@@ -1,8 +1,5 @@
 name: build-core
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 on:
   workflow_dispatch:
     inputs:
@@ -10,49 +7,23 @@ on:
         description: "Core version (e.g. v1.19.24)"
         required: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NDK_VERSION: "28.0.13004108"
+
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: windows
-            os: ubuntu-latest
-            arch: amd64
-            goos: windows
-            goarch: amd64
-            ext: .exe
-          - platform: windows
-            os: ubuntu-latest
-            arch: arm64
-            goos: windows
-            goarch: arm64
-            ext: .exe
-          - platform: linux
-            os: ubuntu-latest
-            arch: amd64
-            goos: linux
-            goarch: amd64
-            ext: ""
-          - platform: linux
-            os: ubuntu-latest
-            arch: arm64
-            goos: linux
-            goarch: arm64
-            ext: ""
-          - platform: macos
-            os: macos-latest
-            arch: amd64
-            goos: darwin
-            goarch: amd64
-            ext: ""
-          - platform: macos
-            os: macos-latest
-            arch: arm64
-            goos: darwin
-            goarch: arm64
-            ext: ""
+          - arch: arm
+            abi: armeabi-v7a
+          - arch: arm64
+            abi: arm64-v8a
+          - arch: amd64
+            abi: x86_64
 
     steps:
       - name: Checkout
@@ -60,11 +31,28 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: "1.26.0"
           cache-dependency-path: core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
 
       - name: Update mihomo dependency
         run: |
@@ -72,23 +60,21 @@ jobs:
           go get github.com/metacubex/mihomo@${{ github.event.inputs.version }}
           go mod tidy
 
-      - name: Build core
-        env:
-          CGO_ENABLED: "0"
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+      - name: Build Android core
+        run: dart setup.dart android --arch ${{ matrix.arch }} --out core
+
+      - name: Pack Android core
         run: |
-          cd core
-          go build \
-            -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version=${{ github.event.inputs.version }}" \
-            -tags="with_gvisor,cmfa" \
-            -o "../FlClashCore-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          mkdir -p dist
+          zip -r "dist/FlClashCore-android-${{ matrix.abi }}.zip" \
+            "libclash/android/${{ matrix.abi }}" \
+            "libclash/android/includes/${{ matrix.abi }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: core-${{ matrix.platform }}-${{ matrix.arch }}
-          path: FlClashCore-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
+          name: core-android-${{ matrix.abi }}
+          path: dist/FlClashCore-android-${{ matrix.abi }}.zip
 
   release:
     needs: build
@@ -106,7 +92,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "core-${{ github.event.inputs.version }}"
-          name: "Core ${{ github.event.inputs.version }}"
-          body: "Desktop core ${{ github.event.inputs.version }}"
+          name: "Android Core ${{ github.event.inputs.version }}"
+          body: "Android shared core artifacts for ${{ github.event.inputs.version }}"
           prerelease: true
           files: dist/*

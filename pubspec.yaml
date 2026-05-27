@@ -1,5 +1,5 @@
 name: flclashx
-description: FlClashM is a rebrand-ready FlClashX-based client with preserved Android package continuity from makriq.
+description: FlClashM is an Android-only FlClashX-based client with preserved Android package continuity from makriq.
 publish_to: "none"
 version: 0.10.0+2026052601
 
@@ -74,7 +74,6 @@ dev_dependencies:
   riverpod_lint: ^2.3.13
   custom_lint: ^0.7.3
   flutter_launcher_icons: ^0.14.4
-  msix: ^3.16.8
 
 flutter:
   uses-material-design: true
@@ -117,14 +116,3 @@ flutter_launcher_icons:
   adaptive_icon_background: "#202020"
   adaptive_icon_foreground: "assets/images/icon.png"
   adaptive_icon_monochrome: "assets/images/icon_white.png"
-
-msix_config:
-  display_name: FlClashM
-  publisher_display_name: makriq
-  publisher: CN=F778E60B-B797-4F7E-AE56-743F6A0F5B32
-  identity_name: pluralplay.FlClashX
-  msix_version: 0.4.0.0
-  logo_path: assets/images/icon.png
-  capabilities: internetClient, privateNetworkClientServer
-  languages: en, ru, zh-CN
-  store: true

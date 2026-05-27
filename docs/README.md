@@ -8,3 +8,9 @@
 - `runtime.md`
 - `security-policy.md`
 - `migration-plan.md`
+
+Текущий фокус:
+
+- зафиксировать `Android-only` продукт и release policy
+- удержать Android continuity
+- подготовить seam для product/runtime migration без desktop-ветки

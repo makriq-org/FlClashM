@@ -10,13 +10,7 @@
 [![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` — продуктовый клиент на базе `FlClashX`, унаследованный от многоплатформенного прокси-клиента FlClash на основе ClashMeta.
-
-Десктопный вид:
-
-<p style="text-align: center;">
-    <img alt="desktop" src="snapshots/desktop.gif">
-</p>
+`FlClashM` — Android-only продуктовый клиент на базе `FlClashX`, с сохранением Android continuity относительно `FlClash-my`.
 
 Мобильный вид:
 
@@ -32,7 +26,7 @@
 
 🗑️ **Очистка данных приложения:** Добавлена кнопка "Очистить данные" в настройках приложения, которая удаляет все профили из папки profiles. Полезно для устранения неполадок или сброса приложения.
 
-🇷🇺 Добавлен русский язык в установщик и переработана локаль в приложении
+🇷🇺 Переработана локаль в приложении под продуктовый Android-фокус
 
 ✈️ Передача HWID в панель (Работает только с <a href="https://github.com/remnawave/panel">Remnawave</a>)
 
@@ -43,8 +37,6 @@
 - добавлена кнопка "Вставить" для меню добавления подписки по ссылке
 - добавлена кнопка выбора профиля
 - добавлена передача профиля с мобильного приложения через QR-код
-
-💻 macOS - приложение в нативной строке состояния (status bar) вместо оконного интерфейса.
 
 🪪 Переработана карточка профиля на странице профиля и виджет на главной:
 
@@ -71,9 +63,9 @@
 |    `outboundMode`    | Режим работы прокси (старый вид)                            |
 |    `trafficUsage`    | Использование трафика                                       |
 |  `networkDetection`  | Определение локации и IP                                    |
-|     `tunButton`      | Кнопка TUN (только Desktop)                                 |
+|     `tunButton`      | Legacy desktop widget, в Android-only релизах не используется |
 |     `vpnButton`      | Кнопка VPN (только Android)                                 |
-| `systemProxyButton`  | Кнопка системного прокси (только Desktop)                   |
+| `systemProxyButton`  | Legacy desktop widget, в Android-only релизах не используется |
 |     `intranetIp`     | Локальный IP-адрес                                          |
 |     `memoryInfo`     | Использование памяти                                        |
 |      `metainfo`      | Информация о подписке                                       |
@@ -185,7 +177,7 @@ flclashx-serverinfo: Proxy
 
 **Рекомендации для изображения:**
 - Формат: PNG, JPG или WebP
-- Разрешение: 1920x1080 или выше для десктопа, 1080x1920 для мобильных устройств
+- Разрешение: 1080x1920 или выше для мобильных устройств
 - Размер файла: Желательно до 2МБ для лучшей производительности
 - Содержание: Используйте изображения с тонкими узорами или градиентами; избегайте слишком ярких или загруженных изображений
 - Контраст: Обеспечьте хорошую читаемость текста на фоне
@@ -204,18 +196,17 @@ flclashx-background: https://example.com/background.jpg
 
 |   Параметр    | Описание                                                 | По умолчанию |
 | :-----------: | -------------------------------------------------------- | :----------: |
-|  `minimize`   | Сворачивать приложение при выходе вместо закрытия        | ❌ Выкл      |
-|   `autorun`   | Запускать приложение при старте системы                  | ❌ Выкл      |
-| `shadowstart` | Запускать приложение свернутым в трей                    | ❌ Выкл      |
 |  `autostart`  | Автоматически запускать прокси при запуске приложения    | ❌ Выкл      |
 | `autoupdate`  | Автоматически проверять обновления приложения            | ❌ Выкл      |
+
+Desktop-only флаги `minimize`, `autorun` и `shadowstart` в Android-only продукте считаются legacy и игнорируются.
 
 Переопределение на стороне клиента: Пользователи могут включить «Переопределить настройки провайдера» в настройках приложения, чтобы применять свою локальную конфигурацию вместо настроек из подписки.
 
 Использование:
 
 ```bash
-flclashx-settings: minimize, autorun, shadowstart, autostart, autoupdate
+flclashx-settings: autostart, autoupdate
 ```
 </details>
 
@@ -275,7 +266,9 @@ HEX-коды стандартных тем:
 <details>
 <summary><strong>flclashx-androidsecure</strong></summary>
 
-Данный хедер позволяет принудительно включить Mixed-port:0 только на Андроид-девайсах, при активном 7890 (например) в конфиге.
+В `FlClashM` этот header больше не используется как обязательная Android security policy.
+
+Он считается legacy hint и не должен менять security-critical поведение клиента.
 
 Использование:
 ```bash
@@ -296,15 +289,6 @@ flclashx-androidsecure: true
 
 ## Использование
 
-### Linux
-
-⚠️ Перед использованием убедитесь, что установлены следующие зависимости:
-
-```bash
- sudo apt-get install libayatana-appindicator3-dev
- sudo apt-get install libkeybinder-3.0-dev
-```
-
 ### Android
 
 Поддерживаются следующие действия:
@@ -318,6 +302,14 @@ flclashx-androidsecure: true
 ```
 
 ## Скачать
+
+Релизные артефакты публикуются только для Android:
+
+- `FlClashM-android-universal.apk`
+- `FlClashM-android-arm64-v8a.apk`
+- `FlClashM-android-armeabi-v7a.apk`
+- `FlClashM-android-x86_64.apk`
+- `FlClashM-android-release.aab`
 
 <a href="https://github.com/makriq-org/FlClashM/releases"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" width="200px"/></a>
 

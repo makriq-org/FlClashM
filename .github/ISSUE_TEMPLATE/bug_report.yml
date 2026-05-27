@@ -38,9 +38,6 @@ body:
       label: Операционная система / OS
       options:
         - Android
-        - Windows
-        - MacOS
-        - Linux
     validations:
       required: true
   - type: textarea

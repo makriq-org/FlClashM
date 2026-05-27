@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -28,9 +26,7 @@ class OverrideNetworkSettingsItem extends ConsumerWidget {
             value: overrideNetworkSettings,
             onChanged: (value) {
               ref.read(appSettingProvider.notifier).updateState(
-                    (state) => state.copyWith(
-                      overrideNetworkSettings: value,
-                    ),
+                    (state) => state.copyWith(overrideNetworkSettings: value),
                   );
             },
           ),
@@ -38,7 +34,9 @@ class OverrideNetworkSettingsItem extends ConsumerWidget {
         if (!overrideNetworkSettings)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            color: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             child: Row(
               children: [
                 Icon(
@@ -70,8 +68,9 @@ class LogLevelItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final uiLogLevel =
-        ref.watch(patchClashConfigProvider.select((state) => state.logLevel));
+    final uiLogLevel = ref.watch(
+      patchClashConfigProvider.select((state) => state.logLevel),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -99,11 +98,9 @@ class LogLevelItem extends ConsumerWidget {
                   if (value == null) {
                     return;
                   }
-                  ref.read(patchClashConfigProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          logLevel: value,
-                        ),
-                      );
+                  ref
+                      .read(patchClashConfigProvider.notifier)
+                      .updateState((state) => state.copyWith(logLevel: value));
                 },
                 textBuilder: (logLevel) => logLevel.name,
                 value: display,
@@ -121,26 +118,21 @@ class UaItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final globalUa =
-        ref.watch(patchClashConfigProvider.select((state) => state.globalUa));
+    final globalUa = ref.watch(
+      patchClashConfigProvider.select((state) => state.globalUa),
+    );
     return ListItem<String?>.options(
       leading: const Icon(Icons.computer_outlined),
       title: const Text("UA"),
       subtitle: Text(globalUa ?? appLocalizations.defaultText),
       delegate: OptionsDelegate<String?>(
         title: "UA",
-        options: [
-          null,
-          "clashx-verge/v1.6.6",
-          "ClashforWindows/0.19.23",
-        ],
+        options: [null, "clashx-verge/v1.6.6", "ClashforWindows/0.19.23"],
         value: globalUa,
         onChanged: (value) {
-          ref.read(patchClashConfigProvider.notifier).updateState(
-                (state) => state.copyWith(
-                  globalUa: value,
-                ),
-              );
+          ref
+              .read(patchClashConfigProvider.notifier)
+              .updateState((state) => state.copyWith(globalUa: value));
         },
         textBuilder: (ua) => ua ?? appLocalizations.defaultText,
       ),
@@ -154,7 +146,8 @@ class KeepAliveIntervalItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final uiKeepAlive = ref.watch(
-        patchClashConfigProvider.select((state) => state.keepAliveInterval));
+      patchClashConfigProvider.select((state) => state.keepAliveInterval),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -182,7 +175,9 @@ class KeepAliveIntervalItem extends ConsumerWidget {
                   }
                   final intValue = int.tryParse(value);
                   if (intValue == null) {
-                    return appLocalizations.numberTip(appLocalizations.interval);
+                    return appLocalizations.numberTip(
+                      appLocalizations.interval,
+                    );
                   }
                   return null;
                 },
@@ -192,9 +187,7 @@ class KeepAliveIntervalItem extends ConsumerWidget {
                   }
                   final intValue = int.parse(value);
                   ref.read(patchClashConfigProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          keepAliveInterval: intValue,
-                        ),
+                        (state) => state.copyWith(keepAliveInterval: intValue),
                       );
                 },
               ),
@@ -211,8 +204,9 @@ class TestUrlItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final testUrl =
-        ref.watch(appSettingProvider.select((state) => state.testUrl));
+    final testUrl = ref.watch(
+      appSettingProvider.select((state) => state.testUrl),
+    );
     return ListItem.input(
       leading: const Icon(Icons.timeline),
       title: Text(appLocalizations.testUrl),
@@ -234,11 +228,9 @@ class TestUrlItem extends ConsumerWidget {
           if (value == null) {
             return;
           }
-          ref.read(appSettingProvider.notifier).updateState(
-                (state) => state.copyWith(
-                  testUrl: value,
-                ),
-              );
+          ref
+              .read(appSettingProvider.notifier)
+              .updateState((state) => state.copyWith(testUrl: value));
         },
       ),
     );
@@ -249,34 +241,15 @@ class PortItem extends ConsumerWidget {
   const PortItem({super.key});
 
   Future<void> handleShowPortDialog() async {
-    await globalState.showCommonDialog(
-      child: const _PortDialog(),
-    );
+    await globalState.showCommonDialog(child: const _PortDialog());
     // inputDelegate.onChanged(value);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // flclashx-androidsecure header forces mixed-port=0 on Android. The port
-    // field becomes meaningless in that case, so hide it entirely rather than
-    // showing a disabled "0" row the user can't do anything about.
-    if (Platform.isAndroid) {
-      final secure = ref.watch(
-        currentProfileProvider.select(
-          (p) =>
-              p?.providerHeaders['flclashx-androidsecure']
-                  ?.trim()
-                  .toLowerCase() ==
-              'true',
-        ),
-      );
-      if (secure) {
-        return const SizedBox.shrink();
-      }
-    }
-
-    final mixedPort =
-        ref.watch(patchClashConfigProvider.select((state) => state.mixedPort));
+    final mixedPort = ref.watch(
+      patchClashConfigProvider.select((state) => state.mixedPort),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -331,33 +304,32 @@ class HostsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListItem.open(
-      leading: const Icon(Icons.view_list_outlined),
-      title: const Text("Hosts"),
-      subtitle: Text(appLocalizations.hostsDesc),
-      delegate: OpenDelegate(
-        blur: false,
-        title: "Hosts",
-        widget: Consumer(
-          builder: (_, ref, __) {
-            final hosts = ref
-                .watch(patchClashConfigProvider.select((state) => state.hosts));
-            return MapInputPage(
-              title: "Hosts",
-              map: hosts,
-              titleBuilder: (item) => Text(item.key),
-              subtitleBuilder: (item) => Text(item.value),
-              onChange: (value) {
-                ref.read(patchClashConfigProvider.notifier).updateState(
-                      (state) => state.copyWith(
-                        hosts: value,
-                      ),
-                    );
-              },
-            );
-          },
+        leading: const Icon(Icons.view_list_outlined),
+        title: const Text("Hosts"),
+        subtitle: Text(appLocalizations.hostsDesc),
+        delegate: OpenDelegate(
+          blur: false,
+          title: "Hosts",
+          widget: Consumer(
+            builder: (_, ref, __) {
+              final hosts = ref.watch(
+                patchClashConfigProvider.select((state) => state.hosts),
+              );
+              return MapInputPage(
+                title: "Hosts",
+                map: hosts,
+                titleBuilder: (item) => Text(item.key),
+                subtitleBuilder: (item) => Text(item.value),
+                onChange: (value) {
+                  ref
+                      .read(patchClashConfigProvider.notifier)
+                      .updateState((state) => state.copyWith(hosts: value));
+                },
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
 }
 
 class SendHeadersToggle extends StatefulWidget {
@@ -396,14 +368,12 @@ class _SendHeadersToggleState extends State<SendHeadersToggle> {
 
   @override
   Widget build(BuildContext context) => ListItem.switchItem(
-      leading: const Icon(Icons.perm_device_information_outlined),
-      title: Text(appLocalizations.settingsSendDeviceDataTitle),
-      subtitle: Text(appLocalizations.settingsSendDeviceDataSubtitle),
-      delegate: SwitchDelegate(
-        value: _sendHeaders,
-        onChanged: _updatePreference,
-      ),
-    );
+        leading: const Icon(Icons.perm_device_information_outlined),
+        title: Text(appLocalizations.settingsSendDeviceDataTitle),
+        subtitle: Text(appLocalizations.settingsSendDeviceDataSubtitle),
+        delegate:
+            SwitchDelegate(value: _sendHeaders, onChanged: _updatePreference),
+      );
 }
 
 class Ipv6Item extends ConsumerWidget {
@@ -411,13 +381,14 @@ class Ipv6Item extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ipv6 =
-        ref.watch(patchClashConfigProvider.select((state) => state.ipv6));
+    final ipv6 = ref.watch(
+      patchClashConfigProvider.select((state) => state.ipv6),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
-    
+
     return AbsorbPointer(
       absorbing: !isEnabled,
       child: Opacity(
@@ -429,11 +400,9 @@ class Ipv6Item extends ConsumerWidget {
           delegate: SwitchDelegate(
             value: ipv6,
             onChanged: (value) async {
-              ref.read(patchClashConfigProvider.notifier).updateState(
-                    (state) => state.copyWith(
-                      ipv6: value,
-                    ),
-                  );
+              ref
+                  .read(patchClashConfigProvider.notifier)
+                  .updateState((state) => state.copyWith(ipv6: value));
               globalState.appController.updateClashConfigDebounce();
             },
           ),
@@ -448,13 +417,14 @@ class AllowLanItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allowLan =
-        ref.watch(patchClashConfigProvider.select((state) => state.allowLan));
+    final allowLan = ref.watch(
+      patchClashConfigProvider.select((state) => state.allowLan),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
-    
+
     return AbsorbPointer(
       absorbing: !isEnabled,
       child: Opacity(
@@ -466,11 +436,9 @@ class AllowLanItem extends ConsumerWidget {
           delegate: SwitchDelegate(
             value: allowLan,
             onChanged: (value) async {
-              ref.read(patchClashConfigProvider.notifier).updateState(
-                    (state) => state.copyWith(
-                      allowLan: value,
-                    ),
-                  );
+              ref
+                  .read(patchClashConfigProvider.notifier)
+                  .updateState((state) => state.copyWith(allowLan: value));
               globalState.appController.updateClashConfigDebounce();
             },
           ),
@@ -485,8 +453,9 @@ class UnifiedDelayItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final uiUnifiedDelay = ref
-        .watch(patchClashConfigProvider.select((state) => state.unifiedDelay));
+    final uiUnifiedDelay = ref.watch(
+      patchClashConfigProvider.select((state) => state.unifiedDelay),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -507,9 +476,7 @@ class UnifiedDelayItem extends ConsumerWidget {
                 value: display,
                 onChanged: (value) async {
                   ref.read(patchClashConfigProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          unifiedDelay: value,
-                        ),
+                        (state) => state.copyWith(unifiedDelay: value),
                       );
                 },
               ),
@@ -559,9 +526,7 @@ class FindProcessItem extends ConsumerWidget {
             onChanged: (value) async {
               if (value == null) return;
               ref.read(patchClashConfigProvider.notifier).updateState(
-                    (state) => state.copyWith(
-                      findProcessMode: value,
-                    ),
+                    (state) => state.copyWith(findProcessMode: value),
                   );
               globalState.appController.updateClashConfigDebounce();
             },
@@ -579,8 +544,9 @@ class TcpConcurrentItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final uiTcpConcurrent = ref
-        .watch(patchClashConfigProvider.select((state) => state.tcpConcurrent));
+    final uiTcpConcurrent = ref.watch(
+      patchClashConfigProvider.select((state) => state.tcpConcurrent),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -601,9 +567,7 @@ class TcpConcurrentItem extends ConsumerWidget {
                 value: display,
                 onChanged: (value) async {
                   ref.read(patchClashConfigProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          tcpConcurrent: value,
-                        ),
+                        (state) => state.copyWith(tcpConcurrent: value),
                       );
                 },
               ),
@@ -620,8 +584,11 @@ class GeodataLoaderItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isMemconservative = ref.watch(patchClashConfigProvider.select(
-        (state) => state.geodataLoader == GeodataLoader.memconservative));
+    final isMemconservative = ref.watch(
+      patchClashConfigProvider.select(
+        (state) => state.geodataLoader == GeodataLoader.memconservative,
+      ),
+    );
     return ListItem.switchItem(
       leading: const Icon(Icons.memory),
       title: Text(appLocalizations.geodataLoader),
@@ -647,8 +614,11 @@ class ExternalControllerItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasExternalController = ref.watch(patchClashConfigProvider.select(
-        (state) => state.externalController == ExternalControllerStatus.open));
+    final hasExternalController = ref.watch(
+      patchClashConfigProvider.select(
+        (state) => state.externalController == ExternalControllerStatus.open,
+      ),
+    );
     final overrideNetworkSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
@@ -709,13 +679,7 @@ final generalItems = <Widget>[
   const TcpConcurrentItem(),
   const GeodataLoaderItem(),
   const ExternalControllerItem(),
-]
-    .separated(
-      const Divider(
-        height: 0,
-      ),
-    )
-    .toList();
+].separated(const Divider(height: 0)).toList();
 
 class _PortDialog extends ConsumerStatefulWidget {
   const _PortDialog();
@@ -737,35 +701,27 @@ class _PortDialogState extends ConsumerState<_PortDialog> {
   @override
   void initState() {
     super.initState();
-    final vm5 = ref.read(patchClashConfigProvider.select((state) => VM5(
-        a: state.mixedPort,
-        b: state.port,
-        c: state.socksPort,
-        d: state.redirPort,
-        e: state.tproxyPort,
-      )));
-    _mixedPortController = TextEditingController(
-      text: vm5.a.toString(),
+    final vm5 = ref.read(
+      patchClashConfigProvider.select(
+        (state) => VM5(
+          a: state.mixedPort,
+          b: state.port,
+          c: state.socksPort,
+          d: state.redirPort,
+          e: state.tproxyPort,
+        ),
+      ),
     );
-    _portController = TextEditingController(
-      text: vm5.b.toString(),
-    );
-    _socksPortController = TextEditingController(
-      text: vm5.c.toString(),
-    );
-    _redirPortController = TextEditingController(
-      text: vm5.d.toString(),
-    );
-    _tProxyPortController = TextEditingController(
-      text: vm5.e.toString(),
-    );
+    _mixedPortController = TextEditingController(text: vm5.a.toString());
+    _portController = TextEditingController(text: vm5.b.toString());
+    _socksPortController = TextEditingController(text: vm5.c.toString());
+    _redirPortController = TextEditingController(text: vm5.d.toString());
+    _tProxyPortController = TextEditingController(text: vm5.e.toString());
   }
 
   Future<void> _handleReset() async {
     final res = await globalState.showMessage(
-      message: TextSpan(
-        text: appLocalizations.resetTip,
-      ),
+      message: TextSpan(text: appLocalizations.resetTip),
     );
     if (res != true) {
       return;
@@ -806,122 +762,79 @@ class _PortDialogState extends ConsumerState<_PortDialog> {
 
   @override
   Widget build(BuildContext context) => CommonDialog(
-      title: appLocalizations.port,
-      actions: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton.filledTonal(
-              onPressed: _handleMore,
-              icon: CommonExpandIcon(
-                expand: _isMore,
+        title: appLocalizations.port,
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton.filledTonal(
+                onPressed: _handleMore,
+                icon: CommonExpandIcon(expand: _isMore),
               ),
-            ),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: _handleReset,
-                  child: Text(appLocalizations.reset),
-                ),
-                const SizedBox(
-                  width: 4,
-                ),
-                TextButton(
-                  onPressed: _handleUpdate,
-                  child: Text(appLocalizations.submit),
-                )
-              ],
-            )
-          ],
-        )
-      ],
-      child: Form(
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        key: _formKey,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: AnimatedSize(
-            duration: midDuration,
-            curve: Curves.easeOutQuad,
-            alignment: Alignment.topCenter,
-            child: Column(
-              spacing: 24,
-              children: [
-                TextFormField(
-                  keyboardType: TextInputType.url,
-                  maxLines: 1,
-                  minLines: 1,
-                  controller: _mixedPortController,
-                  onFieldSubmitted: (_) {
-                    _handleUpdate();
-                  },
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: appLocalizations.mixedPort,
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _handleReset,
+                    child: Text(appLocalizations.reset),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return appLocalizations
-                          .emptyTip(appLocalizations.mixedPort);
-                    }
-                    final port = int.tryParse(value);
-                    if (port == null) {
-                      return appLocalizations
-                          .numberTip(appLocalizations.mixedPort);
-                    }
-                    if (port == 0) {
-                      return null;
-                    }
-                    if (port < 1024 || port > 49151) {
-                      return appLocalizations
-                          .portTip(appLocalizations.mixedPort);
-                    }
-                    final ports = [
-                      _portController.text,
-                      _socksPortController.text,
-                      _tProxyPortController.text,
-                      _redirPortController.text
-                    ].map((item) => item.trim());
-                    if (ports.contains(value.trim())) {
-                      return appLocalizations.portConflictTip;
-                    }
-                    return null;
-                  },
-                ),
-                if (_isMore) ...[
+                  const SizedBox(width: 4),
+                  TextButton(
+                    onPressed: _handleUpdate,
+                    child: Text(appLocalizations.submit),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+        child: Form(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          key: _formKey,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: AnimatedSize(
+              duration: midDuration,
+              curve: Curves.easeOutQuad,
+              alignment: Alignment.topCenter,
+              child: Column(
+                spacing: 24,
+                children: [
                   TextFormField(
                     keyboardType: TextInputType.url,
                     maxLines: 1,
                     minLines: 1,
-                    controller: _portController,
+                    controller: _mixedPortController,
                     onFieldSubmitted: (_) {
                       _handleUpdate();
                     },
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
-                      labelText: appLocalizations.port,
+                      labelText: appLocalizations.mixedPort,
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return appLocalizations.emptyTip(appLocalizations.port);
+                        return appLocalizations.emptyTip(
+                          appLocalizations.mixedPort,
+                        );
                       }
                       final port = int.tryParse(value);
                       if (port == null) {
                         return appLocalizations.numberTip(
-                          appLocalizations.port,
+                          appLocalizations.mixedPort,
                         );
                       }
                       if (port == 0) {
                         return null;
                       }
                       if (port < 1024 || port > 49151) {
-                        return appLocalizations.portTip(appLocalizations.port);
+                        return appLocalizations
+                            .portTip(appLocalizations.mixedPort);
                       }
                       final ports = [
-                        _mixedPortController.text,
+                        _portController.text,
                         _socksPortController.text,
                         _tProxyPortController.text,
-                        _redirPortController.text
+                        _redirPortController.text,
                       ].map((item) => item.trim());
                       if (ports.contains(value.trim())) {
                         return appLocalizations.portConflictTip;
@@ -929,136 +842,186 @@ class _PortDialogState extends ConsumerState<_PortDialog> {
                       return null;
                     },
                   ),
-                  TextFormField(
-                    keyboardType: TextInputType.url,
-                    maxLines: 1,
-                    minLines: 1,
-                    controller: _socksPortController,
-                    onFieldSubmitted: (_) {
-                      _handleUpdate();
-                    },
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: appLocalizations.socksPort,
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return appLocalizations
-                            .emptyTip(appLocalizations.socksPort);
-                      }
-                      final port = int.tryParse(value);
-                      if (port == null) {
-                        return appLocalizations
-                            .numberTip(appLocalizations.socksPort);
-                      }
-                      if (port == 0) {
+                  if (_isMore) ...[
+                    TextFormField(
+                      keyboardType: TextInputType.url,
+                      maxLines: 1,
+                      minLines: 1,
+                      controller: _portController,
+                      onFieldSubmitted: (_) {
+                        _handleUpdate();
+                      },
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: appLocalizations.port,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return appLocalizations
+                              .emptyTip(appLocalizations.port);
+                        }
+                        final port = int.tryParse(value);
+                        if (port == null) {
+                          return appLocalizations
+                              .numberTip(appLocalizations.port);
+                        }
+                        if (port == 0) {
+                          return null;
+                        }
+                        if (port < 1024 || port > 49151) {
+                          return appLocalizations
+                              .portTip(appLocalizations.port);
+                        }
+                        final ports = [
+                          _mixedPortController.text,
+                          _socksPortController.text,
+                          _tProxyPortController.text,
+                          _redirPortController.text,
+                        ].map((item) => item.trim());
+                        if (ports.contains(value.trim())) {
+                          return appLocalizations.portConflictTip;
+                        }
                         return null;
-                      }
-                      if (port < 1024 || port > 49151) {
-                        return appLocalizations
-                            .portTip(appLocalizations.socksPort);
-                      }
-                      final ports = [
-                        _portController.text,
-                        _mixedPortController.text,
-                        _tProxyPortController.text,
-                        _redirPortController.text
-                      ].map((item) => item.trim());
-                      if (ports.contains(value.trim())) {
-                        return appLocalizations.portConflictTip;
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    keyboardType: TextInputType.url,
-                    maxLines: 1,
-                    minLines: 1,
-                    controller: _redirPortController,
-                    onFieldSubmitted: (_) {
-                      _handleUpdate();
-                    },
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: appLocalizations.redirPort,
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return appLocalizations
-                            .emptyTip(appLocalizations.redirPort);
-                      }
-                      final port = int.tryParse(value);
-                      if (port == null) {
-                        return appLocalizations
-                            .numberTip(appLocalizations.redirPort);
-                      }
-                      if (port == 0) {
+                    TextFormField(
+                      keyboardType: TextInputType.url,
+                      maxLines: 1,
+                      minLines: 1,
+                      controller: _socksPortController,
+                      onFieldSubmitted: (_) {
+                        _handleUpdate();
+                      },
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: appLocalizations.socksPort,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return appLocalizations.emptyTip(
+                            appLocalizations.socksPort,
+                          );
+                        }
+                        final port = int.tryParse(value);
+                        if (port == null) {
+                          return appLocalizations.numberTip(
+                            appLocalizations.socksPort,
+                          );
+                        }
+                        if (port == 0) {
+                          return null;
+                        }
+                        if (port < 1024 || port > 49151) {
+                          return appLocalizations.portTip(
+                            appLocalizations.socksPort,
+                          );
+                        }
+                        final ports = [
+                          _portController.text,
+                          _mixedPortController.text,
+                          _tProxyPortController.text,
+                          _redirPortController.text,
+                        ].map((item) => item.trim());
+                        if (ports.contains(value.trim())) {
+                          return appLocalizations.portConflictTip;
+                        }
                         return null;
-                      }
-                      if (port < 1024 || port > 49151) {
-                        return appLocalizations
-                            .portTip(appLocalizations.redirPort);
-                      }
-                      final ports = [
-                        _portController.text,
-                        _socksPortController.text,
-                        _tProxyPortController.text,
-                        _mixedPortController.text
-                      ].map((item) => item.trim());
-                      if (ports.contains(value.trim())) {
-                        return appLocalizations.portConflictTip;
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    keyboardType: TextInputType.url,
-                    maxLines: 1,
-                    minLines: 1,
-                    controller: _tProxyPortController,
-                    onFieldSubmitted: (_) {
-                      _handleUpdate();
-                    },
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: appLocalizations.tproxyPort,
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return appLocalizations
-                            .emptyTip(appLocalizations.tproxyPort);
-                      }
-                      final port = int.tryParse(value);
-                      if (port == null) {
-                        return appLocalizations
-                            .numberTip(appLocalizations.tproxyPort);
-                      }
-                      if (port == 0) {
+                    TextFormField(
+                      keyboardType: TextInputType.url,
+                      maxLines: 1,
+                      minLines: 1,
+                      controller: _redirPortController,
+                      onFieldSubmitted: (_) {
+                        _handleUpdate();
+                      },
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: appLocalizations.redirPort,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return appLocalizations.emptyTip(
+                            appLocalizations.redirPort,
+                          );
+                        }
+                        final port = int.tryParse(value);
+                        if (port == null) {
+                          return appLocalizations.numberTip(
+                            appLocalizations.redirPort,
+                          );
+                        }
+                        if (port == 0) {
+                          return null;
+                        }
+                        if (port < 1024 || port > 49151) {
+                          return appLocalizations.portTip(
+                            appLocalizations.redirPort,
+                          );
+                        }
+                        final ports = [
+                          _portController.text,
+                          _socksPortController.text,
+                          _tProxyPortController.text,
+                          _mixedPortController.text,
+                        ].map((item) => item.trim());
+                        if (ports.contains(value.trim())) {
+                          return appLocalizations.portConflictTip;
+                        }
                         return null;
-                      }
-                      if (port < 1024 || port > 49151) {
-                        return appLocalizations.portTip(
-                          appLocalizations.tproxyPort,
-                        );
-                      }
-                      final ports = [
-                        _portController.text,
-                        _socksPortController.text,
-                        _mixedPortController.text,
-                        _redirPortController.text
-                      ].map((item) => item.trim());
-                      if (ports.contains(value.trim())) {
-                        return appLocalizations.portConflictTip;
-                      }
+                      },
+                    ),
+                    TextFormField(
+                      keyboardType: TextInputType.url,
+                      maxLines: 1,
+                      minLines: 1,
+                      controller: _tProxyPortController,
+                      onFieldSubmitted: (_) {
+                        _handleUpdate();
+                      },
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: appLocalizations.tproxyPort,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return appLocalizations.emptyTip(
+                            appLocalizations.tproxyPort,
+                          );
+                        }
+                        final port = int.tryParse(value);
+                        if (port == null) {
+                          return appLocalizations.numberTip(
+                            appLocalizations.tproxyPort,
+                          );
+                        }
+                        if (port == 0) {
+                          return null;
+                        }
+                        if (port < 1024 || port > 49151) {
+                          return appLocalizations.portTip(
+                            appLocalizations.tproxyPort,
+                          );
+                        }
+                        final ports = [
+                          _portController.text,
+                          _socksPortController.text,
+                          _mixedPortController.text,
+                          _redirPortController.text,
+                        ].map((item) => item.trim());
+                        if (ports.contains(value.trim())) {
+                          return appLocalizations.portConflictTip;
+                        }
 
-                      return null;
-                    },
-                  ),
-                ]
-              ],
+                        return null;
+                      },
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 }

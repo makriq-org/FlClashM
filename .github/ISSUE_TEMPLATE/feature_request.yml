@@ -32,11 +32,8 @@ body:
     id: os-labels
     attributes:
       label: Операционная система / Target OS
-      description: Пожалуйста, выберите операционную систему(ы), для которых предназначена эта функция (выберите минимум одну) / Please select the operating system(s) for this feature request (select at least one)
+      description: Android is the only supported target OS for this product.
       options:
         - label: Android
-        - label: Windows
-        - label: MacOS
-        - label: Linux
     validations:
       required: true

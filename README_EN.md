@@ -10,13 +10,7 @@
 [![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` is a product client based on `FlClashX`, inheriting from the multi-platform FlClash proxy client built on ClashMeta.
-
-on Desktop:
-
-<p style="text-align: center;">
-    <img alt="desktop" src="snapshots/desktop.gif">
-</p>
+`FlClashM` is an Android-only product client based on `FlClashX`, with Android continuity preserved from `FlClash-my`.
 
 on Mobile:
 
@@ -32,7 +26,7 @@ on Mobile:
 
 🗑️ **Clear Application Data:** Added "Clear Data" button in Application Settings that removes all profiles from the profiles folder. Useful for troubleshooting or resetting the application.
 
-🇷🇺 Added Russian language to the installer and redesigned the localization in the application.
+🇷🇺 Redesigned localization with an Android-only product focus.
 
 ✈️ Transmit HWID to the panel (Works only with <a href="https://github.com/remnawave/panel">Remnawave</a>).
 
@@ -68,9 +62,9 @@ on Mobile:
   |    `outboundMode`    | Proxy mode (old type)                                       |
   |    `trafficUsage`    | Traffic usage                                               |
   |  `networkDetection`  | Determining location and IP                                 |
-  |     `tunButton`      | TUN button (Desktop only)                                   |
+  |     `tunButton`      | Legacy desktop widget, unused in Android-only releases      |
   |     `vpnButton`      | VPN button (Android only)                                   |
-  | `systemProxyButton`  | System Proxy Button (Desktop only)                          |
+  | `systemProxyButton`  | Legacy desktop widget, unused in Android-only releases      |
   |     `intranetIp`     | Local IP-Address                                            |
   |     `memoryInfo`     | Memory usage                                                |
   |      `metainfo`      | Profile information                                         |
@@ -154,7 +148,7 @@ Usage:
 
 **Image Recommendations:**
   - Format: PNG, JPG, or WebP
-  - Resolution: 1920x1080 or higher for desktop, 1080x1920 for mobile
+  - Resolution: 1080x1920 or higher for mobile
   - File size: Keep under 2MB for better performance
   - Content: Use images with subtle patterns or gradients; avoid too bright or busy images
   - Contrast: Ensure good readability of text over the background
@@ -169,18 +163,17 @@ Usage:
 
 |   Parameter   | Description                                      | Default      |
 | :-----------: | ------------------------------------------------ | :----------: |
-|  `minimize`   | Minimize application on exit instead of closing  | ❌ Disabled  |
-|   `autorun`   | Launch application on system startup             | ❌ Disabled  |
-| `shadowstart` | Launch application minimized to tray             | ❌ Disabled  |
 |  `autostart`  | Automatically start proxy on application launch  | ❌ Disabled  |
 | `autoupdate`  | Automatically check for application updates      | ❌ Disabled  |
+
+Desktop-only flags `minimize`, `autorun`, and `shadowstart` are treated as legacy and ignored in the Android-only product.
 
 **Client-side override:** Users can enable "Override provider settings" in Application Settings to apply their local configuration instead of subscription settings.
 
 Usage:
 
 ```bash
-    flclashx-settings: minimize, autorun, shadowstart, autostart, autoupdate
+    flclashx-settings: autostart, autoupdate
 ```
 
 ### Configuration Settings Override
@@ -197,15 +190,6 @@ By default, the following configuration parameters received from the subscriptio
 
 ## Application Usage
 
-### Linux
-
-⚠️ Before use, ensure the following dependencies are installed:
-
-```bash
- sudo apt-get install libayatana-appindicator3-dev
- sudo apt-get install libkeybinder-3.0-dev
-```
-
 ### Android
 
 The following actions are supported:
@@ -219,6 +203,14 @@ The following actions are supported:
 ```
 
 ## Download
+
+Release artifacts are published for Android only:
+
+- `FlClashM-android-universal.apk`
+- `FlClashM-android-arm64-v8a.apk`
+- `FlClashM-android-armeabi-v7a.apk`
+- `FlClashM-android-x86_64.apk`
+- `FlClashM-android-release.aab`
 
 <a href="https://github.com/makriq-org/FlClashM/releases"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" width="200px"/></a>
 
