@@ -24,6 +24,7 @@ import 'core_version.dart';
 import 'models/models.dart';
 import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
+import 'product/security/product_security.dart';
 
 class GlobalState {
   factory GlobalState() {
@@ -36,7 +37,9 @@ class GlobalState {
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,
       loadCurrentRawProfile: loadCurrentRawProfile,
-      resolveProfilePatch: resolveProfilePatchConfig,
+      compileProfilePatch: compileProfilePatch,
+      enforceSecurityPolicy: enforceSecurityPolicy,
+      secureRuntimeUpdate: secureRuntimeUpdate,
       buildRuntimePlan: buildRuntimePlan,
       applyRuntimePlan: applyRuntimePlan,
       buildCoreState: getCoreState,
@@ -59,9 +62,8 @@ class GlobalState {
   late Color accentColor;
   CorePalette? corePalette;
   Map<String, dynamic>? lastRuntimeConfig;
-  // Effective external-controller endpoint after merging subscription value
-  // over UI defaults. Empty string means disabled. Subscription value wins if
-  // present, otherwise falls back to the UI toggle default.
+  // Effective external-controller endpoint after applying the advisory/profile
+  // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
   // Effective values for fields that follow the overrideNetworkSettings gate
   // but don't round-trip through patchClashConfigProvider. UI reads these when
@@ -78,7 +80,8 @@ class GlobalState {
   AppController? _appController;
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
   bool isInit = false;
-  final ProfileCompiler _profileCompiler = const ProfileCompiler();
+  final ProductProfilePipeline _profilePipeline =
+      const ProductProfilePipeline();
   late final RuntimeRegistry runtimeRegistry;
   late final EngineManager engineManager;
 
@@ -263,22 +266,49 @@ class GlobalState {
     );
   }
 
-  ResolvedProfilePatch resolveProfilePatchConfig({
+  CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
     required ClashConfig patchConfig,
   }) =>
-      _profileCompiler.resolvePatchConfig(
+      _profilePipeline.compileProfilePatch(
         rawProfile: rawProfile,
-        context: _buildCompileContext(patchConfig),
+        context: _buildProfilePatchContext(patchConfig),
+      );
+
+  SecuredProfilePatch enforceSecurityPolicy({
+    required CompiledProfilePatch compiledProfile,
+  }) =>
+      _profilePipeline.secureProfilePatch(
+        compiledProfile: compiledProfile,
+        context: _buildSecurityPolicyContext(),
+      );
+
+  ClashConfig securePatchConfig({
+    required ClashConfig patchConfig,
+  }) =>
+      _profilePipeline.securePatchConfig(
+        patchConfig: patchConfig,
+        context: _buildSecurityPolicyContext(),
+      );
+
+  UpdateParams secureRuntimeUpdate({
+    required UpdateParams updateParams,
+  }) =>
+      _profilePipeline.secureRuntimeUpdate(
+        updateParams: updateParams,
+        context: _buildSecurityPolicyContext(),
       );
 
   Future<RuntimePlan> buildRuntimePlan({
     required RawProfile? rawProfile,
-    required ClashConfig patchConfig,
+    required SecuredProfilePatch securedProfile,
+    required ClashConfig runtimePatchConfig,
   }) =>
-      _profileCompiler.buildRuntimePlan(
+      _profilePipeline.buildRuntimePlan(
         rawProfile: rawProfile,
-        context: _buildCompileContext(patchConfig),
+        context: _buildRuntimePlanContext(),
+        securedProfile: securedProfile,
+        runtimePatchConfig: runtimePatchConfig,
         selectedMap: config.currentProfile?.selectedMap ?? {},
         testUrl: config.appSetting.testUrl,
         providerAssetPathResolver: (
@@ -287,6 +317,22 @@ class GlobalState {
           url,
         ) async =>
             appPath.getProvidersFilePath(profileId, type, url),
+      );
+
+  UpdateParams buildRuntimeUpdateParams({
+    required ClashConfig patchConfig,
+  }) =>
+      UpdateParams(
+        tun: patchConfig.tun.getRealTun(config.networkProps.routeMode),
+        allowLan: patchConfig.allowLan,
+        findProcessMode: patchConfig.findProcessMode,
+        mode: patchConfig.mode,
+        logLevel: patchConfig.logLevel,
+        ipv6: patchConfig.ipv6,
+        tcpConcurrent: patchConfig.tcpConcurrent,
+        externalController: patchConfig.externalController,
+        unifiedDelay: patchConfig.unifiedDelay,
+        mixedPort: patchConfig.mixedPort,
       );
 
   void applyRuntimePlan(RuntimePlan runtimePlan) {
@@ -299,18 +345,31 @@ class GlobalState {
         version: await system.version,
       );
 
-  ProfileCompileContext _buildCompileContext(ClashConfig patchConfig) =>
-      ProfileCompileContext(
+  ProfilePatchContext _buildProfilePatchContext(ClashConfig patchConfig) =>
+      ProfilePatchContext(
         patchConfig: patchConfig,
+        overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
+      );
+
+  SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
+        isAndroid: Platform.isAndroid,
+      );
+
+  RuntimePlanBuildContext _buildRuntimePlanContext() => RuntimePlanBuildContext(
         overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
         overrideDns: config.overrideDns,
         routeMode: config.networkProps.routeMode,
-        isAndroid: Platform.isAndroid,
         hasCurrentScript: config.scriptProps.currentScript != null,
       );
 
   void _applyCompiledProfileMetadata(CompiledProfileMetadata? metadata) {
     if (metadata == null) {
+      groupDescriptions.value = const {};
+      effectiveExternalController.value = "";
+      effectiveTcpConcurrent.value = false;
+      effectiveUnifiedDelay.value = false;
+      effectiveLogLevel.value = LogLevel.info.name;
+      effectiveKeepAliveInterval.value = defaultKeepAliveInterval;
       return;
     }
     groupDescriptions.value = metadata.groupDescriptions;

@@ -4,140 +4,115 @@
 
 `FlClashM` развивается как `Android-only` клиент на обновляемой базе `FlClashX`.
 
-Ключевая продуктовая цепочка:
+Ключевая продуктовая цепочка в коде:
 
 `RawProfile -> ProfileCompiler -> SecurityPolicy -> RuntimePlan -> EngineManager -> EngineAdapter`
 
-На текущем этапе уже выделен bootstrap seam, который нужен перед большой миграцией:
-
-- `AppBootstrap` отвечает за старт приложения.
-- `ProductPlatformProfile` определяет платформенный профиль приложения.
-- `AndroidEntrypoint` держит Android quick actions, tile intents и foreground bootstrap вне `main.dart`.
-- `AndroidSecurityPolicy` определяет Android runtime floor на стороне клиента.
+На этапе `bootstrap/rebrand` эта цепочка собрана в `lib/product/**` без размазывания product policy по upstream-friendly base.
 
 ## Слои
 
 ### 1. FlClashX Base
 
 - Flutter UI primitives
-- upstream-friendly widgets
+- upstream-friendly widgets/providers/models
 - базовый clash/runtime path
-- общие модели и часть providers
 
 ### 2. Product Layer
 
 - `AppBootstrap`
 - `ProductPlatformProfile`
 - `AndroidEntrypoint`
-- `AndroidSecurityPolicy`
-- будущие `ProfileCompiler`, `EngineManager`, `UpdateService`
+- `ProductProfilePipeline`
+- `ProfileCompiler`
+- `SecurityPolicy` / `AndroidSecurityPolicy`
+- `EngineManager`
+- Android platform policies (`AndroidForegroundNotificationPolicy`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
 
 ### 3. Runtime Layer
 
 - основной runtime: `mihomo`
-- будущие engine adapters: `olcrtc`, `naiveproxy`
+- `EngineAdapter`
 - `RuntimeRegistry` как allowlist и selection seam
+- disabled registrations для `olcrtc`, `naiveproxy`, `byedpi`
 
 ### 4. Helper Layer
 
-- `byedpi` только как helper
+- `byedpi` только как helper registration, не как основной engine
 
 ### 5. Platform Layer
 
 - Android VPN/service bridge
 - permissions
-- quick settings tile
-- widgets
 - foreground service
+- quick settings tile
+
+## Текущий handoff
+
+### `ProductProfilePipeline`
+
+Ответственность:
+
+- собрать product runtime pipeline в одном месте
+- держать явные стадии compile/security/runtime-plan
+- скрыть wiring между `GlobalState` и product contracts
+
+Не должен:
+
+- владеть lifecycle runtime
+- читать/писать UI state напрямую
+
+### `ProfileCompiler`
+
+Ответственность:
+
+- читать `RawProfile`
+- применять только advisory provider hints
+- собирать `CompiledProfilePatch` и metadata
+
+Не должен:
+
+- принимать client security decisions
+- включать Android floor напрямую
+
+### `SecurityPolicy`
+
+Ответственность:
+
+- применять client-enforced runtime floor
+- применять тот же floor к прямым runtime updates
+- выдавать `SecuredProfilePatch`
+- отделять обязательные client rules от provider hints
+
+Не должен:
+
+- зависеть от provider headers как от обязательной policy
+- ослаблять Android floor по данным подписки
+
+### `EngineManager`
+
+Ответственность:
+
+- lifecycle engine/runtime
+- orchestration adapters через `RuntimeRegistry`
+- restart/update/cold-start boundaries
+- compile-to-runtime handoff через явные callbacks `compile -> security -> runtimePlan`
+- применять уже secured runtime updates перед adapter bridge
+
+Не должен:
+
+- содержать engine-specific bridge details
+- принимать provider-specific product decisions
+
+## Thin consumers
+
+- `GlobalState` теперь только грузит `RawProfile`, строит локальный context для product pipeline и проецирует compiled metadata в UI-facing notifiers.
+- `AppController` остается UI/runtime consumer: запускает manager, делегирует Android platform policies и не собирает runtime config сам.
+- `AndroidEntrypoint` обрабатывает tile intents и вызывает product/runtime boundary.
 
 ## Android-only правила
 
 - Android считается единственной поддерживаемой runtime platform.
-- Навигация на Android всегда идёт через compact/mobile surface, даже на широких экранах.
-- Desktop shell не участвует в продуктовой архитектуре и release policy.
 - Android runtime policy задаётся клиентом, не подпиской.
-
-## Текущие seam-контракты
-
-### `AppBootstrap`
-
-Ответственность:
-
-- инициализация Flutter/runtime
-- preload core
-- platform-specific boot hooks
-- запуск `ProviderScope`
-
-Не должен:
-
-- содержать product policy
-- содержать tile/widget бизнес-логику
-
-### `ProductPlatformProfile`
-
-Ответственность:
-
-- определить, какой shell строить
-- определить режим навигации
-- скрыть platform branching от feature-кода
-
-Не должен:
-
-- хранить runtime state
-- принимать security-решения
-
-### `AndroidEntrypoint`
-
-Ответственность:
-
-- обработка Android quick actions
-- синхронизация tile intents
-- foreground notification title bootstrap
-
-Не должен:
-
-- компилировать профиль
-- принимать security policy за профиль
-
-### `AndroidSecurityPolicy`
-
-Ответственность:
-
-- enforce Android VPN/TUN floor
-- централизовать Android runtime guardrails
-
-Не должен:
-
-- читать provider headers как источник обязательной security policy
-- ослаблять client floor по данным подписки
-
-## Текущий runtime seam
-
-На этапе 2 orchestration идет через product layer:
-
-- `EngineManager` владеет setup/start/stop/restart/update boundary
-- `MihomoEngineAdapter` инкапсулирует текущий `clashCore`/Android bridge path
-- `RuntimePlan` несет `RuntimeSelection`, а `RuntimeRegistry` решает какой engine/helper вообще допускается
-- `state`, `controller` и `AndroidEntrypoint` выступают thin consumers этого seam
-- app lifecycle consumers только pause/resume polling, без дублирования start/stop логики
-
-Следующий шаг после этого seam:
-
-- отделить Android platform policy от runtime orchestration
-- подключать новые engine adapters через registry/descriptor path без переписывания bootstrap
-- держать helper integrations вне engine lifecycle, пока для них не появится отдельный supervisor
-
-## Android platform seam
-
-На этапе 3 Android-specific policy вынесена в `lib/product/android/**`:
-
-- `AndroidForegroundNotificationPolicy` собирает foreground title и держит policy для service/profile/server naming.
-- для explicit proxy change foreground title обновляется из client-side selection, а не зависит от успешного `updateGroups()` round-trip
-- `AndroidRuntimeAccessPolicy` централизует Android VPN start/stop access path и client-side merge для access-control.
-- `AndroidUpdateBridge` держит Android app update/install boundary отдельно от view-кода и сам владеет external release open/install path.
-
-Ожидаемые thin consumers:
-
-- `controller` только синхронизирует runtime state и вызывает platform services
-- `AndroidEntrypoint` только принимает tile intents и делегирует policy
-- `plugins/vpn.dart` и `plugins/app.dart` остаются transport/shim слоем без product policy
+- Security-critical поведение не определяется provider headers.
+- Release continuity держится относительно `FlClash-my`.

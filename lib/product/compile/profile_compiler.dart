@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/security/android_security_policy.dart';
 import 'package:flutter/foundation.dart';
 
 import '../runtime/runtime_types.dart';
+import '../security/product_security.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
 
@@ -14,41 +14,44 @@ typedef ProviderAssetPathResolver = Future<String> Function(
     String profileId, String type, String url);
 
 @immutable
-class ProfileCompileContext {
-  const ProfileCompileContext({
+class ProfilePatchContext {
+  const ProfilePatchContext({
     required this.patchConfig,
     required this.overrideNetworkSettings,
-    required this.overrideDns,
-    required this.routeMode,
-    required this.isAndroid,
-    required this.hasCurrentScript,
   });
 
   final ClashConfig patchConfig;
   final bool overrideNetworkSettings;
+}
+
+@immutable
+class RuntimePlanBuildContext {
+  const RuntimePlanBuildContext({
+    required this.overrideNetworkSettings,
+    required this.overrideDns,
+    required this.routeMode,
+    required this.hasCurrentScript,
+  });
+
+  final bool overrideNetworkSettings;
   final bool overrideDns;
   final RouteMode routeMode;
-  final bool isAndroid;
   final bool hasCurrentScript;
 }
 
 class ProfileCompiler {
-  const ProfileCompiler({
-    this.securityPolicy = androidSecurityPolicy,
-  });
+  const ProfileCompiler();
 
-  final AndroidSecurityPolicy securityPolicy;
-
-  ResolvedProfilePatch resolvePatchConfig({
+  CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
-    required ProfileCompileContext context,
+    required ProfilePatchContext context,
   }) {
     var patchConfig = context.patchConfig;
     CompiledProfileMetadata? metadata;
 
     if (rawProfile != null) {
       if (!context.overrideNetworkSettings) {
-        final providerSettings = rawProfile.providerNetworkSettings;
+        final providerSettings = rawProfile.providerHints.network;
         patchConfig = patchConfig
             .copyWith(
               ipv6: providerSettings.ipv6 ?? patchConfig.ipv6,
@@ -67,11 +70,7 @@ class ProfileCompiler {
       );
     }
 
-    if (context.isAndroid) {
-      patchConfig = securityPolicy.applyToPatchConfig(patchConfig);
-    }
-
-    return ResolvedProfilePatch(
+    return CompiledProfilePatch(
       patchConfig: patchConfig,
       metadata: metadata,
     );
@@ -79,7 +78,9 @@ class ProfileCompiler {
 
   Future<RuntimePlan> buildRuntimePlan({
     required RawProfile? rawProfile,
-    required ProfileCompileContext context,
+    required RuntimePlanBuildContext context,
+    required SecuredProfilePatch securedProfile,
+    required ClashConfig runtimePatchConfig,
     required Map<String, String> selectedMap,
     required String testUrl,
     required ProviderAssetPathResolver providerAssetPathResolver,
@@ -92,14 +93,15 @@ class ProfileCompiler {
     }
 
     final rawConfig = _cloneConfig(rawProfile.config);
-    final patchConfig = context.patchConfig.copyWith(
-      tun: context.patchConfig.tun.getRealTun(context.routeMode),
+    final patchConfig = runtimePatchConfig.copyWith(
+      tun: runtimePatchConfig.tun.getRealTun(context.routeMode),
     );
-    final metadata = _buildMetadata(
-      rawProfile: rawProfile,
-      patchConfig: context.patchConfig,
-      overrideNetworkSettings: context.overrideNetworkSettings,
-    );
+    final metadata = securedProfile.metadata ??
+        _buildMetadata(
+          rawProfile: rawProfile,
+          patchConfig: runtimePatchConfig,
+          overrideNetworkSettings: context.overrideNetworkSettings,
+        );
 
     _applyCoreRuntimeSettings(
       rawConfig: rawConfig,
@@ -111,7 +113,7 @@ class ProfileCompiler {
       rawConfig: rawConfig,
       patchConfig: patchConfig,
       overrideNetworkSettings: context.overrideNetworkSettings,
-      isAndroid: context.isAndroid,
+      runtimeConstraints: securedProfile.runtimeConstraints,
     );
     _normalizeSnifferPorts(rawConfig);
     await _rewriteProviderPaths(
@@ -146,10 +148,12 @@ class ProfileCompiler {
     required ClashConfig patchConfig,
     required bool overrideNetworkSettings,
   }) {
-    final runtimeHints = rawProfile.runtimeHints;
+    final providerHints = rawProfile.providerHints;
+    final runtimeHints = providerHints.runtime;
     return CompiledProfileMetadata(
-      externalController: rawProfile.providerExternalController.isNotEmpty
-          ? rawProfile.providerExternalController
+      externalController: !overrideNetworkSettings &&
+              providerHints.externalController.isNotEmpty
+          ? providerHints.externalController
           : patchConfig.externalController.value,
       tcpConcurrent: overrideNetworkSettings
           ? patchConfig.tcpConcurrent
@@ -197,18 +201,10 @@ class ProfileCompiler {
     rawConfig["redir-port"] = patchConfig.redirPort;
     rawConfig["tproxy-port"] = patchConfig.tproxyPort;
     rawConfig["mode"] = patchConfig.mode.name;
-
-    if (overrideNetworkSettings) {
-      rawConfig["find-process-mode"] = patchConfig.findProcessMode.name;
-      rawConfig["allow-lan"] = patchConfig.allowLan;
-      rawConfig["ipv6"] = patchConfig.ipv6;
-      rawConfig["mixed-port"] = patchConfig.mixedPort;
-    } else {
-      rawConfig["find-process-mode"] ??= patchConfig.findProcessMode.name;
-      rawConfig["allow-lan"] ??= patchConfig.allowLan;
-      rawConfig["ipv6"] ??= patchConfig.ipv6;
-      rawConfig["mixed-port"] ??= patchConfig.mixedPort;
-    }
+    rawConfig["find-process-mode"] = patchConfig.findProcessMode.name;
+    rawConfig["allow-lan"] = patchConfig.allowLan;
+    rawConfig["ipv6"] = patchConfig.ipv6;
+    rawConfig["mixed-port"] = patchConfig.mixedPort;
 
     rawConfig["geodata-loader"] = patchConfig.geodataLoader.name;
     rawConfig["global-ua"] = patchConfig.globalUa;
@@ -218,25 +214,23 @@ class ProfileCompiler {
     required Map<String, dynamic> rawConfig,
     required ClashConfig patchConfig,
     required bool overrideNetworkSettings,
-    required bool isAndroid,
+    required RuntimeSecurityConstraints runtimeConstraints,
   }) {
     rawConfig["tun"] ??= <String, dynamic>{};
-    if (isAndroid) {
-      securityPolicy.applyToRawConfig(
-        rawConfig,
-        patchConfig: patchConfig,
-      );
+    if (runtimeConstraints.enforceTun) {
+      rawConfig["tun"]["enable"] = true;
+      rawConfig["tun"]["device"] = patchConfig.tun.device;
+      rawConfig["tun"]["dns-hijack"] = patchConfig.tun.dnsHijack;
+      rawConfig["tun"]["stack"] = patchConfig.tun.stack.name;
+      rawConfig["tun"]["route-address"] = patchConfig.tun.routeAddress;
+      rawConfig["tun"]["auto-route"] = patchConfig.tun.autoRoute;
       return;
     }
 
     rawConfig["tun"]["enable"] = patchConfig.tun.enable;
     rawConfig["tun"]["device"] = patchConfig.tun.device;
     rawConfig["tun"]["dns-hijack"] = patchConfig.tun.dnsHijack;
-    if (overrideNetworkSettings) {
-      rawConfig["tun"]["stack"] = patchConfig.tun.stack.name;
-    } else {
-      rawConfig["tun"]["stack"] ??= patchConfig.tun.stack.name;
-    }
+    rawConfig["tun"]["stack"] = patchConfig.tun.stack.name;
     rawConfig["tun"]["route-address"] = patchConfig.tun.routeAddress;
     rawConfig["tun"]["auto-route"] = patchConfig.tun.autoRoute;
   }

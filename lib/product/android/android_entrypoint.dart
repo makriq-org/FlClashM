@@ -81,8 +81,11 @@ class AndroidEntrypoint {
   Future<void> handleChangeMode(String mode) async {
     try {
       final modeEnum = Mode.values.byName(mode);
-      final patched = globalState.config.patchClashConfig.copyWith(
+      final requestedPatchConfig = globalState.config.patchClashConfig.copyWith(
         mode: modeEnum,
+      );
+      final patched = globalState.securePatchConfig(
+        patchConfig: requestedPatchConfig,
       );
       if (globalState.isInit) {
         globalState.appController.syncPatchClashConfigFromRuntime(patched);
@@ -94,18 +97,8 @@ class AndroidEntrypoint {
       await preferences.saveConfig(globalState.config);
 
       final updated = await globalState.engineManager.updateConfig(
-        UpdateParams(
-          tun:
-              patched.tun.getRealTun(globalState.config.networkProps.routeMode),
-          allowLan: patched.allowLan,
-          findProcessMode: patched.findProcessMode,
-          mode: modeEnum,
-          logLevel: patched.logLevel,
-          ipv6: patched.ipv6,
-          tcpConcurrent: patched.tcpConcurrent,
-          externalController: patched.externalController,
-          unifiedDelay: patched.unifiedDelay,
-          mixedPort: patched.mixedPort,
+        globalState.buildRuntimeUpdateParams(
+          patchConfig: patched,
         ),
         coldStartPatchConfig: patched.copyWith.tun(enable: false),
       );

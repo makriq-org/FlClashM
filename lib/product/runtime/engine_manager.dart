@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../common/common.dart';
 import '../../models/models.dart';
 import '../compile/product_compile.dart';
+import '../security/product_security.dart';
 import 'engine_adapter.dart';
 import 'runtime_registry.dart';
 import 'runtime_types.dart';
@@ -12,13 +13,20 @@ import 'runtime_types.dart';
 typedef RuntimeUpdateTask = FutureOr<void> Function();
 typedef RuntimeUpdateTasks = List<RuntimeUpdateTask>;
 typedef LoadCurrentRawProfileCallback = Future<RawProfile?> Function();
-typedef ResolveProfilePatchCallback = ResolvedProfilePatch Function({
+typedef CompileProfilePatchCallback = CompiledProfilePatch Function({
   required RawProfile? rawProfile,
   required ClashConfig patchConfig,
 });
+typedef EnforceSecurityPolicyCallback = SecuredProfilePatch Function({
+  required CompiledProfilePatch compiledProfile,
+});
+typedef SecureRuntimeUpdateCallback = UpdateParams Function({
+  required UpdateParams updateParams,
+});
 typedef BuildRuntimePlanCallback = Future<RuntimePlan> Function({
   required RawProfile? rawProfile,
-  required ClashConfig patchConfig,
+  required SecuredProfilePatch securedProfile,
+  required ClashConfig runtimePatchConfig,
 });
 typedef ApplyRuntimePlanCallback = void Function(RuntimePlan runtimePlan);
 typedef BuildCoreStateCallback = CoreState Function();
@@ -85,7 +93,9 @@ class EngineManager {
   EngineManager({
     required RuntimeRegistry runtimeRegistry,
     required LoadCurrentRawProfileCallback loadCurrentRawProfile,
-    required ResolveProfilePatchCallback resolveProfilePatch,
+    required CompileProfilePatchCallback compileProfilePatch,
+    required EnforceSecurityPolicyCallback enforceSecurityPolicy,
+    required SecureRuntimeUpdateCallback secureRuntimeUpdate,
     required BuildRuntimePlanCallback buildRuntimePlan,
     required ApplyRuntimePlanCallback applyRuntimePlan,
     required BuildCoreStateCallback buildCoreState,
@@ -93,7 +103,9 @@ class EngineManager {
   })  : _runtimeRegistry = runtimeRegistry,
         _activeRuntime = runtimeRegistry.resolveSelection(),
         _loadCurrentRawProfile = loadCurrentRawProfile,
-        _resolveProfilePatch = resolveProfilePatch,
+        _compileProfilePatch = compileProfilePatch,
+        _enforceSecurityPolicy = enforceSecurityPolicy,
+        _secureRuntimeUpdate = secureRuntimeUpdate,
         _buildRuntimePlan = buildRuntimePlan,
         _applyRuntimePlan = applyRuntimePlan,
         _buildCoreState = buildCoreState,
@@ -102,7 +114,9 @@ class EngineManager {
   final RuntimeRegistry _runtimeRegistry;
   ResolvedRuntimeSelection _activeRuntime;
   final LoadCurrentRawProfileCallback _loadCurrentRawProfile;
-  final ResolveProfilePatchCallback _resolveProfilePatch;
+  final CompileProfilePatchCallback _compileProfilePatch;
+  final EnforceSecurityPolicyCallback _enforceSecurityPolicy;
+  final SecureRuntimeUpdateCallback _secureRuntimeUpdate;
   final BuildRuntimePlanCallback _buildRuntimePlan;
   final ApplyRuntimePlanCallback _applyRuntimePlan;
   final BuildCoreStateCallback _buildCoreState;
@@ -189,8 +203,11 @@ class EngineManager {
     ResolveTunAccessCallback? resolveTunAccess,
     ClashConfig? coldStartPatchConfig,
   }) async {
+    final securedUpdateParams = _secureRuntimeUpdate(
+      updateParams: updateParams,
+    );
     final resolvedUpdateParams = await _resolveUpdateParams(
-      updateParams,
+      securedUpdateParams,
       resolveTunAccess,
     );
     if (resolvedUpdateParams == null) {
@@ -336,13 +353,15 @@ class EngineManager {
     await request.refreshProfile?.call();
 
     final rawProfile = await _loadCurrentRawProfile();
-    var patchConfig = request.patchConfig;
-    final resolvedPatch = _resolveProfilePatch(
+    final compiledProfile = _compileProfilePatch(
       rawProfile: rawProfile,
-      patchConfig: patchConfig,
+      patchConfig: request.patchConfig,
     );
-    if (resolvedPatch.patchConfig != patchConfig) {
-      patchConfig = resolvedPatch.patchConfig;
+    final securedProfile = _enforceSecurityPolicy(
+      compiledProfile: compiledProfile,
+    );
+    final patchConfig = securedProfile.patchConfig;
+    if (patchConfig != request.patchConfig) {
       request.onPatchConfigResolved?.call(patchConfig);
     }
 
@@ -356,7 +375,8 @@ class EngineManager {
 
     final runtimePlan = await _buildRuntimePlan(
       rawProfile: rawProfile,
-      patchConfig: realPatchConfig,
+      securedProfile: securedProfile,
+      runtimePatchConfig: realPatchConfig,
     );
     final resolvedRuntime = _resolveRuntimeSelection(runtimePlan.runtime);
 

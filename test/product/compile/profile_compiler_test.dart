@@ -1,14 +1,14 @@
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const compiler = ProfileCompiler();
 
-  group('ProfileCompiler.resolvePatchConfig', () {
-    test('syncs provider network settings and keeps fallback on invalid values',
-        () {
+  group('ProfileCompiler.compileProfilePatch', () {
+    test('syncs provider hints and keeps fallback on invalid values', () {
       const rawProfileConfig = {
         'ipv6': false,
         'allow-lan': true,
@@ -49,36 +49,32 @@ void main() {
         ),
       );
 
-      final resolvedPatch = compiler.resolvePatchConfig(
+      final compiledProfile = compiler.compileProfilePatch(
         rawProfile: rawProfile,
-        context: const ProfileCompileContext(
+        context: const ProfilePatchContext(
           patchConfig: patchConfig,
           overrideNetworkSettings: false,
-          overrideDns: false,
-          routeMode: RouteMode.config,
-          isAndroid: true,
-          hasCurrentScript: false,
         ),
       );
 
-      expect(resolvedPatch.patchConfig.ipv6, isFalse);
-      expect(resolvedPatch.patchConfig.allowLan, isTrue);
-      expect(resolvedPatch.patchConfig.mixedPort, 9091);
+      expect(compiledProfile.patchConfig.ipv6, isFalse);
+      expect(compiledProfile.patchConfig.allowLan, isTrue);
+      expect(compiledProfile.patchConfig.mixedPort, 9091);
       expect(
-        resolvedPatch.patchConfig.findProcessMode,
+        compiledProfile.patchConfig.findProcessMode,
         FindProcessMode.strict,
       );
-      expect(resolvedPatch.patchConfig.tun.stack, TunStack.system);
-      expect(resolvedPatch.patchConfig.tun.enable, isTrue);
+      expect(compiledProfile.patchConfig.tun.stack, TunStack.system);
+      expect(compiledProfile.patchConfig.tun.enable, isFalse);
       expect(
-        resolvedPatch.metadata?.groupDescriptions,
+        compiledProfile.metadata?.groupDescriptions,
         {'Auto': 'provider description'},
       );
-      expect(resolvedPatch.metadata?.logLevel, 'warning');
+      expect(compiledProfile.metadata?.logLevel, 'warning');
     });
 
     test(
-      'keeps UI overrides for network/runtime hints but preserves provider external-controller',
+      'keeps UI overrides for advisory network/runtime hints including external-controller',
       () {
         const profile = Profile(
           id: 'profile-override',
@@ -118,36 +114,100 @@ void main() {
           externalController: ExternalControllerStatus.open,
         );
 
-        final resolvedPatch = compiler.resolvePatchConfig(
+        final compiledProfile = compiler.compileProfilePatch(
           rawProfile: rawProfile,
-          context: const ProfileCompileContext(
+          context: const ProfilePatchContext(
             patchConfig: patchConfig,
             overrideNetworkSettings: true,
-            overrideDns: false,
-            routeMode: RouteMode.config,
-            isAndroid: false,
-            hasCurrentScript: false,
           ),
         );
 
-        expect(resolvedPatch.patchConfig.ipv6, isTrue);
-        expect(resolvedPatch.patchConfig.allowLan, isFalse);
-        expect(resolvedPatch.patchConfig.mixedPort, 7890);
+        expect(compiledProfile.patchConfig.ipv6, isTrue);
+        expect(compiledProfile.patchConfig.allowLan, isFalse);
+        expect(compiledProfile.patchConfig.mixedPort, 7890);
         expect(
-          resolvedPatch.patchConfig.findProcessMode,
+          compiledProfile.patchConfig.findProcessMode,
           FindProcessMode.strict,
         );
-        expect(resolvedPatch.patchConfig.tun.stack, TunStack.mixed);
-        expect(resolvedPatch.metadata?.externalController, '127.0.0.1:9091');
-        expect(resolvedPatch.metadata?.tcpConcurrent, isTrue);
-        expect(resolvedPatch.metadata?.unifiedDelay, isTrue);
-        expect(resolvedPatch.metadata?.logLevel, 'error');
-        expect(resolvedPatch.metadata?.keepAliveInterval, 30);
+        expect(compiledProfile.patchConfig.tun.stack, TunStack.mixed);
+        expect(
+          compiledProfile.metadata?.externalController,
+          ExternalControllerStatus.open.value,
+        );
+        expect(compiledProfile.metadata?.tcpConcurrent, isTrue);
+        expect(compiledProfile.metadata?.unifiedDelay, isTrue);
+        expect(compiledProfile.metadata?.logLevel, 'error');
+        expect(compiledProfile.metadata?.keepAliveInterval, 30);
       },
     );
   });
 
   group('ProfileCompiler.buildRuntimePlan', () {
+    test('writes sanitized compiled network settings into runtime config',
+        () async {
+      const profile = Profile(
+        id: 'profile-sanitized',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'ipv6': 'bad',
+          'allow-lan': 'bad',
+          'mixed-port': 'bad',
+          'find-process-mode': 'bad',
+          'tun': {
+            'stack': 'bad',
+          },
+        },
+      );
+
+      const patchConfig = ClashConfig(
+        mixedPort: 7890,
+        ipv6: true,
+        allowLan: false,
+        findProcessMode: FindProcessMode.strict,
+        tun: Tun(
+          enable: false,
+          stack: TunStack.system,
+        ),
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: patchConfig,
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(runtimePlan.config['ipv6'], isTrue);
+      expect(runtimePlan.config['allow-lan'], isFalse);
+      expect(runtimePlan.config['mixed-port'], 7890);
+      expect(runtimePlan.config['find-process-mode'], 'strict');
+      expect(runtimePlan.config['tun']['stack'], 'system');
+    });
+
     test('rewrites providers and merges dns, hosts and override rules',
         () async {
       const profile = Profile(
@@ -213,17 +273,27 @@ void main() {
           'foo.test': '1.1.1.1, 2.2.2.2',
         },
       );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: patchConfig,
+          overrideNetworkSettings: false,
+        ),
+      );
 
       final runtimePlan = await compiler.buildRuntimePlan(
         rawProfile: rawProfile,
-        context: const ProfileCompileContext(
-          patchConfig: patchConfig,
+        context: const RuntimePlanBuildContext(
           overrideNetworkSettings: false,
           overrideDns: false,
           routeMode: RouteMode.config,
-          isAndroid: false,
           hasCurrentScript: false,
         ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: patchConfig,
         selectedMap: const {'Main': 'Proxy'},
         testUrl: 'https://cp.cloudflare.com/generate_204',
         providerAssetPathResolver: (profileId, type, url) async =>
@@ -283,17 +353,27 @@ void main() {
           'rules': ['MATCH,DIRECT'],
         },
       );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
 
       final runtimePlan = await compiler.buildRuntimePlan(
         rawProfile: rawProfile,
-        context: const ProfileCompileContext(
-          patchConfig: ClashConfig(),
+        context: const RuntimePlanBuildContext(
           overrideNetworkSettings: false,
           overrideDns: false,
           routeMode: RouteMode.config,
-          isAndroid: false,
           hasCurrentScript: true,
         ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: const ClashConfig(),
         selectedMap: const {},
         testUrl: 'https://cp.cloudflare.com/generate_204',
         providerAssetPathResolver: (profileId, type, url) async =>

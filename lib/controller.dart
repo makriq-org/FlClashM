@@ -634,12 +634,20 @@ class AppController {
   }
 
   Future<void> _updateClashConfig() async {
-    final updateParams = _ref.read(updateParamsProvider);
+    final securedPatchConfig = globalState.securePatchConfig(
+      patchConfig: _ref.read(patchClashConfigProvider),
+    );
+    if (securedPatchConfig != _ref.read(patchClashConfigProvider)) {
+      syncPatchClashConfigFromRuntime(securedPatchConfig);
+    }
+
     final updated = await globalState.engineManager.updateConfig(
-      updateParams,
+      globalState.buildRuntimeUpdateParams(
+        patchConfig: securedPatchConfig,
+      ),
       resolveTunAccess: _resolveTunAccess,
       coldStartPatchConfig: _buildColdStartPatchConfig(
-        _ref.read(patchClashConfigProvider),
+        securedPatchConfig,
       ),
     );
     if (!updated) {

@@ -2,56 +2,42 @@
 
 ## Фаза
 
-`bootstrap/rebrand -> android-only`
+`bootstrap/rebrand`
 
-## Уже сделано в этой итерации
+## Уже сделано
 
-- выделен `AppBootstrap`
-- введён `ProductPlatformProfile`
-- Android quick actions вынесены в `AndroidEntrypoint`
-- Android security policy вынесена в `AndroidSecurityPolicy`
-- Android навигация зафиксирована как compact/mobile-first surface
-- provider-driven `flclashx-androidsecure` убран из обязательной runtime policy
-- release/build pipeline сокращён до Android-only
-- continuity baseline и release guard зафиксированы в tooling/CI
+- новый Android-only bootstrap зафиксирован через `AppBootstrap`
+- Android continuity guardrails и release continuity checks уже в tooling/tests
+- compile seam выделен через `RawProfile`, `ProfileCompiler`, `ProductProfilePipeline`
+- product-level `SecurityPolicy` добавлена как отдельный этап между compile и runtime plan
+- advisory provider hints и client-enforced policy разведены по отдельным типам
+- runtime seam выделен через `EngineManager`, `EngineAdapter`, `RuntimeRegistry`
+- Android platform seam вынесен в `lib/product/android/**`
+- `mihomo` поддержан как единственный enabled engine
+- `olcrtc`, `naiveproxy`, `byedpi` остаются disabled с guardrails и rollback/update notes
 
-## Ближайшие шаги
+## Следующие шаги
 
-### 1. Выделить compile seam
+### 1. Перенос product services из legacy path
 
-- `RawProfile`
-- `ProfileCompiler`
-- `RuntimePlan`
+- updater
+- split tunneling policy pieces
+- оставшиеся Android-specific policy hooks
 
-### 2. Выделить runtime orchestration seam
+### 2. Стабилизация базы
 
-- `EngineManager`
-- `EngineAdapter`
+- runtime start/stop regressions
+- VPN behavior
+- update/install flow
 
-### 3. Перенести Android-specific policy из общих state/controller мест
+### 3. Интеграция runtime по одному
 
-- VPN policy
-- update/install path
-- foreground notification policy
-
-### 4. Подготовить continuity-safe updater path
-
-- `applicationId = com.makriq.flclash`
-- release signing continuity
-- `versionCode` monotonic upgrade against public `FlClash-my`
-- release channel `makriq-org/FlClashM`
-- automatic guard before release и в отдельной CI-проверке
+- `olcrtc`
+- `naiveproxy`
+- `byedpi` как helper-only path
 
 ## Риски
 
-- часть runtime pipeline всё ещё живёт в `GlobalState` и `AppController`
-- в репозитории ещё остаётся legacy desktop codebase, хотя release policy уже Android-only
-- engine adapters пока ещё не оформлены как отдельные контракты
-
-## Критерий завершения следующей фазы
-
-Фаза считается завершённой, когда:
-
-- профиль компилируется через отдельный product contract
-- Android policy не размазана по UI/controller/state
-- runtime adapters можно подключать без переписывания bootstrap
+- в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
+- часть display/branding поведения по provider headers по-прежнему живет рядом с UI/controller и еще не оформлена как отдельный product service
+- новые runtime пока есть только как registrations и guardrails, без production adapters

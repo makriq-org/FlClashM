@@ -23,8 +23,8 @@ class CompiledProfileMetadata {
 }
 
 @immutable
-class ResolvedProfilePatch {
-  const ResolvedProfilePatch({
+class CompiledProfilePatch {
+  const CompiledProfilePatch({
     required this.patchConfig,
     required this.metadata,
   });

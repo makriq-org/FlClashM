@@ -8,87 +8,69 @@ Android security policy определяется клиентом `FlClashM`.
 
 - metadata
 - display hints
-- advisory hints
+- advisory runtime hints
 
 Провайдер не может:
 
 - ослаблять client security floor
 - задавать обязательное security-critical поведение через headers
 
-## Что уже закреплено
+## Текущий контракт
 
-### 1. Android policy вынесена в `AndroidSecurityPolicy`
+Product-level security boundary теперь выражена типами:
 
-Это single point для Android runtime guardrails.
+- advisory provider side: `ProviderAdvisoryHints`, `ProviderNetworkHints`, `ProviderRuntimeHints`
+- compile result: `CompiledProfilePatch`
+- client-enforced policy result: `SecuredProfilePatch`
+- runtime hardening flags: `RuntimeSecurityConstraints`
 
-### 2. `flclashx-androidsecure` больше не является источником обязательной policy
+Это означает:
 
-В `FlClashM` этот header считается legacy provider hint и не должен менять security-critical поведение клиента.
+- `ProfileCompiler` только читает advisory hints
+- `SecurityPolicy` применяет обязательные client rules и для compile handoff, и для direct runtime updates
+- `EngineManager` больше не работает с объединенным “patch+policy” этапом
 
-Причина:
+## Android floor
 
-- security policy нельзя делегировать подписке
-- это ломает предсказуемость клиента
-- это мешает безопасной эволюции Android runtime
+Текущий Android floor:
 
-### 3. Android runtime floor задаётся клиентом
+- Android runtime идет через VPN/TUN path
+- `AndroidSecurityPolicy` принудительно включает TUN на security stage
+- тот же `AndroidSecurityPolicy` принудительно включает TUN и для live `updateConfig` path
+- runtime plan builder применяет Android tun hardening по `RuntimeSecurityConstraints`
+- Android VPN access-control по-прежнему собирается client-side из локального `vpnProps.accessControl`
 
-Текущий минимальный floor:
+## Provider headers
 
-- Android runtime идёт через VPN/TUN path
-- platform policy применяется на стороне клиента во время сборки runtime config
-- release pipeline публикует только Android-артефакты
+- `flclashx-androidsecure` считается legacy и не участвует в обязательной policy
+- `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints
+- branding/custom view headers не могут менять runtime floor
 
-### 4. Android access control merge остаётся client-side
+## Advisory profile hints
 
-Android VPN access-control для runtime старта собирается клиентом из локального `vpnProps.accessControl`.
-
-Это значит:
-
-- provider headers не могут подменить список allow/deny приложений
-- `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints и не участвуют в access/update policy
-- runtime получает уже собранный client-side policy payload
-- future updater/install flow не должен обходить этот boundary
-
-### 5. Runtime allowlist задаётся клиентом
-
-Выбор engine/helper идёт только через `RuntimeRegistry`.
-
-Это значит:
-
-- неподдержанные runtime registrations остаются disabled, даже если upstream уже существует
-- helper integration не может сам владеть Android VPN/TUN lifecycle
-- `byedpi` может появиться только как attachable helper, а не как основной engine
-- `olcrtc` и `naiveproxy` нельзя включать до pinned artifact path и rollback policy
+- `overrideNetworkSettings=false` разрешает advisory hints влиять на compile result
+- `overrideNetworkSettings=true` оставляет за клиентом и network/runtime hints, и `external-controller`
 
 ## Границы ответственности
 
 ### Клиент решает
 
-- какие Android runtime ограничения обязательны
-- какие параметры можно менять пользователю
-- какие runtime adapters допускаются
+- какой security floor обязателен
+- какие runtime adapters вообще допустимы
+- какие Android ограничения нельзя ослаблять
 
 ### Подписка может только подсказывать
 
 - branding metadata
-- service label hints
-- server info hints
+- service/server display hints
 - advisory profile settings
 
-## Правила для будущих изменений
+## Правила для новых runtime
 
-Перед любой новой runtime-интеграцией нужно зафиксировать:
+Перед новой runtime-интеграцией нужно зафиксировать:
 
 1. место в архитектуре
 2. контракт
 3. security ограничения
 4. update path
 5. rollback path
-
-## Технический долг
-
-Следующий этап:
-
-- вынести полноценный `SecurityPolicy` из общего `GlobalState`
-- разделить advisory provider hints и обязательные client rules на уровне типов, а не строковых header key

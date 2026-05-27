@@ -1,24 +1,53 @@
 import 'package:flclashx/models/models.dart';
 
-class AndroidSecurityPolicy {
+import '../compile/runtime_plan.dart';
+import 'security_policy.dart';
+
+class AndroidSecurityPolicy implements SecurityPolicy {
   const AndroidSecurityPolicy();
 
   static const ignoredProviderHint = 'flclashx-androidsecure';
 
-  ClashConfig applyToPatchConfig(ClashConfig patchConfig) =>
-      patchConfig.copyWith.tun(enable: true);
-
-  void applyToRawConfig(
-    Map<String, dynamic> rawConfig, {
+  @override
+  ClashConfig securePatchConfig({
     required ClashConfig patchConfig,
+    required SecurityPolicyContext context,
+  }) =>
+      context.isAndroid ? patchConfig.copyWith.tun(enable: true) : patchConfig;
+
+  @override
+  UpdateParams secureRuntimeUpdate({
+    required UpdateParams updateParams,
+    required SecurityPolicyContext context,
+  }) =>
+      context.isAndroid
+          ? updateParams.copyWith(
+              tun: updateParams.tun.copyWith(enable: true),
+            )
+          : updateParams;
+
+  @override
+  SecuredProfilePatch secureProfile({
+    required CompiledProfilePatch compiledProfile,
+    required SecurityPolicyContext context,
   }) {
-    rawConfig["tun"] ??= <String, dynamic>{};
-    rawConfig["tun"]["enable"] = true;
-    rawConfig["tun"]["device"] = patchConfig.tun.device;
-    rawConfig["tun"]["dns-hijack"] = patchConfig.tun.dnsHijack;
-    rawConfig["tun"]["stack"] = patchConfig.tun.stack.name;
-    rawConfig["tun"]["route-address"] = patchConfig.tun.routeAddress;
-    rawConfig["tun"]["auto-route"] = patchConfig.tun.autoRoute;
+    if (!context.isAndroid) {
+      return SecuredProfilePatch(
+        patchConfig: compiledProfile.patchConfig,
+        metadata: compiledProfile.metadata,
+      );
+    }
+
+    return SecuredProfilePatch(
+      patchConfig: securePatchConfig(
+        patchConfig: compiledProfile.patchConfig,
+        context: context,
+      ),
+      metadata: compiledProfile.metadata,
+      runtimeConstraints: const RuntimeSecurityConstraints(
+        enforceTun: true,
+      ),
+    );
   }
 }
 

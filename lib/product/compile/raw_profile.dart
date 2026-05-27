@@ -8,9 +8,7 @@ class RawProfile {
     required this.profile,
     required this.config,
     required this.groupDescriptions,
-    required this.providerNetworkSettings,
-    required this.runtimeHints,
-    required this.providerExternalController,
+    required this.providerHints,
   });
 
   factory RawProfile.fromConfig({
@@ -21,29 +19,29 @@ class RawProfile {
         profile: profile,
         config: config,
         groupDescriptions: _parseGroupDescriptions(config["proxy-groups"]),
-        providerNetworkSettings: RawProfileNetworkSettings(
-          ipv6: _asBool(config["ipv6"]),
-          allowLan: _asBool(config["allow-lan"]),
-          mixedPort: _asInt(config["mixed-port"]),
-          findProcessMode: _parseFindProcessMode(config["find-process-mode"]),
-          tunStack: _parseTunStack(config["tun"]),
+        providerHints: ProviderAdvisoryHints(
+          network: ProviderNetworkHints(
+            ipv6: _asBool(config["ipv6"]),
+            allowLan: _asBool(config["allow-lan"]),
+            mixedPort: _asInt(config["mixed-port"]),
+            findProcessMode: _parseFindProcessMode(config["find-process-mode"]),
+            tunStack: _parseTunStack(config["tun"]),
+          ),
+          runtime: ProviderRuntimeHints(
+            tcpConcurrent: _asBool(config["tcp-concurrent"]),
+            unifiedDelay: _asBool(config["unified-delay"]),
+            logLevel: _trimmedString(config["log-level"]),
+            keepAliveInterval: _asInt(config["keep-alive-interval"]),
+          ),
+          externalController:
+              _trimmedString(config["external-controller"]) ?? "",
         ),
-        runtimeHints: RawProfileRuntimeHints(
-          tcpConcurrent: _asBool(config["tcp-concurrent"]),
-          unifiedDelay: _asBool(config["unified-delay"]),
-          logLevel: _trimmedString(config["log-level"]),
-          keepAliveInterval: _asInt(config["keep-alive-interval"]),
-        ),
-        providerExternalController:
-            _trimmedString(config["external-controller"]) ?? "",
       );
 
   final Profile profile;
   final Map<String, dynamic> config;
   final Map<String, String> groupDescriptions;
-  final RawProfileNetworkSettings providerNetworkSettings;
-  final RawProfileRuntimeHints runtimeHints;
-  final String providerExternalController;
+  final ProviderAdvisoryHints providerHints;
 
   static Map<String, String> _parseGroupDescriptions(Object? groups) {
     final descriptions = <String, String>{};
@@ -116,8 +114,21 @@ class RawProfile {
 }
 
 @immutable
-class RawProfileNetworkSettings {
-  const RawProfileNetworkSettings({
+class ProviderAdvisoryHints {
+  const ProviderAdvisoryHints({
+    this.network = const ProviderNetworkHints(),
+    this.runtime = const ProviderRuntimeHints(),
+    this.externalController = "",
+  });
+
+  final ProviderNetworkHints network;
+  final ProviderRuntimeHints runtime;
+  final String externalController;
+}
+
+@immutable
+class ProviderNetworkHints {
+  const ProviderNetworkHints({
     this.ipv6,
     this.allowLan,
     this.mixedPort,
@@ -133,8 +144,8 @@ class RawProfileNetworkSettings {
 }
 
 @immutable
-class RawProfileRuntimeHints {
-  const RawProfileRuntimeHints({
+class ProviderRuntimeHints {
+  const ProviderRuntimeHints({
     this.tcpConcurrent,
     this.unifiedDelay,
     this.logLevel,

@@ -2,6 +2,7 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
 import 'package:flclashx/product/runtime/product_runtime.dart';
+import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -43,17 +44,29 @@ void main() {
             ],
           ),
           loadCurrentRawProfile: () async => null,
-          resolveProfilePatch: ({
+          compileProfilePatch: ({
             required rawProfile,
             required patchConfig,
           }) =>
-              ResolvedProfilePatch(
+              CompiledProfilePatch(
             patchConfig: patchConfig,
             metadata: null,
           ),
+          enforceSecurityPolicy: ({
+            required compiledProfile,
+          }) =>
+              SecuredProfilePatch(
+            patchConfig: compiledProfile.patchConfig,
+            metadata: compiledProfile.metadata,
+          ),
+          secureRuntimeUpdate: ({
+            required updateParams,
+          }) =>
+              updateParams,
           buildRuntimePlan: ({
             required rawProfile,
-            required patchConfig,
+            required securedProfile,
+            required runtimePatchConfig,
           }) async =>
               RuntimePlan.empty(
             selectedMap: const {},
@@ -132,6 +145,89 @@ void main() {
       expect(mihomoAdapter.lastPersistedSetupParams, isNotNull);
     });
 
+    test('secures live runtime updates before adapter update', () async {
+      manager = EngineManager(
+        runtimeRegistry: RuntimeRegistry(
+          defaultSelection: const RuntimeSelection.mihomo(),
+          engines: [
+            EngineRuntimeRegistration(
+              descriptor: const RuntimeDescriptor(
+                id: RuntimeId.mihomo,
+                role: RuntimeRole.engine,
+                capabilities: {RuntimeCapability.tun},
+              ),
+              availability: const RuntimeAvailability.supported(
+                updatePath: 'bundled',
+                rollbackPath: 'bundled',
+              ),
+              adapterFactory: () => mihomoAdapter,
+            ),
+          ],
+        ),
+        loadCurrentRawProfile: () async => null,
+        compileProfilePatch: ({
+          required rawProfile,
+          required patchConfig,
+        }) =>
+            CompiledProfilePatch(
+          patchConfig: patchConfig,
+          metadata: null,
+        ),
+        enforceSecurityPolicy: ({
+          required compiledProfile,
+        }) =>
+            SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        secureRuntimeUpdate: ({
+          required updateParams,
+        }) =>
+            updateParams.copyWith(
+          tun: updateParams.tun.copyWith(enable: true),
+        ),
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async =>
+            RuntimePlan.empty(
+          selectedMap: const {},
+          testUrl: 'https://example.com',
+          runtime: runtimeSelection,
+        ),
+        applyRuntimePlan: (_) {
+          applyRuntimePlanCalls++;
+        },
+        buildCoreState: () => const CoreState(
+          vpnProps: VpnProps(),
+          onlyStatisticsProxy: false,
+          currentProfileName: '',
+        ),
+        buildInitParams: () async =>
+            const InitParams(homeDir: '/tmp/flclashm', version: 1),
+      );
+
+      final updated = await manager.updateConfig(
+        const UpdateParams(
+          tun: Tun(enable: false),
+          mixedPort: defaultMixedPort,
+          allowLan: false,
+          findProcessMode: FindProcessMode.always,
+          mode: Mode.rule,
+          logLevel: LogLevel.error,
+          ipv6: true,
+          tcpConcurrent: true,
+          externalController: ExternalControllerStatus.close,
+          unifiedDelay: true,
+        ),
+      );
+
+      expect(updated, isTrue);
+      expect(mihomoAdapter.updateConfigCalls, 1);
+      expect(mihomoAdapter.lastUpdateParams?.tun.enable, isTrue);
+    });
+
     test('initializes the engine selected by runtime plan', () async {
       naiveproxyAdapter.isInitializedValue = false;
       runtimeSelection = const RuntimeSelection(engine: RuntimeId.naiveproxy);
@@ -208,6 +304,7 @@ class _FakeEngineAdapter implements EngineAdapter {
   int updateConfigCalls = 0;
   int persistColdStartCalls = 0;
   SetupParams? lastPersistedSetupParams;
+  UpdateParams? lastUpdateParams;
 
   @override
   Future<void> applyPendingUpdate() async {
@@ -238,6 +335,7 @@ class _FakeEngineAdapter implements EngineAdapter {
   @override
   Future<String> updateRuntimeConfig(UpdateParams updateParams) async {
     updateConfigCalls++;
+    lastUpdateParams = updateParams;
     return '';
   }
 
