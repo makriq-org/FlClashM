@@ -1,7 +1,7 @@
 name: flclashx
-description: Fork multi-platform proxy client FlClash based on ClashMeta, simple and easy to use, open-source and ad-free.
+description: FlClashM is a rebrand-ready FlClashX-based client with preserved Android package continuity from makriq.
 publish_to: "none"
-version: 0.4.0+2026012301
+version: 0.10.0+2026052601
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

@@ -3,12 +3,15 @@ package com.follow.clashx.plugins
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.ComponentInfo
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -249,32 +252,43 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             file
         )
 
-        val flags =
-            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val mimeType = getMimeType(file)
+        val intent = if (mimeType == APK_MIME_TYPE) {
+            Intent(Intent.ACTION_INSTALL_PACKAGE)
+        } else {
+            Intent(Intent.ACTION_VIEW)
+        }.apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            clipData = ClipData.newRawUri(file.name, uri)
+        }
 
-        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(
-            uri,
-            "text/plain"
-        ).addFlags(flags)
-
-        val resInfoList = FlClashXApplication.getAppContext().packageManager.queryIntentActivities(
-            intent, PackageManager.MATCH_DEFAULT_ONLY
-        )
-
-        for (resolveInfo in resInfoList) {
-            val packageName = resolveInfo.activityInfo.packageName
-            FlClashXApplication.getAppContext().grantUriPermission(
-                packageName,
-                uri,
-                flags
-            )
+        val launchIntent = if (mimeType == APK_MIME_TYPE) {
+            intent
+        } else {
+            Intent.createChooser(intent, file.name).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newRawUri(file.name, uri)
+            }
         }
 
         try {
-            activityRef?.get()?.startActivity(intent)
+            activityRef?.get()?.startActivity(launchIntent)
+        } catch (_: ActivityNotFoundException) {
+            tip("No app found to open ${file.name}")
         } catch (e: Exception) {
             android.util.Log.w("AppPlugin", "openFile failed", e)
         }
+    }
+
+    private fun getMimeType(file: File): String {
+        val extension = file.extension.lowercase()
+        if (extension == "apk") {
+            return APK_MIME_TYPE
+        }
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
     }
 
     private fun updateExcludeFromRecents(value: Boolean?) {
@@ -494,5 +508,9 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         } else {
             Handler(Looper.getMainLooper()).post { runCatching { success(value) } }
         }
+    }
+
+    private companion object {
+        const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     }
 }

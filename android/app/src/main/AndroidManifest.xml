@@ -16,6 +16,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission
@@ -28,7 +29,7 @@
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
-        android:label="FlClashX"
+        android:label="FlClashM"
         android:memtagMode="off">
 
         <activity
@@ -132,7 +133,7 @@
             android:name=".services.FlClashXTileService"
             android:exported="true"
             android:icon="@drawable/ic"
-            android:label="FlClashX"
+            android:label="FlClashM"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             tools:targetApi="n">
             <intent-filter>
