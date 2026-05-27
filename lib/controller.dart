@@ -22,7 +22,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'common/common.dart';
 import 'models/models.dart';
 import 'plugins/vpn.dart';
-import 'product/security/android_security_policy.dart';
 import 'views/profiles/override_profile.dart';
 
 class AppController {
@@ -656,21 +655,13 @@ class AppController {
     await _ref.read(currentProfileProvider)?.checkAndUpdate();
     var patchConfig = _ref.read(patchClashConfigProvider);
 
-    // Sync network settings from provider config if not overriding
-    final appSetting = _ref.read(appSettingProvider);
-    if (!appSetting.overrideNetworkSettings) {
-      final syncedConfig = await globalState.syncNetworkSettingsFromProvider(
-        patchConfig,
-      );
-      // Always update provider when using provider settings to ensure UI reflects config
-      _ref
-          .read(patchClashConfigProvider.notifier)
-          .updateState((state) => syncedConfig);
-      patchConfig = syncedConfig;
-    }
-
-    if (Platform.isAndroid) {
-      patchConfig = androidSecurityPolicy.applyToPatchConfig(patchConfig);
+    final rawProfile = await globalState.loadCurrentRawProfile();
+    final resolvedPatch = globalState.resolveProfilePatchConfig(
+      rawProfile: rawProfile,
+      patchConfig: patchConfig,
+    );
+    if (resolvedPatch.patchConfig != patchConfig) {
+      patchConfig = resolvedPatch.patchConfig;
       _ref
           .read(patchClashConfigProvider.notifier)
           .updateState((state) => patchConfig);
@@ -682,10 +673,12 @@ class AppController {
     }
     final realTunEnable = _ref.read(realTunEnableProvider);
     final realPatchConfig = patchConfig.copyWith.tun(enable: realTunEnable);
-    final params = await globalState.getSetupParams(
-      pathConfig: realPatchConfig,
+    final runtimePlan = await globalState.buildRuntimePlan(
+      rawProfile: rawProfile,
+      patchConfig: realPatchConfig,
     );
-    final message = await clashCore.setupConfig(params);
+    globalState.applyRuntimePlan(runtimePlan);
+    final message = await clashCore.setupConfig(runtimePlan.toSetupParams());
     lastProfileModified = await _ref.read(
       currentProfileProvider.select((state) => state?.profileLastModified),
     );
