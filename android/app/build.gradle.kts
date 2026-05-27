@@ -65,7 +65,6 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
         }
 
         release {
@@ -93,6 +92,8 @@ flutter {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":common"))
+    implementation(project(":service"))
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.10.1")

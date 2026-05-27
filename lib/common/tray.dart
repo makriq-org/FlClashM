@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flclashx/common/system.dart';
 import 'package:flclashx/common/utils.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -31,6 +32,7 @@ class Tray {
         brightness: brightness ??
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
         isRunning: isRunning,
+        isSystemDark: Platform.isWindows ? system.isWindowsSystemDark : null,
       ),
       isTemplate: true,
     );
@@ -149,18 +151,8 @@ class Tray {
     }
   }
 
-  Future<void> updateTrayTitle([Traffic? traffic]) async {
-    // if (!Platform.isMacOS) {
-    //   return;
-    // }
-    // if (traffic == null) {
-    //   await trayManager.setTitle("");
-    // } else {
-    //   await trayManager.setTitle(
-    //     "${traffic.up.shortShow} ↑ \n${traffic.down.shortShow} ↓",
-    //   );
-    // }
-  }
+  Future<void> updateTrayTitle([Traffic? traffic]) async {}
+
 
   Future<void> _copyEnv(int port) async {
     final url = "http://127.0.0.1:$port";

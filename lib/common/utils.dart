@@ -153,19 +153,21 @@ class Utils {
   String getTrayIconPath({
     required Brightness brightness,
     bool isRunning = false,
+    bool? isSystemDark,
   }) {
     if (Platform.isMacOS) {
-      // macOS always uses white icon for menu bar
       return "assets/images/icon_white.png";
     }
-    
-    // When running - use colored icon
+
     if (isRunning) {
       return "assets/images/icon.ico";
     }
-    
-    // When stopped - use stop icons based on theme
-    return switch (brightness) {
+
+    final effectiveBrightness = isSystemDark != null
+        ? (isSystemDark ? Brightness.dark : Brightness.light)
+        : brightness;
+
+    return switch (effectiveBrightness) {
       Brightness.dark => "assets/images/icon_stop_white.ico",
       Brightness.light => "assets/images/icon_stop_black.ico",
     };

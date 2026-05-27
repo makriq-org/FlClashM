@@ -150,9 +150,7 @@ class MetainfoWidget extends ConsumerWidget {
                         if (supportUrl != null && supportUrl.isNotEmpty)
                           IconButton(
                             icon: Icon(
-                              supportUrl.toLowerCase().contains('t.me')
-                                  ? Icons.telegram
-                                  : Icons.launch,
+                              Icons.contact_support,
                             ),
                             iconSize: 34,
                             color: theme.colorScheme.primary,

@@ -5,14 +5,13 @@ package main
 import "C"
 import (
 	"context"
-	bridge "core/dart-bridge"
 	"core/platform"
 	"core/state"
 	t "core/tun"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
@@ -98,8 +97,19 @@ func handleStopTun() {
 	}
 }
 
-func handleStartTun(fd int, callback unsafe.Pointer) {
+func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	handleStopTun()
+	runLock.Lock()
+	if currentConfig == nil {
+		runLock.Unlock()
+		syscall.Close(fd)
+		if callback != nil {
+			releaseObject(callback)
+		}
+		return false
+	}
+	tunCfg := currentConfig.General.Tun
+	runLock.Unlock()
 	tunLock.Lock()
 	defer tunLock.Unlock()
 	now := time.Now()
@@ -110,17 +120,37 @@ func handleStartTun(fd int, callback unsafe.Pointer) {
 			limit:    semaphore.NewWeighted(4),
 		}
 		initTunHook()
-		tunListener, _ := t.Start(fd, currentConfig.General.Tun.Device, currentConfig.General.Tun.Stack)
+		tunListener, err := t.Start(fd, tunCfg)
+		if err != nil {
+			log.Errorln("handleStartTun: t.Start failed: %v", err)
+			syscall.Close(fd)
+			removeTunHook()
+			if tunHandler != nil {
+				releaseObject(tunHandler.callback)
+				tunHandler = nil
+			}
+			return false
+		}
 		if tunListener != nil {
 			log.Infoln("TUN address: %v", tunListener.Address())
 			tunHandler.listener = tunListener
 		} else {
 			removeTunHook()
+			if tunHandler != nil {
+				releaseObject(tunHandler.callback)
+				tunHandler = nil
+			}
+			return false
 		}
+	} else if callback != nil {
+		releaseObject(callback)
 	}
+	return true
 }
 
 func handleGetRunTime() string {
+	tunLock.Lock()
+	defer tunLock.Unlock()
 	if runTime == nil {
 		return ""
 	}
@@ -151,8 +181,11 @@ func removeTunHook() {
 }
 
 func handleGetAndroidVpnOptions() string {
-	tunLock.Lock()
-	defer tunLock.Unlock()
+	runLock.Lock()
+	defer runLock.Unlock()
+	if currentConfig == nil {
+		return ""
+	}
 	mixedPort := currentConfig.General.MixedPort
 	// With the HTTP/SOCKS inbound disabled there is no proxy endpoint to
 	// advertise via VpnService.setHttpProxy — force it off so Android doesn't
@@ -174,21 +207,28 @@ func handleGetAndroidVpnOptions() string {
 	}
 	data, err := json.Marshal(options)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Errorln("Error: %v", err)
 		return ""
 	}
 	return string(data)
 }
 
 func handleUpdateDns(value string) {
+	var dnsServers []string
+	if err := json.Unmarshal([]byte(value), &dnsServers); err != nil {
+		// Fallback to comma-split for backward compatibility
+		dnsServers = strings.Split(value, ",")
+	}
 	go func() {
 		log.Infoln("[DNS] updateDns %s", value)
-		dns.UpdateSystemDNS(strings.Split(value, ","))
+		dns.UpdateSystemDNS(dnsServers)
 		dns.FlushCacheWithDefaultResolver()
 	}()
 }
 
 func handleGetCurrentProfileName() string {
+	runLock.Lock()
+	defer runLock.Unlock()
 	if state.CurrentState == nil {
 		return ""
 	}
@@ -201,7 +241,11 @@ func nextHandle(action *Action, result ActionResult) bool {
 		result.success(handleGetAndroidVpnOptions())
 		return true
 	case updateDnsMethod:
-		data := action.Data.(string)
+		data, ok := action.Data.(string)
+		if !ok {
+			result.error("invalid data type")
+			return true
+		}
 		handleUpdateDns(data)
 		result.success(true)
 		return true
@@ -216,27 +260,26 @@ func nextHandle(action *Action, result ActionResult) bool {
 }
 
 //export quickStart
-func quickStart(initParamsChar *C.char, paramsChar *C.char, stateParamsChar *C.char, port C.longlong) {
-	i := int64(port)
+func quickStart(initParamsChar *C.char, paramsChar *C.char, stateParamsChar *C.char, callback unsafe.Pointer) {
 	paramsString := C.GoString(initParamsChar)
 	bytes := []byte(C.GoString(paramsChar))
 	stateParams := C.GoString(stateParamsChar)
 	go func() {
-		res := handleInitClash(paramsString)
-		if res == false {
-			bridge.SendToPort(i, "init error")
+		// Callback lifetime is managed on the JVM side: invoke_callback_impl deletes
+		// the global ref after delivering onResult. Every path below fires the
+		// callback exactly once.
+		if !handleInitClash(paramsString) {
+			invokeCallback(callback, "init error")
+			return
 		}
 		handleSetState(stateParams)
-		bridge.SendToPort(i, handleSetupConfig(bytes))
+		invokeCallback(callback, handleSetupConfig(bytes))
 	}()
 }
 
 //export startTUN
 func startTUN(fd C.int, callback unsafe.Pointer) bool {
-	go func() {
-		handleStartTun(int(fd), callback)
-	}()
-	return true
+	return handleStartTun(int(fd), callback)
 }
 
 //export getRunTime
@@ -246,9 +289,7 @@ func getRunTime() *C.char {
 
 //export stopTun
 func stopTun() {
-	go func() {
-		handleStopTun()
-	}()
+	handleStopTun()
 }
 
 //export getCurrentProfileName
@@ -271,4 +312,15 @@ func setState(s *C.char) {
 func updateDns(s *C.char) {
 	dnsList := C.GoString(s)
 	handleUpdateDns(dnsList)
+}
+
+//export resetConnections
+func resetConnections() {
+	go func() {
+		runLock.Lock()
+		defer runLock.Unlock()
+		resolver.ResetConnection()
+		closeConnections()
+		log.Infoln("[Network] connections reset after network change")
+	}()
 }

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/plugins/tile.dart';
@@ -117,8 +119,19 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       globalState.appController.savePreferences();
+      if (Platform.isAndroid) {
+        globalState.stopUpdateTasks();
+        globalState.appController.stopRunTimeTimer();
+      }
     } else {
       render?.resume();
+      if (state == AppLifecycleState.resumed && Platform.isAndroid) {
+        clashLib?.reconnectIfNeeded();
+        if (globalState.isStart) {
+          globalState.startUpdateTasks();
+          globalState.appController.startRunTimeTimer();
+        }
+      }
     }
   }
 

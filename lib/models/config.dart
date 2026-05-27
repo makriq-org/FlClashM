@@ -83,6 +83,7 @@ class AppSettingProps with _$AppSettingProps {
     @Default(false) bool overrideProviderSettings,
     @Default(false) bool overrideNetworkSettings,
     @Default(RecoveryStrategy.compatible) RecoveryStrategy recoveryStrategy,
+    bool? newDashboard,
   }) = _AppSettingProps;
 
   factory AppSettingProps.fromJson(Map<String, Object?> json) =>
@@ -189,7 +190,7 @@ class ThemeProps with _$ThemeProps {
   const factory ThemeProps({
     int? primaryColor,
     @Default(defaultPrimaryColors) List<int> primaryColors,
-    @Default(ThemeMode.dark) ThemeMode themeMode,
+    @Default(ThemeMode.system) ThemeMode themeMode,
     @Default(DynamicSchemeVariant.content) DynamicSchemeVariant schemeVariant,
     @Default(false) bool pureBlack,
     @Default(TextScale()) TextScale textScale,
@@ -271,12 +272,22 @@ class Config with _$Config {
           (json["vpnProps"]! as Map)["accessControl"] = accessControlMap;
         }
       }
-      
+
       // Migration: Replace deprecated "standard" iconStyle with "icon"
       final proxiesStyle = json["proxiesStyle"];
       if (proxiesStyle is Map) {
         if (proxiesStyle["iconStyle"] == "standard") {
           proxiesStyle["iconStyle"] = "icon";
+        }
+      }
+
+      // Migration: strip removed fields from profiles
+      final profiles = json["profiles"];
+      if (profiles is List) {
+        for (final p in profiles) {
+          if (p is Map) {
+            p.remove("updateMethod");
+          }
         }
       }
     } catch (_) {}

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:defer_pointer/defer_pointer.dart';
@@ -8,7 +9,9 @@ import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'widgets/hero_connect.dart';
 import 'widgets/start_button.dart';
+import 'widgets/stats_grid.dart';
 
 
 class DashboardView extends ConsumerStatefulWidget {
@@ -72,21 +75,23 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
               : const SizedBox()),
         Consumer(
           builder: (context, ref, child) {
-            final denyEditing = ref.watch(currentProfileProvider
-                .select((profile) => profile?.providerHeaders['flclashx-denywidgets']));
+            final headers = ref.watch(currentProfileProvider
+                .select((profile) => profile?.providerHeaders)) ?? {};
+            final denyEditing = headers['flclashx-denywidgets'];
+            final heroOnly = headers['flclashx-newboard'];
+            final newDashboard = ref.watch(appSettingProvider.select((s) => s.newDashboard));
 
-            if (denyEditing == 'true') {
+            if (denyEditing == 'true' || heroOnly == 'true' || newDashboard == true) {
               return const SizedBox.shrink();
             }
 
-            return IconButton(
-              icon: _buildIsEdit((isEdit) => isEdit
+            return _buildIsEdit((isEdit) => IconButton(
+              tooltip: isEdit ? appLocalizations.save : appLocalizations.edit,
+              icon: isEdit
                     ? const Icon(Icons.save)
-                    : const Icon(
-                        Icons.edit,
-                      )),
+                    : const Icon(Icons.edit),
               onPressed: _handleUpdateIsEdit,
-            );
+            ));
           },
         ),
       ];
@@ -174,7 +179,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
     final hasServerInfo = ref.watch(hasServerInfoDataProvider);
     final columns = max(4 * ((dashboardState.viewWidth / 320).ceil()), 8);
     final spacing = 16.ap;
-    
+
     bool isAllowed(DashboardWidget item) => _isAllowedWidget(
       item,
       globalModeEnabled: globalModeEnabled,
@@ -182,7 +187,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
       hasServiceInfoData: hasServiceInfo,
       hasServerInfoData: hasServerInfo,
     );
-    
+
     final children = [
       ...dashboardState.dashboardWidgets
           .where(isAllowed)
@@ -200,47 +205,77 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
     });
     return Column(
       children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16).copyWith(
-                bottom: 16,
+        _buildIsEdit((isEdit) {
+      if (isEdit) {
+        return Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: SystemBackBlock(
+              child: CommonPopScope(
+                child: SuperGrid(
+                  key: key,
+                  crossAxisCount: columns,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                  onUpdate: _handleSave,
+                  children: [
+                    ...dashboardState.dashboardWidgets
+                        .where(isAllowed)
+                        .map((item) => item.widget),
+                  ],
+                ),
+                onPop: () {
+                  _handleUpdateIsEdit();
+                  return false;
+                },
               ),
-              child: _buildIsEdit((isEdit) => isEdit
-                    ? SystemBackBlock(
-                        child: CommonPopScope(
-                          child: SuperGrid(
-                            key: key,
-                            crossAxisCount: columns,
-                            crossAxisSpacing: spacing,
-                            mainAxisSpacing: spacing,
-                            onUpdate: _handleSave,
-                            children: [
-                              ...dashboardState.dashboardWidgets
-                                  .where(isAllowed)
-                                  .map(
-                                    (item) => item.widget,
-                                  ),
-                            ],
-                          ),
-                          onPop: () {
-                            _handleUpdateIsEdit();
-                            return false;
-                          },
-                        ),
-                      )
-                    : Grid(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: spacing,
-                        mainAxisSpacing: spacing,
-                        children: children,
-                      )),
             ),
           ),
+        );
+      }
+      final headerNewBoard = ref.watch(currentProfileProvider
+          .select((p) => p?.providerHeaders['flclashx-newboard'])) == 'true';
+      final settingNewDashboard = ref.watch(appSettingProvider.select((s) => s.newDashboard));
+      final newDashboard = settingNewDashboard ?? headerNewBoard;
+
+      if (!newDashboard) {
+        return Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16).copyWith(bottom: 16),
+                  child: Grid(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: spacing,
+                    mainAxisSpacing: spacing,
+                    children: children,
+                  ),
+                ),
+              ),
+              const StartButton(),
+            ],
+          ),
+        );
+      }
+
+      return Expanded(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 12,
+            bottom: Platform.isAndroid ? 55 : 16,
+          ),
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              StatsGrid(),
+              SizedBox(height: 12),
+              HeroConnect(),
+            ],
+          ),
         ),
-        // Start/Stop button at the bottom
-        const StartButton(),
+      );
+    }),
       ],
     );
   }

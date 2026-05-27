@@ -1,37 +1,29 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
-import 'package:flclashx/state.dart';
-import 'package:flutter/services.dart';
 
-import '../clash/lib.dart';
+import 'package:flclashx/clash/clash.dart';
 
+/// Compatibility façade over [ClashLib] for call-sites that still reach for a
+/// standalone "service" object. Under the AIDL architecture there is no
+/// separate Dart-side service — everything is one MethodChannel.
 class Service {
-
-  factory Service() {
-    _instance ??= Service._internal();
-    return _instance!;
-  }
-
-  Service._internal() {
-    methodChannel = const MethodChannel("service");
-  }
+  factory Service() => _instance ??= Service._();
   static Service? _instance;
-  late MethodChannel methodChannel;
-  ReceivePort? receiver;
+  Service._();
 
-  Future<bool?> init() async => methodChannel.invokeMethod<bool>("init");
+  Future<bool?> init() async {
+    await clashLib?.preload();
+    return true;
+  }
 
-  Future<bool?> destroy() async => methodChannel.invokeMethod<bool>("destroy");
+  Future<bool?> destroy() async => clashLib?.destroy();
 
   Future<bool?> startVpn() async {
-    final options = await clashLib?.getAndroidVpnOptions() ?? "";
-    return methodChannel.invokeMethod<bool>("startVpn", {
-      'data': options,
-    });
+    final rt = await clashLib?.startVpn() ?? 0;
+    return rt != 0;
   }
 
-  Future<bool?> stopVpn() async => methodChannel.invokeMethod<bool>("stopVpn");
+  Future<bool?> stopVpn() async => clashLib?.stopVpn();
 }
 
-Service? get service => Platform.isAndroid && !globalState.isService ? Service() : null;
+Service? get service => Platform.isAndroid ? Service() : null;

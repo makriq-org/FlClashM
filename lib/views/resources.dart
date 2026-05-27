@@ -293,7 +293,8 @@ class _GeoDataListItemState extends State<GeoDataListItem> {
           }
         }
       }
-    } catch (e) {
+    } catch (_) {
+      // config parsing failed — fall through to default
     }
     
     return ref.read(patchClashConfigProvider.select((state) => state.geoXUrl.toJson()[geoItem.key]));

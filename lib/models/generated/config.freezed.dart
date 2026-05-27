@@ -41,6 +41,7 @@ mixin _$AppSettingProps {
   bool get overrideProviderSettings => throw _privateConstructorUsedError;
   bool get overrideNetworkSettings => throw _privateConstructorUsedError;
   RecoveryStrategy get recoveryStrategy => throw _privateConstructorUsedError;
+  bool? get newDashboard => throw _privateConstructorUsedError;
 
   /// Serializes this AppSettingProps to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -78,7 +79,8 @@ abstract class $AppSettingPropsCopyWith<$Res> {
       bool developerMode,
       bool overrideProviderSettings,
       bool overrideNetworkSettings,
-      RecoveryStrategy recoveryStrategy});
+      RecoveryStrategy recoveryStrategy,
+      bool? newDashboard});
 }
 
 /// @nodoc
@@ -115,6 +117,7 @@ class _$AppSettingPropsCopyWithImpl<$Res, $Val extends AppSettingProps>
     Object? overrideProviderSettings = null,
     Object? overrideNetworkSettings = null,
     Object? recoveryStrategy = null,
+    Object? newDashboard = freezed,
   }) {
     return _then(_value.copyWith(
       locale: freezed == locale
@@ -193,6 +196,10 @@ class _$AppSettingPropsCopyWithImpl<$Res, $Val extends AppSettingProps>
           ? _value.recoveryStrategy
           : recoveryStrategy // ignore: cast_nullable_to_non_nullable
               as RecoveryStrategy,
+      newDashboard: freezed == newDashboard
+          ? _value.newDashboard
+          : newDashboard // ignore: cast_nullable_to_non_nullable
+              as bool?,
     ) as $Val);
   }
 }
@@ -225,7 +232,8 @@ abstract class _$$AppSettingPropsImplCopyWith<$Res>
       bool developerMode,
       bool overrideProviderSettings,
       bool overrideNetworkSettings,
-      RecoveryStrategy recoveryStrategy});
+      RecoveryStrategy recoveryStrategy,
+      bool? newDashboard});
 }
 
 /// @nodoc
@@ -260,6 +268,7 @@ class __$$AppSettingPropsImplCopyWithImpl<$Res>
     Object? overrideProviderSettings = null,
     Object? overrideNetworkSettings = null,
     Object? recoveryStrategy = null,
+    Object? newDashboard = freezed,
   }) {
     return _then(_$AppSettingPropsImpl(
       locale: freezed == locale
@@ -338,6 +347,10 @@ class __$$AppSettingPropsImplCopyWithImpl<$Res>
           ? _value.recoveryStrategy
           : recoveryStrategy // ignore: cast_nullable_to_non_nullable
               as RecoveryStrategy,
+      newDashboard: freezed == newDashboard
+          ? _value.newDashboard
+          : newDashboard // ignore: cast_nullable_to_non_nullable
+              as bool?,
     ));
   }
 }
@@ -365,7 +378,8 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
       this.developerMode = false,
       this.overrideProviderSettings = false,
       this.overrideNetworkSettings = false,
-      this.recoveryStrategy = RecoveryStrategy.compatible})
+      this.recoveryStrategy = RecoveryStrategy.compatible,
+      this.newDashboard})
       : _dashboardWidgets = dashboardWidgets;
 
   factory _$AppSettingPropsImpl.fromJson(Map<String, dynamic> json) =>
@@ -434,10 +448,12 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
   @override
   @JsonKey()
   final RecoveryStrategy recoveryStrategy;
+  @override
+  final bool? newDashboard;
 
   @override
   String toString() {
-    return 'AppSettingProps(locale: $locale, dashboardWidgets: $dashboardWidgets, onlyStatisticsProxy: $onlyStatisticsProxy, autoLaunch: $autoLaunch, silentLaunch: $silentLaunch, autoRun: $autoRun, openLogs: $openLogs, closeConnections: $closeConnections, testUrl: $testUrl, isAnimateToPage: $isAnimateToPage, autoCheckUpdate: $autoCheckUpdate, showLabel: $showLabel, disclaimerAccepted: $disclaimerAccepted, minimizeOnExit: $minimizeOnExit, hidden: $hidden, developerMode: $developerMode, overrideProviderSettings: $overrideProviderSettings, overrideNetworkSettings: $overrideNetworkSettings, recoveryStrategy: $recoveryStrategy)';
+    return 'AppSettingProps(locale: $locale, dashboardWidgets: $dashboardWidgets, onlyStatisticsProxy: $onlyStatisticsProxy, autoLaunch: $autoLaunch, silentLaunch: $silentLaunch, autoRun: $autoRun, openLogs: $openLogs, closeConnections: $closeConnections, testUrl: $testUrl, isAnimateToPage: $isAnimateToPage, autoCheckUpdate: $autoCheckUpdate, showLabel: $showLabel, disclaimerAccepted: $disclaimerAccepted, minimizeOnExit: $minimizeOnExit, hidden: $hidden, developerMode: $developerMode, overrideProviderSettings: $overrideProviderSettings, overrideNetworkSettings: $overrideNetworkSettings, recoveryStrategy: $recoveryStrategy, newDashboard: $newDashboard)';
   }
 
   @override
@@ -480,7 +496,9 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
                     other.overrideNetworkSettings, overrideNetworkSettings) ||
                 other.overrideNetworkSettings == overrideNetworkSettings) &&
             (identical(other.recoveryStrategy, recoveryStrategy) ||
-                other.recoveryStrategy == recoveryStrategy));
+                other.recoveryStrategy == recoveryStrategy) &&
+            (identical(other.newDashboard, newDashboard) ||
+                other.newDashboard == newDashboard));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -505,7 +523,8 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
         developerMode,
         overrideProviderSettings,
         overrideNetworkSettings,
-        recoveryStrategy
+        recoveryStrategy,
+      newDashboard
       ]);
 
   /// Create a copy of AppSettingProps
@@ -546,7 +565,8 @@ abstract class _AppSettingProps implements AppSettingProps {
       final bool developerMode,
       final bool overrideProviderSettings,
       final bool overrideNetworkSettings,
-      final RecoveryStrategy recoveryStrategy}) = _$AppSettingPropsImpl;
+      final RecoveryStrategy recoveryStrategy,
+      final bool? newDashboard}) = _$AppSettingPropsImpl;
 
   factory _AppSettingProps.fromJson(Map<String, dynamic> json) =
       _$AppSettingPropsImpl.fromJson;
@@ -2213,7 +2233,7 @@ class _$ThemePropsImpl implements _ThemeProps {
   const _$ThemePropsImpl(
       {this.primaryColor,
       final List<int> primaryColors = defaultPrimaryColors,
-      this.themeMode = ThemeMode.dark,
+      this.themeMode = ThemeMode.system,
       this.schemeVariant = DynamicSchemeVariant.content,
       this.pureBlack = false,
       this.textScale = const TextScale()})

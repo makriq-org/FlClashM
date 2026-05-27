@@ -27,7 +27,7 @@ class Window {
     await windowManager.ensureInitialized();
     final windowOptions = WindowOptions(
       size: Size(props.width, props.height),
-      minimumSize: const Size(380, 400),
+      minimumSize: const Size(380, 600),
     );
     await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     if (!Platform.isMacOS) {

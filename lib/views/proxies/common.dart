@@ -59,20 +59,29 @@ Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {
     if (name.isEmpty) {
       return;
     }
-    appController
-      ..setDelay(
-        Delay(
-          url: url,
-          name: name,
-          value: 0,
-        ),
-      )
-      ..setDelay(
+    appController.setDelay(
+      Delay(
+        url: url,
+        name: name,
+        value: 0,
+      ),
+    );
+    try {
+      appController.setDelay(
         await clashCore.getDelay(
           url,
           name,
         ),
       );
+    } catch (_) {
+      appController.setDelay(
+        Delay(
+          url: url,
+          name: name,
+          value: -1,
+        ),
+      );
+    }
   }).toList();
 
   final batchesDelayProxies = delayProxies.batch(100);

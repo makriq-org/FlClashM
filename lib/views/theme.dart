@@ -7,6 +7,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/selector.dart';
 import 'package:flclashx/providers/config.dart';
+import 'package:flclashx/providers/state.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +47,7 @@ class ThemeView extends StatelessWidget {
           _ThemeModeItem(),
           _PrimaryColorItem(),
           _PrueBlackItem(),
+          _NewDashboardItem(),
           _TextScaleFactorItem(),
           SizedBox(
             height: 64,
@@ -462,6 +464,38 @@ class _PrueBlackItem extends ConsumerWidget {
                 (state) => state.copyWith(
                   pureBlack: value,
                 ),
+              );
+        },
+      ),
+    );
+  }
+}
+
+class _NewDashboardItem extends ConsumerWidget {
+  const _NewDashboardItem();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settingValue = ref.watch(
+      appSettingProvider.select((state) => state.newDashboard),
+    );
+    final headerValue = ref.watch(currentProfileProvider
+        .select((p) => p?.providerHeaders['flclashx-newboard'])) == 'true';
+    final enabled = settingValue ?? headerValue;
+    return ListItem.switchItem(
+      leading: const Icon(Icons.dashboard_customize),
+      horizontalTitleGap: 12,
+      title: Text(
+        appLocalizations.newDashboard,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: context.colorScheme.onSurfaceVariant,
+            ),
+      ),
+      delegate: SwitchDelegate(
+        value: enabled,
+        onChanged: (value) {
+          ref.read(appSettingProvider.notifier).updateState(
+                (state) => state.copyWith(newDashboard: value),
               );
         },
       ),

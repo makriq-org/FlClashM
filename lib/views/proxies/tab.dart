@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
@@ -45,11 +46,7 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
 
   Future<void> delayTestCurrentGroup() async {
     final currentGroupName = globalState.appController.getCurrentGroupName();
-    final currentState = _keyMap[currentGroupName]?.currentState;
-    await delayTest(
-      currentState?.proxies ?? [],
-      currentState?.testUrl,
-    );
+    await clashCore.healthCheck(currentGroupName ?? '');
   }
 
   Consumer _buildMoreButton() => Consumer(
@@ -429,6 +426,7 @@ class _DelayTestButtonState extends State<DelayTestButton>
         ),
       child: FloatingActionButton(
         heroTag: null,
+        tooltip: appLocalizations.testAllDelay,
         onPressed: _healthcheck,
         child: const Icon(Icons.network_ping),
       ),

@@ -22,6 +22,23 @@ class System {
   bool get isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+  bool? get isWindowsSystemDark {
+    if (!Platform.isWindows) return null;
+    try {
+      final result = Process.runSync('reg', [
+        'query',
+        r'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize',
+        '/v', 'SystemUsesLightTheme',
+      ]);
+      if (result.exitCode != 0) return null;
+      final match = RegExp(r'0x(\d+)').firstMatch(result.stdout.toString());
+      if (match == null) return null;
+      return int.tryParse(match.group(1)!) == 0;
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
 
   Future<bool> get isAndroidTV async {
@@ -92,19 +109,22 @@ class System {
       }
       return AuthorizeCode.error;
     } else if (Platform.isLinux) {
-      final shell = Platform.environment['SHELL'] ?? 'bash';
       final password = await globalState.showCommonDialog<String>(
         child: InputDialog(
           title: appLocalizations.pleaseInputAdminPassword,
           value: '',
         ),
       );
-      final arguments = [
-        "-c",
-        'echo "$password" | sudo -S chown root:root "$corePath" && echo "$password" | sudo -S chmod +sx "$corePath"'
-      ];
-      final result = await Process.run(shell, arguments);
-      if (result.exitCode != 0) {
+      if (password == null) return AuthorizeCode.error;
+      final proc = await Process.start('sudo', [
+        '-S', 'sh', '-c',
+        'chown root:root "\$1" && chmod +sx "\$1"',
+        'sh', corePath,
+      ]);
+      proc.stdin.writeln(password);
+      await proc.stdin.close();
+      final exitCode = await proc.exitCode;
+      if (exitCode != 0) {
         return AuthorizeCode.error;
       }
       return AuthorizeCode.success;

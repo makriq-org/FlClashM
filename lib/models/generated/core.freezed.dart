@@ -901,6 +901,8 @@ mixin _$AndroidVpnOptions {
   String get ipv6Address => throw _privateConstructorUsedError;
   List<String> get routeAddress => throw _privateConstructorUsedError;
   String get dnsServerAddress => throw _privateConstructorUsedError;
+  List<String> get includePackage => throw _privateConstructorUsedError;
+  List<String> get excludePackage => throw _privateConstructorUsedError;
 
   /// Serializes this AndroidVpnOptions to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -928,7 +930,9 @@ abstract class $AndroidVpnOptionsCopyWith<$Res> {
       String ipv4Address,
       String ipv6Address,
       List<String> routeAddress,
-      String dnsServerAddress});
+      String dnsServerAddress,
+      List<String> includePackage,
+      List<String> excludePackage});
 
   $AccessControlCopyWith<$Res>? get accessControl;
 }
@@ -958,6 +962,8 @@ class _$AndroidVpnOptionsCopyWithImpl<$Res, $Val extends AndroidVpnOptions>
     Object? ipv6Address = null,
     Object? routeAddress = null,
     Object? dnsServerAddress = null,
+    Object? includePackage = null,
+    Object? excludePackage = null,
   }) {
     return _then(_value.copyWith(
       enable: null == enable
@@ -1000,6 +1006,14 @@ class _$AndroidVpnOptionsCopyWithImpl<$Res, $Val extends AndroidVpnOptions>
           ? _value.dnsServerAddress
           : dnsServerAddress // ignore: cast_nullable_to_non_nullable
               as String,
+      includePackage: null == includePackage
+          ? _value.includePackage
+          : includePackage // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      excludePackage: null == excludePackage
+          ? _value.excludePackage
+          : excludePackage // ignore: cast_nullable_to_non_nullable
+              as List<String>,
     ) as $Val);
   }
 
@@ -1036,7 +1050,9 @@ abstract class _$$AndroidVpnOptionsImplCopyWith<$Res>
       String ipv4Address,
       String ipv6Address,
       List<String> routeAddress,
-      String dnsServerAddress});
+      String dnsServerAddress,
+      List<String> includePackage,
+      List<String> excludePackage});
 
   @override
   $AccessControlCopyWith<$Res>? get accessControl;
@@ -1065,6 +1081,8 @@ class __$$AndroidVpnOptionsImplCopyWithImpl<$Res>
     Object? ipv6Address = null,
     Object? routeAddress = null,
     Object? dnsServerAddress = null,
+    Object? includePackage = null,
+    Object? excludePackage = null,
   }) {
     return _then(_$AndroidVpnOptionsImpl(
       enable: null == enable
@@ -1107,6 +1125,14 @@ class __$$AndroidVpnOptionsImplCopyWithImpl<$Res>
           ? _value.dnsServerAddress
           : dnsServerAddress // ignore: cast_nullable_to_non_nullable
               as String,
+      includePackage: null == includePackage
+          ? _value._includePackage
+          : includePackage // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      excludePackage: null == excludePackage
+          ? _value._excludePackage
+          : excludePackage // ignore: cast_nullable_to_non_nullable
+              as List<String>,
     ));
   }
 }
@@ -1124,9 +1150,13 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
       required this.ipv4Address,
       required this.ipv6Address,
       final List<String> routeAddress = const [],
-      required this.dnsServerAddress})
+      required this.dnsServerAddress,
+      final List<String> includePackage = const [],
+      final List<String> excludePackage = const []})
       : _bypassDomain = bypassDomain,
-        _routeAddress = routeAddress;
+        _routeAddress = routeAddress,
+        _includePackage = includePackage,
+        _excludePackage = excludePackage;
 
   factory _$AndroidVpnOptionsImpl.fromJson(Map<String, dynamic> json) =>
       _$$AndroidVpnOptionsImplFromJson(json);
@@ -1164,10 +1194,25 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
 
   @override
   final String dnsServerAddress;
+  final List<String> _includePackage;
+  @override
+  @JsonKey()
+  List<String> get includePackage {
+    if (_includePackage is EqualUnmodifiableListView) return _includePackage;
+    return EqualUnmodifiableListView(_includePackage);
+  }
+
+  final List<String> _excludePackage;
+  @override
+  @JsonKey()
+  List<String> get excludePackage {
+    if (_excludePackage is EqualUnmodifiableListView) return _excludePackage;
+    return EqualUnmodifiableListView(_excludePackage);
+  }
 
   @override
   String toString() {
-    return 'AndroidVpnOptions(enable: $enable, port: $port, accessControl: $accessControl, allowBypass: $allowBypass, systemProxy: $systemProxy, bypassDomain: $bypassDomain, ipv4Address: $ipv4Address, ipv6Address: $ipv6Address, routeAddress: $routeAddress, dnsServerAddress: $dnsServerAddress)';
+    return 'AndroidVpnOptions(enable: $enable, port: $port, accessControl: $accessControl, allowBypass: $allowBypass, systemProxy: $systemProxy, bypassDomain: $bypassDomain, ipv4Address: $ipv4Address, ipv6Address: $ipv6Address, routeAddress: $routeAddress, dnsServerAddress: $dnsServerAddress, includePackage: $includePackage, excludePackage: $excludePackage)';
   }
 
   @override
@@ -1192,7 +1237,11 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
             const DeepCollectionEquality()
                 .equals(other._routeAddress, _routeAddress) &&
             (identical(other.dnsServerAddress, dnsServerAddress) ||
-                other.dnsServerAddress == dnsServerAddress));
+                other.dnsServerAddress == dnsServerAddress) &&
+            const DeepCollectionEquality()
+                .equals(other._includePackage, _includePackage) &&
+            const DeepCollectionEquality()
+                .equals(other._excludePackage, _excludePackage));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1208,7 +1257,9 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
       ipv4Address,
       ipv6Address,
       const DeepCollectionEquality().hash(_routeAddress),
-      dnsServerAddress);
+      dnsServerAddress,
+      const DeepCollectionEquality().hash(_includePackage),
+      const DeepCollectionEquality().hash(_excludePackage));
 
   /// Create a copy of AndroidVpnOptions
   /// with the given fields replaced by the non-null parameter values.
@@ -1238,7 +1289,9 @@ abstract class _AndroidVpnOptions implements AndroidVpnOptions {
       required final String ipv4Address,
       required final String ipv6Address,
       final List<String> routeAddress,
-      required final String dnsServerAddress}) = _$AndroidVpnOptionsImpl;
+      required final String dnsServerAddress,
+      final List<String> includePackage,
+      final List<String> excludePackage}) = _$AndroidVpnOptionsImpl;
 
   factory _AndroidVpnOptions.fromJson(Map<String, dynamic> json) =
       _$AndroidVpnOptionsImpl.fromJson;
@@ -1263,6 +1316,10 @@ abstract class _AndroidVpnOptions implements AndroidVpnOptions {
   List<String> get routeAddress;
   @override
   String get dnsServerAddress;
+  @override
+  List<String> get includePackage;
+  @override
+  List<String> get excludePackage;
 
   /// Create a copy of AndroidVpnOptions
   /// with the given fields replaced by the non-null parameter values.

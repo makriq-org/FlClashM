@@ -208,6 +208,8 @@ class CommonScaffoldState extends ConsumerState<CommonScaffold> {
     _appBarState.dispose();
     _textController.dispose();
     _floatingActionButton.dispose();
+    _keywordsNotifier.dispose();
+    _loading.dispose();
     super.dispose();
   }
 

@@ -78,10 +78,12 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
   @override
   List<Widget> get actions => [
         IconButton(
+          tooltip: appLocalizations.sync,
           onPressed: _updateProfiles,
           icon: const Icon(Icons.sync),
         ),
         IconButton(
+          tooltip: appLocalizations.script,
           onPressed: () {
             showExtend(
               context,
@@ -100,6 +102,7 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
           ),
         ),
         IconButton(
+          tooltip: appLocalizations.profilesSort,
           onPressed: () {
             final profiles = globalState.config.profiles;
             showSheet(
@@ -118,6 +121,7 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
   @override
   Widget? get floatingActionButton => FloatingActionButton(
         heroTag: null,
+        tooltip: appLocalizations.addProfile,
         onPressed: _handleShowAddExtendPage,
         child: const Icon(
           Icons.add,
@@ -457,9 +461,7 @@ class _ProfileItemState extends State<ProfileItem> {
                               ),
                               if (widget.profile.providerHeaders['support-url'] != null && widget.profile.providerHeaders['support-url']!.isNotEmpty && !_isTV )
                             PopupMenuItemData(
-                              icon: widget.profile.providerHeaders['support-url']!.toLowerCase().contains('t.me')
-                              ? Icons.telegram
-                              : Icons.insert_link,
+                              icon: Icons.contact_support,
                               label: appLocalizations.support,
                               onPressed: () {
                                 globalState.openUrl(widget.profile.providerHeaders['support-url']!);
@@ -574,6 +576,7 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
       type: widget.type,
       actions: [
         IconButton(
+          tooltip: appLocalizations.save,
           onPressed: () {
             Navigator.of(context).pop();
             globalState.appController.setProfiles(profiles);
@@ -630,3 +633,4 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
       title: appLocalizations.profilesSort,
     );
 }
+

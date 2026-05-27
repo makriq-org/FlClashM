@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -33,8 +36,12 @@ var (
 	externalProviders   = map[string]cp.Provider{}
 	logSubscriber       observable.Subscription[log.Event]
 	healthCheckStopCh   chan struct{}
+	healthCheckChMu     sync.Mutex
+	healthCheckMu       sync.Mutex
 	healthCheckSeen     = map[string]string{}
 	requestStopCh       chan struct{}
+	requestChMu         sync.Mutex
+	requestMu           sync.Mutex
 	requestSeen         = map[string]bool{}
 )
 
@@ -44,6 +51,8 @@ func handleInitClash(paramsString string) bool {
 	if err != nil {
 		return false
 	}
+	debug.SetGCPercent(50)
+	debug.SetMemoryLimit(60 * 1024 * 1024)
 	version = params.Version
 	constant.SetHomeDir(params.HomeDir)
 	if !isInit {
@@ -69,15 +78,15 @@ func handleStartListener() bool {
 			currentConfig.General.Tun.Enable = pendingTunEnable
 		}
 	}
-	runLock.Unlock()
-
 	// setupConfig already ran executor.ApplyConfig when the profile was loaded,
 	// so proxies/rules/DNS/providers are live. Starting only needs to (re)bind
 	// listeners and (re)create the TUN device — calling ApplyConfig again would
 	// re-run updateProxies, loadProvider(wg.Wait()), updateDNS and runtime.GC()
 	// for no reason and was the main source of the long "start" delay.
+	updateListeners()
+	runLock.Unlock()
+
 	go func() {
-		updateListeners()
 		resolver.ResetConnection()
 		startHealthCheckForwarder()
 		startRequestForwarder()
@@ -108,22 +117,35 @@ func handleForceGc() {
 }
 
 func handleShutdown() bool {
+	runLock.Lock()
+	defer runLock.Unlock()
 	stopHealthCheckForwarder()
 	stopRequestForwarder()
 	stopListeners()
 	executor.Shutdown()
 	runtime.GC()
 	isInit = false
+	isRunning = false
+	currentConfig = nil
 	return true
 }
 
 func startHealthCheckForwarder() {
-	if healthCheckStopCh != nil {
-		return
-	}
+	stopHealthCheckForwarder()
+	healthCheckChMu.Lock()
 	healthCheckStopCh = make(chan struct{})
+	stopCh := healthCheckStopCh
+	healthCheckChMu.Unlock()
 	go func(stopCh chan struct{}) {
-		ticker := time.NewTicker(2 * time.Second)
+		interval := minHealthCheckInterval
+		log.Infoln("[HealthCheck] forwarder interval: %s", interval)
+		select {
+		case <-time.After(3 * time.Second):
+			forwardHealthCheckDelays()
+		case <-stopCh:
+			return
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -133,10 +155,12 @@ func startHealthCheckForwarder() {
 				return
 			}
 		}
-	}(healthCheckStopCh)
+	}(stopCh)
 }
 
 func stopHealthCheckForwarder() {
+	healthCheckChMu.Lock()
+	defer healthCheckChMu.Unlock()
 	if healthCheckStopCh == nil {
 		return
 	}
@@ -145,7 +169,9 @@ func stopHealthCheckForwarder() {
 }
 
 func resetHealthCheckForwarderState() {
+	healthCheckMu.Lock()
 	healthCheckSeen = map[string]string{}
+	healthCheckMu.Unlock()
 }
 
 func forwardHealthCheckDelays() {
@@ -202,13 +228,19 @@ func touchProviders() {
 // not expose the statistic.DefaultRequestNotify hook our old Clash.Meta fork
 // relied on, so we emulate it with a short-interval poll.
 func startRequestForwarder() {
+	requestChMu.Lock()
 	if requestStopCh != nil {
+		requestChMu.Unlock()
 		return
 	}
+	requestMu.Lock()
 	requestSeen = map[string]bool{}
+	requestMu.Unlock()
 	requestStopCh = make(chan struct{})
+	stopCh := requestStopCh
+	requestChMu.Unlock()
 	go func(stopCh chan struct{}) {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -218,19 +250,25 @@ func startRequestForwarder() {
 				return
 			}
 		}
-	}(requestStopCh)
+	}(stopCh)
 }
 
 func stopRequestForwarder() {
+	requestChMu.Lock()
+	defer requestChMu.Unlock()
 	if requestStopCh == nil {
 		return
 	}
 	close(requestStopCh)
 	requestStopCh = nil
+	requestMu.Lock()
 	requestSeen = map[string]bool{}
+	requestMu.Unlock()
 }
 
 func forwardNewRequests() {
+	requestMu.Lock()
+	defer requestMu.Unlock()
 	alive := make(map[string]bool, len(requestSeen))
 	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
 		id := c.ID()
@@ -245,8 +283,6 @@ func forwardNewRequests() {
 		})
 		return true
 	})
-	// Drop ids that were closed so short-lived reused ids do not accumulate
-	// and a later reconnection with the same id can still be reported.
 	for id := range requestSeen {
 		if !alive[id] {
 			delete(requestSeen, id)
@@ -261,10 +297,13 @@ func emitLatestDelay(proxyName string, testURL string, history []constant.DelayH
 	latest := history[len(history)-1]
 	key := proxyName + "|" + testURL
 	signature := fmt.Sprintf("%d:%d", latest.Time.UnixNano(), latest.Delay)
+	healthCheckMu.Lock()
 	if healthCheckSeen[key] == signature {
+		healthCheckMu.Unlock()
 		return
 	}
 	healthCheckSeen[key] = signature
+	healthCheckMu.Unlock()
 
 	delayValue := int32(latest.Delay)
 	if latest.Delay == 0 {
@@ -304,6 +343,10 @@ func handleChangeProxy(data string, fn func(string string)) {
 			fn(err.Error())
 			return
 		}
+		if params.GroupName == nil || params.ProxyName == nil {
+			fn("missing group-name or proxy-name")
+			return
+		}
 		groupName := *params.GroupName
 		proxyName := *params.ProxyName
 		proxies := proxiesWithProviders()
@@ -312,7 +355,11 @@ func handleChangeProxy(data string, fn func(string string)) {
 			fn("Not found group")
 			return
 		}
-		adapterProxy := group.(*adapter.Proxy)
+		adapterProxy, ok := group.(*adapter.Proxy)
+		if !ok {
+			fn("Group is not a proxy adapter")
+			return
+		}
 		selector, ok := adapterProxy.ProxyAdapter.(outboundgroup.SelectAble)
 		if !ok {
 			fn("Group is not selectable")
@@ -341,7 +388,7 @@ func handleGetTraffic() string {
 	}
 	data, err := json.Marshal(traffic)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Errorln("Error: %v", err)
 		return ""
 	}
 	return string(data)
@@ -355,7 +402,7 @@ func handleGetTotalTraffic() string {
 	}
 	data, err := json.Marshal(traffic)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Errorln("Error: %v", err)
 		return ""
 	}
 	return string(data)
@@ -432,7 +479,7 @@ func handleGetConnections() string {
 	snapshot := statistic.DefaultManager.Snapshot()
 	data, err := json.Marshal(snapshot)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Errorln("Error: %v", err)
 		return ""
 	}
 	return string(data)
@@ -447,10 +494,7 @@ func handleCloseConnections() bool {
 
 func closeConnections() {
 	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-		err := c.Close()
-		if err != nil {
-			return false
-		}
+		_ = c.Close()
 		return true
 	})
 }
@@ -534,7 +578,9 @@ func handleUpdateGeoData(geoType string, geoName string, fn func(value string)) 
 
 func handleUpdateExternalProvider(providerName string, fn func(value string)) {
 	go func() {
+		runLock.Lock()
 		externalProvider, exist := externalProviders[providerName]
+		runLock.Unlock()
 		if !exist {
 			fn("external provider is not exist")
 			return
@@ -566,15 +612,23 @@ func handleSideLoadExternalProvider(providerName string, data []byte, fn func(va
 	}()
 }
 
+var logMu sync.Mutex
+
 func handleStartLog() {
+	logMu.Lock()
+	defer logMu.Unlock()
 	if logSubscriber != nil {
 		log.UnSubscribe(logSubscriber)
 		logSubscriber = nil
 	}
 	logSubscriber = log.Subscribe()
+	sub := logSubscriber
 	go func() {
-		for logData := range logSubscriber {
+		for logData := range sub {
 			if logData.LogLevel < log.Level() {
+				continue
+			}
+			if strings.Contains(logData.Payload, "http: Server closed") {
 				continue
 			}
 			message := &Message{
@@ -587,6 +641,8 @@ func handleStartLog() {
 }
 
 func handleStopLog() {
+	logMu.Lock()
+	defer logMu.Unlock()
 	if logSubscriber != nil {
 		log.UnSubscribe(logSubscriber)
 		logSubscriber = nil
@@ -613,7 +669,11 @@ func handleGetMemory(fn func(value string)) {
 }
 
 func handleSetState(params string) {
-	_ = json.Unmarshal([]byte(params), state.CurrentState)
+	runLock.Lock()
+	defer runLock.Unlock()
+	if err := json.Unmarshal([]byte(params), state.CurrentState); err != nil {
+		log.Warnln("[State] unmarshal failed: %v", err)
+	}
 }
 
 func handleGetConfig(path string) (*config.RawConfig, error) {
@@ -626,6 +686,61 @@ func handleGetConfig(path string) (*config.RawConfig, error) {
 		return nil, err
 	}
 	return prof, nil
+}
+
+func handleHealthCheck(groupName string, fn func(value string)) {
+	runLock.Lock()
+	testUrl := currentTestURL
+	runLock.Unlock()
+	go func() {
+		proxies := tunnel.Proxies()
+		expectedStatus, _ := utils.NewUnsignedRanges[uint16]("")
+		defaultUrl := testUrl
+
+		for name, proxy := range proxies {
+			if groupName != "" && name != groupName {
+				continue
+			}
+			group, ok := proxy.Adapter().(outboundgroup.ProxyGroup)
+			if !ok {
+				continue
+			}
+			testUrl := ""
+			for _, p := range group.Providers() {
+				if u := p.HealthCheckURL(); u != "" {
+					testUrl = u
+					break
+				}
+			}
+			if testUrl == "" {
+				testUrl = defaultUrl
+			}
+			log.Infoln("[HealthCheck] testing group: %s url: %s", name, testUrl)
+			for _, p := range group.Providers() {
+				for _, px := range p.Proxies() {
+					sendMessage(Message{
+						Type: DelayMessage,
+						Data: &Delay{Url: testUrl, Name: px.Name(), Value: 0},
+					})
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			dm, err := group.URLTest(ctx, testUrl, expectedStatus)
+			cancel()
+			if err != nil {
+				log.Warnln("[HealthCheck] group %s error: %v", name, err)
+				continue
+			}
+			for proxyName, delay := range dm {
+				sendMessage(Message{
+					Type: DelayMessage,
+					Data: &Delay{Url: testUrl, Name: proxyName, Value: int32(delay)},
+				})
+			}
+			log.Infoln("[HealthCheck] group %s done, %d results", name, len(dm))
+		}
+		fn("")
+	}()
 }
 
 func handleCrash() {

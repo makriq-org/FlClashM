@@ -34,6 +34,7 @@ _$AppSettingPropsImpl _$$AppSettingPropsImplFromJson(
       recoveryStrategy: $enumDecodeNullable(
               _$RecoveryStrategyEnumMap, json['recoveryStrategy']) ??
           RecoveryStrategy.compatible,
+      newDashboard: json['newDashboard'] as bool?,
     );
 
 Map<String, dynamic> _$$AppSettingPropsImplToJson(
@@ -60,6 +61,7 @@ Map<String, dynamic> _$$AppSettingPropsImplToJson(
       'overrideProviderSettings': instance.overrideProviderSettings,
       'overrideNetworkSettings': instance.overrideNetworkSettings,
       'recoveryStrategy': _$RecoveryStrategyEnumMap[instance.recoveryStrategy]!,
+      'newDashboard': instance.newDashboard,
     };
 
 const _$RecoveryStrategyEnumMap = {

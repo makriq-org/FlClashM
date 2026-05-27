@@ -33,13 +33,17 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.Result
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.lang.ref.WeakReference
+import java.util.Collections
 import java.util.zip.ZipFile
 
 class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
@@ -52,7 +56,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     private var vpnCallBack: (() -> Unit)? = null
 
-    private val iconMap = mutableMapOf<String, String?>()
+    private val iconMap: MutableMap<String, String?> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String?>(128, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, String?>?): Boolean = size > 200
+        }
+    )
 
     private val packages = mutableListOf<Package>()
 
@@ -118,26 +126,30 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var isBlockNotification: Boolean = false
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        scope = CoroutineScope(Dispatchers.Default)
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "app")
         channel.setMethodCallHandler(this)
     }
 
-    private fun initShortcuts(label: String) {
-        val shortcut = ShortcutInfoCompat.Builder(FlClashXApplication.getAppContext(), "toggle")
-            .setShortLabel(label)
-            .setIcon(
-                IconCompat.createWithResource(
-                    FlClashXApplication.getAppContext(),
-                    R.mipmap.ic_launcher_round
-                )
-            )
-            .setIntent(FlClashXApplication.getAppContext().getActionIntent("CHANGE"))
+    private fun initShortcuts(toggle: String, start: String, stop: String) {
+        val ctx = FlClashXApplication.getAppContext()
+        val icon = IconCompat.createWithResource(ctx, R.mipmap.ic_launcher_round)
+        val toggleShortcut = ShortcutInfoCompat.Builder(ctx, "toggle")
+            .setShortLabel(toggle)
+            .setIcon(icon)
+            .setIntent(ctx.getActionIntent("CHANGE"))
             .build()
-        ShortcutManagerCompat.setDynamicShortcuts(
-            FlClashXApplication.getAppContext(),
-            listOf(shortcut)
-        )
+        val startShortcut = ShortcutInfoCompat.Builder(ctx, "start")
+            .setShortLabel(start)
+            .setIcon(icon)
+            .setIntent(ctx.getActionIntent("START"))
+            .build()
+        val stopShortcut = ShortcutInfoCompat.Builder(ctx, "stop")
+            .setShortLabel(stop)
+            .setIcon(icon)
+            .setIntent(ctx.getActionIntent("STOP"))
+            .build()
+        ShortcutManagerCompat.setDynamicShortcuts(ctx, listOf(toggleShortcut, startShortcut, stopShortcut))
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -165,19 +177,26 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }
 
             "initShortcuts" -> {
-                initShortcuts(call.arguments as String)
+                val args = call.arguments as? Map<*, *> ?: emptyMap<String, String>()
+                initShortcuts(
+                    toggle = args["toggle"] as? String ?: "Toggle",
+                    start = args["start"] as? String ?: "Start",
+                    stop = args["stop"] as? String ?: "Stop",
+                )
                 result.success(true)
             }
 
             "getPackages" -> {
-                scope.launch {
-                    result.success(getPackagesToJson())
+                scope.launch(Dispatchers.IO) {
+                    val json = getPackagesToJson()
+                    result.successOnMain(json)
                 }
             }
 
             "getChinaPackageNames" -> {
-                scope.launch {
-                    result.success(getChinaPackageNames())
+                scope.launch(Dispatchers.IO) {
+                    val names = getChinaPackageNames()
+                    result.successOnMain(names)
                 }
             }
 
@@ -185,20 +204,20 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 scope.launch {
                     val packageName = call.argument<String>("packageName")
                     if (packageName == null) {
-                        result.success(null)
+                        result.successOnMain(null)
                         return@launch
                     }
                     val packageIcon = getPackageIcon(packageName)
                     packageIcon.let {
                         if (it != null) {
-                            result.success(it)
+                            result.successOnMain(it)
                             return@launch
                         }
                         if (iconMap["default"] == null) {
                             iconMap["default"] =
                                 FlClashXApplication.getAppContext().packageManager?.defaultActivityIcon?.getBase64()
                         }
-                        result.success(iconMap["default"])
+                        result.successOnMain(iconMap["default"])
                         return@launch
                     }
                 }
@@ -211,7 +230,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }
 
             "openFile" -> {
-                val path = call.argument<String>("path")!!
+                val path = call.argument<String>("path") ?: run { result.success(false); return }
                 openFile(path)
                 result.success(true)
             }
@@ -230,13 +249,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             file
         )
 
+        val flags =
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(
             uri,
             "text/plain"
-        )
-
-        val flags =
-            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        ).addFlags(flags)
 
         val resInfoList = FlClashXApplication.getAppContext().packageManager.queryIntentActivities(
             intent, PackageManager.MATCH_DEFAULT_ONLY
@@ -254,7 +273,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         try {
             activityRef?.get()?.startActivity(intent)
         } catch (e: Exception) {
-            println(e)
+            android.util.Log.w("AppPlugin", "openFile failed", e)
         }
     }
 
@@ -308,13 +327,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private suspend fun getPackagesToJson(): String {
-        return withContext(Dispatchers.Default) {
+        return withContext(Dispatchers.IO) {
             Gson().toJson(getPackages())
         }
     }
 
     private suspend fun getChinaPackageNames(): String {
-        return withContext(Dispatchers.Default) {
+        return withContext(Dispatchers.IO) {
             val packages: List<String> =
                 getPackages().map { it.packageName }.filter { isChinaPackage(it) }
             Gson().toJson(packages)
@@ -325,8 +344,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         vpnCallBack = callBack
         val intent = VpnService.prepare(FlClashXApplication.getAppContext())
         if (intent != null) {
-            activityRef?.get()?.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
-            return
+            val activity = activityRef?.get()
+            if (activity != null) {
+                activity.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
+                return
+            }
         }
         vpnCallBack?.invoke()
     }
@@ -411,6 +433,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                             DexBackedDexFile.fromInputStream(null, input)
                         } catch (e: Exception) {
                             return false
+                        } finally {
+                            input.close()
                         }
                         for (clazz in dexFile.classes) {
                             val clazzName =
@@ -447,11 +471,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
-            if (resultCode == FlutterActivity.RESULT_OK) {
-                GlobalState.initServiceEngine()
-                vpnCallBack?.invoke()
-            }
+        if (requestCode == VPN_PERMISSION_REQUEST_CODE && resultCode == FlutterActivity.RESULT_OK) {
+            vpnCallBack?.invoke()
         }
         return true
     }
@@ -465,5 +486,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             isBlockNotification = true
         }
         return true
+    }
+
+    private fun Result.successOnMain(value: Any?) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            runCatching { success(value) }
+        } else {
+            Handler(Looper.getMainLooper()).post { runCatching { success(value) } }
+        }
     }
 }

@@ -66,14 +66,24 @@ class App {
         }) ??
         false;
 
-  Future<ImageProvider?> getPackageIcon(String packageName) async {
+  final _iconCache = <String, ImageProvider?>{};
+  final _iconFutures = <String, Future<ImageProvider?>>{};
+
+  Future<ImageProvider?> getPackageIcon(String packageName) {
+    if (_iconCache.containsKey(packageName)) {
+      return Future.value(_iconCache[packageName]);
+    }
+    return _iconFutures[packageName] ??= _fetchIcon(packageName);
+  }
+
+  Future<ImageProvider?> _fetchIcon(String packageName) async {
     final base64 = await methodChannel.invokeMethod<String>("getPackageIcon", {
       "packageName": packageName,
     });
-    if (base64 == null) {
-      return null;
-    }
-    return MemoryImage(base64Decode(base64));
+    final icon = base64 != null ? MemoryImage(base64Decode(base64)) : null;
+    _iconCache[packageName] = icon;
+    _iconFutures.remove(packageName);
+    return icon;
   }
 
   Future<bool?> tip(String? message) async => methodChannel.invokeMethod<bool>("tip", {
@@ -82,7 +92,11 @@ class App {
 
   Future<bool?> initShortcuts() async => methodChannel.invokeMethod<bool>(
       "initShortcuts",
-      appLocalizations.toggle,
+      <String, String>{
+        "toggle": appLocalizations.toggle,
+        "start": appLocalizations.start,
+        "stop": appLocalizations.stop,
+      },
     );
 
   Future<bool?> updateExcludeFromRecents(bool value) async => methodChannel.invokeMethod<bool>("updateExcludeFromRecents", {

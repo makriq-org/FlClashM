@@ -127,13 +127,13 @@ static gboolean my_application_local_command_line(GApplication* application, gch
 
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
-  // On some Raspberry Pi environments, setting safer defaults helps the
-  // Flutter engine initialize EGL/GL correctly. Only set if not already
-  // provided by the user environment.
-#if defined(__arm__) || defined(__aarch64__)
+  // Flutter's GTK embedder has known issues with Wayland input handling
+  // (gdk_device_get_source assertion failures causing freezes on text input).
+  // Force X11 via XWayland until Flutter resolves this upstream.
   if (!g_getenv("GDK_BACKEND")) {
     g_setenv("GDK_BACKEND", "x11", FALSE);
   }
+#if defined(__arm__) || defined(__aarch64__)
   if (!g_getenv("GDK_GL")) {
     g_setenv("GDK_GL", "gles", FALSE);
   }

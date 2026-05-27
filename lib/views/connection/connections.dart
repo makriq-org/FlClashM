@@ -28,6 +28,7 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
   );
 
   Timer? timer;
+  bool _isPageVisible = false;
 
   @override
   List<Widget> get actions => [
@@ -59,12 +60,12 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
 
   Future<void> _updateConnections() async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted) {
+      if (mounted && _isPageVisible) {
         _connectionsStateNotifier.value =
             _connectionsStateNotifier.value.copyWith(
           connections: await clashCore.getConnections(),
         );
-        timer = Timer(const Duration(seconds: 1), () async {
+        timer = Timer(const Duration(seconds: 2), () async {
           _updateConnections();
         });
       }
@@ -81,13 +82,17 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
             pageLabel == PageLabel.tools && viewMode == ViewMode.mobile,
       ),
       (prev, next) {
-        if (prev != next && next == true) {
+        _isPageVisible = next == true;
+        if (prev != next && _isPageVisible) {
           initPageState();
+          _updateConnections();
+        } else if (!_isPageVisible) {
+          timer?.cancel();
+          timer = null;
         }
       },
       fireImmediately: true,
     );
-    _updateConnections();
   }
 
   Future<void> _handleBlockConnection(String id) async {

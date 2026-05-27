@@ -1,6 +1,10 @@
 import 'dart:io';
 
+import 'package:flclashx/clash/core.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/core_version.dart';
+import 'package:flclashx/common/yaml_dump.dart';
+import 'package:flclashx/common/yaml_highlight.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
@@ -56,9 +60,12 @@ class _ToolboxViewState extends ConsumerState<ToolsView> {
   List<Widget> _getOtherList(BuildContext context, bool enableDeveloperMode) => generateSection(
       title: AppLocalizations.of(context).other,
       items: [
+        const _RuntimeConfigItem(),
         const _DisclaimerItem(),
         if (enableDeveloperMode) const _DeveloperItem(),
         const _InfoItem(),
+        if (system.isDesktop) const _CoreUpdateItem(),
+        const _CoreStatusItem(),
       ],
     );
 
@@ -272,6 +279,142 @@ class _SettingItem extends StatelessWidget {
   }
 }
 
+class _RuntimeConfigItem extends StatelessWidget {
+  const _RuntimeConfigItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocale = AppLocalizations.of(context);
+    return ListItem(
+      leading: const Icon(Icons.code),
+      title: Text(appLocale.runtimeConfig),
+      onTap: () {
+        final config = globalState.lastRuntimeConfig;
+        if (config == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(appLocale.runtimeConfigNotAvailable)),
+          );
+          return;
+        }
+
+        final buffer = StringBuffer();
+        yamlDump(buffer, config, 0);
+
+        showExtend(
+          context,
+          builder: (_, type) => AdaptiveSheetScaffold(
+            type: type,
+            title: appLocale.runtimeConfig,
+            body: _RuntimeConfigBody(text: buffer.toString()),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RuntimeConfigBody extends StatefulWidget {
+  const _RuntimeConfigBody({required this.text});
+  final String text;
+
+  @override
+  State<_RuntimeConfigBody> createState() => _RuntimeConfigBodyState();
+}
+
+class _RuntimeConfigBodyState extends State<_RuntimeConfigBody> {
+  late final YamlHighlightController _yamlController;
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _yamlController = YamlHighlightController(text: widget.text);
+  }
+
+  @override
+  void dispose() {
+    _yamlController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String query) {
+    setState(() => _query = query);
+    if (query.isEmpty) {
+      _yamlController.setSearch('', [], -1);
+      return;
+    }
+    final text = widget.text.toLowerCase();
+    final q = query.toLowerCase();
+    final matches = <int>[];
+    var start = 0;
+    while (true) {
+      final idx = text.indexOf(q, start);
+      if (idx == -1) break;
+      matches.add(idx);
+      start = idx + 1;
+    }
+    _yamlController.setSearch(query, matches, matches.isNotEmpty ? 0 : -1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context).search,
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              suffixIcon: _query.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearch('');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: _onSearch,
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _yamlController,
+              readOnly: true,
+              maxLines: null,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                height: 1.5,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DisclaimerItem extends StatelessWidget {
   const _DisclaimerItem();
 
@@ -322,6 +465,244 @@ class _DeveloperItem extends StatelessWidget {
         title: appLocale.developerMode,
         widget: const DeveloperView(),
       ),
+    );
+  }
+}
+
+class _CoreUpdateItem extends StatefulWidget {
+  const _CoreUpdateItem();
+
+  @override
+  State<_CoreUpdateItem> createState() => _CoreUpdateItemState();
+}
+
+class _CoreUpdateItemState extends State<_CoreUpdateItem> {
+  String _status = '';
+  Map<String, dynamic>? _release;
+  bool _busy = false;
+  double _progress = 0;
+  bool _downloading = false;
+
+  String get _coreAssetName {
+    final arch = Platform.version.contains('arm64') ||
+            Platform.version.contains('aarch64')
+        ? 'arm64'
+        : 'amd64';
+    final platform = Platform.isWindows
+        ? 'windows'
+        : Platform.isMacOS
+            ? 'macos'
+            : 'linux';
+    final ext = Platform.isWindows ? '.exe' : '';
+    return 'FlClashCore-$platform-$arch$ext';
+  }
+
+  bool _initialCheckDone = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialCheckDone) {
+      _initialCheckDone = true;
+      _check();
+    }
+  }
+
+  Future<void> _check() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _status = AppLocalizations.of(context).coreUpdateChecking;
+    });
+    try {
+      final coreVersion = await clashCore.getCoreVersion();
+      final currentVersion = coreVersion.isNotEmpty ? coreVersion : kCoreVersionFromSource;
+      _release = await request.checkForCoreUpdate(currentVersion);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _status = _release != null
+              ? (_release!['tag_name'] as String).replaceFirst('core-', '')
+              : currentVersion;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _status = '$e';
+        });
+      }
+    }
+  }
+
+  Future<void> _download() async {
+    if (_busy || _release == null) return;
+    final assets = _release!['assets'] as List<dynamic>? ?? [];
+    final name = _coreAssetName;
+    final asset = assets.cast<Map<String, dynamic>>().where(
+      (a) => (a['name'] as String?) == name,
+    ).firstOrNull;
+    if (asset == null) {
+      setState(() => _status = '${AppLocalizations.of(context).coreUpdateFailed}: $name not found');
+      return;
+    }
+    final url = asset['browser_download_url'] as String;
+    setState(() {
+      _busy = true;
+      _downloading = true;
+      _progress = 0;
+      _status = AppLocalizations.of(context).coreUpdateDownloading;
+    });
+    final error = await request.downloadCoreUpdate(
+      url,
+      appPath.corePendingPath,
+      onProgress: (received, total) {
+        if (!mounted || total <= 0) return;
+        setState(() => _progress = received / total);
+      },
+    );
+    if (!mounted) return;
+    if (error != null) {
+      setState(() {
+        _busy = false;
+        _downloading = false;
+        _status = '${AppLocalizations.of(context).coreUpdateFailed}: $error';
+      });
+      return;
+    }
+    setState(() {
+      _downloading = false;
+      _busy = false;
+    });
+    if (!mounted) return;
+    _showRestartDialog();
+  }
+
+  void _showRestartDialog() {
+    final appLocale = AppLocalizations.of(context);
+    globalState.showCommonDialog(
+      dismissible: false,
+      child: CommonDialog(
+        title: appLocale.coreUpdateSuccess,
+        actions: [
+          TextButton(
+            onPressed: () => globalState.appController.handleRestart(),
+            child: Text(appLocale.restart),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocale = AppLocalizations.of(context);
+    final hasUpdate = _release != null && !_busy;
+    final color = hasUpdate
+        ? Theme.of(context).colorScheme.primary
+        : null;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListItem(
+          leading: Icon(
+            hasUpdate ? Icons.system_update : Icons.update,
+            color: color,
+          ),
+          title: Text(
+            hasUpdate
+                ? appLocale.coreUpdateAvailable
+                : appLocale.coreUpdate,
+            style: hasUpdate ? TextStyle(color: color, fontWeight: FontWeight.bold) : null,
+          ),
+          subtitle: _status.isNotEmpty ? Text(_status) : null,
+          onTap: _release != null ? _download : _check,
+        ),
+        if (_downloading)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: LinearProgressIndicator(value: _progress > 0 ? _progress : null),
+          ),
+      ],
+    );
+  }
+}
+
+enum _CoreState { running, restarting, stopped }
+
+class _CoreStatusItem extends StatefulWidget {
+  const _CoreStatusItem();
+
+  @override
+  State<_CoreStatusItem> createState() => _CoreStatusItemState();
+}
+
+class _CoreStatusItemState extends State<_CoreStatusItem> {
+  _CoreState _state = _CoreState.stopped;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCoreStatus();
+  }
+
+  Future<void> _checkCoreStatus() async {
+    try {
+      final alive = await clashCore.isInit;
+      if (mounted) {
+        setState(() => _state = alive ? _CoreState.running : _CoreState.stopped);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _state = _CoreState.stopped);
+    }
+  }
+
+  Color get _statusColor => switch (_state) {
+    _CoreState.running => Colors.green,
+    _CoreState.restarting => Colors.orange,
+    _CoreState.stopped => Colors.red,
+  };
+
+  String _statusText(AppLocalizations l) => switch (_state) {
+    _CoreState.running => l.coreStatusRunning,
+    _CoreState.restarting => l.coreStatusRestarting,
+    _CoreState.stopped => l.coreStatusStopped,
+  };
+
+  Future<void> _restart() async {
+    if (_state == _CoreState.restarting) return;
+    setState(() => _state = _CoreState.restarting);
+    try {
+      await globalState.appController.restartCore();
+      if (mounted) setState(() => _state = _CoreState.running);
+    } catch (_) {
+      if (mounted) setState(() => _state = _CoreState.stopped);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocale = AppLocalizations.of(context);
+    return ListItem(
+      leading: Icon(Icons.memory, color: _statusColor),
+      title: Text(appLocale.restartCore),
+      subtitle: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _statusColor,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(_statusText(appLocale)),
+        ],
+      ),
+      onTap: _restart,
     );
   }
 }

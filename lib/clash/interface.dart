@@ -24,6 +24,8 @@ mixin ClashInterface {
 
   Future<String> asyncTestDelay(String url, String proxyName);
 
+  Future<void> healthCheck([String groupName = '']);
+
   FutureOr<String> updateConfig(UpdateParams updateParams);
 
   FutureOr<String> setupConfig(SetupParams setupParams);
@@ -56,6 +58,8 @@ mixin ClashInterface {
   FutureOr<String> getCountryCode(String ip);
 
   FutureOr<String> getMemory();
+
+  FutureOr<String> getCoreVersion();
 
   resetTraffic();
 
@@ -250,7 +254,7 @@ abstract class ClashHandlerInterface with ClashInterface {
   Future<String> updateGeoData(UpdateGeoDataParams params) => invoke<String>(
         method: ActionMethod.updateGeoData,
         data: json.encode(params),
-        timeout: const Duration(minutes: 1));
+        timeout: const Duration(seconds: 100));
 
   @override
   Future<String> sideLoadExternalProvider({
@@ -353,6 +357,13 @@ abstract class ClashHandlerInterface with ClashInterface {
   }
 
   @override
+  Future<void> healthCheck([String groupName = '']) => invoke<String>(
+      method: ActionMethod.healthCheck,
+      data: groupName,
+      timeout: const Duration(seconds: 30),
+    );
+
+  @override
   FutureOr<String> getCountryCode(String ip) => invoke<String>(
       method: ActionMethod.getCountryCode,
       data: ip,
@@ -361,5 +372,10 @@ abstract class ClashHandlerInterface with ClashInterface {
   @override
   FutureOr<String> getMemory() => invoke<String>(
       method: ActionMethod.getMemory,
+    );
+
+  @override
+  FutureOr<String> getCoreVersion() => invoke<String>(
+      method: ActionMethod.getCoreVersion,
     );
 }

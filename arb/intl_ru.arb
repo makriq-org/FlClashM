@@ -433,6 +433,8 @@
   "trafficUnlimited": "Безлимитный трафик",
   "subscriptionEternal": "Бессрочная подписка",
   "expiresOn": "Истекает",
+  "newDashboard": "Новый вид",
+  "untilDate": "до",
   "remaining": "Осталось",
   "remainingSingular": "Остался",
   "remainingPlural": "Осталось",

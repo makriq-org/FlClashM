@@ -93,12 +93,6 @@ fn stop() -> impl Reply {
     "".to_string()
 }
 
-fn shutdown_service() -> impl Reply {
-    // Do not allow shutting down the Windows service via HTTP in production
-    log_message("Received shutdown request - ignored".to_string());
-    "Shutdown endpoint is disabled".to_string()
-}
-
 fn log_message(message: String) {
     let mut log_buffer = LOGS.lock().unwrap();
     if log_buffer.len() == 100 {

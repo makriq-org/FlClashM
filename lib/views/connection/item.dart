@@ -87,18 +87,6 @@ class ConnectionItem extends ConsumerWidget {
 
           InkWell(
           child: GestureDetector(
-            // onLongPressStart: (details) {
-            //   if (!system.isDesktop) {
-            //     return;
-            //   }
-            //   openPopup(details.localPosition);
-            // },
-            // onSecondaryTapDown: (details) {
-            //   if (!system.isDesktop) {
-            //     return;
-            //   }
-            //   openPopup(details.localPosition);
-            // },
             child: ListItem(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16,
@@ -120,7 +108,7 @@ class ConnectionItem extends ConsumerWidget {
                         child: FutureBuilder<ImageProvider?>(
                           future: _getPackageIcon(connection),
                           builder: (_, snapshot) {
-                            if (!snapshot.hasData && snapshot.data == null) {
+                            if (!snapshot.hasData || snapshot.data == null) {
                               return Container();
                             } else {
                               return Image(

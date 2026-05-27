@@ -1,5 +1,8 @@
 name: build-core
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_dispatch:
     inputs:
@@ -62,6 +65,12 @@ jobs:
         with:
           go-version: "1.26.0"
           cache-dependency-path: core/go.sum
+
+      - name: Update mihomo dependency
+        run: |
+          cd core
+          go get github.com/metacubex/mihomo@${{ github.event.inputs.version }}
+          go mod tidy
 
       - name: Build core
         env:

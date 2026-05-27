@@ -1,290 +1,268 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
-import 'dart:ui';
 
-import 'package:ffi/ffi.dart';
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/plugins/service.dart';
 import 'package:flclashx/state.dart';
+import 'package:flutter/services.dart';
 
-import 'generated/clash_ffi.dart';
 import 'interface.dart';
 
+/// Android-only bridge to the `com.follow.clashx/service` AIDL service living
+/// in the `:remote` process. Replaces the old FFI + dart-port / service-isolate
+/// architecture: every call now goes through a MethodChannel and is forwarded
+/// across AIDL to the Go core.
 class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
-
-  factory ClashLib() {
-    _instance ??= ClashLib._internal();
-    return _instance!;
-  }
+  factory ClashLib() => _instance ??= ClashLib._internal();
+  static ClashLib? _instance;
 
   ClashLib._internal() {
-    _initService();
+    _channel.setMethodCallHandler(_onMethodCall);
+    unawaited(_init());
   }
-  static ClashLib? _instance;
-  Completer<bool> _canSendCompleter = Completer();
-  SendPort? sendPort;
-  final receiverPort = ReceivePort();
+
+  final MethodChannel _channel = const MethodChannel('com.follow.clashx/service');
+  Completer<bool> _initCompleter = Completer<bool>();
+
+  static const int _maxCrashRetries = 5;
+  int _crashCount = 0;
+  DateTime? _lastCrashTime;
+
+  Future<void> _init() async {
+    try {
+      await _channel.invokeMethod<String>('init')
+          .timeout(const Duration(seconds: 15));
+      _crashCount = 0;
+      if (!_initCompleter.isCompleted) _initCompleter.complete(true);
+    } catch (e) {
+      commonPrint.log('ClashLib init failed: $e');
+      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
+    }
+  }
+
+  Future<void> _handleCrashRestart() async {
+    final now = DateTime.now();
+    if (_lastCrashTime != null &&
+        now.difference(_lastCrashTime!).inSeconds > 60) {
+      _crashCount = 0;
+    }
+    _lastCrashTime = now;
+    _crashCount++;
+
+    if (_crashCount > _maxCrashRetries) {
+      commonPrint.log(
+        'service crash loop: $_crashCount crashes, giving up. '
+        'Restart the app to retry.',
+      );
+      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
+      return;
+    }
+
+    final delayMs = 1000 * (1 << (_crashCount - 1)).clamp(1, 16);
+    commonPrint.log(
+      'service crash #$_crashCount/$_maxCrashRetries, '
+      'retrying in ${delayMs}ms',
+    );
+    await Future.delayed(Duration(milliseconds: delayMs));
+    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
+    unawaited(_init());
+  }
+
+  Future<dynamic> _onMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'event':
+        final raw = call.arguments as String?;
+        if (raw == null || raw.isEmpty) return null;
+        try {
+          handleResult(ActionResult.fromJson(json.decode(raw)));
+        } catch (e) {
+          commonPrint.log('event parse err: $e raw=$raw');
+        }
+        return null;
+      case 'crash':
+        commonPrint.log('service crash: ${call.arguments}');
+        unawaited(_handleCrashRestart());
+        return null;
+      case 'onStarted':
+        return null;
+      default:
+        return null;
+    }
+  }
 
   @override
-  Future<bool> preload() => _canSendCompleter.future;
-
-  Future<void> _initService() async {
-    await service?.destroy();
-    _registerMainPort(receiverPort.sendPort);
-    receiverPort.listen((message) {
-      if (message is SendPort) {
-        if (_canSendCompleter.isCompleted) {
-          sendPort = null;
-          _canSendCompleter = Completer();
-        }
-        sendPort = message;
-        _canSendCompleter.complete(true);
-      } else if (message is Map) {
-        // Ignore IPC responses (Map type) - they don't need processing
-        return;
-      } else {
-        handleResult(
-          ActionResult.fromJson(json.decode(
-            message,
-          )),
-        );
-      }
-    });
-    await service?.init();
-  }
-
-  void _registerMainPort(SendPort sendPort) {
-    IsolateNameServer.removePortNameMapping(mainIsolate);
-    IsolateNameServer.registerPortWithName(sendPort, mainIsolate);
-  }
+  Future<bool> preload() => _initCompleter.future;
 
   @override
   Future<bool> destroy() async {
-    await service?.destroy();
+    try {
+      await _channel.invokeMethod<bool>('shutdown');
+    } catch (_) {}
     return true;
   }
 
   @override
   void reStart() {
-    _initService();
+    _crashCount = 0;
+    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
+    unawaited(_init());
+  }
+
+  void reconnectIfNeeded() {
+    if (_crashCount <= _maxCrashRetries && _initCompleter.isCompleted) return;
+    _crashCount = 0;
+    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
+    unawaited(_init());
   }
 
   @override
   Future<bool> shutdown() async {
     await super.shutdown();
-    destroy();
-    return true;
+    return destroy();
   }
 
   @override
   Future<void> sendMessage(String message) async {
-    await _canSendCompleter.future;
-    sendPort?.send(message);
+    try {
+      final res = await _channel.invokeMethod<String>('invokeAction', message);
+      if (res == null || res.isEmpty) {
+        _failPendingCompleter(message, 'empty response');
+        return;
+      }
+      try {
+        handleResult(ActionResult.fromJson(json.decode(res)));
+      } catch (e) {
+        commonPrint.log('invokeAction parse err: $e');
+        _failPendingCompleter(message, res);
+      }
+    } catch (e) {
+      commonPrint.log('sendMessage channel error: $e');
+      _failPendingCompleter(message, '$e');
+    }
   }
 
-  /// Send a custom IPC message to service (for foreground notification updates)
-  Future<void> sendIpcMessage(Map<String, dynamic> message) async {
-    await _canSendCompleter.future;
-    sendPort?.send(message);
+  void _failPendingCompleter(String message, String reason) {
+    try {
+      final decoded = json.decode(message);
+      if (decoded is Map<String, dynamic>) {
+        final id = decoded['id'] as String?;
+        final method = decoded['method'] as String?;
+        if (id != null) {
+          final completer = callbackCompleterMap.remove(id);
+          if (completer != null && !completer.isCompleted) {
+            commonPrint.log('_failPendingCompleter: method=$method reason=$reason');
+            completer.complete(null);
+          }
+        }
+      }
+    } catch (e) {
+      commonPrint.log('_failPendingCompleter parse error: $e reason=$reason');
+    }
   }
 
-  // @override
-  // Future<bool> stopTun() {
-  //   return invoke<bool>(
-  //     method: ActionMethod.stopTun,
-  //   );
-  // }
+  // --- fork-specific straight-through methods (native returns direct result) --
 
   @override
-  Future<String> getAndroidVpnOptions() => invoke<String>(
-        method: ActionMethod.getAndroidVpnOptions,
-      );
+  Future<String> getAndroidVpnOptions() async =>
+      (await _channel.invokeMethod<String>('getAndroidVpnOptions')) ?? '';
 
   @override
-  Future<bool> updateDns(String value) => invoke<bool>(
-      method: ActionMethod.updateDns,
-      data: value,
-    );
+  Future<bool> updateDns(String value) async {
+    await _channel.invokeMethod('updateDns', value);
+    return true;
+  }
 
   @override
   Future<DateTime?> getRunTime() async {
-    final runTimeString = await invoke<String>(
-      method: ActionMethod.getRunTime,
-    );
-    if (runTimeString.isEmpty) {
-      return null;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(int.parse(runTimeString));
+    final rt = await _channel.invokeMethod('getRunTime');
+    final ms = (rt is int) ? rt : int.tryParse('$rt');
+    if (ms == null || ms == 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
   }
 
   @override
-  Future<String> getCurrentProfileName() => invoke<String>(
-      method: ActionMethod.getCurrentProfileName,
-    );
-}
+  Future<String> getCurrentProfileName() async =>
+      (await _channel.invokeMethod<String>('getCurrentProfileName')) ?? '';
 
-class ClashLibHandler {
+  // --- VPN lifecycle --------------------------------------------------------
 
-  factory ClashLibHandler() {
-    _instance ??= ClashLibHandler._internal();
-    return _instance!;
+  /// Tells the `:remote` service to bring the TUN tunnel up using the current
+  /// Go-provided `AndroidVpnOptions`, merged with UI access control settings.
+  Future<int> startVpn() async {
+    final optionsRaw = await getAndroidVpnOptions();
+    final merged = _mergeAccessControl(optionsRaw);
+    final res = await _channel.invokeMethod('start', {'data': merged});
+    return (res is int) ? res : int.tryParse('$res') ?? 0;
   }
 
-  ClashLibHandler._internal() {
-    lib = DynamicLibrary.open("libclash.so");
-    clashFFI = ClashFFI(lib);
-    clashFFI.initNativeApiBridge(
-      NativeApi.initializeApiDLData,
-    );
-  }
-  static ClashLibHandler? _instance;
-
-  late final ClashFFI clashFFI;
-
-  late final DynamicLibrary lib;
-
-  Future<String> invokeAction(String actionParams) {
-    final completer = Completer<String>();
-    final receiver = ReceivePort();
-    receiver.listen((message) {
-      if (!completer.isCompleted) {
-        completer.complete(message);
-        receiver.close();
+  String _mergeAccessControl(String optionsJson) {
+    if (optionsJson.isEmpty) return optionsJson;
+    try {
+      final map = json.decode(optionsJson) as Map<String, dynamic>;
+      final ac = globalState.config.vpnProps.accessControl;
+      if (ac.enable) {
+        map['accessControl'] = {
+          'mode': ac.mode.name,
+          'acceptList': ac.acceptList,
+          'rejectList': ac.rejectList,
+        };
       }
-    });
-    final actionParamsChar = actionParams.toNativeUtf8().cast<Char>();
-    clashFFI.invokeAction(
-      actionParamsChar,
-      receiver.sendPort.nativePort,
-    );
-    malloc.free(actionParamsChar);
-    return completer.future;
-  }
-
-  void attachMessagePort(int messagePort) {
-    clashFFI.attachMessagePort(
-      messagePort,
-    );
-  }
-
-  void updateDns(String dns) {
-    final dnsChar = dns.toNativeUtf8().cast<Char>();
-    clashFFI.updateDns(dnsChar);
-    malloc.free(dnsChar);
-  }
-
-  void setState(CoreState state) {
-    final stateChar = json.encode(state).toNativeUtf8().cast<Char>();
-    clashFFI.setState(stateChar);
-    malloc.free(stateChar);
-  }
-
-  String getCurrentProfileName() {
-    final currentProfileRaw = clashFFI.getCurrentProfileName();
-    final currentProfile = currentProfileRaw.cast<Utf8>().toDartString();
-    clashFFI.freeCString(currentProfileRaw);
-    return currentProfile;
-  }
-
-  String getAndroidVpnOptions() {
-    final vpnOptionsRaw = clashFFI.getAndroidVpnOptions();
-    final vpnOptions = vpnOptionsRaw.cast<Utf8>().toDartString();
-    clashFFI.freeCString(vpnOptionsRaw);
-    return vpnOptions;
-  }
-
-  Traffic getTraffic() {
-    final trafficRaw = clashFFI.getTraffic();
-    final trafficString = trafficRaw.cast<Utf8>().toDartString();
-    clashFFI.freeCString(trafficRaw);
-    if (trafficString.isEmpty) {
-      return Traffic();
+      return json.encode(map);
+    } catch (_) {
+      return optionsJson;
     }
-    return Traffic.fromMap(json.decode(trafficString));
   }
 
-  Traffic getTotalTraffic(bool value) {
-    final trafficRaw = clashFFI.getTotalTraffic();
-    final trafficString = trafficRaw.cast<Utf8>().toDartString();
-    clashFFI.freeCString(trafficRaw);
-    if (trafficString.isEmpty) {
-      return Traffic();
-    }
-    return Traffic.fromMap(json.decode(trafficString));
-  }
-
-  Future<bool> startListener() async {
-    clashFFI.startListener();
+  Future<bool> stopVpn() async {
+    await _channel.invokeMethod('stop');
     return true;
   }
 
-  Future<bool> stopListener() async {
-    clashFFI.stopListener();
-    return true;
-  }
-
-  DateTime? getRunTime() {
-    final runTimeRaw = clashFFI.getRunTime();
-    final runTimeString = runTimeRaw.cast<Utf8>().toDartString();
-    if (runTimeString.isEmpty) {
-      return null;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(int.parse(runTimeString));
-  }
-
-  Future<Map<String, dynamic>> getConfig(String id) async {
-    final path = await appPath.getProfilePath(id);
-    final pathChar = path.toNativeUtf8().cast<Char>();
-    final configRaw = clashFFI.getConfig(pathChar);
-    final configString = configRaw.cast<Utf8>().toDartString();
-    if (configString.isEmpty) {
-      return {};
-    }
-    final config = json.decode(configString);
-    malloc.free(pathChar);
-    clashFFI.freeCString(configRaw);
-    return config;
-  }
-
-  Future<String> quickStart(
-    InitParams initParams,
-    SetupParams setupParams,
-    CoreState state,
-  ) {
-    final completer = Completer<String>();
-    final receiver = ReceivePort();
-    receiver.listen((message) {
-      if (!completer.isCompleted) {
-        completer.complete(message);
-        receiver.close();
-      }
+  /// One-shot start: atomically `initClash` + `setupConfig` + foreground
+  /// service bring-up on the remote side. Returns an error string (empty on
+  /// success) matching the legacy Dart API.
+  Future<String> quickStart({
+    required InitParams initParams,
+    required SetupParams setupParams,
+    required CoreState state,
+  }) async {
+    final res = await _channel.invokeMethod<String>('quickStart', <String, String>{
+      'init': json.encode(initParams),
+      'params': json.encode(setupParams),
+      'state': json.encode(state),
     });
-    final params = json.encode(setupParams);
-    final initValue = json.encode(initParams);
-    final stateParams = json.encode(state);
-    final initParamsChar = initValue.toNativeUtf8().cast<Char>();
-    final paramsChar = params.toNativeUtf8().cast<Char>();
-    final stateParamsChar = stateParams.toNativeUtf8().cast<Char>();
-    clashFFI.quickStart(
-      initParamsChar,
-      paramsChar,
-      stateParamsChar,
-      receiver.sendPort.nativePort,
-    );
-    malloc.free(initParamsChar);
-    malloc.free(paramsChar);
-    malloc.free(stateParamsChar);
-    return completer.future;
+    return res ?? '';
+  }
+
+  /// Push foreground-notification params (title/server/content) so the
+  /// :remote service can render the sticky notification without having to
+  /// call back into Dart.
+  Future<void> updateNotificationParams({
+    required String title,
+    String server = '',
+    bool onlyStatisticsProxy = false,
+  }) async {
+    await _channel.invokeMethod('updateNotificationParams', json.encode({
+      'title': title,
+      'stopText': server,
+      'onlyStatisticsProxy': onlyStatisticsProxy,
+    }));
+  }
+
+  /// Persist quickStart-equivalent params so tile/widget/Always-on can
+  /// cold-start without Flutter via FlVpnService.coldStart().
+  Future<void> saveParamsForColdStart({
+    required InitParams initParams,
+    required SetupParams setupParams,
+    required CoreState state,
+  }) async {
+    await _channel.invokeMethod('saveParams', <String, String>{
+      'init': json.encode(initParams),
+      'params': json.encode(setupParams),
+      'state': json.encode(state),
+    });
   }
 }
 
-ClashLib? get clashLib =>
-    Platform.isAndroid && !globalState.isService ? ClashLib() : null;
-
-ClashLibHandler? get clashLibHandler =>
-    Platform.isAndroid && globalState.isService ? ClashLibHandler() : null;
+ClashLib? get clashLib => Platform.isAndroid ? ClashLib() : null;

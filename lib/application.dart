@@ -68,7 +68,7 @@ class ApplicationState extends ConsumerState<Application> {
   }
 
   void _autoUpdateGroupTask() {
-    _autoUpdateGroupTaskTimer = Timer(const Duration(milliseconds: 20000), () {
+    _autoUpdateGroupTaskTimer = Timer(const Duration(seconds: 60), () {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         globalState.appController.updateGroupsDebounce();
         _autoUpdateGroupTask();

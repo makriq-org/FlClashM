@@ -13,12 +13,6 @@ import com.follow.clashx.GlobalState
 import com.follow.clashx.R
 import com.follow.clashx.RunState
 
-/**
- * Minimal 1x1 home-screen widget: a single tap target showing the app
- * logo (colored when the tunnel is up, monochrome otherwise). Tap
- * toggles the tunnel. Separate from ModeWidgetProvider so users can
- * pick the compact variant without the mode column.
- */
 class OnOffWidgetProvider : AppWidgetProvider() {
 
     companion object {
@@ -84,9 +78,12 @@ class OnOffWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        Log.d(TAG, "onReceive: ${intent.action}")
         ensureObservers()
         if (intent.action == ACTION_TOGGLE) {
+            if (GlobalState.runStateFlow.value == RunState.PENDING) {
+                Log.d(TAG, "Ignoring toggle — operation in progress")
+                return
+            }
             GlobalState.handleToggle()
         }
     }
@@ -96,5 +93,16 @@ class OnOffWidgetProvider : AppWidgetProvider() {
         Log.d(TAG, "onEnabled")
         ensureObservers()
         GlobalState.syncStatus()
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        Log.d(TAG, "onDisabled")
+        synchronized(Companion) {
+            if (observersAttached) {
+                GlobalState.runState.removeObserver(runStateObserver)
+                observersAttached = false
+            }
+        }
     }
 }

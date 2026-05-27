@@ -52,6 +52,13 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Local properties (contains SDK path, potentially sensitive)
+android/local.properties
+
+# Project assets
+store/
+docs/
+
 # Helper
 /services/helper/target/
 #libclash
@@ -68,3 +75,7 @@ app.*.map.json
 # Environment variables (contains sensitive data)
 .env
 *.local.sh
+
+
+# Landing page (deployed separately)
+docs/

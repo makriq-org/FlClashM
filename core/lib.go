@@ -7,22 +7,9 @@ package main
 */
 import "C"
 import (
-	bridge "core/dart-bridge"
 	"encoding/json"
 	"unsafe"
 )
-
-var messagePort int64 = -1
-
-//export initNativeApiBridge
-func initNativeApiBridge(api unsafe.Pointer) {
-	bridge.InitDartApi(api)
-}
-
-//export attachMessagePort
-func attachMessagePort(mPort C.longlong) {
-	messagePort = int64(mPort)
-}
 
 //export getTraffic
 func getTraffic() *C.char {
@@ -44,37 +31,36 @@ func (result ActionResult) send() {
 	if err != nil {
 		return
 	}
-	bridge.SendToPort(result.Port, string(data))
+	invokeCallback(result.Callback, string(data))
 }
 
 //export invokeAction
-func invokeAction(paramsChar *C.char, port C.longlong) {
+func invokeAction(paramsChar *C.char, callback unsafe.Pointer) {
 	params := C.GoString(paramsChar)
-	i := int64(port)
 	var action = &Action{}
 	err := json.Unmarshal([]byte(params), action)
 	if err != nil {
-		bridge.SendToPort(i, err.Error())
+		invokeCallback(callback, err.Error())
 		return
 	}
 	result := ActionResult{
-		Id:     action.Id,
-		Method: action.Method,
-		Port:   i,
+		Id:       action.Id,
+		Method:   action.Method,
+		Callback: callback,
 	}
 	go handleAction(action, result)
 }
 
 func sendMessage(message Message) {
-	if messagePort == -1 {
-		return
-	}
 	result := ActionResult{
 		Method: messageMethod,
-		Port:   messagePort,
 		Data:   message,
 	}
-	result.send()
+	data, err := result.Json()
+	if err != nil {
+		return
+	}
+	emitEvent(string(data))
 }
 
 //export getConfig

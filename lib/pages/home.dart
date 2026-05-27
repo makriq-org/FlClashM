@@ -32,8 +32,18 @@ class HomePage extends StatelessWidget {
               navigationItems: navigationItems,
               currentIndex: currentIndex,
             );
-            final bottomNavigationBar =
-                viewMode == ViewMode.mobile ? navigationBar : null;
+            final headerNewBoard = ref.watch(currentProfileProvider
+                    .select((p) => p?.providerHeaders['flclashx-newboard'])) == 'true';
+            final settingNewDashboard = ref.watch(appSettingProvider.select((s) => s.newDashboard));
+            final isNewDashboard = (settingNewDashboard ?? headerNewBoard)
+                && pageLabel == PageLabel.dashboard;
+            final showBottomBar = viewMode == ViewMode.mobile && !isNewDashboard;
+            final bottomNavigationBar = viewMode == ViewMode.mobile
+                ? AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    child: showBottomBar ? navigationBar : const SizedBox.shrink(),
+                  )
+                : null;
             final sideNavigationBar =
                 viewMode != ViewMode.mobile ? navigationBar : null;
             return CommonScaffold(

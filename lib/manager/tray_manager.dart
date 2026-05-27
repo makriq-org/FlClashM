@@ -22,7 +22,7 @@ class TrayManager extends ConsumerStatefulWidget {
   ConsumerState<TrayManager> createState() => _TrayContainerState();
 }
 
-class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener {
+class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener, WidgetsBindingObserver {
   Timer? _menuMonitor;
 
   void _closeWindowsPopupMenu() {
@@ -37,7 +37,9 @@ class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener {
       }
 
       calloc.free(className);
-    } catch (e) {}
+    } catch (_) {
+      // FFI menu detection may fail
+    }
 
     _stopMenuMonitor();
   }
@@ -118,6 +120,7 @@ class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener {
   void initState() {
     super.initState();
     trayManager.addListener(this);
+    WidgetsBinding.instance.addObserver(this);
     ref.listenManual(
       trayStateProvider,
       (prev, next) {
@@ -126,6 +129,18 @@ class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener {
         }
       },
     );
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    globalState.appController.updateTray();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      globalState.appController.updateTray();
+    }
   }
 
   @override
@@ -154,6 +169,7 @@ class _TrayContainerState extends ConsumerState<TrayManager> with TrayListener {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopMenuMonitor();
     trayManager.removeListener(this);
     super.dispose();

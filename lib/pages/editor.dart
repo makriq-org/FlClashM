@@ -1,22 +1,14 @@
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/common/yaml_highlight.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/common.dart';
-import 'package:flclashx/providers/app.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:re_editor/re_editor.dart';
-import 'package:re_highlight/languages/javascript.dart';
-import 'package:re_highlight/languages/yaml.dart';
-import 'package:re_highlight/styles/atom-one-light.dart';
 
-typedef EditingValueChangeBuilder = Widget Function(CodeLineEditingValue value);
 typedef TextEditingValueChangeBuilder = Widget Function(TextEditingValue value);
 
 class EditorPage extends ConsumerStatefulWidget {
-
   const EditorPage({
     super.key,
     required this.title,
@@ -25,10 +17,9 @@ class EditorPage extends ConsumerStatefulWidget {
     this.onSave,
     this.onPop,
     this.supportRemoteDownload = false,
-    this.languages = const [
-      Language.yaml,
-    ],
+    this.languages = const [Language.yaml],
   });
+
   final String title;
   final String content;
   final List<Language> languages;
@@ -43,80 +34,71 @@ class EditorPage extends ConsumerStatefulWidget {
 }
 
 class _EditorPageState extends ConsumerState<EditorPage> {
-  late CodeLineEditingController _controller;
-  late CodeFindController _findController;
+  late TextEditingController _controller;
   late TextEditingController _titleController;
-  final _focusNode = FocusNode();
+  late ScrollController _scrollController;
+  bool _showSearch = false;
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    _controller = CodeLineEditingController.fromText(widget.content);
-    _findController = CodeFindController(_controller);
+    _controller = widget.languages.contains(Language.yaml)
+        ? YamlHighlightController(text: widget.content)
+        : TextEditingController(text: widget.content);
     _titleController = TextEditingController(text: widget.title);
-    if (system.isDesktop) {
-      return;
-    }
-    _focusNode.onKeyEvent = ((_, event) {
-      final keys = HardwareKeyboard.instance.logicalKeysPressed;
-      final key = event.logicalKey;
-      if (!keys.contains(key)) {
-        return KeyEventResult.ignored;
-      }
-      if (key == LogicalKeyboardKey.arrowUp) {
-        _controller.moveCursor(AxisDirection.up);
-        return KeyEventResult.handled;
-      } else if (key == LogicalKeyboardKey.arrowDown) {
-        _controller.moveCursor(AxisDirection.down);
-        return KeyEventResult.handled;
-      } else if (key == LogicalKeyboardKey.arrowLeft) {
-        _controller.selection.endIndex;
-        _controller.moveCursor(AxisDirection.left);
-        return KeyEventResult.handled;
-      } else if (key == LogicalKeyboardKey.arrowRight) {
-        _controller.moveCursor(AxisDirection.right);
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    });
+    _scrollController = ScrollController();
   }
 
   @override
   void dispose() {
-    _findController.dispose();
     _controller.dispose();
-    _focusNode.dispose();
+    _titleController.dispose();
+    _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
-  Widget _wrapController(EditingValueChangeBuilder builder) => ValueListenableBuilder(
-      valueListenable: _controller,
-      builder: (_, value, ___) => builder(value),
-    );
+  Widget _wrapTitleController(TextEditingValueChangeBuilder builder) =>
+      ValueListenableBuilder(
+        valueListenable: _titleController,
+        builder: (_, value, ___) => builder(value),
+      );
 
-  Widget _wrapTitleController(TextEditingValueChangeBuilder builder) => ValueListenableBuilder(
-      valueListenable: _titleController,
-      builder: (_, value, ___) => builder(value),
-    );
+  Widget _wrapController(TextEditingValueChangeBuilder builder) =>
+      ValueListenableBuilder(
+        valueListenable: _controller,
+        builder: (_, value, ___) => builder(value),
+      );
 
-  void _handleSearch() {
-    _findController.findMode();
+  TextStyle get _editorStyle => TextStyle(
+        fontSize: context.textTheme.bodyLarge?.fontSize?.ap,
+        fontFamily: FontFamily.jetBrainsMono.value,
+        height: 1.5,
+      );
+
+  void _toggleSearch() {
+    setState(() {
+      _showSearch = !_showSearch;
+      if (_showSearch) {
+        Future.microtask(() => _searchFocusNode.requestFocus());
+      } else if (_controller is YamlHighlightController) {
+        (_controller as YamlHighlightController).setSearch('', [], -1);
+      }
+    });
   }
 
   Future<void> _handleImport() async {
     final option = await globalState.showCommonDialog<ImportOption>(
       child: const _ImportOptionsDialog(),
     );
-    if (option == null) {
-      return;
-    }
+    if (option == null) return;
     if (option == ImportOption.file) {
       final file = await picker.pickerFile();
-      if (file == null) {
-        return;
-      }
-      final res = String.fromCharCodes(file.bytes?.toList() ?? []);
-      _controller.text = res;
+      if (file == null) return;
+      _controller.text = String.fromCharCodes(file.bytes?.toList() ?? []);
       return;
     }
     final url = await globalState.showCommonDialog(
@@ -135,29 +117,19 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         },
       ),
     );
-    if (url == null) {
-      return;
-    }
+    if (url == null) return;
     final res = await request.getTextResponseForUrl(url);
     _controller.text = res.data;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMobileView = ref.watch(isMobileViewProvider);
     return CommonPopScope(
       onPop: () async {
-        if (widget.onPop == null) {
-          return true;
-        }
+        if (widget.onPop == null) return true;
         final res = await widget.onPop!(
-          context,
-          _titleController.text,
-          _controller.text,
-        );
-        if (res && context.mounted) {
-          return true;
-        }
+            context, _titleController.text, _controller.text);
+        if (res && context.mounted) return true;
         return false;
       },
       child: CommonScaffold(
@@ -176,17 +148,12 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           actions: genActions([
             if (widget.onSave != null)
               _wrapController(
-                (value) => _wrapTitleController(
-                  (value) => IconButton(
+                (_) => _wrapTitleController(
+                  (_) => IconButton(
                     onPressed: _controller.text != widget.content ||
                             _titleController.text != widget.title
-                        ? () {
-                            widget.onSave!(
-                              context,
-                              _titleController.text,
-                              _controller.text,
-                            );
-                          }
+                        ? () => widget.onSave!(
+                            context, _titleController.text, _controller.text)
                         : null,
                     icon: const Icon(Icons.save_sharp),
                   ),
@@ -195,491 +162,335 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             if (widget.supportRemoteDownload)
               IconButton(
                 onPressed: _handleImport,
-                icon: const Icon(
-                  Icons.arrow_downward,
-                ),
+                icon: const Icon(Icons.arrow_downward),
               ),
-            _wrapController(
-              (value) => CommonPopupBox(
-                targetBuilder: (open) => IconButton(
-                    onPressed: () {
-                      open(
-                        offset: const Offset(-20, 20),
-                      );
-                    },
-                    icon: const Icon(Icons.more_vert),
-                  ),
-                popup: CommonPopupMenu(
-                  items: [
-                    PopupMenuItemData(
-                      icon: Icons.search,
-                      label: appLocalizations.search,
-                      onPressed: _handleSearch,
-                    ),
-                    PopupMenuItemData(
-                      icon: Icons.undo,
-                      label: appLocalizations.undo,
-                      onPressed: _controller.canUndo ? _controller.undo : null,
-                    ),
-                    PopupMenuItemData(
-                      icon: Icons.redo,
-                      label: appLocalizations.redo,
-                      onPressed: _controller.canRedo ? _controller.redo : null,
-                    ),
-                  ],
-                ),
-              ),
+            IconButton(
+              onPressed: _toggleSearch,
+              icon: const Icon(Icons.search),
             ),
           ]),
         ),
-        body: CodeEditor(
-          findController: _findController,
-          findBuilder: (context, controller, readOnly) => FindPanel(
-            controller: controller,
-            readOnly: readOnly,
-            isMobileView: isMobileView,
-          ),
-          padding: const EdgeInsets.only(
-            right: 16,
-          ),
-          autocompleteSymbols: true,
-          focusNode: _focusNode,
-          scrollbarBuilder: (context, child, details) => CommonScrollBar(
-              controller: details.controller,
-              child: child,
+        body: Column(
+          children: [
+            if (_showSearch)
+              _SearchBar(
+                searchController: _searchController,
+                focusNode: _searchFocusNode,
+                editorController: _controller,
+                scrollController: _scrollController,
+                onClose: _toggleSearch,
+              ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _LineGutter(
+                          controller: _controller,
+                          style: _editorStyle,
+                          totalWidth: constraints.maxWidth,
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: TextField(
+                              controller: _controller,
+                              maxLines: null,
+                              style: _editorStyle,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
-          toolbarController: ContextMenuControllerImpl(),
-          indicatorBuilder: (
-            context,
-            editingController,
-            chunkController,
-            notifier,
-          ) => Row(
-              children: [
-                DefaultCodeLineNumber(
-                  controller: editingController,
-                  notifier: notifier,
-                ),
-                DefaultCodeChunkIndicator(
-                  width: 20,
-                  controller: chunkController,
-                  notifier: notifier,
-                )
-              ],
-            ),
-          shortcutsActivatorsBuilder: const DefaultCodeShortcutsActivatorsBuilder(),
-          controller: _controller,
-          style: CodeEditorStyle(
-            fontSize: context.textTheme.bodyLarge?.fontSize?.ap,
-            fontFamily: FontFamily.jetBrainsMono.value,
-            codeTheme: CodeHighlightTheme(
-              languages: {
-                if (widget.languages.contains(Language.yaml))
-                  'yaml': CodeHighlightThemeMode(
-                    mode: langYaml,
-                  ),
-                if (widget.languages.contains(Language.javaScript))
-                  "javascript": CodeHighlightThemeMode(
-                    mode: langJavascript,
-                  ),
-              },
-              theme: atomOneLightTheme,
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-const double _kDefaultFindPanelHeight = 52;
-
-class FindPanel extends StatelessWidget implements PreferredSizeWidget {
-
-  const FindPanel({
-    super.key,
+class _LineGutter extends StatelessWidget {
+  const _LineGutter({
     required this.controller,
-    required this.readOnly,
-    required this.isMobileView,
-  }) : height = (isMobileView
-                ? _kDefaultFindPanelHeight * 2
-                : _kDefaultFindPanelHeight) +
-            8;
-  final CodeFindController controller;
-  final bool readOnly;
-  final bool isMobileView;
-  final double height;
+    required this.style,
+    required this.totalWidth,
+  });
 
-  @override
-  Size get preferredSize => Size(
-        double.infinity,
-        controller.value == null ? 0 : height,
-      );
+  final TextEditingController controller;
+  final TextStyle style;
+  final double totalWidth;
+
+  static const _padLeft = 12.0;
+  static const _padRight = 8.0;
+  static const _textPadRight = 16.0;
 
   @override
   Widget build(BuildContext context) {
-    if (controller.value == null) {
-      return const SizedBox(
-        width: 0,
-        height: 0,
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: 12,
-        horizontal: 16,
-      ),
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
-      color: context.colorScheme.surface,
-      alignment: Alignment.centerLeft,
-      height: height,
-      child: _buildFindInputView(context),
-    );
-  }
+    final gutterColor = context.colorScheme.onSurface.withValues(alpha: 0.38);
+    final gutterStyle = style.copyWith(color: gutterColor);
+    final textScaler = MediaQuery.textScalerOf(context);
 
-  Widget _buildFindInputView(BuildContext context) {
-    final value = controller.value!;
-    final String result;
-    if (value.result == null) {
-      result = appLocalizations.none;
-    } else {
-      result = '${value.result!.index + 1}/${value.result!.matches.length}';
-    }
-    final bar = Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        if (!isMobileView) ...[
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: _buildFindInput(context, value),
-          ),
-          const SizedBox(
-            width: 12,
-          ),
-        ],
-        Text(
-          result,
-          style: context.textTheme.bodyMedium,
-        ),
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            spacing: 8,
-            children: [
-              _buildIconButton(
-                onPressed: value.result == null
-                    ? null
-                    : controller.previousMatch,
-                icon: Icons.arrow_upward,
-              ),
-              _buildIconButton(
-                onPressed: value.result == null
-                    ? null
-                    : controller.nextMatch,
-                icon: Icons.arrow_downward,
-              ),
-              const SizedBox(
-                width: 2,
-              ),
-              IconButton.filledTonal(
-                visualDensity: VisualDensity.compact,
-                onPressed: controller.close,
-                style: const ButtonStyle(
-                  padding: WidgetStatePropertyAll(
-                    EdgeInsets.all(0),
-                  ),
-                ),
-                icon: const Icon(
-                  Icons.close,
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-    if (isMobileView) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          bar,
-          const SizedBox(
-            height: 4,
-          ),
-          _buildFindInput(context, value),
-        ],
-      );
-    }
-    return bar;
-  }
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        final lines = value.text.split('\n');
+        final digits = lines.length.toString().length.clamp(2, 6);
 
-  Stack _buildFindInput(BuildContext context, CodeFindValue value) => Stack(
-      alignment: Alignment.center,
-      children: [
-        _buildTextField(
-          context: context,
-          onSubmitted: () {
-            if (value.result == null) {
-              return;
-            }
-            controller.nextMatch();
-            controller.findInputFocusNode.requestFocus();
-          },
-          controller: controller.findInputController,
-          focusNode: controller.findInputFocusNode,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          spacing: 8,
-          children: [
-            _buildCheckText(
-              context: context,
-              text: 'Aa',
-              isSelected: value.option.caseSensitive,
-              onPressed: controller.toggleCaseSensitive,
-            ),
-            _buildCheckText(
-              context: context,
-              text: '.*',
-              isSelected: value.option.regex,
-              onPressed: controller.toggleRegex,
-            ),
-            const SizedBox(
-              width: 4,
-            ),
-          ],
-        )
-      ],
-    );
+        final digitPainter = TextPainter(
+          text: TextSpan(text: '0' * (digits + 1), style: gutterStyle),
+          textDirection: TextDirection.ltr,
+          textScaler: textScaler,
+        )..layout();
+        final gutterContentWidth = digitPainter.width.ceilToDouble();
+        digitPainter.dispose();
 
-  Widget _buildTextField({
-    required BuildContext context,
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required VoidCallback onSubmitted,
-  }) => TextField(
-      maxLines: 1,
-      focusNode: focusNode,
-      style: context.textTheme.bodyMedium,
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 12,
-        ),
-      ),
-      onSubmitted: (_) {
-        onSubmitted();
+        final gutterWidth = _padLeft + gutterContentWidth + _padRight;
+        final textAreaWidth = totalWidth - gutterWidth - _textPadRight;
+
+        final painter = TextPainter(
+          textDirection: TextDirection.ltr,
+          textScaler: textScaler,
+        );
+
+        final children = <Widget>[];
+        for (var i = 0; i < lines.length; i++) {
+          painter.text = TextSpan(
+            text: lines[i].isEmpty ? ' ' : lines[i],
+            style: style,
+          );
+          painter.layout(
+            maxWidth: textAreaWidth > 0 ? textAreaWidth : double.infinity,
+          );
+          children.add(SizedBox(
+            height: painter.height,
+            child: Text('${i + 1}', style: gutterStyle),
+          ));
+        }
+        painter.dispose();
+
+        return SizedBox(
+          width: gutterWidth,
+          child: Padding(
+            padding: const EdgeInsets.only(left: _padLeft, right: _padRight),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: children,
+            ),
+          ),
+        );
       },
-      controller: controller,
     );
-
-  Widget _buildCheckText({
-    required BuildContext context,
-    required String text,
-    required bool isSelected,
-    required VoidCallback onPressed,
-  }) => SizedBox(
-      width: 28,
-      height: 28,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: isSelected
-            ? IconButton.filledTonal(
-                onPressed: onPressed,
-                padding: const EdgeInsets.all(2),
-                icon: Text(text, style: context.textTheme.bodySmall),
-              )
-            : IconButton(
-                onPressed: onPressed,
-                padding: const EdgeInsets.all(2),
-                icon: Text(
-                  text,
-                  style: context.textTheme.bodySmall,
-                ),
-              ),
-      ),
-    );
-
-  Widget _buildIconButton({
-    required IconData icon,
-    VoidCallback? onPressed,
-  }) => IconButton(
-      visualDensity: VisualDensity.compact,
-      onPressed: onPressed,
-      style: const ButtonStyle(padding: WidgetStatePropertyAll(EdgeInsets.all(0))),
-      icon: Icon(
-        icon,
-        size: 16,
-      ),
-    );
+  }
 }
 
-class ContextMenuControllerImpl implements SelectionToolbarController {
-  OverlayEntry? _overlayEntry;
-  bool _isFirstRender = true;
+class _SearchBar extends StatefulWidget {
+  const _SearchBar({
+    required this.searchController,
+    required this.focusNode,
+    required this.editorController,
+    required this.scrollController,
+    required this.onClose,
+  });
 
-  void _removeOverLayEntry() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    _isFirstRender = true;
+  final TextEditingController searchController;
+  final FocusNode focusNode;
+  final TextEditingController editorController;
+  final ScrollController scrollController;
+  final VoidCallback onClose;
+
+  @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  List<int> _matches = [];
+  int _current = -1;
+
+  void _notifyHighlight() {
+    final ctrl = widget.editorController;
+    if (ctrl is YamlHighlightController) {
+      ctrl.setSearch(widget.searchController.text, _matches, _current);
+    }
+  }
+
+  void _search(String query) {
+    if (query.isEmpty) {
+      setState(() { _matches = []; _current = -1; });
+      _notifyHighlight();
+      return;
+    }
+    final text = widget.editorController.text.toLowerCase();
+    final q = query.toLowerCase();
+    final matches = <int>[];
+    var start = 0;
+    while (true) {
+      final idx = text.indexOf(q, start);
+      if (idx == -1) break;
+      matches.add(idx);
+      start = idx + 1;
+    }
+    setState(() {
+      _matches = matches;
+      _current = matches.isNotEmpty ? 0 : -1;
+    });
+    _notifyHighlight();
+    _goToMatch();
+  }
+
+  void _next() {
+    if (_matches.isEmpty) return;
+    setState(() => _current = (_current + 1) % _matches.length);
+    _notifyHighlight();
+    _goToMatch();
+  }
+
+  void _prev() {
+    if (_matches.isEmpty) return;
+    setState(() =>
+        _current = (_current - 1 + _matches.length) % _matches.length);
+    _notifyHighlight();
+    _goToMatch();
+  }
+
+  void _goToMatch() {
+    if (_current < 0 || _current >= _matches.length) return;
+    final pos = _matches[_current];
+    final len = widget.searchController.text.length;
+    widget.editorController.selection =
+        TextSelection(baseOffset: pos, extentOffset: pos + len);
+
+    if (!widget.scrollController.hasClients) return;
+    final text = widget.editorController.text;
+    final linesBefore = '\n'.allMatches(text.substring(0, pos)).length;
+    final lineHeight = (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 14) * 1.5;
+    final target = linesBefore * lineHeight;
+    final maxScroll = widget.scrollController.position.maxScrollExtent;
+    final viewportHeight = widget.scrollController.position.viewportDimension;
+    widget.scrollController.animateTo(
+      (target - viewportHeight / 3).clamp(0.0, maxScroll),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
-  void hide(BuildContext context) {
-    _removeOverLayEntry();
-  }
-
-  @override
-  void show({
-    required BuildContext context,
-    required CodeLineEditingController controller,
-    required TextSelectionToolbarAnchors anchors,
-    Rect? renderRect,
-    required LayerLink layerLink,
-    required ValueNotifier<bool> visibility,
-  }) {
-    _removeOverLayEntry();
-    _overlayEntry ??= OverlayEntry(
-      builder: (context) => CodeEditorTapRegion(
-        child: ValueListenableBuilder(
-          valueListenable: controller,
-          builder: (_, __, child) {
-            final isNotEmpty = controller.selectedText.isNotEmpty;
-            final isAllSelected = controller.isAllSelected;
-            final hasSelected = controller.selectedText.isNotEmpty;
-            final menus = <PopupMenuItemData>[
-              if (isNotEmpty)
-                PopupMenuItemData(
-                  label: appLocalizations.copy,
-                  onPressed: controller.copy,
-                ),
-              PopupMenuItemData(
-                label: appLocalizations.paste,
-                onPressed: controller.paste,
+  Widget build(BuildContext context) {
+    final result = _matches.isNotEmpty
+        ? '${_current + 1}/${_matches.length}'
+        : appLocalizations.none;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.searchController,
+              focusNode: widget.focusNode,
+              maxLines: 1,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                hintText: appLocalizations.search,
               ),
-              if (isNotEmpty)
-                PopupMenuItemData(
-                  label: appLocalizations.cut,
-                  onPressed: controller.cut,
-                ),
-              if (hasSelected && !isAllSelected)
-                PopupMenuItemData(
-                  label: appLocalizations.selectAll,
-                  onPressed: controller.selectAll,
-                ),
-            ];
-            if (_isFirstRender) {
-              _isFirstRender = false;
-            } else if (controller.selectedText.isEmpty) {
-              _removeOverLayEntry();
-            }
-            return TextSelectionToolbar(
-              anchorAbove: anchors.primaryAnchor,
-              anchorBelow: anchors.secondaryAnchor ?? Offset.zero,
-              children: menus.asMap().entries.map(
-                (entry) => TextSelectionToolbarTextButton(
-                    padding: TextSelectionToolbarTextButton.getPadding(
-                      entry.key,
-                      menus.length,
-                    ),
-                    alignment: AlignmentDirectional.centerStart,
-                    onPressed: () {
-                      if (entry.value.onPressed == null) {
-                        return;
-                      }
-                      entry.value.onPressed!();
-                      _removeOverLayEntry();
-                    },
-                    child: Text(entry.value.label),
-                  ),
-              ).toList(),
-            );
-          },
-        ),
+              style: Theme.of(context).textTheme.bodyMedium,
+              onChanged: _search,
+              onSubmitted: (_) => _next(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(result, style: Theme.of(context).textTheme.bodySmall),
+          IconButton(
+            icon: const Icon(Icons.arrow_upward, size: 16),
+            visualDensity: VisualDensity.compact,
+            onPressed: _matches.isNotEmpty ? _prev : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_downward, size: 16),
+            visualDensity: VisualDensity.compact,
+            onPressed: _matches.isNotEmpty ? _next : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.onClose,
+          ),
+        ],
       ),
     );
-    Overlay.of(context).insert(_overlayEntry!);
   }
 }
 
 class _NoInputBorder extends InputBorder {
   const _NoInputBorder() : super(borderSide: BorderSide.none);
-
   @override
   _NoInputBorder copyWith({BorderSide? borderSide}) => const _NoInputBorder();
-
   @override
   bool get isOutline => false;
-
   @override
   EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
-
   @override
   _NoInputBorder scale(double t) => const _NoInputBorder();
-
   @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
-
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      Path()..addRect(rect);
   @override
-  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
-
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) =>
+      Path()..addRect(rect);
   @override
   void paintInterior(Canvas canvas, Rect rect, Paint paint,
       {TextDirection? textDirection}) {
     canvas.drawRect(rect, paint);
   }
-
   @override
   bool get preferPaintInterior => true;
-
   @override
-  void paint(
-    Canvas canvas,
-    Rect rect, {
-    double? gapStart,
-    double gapExtent = 0.0,
-    double gapPercentage = 0.0,
-    TextDirection? textDirection,
-  }) {}
+  void paint(Canvas canvas, Rect rect,
+      {double? gapStart,
+      double gapExtent = 0.0,
+      double gapPercentage = 0.0,
+      TextDirection? textDirection}) {}
 }
 
 class _ImportOptionsDialog extends StatefulWidget {
   const _ImportOptionsDialog();
-
   @override
   State<_ImportOptionsDialog> createState() => _ImportOptionsDialogState();
 }
 
 class _ImportOptionsDialogState extends State<_ImportOptionsDialog> {
-  void _handleOnTab(ImportOption value) {
-    Navigator.of(context).pop(value);
-  }
+  void _handleOnTab(ImportOption value) => Navigator.of(context).pop(value);
 
   @override
   Widget build(BuildContext context) => CommonDialog(
-      title: appLocalizations.import,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 16,
-      ),
-      child: Wrap(
-        children: [
-          ListItem(
-            onTap: () {
-              _handleOnTab(ImportOption.url);
-            },
-            title: Text(appLocalizations.importUrl),
-          ),
-          ListItem(
-            onTap: () {
-              _handleOnTab(ImportOption.file);
-            },
-            title: Text(appLocalizations.importFile),
-          )
-        ],
-      ),
-    );
+        title: appLocalizations.import,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+        child: Wrap(
+          children: [
+            ListItem(
+              onTap: () => _handleOnTab(ImportOption.url),
+              title: Text(appLocalizations.importUrl),
+            ),
+            ListItem(
+              onTap: () => _handleOnTab(ImportOption.file),
+              title: Text(appLocalizations.importFile),
+            ),
+          ],
+        ),
+      );
 }

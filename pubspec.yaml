@@ -43,8 +43,6 @@ dependencies:
   dio: ^5.9.0
   win32: ^5.15.0
   ffi: ^2.1.5
-  re_editor: 0.8.0
-  re_highlight: ^0.0.3
   archive: ^4.0.7
   lpinyin: ^2.0.3
   emoji_regex: ^0.0.5
@@ -76,6 +74,7 @@ dev_dependencies:
   riverpod_lint: ^2.3.13
   custom_lint: ^0.7.3
   flutter_launcher_icons: ^0.14.4
+  msix: ^3.16.8
 
 flutter:
   uses-material-design: true
@@ -118,3 +117,14 @@ flutter_launcher_icons:
   adaptive_icon_background: "#202020"
   adaptive_icon_foreground: "assets/images/icon.png"
   adaptive_icon_monochrome: "assets/images/icon_white.png"
+
+msix_config:
+  display_name: FlClashX
+  publisher_display_name: pluralplay
+  publisher: CN=F778E60B-B797-4F7E-AE56-743F6A0F5B32
+  identity_name: pluralplay.FlClashX
+  msix_version: 0.4.0.0
+  logo_path: assets/images/icon.png
+  capabilities: internetClient, privateNetworkClientServer
+  languages: en, ru, zh-CN
+  store: true

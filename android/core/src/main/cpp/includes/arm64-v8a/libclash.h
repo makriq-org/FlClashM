@@ -31,6 +31,10 @@ typedef void (*protect_func)(void *tun_interface, int fd);
 
 typedef const char* (*resolve_process_func)(void *tun_interface, int protocol, const char *source, const char *target, int uid);
 
+typedef void (*invoke_callback_func)(void *callback, const char *data);
+
+typedef void (*event_listener_func)(void *listener, const char *data);
+
 static void protect(protect_func fn, void *tun_interface, int fd) {
     if (fn) {
         fn(tun_interface, fd);
@@ -41,12 +45,24 @@ static const char* resolve_process(resolve_process_func fn, void *tun_interface,
     if (fn) {
         return fn(tun_interface, protocol, source, target, uid);
     }
-    return "";
+    return NULL;
 }
 
 static void release_object(release_object_func fn, void *obj) {
     if (fn) {
         return fn(obj);
+    }
+}
+
+static void invoke_callback(invoke_callback_func fn, void *callback, const char *data) {
+    if (fn) {
+        fn(callback, data);
+    }
+}
+
+static void dispatch_event(event_listener_func fn, void *listener, const char *data) {
+    if (fn) {
+        fn(listener, data);
     }
 }
 
@@ -119,17 +135,16 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern void registerCallbacks(protect_func markSocketFunc, resolve_process_func resolveProcessFunc, release_object_func releaseObjectFunc);
-extern void initNativeApiBridge(void* api);
-extern void attachMessagePort(long long mPort);
+extern void registerCallbacks(invoke_callback_func invokeCallbackFunc, event_listener_func eventListenerFunc, protect_func markSocketFunc, resolve_process_func resolveProcessFunc, release_object_func releaseObjectFunc);
+extern void setEventListener(void* listener);
 extern char* getTraffic(void);
 extern char* getTotalTraffic(void);
 extern void freeCString(char* s);
-extern void invokeAction(char* paramsChar, long long port);
+extern void invokeAction(char* paramsChar, void* callback);
 extern char* getConfig(char* s);
 extern void startListener(void);
 extern void stopListener(void);
-extern void quickStart(char* initParamsChar, char* paramsChar, char* stateParamsChar, long long port);
+extern void quickStart(char* initParamsChar, char* paramsChar, char* stateParamsChar, void* callback);
 extern GoUint8 startTUN(int fd, void* callback);
 extern char* getRunTime(void);
 extern void stopTun(void);
@@ -137,6 +152,7 @@ extern char* getCurrentProfileName(void);
 extern char* getAndroidVpnOptions(void);
 extern void setState(char* s);
 extern void updateDns(char* s);
+extern void resetConnections(void);
 
 #ifdef __cplusplus
 }

@@ -28,16 +28,26 @@ class Preferences {
     final preferences = await sharedPreferencesCompleter.future;
     final clashConfigString = preferences?.getString(clashConfigKey);
     if (clashConfigString == null) return null;
-    final clashConfigMap = json.decode(clashConfigString);
-    return ClashConfig.fromJson(clashConfigMap);
+    try {
+      final clashConfigMap = json.decode(clashConfigString);
+      return ClashConfig.fromJson(clashConfigMap);
+    } catch (_) {
+      preferences?.remove(clashConfigKey);
+      return null;
+    }
   }
 
   Future<Config?> getConfig() async {
     final preferences = await sharedPreferencesCompleter.future;
     final configString = preferences?.getString(configKey);
     if (configString == null) return null;
-    final configMap = json.decode(configString);
-    return Config.compatibleFromJson(configMap);
+    try {
+      final configMap = json.decode(configString);
+      return Config.compatibleFromJson(configMap);
+    } catch (_) {
+      preferences?.remove(configKey);
+      return null;
+    }
   }
 
   Future<bool> saveConfig(Config config) async {

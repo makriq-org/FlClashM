@@ -137,7 +137,7 @@ class ServiceInfoWidget extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    Icons.support_agent,
+                    Icons.contact_support,
                     size: 28,
                     color: context.colorScheme.onPrimary,
                   ),

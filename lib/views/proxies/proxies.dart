@@ -1,3 +1,4 @@
+import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -9,7 +10,6 @@ import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'common.dart';
 import 'setting.dart';
 import 'tab.dart';
 
@@ -26,22 +26,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
   bool _isTab = false;
 
   Future<void> _pingAllGroups() async {
-    final groups = ref.read(currentGroupsStateProvider).value;
-    final allProxies = <Proxy>[];
-    final seenNames = <String>{};
-    
-    for (final group in groups) {
-      for (final proxy in group.all) {
-        if (!seenNames.contains(proxy.name)) {
-          seenNames.add(proxy.name);
-          allProxies.add(proxy);
-        }
-      }
-    }
-    
-    if (allProxies.isNotEmpty) {
-      await delayTest(allProxies, null);
-    }
+    await clashCore.healthCheck();
   }
 
   @override
@@ -57,6 +42,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
         const SearchOrderMarker(),
         if (_isTab)
           IconButton(
+            tooltip: appLocalizations.goToSelected,
             onPressed: () {
               _proxiesTabKey.currentState?.scrollToGroupSelected();
             },
@@ -67,6 +53,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
           ),
         if (!_isTab) ...[
           IconButton(
+            tooltip: appLocalizations.testAllDelay,
             onPressed: _pingAllGroups,
             icon: const Icon(
               Icons.network_ping,
@@ -83,6 +70,9 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
               final allExpanded = groupNames.isNotEmpty &&
                   groupNames.every(unfoldSet.contains);
               return IconButton(
+                tooltip: allExpanded
+                    ? appLocalizations.collapseAll
+                    : appLocalizations.expandAll,
                 onPressed: () {
                   if (allExpanded) {
                     globalState.appController.updateCurrentUnfoldSet({});
@@ -259,7 +249,7 @@ class _ModeSelectorAction extends ConsumerWidget {
 
     return CommonPopupBox(
       targetBuilder: (open) => IconButton(
-        tooltip: _modeLabel(context, mode),
+        tooltip: appLocalizations.action_mode,
         onPressed: () => open(offset: const Offset(0, 20)),
         icon: Icon(_modeIcon(mode)),
       ),

@@ -1,206 +1,307 @@
 package com.follow.clashx
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import com.follow.clashx.common.BroadcastAction
+import com.follow.clashx.common.GlobalState as CommonGlobalState
+import com.follow.clashx.common.receiveBroadcastFlow
+import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.TilePlugin
-import com.follow.clashx.plugins.VpnPlugin
-import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.dart.DartExecutor
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
-enum class RunState {
-    START,
-    PENDING,
-    STOP
-}
-
+enum class RunState { START, PENDING, STOP }
 
 object GlobalState {
-    val runLock = ReentrantLock()
+    private const val TAG = "GlobalState"
 
     const val NOTIFICATION_CHANNEL = "FlClashX"
     const val SUBSCRIPTION_NOTIFICATION_CHANNEL = "FlClashX_Subscription"
-
     const val NOTIFICATION_ID = 1
     const val SUBSCRIPTION_NOTIFICATION_ID = 2
 
-    val runState: MutableLiveData<RunState> = MutableLiveData<RunState>(RunState.STOP)
-    // Current clash mode — "rule", "global" or "direct". Pushed from Dart via
-    // TilePlugin.updateMode() so the home-screen widget can highlight the
-    // active button without duplicating state.
-    val currentMode: MutableLiveData<String> = MutableLiveData<String>("rule")
-    // Whether the Global mode button should be shown in the widget.
-    // Reflects the `flclashx-globalmode` subscription header — pushed from Dart.
-    val globalModeEnabled: MutableLiveData<Boolean> = MutableLiveData<Boolean>(true)
-    var flutterEngine: FlutterEngine? = null
-    private var serviceEngine: FlutterEngine? = null
 
-    fun getCurrentAppPlugin(): AppPlugin? {
-        val currentEngine = if (flutterEngine != null) flutterEngine else serviceEngine
-        return currentEngine?.plugins?.get(AppPlugin::class.java) as AppPlugin?
-    }
+    val runState: MutableLiveData<RunState> = MutableLiveData(RunState.STOP)
+    val currentMode: MutableLiveData<String> = MutableLiveData("rule")
+    val globalModeEnabled: MutableLiveData<Boolean> = MutableLiveData(true)
 
-    fun syncStatus() {
-        CoroutineScope(Dispatchers.Default).launch {
-            val status = getCurrentVPNPlugin()?.getStatus() ?: false
-            withContext(Dispatchers.Main){
-                runState.value = if (status) RunState.START else RunState.STOP
-            }
-        }
-    }
-    
-    fun hasActiveProfile(): Boolean {
-        val prefs = FlClashXApplication.getAppContext()
-            .getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE)
-        val configJson = prefs.getString("flutter.config", null)
-        
-        if (configJson != null) {
-            try {
-                val config = org.json.JSONObject(configJson)
-                val currentProfileId = config.optString("currentProfileId", null)
-                Log.d("GlobalState", "hasActiveProfile: currentProfileId=$currentProfileId")
-                return !currentProfileId.isNullOrEmpty()
-            } catch (e: Exception) {
-                Log.e("GlobalState", "Error parsing config: ${e.message}")
-                return false
-            }
-        }
-        Log.d("GlobalState", "hasActiveProfile: no config found")
-        return false
-    }
 
-    suspend fun getText(text: String): String {
-        return getCurrentAppPlugin()?.getText(text) ?: ""
-    }
+    val runStateFlow: MutableStateFlow<RunState> = MutableStateFlow(RunState.STOP)
 
-    fun getCurrentTilePlugin(): TilePlugin? {
-        val currentEngine = if (flutterEngine != null) flutterEngine else serviceEngine
-        return currentEngine?.plugins?.get(TilePlugin::class.java) as TilePlugin?
-    }
+    val runLock = Mutex()
+    @Volatile var runTime: Long = 0L
+    @Volatile var flutterEngine: FlutterEngine? = null
+    @Volatile var startRequestedAt: Long = 0L
 
-    fun getCurrentVPNPlugin(): VpnPlugin? {
-        return serviceEngine?.plugins?.get(VpnPlugin::class.java) as VpnPlugin?
-    }
+    private var broadcastJob: Job? = null
+    private var pendingTimeoutJob: Job? = null
 
-    fun handleToggle() {
-        val starting = handleStart()
-        if (!starting) {
-            handleStop()
-        }
-    }
 
-    /**
-     * Request a mode switch. Routes through TilePlugin to the Dart side
-     * (either the main engine if the app is open, or the background service
-     * engine), which updates patchClashConfig and pushes the change to core.
-     * Safe to call when the service engine is not yet alive — the method
-     * spins it up and queues the request via a pending action, mirroring
-     * how handleStart() works.
-     */
-    fun handleChangeMode(mode: String) {
-        Log.d("GlobalState", "handleChangeMode: $mode")
-        val tilePlugin = getCurrentTilePlugin()
-        if (tilePlugin != null) {
-            tilePlugin.handleChangeMode(mode)
-            // Optimistically reflect the new mode on the widget — Dart will
-            // confirm with updateMode() when the patch lands in core.
-            currentMode.postValue(mode)
-        } else {
-            TilePlugin.setPendingMode(mode)
-            initServiceEngine()
-        }
-    }
-
-    fun handleStart(): Boolean {
-        Log.d("GlobalState", "handleStart called, current runState: ${runState.value}")
-        if (runState.value == RunState.STOP) {
-            Log.d("GlobalState", "Setting runState to PENDING")
-            runState.value = RunState.PENDING
-            runLock.withLock {
-                val tilePlugin = getCurrentTilePlugin()
-                Log.d("GlobalState", "TilePlugin: $tilePlugin, flutterEngine: $flutterEngine, serviceEngine: $serviceEngine")
-                if (tilePlugin != null) {
-                    Log.d("GlobalState", "TilePlugin exists, calling handleStart()")
-                    tilePlugin.handleStart()
-                } else {
-                    Log.d("GlobalState", "No TilePlugin, setting pending action and calling initServiceEngine()")
-                    // Set pending action BEFORE initializing service engine
-                    // When Dart is ready, it will call serviceReady() which triggers the pending action
-                    TilePlugin.setPendingAction(TilePlugin.Companion.PendingAction.START)
-                    initServiceEngine()
+    fun install() {
+        CommonGlobalState.launch {
+            runStateFlow.collect { state ->
+                withContext(Dispatchers.Main) {
+                    runState.value = state
+                    if (state != RunState.PENDING) {
+                        pendingTimeoutJob?.cancel()
+                    }
+                    if (state != RunState.PENDING) {
+                        runCatching {
+                            com.follow.clashx.services.FlClashXTileService.requestUpdate(
+                                CommonGlobalState.application,
+                            )
+                        }
+                        runCatching {
+                            val ctx = CommonGlobalState.application
+                            val mgr = android.appwidget.AppWidgetManager.getInstance(ctx)
+                            for (cls in arrayOf(
+                                com.follow.clashx.widgets.OnOffWidgetProvider::class.java,
+                                com.follow.clashx.widgets.ModeWidgetProvider::class.java,
+                            )) {
+                                val ids = mgr.getAppWidgetIds(android.content.ComponentName(ctx, cls))
+                                if (ids.isNotEmpty()) {
+                                    val intent = android.content.Intent(ctx, cls)
+                                        .setAction(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                                        .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                                    ctx.sendBroadcast(intent)
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            return true
         }
-        Log.d("GlobalState", "handleStart: runState is not STOP, ignoring")
-        return false
+        broadcastJob?.cancel()
+        broadcastJob = CommonGlobalState.application
+            .receiveBroadcastFlow(
+                BroadcastAction.SERVICE_CREATED.action,
+                BroadcastAction.SERVICE_DESTROYED.action,
+            )
+            .onEach { intent ->
+                when (intent.action) {
+                    BroadcastAction.SERVICE_CREATED.action -> {
+                        Log.d(TAG, "SERVICE_CREATED received")
+                        CommonGlobalState.launch { handleSyncState() }
+                    }
+                    BroadcastAction.SERVICE_DESTROYED.action -> {
+                        Log.d(TAG, "SERVICE_DESTROYED received")
+                        CommonGlobalState.launch {
+                            runLock.withLock {
+                                startRequestedAt = 0L
+                                runTime = 0L
+                                runStateFlow.tryEmit(RunState.STOP)
+                                getCurrentTilePlugin()?.handleStop()
+                            }
+                        }
+                    }
+                }
+            }
+            .launchIn(CommonGlobalState.scope)
+    }
+
+
+    fun getCurrentAppPlugin(): AppPlugin? =
+        flutterEngine?.plugins?.get(AppPlugin::class.java) as? AppPlugin
+
+    fun getCurrentTilePlugin(): TilePlugin? =
+        flutterEngine?.plugins?.get(TilePlugin::class.java) as? TilePlugin
+
+    suspend fun getText(text: String): String =
+        getCurrentAppPlugin()?.getText(text) ?: ""
+
+
+    fun syncStatus() {
+        CommonGlobalState.launch { handleSyncState() }
+    }
+
+    suspend fun handleSyncState() {
+        runLock.withLock {
+            val vpnActive = com.follow.clashx.common.SavedParams.isVpnActive()
+            if (!vpnActive) {
+                runTime = 0L
+                runStateFlow.tryEmit(RunState.STOP)
+                return@withLock
+            }
+            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
+            runCatching {
+                Service.bind()
+                val rt = Service.getRunTimeString().toLongOrNull() ?: 0L
+                runTime = rt
+                val state = when {
+                    rt != 0L -> RunState.START
+                    recentStart -> RunState.START
+                    else -> RunState.STOP
+                }
+                runStateFlow.tryEmit(state)
+            }.onFailure {
+                Log.w(TAG, "syncState failed: ${it.message}")
+                if (!recentStart) {
+                    runTime = 0L
+                    runStateFlow.tryEmit(RunState.STOP)
+                }
+            }
+        }
+    }
+
+    fun hasActiveProfile(): Boolean {
+        val prefs = CommonGlobalState.application
+            .getSharedPreferences("FlutterSharedPreferences", android.content.Context.MODE_PRIVATE)
+        val configJson = prefs.getString("flutter.config", null)
+        if (configJson == null) return false
+        return try {
+            val currentProfileId = org.json.JSONObject(configJson).optString("currentProfileId", null)
+            !currentProfileId.isNullOrEmpty()
+        } catch (e: Exception) {
+            Log.e(TAG, "hasActiveProfile parse error: ${e.message}")
+            false
+        }
+    }
+
+
+    fun handleToggle() {
+        CommonGlobalState.launch {
+            handleSyncState()
+            runLock.withLock {
+                when (runStateFlow.value) {
+                    RunState.STOP, RunState.PENDING -> triggerStart()
+                    RunState.START -> triggerStop()
+                }
+            }
+        }
+    }
+
+    fun handleStart() {
+        CommonGlobalState.launch {
+            runLock.withLock { triggerStart() }
+        }
     }
 
     fun handleStop() {
-        Log.d("GlobalState", "handleStop called, current runState: ${runState.value}")
-        if (runState.value == RunState.START) {
-            runState.value = RunState.PENDING
-            runLock.withLock {
-                val tilePlugin = getCurrentTilePlugin()
-                if (tilePlugin != null) {
-                    tilePlugin.handleStop()
-                } else {
-                    Log.d("GlobalState", "No TilePlugin for stop, setting pending action")
-                    TilePlugin.setPendingAction(TilePlugin.Companion.PendingAction.STOP)
-                    initServiceEngine()
-                }
+        CommonGlobalState.launch {
+            runLock.withLock { triggerStop() }
+        }
+    }
+
+    fun handleChangeMode(mode: String) {
+        Log.d(TAG, "handleChangeMode: $mode")
+        currentMode.postValue(mode)
+        getCurrentTilePlugin()?.handleChangeMode(mode)
+            ?: run { TilePlugin.setPendingMode(mode) }
+    }
+
+    private fun schedulePendingTimeout() {
+        pendingTimeoutJob?.cancel()
+        pendingTimeoutJob = CommonGlobalState.launch {
+            delay(15_000L)
+            if (runStateFlow.value == RunState.PENDING) {
+                Log.w(TAG, "PENDING timeout, forcing sync")
+                handleSyncState()
             }
         }
     }
 
-    fun handleTryDestroy() {
-        if (flutterEngine == null) {
-            destroyServiceEngine()
-        }
-    }
+    private suspend fun triggerStart() {
+        if (runStateFlow.value == RunState.START) return
 
-    fun destroyServiceEngine() {
-        runLock.withLock {
-            serviceEngine?.destroy()
-            serviceEngine = null
-        }
-    }
-
-    fun initServiceEngine() {
-        Log.d("GlobalState", "initServiceEngine called, serviceEngine: $serviceEngine")
-        if (serviceEngine != null) {
-            Log.d("GlobalState", "serviceEngine already exists, returning")
+        val tile = getCurrentTilePlugin()
+        if (tile != null) {
+            runStateFlow.tryEmit(RunState.PENDING)
+            tile.handleStart()
+            schedulePendingTimeout()
             return
         }
-        destroyServiceEngine()
-        runLock.withLock {
-            Log.d("GlobalState", "Creating new serviceEngine")
-            serviceEngine = FlutterEngine(FlClashXApplication.getAppContext())
-            Log.d("GlobalState", "Registering plugins")
-            io.flutter.plugins.GeneratedPluginRegistrant.registerWith(serviceEngine!!)
-            serviceEngine?.plugins?.add(VpnPlugin)
-            serviceEngine?.plugins?.add(AppPlugin())
-            serviceEngine?.plugins?.add(TilePlugin())
-            val vpnService = DartExecutor.DartEntrypoint(
-                FlutterInjector.instance().flutterLoader().findAppBundlePath(),
-                "_service"
-            )
-            val args = if (flutterEngine == null) listOf("quick") else null
-            Log.d("GlobalState", "Executing _service entrypoint with args: $args")
-            serviceEngine?.dartExecutor?.executeDartEntrypoint(
-                vpnService,
-                args
-            )
-            Log.d("GlobalState", "serviceEngine initialized successfully")
+
+        val hasSavedParams = com.follow.clashx.common.SavedParams.loadQuickStartParams() != null
+        if (!hasSavedParams) {
+            runStateFlow.tryEmit(RunState.STOP)
+            TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
+            launchMainActivity()
+            return
+        }
+
+        val ctx = CommonGlobalState.application
+        val vpnPrepare = android.net.VpnService.prepare(ctx)
+        if (vpnPrepare != null) {
+            Log.d(TAG, "triggerStart: VPN permission needed, launching TempActivity")
+            runCatching {
+                val tempIntent = ctx.getActionIntent("START")
+                ctx.startActivity(tempIntent)
+            }
+            return
+        }
+
+        com.follow.clashx.common.SavedParams.setVpnActive(true)
+        startRequestedAt = android.os.SystemClock.elapsedRealtime()
+        runCatching {
+            val intent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
+            androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
+            runStateFlow.tryEmit(RunState.START)
+        }.onFailure {
+            Log.w(TAG, "Direct VPN start failed: ${it.message}")
+            com.follow.clashx.common.SavedParams.setVpnActive(false)
+            runStateFlow.tryEmit(RunState.STOP)
+            TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
+            launchMainActivity()
         }
     }
+
+    private suspend fun triggerStop() {
+        if (runStateFlow.value == RunState.STOP) return
+
+        startRequestedAt = 0L
+        com.follow.clashx.common.SavedParams.setVpnActive(false)
+        runTime = 0L
+        runStateFlow.tryEmit(RunState.STOP)
+
+        runCatching { getCurrentTilePlugin()?.handleStop() }
+
+        runCatching {
+            val ctx = CommonGlobalState.application
+            val stopIntent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
+                .setAction(com.follow.clashx.service.FlVpnService.ACTION_STOP)
+            androidx.core.content.ContextCompat.startForegroundService(ctx, stopIntent)
+        }
+        CommonGlobalState.launch {
+            runCatching { Service.stopListener() }
+            runCatching { Service.stopService() }
+        }
+    }
+
+    fun requestBatteryOptimizationExemption() {
+        val ctx = CommonGlobalState.application
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(ctx.packageName)) return
+        runCatching {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${ctx.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        }.onFailure {
+            Log.w(TAG, "Failed to request battery optimization exemption: ${it.message}")
+        }
+    }
+
+    private fun launchMainActivity() {
+        val ctx = CommonGlobalState.application
+        val intent = Intent(ctx, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        ctx.startActivity(intent)
+    }
 }
-
-

@@ -14,16 +14,6 @@ import com.follow.clashx.GlobalState
 import com.follow.clashx.R
 import com.follow.clashx.RunState
 
-/**
- * Home-screen widget: three mode buttons (Rule/Global/Direct) and a
- * toggle button showing the app logo (colored when the tunnel is up,
- * monochrome otherwise). When the current subscription disables global
- * mode (`flclashx-globalmode: false`), the mode column is hidden and a
- * start/stop label appears under the logo.
- *
- * Widget redraws are driven by LiveData in GlobalState; observers are
- * attached lazily on the first widget event and live with the process.
- */
 class ModeWidgetProvider : AppWidgetProvider() {
 
     companion object {
@@ -38,17 +28,11 @@ class ModeWidgetProvider : AppWidgetProvider() {
         private var observersAttached = false
 
         private val runStateObserver = Observer<RunState> { _ ->
-            GlobalState.flutterEngine?.let { /* no-op, just to hint dependency */ }
             refreshAll()
         }
         private val modeObserver = Observer<String> { _ -> refreshAll() }
         private val globalModeEnabledObserver = Observer<Boolean> { _ -> refreshAll() }
 
-        /**
-         * Ensure the widget redraws whenever the app's runState or mode
-         * changes. observeForever is cheap and lives until process death;
-         * we guard so we only wire it once.
-         */
         fun ensureObservers() {
             if (observersAttached) return
             synchronized(this) {
@@ -76,22 +60,21 @@ class ModeWidgetProvider : AppWidgetProvider() {
             val runState = GlobalState.runState.value ?: RunState.STOP
             val mode = GlobalState.currentMode.value ?: "rule"
 
-            // Mode buttons — highlight active one, wire click intents.
             applyMode(views, mode)
             views.setOnClickPendingIntent(R.id.widget_btn_rule, pending(context, ACTION_MODE_RULE))
             views.setOnClickPendingIntent(R.id.widget_btn_global, pending(context, ACTION_MODE_GLOBAL))
             views.setOnClickPendingIntent(R.id.widget_btn_direct, pending(context, ACTION_MODE_DIRECT))
 
-            // When subscription disables global mode we drop the whole mode
-            // column and leave just the logo toggle.
             val globalEnabled = GlobalState.globalModeEnabled.value ?: true
             views.setViewVisibility(
                 R.id.widget_mode_col,
                 if (globalEnabled) View.VISIBLE else View.GONE,
             )
 
-            // Toggle — colored logo when tunnel is up, monochrome otherwise.
-            val logo = if (runState == RunState.START) R.drawable.widget_logo_color else R.drawable.widget_logo_mono
+            val logo = when (runState) {
+                RunState.START -> R.drawable.widget_logo_color
+                else -> R.drawable.widget_logo_mono
+            }
             views.setImageViewResource(R.id.widget_toggle, logo)
             views.setOnClickPendingIntent(R.id.widget_toggle, pending(context, ACTION_TOGGLE))
 
@@ -148,7 +131,13 @@ class ModeWidgetProvider : AppWidgetProvider() {
         Log.d(TAG, "onReceive: ${intent.action}")
         ensureObservers()
         when (intent.action) {
-            ACTION_TOGGLE -> GlobalState.handleToggle()
+            ACTION_TOGGLE -> {
+                if (GlobalState.runStateFlow.value == RunState.PENDING) {
+                    Log.d(TAG, "Ignoring toggle — operation in progress")
+                    return
+                }
+                GlobalState.handleToggle()
+            }
             ACTION_MODE_RULE -> GlobalState.handleChangeMode("rule")
             ACTION_MODE_GLOBAL -> GlobalState.handleChangeMode("global")
             ACTION_MODE_DIRECT -> GlobalState.handleChangeMode("direct")
@@ -160,5 +149,18 @@ class ModeWidgetProvider : AppWidgetProvider() {
         Log.d(TAG, "onEnabled")
         ensureObservers()
         GlobalState.syncStatus()
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        Log.d(TAG, "onDisabled")
+        synchronized(Companion) {
+            if (observersAttached) {
+                GlobalState.runState.removeObserver(runStateObserver)
+                GlobalState.currentMode.removeObserver(modeObserver)
+                GlobalState.globalModeEnabled.removeObserver(globalModeEnabledObserver)
+                observersAttached = false
+            }
+        }
     }
 }

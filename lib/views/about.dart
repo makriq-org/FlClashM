@@ -222,7 +222,6 @@ class AboutView extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
                       const SizedBox(height: 4),
-                      const _CoreVersionWidget(),
                     ],
                   )
                 ],
@@ -427,24 +426,6 @@ class ThanksAvatar extends StatelessWidget {
           ),
         )
       ],
-    );
-  }
-}
-
-class _CoreVersionWidget extends StatelessWidget {
-  const _CoreVersionWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    final coreVersion = globalState.coreVersion;
-    if (coreVersion == null || coreVersion.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Text(
-      'Core: $coreVersion',
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
     );
   }
 }

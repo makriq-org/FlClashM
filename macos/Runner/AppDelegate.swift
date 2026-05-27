@@ -109,8 +109,9 @@ class AppDelegate: FlutterAppDelegate {
     }
     
     func setCorePermissions(corePath: String) -> Bool {
+        let escaped = corePath.replacingOccurrences(of: "'", with: "'\\''")
         let script = """
-        do shell script "chown root:admin '\(corePath)' && chmod +sx '\(corePath)'" with administrator privileges
+        do shell script "chown root:admin '\(escaped)' && chmod +sx '\(escaped)'" with administrator privileges
         """
         
         var error: NSDictionary?

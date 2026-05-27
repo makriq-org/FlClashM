@@ -15,7 +15,7 @@ import 'package:flclashx/widgets/dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
+
 import 'package:path/path.dart' hide windows;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,7 +28,6 @@ import 'views/profiles/override_profile.dart';
 class AppController {
   AppController(this.context, WidgetRef ref) : _ref = ref;
   int? lastProfileModified;
-  Timer? _profileUpdateTimer;
   final BuildContext context;
   final WidgetRef _ref;
 
@@ -79,16 +78,24 @@ class AppController {
     }, args: [groupName, proxyName]);
   }
 
-  /// Update cached server name in VPN plugin for foreground notification
-  /// Also sends IPC message to service isolate to update selectedMap
-  void _updateForegroundServerName(String groupName, String serverName) {
-    vpn?.updateServerName(serverName);
-    // Send IPC message to service isolate (Android only)
-    clashLib?.sendIpcMessage({
-      'action': 'updateForegroundServer',
-      'groupName': groupName,
-      'serverName': serverName,
-    });
+  /// Update cached server name in VPN plugin for foreground notification.
+  /// Only updates if the changed group matches the flclashx-serverinfo header,
+  /// or if no header is set and this is the first non-DIRECT/REJECT group.
+  void _updateForegroundServerName(String groupName, String proxyName) {
+    final profile = globalState.config.currentProfile;
+    if (profile == null) return;
+    final serverInfoHeader = profile.providerHeaders['flclashx-serverinfo'];
+    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
+      String decodedGroupName;
+      try {
+        final normalized = base64.normalize(serverInfoHeader);
+        decodedGroupName = utf8.decode(base64.decode(normalized)).trim();
+      } catch (_) {
+        decodedGroupName = serverInfoHeader.trim();
+      }
+      if (groupName != decodedGroupName) return;
+    }
+    vpn?.updateServerName(proxyName);
   }
 
   /// Initialize foreground notification cache with current profile and server
@@ -110,28 +117,48 @@ class AppController {
       }
     }
 
+    commonPrint.log('[initForegroundCache] profileName="$profileName" serviceName="$serviceName" selectedMap=${profile.selectedMap}');
     vpn?.updateProfileInfo(
       profileName: profileName,
       serviceName: serviceName,
     );
 
-    // Get current server name from selectedMap
-    String? groupName = profile.providerHeaders['flclashx-serverinfo'];
-    if (groupName != null && groupName.isNotEmpty) {
+    final groups = _ref.read(groupsProvider);
+    String serverName = "";
+    final serverInfoHeader = profile.providerHeaders['flclashx-serverinfo'];
+    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
       String decodedGroupName;
       try {
-        final normalized = base64.normalize(groupName);
+        final normalized = base64.normalize(serverInfoHeader);
         decodedGroupName = utf8.decode(base64.decode(normalized)).trim();
       } catch (_) {
-        decodedGroupName = groupName.trim();
+        decodedGroupName = serverInfoHeader.trim();
       }
-      final serverName = profile.selectedMap[decodedGroupName] ?? "";
+      final group = groups.getGroup(decodedGroupName);
+      if (group != null) {
+        serverName = group.realNow;
+      }
+      if (serverName.isEmpty) {
+        serverName = profile.selectedMap[decodedGroupName] ?? "";
+      }
+    }
+    if (serverName.isEmpty) {
+      for (final g in groups) {
+        final now = g.realNow;
+        if (now.isNotEmpty && now != 'DIRECT' && now != 'REJECT') {
+          serverName = now;
+          break;
+        }
+      }
+    }
+    if (serverName.isNotEmpty) {
       vpn?.updateServerName(serverName);
     }
   }
 
   Future<void> restartCore() async {
     commonPrint.log("restart core");
+    await _applyPendingCoreUpdate();
     await clashService?.reStart();
     await _initCore();
     if (_ref.read(runTimeProvider.notifier).isStart) {
@@ -146,9 +173,9 @@ class AppController {
       // Initialize foreground notification cache before starting
       initForegroundCache();
       await globalState.handleStart([
-        updateRunTime,
         updateTraffic,
       ]);
+      startRunTimeTimer();
       final currentLastModified =
           await _ref.read(currentProfileProvider)?.profileLastModified;
       if (currentLastModified == null || lastProfileModified == null) {
@@ -161,6 +188,7 @@ class AppController {
       }
       applyProfileDebounce();
     } else {
+      stopRunTimeTimer();
       await globalState.handleStop();
       clashCore.resetTraffic();
       _ref.read(trafficsProvider.notifier).clear();
@@ -168,6 +196,21 @@ class AppController {
       _ref.read(runTimeProvider.notifier).value = null;
       addCheckIpNumDebounce();
     }
+  }
+
+  Timer? _runTimeTimer;
+
+  void startRunTimeTimer() {
+    stopRunTimeTimer();
+    updateRunTime();
+    _runTimeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      updateRunTime();
+    });
+  }
+
+  void stopRunTimeTimer() {
+    _runTimeTimer?.cancel();
+    _runTimeTimer = null;
   }
 
   void updateRunTime() {
@@ -372,32 +415,48 @@ class AppController {
   }
 
   Future<void> updateProfile(Profile profile) async {
+    _ref.read(profilesProvider.notifier).setProfile(
+      profile.copyWith(isUpdating: true),
+    );
+    try {
     final prefs = await SharedPreferences.getInstance();
     final shouldSend = prefs.getBool('sendDeviceHeaders') ?? true;
     final newProfile = await profile.update(
       shouldSendHeaders: shouldSend,
     );
 
-    final headers = newProfile.providerHeaders;
-    if (headers.isNotEmpty) {
-      _applyAllHeaderSettings(newProfile, isNewProfile: false);
+    final mergedHeaders = Map<String, String>.from(profile.providerHeaders)
+      ..addAll(newProfile.providerHeaders);
+    for (final key in ['announce', 'support-url']) {
+      if (!newProfile.providerHeaders.containsKey(key)) {
+        mergedHeaders.remove(key);
+      }
+    }
+    final mergedProfile = newProfile.copyWith(
+      providerHeaders: mergedHeaders,
+      isUpdating: false,
+    );
+
+    if (mergedHeaders.isNotEmpty) {
+      _applyAllHeaderSettings(mergedProfile, isNewProfile: false);
     }
 
-    final showHwidLimit = headers['x-hwid-limit']?.toLowerCase() == 'true';
-    final announceText = headers['announce'];
+    final showHwidLimit = mergedHeaders['x-hwid-max-devices-reached']?.toLowerCase() == 'true';
+    final announceText = mergedHeaders['announce'];
     if (showHwidLimit && announceText != null && announceText.isNotEmpty) {
-      _showHwidLimitNotice(announceText, headers['support-url']);
+      _showHwidLimitNotice(announceText, mergedHeaders['support-url']);
+    }
+
+    if (mergedHeaders['x-hwid-not-supported']?.toLowerCase() == 'true') {
+      _showHwidNotSupportedNotice();
     }
 
     _ref
         .read(profilesProvider.notifier)
-        .setProfile(newProfile.copyWith(isUpdating: false));
+        .setProfile(mergedProfile);
 
     if (profile.id == _ref.read(currentProfileIdProvider)) {
       applyProfileDebounce(silence: true);
-      unawaited(_updateGeoFilesAfterProfileUpdate().catchError((e) {
-        commonPrint.log("Error updating geo files: $e");
-      }));
     }
 
     // Check subscription expiration and show notification if needed
@@ -405,6 +464,20 @@ class AppController {
         .catchError((e) {
       commonPrint.log("Error checking subscription: $e");
     }));
+    } catch (e) {
+      _ref.read(profilesProvider.notifier).setProfile(
+        profile.copyWith(isUpdating: false),
+      );
+      rethrow;
+    }
+  }
+
+  void _showHwidNotSupportedNotice() {
+    globalState.showMessage(
+      title: 'HWID',
+      message: TextSpan(text: appLocalizations.hwidNotSupported),
+      cancelable: false,
+    );
   }
 
   void _showHwidLimitNotice(String encodedText, String? supportUrl) {
@@ -464,176 +537,6 @@ class AppController {
           ),
         ),
       );
-    }
-  }
-
-  Future<Map<String, String>?> _getRemoteFileMetadata(String url) async {
-    try {
-      final response = await http.head(Uri.parse(url)).timeout(
-            const Duration(seconds: 10),
-          );
-
-      if (response.statusCode != 200) {
-        return null;
-      }
-
-      final metadata = <String, String>{};
-
-      final etag = response.headers['etag'];
-      if (etag != null && etag.isNotEmpty) {
-        metadata['etag'] = etag;
-      }
-
-      final lastModified = response.headers['last-modified'];
-      if (lastModified != null && lastModified.isNotEmpty) {
-        metadata['last-modified'] = lastModified;
-      }
-
-      final contentLength = response.headers['content-length'];
-      if (contentLength != null && contentLength.isNotEmpty) {
-        metadata['content-length'] = contentLength;
-      }
-
-      return metadata.isEmpty ? null : metadata;
-    } catch (e) {
-      commonPrint.log("Failed to get remote file metadata for $url: $e");
-      return null;
-    }
-  }
-
-  String _getMetadataKey(String profileId, String key) =>
-      'geo_metadata_${profileId}_$key';
-
-  Future<Map<String, String>?> _getSavedMetadata(
-      String profileId, String key) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final storageKey = _getMetadataKey(profileId, key);
-      final jsonString = prefs.getString(storageKey);
-      if (jsonString == null) return null;
-      return Map<String, String>.from(json.decode(jsonString));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<void> _saveMetadata(
-      String profileId, String key, Map<String, String> metadata) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final storageKey = _getMetadataKey(profileId, key);
-      await prefs.setString(storageKey, json.encode(metadata));
-    } catch (e) {
-      commonPrint.log("Failed to save metadata for $key: $e");
-    }
-  }
-
-  bool _hasMetadataChanged(
-      Map<String, String>? oldMeta, Map<String, String>? newMeta) {
-    if (oldMeta == null || newMeta == null) return true;
-
-    if (newMeta['etag'] != null && oldMeta['etag'] != null) {
-      return newMeta['etag'] != oldMeta['etag'];
-    }
-
-    if (newMeta['last-modified'] != null && oldMeta['last-modified'] != null) {
-      return newMeta['last-modified'] != oldMeta['last-modified'];
-    }
-
-    if (newMeta['content-length'] != null &&
-        oldMeta['content-length'] != null) {
-      return newMeta['content-length'] != oldMeta['content-length'];
-    }
-
-    return true;
-  }
-
-  Future<void> _updateGeoFilesAfterProfileUpdate(
-      {bool forceUpdate = false}) async {
-    try {
-      final currentProfileId = _ref.read(currentProfileIdProvider);
-      if (currentProfileId == null) return;
-
-      final profileConfig =
-          await globalState.getProfileConfig(currentProfileId);
-
-      final geodataMode = profileConfig["geodata-mode"];
-      if (geodataMode != true) {
-        commonPrint.log(
-            "Geodata updates are disabled by profile (geodata-mode != true)");
-        return;
-      }
-
-      final geoXUrl = profileConfig["geox-url"];
-
-      if (geoXUrl == null || geoXUrl is! Map) {
-        commonPrint.log("No geox-url found in profile config");
-        return;
-      }
-
-      final geoFiles = [
-        {'type': 'GeoIp', 'name': geoIpFileName, 'key': 'geoip'},
-        {'type': 'MMDB', 'name': mmdbFileName, 'key': 'mmdb'},
-        {'type': 'GeoSite', 'name': geoSiteFileName, 'key': 'geosite'},
-        {'type': 'ASN', 'name': asnFileName, 'key': 'asn'},
-      ];
-
-      // Counters for logging purposes (values used in log messages via increment)
-      // ignore: unused_local_variable
-      var updatedCount = 0;
-      // ignore: unused_local_variable
-      var skippedCount = 0;
-
-      for (final geoFile in geoFiles) {
-        final geoType = geoFile['type']!;
-        final fileName = geoFile['name']!;
-        final key = geoFile['key']!;
-
-        final url = geoXUrl[key];
-        if (url == null || url is! String || url.isEmpty) {
-          commonPrint.log("No URL for $fileName, skipping");
-          continue;
-        }
-
-        try {
-          final remoteMetadata = await _getRemoteFileMetadata(url);
-          if (remoteMetadata == null) {
-            commonPrint.log("Failed to get metadata for $fileName from $url");
-            continue;
-          }
-
-          final savedMetadata = await _getSavedMetadata(currentProfileId, key);
-
-          if (!forceUpdate &&
-              !_hasMetadataChanged(savedMetadata, remoteMetadata)) {
-            commonPrint.log(
-                "$fileName is up to date for profile $currentProfileId, skipping download");
-            skippedCount++;
-            continue;
-          }
-
-          final reason = forceUpdate ? "force update" : "metadata changed";
-          commonPrint.log(
-              "$fileName needs update for profile $currentProfileId ($reason), downloading from $url...");
-          final result = await clashCore.updateGeoData(
-            UpdateGeoDataParams(geoType: geoType, geoName: fileName),
-          );
-
-          if (result.isNotEmpty) {
-            commonPrint.log("Failed to update $fileName: $result");
-            continue;
-          }
-
-          await _saveMetadata(currentProfileId, key, remoteMetadata);
-          commonPrint.log(
-              "$fileName was successfully updated for profile $currentProfileId from $url");
-          updatedCount++;
-        } catch (e) {
-          commonPrint.log("Failed to update $fileName: $e");
-        }
-      }
-    } catch (e) {
-      commonPrint.log("Failed to update geo files after profile update: $e");
     }
   }
 
@@ -816,6 +719,7 @@ class AppController {
     await setupClashConfig();
     await updateGroups();
     await updateProviders();
+    initForegroundCache();
   }
 
   Future applyProfile({bool silence = false}) async {
@@ -853,11 +757,6 @@ class AppController {
     globalState.cacheHeightMap = {};
     globalState.cacheScrollPosition = {};
 
-    if (currentProfileId != null) {
-      _updateGeoFilesAfterProfileUpdate(forceUpdate: true).catchError((e) {
-        commonPrint.log("Error updating geo files on profile change: $e");
-      });
-    }
   }
 
   void updateBrightness(Brightness brightness) {
@@ -1002,7 +901,6 @@ class AppController {
   }
 
   Future<void> handleExit() async {
-    _profileUpdateTimer?.cancel();
     Future.delayed(commonDuration, system.exit);
     try {
       await savePreferences();
@@ -1176,7 +1074,34 @@ class AppController {
     await handleExit();
   }
 
+  Future<void> _applyPendingCoreUpdate() async {
+    final pending = File(appPath.corePendingPath);
+    if (!await pending.exists()) return;
+    commonPrint.log("Applying pending core update...");
+    try {
+      final target = File(appPath.corePath);
+      if (await target.exists()) {
+        for (var i = 0; i < 10; i++) {
+          try {
+            await target.delete();
+            break;
+          } catch (_) {
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
+        }
+      }
+      await pending.rename(appPath.corePath);
+      if (!Platform.isWindows) {
+        await Process.run('chmod', ['+x', appPath.corePath]);
+      }
+      commonPrint.log("Pending core update applied successfully");
+    } catch (e) {
+      commonPrint.log("Failed to apply pending core update: $e");
+    }
+  }
+
   Future<void> _initCore() async {
+    await _applyPendingCoreUpdate();
     final isInit = await clashCore.isInit;
     if (!isInit) {
       await clashCore.init();
@@ -1185,6 +1110,28 @@ class AppController {
       );
     }
     await applyProfile();
+    unawaited(_persistColdStartParams());
+  }
+
+  Future<void> _persistColdStartParams() async {
+    try {
+      final clashConfig = globalState.config.patchClashConfig.copyWith.tun(
+        enable: false,
+      );
+      final setupParams = await globalState.getSetupParams(
+        pathConfig: clashConfig,
+      );
+      unawaited(clashLib?.saveParamsForColdStart(
+        initParams: InitParams(
+          homeDir: await appPath.homeDirPath,
+          version: await system.version,
+        ),
+        setupParams: setupParams,
+        state: globalState.getCoreState(),
+      ));
+    } catch (e) {
+      commonPrint.log("persistColdStartParams: $e");
+    }
   }
 
   Future<void> init() async {
@@ -1192,7 +1139,11 @@ class AppController {
       commonPrint.log(details.stack.toString());
     };
     updateTray(true);
-    await _initCore();
+    try {
+      await _initCore();
+    } catch (e) {
+      commonPrint.log("initCore failed (will retry on profile change): $e");
+    }
     await _initStatus();
     autoLaunch?.updateStatus(
       _ref.read(appSettingProvider).autoLaunch,
@@ -1312,7 +1263,6 @@ class AppController {
     if (globalState.navigatorKey.currentState?.canPop() ?? false) {
       globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     }
-    toPage(PageLabel.dashboard);
     final commonScaffoldState = globalState.homeScaffoldKey.currentState;
     if (commonScaffoldState?.mounted != true) return;
 
@@ -1330,10 +1280,13 @@ class AppController {
         _applyAllHeaderSettings(profile, isNewProfile: true);
 
         final headers = profile.providerHeaders;
-        final showHwidLimit = headers['x-hwid-limit']?.toLowerCase() == 'true';
+        final showHwidLimit = headers['x-hwid-max-devices-reached']?.toLowerCase() == 'true';
         final announceText = headers['announce'];
         if (showHwidLimit && announceText != null && announceText.isNotEmpty) {
           _showHwidLimitNotice(announceText, headers['support-url']);
+        }
+        if (headers['x-hwid-not-supported']?.toLowerCase() == 'true') {
+          _showHwidNotSupportedNotice();
         }
 
         await addProfile(profile);

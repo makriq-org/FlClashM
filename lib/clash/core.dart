@@ -103,10 +103,12 @@ class ClashCore {
       })
     ];
     final groupsRaw = groupNames.map((groupName) {
-      final group = proxies[groupName];
+      final group = Map<String, dynamic>.from(proxies[groupName] as Map);
       group["all"] = ((group["all"] ?? []) as List)
           .map(
-            (name) => proxies[name],
+            (name) => proxies[name] != null
+                ? Map<String, dynamic>.from(proxies[name] as Map)
+                : null,
           )
           .where((proxy) => proxy != null)
           .toList();
@@ -114,7 +116,7 @@ class ClashCore {
     }).toList();
     return groupsRaw
         .map(
-          (e) => Group.fromJson(e),
+          (e) => Group.fromJson(Map<String, dynamic>.from(e)),
         )
         .toList();
   }
@@ -125,7 +127,7 @@ class ClashCore {
     final res = await clashInterface.getConnections();
     final connectionsData = json.decode(res) as Map;
     final connectionsRaw = connectionsData['connections'] as List? ?? [];
-    return connectionsRaw.map((e) => Connection.fromJson(e)).toList();
+    return connectionsRaw.map((e) => Connection.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   void closeConnection(String id) {
@@ -192,6 +194,8 @@ class ClashCore {
     await clashInterface.stopListener();
   }
 
+  Future<void> healthCheck([String groupName = '']) => clashInterface.healthCheck(groupName);
+
   Future<Delay> getDelay(String url, String proxyName) async {
     final data = await clashInterface.asyncTestDelay(url, proxyName);
     return Delay.fromJson(json.decode(data));
@@ -201,7 +205,7 @@ class ClashCore {
     final profilePath = await appPath.getProfilePath(id);
     final res = await clashInterface.getConfig(profilePath);
     if (res.isSuccess) {
-      return res.data as Map<String, dynamic>;
+      return Map<String, dynamic>.from(res.data as Map);
     } else {
       throw res.message;
     }
@@ -240,6 +244,14 @@ class ClashCore {
       return 0;
     }
     return int.parse(value);
+  }
+
+  Future<String> getCoreVersion() async {
+    try {
+      return await clashInterface.getCoreVersion();
+    } catch (_) {
+      return '';
+    }
   }
 
   void resetTraffic() {

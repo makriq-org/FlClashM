@@ -116,6 +116,7 @@ enum AccessSortType { none, name, time }
 
 enum ProfileType { file, url }
 
+
 enum ResultType {
   @JsonValue(0)
   success,
@@ -276,6 +277,8 @@ enum ActionMethod {
   getMemory,
   crash,
   setupConfig,
+  getCoreVersion,
+  healthCheck,
 
   ///Android,
   setState,

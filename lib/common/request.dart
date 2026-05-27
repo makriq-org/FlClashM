@@ -35,13 +35,16 @@ class Request {
   String? userAgent;
 
   Future<Response<Uint8List>> getFileResponseForUrl(
-    String url, {
+    String rawUrl, {
     Map<String, dynamic>? headers,
   }) async {
+    final url = rawUrl.normalizeUrlCredentials;
     final requestHeaders = headers ?? {};
     requestHeaders['User-Agent'] = globalState.ua;
 
-    final firstResponse = await _dio.get<Uint8List>(
+    final dio = _dio;
+
+    final firstResponse = await dio.get<Uint8List>(
       url,
       options: Options(
         responseType: ResponseType.bytes,
@@ -58,7 +61,7 @@ class Request {
       }
 
       print('↪️ Redirecting to: $newUrl');
-      final finalResponse = await _dio.get<Uint8List>(
+      final finalResponse = await dio.get<Uint8List>(
         newUrl,
         options: Options(
           responseType: ResponseType.bytes,
@@ -113,6 +116,48 @@ class Request {
     return data;
   }
 
+  Future<Map<String, dynamic>?> checkForCoreUpdate(String currentCoreVersion) async {
+    final response = await _dio.get(
+      "https://api.github.com/repos/$repository/releases",
+      options: Options(responseType: ResponseType.json),
+      queryParameters: {'per_page': 20},
+    );
+    if (response.statusCode != 200) return null;
+    final current = currentCoreVersion.replaceAll(RegExp(r'^v'), '');
+    final releases = response.data as List<dynamic>;
+    for (final release in releases) {
+      final tag = release['tag_name'] as String? ?? '';
+      if (!tag.startsWith('core-')) continue;
+      final remote = tag.replaceFirst('core-', '').replaceAll(RegExp(r'^v'), '');
+      if (remote == current) return null;
+      return release as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<String?> downloadCoreUpdate(
+    String downloadUrl,
+    String targetPath, {
+    void Function(int received, int total)? onProgress,
+  }) async {
+    try {
+      final tmpPath = '$targetPath.tmp';
+      await _dio.download(
+        downloadUrl,
+        tmpPath,
+        onReceiveProgress: onProgress,
+      );
+      final tmpFile = File(tmpPath);
+      if (!await tmpFile.exists()) return 'Download failed';
+      final target = File(targetPath);
+      if (await target.exists()) await target.delete();
+      await tmpFile.rename(targetPath);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   final Map<String, IpInfo Function(Map<String, dynamic>)> _ipInfoSources = {
     "https://ipwho.is/": IpInfo.fromIpwhoIsJson,
     "https://api.ip.sb/geoip/": IpInfo.fromIpSbJson,
@@ -124,7 +169,7 @@ class Request {
     var failureCount = 0;
     final futures = _ipInfoSources.entries.map((source) async {
       final completer = Completer<Result<IpInfo?>>();
-      final future = Dio().get<Map<String, dynamic>>(
+      final future = _clashDio.get<Map<String, dynamic>>(
         source.key,
         cancelToken: cancelToken,
         options: Options(
@@ -142,8 +187,10 @@ class Request {
         }
       }).catchError((e) {
         failureCount++;
-        if (e == DioExceptionType.cancel) {
+        if (e is DioException && e.type == DioExceptionType.cancel) {
           completer.complete(Result.error("cancelled"));
+        } else if (failureCount == _ipInfoSources.length) {
+          completer.complete(Result.success(null));
         }
       });
       return completer.future;
@@ -225,13 +272,15 @@ class Request {
 
   Future<Map<String, dynamic>?> getCoreVersion() async {
     try {
+      final addr = globalState.effectiveExternalController.value;
+      if (addr.isEmpty) return null;
       final response = await _dio.get<Map<String, dynamic>>(
-        "http://$defaultExternalController/version",
+        "http://$addr/version",
         options: Options(
           responseType: ResponseType.json,
         ),
       ).timeout(const Duration(seconds: 2));
-      
+
       if (response.statusCode != HttpStatus.ok) return null;
       return response.data;
     } catch (_) {

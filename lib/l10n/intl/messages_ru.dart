@@ -180,6 +180,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "clipboardExport": MessageLookupByLibrary.simpleMessage(
       "Экспорт в буфер обмена",
     ),
+    "collapseAll": MessageLookupByLibrary.simpleMessage("Свернуть все"),
     "clipboardImport": MessageLookupByLibrary.simpleMessage(
       "Импорт из буфера обмена",
     ),
@@ -278,10 +279,20 @@ class MessageLookup extends MessageLookupByLibrary {
     "existsTip": m3,
     "exit": MessageLookupByLibrary.simpleMessage("Выход"),
     "expand": MessageLookupByLibrary.simpleMessage("Стандартный"),
+    "expandAll": MessageLookupByLibrary.simpleMessage("Развернуть все"),
     "expirationTime": MessageLookupByLibrary.simpleMessage("Время истечения"),
     "expiresOn": MessageLookupByLibrary.simpleMessage("Истекает"),
+    "newDashboard": MessageLookupByLibrary.simpleMessage("Новый вид"),
+    "untilDate": MessageLookupByLibrary.simpleMessage("до"),
     "exportFile": MessageLookupByLibrary.simpleMessage("Экспорт файла"),
     "exportLogs": MessageLookupByLibrary.simpleMessage("Экспорт логов"),
+    "restartCore": MessageLookupByLibrary.simpleMessage("Перезапустить ядро"),
+    "restartCoreDesc": MessageLookupByLibrary.simpleMessage("Перезапустить прокси-ядро"),
+    "coreStatusRunning": MessageLookupByLibrary.simpleMessage("Работает"),
+    "coreStatusRestarting": MessageLookupByLibrary.simpleMessage("Перезапускается..."),
+    "coreStatusStopped": MessageLookupByLibrary.simpleMessage("Остановлено"),
+    "runtimeConfig": MessageLookupByLibrary.simpleMessage("Рантайм конфиг"),
+    "runtimeConfigNotAvailable": MessageLookupByLibrary.simpleMessage("Рантайм конфиг ещё не доступен. Сначала запустите VPN."),
     "exportSuccess": MessageLookupByLibrary.simpleMessage("Экспорт успешен"),
     "expressiveScheme": MessageLookupByLibrary.simpleMessage("Экспрессивные"),
     "externalController": MessageLookupByLibrary.simpleMessage(
@@ -340,6 +351,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "global": MessageLookupByLibrary.simpleMessage("Глобальный"),
     "go": MessageLookupByLibrary.simpleMessage("Перейти"),
+    "goToSelected": MessageLookupByLibrary.simpleMessage("К выбранному"),
     "goDownload": MessageLookupByLibrary.simpleMessage("Перейти к загрузке"),
     "gratitude": MessageLookupByLibrary.simpleMessage("Благодарность"),
     "hasCacheChange": MessageLookupByLibrary.simpleMessage(
@@ -470,6 +482,18 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "noNetwork": MessageLookupByLibrary.simpleMessage("Нет сети"),
     "noNetworkApp": MessageLookupByLibrary.simpleMessage("Приложение без сети"),
+    "includeInVpn": MessageLookupByLibrary.simpleMessage("Включить в VPN"),
+    "excludeFromVpn": MessageLookupByLibrary.simpleMessage("Исключить из VPN"),
+    "whitelistModeDesc": MessageLookupByLibrary.simpleMessage("Только выбранные приложения будут использовать VPN. Все остальные — напрямую."),
+    "blacklistModeDesc": MessageLookupByLibrary.simpleMessage("Выбранные приложения обойдут VPN. Все остальные — через VPN."),
+    "hwidNotSupported": MessageLookupByLibrary.simpleMessage("HWID не включен на этом устройстве. Пожалуйста, включите его в настройках приложения."),
+    "coreUpdate": MessageLookupByLibrary.simpleMessage("Обновить ядро"),
+    "coreUpdateAvailable": MessageLookupByLibrary.simpleMessage("Доступно обновление"),
+    "coreUpdateCurrent": MessageLookupByLibrary.simpleMessage("Актуальная версия"),
+    "coreUpdateDownloading": MessageLookupByLibrary.simpleMessage("Загрузка..."),
+    "coreUpdateSuccess": MessageLookupByLibrary.simpleMessage("Ядро обновлено, перезапуск..."),
+    "coreUpdateFailed": MessageLookupByLibrary.simpleMessage("Ошибка обновления"),
+    "coreUpdateChecking": MessageLookupByLibrary.simpleMessage("Проверка..."),
     "noProxy": MessageLookupByLibrary.simpleMessage("Нет прокси"),
     "noProxyDesc": MessageLookupByLibrary.simpleMessage(
       "Пожалуйста, создайте профиль или добавьте действительный профиль",
@@ -754,6 +778,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "tabAnimationDesc": MessageLookupByLibrary.simpleMessage(
       "Работает только в мобильном режиме",
     ),
+    "testAllDelay": MessageLookupByLibrary.simpleMessage("Проверить все задержки"),
     "tcpConcurrent": MessageLookupByLibrary.simpleMessage("Параллельный TCP"),
     "tcpConcurrentDesc": MessageLookupByLibrary.simpleMessage(
       "Использовать параллельные TCP-соединения",
