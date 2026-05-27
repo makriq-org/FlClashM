@@ -6,7 +6,7 @@
 - `pubspec.yaml` остается source of truth для `versionName` и `versionCode`.
 - `android/app/build.gradle.kts` остается source of truth для Android `applicationId`.
 - `lib/common/constant.dart` остается source of truth для runtime release repository.
-- `.github/workflows/build.yaml` и `.github/workflows/continuity.yaml` остаются source of truth для CI wiring.
+- `.github/workflows/build.yaml`, `.github/workflows/continuity.yaml` и `.github/workflows/android-base-verification.yaml` остаются source of truth для CI wiring.
 
 ## Что проверяется
 
@@ -26,7 +26,7 @@ Guard: `tool/check_release_continuity.dart`
 
 - Локально: `nix shell nixpkgs#flutter --command dart tool/check_release_continuity.dart`
 - Локально для release channel guard: `nix shell nixpkgs#flutter --command dart tool/check_release_continuity.dart --github-repository makriq-org/FlClashM`
-- CI: `.github/workflows/continuity.yaml`
+- CI: `.github/workflows/continuity.yaml` и `.github/workflows/android-base-verification.yaml`
 - Tag release pipeline: ранний шаг `Check release continuity` в `.github/workflows/build.yaml`
 
 ## Как обновлять floor

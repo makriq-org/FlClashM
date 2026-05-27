@@ -1,0 +1,114 @@
+name: android-base-verification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "analysis_options.yaml"
+      - "android/**"
+      - "core/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "setup.dart"
+      - "test/product/**"
+      - "tool/**"
+  push:
+    branches:
+      - "**"
+    paths:
+      - ".github/workflows/**"
+      - "analysis_options.yaml"
+      - "android/**"
+      - "core/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "setup.dart"
+      - "test/product/**"
+      - "tool/**"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NDK_VERSION: "28.0.13004108"
+
+jobs:
+  base-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Check release continuity
+        run: dart tool/check_release_continuity.dart
+
+      - name: Run product tests
+        run: flutter test test/product
+
+      - name: Run targeted analyze
+        run: flutter analyze --fatal-infos lib/product test/product tool/check_release_continuity.dart setup.dart lib/common/constant.dart lib/core_version.dart
+
+  android-smoke:
+    needs: base-guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.0"
+          cache-dependency-path: core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Android core smoke artifact
+        run: dart setup.dart android --arch arm64 --out core
+
+      - name: Build Android arm64 release smoke APK
+        shell: bash
+        run: |
+          core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\\(.*\\)';$/\\1/p" lib/core_version.dart)
+          test -n "$core_version"
+          flutter build apk \
+            --release \
+            --target-platform android-arm64 \
+            --dart-define=APP_ENV=pre \
+            --dart-define=CORE_VERSION="$core_version"
+
+      - name: Assert smoke artifact exists
+        run: test -f build/app/outputs/flutter-apk/app-release.apk

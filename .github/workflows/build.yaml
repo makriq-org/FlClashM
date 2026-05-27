@@ -38,9 +38,11 @@ jobs:
       - name: Setup Android signing
         run: |
           echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
+          {
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+            echo "storePassword=${{ secrets.STORE_PASSWORD }}"
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+          } >> android/local.properties
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -69,7 +71,7 @@ jobs:
       - name: Generate
         if: ${{ env.IS_STABLE == 'true' }}
         run: |
-          tags=($(git tag --merged $(git rev-parse HEAD) --sort=-creatordate))
+          mapfile -t tags < <(git tag --merged "$(git rev-parse HEAD)" --sort=-creatordate)
           preTag=$(grep -oP '^## \K.*' CHANGELOG.md | head -n 1)
           currentTag=""
           for ((i = 0; i <= ${#tags[@]}; i++)); do
@@ -131,7 +133,7 @@ jobs:
 
       - name: Generate release.md
         run: |
-          tags=($(git tag --merged $(git rev-parse HEAD) --sort=-creatordate))
+          mapfile -t tags < <(git tag --merged "$(git rev-parse HEAD)" --sort=-creatordate)
           if [ "${{ env.IS_STABLE }}" == "true" ]; then
             preTag=$(curl --silent "https://api.github.com/repos/${CONTINUITY_RELEASE_REPOSITORY}/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
           else
@@ -183,9 +185,9 @@ jobs:
         if: env.IS_STABLE == 'true'
         run: |
           cd ./dist
-          for file in $(find . -type f -not -name "*.sha256"); do
+          while IFS= read -r -d '' file; do
             sha256sum "$file" > "${file}.sha256"
-          done
+          done < <(find . -type f -not -name "*.sha256" -print0)
 
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}
@@ -206,14 +208,14 @@ jobs:
       - name: Prepare commit list for notification
         id: prepare_commits
         run: |
-          main_commit=$(git log -1 --pretty=format:"%s" ${{ github.ref_name }})
+          main_commit=$(git log -1 --pretty=format:"%s" "${{ github.ref_name }}")
           other_commits=$(head -n 20 release.md | grep "^- " | grep -v "^- ${main_commit}$" | head -n 9)
           commits="• ${main_commit}"
           if [ -n "$other_commits" ]; then
             commits="${commits}"$'\n'"${other_commits}"
           fi
           commits_escaped=$(echo "$commits" | jq -Rs .)
-          echo "commits=$commits_escaped" >> $GITHUB_OUTPUT
+          echo "commits=$commits_escaped" >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notifications
         if: success()

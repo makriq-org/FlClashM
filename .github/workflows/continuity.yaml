@@ -11,6 +11,8 @@ on:
       - "tool/check_release_continuity.dart"
       - "tool/release_continuity_baseline.json"
   push:
+    branches:
+      - "**"
     paths:
       - ".github/workflows/build.yaml"
       - ".github/workflows/continuity.yaml"

@@ -14,14 +14,14 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<void> applyPendingUpdate() async {
     final pending = File(appPath.corePendingPath);
-    if (!await pending.exists()) {
+    if (!pending.existsSync()) {
       return;
     }
 
     commonPrint.log("Applying pending core update...");
     try {
       final target = File(appPath.corePath);
-      if (await target.exists()) {
+      if (target.existsSync()) {
         for (var i = 0; i < 10; i++) {
           try {
             await target.delete();
