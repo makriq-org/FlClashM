@@ -123,3 +123,18 @@
 
 - отделить Android platform policy от runtime orchestration
 - готовить подключение новых engine adapters без переписывания bootstrap
+
+## Android platform seam
+
+На этапе 3 Android-specific policy вынесена в `lib/product/android/**`:
+
+- `AndroidForegroundNotificationPolicy` собирает foreground title и держит policy для service/profile/server naming.
+- для explicit proxy change foreground title обновляется из client-side selection, а не зависит от успешного `updateGroups()` round-trip
+- `AndroidRuntimeAccessPolicy` централизует Android VPN start/stop access path и client-side merge для access-control.
+- `AndroidUpdateBridge` держит Android app update/install boundary отдельно от view-кода и сам владеет external release open/install path.
+
+Ожидаемые thin consumers:
+
+- `controller` только синхронизирует runtime state и вызывает platform services
+- `AndroidEntrypoint` только принимает tile intents и делегирует policy
+- `plugins/vpn.dart` и `plugins/app.dart` остаются transport/shim слоем без product policy

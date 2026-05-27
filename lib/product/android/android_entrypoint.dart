@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/plugins/tile.dart';
-import 'package:flclashx/plugins/vpn.dart';
 import 'package:flclashx/state.dart';
 
 import '../../common/common.dart';
 import '../../models/models.dart';
+import 'android_platform.dart';
 
 class AndroidEntrypoint {
   AndroidEntrypoint._();
@@ -16,8 +15,6 @@ class AndroidEntrypoint {
   static final AndroidEntrypoint instance = AndroidEntrypoint._();
 
   Future<void> init() async {
-    // Accessing the singletons wires up method channel handlers.
-    vpn;
     tile?.addListener(_MainTileListener(this));
     // Let the Kotlin side replay pending START/STOP/CHANGE intents after the
     // Flutter engine is ready.
@@ -45,7 +42,7 @@ class AndroidEntrypoint {
       }
 
       final profile = globalState.config.currentProfile;
-      final title = buildNotificationTitle(profile);
+      final title = androidPlatform.foregroundNotification.buildTitle(profile);
       final started = await globalState.engineManager.start(
         updateTasks: globalState.isInit
             ? [globalState.appController.updateTraffic]
@@ -118,49 +115,6 @@ class AndroidEntrypoint {
       unawaited(tile?.updateMode(mode));
     } catch (e) {
       commonPrint.log("Tile onChangeMode error: $e");
-    }
-  }
-
-  String buildNotificationTitle(Profile? profile) {
-    if (profile == null) {
-      return appName;
-    }
-
-    final profileName = profile.label ?? profile.id;
-    final serviceName = _decodeProviderHeader(
-      profile.providerHeaders['flclashx-servicename'],
-    );
-    final displayName = serviceName.isNotEmpty ? serviceName : profileName;
-
-    final serverGroupName = _decodeProviderHeader(
-      profile.providerHeaders['flclashx-serverinfo'],
-    );
-    var serverName = '';
-    if (serverGroupName.isNotEmpty) {
-      serverName = profile.selectedMap[serverGroupName] ?? '';
-    }
-    if (serverName.isEmpty) {
-      for (final entry in profile.selectedMap.entries) {
-        final value = entry.value;
-        if (value.isNotEmpty && value != 'DIRECT' && value != 'REJECT') {
-          serverName = value;
-          break;
-        }
-      }
-    }
-
-    return serverName.isNotEmpty ? '$displayName / $serverName' : displayName;
-  }
-
-  String _decodeProviderHeader(String? value) {
-    if (value == null || value.isEmpty) {
-      return '';
-    }
-    try {
-      final normalized = base64.normalize(value);
-      return utf8.decode(base64.decode(normalized)).trim();
-    } catch (_) {
-      return value.trim();
     }
   }
 }

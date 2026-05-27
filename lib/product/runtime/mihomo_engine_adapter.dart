@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/plugins/service.dart';
+import 'package:flclashx/product/android/product_android.dart';
 
 import '../compile/product_compile.dart';
 import 'engine_adapter.dart';
@@ -77,7 +77,7 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<bool> start({String? notificationTitle}) async {
     if (notificationTitle != null && notificationTitle.isNotEmpty) {
-      await clashLib?.updateNotificationParams(title: notificationTitle);
+      await androidPlatform.foregroundNotification.pushTitle(notificationTitle);
     }
 
     await clashCore.startListener();
@@ -85,7 +85,7 @@ class MihomoEngineAdapter implements EngineAdapter {
       return true;
     }
 
-    final started = await service?.startVpn() ?? false;
+    final started = await androidPlatform.runtimeAccess.startVpn();
     if (!started) {
       await clashCore.stopListener();
     }
@@ -95,7 +95,7 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<void> stop() async {
     await clashCore.stopListener();
-    await service?.stopVpn();
+    await androidPlatform.runtimeAccess.stopVpn();
   }
 
   @override

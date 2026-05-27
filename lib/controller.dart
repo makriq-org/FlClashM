@@ -17,11 +17,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' hide windows;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
 import 'models/models.dart';
-import 'plugins/vpn.dart';
+import 'product/android/product_android.dart';
 import 'product/runtime/product_runtime.dart';
 import 'views/profiles/override_profile.dart';
 
@@ -71,87 +70,30 @@ class AppController {
       String proxyName,
     ) async {
       await changeProxy(groupName: groupName, proxyName: proxyName);
+      await syncAndroidForegroundNotificationForProxyChange(
+        groupName: groupName,
+        proxyName: proxyName,
+      );
       await updateGroups();
-      // Update cached server name for foreground notification
-      _updateForegroundServerName(groupName, proxyName);
     }, args: [groupName, proxyName]);
   }
 
-  /// Update cached server name in VPN plugin for foreground notification.
-  /// Only updates if the changed group matches the flclashx-serverinfo header,
-  /// or if no header is set and this is the first non-DIRECT/REJECT group.
-  void _updateForegroundServerName(String groupName, String proxyName) {
-    final profile = globalState.config.currentProfile;
-    if (profile == null) return;
-    final serverInfoHeader = profile.providerHeaders['flclashx-serverinfo'];
-    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
-      String decodedGroupName;
-      try {
-        final normalized = base64.normalize(serverInfoHeader);
-        decodedGroupName = utf8.decode(base64.decode(normalized)).trim();
-      } catch (_) {
-        decodedGroupName = serverInfoHeader.trim();
-      }
-      if (groupName != decodedGroupName) return;
-    }
-    vpn?.updateServerName(proxyName);
+  Future<void> syncAndroidForegroundNotification() async {
+    await androidPlatform.foregroundNotification.syncCurrentProfile(
+      profile: globalState.config.currentProfile,
+      groups: _ref.read(groupsProvider),
+    );
   }
 
-  /// Initialize foreground notification cache with current profile and server
-  void initForegroundCache() {
-    final profile = globalState.config.currentProfile;
-    if (profile == null) return;
-
-    final profileName = profile.label ?? profile.id;
-
-    // Decode service name from header
-    String serviceName = "";
-    final svc = profile.providerHeaders['flclashx-servicename'];
-    if (svc != null && svc.isNotEmpty) {
-      try {
-        final normalized = base64.normalize(svc);
-        serviceName = utf8.decode(base64.decode(normalized)).trim();
-      } catch (_) {
-        serviceName = svc.trim();
-      }
-    }
-
-    commonPrint.log(
-      '[initForegroundCache] profileName="$profileName" serviceName="$serviceName" selectedMap=${profile.selectedMap}',
+  Future<void> syncAndroidForegroundNotificationForProxyChange({
+    required String groupName,
+    required String proxyName,
+  }) async {
+    await androidPlatform.foregroundNotification.syncProxyChange(
+      profile: globalState.config.currentProfile,
+      groupName: groupName,
+      proxyName: proxyName,
     );
-    vpn?.updateProfileInfo(profileName: profileName, serviceName: serviceName);
-
-    final groups = _ref.read(groupsProvider);
-    String serverName = "";
-    final serverInfoHeader = profile.providerHeaders['flclashx-serverinfo'];
-    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
-      String decodedGroupName;
-      try {
-        final normalized = base64.normalize(serverInfoHeader);
-        decodedGroupName = utf8.decode(base64.decode(normalized)).trim();
-      } catch (_) {
-        decodedGroupName = serverInfoHeader.trim();
-      }
-      final group = groups.getGroup(decodedGroupName);
-      if (group != null) {
-        serverName = group.realNow;
-      }
-      if (serverName.isEmpty) {
-        serverName = profile.selectedMap[decodedGroupName] ?? "";
-      }
-    }
-    if (serverName.isEmpty) {
-      for (final g in groups) {
-        final now = g.realNow;
-        if (now.isNotEmpty && now != 'DIRECT' && now != 'REJECT') {
-          serverName = now;
-          break;
-        }
-      }
-    }
-    if (serverName.isNotEmpty) {
-      vpn?.updateServerName(serverName);
-    }
   }
 
   Future<void> restartCore() async {
@@ -166,6 +108,10 @@ class AppController {
       ),
       resumeIfStarted: wasStarted,
       updateTasks: [updateTraffic],
+      notificationTitle: androidPlatform.foregroundNotification.buildTitle(
+        globalState.config.currentProfile,
+        groups: _ref.read(groupsProvider),
+      ),
     );
     if (wasStarted && started) {
       await onRuntimeStarted(
@@ -179,9 +125,13 @@ class AppController {
 
   Future<void> updateStatus(bool isStart) async {
     if (isStart) {
-      initForegroundCache();
+      await syncAndroidForegroundNotification();
       final started = await globalState.engineManager.start(
         updateTasks: [updateTraffic],
+        notificationTitle: androidPlatform.foregroundNotification.buildTitle(
+          globalState.config.currentProfile,
+          groups: _ref.read(groupsProvider),
+        ),
       );
       if (!started) {
         await StatusBarManager.updateIcon(isConnected: false);
@@ -700,23 +650,15 @@ class AppController {
   Future<ResolvedTunAccess> _resolveTunAccess({
     required bool requestedTunEnable,
   }) async {
-    var enableTun = requestedTunEnable;
     final realTunEnable = _ref.read(realTunEnableProvider);
-    if (enableTun != realTunEnable && realTunEnable == false) {
-      final code = await system.authorizeCore();
-      switch (code) {
-        case AuthorizeCode.success:
-          await restartCore();
-          return const ResolvedTunAccess.abort();
-        case AuthorizeCode.none:
-          break;
-        case AuthorizeCode.error:
-          enableTun = false;
-          break;
-      }
-    }
-    _ref.read(realTunEnableProvider.notifier).value = enableTun;
-    return ResolvedTunAccess.proceed(enableTun: enableTun);
+    return androidPlatform.runtimeAccess.resolveTunAccess(
+      requestedTunEnable: requestedTunEnable,
+      realTunEnable: realTunEnable,
+      onAuthorizeRestart: restartCore,
+      onResolvedTunEnable: (value) {
+        _ref.read(realTunEnableProvider.notifier).value = value;
+      },
+    );
   }
 
   Future<bool> setupClashConfig() async {
@@ -777,7 +719,7 @@ class AppController {
     }
     await updateGroups();
     await updateProviders();
-    initForegroundCache();
+    await syncAndroidForegroundNotification();
   }
 
   Future applyProfile({bool silence = false}) async {
@@ -1062,48 +1004,9 @@ class AppController {
   }
 
   Future<void> autoCheckUpdate() async {
-    if (!_ref.read(appSettingProvider).autoCheckUpdate) return;
-    final res = await request.checkForUpdate();
-    checkUpdateResultHandle(data: res);
-  }
-
-  Future<void> checkUpdateResultHandle({
-    Map<String, dynamic>? data,
-    bool handleError = false,
-  }) async {
-    if (globalState.isPre) {
-      return;
-    }
-    if (data != null) {
-      final tagName = data['tag_name'];
-      final body = data['body'];
-      final submits = utils.parseReleaseBody(body);
-      final textTheme = context.textTheme;
-      final res = await globalState.showMessage(
-        title: appLocalizations.discoverNewVersion,
-        message: TextSpan(
-          text: "$tagName \n",
-          style: textTheme.headlineSmall,
-          children: [
-            TextSpan(text: "\n", style: textTheme.bodyMedium),
-            for (final submit in submits)
-              TextSpan(text: "- $submit \n", style: textTheme.bodyMedium),
-          ],
-        ),
-        confirmText: appLocalizations.goDownload,
-      );
-      if (res != true) {
-        return;
-      }
-      unawaited(
-        launchUrl(Uri.parse("https://github.com/$repository/releases/latest")),
-      );
-    } else if (handleError) {
-      globalState.showMessage(
-        title: appLocalizations.checkUpdate,
-        message: TextSpan(text: appLocalizations.checkUpdateError),
-      );
-    }
+    await androidPlatform.updateBridge.autoCheckForAppUpdate(
+      enabled: _ref.read(appSettingProvider).autoCheckUpdate,
+    );
   }
 
   Future<void> _handlePreference() async {

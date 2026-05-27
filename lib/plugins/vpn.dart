@@ -13,54 +13,22 @@ abstract mixin class VpnListener {
   void onDnsChanged(String dns) {}
 }
 
-/// Compatibility shim for UI code that still reads/writes notification state
-/// through the old `vpn` singleton. All transport now goes through [ClashLib]
-/// on the `com.follow.clashx/service` channel; this class keeps the caches
-/// needed to render the sticky notification title via
-/// [ClashLib.updateNotificationParams].
+/// Thin Android VPN/service bridge. Product policy lives under
+/// `lib/product/android/**`; this shim only forwards calls to ClashLib/native.
 class Vpn {
   factory Vpn() => _instance ??= Vpn._();
   static Vpn? _instance;
 
   Vpn._();
 
-  String _cachedServerName = '';
-  String _cachedProfileName = 'FlClashM';
-  String _cachedServiceName = '';
-
-  String get cachedServerName => _cachedServerName;
-  String get cachedProfileName => _cachedProfileName;
-  String get cachedServiceName => _cachedServiceName;
-
-  void updateServerName(String serverName) {
-    _cachedServerName = serverName;
-    _pushNotification();
-  }
-
-  void updateProfileInfo({
-    required String profileName,
-    required String serviceName,
-  }) {
-    _cachedProfileName = profileName;
-    _cachedServiceName = serviceName;
-    _pushNotification();
-  }
-
-  Future<void> _pushNotification() async {
+  Future<void> updateNotification({required String title}) async {
     try {
-      final displayName = _cachedServiceName.isNotEmpty
-          ? _cachedServiceName
-          : _cachedProfileName;
-      final title = _cachedServerName.isNotEmpty
-          ? '$displayName / $_cachedServerName'
-          : displayName;
-      commonPrint.log('[Vpn] pushNotification: title="$title" server="$_cachedServiceName" clashLib=${clashLib != null}');
-      await clashLib?.updateNotificationParams(
-        title: title,
-        server: _cachedServiceName,
+      commonPrint.log(
+        '[Vpn] updateNotification: title="$title" clashLib=${clashLib != null}',
       );
+      await clashLib?.updateNotificationParams(title: title);
     } catch (e) {
-      commonPrint.log('[Vpn] pushNotification FAILED: $e');
+      commonPrint.log('[Vpn] updateNotification FAILED: $e');
     }
   }
 
@@ -88,8 +56,8 @@ class Vpn {
     }
   }
 
-  Future<bool> start(String optionsJson) async {
-    final rt = await clashLib?.startVpn() ?? 0;
+  Future<bool> start({String? optionsJson}) async {
+    final rt = await clashLib?.startVpn(optionsJson: optionsJson) ?? 0;
     return rt != 0;
   }
 

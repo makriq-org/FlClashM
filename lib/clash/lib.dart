@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
 import 'package:flutter/services.dart';
 
 import 'interface.dart';
@@ -22,7 +21,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     unawaited(_init());
   }
 
-  final MethodChannel _channel = const MethodChannel('com.follow.clashx/service');
+  final MethodChannel _channel =
+      const MethodChannel('com.follow.clashx/service');
   Completer<bool> _initCompleter = Completer<bool>();
 
   static const int _maxCrashRetries = 5;
@@ -31,7 +31,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   Future<void> _init() async {
     try {
-      await _channel.invokeMethod<String>('init')
+      await _channel
+          .invokeMethod<String>('init')
           .timeout(const Duration(seconds: 15));
       _crashCount = 0;
       if (!_initCompleter.isCompleted) _initCompleter.complete(true);
@@ -151,7 +152,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         if (id != null) {
           final completer = callbackCompleterMap.remove(id);
           if (completer != null && !completer.isCompleted) {
-            commonPrint.log('_failPendingCompleter: method=$method reason=$reason');
+            commonPrint
+                .log('_failPendingCompleter: method=$method reason=$reason');
             completer.complete(null);
           }
         }
@@ -189,29 +191,10 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   /// Tells the `:remote` service to bring the TUN tunnel up using the current
   /// Go-provided `AndroidVpnOptions`, merged with UI access control settings.
-  Future<int> startVpn() async {
-    final optionsRaw = await getAndroidVpnOptions();
-    final merged = _mergeAccessControl(optionsRaw);
-    final res = await _channel.invokeMethod('start', {'data': merged});
+  Future<int> startVpn({String? optionsJson}) async {
+    final payload = optionsJson ?? await getAndroidVpnOptions();
+    final res = await _channel.invokeMethod('start', {'data': payload});
     return (res is int) ? res : int.tryParse('$res') ?? 0;
-  }
-
-  String _mergeAccessControl(String optionsJson) {
-    if (optionsJson.isEmpty) return optionsJson;
-    try {
-      final map = json.decode(optionsJson) as Map<String, dynamic>;
-      final ac = globalState.config.vpnProps.accessControl;
-      if (ac.enable) {
-        map['accessControl'] = {
-          'mode': ac.mode.name,
-          'acceptList': ac.acceptList,
-          'rejectList': ac.rejectList,
-        };
-      }
-      return json.encode(map);
-    } catch (_) {
-      return optionsJson;
-    }
   }
 
   Future<bool> stopVpn() async {
@@ -227,7 +210,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     required SetupParams setupParams,
     required CoreState state,
   }) async {
-    final res = await _channel.invokeMethod<String>('quickStart', <String, String>{
+    final res =
+        await _channel.invokeMethod<String>('quickStart', <String, String>{
       'init': json.encode(initParams),
       'params': json.encode(setupParams),
       'state': json.encode(state),
@@ -243,11 +227,13 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     String server = '',
     bool onlyStatisticsProxy = false,
   }) async {
-    await _channel.invokeMethod('updateNotificationParams', json.encode({
-      'title': title,
-      'stopText': server,
-      'onlyStatisticsProxy': onlyStatisticsProxy,
-    }));
+    await _channel.invokeMethod(
+        'updateNotificationParams',
+        json.encode({
+          'title': title,
+          'stopText': server,
+          'onlyStatisticsProxy': onlyStatisticsProxy,
+        }));
   }
 
   /// Persist quickStart-equivalent params so tile/widget/Always-on can

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/android/product_android.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -36,10 +37,10 @@ class AboutView extends StatelessWidget {
     final commonScaffoldState = context.commonScaffoldState;
     if (commonScaffoldState?.mounted != true) return;
     final data = await commonScaffoldState?.loadingRun<Map<String, dynamic>?>(
-      request.checkForUpdate,
+      androidPlatform.updateBridge.checkForAppUpdate,
       title: appLocalizations.checkUpdate,
     );
-    globalState.appController.checkUpdateResultHandle(
+    await androidPlatform.updateBridge.handleAppUpdateCheckResult(
       data: data,
       handleError: true,
     );

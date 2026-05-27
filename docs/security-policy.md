@@ -39,6 +39,17 @@ Android security policy определяется клиентом `FlClashM`.
 - platform policy применяется на стороне клиента во время сборки runtime config
 - release pipeline публикует только Android-артефакты
 
+### 4. Android access control merge остаётся client-side
+
+Android VPN access-control для runtime старта собирается клиентом из локального `vpnProps.accessControl`.
+
+Это значит:
+
+- provider headers не могут подменить список allow/deny приложений
+- `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints и не участвуют в access/update policy
+- runtime получает уже собранный client-side policy payload
+- future updater/install flow не должен обходить этот boundary
+
 ## Границы ответственности
 
 ### Клиент решает
