@@ -7,10 +7,7 @@ import 'package:flclashx/plugins/tile.dart';
 import 'package:flclashx/plugins/vpn.dart';
 import 'package:flclashx/state.dart';
 
-import '../../clash/core.dart';
-import '../../clash/lib.dart';
 import '../../common/common.dart';
-import '../../models/core.dart' as core_models show Action;
 import '../../models/models.dart';
 
 class AndroidEntrypoint {
@@ -37,25 +34,35 @@ class AndroidEntrypoint {
         return;
       }
 
-      for (var i = 0; i < 30; i++) {
-        if (await clashCore.isInit) {
-          break;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
+      final isReady = await globalState.engineManager.waitUntilInitialized(
+        attempts: 30,
+        delay: const Duration(milliseconds: 500),
+      );
+      if (!isReady) {
+        commonPrint.log("Tile start: runtime is not ready");
+        unawaited(app?.tip("Runtime is not ready"));
+        return;
       }
 
       final profile = globalState.config.currentProfile;
       final title = buildNotificationTitle(profile);
-      unawaited(clashLib?.updateNotificationParams(title: title));
-
-      final rt = await clashLib?.startVpn() ?? 0;
-      if (rt == 0) {
-        commonPrint.log("Tile start: startVpn returned 0");
+      final started = await globalState.engineManager.start(
+        updateTasks: globalState.isInit
+            ? [globalState.appController.updateTraffic]
+            : null,
+        notificationTitle: title,
+      );
+      if (!started) {
+        commonPrint.log("Tile start: runtime start failed");
         unawaited(app?.tip("VPN start failed"));
         return;
       }
 
-      await clashCore.startListener();
+      if (globalState.isInit) {
+        await globalState.appController.onRuntimeStarted(
+          checkProfileModified: false,
+        );
+      }
     } catch (e, stackTrace) {
       commonPrint.log("Tile onStart error: $e\n$stackTrace");
       unawaited(app?.tip("Start error: $e"));
@@ -65,7 +72,10 @@ class AndroidEntrypoint {
   Future<void> handleStop() async {
     try {
       unawaited(app?.tip(appLocalizations.stopVpn));
-      await globalState.appController.updateStatus(false);
+      await globalState.engineManager.stop();
+      if (globalState.isInit) {
+        await globalState.appController.onRuntimeStopped();
+      }
     } catch (e) {
       commonPrint.log("Tile onStop error: $e");
     }
@@ -77,37 +87,34 @@ class AndroidEntrypoint {
       final patched = globalState.config.patchClashConfig.copyWith(
         mode: modeEnum,
       );
-      globalState.config = globalState.config.copyWith(
-        patchClashConfig: patched,
-      );
+      if (globalState.isInit) {
+        globalState.appController.syncPatchClashConfigFromRuntime(patched);
+      } else {
+        globalState.config = globalState.config.copyWith(
+          patchClashConfig: patched,
+        );
+      }
       await preferences.saveConfig(globalState.config);
 
-      final updateParamsMap = UpdateParams(
-        tun: patched.tun.getRealTun(globalState.config.networkProps.routeMode),
-        allowLan: patched.allowLan,
-        findProcessMode: patched.findProcessMode,
-        mode: modeEnum,
-        logLevel: patched.logLevel,
-        ipv6: patched.ipv6,
-        tcpConcurrent: patched.tcpConcurrent,
-        externalController: patched.externalController,
-        unifiedDelay: patched.unifiedDelay,
-        mixedPort: patched.mixedPort,
-      ).toJson();
-
-      final effective = globalState.effectiveExternalController.value;
-      if (effective.isNotEmpty) {
-        updateParamsMap['external-controller'] = effective;
-      }
-
-      final actionJson = json.encode(
-        core_models.Action(
-          id: "${ActionMethod.updateConfig.name}#${utils.id}",
-          method: ActionMethod.updateConfig,
-          data: json.encode(updateParamsMap),
+      final updated = await globalState.engineManager.updateConfig(
+        UpdateParams(
+          tun:
+              patched.tun.getRealTun(globalState.config.networkProps.routeMode),
+          allowLan: patched.allowLan,
+          findProcessMode: patched.findProcessMode,
+          mode: modeEnum,
+          logLevel: patched.logLevel,
+          ipv6: patched.ipv6,
+          tcpConcurrent: patched.tcpConcurrent,
+          externalController: patched.externalController,
+          unifiedDelay: patched.unifiedDelay,
+          mixedPort: patched.mixedPort,
         ),
+        coldStartPatchConfig: patched.copyWith.tun(enable: false),
       );
-      unawaited(clashLib?.sendMessage(actionJson));
+      if (!updated) {
+        return;
+      }
       unawaited(tile?.updateMode(mode));
     } catch (e) {
       commonPrint.log("Tile onChangeMode error: $e");

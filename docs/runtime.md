@@ -14,13 +14,14 @@ Runtime слой должен быть независим от UI и от provid
 
 ## Текущее состояние
 
-Сейчас в коде уже есть базовый Android runtime bootstrap:
+Сейчас базовый runtime seam уже выделен:
 
-- Flutter UI стартует через `AppBootstrap`
-- Android quick actions обслуживает `AndroidEntrypoint`
-- runtime config собирается в `GlobalState.patchRawConfig`
-- Android policy применяется через `AndroidSecurityPolicy`
-- запуск/остановка VPN идут через Android service bridge
+- `EngineManager` живет в `lib/product/runtime/engine_manager.dart`
+- `EngineAdapter` контракт живет в `lib/product/runtime/engine_adapter.dart`
+- текущий `mihomo` path завернут в `MihomoEngineAdapter`
+- `RuntimePlan` теперь применяется через manager, а не напрямую из `controller/state`
+- `AndroidEntrypoint` и legacy controller используют manager как orchestration boundary
+- manager также держит re-attach к уже запущенному runtime и refresh cold-start snapshot после setup/update
 
 ## Ограничения
 
@@ -82,12 +83,15 @@ Runtime слой должен быть независим от UI и от provid
 - lifecycle engine/runtime
 - orchestration adapters
 - restart/update boundaries
+- compile-to-runtime handoff для `RuntimePlan`
+- re-attach/polling для already-running Android runtime
 
 ### `EngineAdapter`
 
 Ответственность:
 
 - конкретный контракт для `mihomo`, потом `olcrtc`, `naiveproxy`
+- hide low-level bridge details (`clashCore`, Android service bridge, cold-start save path)
 
 ## Будущая интеграция runtime
 

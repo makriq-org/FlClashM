@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AppStateManager extends ConsumerStatefulWidget {
-
   const AppStateManager({
     super.key,
     required this.child,
@@ -120,7 +119,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         state == AppLifecycleState.inactive) {
       globalState.appController.savePreferences();
       if (Platform.isAndroid) {
-        globalState.stopUpdateTasks();
+        globalState.engineManager.pauseUpdateTasks();
         globalState.appController.stopRunTimeTimer();
       }
     } else {
@@ -128,7 +127,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       if (state == AppLifecycleState.resumed && Platform.isAndroid) {
         clashLib?.reconnectIfNeeded();
         if (globalState.isStart) {
-          globalState.startUpdateTasks();
+          await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();
         }
       }
@@ -144,15 +143,14 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
 
   @override
   Widget build(BuildContext context) => Listener(
-      onPointerHover: (_) {
-        render?.resume();
-      },
-      child: widget.child,
-    );
+        onPointerHover: (_) {
+          render?.resume();
+        },
+        child: widget.child,
+      );
 }
 
 class AppEnvManager extends StatelessWidget {
-
   const AppEnvManager({
     super.key,
     required this.child,

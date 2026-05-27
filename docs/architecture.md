@@ -110,12 +110,16 @@
 - читать provider headers как источник обязательной security policy
 - ослаблять client floor по данным подписки
 
-## Следующий шаг
+## Текущий runtime seam
 
-Следующая крупная миграция должна вынести из общей базы отдельные продуктовые контракты:
+На этапе 2 orchestration идет через product layer:
 
-- `RawProfile`
-- `ProfileCompiler`
-- `RuntimePlan`
-- `EngineManager`
-- `EngineAdapter`
+- `EngineManager` владеет setup/start/stop/restart/update boundary
+- `MihomoEngineAdapter` инкапсулирует текущий `clashCore`/Android bridge path
+- `state`, `controller` и `AndroidEntrypoint` выступают thin consumers этого seam
+- app lifecycle consumers только pause/resume polling, без дублирования start/stop логики
+
+Следующий шаг после этого seam:
+
+- отделить Android platform policy от runtime orchestration
+- готовить подключение новых engine adapters без переписывания bootstrap

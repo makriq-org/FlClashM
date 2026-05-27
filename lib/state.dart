@@ -10,7 +10,6 @@ import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/theme.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/l10n/l10n.dart';
-import 'package:flclashx/plugins/service.dart';
 import 'package:flclashx/widgets/dialog.dart';
 import 'package:flclashx/widgets/scaffold.dart';
 import 'package:flutter/material.dart';
@@ -24,8 +23,7 @@ import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
 import 'product/compile/product_compile.dart';
-
-typedef UpdateTasks = List<FutureOr Function()>;
+import 'product/runtime/product_runtime.dart';
 
 class GlobalState {
   factory GlobalState() {
@@ -33,11 +31,20 @@ class GlobalState {
     return _instance!;
   }
 
-  GlobalState._internal();
+  GlobalState._internal() {
+    engineManager = EngineManager(
+      adapter: const MihomoEngineAdapter(),
+      loadCurrentRawProfile: loadCurrentRawProfile,
+      resolveProfilePatch: resolveProfilePatchConfig,
+      buildRuntimePlan: buildRuntimePlan,
+      applyRuntimePlan: applyRuntimePlan,
+      buildCoreState: getCoreState,
+      buildInitParams: _buildInitParams,
+    );
+  }
   static GlobalState? _instance;
   Map<CacheTag, double> cacheScrollPosition = {};
   Map<CacheTag, FixedMap<String, double>> cacheHeightMap = {};
-  Timer? timer;
   Timer? groupsUpdateTimer;
   late Config config;
   late AppState appState;
@@ -50,8 +57,6 @@ class GlobalState {
   late CommonTheme theme;
   late Color accentColor;
   CorePalette? corePalette;
-  DateTime? startTime;
-  UpdateTasks tasks = [];
   Map<String, dynamic>? lastRuntimeConfig;
   // Effective external-controller endpoint after merging subscription value
   // over UI defaults. Empty string means disabled. Subscription value wins if
@@ -73,8 +78,11 @@ class GlobalState {
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
   bool isInit = false;
   final ProfileCompiler _profileCompiler = const ProfileCompiler();
+  late final EngineManager engineManager;
 
-  bool get isStart => startTime != null && startTime!.isBeforeNow;
+  bool get isStart => engineManager.isStarted;
+
+  DateTime? get startTime => engineManager.startTime;
 
   AppController get appController => _appController!;
 
@@ -121,48 +129,6 @@ class GlobalState {
   }
 
   String get ua => config.patchClashConfig.globalUa ?? packageInfo.ua;
-
-  Future<void> startUpdateTasks([UpdateTasks? tasks]) async {
-    if (timer != null && timer!.isActive == true) return;
-    if (tasks != null) {
-      this.tasks = tasks;
-    }
-    await executorUpdateTask();
-    timer = Timer(const Duration(seconds: 3), () async {
-      startUpdateTasks();
-    });
-  }
-
-  Future<void> executorUpdateTask() async {
-    for (final task in tasks) {
-      await task();
-    }
-    timer = null;
-  }
-
-  void stopUpdateTasks() {
-    if (timer == null || timer?.isActive == false) return;
-    timer?.cancel();
-    timer = null;
-  }
-
-  Future<void> handleStart([UpdateTasks? tasks]) async {
-    startTime ??= DateTime.now();
-    await clashCore.startListener();
-    await service?.startVpn();
-    startUpdateTasks(tasks);
-  }
-
-  Future updateStartTime() async {
-    startTime = await clashLib?.getRunTime();
-  }
-
-  Future handleStop() async {
-    startTime = null;
-    await clashCore.stopListener();
-    await service?.stopVpn();
-    stopUpdateTasks();
-  }
 
   Future<bool?> showMessage({
     String? title,
@@ -280,21 +246,7 @@ class GlobalState {
     );
   }
 
-  Future<SetupParams> getSetupParams({required ClashConfig pathConfig}) async {
-    final rawProfile = await loadCurrentRawProfile();
-    // Cold-start params must go through the same resolve step as live setup,
-    // otherwise provider-derived network settings can diverge from runtime.
-    final resolvedPatch = resolveProfilePatchConfig(
-      rawProfile: rawProfile,
-      patchConfig: pathConfig,
-    );
-    final runtimePlan = await buildRuntimePlan(
-      rawProfile: rawProfile,
-      patchConfig: resolvedPatch.patchConfig,
-    );
-    applyRuntimePlan(runtimePlan);
-    return runtimePlan.toSetupParams();
-  }
+  Future<void> syncRuntimeStartTime() => engineManager.syncStartTime();
 
   Future<RawProfile?> loadCurrentRawProfile() async {
     final profile = config.currentProfile;
@@ -339,6 +291,11 @@ class GlobalState {
     lastRuntimeConfig = runtimePlan.config;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
   }
+
+  Future<InitParams> _buildInitParams() async => InitParams(
+        homeDir: await appPath.homeDirPath,
+        version: await system.version,
+      );
 
   ProfileCompileContext _buildCompileContext(ClashConfig patchConfig) =>
       ProfileCompileContext(

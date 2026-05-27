@@ -22,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'common/common.dart';
 import 'models/models.dart';
 import 'plugins/vpn.dart';
+import 'product/runtime/product_runtime.dart';
 import 'views/profiles/override_profile.dart';
 
 class AppController {
@@ -29,6 +30,8 @@ class AppController {
   int? lastProfileModified;
   final BuildContext context;
   final WidgetRef _ref;
+  bool _suppressNextRuntimeConfigUpdate = false;
+  bool _runtimeConfigListenerReady = false;
 
   void setupClashConfigDebounce() {
     debouncer.call(FunctionTag.setupClashConfig, () async {
@@ -153,42 +156,81 @@ class AppController {
 
   Future<void> restartCore() async {
     commonPrint.log("restart core");
-    await _applyPendingCoreUpdate();
-    await clashService?.reStart();
-    await _initCore();
-    if (_ref.read(runTimeProvider.notifier).isStart) {
-      await globalState.handleStart();
+    final wasStarted = _ref.read(runTimeProvider.notifier).isStart;
+    final started = await globalState.engineManager.restart(
+      runtimePlanRequest: _buildRuntimePlanRequest(
+        patchConfig: _ref.read(patchClashConfigProvider),
+      ),
+      coldStartPatchConfig: _buildColdStartPatchConfig(
+        _ref.read(patchClashConfigProvider),
+      ),
+      resumeIfStarted: wasStarted,
+      updateTasks: [updateTraffic],
+    );
+    if (wasStarted && started) {
+      await onRuntimeStarted(
+        checkProfileModified: false,
+        updateStatusBarIcon: false,
+      );
+    } else if (wasStarted) {
+      await onRuntimeStopped();
     }
   }
 
   Future<void> updateStatus(bool isStart) async {
-    await StatusBarManager.updateIcon(isConnected: isStart);
-
     if (isStart) {
-      // Initialize foreground notification cache before starting
       initForegroundCache();
-      await globalState.handleStart([updateTraffic]);
-      startRunTimeTimer();
-      final currentLastModified =
-          await _ref.read(currentProfileProvider)?.profileLastModified;
-      if (currentLastModified == null || lastProfileModified == null) {
-        addCheckIpNumDebounce();
+      final started = await globalState.engineManager.start(
+        updateTasks: [updateTraffic],
+      );
+      if (!started) {
+        await StatusBarManager.updateIcon(isConnected: false);
         return;
       }
-      if (currentLastModified <= (lastProfileModified ?? 0)) {
-        addCheckIpNumDebounce();
-        return;
-      }
-      applyProfileDebounce();
+      await onRuntimeStarted(checkProfileModified: true);
     } else {
-      stopRunTimeTimer();
-      await globalState.handleStop();
-      clashCore.resetTraffic();
-      _ref.read(trafficsProvider.notifier).clear();
-      _ref.read(totalTrafficProvider.notifier).value = Traffic();
-      _ref.read(runTimeProvider.notifier).value = null;
-      addCheckIpNumDebounce();
+      await globalState.engineManager.stop();
+      await onRuntimeStopped();
     }
+  }
+
+  Future<void> onRuntimeStarted({
+    required bool checkProfileModified,
+    bool updateStatusBarIcon = true,
+  }) async {
+    if (updateStatusBarIcon) {
+      await StatusBarManager.updateIcon(isConnected: true);
+    }
+
+    startRunTimeTimer();
+    if (!checkProfileModified) {
+      return;
+    }
+
+    final currentLastModified =
+        await _ref.read(currentProfileProvider)?.profileLastModified;
+    if (currentLastModified == null || lastProfileModified == null) {
+      addCheckIpNumDebounce();
+      return;
+    }
+    if (currentLastModified <= (lastProfileModified ?? 0)) {
+      addCheckIpNumDebounce();
+      return;
+    }
+    applyProfileDebounce();
+  }
+
+  Future<void> onRuntimeStopped({bool updateStatusBarIcon = true}) async {
+    if (updateStatusBarIcon) {
+      await StatusBarManager.updateIcon(isConnected: false);
+    }
+
+    stopRunTimeTimer();
+    clashCore.resetTraffic();
+    _ref.read(trafficsProvider.notifier).clear();
+    _ref.read(totalTrafficProvider.notifier).value = Traffic();
+    _ref.read(runTimeProvider.notifier).value = null;
+    addCheckIpNumDebounce();
   }
 
   Timer? _runTimeTimer;
@@ -222,6 +264,36 @@ class AppController {
     _ref.read(trafficsProvider.notifier).addTraffic(traffic);
     _ref.read(totalTrafficProvider.notifier).value =
         await clashCore.getTotalTraffic();
+  }
+
+  void markRuntimeConfigListenerReady() {
+    _runtimeConfigListenerReady = true;
+  }
+
+  void markRuntimeConfigListenerNotReady() {
+    _runtimeConfigListenerReady = false;
+    _suppressNextRuntimeConfigUpdate = false;
+  }
+
+  bool consumeSuppressedRuntimeConfigUpdate() {
+    if (!_suppressNextRuntimeConfigUpdate) {
+      return false;
+    }
+    _suppressNextRuntimeConfigUpdate = false;
+    return true;
+  }
+
+  void syncPatchClashConfigFromRuntime(ClashConfig patchConfig) {
+    if (_runtimeConfigListenerReady) {
+      _suppressNextRuntimeConfigUpdate = true;
+    }
+    _ref
+        .read(patchClashConfigProvider.notifier)
+        .updateState((state) => patchConfig);
+    if (patchConfig.mode == Mode.global) {
+      updateCurrentGroupName(GroupName.GLOBAL.name);
+    }
+    addCheckIpNumDebounce();
   }
 
   Future<void> addProfile(Profile profile) async {
@@ -613,25 +685,29 @@ class AppController {
 
   Future<void> _updateClashConfig() async {
     final updateParams = _ref.read(updateParamsProvider);
-    final res = await _requestAdmin(updateParams.tun.enable);
-    if (res.isError) {
+    final updated = await globalState.engineManager.updateConfig(
+      updateParams,
+      resolveTunAccess: _resolveTunAccess,
+      coldStartPatchConfig: _buildColdStartPatchConfig(
+        _ref.read(patchClashConfigProvider),
+      ),
+    );
+    if (!updated) {
       return;
     }
-    final realTunEnable = _ref.read(realTunEnableProvider);
-    final message = await clashCore.updateConfig(
-      updateParams.copyWith.tun(enable: realTunEnable),
-    );
-    if (message.isNotEmpty) throw message;
   }
 
-  Future<Result<bool>> _requestAdmin(bool enableTun) async {
+  Future<ResolvedTunAccess> _resolveTunAccess({
+    required bool requestedTunEnable,
+  }) async {
+    var enableTun = requestedTunEnable;
     final realTunEnable = _ref.read(realTunEnableProvider);
     if (enableTun != realTunEnable && realTunEnable == false) {
       final code = await system.authorizeCore();
       switch (code) {
         case AuthorizeCode.success:
           await restartCore();
-          return Result.error("");
+          return const ResolvedTunAccess.abort();
         case AuthorizeCode.none:
           break;
         case AuthorizeCode.error:
@@ -640,56 +716,65 @@ class AppController {
       }
     }
     _ref.read(realTunEnableProvider.notifier).value = enableTun;
-    return Result.success(enableTun);
+    return ResolvedTunAccess.proceed(enableTun: enableTun);
   }
 
-  Future<void> setupClashConfig() async {
+  Future<bool> setupClashConfig() async {
     final commonScaffoldState = globalState.homeScaffoldKey.currentState;
-    if (commonScaffoldState?.mounted != true) return;
-    await commonScaffoldState?.loadingRun(() async {
-      await _setupClashConfig();
-    });
+    if (commonScaffoldState?.mounted != true) return false;
+    return await commonScaffoldState?.loadingRun(() async {
+          return _setupClashConfig();
+        }) ??
+        false;
   }
 
-  Future<void> _setupClashConfig() async {
-    await _ref.read(currentProfileProvider)?.checkAndUpdate();
-    var patchConfig = _ref.read(patchClashConfigProvider);
+  EngineRuntimePlanRequest _buildRuntimePlanRequest({
+    required ClashConfig patchConfig,
+    bool refreshProfile = true,
+  }) =>
+      EngineRuntimePlanRequest(
+        patchConfig: patchConfig,
+        refreshProfile: refreshProfile
+            ? () async {
+                await _ref.read(currentProfileProvider)?.checkAndUpdate();
+              }
+            : null,
+        resolveTunAccess: _resolveTunAccess,
+        onPatchConfigResolved: (resolvedPatchConfig) {
+          _ref
+              .read(patchClashConfigProvider.notifier)
+              .updateState((state) => resolvedPatchConfig);
+        },
+      );
 
-    final rawProfile = await globalState.loadCurrentRawProfile();
-    final resolvedPatch = globalState.resolveProfilePatchConfig(
-      rawProfile: rawProfile,
-      patchConfig: patchConfig,
+  ClashConfig _buildColdStartPatchConfig(ClashConfig patchConfig) =>
+      patchConfig.copyWith.tun(enable: false);
+
+  Future<bool> _setupClashConfig() async {
+    final appliedRuntimePlan = await globalState.engineManager.setupRuntimePlan(
+      _buildRuntimePlanRequest(
+        patchConfig: _ref.read(patchClashConfigProvider),
+      ),
+      coldStartPatchConfig: _buildColdStartPatchConfig(
+        _ref.read(patchClashConfigProvider),
+      ),
     );
-    if (resolvedPatch.patchConfig != patchConfig) {
-      patchConfig = resolvedPatch.patchConfig;
-      _ref
-          .read(patchClashConfigProvider.notifier)
-          .updateState((state) => patchConfig);
+    if (appliedRuntimePlan == null) {
+      return false;
     }
 
-    final res = await _requestAdmin(patchConfig.tun.enable);
-    if (res.isError) {
-      return;
-    }
-    final realTunEnable = _ref.read(realTunEnableProvider);
-    final realPatchConfig = patchConfig.copyWith.tun(enable: realTunEnable);
-    final runtimePlan = await globalState.buildRuntimePlan(
-      rawProfile: rawProfile,
-      patchConfig: realPatchConfig,
-    );
-    globalState.applyRuntimePlan(runtimePlan);
-    final message = await clashCore.setupConfig(runtimePlan.toSetupParams());
     lastProfileModified = await _ref.read(
       currentProfileProvider.select((state) => state?.profileLastModified),
     );
-    if (message.isNotEmpty) {
-      throw message;
-    }
+    return true;
   }
 
   Future _applyProfile() async {
     clashCore.requestGc();
-    await setupClashConfig();
+    final isConfigured = await setupClashConfig();
+    if (!isConfigured) {
+      return;
+    }
     await updateGroups();
     await updateProviders();
     initForegroundCache();
@@ -913,7 +998,8 @@ class AppController {
   Future handleClear() async {
     try {
       // Stop proxy/VPN first
-      await globalState.handleStop();
+      await globalState.engineManager.stop();
+      await onRuntimeStopped();
       commonPrint.log("stopped proxy/VPN");
 
       // Stop core
@@ -1038,65 +1124,14 @@ class AppController {
     await handleExit();
   }
 
-  Future<void> _applyPendingCoreUpdate() async {
-    final pending = File(appPath.corePendingPath);
-    if (!await pending.exists()) return;
-    commonPrint.log("Applying pending core update...");
-    try {
-      final target = File(appPath.corePath);
-      if (await target.exists()) {
-        for (var i = 0; i < 10; i++) {
-          try {
-            await target.delete();
-            break;
-          } catch (_) {
-            await Future.delayed(const Duration(milliseconds: 500));
-          }
-        }
-      }
-      await pending.rename(appPath.corePath);
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', appPath.corePath]);
-      }
-      commonPrint.log("Pending core update applied successfully");
-    } catch (e) {
-      commonPrint.log("Failed to apply pending core update: $e");
-    }
-  }
-
-  Future<void> _initCore() async {
-    await _applyPendingCoreUpdate();
-    final isInit = await clashCore.isInit;
-    if (!isInit) {
-      await clashCore.init();
-      await clashCore.setState(globalState.getCoreState());
-    }
-    await applyProfile();
-    unawaited(_persistColdStartParams());
-  }
-
-  Future<void> _persistColdStartParams() async {
-    try {
-      final clashConfig = globalState.config.patchClashConfig.copyWith.tun(
-        enable: false,
-      );
-      final setupParams = await globalState.getSetupParams(
-        pathConfig: clashConfig,
-      );
-      unawaited(
-        clashLib?.saveParamsForColdStart(
-          initParams: InitParams(
-            homeDir: await appPath.homeDirPath,
-            version: await system.version,
-          ),
-          setupParams: setupParams,
-          state: globalState.getCoreState(),
+  Future<bool> _initCore() => globalState.engineManager.initializeCore(
+        runtimePlanRequest: _buildRuntimePlanRequest(
+          patchConfig: _ref.read(patchClashConfigProvider),
+        ),
+        coldStartPatchConfig: _buildColdStartPatchConfig(
+          _ref.read(patchClashConfigProvider),
         ),
       );
-    } catch (e) {
-      commonPrint.log("persistColdStartParams: $e");
-    }
-  }
 
   Future<void> init() async {
     FlutterError.onError = (details) {
@@ -1131,7 +1166,7 @@ class AppController {
 
   Future<void> _initStatus() async {
     if (Platform.isAndroid) {
-      await globalState.updateStartTime();
+      await globalState.syncRuntimeStartTime();
     }
     final status = globalState.isStart == true
         ? true

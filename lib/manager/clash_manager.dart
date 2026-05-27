@@ -1,6 +1,5 @@
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/common/file_logger.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/app.dart';
@@ -11,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ClashManager extends ConsumerStatefulWidget {
-
   const ClashManager({
     super.key,
     required this.child,
@@ -31,6 +29,7 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   void initState() {
     super.initState();
     clashMessage.addListener(this);
+    globalState.appController.markRuntimeConfigListenerReady();
     ref.listenManual(needSetupProvider, (prev, next) {
       if (prev != next) {
         globalState.appController.handleChangeProfile();
@@ -43,6 +42,9 @@ class _ClashContainerState extends ConsumerState<ClashManager>
     });
     ref.listenManual(updateParamsProvider, (prev, next) {
       if (prev != next) {
+        if (globalState.appController.consumeSuppressedRuntimeConfigUpdate()) {
+          return;
+        }
         globalState.appController.updateClashConfigDebounce();
       }
     });
@@ -62,6 +64,7 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   @override
   Future<void> dispose() async {
     clashMessage.removeListener(this);
+    globalState.appController.markRuntimeConfigListenerNotReady();
     super.dispose();
   }
 
@@ -82,10 +85,10 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   @override
   void onLog(Log log) {
     ref.read(logsProvider.notifier).addLog(log);
-    
+
     // Write core logs to file
     fileLogger.log("[${log.logLevel.name.toUpperCase()}] ${log.payload}");
-    
+
     if (log.logLevel == LogLevel.error) {
       globalState.showNotifier(log.payload);
     }
