@@ -193,7 +193,7 @@ class FlVpnService : VpnService(), IBaseService {
     override suspend fun handleStart(options: VpnOptions) {
         State.options = options
         val builder = Builder()
-            .setSession("FlClashX")
+            .setSession("FlClashM")
         for (dns in options.dnsServers.ifEmpty { listOf("8.8.8.8", "1.1.1.1") }) {
             builder.addDnsServer(dns)
         }

@@ -608,7 +608,7 @@ class BuildCommand extends Command {
           .replaceAll("{{APP_ID}}", "728B3532-C74B-4870-9068-BE70FE12A3E6")
           .replaceAll("{{APP_VERSION}}", version)
           .replaceAll("{{DISPLAY_NAME}}", Build.appName)
-          .replaceAll("{{PUBLISHER_NAME}}", "pluralplay")
+          .replaceAll("{{PUBLISHER_NAME}}", "makriq")
           .replaceAll("{{PUBLISHER_URL}}", "https://github.com/makriq-org/FlClashM")
           .replaceAll("{{INSTALL_DIR_NAME}}", "{autopf}\\${Build.appName}")
           .replaceAll("{{OUTPUT_BASE_FILENAME}}", "${Build.appName}-windows-$archName-setup")
@@ -716,17 +716,17 @@ class BuildCommand extends Command {
       "Icon=$appName\n"
       "Terminal=false\n"
       "Categories=Network;\n"
-      "Keywords=FlClashX;Clash;Proxy;\n"
+      "Keywords=FlClashM;Clash;Proxy;\n"
       "StartupNotify=true\n",
     );
     File(join(debControlDir, "control")).writeAsStringSync(
-      "Package: flclashx\n"
+      "Package: flclashm\n"
       "Version: $version\n"
       "Section: x11\n"
       "Priority: optional\n"
       "Architecture: $debArch\n"
       "Depends: libayatana-appindicator3-dev, libkeybinder-3.0-dev\n"
-      "Maintainer: pluralplay <mail@pluralplay.rw>\n"
+      "Maintainer: makriq <141617622+makriq@users.noreply.github.com>\n"
       "Description: $appName\n",
     );
     final debPath = join(Build.distPath, "$appName-linux-$archName.deb");
@@ -755,19 +755,19 @@ class BuildCommand extends Command {
         "Icon=$appName\n"
         "Terminal=false\n"
         "Categories=Network;\n"
-        "Keywords=FlClashX;Clash;Proxy;\n"
+        "Keywords=FlClashM;Clash;Proxy;\n"
         "StartupNotify=true\n",
       );
 
       final specPath = join(current, "build", "$appName.spec");
       File(specPath).writeAsStringSync(
-        "Name: flclashx\n"
+        "Name: flclashm\n"
         "Version: $version\n"
         "Release: 1\n"
         "Summary: $appName\n"
         "License: Other\n"
         "Group: Applications/Internet\n"
-        "Packager: pluralplay <mail@pluralplay.rw>\n"
+        "Packager: makriq <141617622+makriq@users.noreply.github.com>\n"
         "AutoReqProv: no\n"
         "\n"
         "%description\n"
@@ -839,7 +839,7 @@ class BuildCommand extends Command {
         "Icon=$appName\n"
         "Terminal=false\n"
         "Categories=Network;\n"
-        "Keywords=FlClashX;Clash;Proxy;\n"
+        "Keywords=FlClashM;Clash;Proxy;\n"
         "StartupNotify=true\n",
       );
       Build.copyFile(join(appShareDesktop, "com.follow.clashx.desktop"), join(appDir, "com.follow.clashx.desktop"));

@@ -240,8 +240,8 @@ jobs:
           git add CHANGELOG.md
           if ! git diff --cached --quiet; then
             echo "Commit pushing"
-            git config --local user.email "flclashx@pluralplay.ru"
-            git config --local user.name "pluralplay"
+            git config --local user.email "141617622+makriq@users.noreply.github.com"
+            git config --local user.name "makriq"
             git commit -m "Update changelog"
             git push
             if [ $? -eq 0 ]; then
@@ -288,7 +288,7 @@ jobs:
           # Determine previous tag based on release type
           if [ "${{ env.IS_STABLE }}" == "true" ]; then
             # For stable: get latest stable release from API
-            preTag=$(curl --silent "https://api.github.com/repos/pluralplay/FlClashX/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+            preTag=$(curl --silent "https://api.github.com/repos/makriq-org/FlClashM/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
           else
             # For pre-release: get the latest pre-release tag (last tag with '-' in name before current)
             preTag=""
@@ -300,7 +300,7 @@ jobs:
             done
             # If no previous pre-release found, use latest stable
             if [ -z "$preTag" ]; then
-              preTag=$(curl --silent "https://api.github.com/repos/pluralplay/FlClashX/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+              preTag=$(curl --silent "https://api.github.com/repos/makriq-org/FlClashM/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
             fi
           fi
           

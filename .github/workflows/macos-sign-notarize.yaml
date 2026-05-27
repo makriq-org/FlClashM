@@ -151,7 +151,7 @@ jobs:
           DMG_FILE=$(find ./dist -name "*.dmg" -type f | head -n 1)
           BASENAME=$(basename "$DMG_FILE")
           
-          # FlClashX-0.3.0-macos-arm64.dmg -> FlClashX-macos-arm64.dmg
+          # FlClashM-0.3.0-macos-arm64.dmg -> FlClashM-macos-arm64.dmg
           NEW_NAME=$(echo "$BASENAME" | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+(-[^-]+)?-/-/')
           
           if [ "$BASENAME" != "$NEW_NAME" ]; then

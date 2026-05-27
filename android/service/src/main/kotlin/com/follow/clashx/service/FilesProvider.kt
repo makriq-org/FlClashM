@@ -41,7 +41,7 @@ class FilesProvider : DocumentsProvider() {
         cursor.newRow().apply {
             add(DocumentsContract.Root.COLUMN_ROOT_ID, "flclashx")
             add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY)
-            add(DocumentsContract.Root.COLUMN_TITLE, "FlClashX")
+            add(DocumentsContract.Root.COLUMN_TITLE, "FlClashM")
             add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, docIdOf(rootDir))
             add(DocumentsContract.Root.COLUMN_AVAILABLE_BYTES, rootDir.usableSpace)
         }

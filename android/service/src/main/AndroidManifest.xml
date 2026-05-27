@@ -18,7 +18,7 @@
             android:process=":remote">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FlClashX AIDL core process keeper" />
+                android:value="FlClashM AIDL core process keeper" />
         </service>
 
         <service
@@ -28,7 +28,7 @@
             android:process=":remote">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FlClashX proxy core running without VPN tunnel" />
+                android:value="FlClashM proxy core running without VPN tunnel" />
         </service>
 
         <service
@@ -42,7 +42,7 @@
             </intent-filter>
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FlClashX VPN tunnel service" />
+                android:value="FlClashM VPN tunnel service" />
         </service>
 
         <provider

@@ -68,7 +68,7 @@ fun Service.ensureNotificationChannel() {
     }
 }
 
-fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashX"): android.app.Notification {
+fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashM"): android.app.Notification {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     val contentIntent = if (launchIntent != null) {
         android.app.PendingIntent.getActivity(
@@ -95,7 +95,7 @@ fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashX"): 
         .build()
 }
 
-fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashX") {
+fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM") {
     ensureNotificationChannel()
     val notification = buildServiceNotification(iconRes, title)
     val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

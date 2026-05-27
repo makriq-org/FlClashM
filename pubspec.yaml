@@ -119,8 +119,8 @@ flutter_launcher_icons:
   adaptive_icon_monochrome: "assets/images/icon_white.png"
 
 msix_config:
-  display_name: FlClashX
-  publisher_display_name: pluralplay
+  display_name: FlClashM
+  publisher_display_name: makriq
   publisher: CN=F778E60B-B797-4F7E-AE56-743F6A0F5B32
   identity_name: pluralplay.FlClashX
   msix_version: 0.4.0.0

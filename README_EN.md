@@ -4,15 +4,13 @@
 
 </div>
 
-## FlClashX
+## FlClashM
 
-[![Downloads](https://img.shields.io/github/downloads/pluralplay/FlClashX/total?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX/releases/)
-[![Last Version](https://img.shields.io/github/release/pluralplay/FlClashX/all.svg?style=flat-square)](https://github.com/pluralplay/FlClashX/releases/)
-[![License](https://img.shields.io/github/license/pluralplay/FlClashX?style=flat-square)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
+[![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
+[![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-[![Channel](https://img.shields.io/badge/Telegram-Chat-blue?style=flat-square&logo=telegram)](https://t.me/FlClashX)
-
-A fork of the multi-platform proxy client FlClash based on ClashMeta, simple and easy to use, open source and ad-free.
+`FlClashM` is a product client based on `FlClashX`, inheriting from the multi-platform FlClash proxy client built on ClashMeta.
 
 on Desktop:
 
@@ -127,7 +125,7 @@ Usage:
 Usage:
 
 ```bash
-    flclashx-servicename: FlClashX
+    flclashx-servicename: FlClashM
 ```
 
 - flclashx-servicelogo: Your logo used in the ServiceInfo widget (works only with active flclashx-servicename header). Supports png/svg.
@@ -222,7 +220,7 @@ The following actions are supported:
 
 ## Download
 
-<a href="https://github.com/pluralplay/FlClashX/releases"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" width="200px"/></a>
+<a href="https://github.com/makriq-org/FlClashM/releases"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" width="200px"/></a>
 
 ## Star
 

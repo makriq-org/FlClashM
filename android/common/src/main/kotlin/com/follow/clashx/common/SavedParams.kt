@@ -65,7 +65,7 @@ object SavedParams {
     }
 
     fun loadNotificationTitle(): String =
-        runCatching { notifTitleFile.readText().trim() }.getOrDefault("FlClashX")
+        runCatching { notifTitleFile.readText().trim() }.getOrDefault("FlClashM")
 
     private fun writeAtomic(target: File, content: String) {
         val tmp = File(target.parentFile, "${target.name}.tmp")
