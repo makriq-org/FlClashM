@@ -45,6 +45,8 @@ Product-level security boundary теперь выражена типами:
 - `flclashx-androidsecure` считается legacy и не участвует в обязательной policy
 - `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints
 - branding/custom view headers не могут менять runtime floor
+- display/customization header parsing локализован в `lib/product/subscription/**`
+- raw provider headers не должны использоваться как product API в base/UI слоях
 
 ## Advisory profile hints
 

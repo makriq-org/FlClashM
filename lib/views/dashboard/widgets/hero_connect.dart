@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'dart:convert';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
@@ -104,10 +102,13 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
     }
 
     final profile = ref.watch(currentProfileProvider);
-    final headers = profile?.providerHeaders ?? {};
-    final serviceName = _decodeBase64(headers['flclashx-servicename']);
-    final logoUrl = _decodeBase64(headers['flclashx-servicelogo']);
-    final announceText = _decodeAnnounce(headers['announce']);
+    final displayHints = ref.watch(currentProductDisplayHintsProvider);
+    final serviceName = displayHints.serviceName;
+    final logoUrl = displayHints.serviceLogoUrl.isEmpty
+        ? null
+        : displayHints.serviceLogoUrl;
+    final announceText = displayHints.announcement;
+    final supportUrl = displayHints.supportUrlOrNull;
     final mode = ref.watch(patchClashConfigProvider.select((s) => s.mode));
     final globalModeEnabled = ref.watch(globalModeEnabledProvider);
 
@@ -123,18 +124,20 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
           width: 1.5,
         ),
         color: _isStart
-            ? Color.lerp(colorScheme.surfaceContainerHigh, colorScheme.primaryContainer, 0.15)!.withValues(alpha: 0.75)
+            ? Color.lerp(colorScheme.surfaceContainerHigh,
+                    colorScheme.primaryContainer, 0.15)!
+                .withValues(alpha: 0.75)
             : colorScheme.surfaceContainerHigh.withValues(alpha: 0.85),
       ),
       child: Column(
         children: [
           // Announce banner
-          if (announceText != null && announceText.isNotEmpty) ...[
+          if (announceText.isNotEmpty) ...[
             _AnnounceBanner(text: announceText),
             const SizedBox(height: 12),
           ],
           // Service badge full width
-          if (serviceName != null && serviceName.isNotEmpty)
+          if (serviceName.isNotEmpty)
             _ServiceBadge(name: serviceName, logoUrl: logoUrl),
           const SizedBox(height: 16),
           // Connect ring center, update left, support right
@@ -162,21 +165,24 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
                       icon: Icons.refresh_rounded,
                       isLoading: profile.isUpdating,
                       color: colorScheme.onSecondaryContainer,
-                      bgColor: colorScheme.secondaryContainer.withValues(alpha: 0.8),
+                      bgColor:
+                          colorScheme.secondaryContainer.withValues(alpha: 0.8),
                       onTap: profile.isUpdating
                           ? null
-                          : () => globalState.appController.updateProfile(profile),
+                          : () =>
+                              globalState.appController.updateProfile(profile),
                     ),
                   ),
                 ],
-                if (headers['support-url'] != null && headers['support-url']!.isNotEmpty)
+                if (supportUrl != null && supportUrl.isNotEmpty)
                   Positioned(
                     right: 0,
                     child: _IconBtn(
                       icon: Icons.contact_support,
                       color: colorScheme.onSecondaryContainer,
-                      bgColor: colorScheme.secondaryContainer.withValues(alpha: 0.8),
-                      onTap: () => globalState.openUrl(headers['support-url']!),
+                      bgColor:
+                          colorScheme.secondaryContainer.withValues(alpha: 0.8),
+                      onTap: () => globalState.openUrl(supportUrl),
                     ),
                   ),
               ],
@@ -196,14 +202,18 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: GestureDetector(
-                      onTap: () => globalState.appController.toPage(PageLabel.proxies),
+                      onTap: () =>
+                          globalState.appController.toPage(PageLabel.proxies),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          color: colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.5),
                           border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.7),
                             width: 1.5,
                           ),
                         ),
@@ -279,12 +289,14 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
                   color: colorScheme.outlineVariant.withValues(alpha: 0.7),
                   width: 1.5,
                 ),
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_rounded, size: 20, color: colorScheme.onSurfaceVariant),
+                  Icon(Icons.add_rounded,
+                      size: 20, color: colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
                     appLocalizations.addProfile,
@@ -383,7 +395,9 @@ class _ConnectRing extends StatelessWidget {
                                 fontFamily: FontFamily.jetBrainsMono.value,
                               ),
                             ),
-                            Icon(Icons.swap_vert_rounded, size: 16, color: activeColor.withValues(alpha: 0.5)),
+                            Icon(Icons.swap_vert_rounded,
+                                size: 16,
+                                color: activeColor.withValues(alpha: 0.5)),
                             Text(
                               '${lastTraffic!.down}',
                               style: context.textTheme.bodySmall?.copyWith(
@@ -462,7 +476,6 @@ class _RingPainter extends CustomPainter {
       old.progress != progress || old.color != color;
 }
 
-
 class _IconBtn extends StatelessWidget {
   const _IconBtn({
     required this.icon,
@@ -488,8 +501,10 @@ class _IconBtn extends StatelessWidget {
           child: Center(
             child: isLoading
                 ? SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                    width: 18,
+                    height: 18,
+                    child:
+                        CircularProgressIndicator(strokeWidth: 2, color: color),
                   )
                 : Icon(icon, size: 20, color: color),
           ),
@@ -509,11 +524,13 @@ class _NavMenuButton extends StatelessWidget {
 
   void _show(BuildContext context) {
     final button = context.findRenderObject()! as RenderBox;
-    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset(0, button.size.height), ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
       ),
       Offset.zero & overlay.size,
     );
@@ -521,16 +538,18 @@ class _NavMenuButton extends StatelessWidget {
       context: context,
       position: position,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _pages.map((p) => PopupMenuItem(
-        value: p.$1,
-        child: Row(
-          children: [
-            Icon(p.$2, size: 18, color: colorScheme.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Text(Intl.message(p.$1.name)),
-          ],
-        ),
-      )).toList(),
+      items: _pages
+          .map((p) => PopupMenuItem(
+                value: p.$1,
+                child: Row(
+                  children: [
+                    Icon(p.$2, size: 18, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Text(Intl.message(p.$1.name)),
+                  ],
+                ),
+              ))
+          .toList(),
     ).then((value) {
       if (value != null) globalState.appController.toPage(value);
     });
@@ -538,19 +557,20 @@ class _NavMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: () => _show(context),
-    child: Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.8),
-      ),
-      child: Center(
-        child: Icon(Icons.settings_rounded, size: 20, color: colorScheme.onSecondaryContainer),
-      ),
-    ),
-  );
+        onTap: () => _show(context),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colorScheme.secondaryContainer.withValues(alpha: 0.8),
+          ),
+          child: Center(
+            child: Icon(Icons.settings_rounded,
+                size: 20, color: colorScheme.onSecondaryContainer),
+          ),
+        ),
+      );
 }
 
 class _ModeButton extends StatelessWidget {
@@ -560,26 +580,28 @@ class _ModeButton extends StatelessWidget {
   final ColorScheme colorScheme;
 
   static IconData _modeIcon(Mode m) => switch (m) {
-    Mode.rule => Icons.rule_rounded,
-    Mode.global => Icons.public_rounded,
-    Mode.direct => Icons.arrow_forward_rounded,
-  };
+        Mode.rule => Icons.rule_rounded,
+        Mode.global => Icons.public_rounded,
+        Mode.direct => Icons.arrow_forward_rounded,
+      };
 
   static const _modes = [Mode.rule, Mode.global];
 
   static String _modeName(Mode m) => switch (m) {
-    Mode.rule => Intl.message('rule'),
-    Mode.global => Intl.message('global'),
-    Mode.direct => Intl.message('direct'),
-  };
+        Mode.rule => Intl.message('rule'),
+        Mode.global => Intl.message('global'),
+        Mode.direct => Intl.message('direct'),
+      };
 
   void _showMenu(BuildContext context) {
     final RenderBox button = context.findRenderObject()! as RenderBox;
-    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset(0, button.size.height), ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero),
+            ancestor: overlay),
       ),
       Offset.zero & overlay.size,
     );
@@ -587,26 +609,31 @@ class _ModeButton extends StatelessWidget {
       context: context,
       position: position,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _modes.map((m) => PopupMenuItem(
-        value: m,
-        child: Row(
-          children: [
-            Icon(
-              _modeIcon(m),
-              size: 18,
-              color: m == mode ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _modeName(m),
-              style: TextStyle(
-                fontWeight: m == mode ? FontWeight.w600 : FontWeight.w400,
-                color: m == mode ? colorScheme.primary : null,
-              ),
-            ),
-          ],
-        ),
-      )).toList(),
+      items: _modes
+          .map((m) => PopupMenuItem(
+                value: m,
+                child: Row(
+                  children: [
+                    Icon(
+                      _modeIcon(m),
+                      size: 18,
+                      color: m == mode
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _modeName(m),
+                      style: TextStyle(
+                        fontWeight:
+                            m == mode ? FontWeight.w600 : FontWeight.w400,
+                        color: m == mode ? colorScheme.primary : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
     ).then((value) {
       if (value != null) globalState.appController.changeMode(value);
     });
@@ -624,7 +651,8 @@ class _ModeButton extends StatelessWidget {
           color: colorScheme.secondaryContainer.withValues(alpha: 0.8),
         ),
         child: Center(
-          child: Icon(_modeIcon(mode), size: 20, color: colorScheme.onSecondaryContainer),
+          child: Icon(_modeIcon(mode),
+              size: 20, color: colorScheme.onSecondaryContainer),
         ),
       ),
     );
@@ -657,29 +685,6 @@ class _AnnounceBanner extends StatelessWidget {
   }
 }
 
-String? _decodeAnnounce(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return null;
-  final decoded = _decodeBase64(trimmed);
-  if (decoded == null || decoded.trim().isEmpty) return null;
-  return decoded.trim();
-}
-
-String? _decodeBase64(String? value) {
-  if (value == null || value.trim().isEmpty) return null;
-  var text = value.trim();
-  if (text.startsWith('base64:')) text = text.substring(7).trim();
-  if (text.isEmpty) return null;
-  try {
-    final normalized = base64.normalize(text);
-    final decoded = utf8.decode(base64.decode(normalized)).trim();
-    return decoded.isEmpty ? null : decoded;
-  } catch (_) {
-    return value.trim().isEmpty ? null : value.trim();
-  }
-}
-
 class _ServiceBadge extends StatelessWidget {
   const _ServiceBadge({required this.name, this.logoUrl});
 
@@ -705,7 +710,8 @@ class _ServiceBadge extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(5),
               child: logoUrl!.toLowerCase().endsWith('.svg')
-                  ? SvgPicture.network(logoUrl!, width: logoSize, height: logoSize)
+                  ? SvgPicture.network(logoUrl!,
+                      width: logoSize, height: logoSize)
                   : CachedNetworkImage(
                       imageUrl: logoUrl!,
                       width: logoSize,
@@ -731,32 +737,4 @@ class _ServiceBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SpeedLabel extends StatelessWidget {
-  const _SpeedLabel({
-    required this.icon,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: context.textTheme.bodySmall?.copyWith(
-              color: color,
-              fontFamily: FontFamily.jetBrainsMono.value,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(icon, size: 14, color: color),
-        ],
-      );
 }

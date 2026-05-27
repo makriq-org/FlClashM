@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/providers/providers.dart';
@@ -10,17 +9,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 class ServiceInfoWidget extends ConsumerWidget {
   const ServiceInfoWidget({super.key});
-
-  String? _decodeBase64IfNeeded(String? value) {
-    if (value == null || value.isEmpty) return value;
-
-    try {
-      final decoded = utf8.decode(base64.decode(value));
-      return decoded;
-    } catch (e) {
-      return value;
-    }
-  }
 
   Widget _buildLogo(BuildContext context, String? logoUrl) {
     const logoSize = 44.0;
@@ -75,18 +63,12 @@ class ServiceInfoWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(currentProfileProvider);
+    final displayHints = ref.watch(currentProductDisplayHintsProvider);
+    final serviceName = displayHints.serviceName;
+    final supportUrl = displayHints.supportUrlOrNull;
+    final logoUrl = displayHints.serviceLogoUrl;
 
-    if (profile == null) {
-      return const SizedBox.shrink();
-    }
-
-    final headers = profile.providerHeaders;
-    final serviceName = _decodeBase64IfNeeded(headers['flclashx-servicename']);
-    final supportUrl = headers['support-url'];
-    final logoUrl = _decodeBase64IfNeeded(headers['flclashx-servicelogo']);
-
-    if (serviceName == null || serviceName.isEmpty) {
+    if (serviceName.isEmpty) {
       return const SizedBox.shrink();
     }
 

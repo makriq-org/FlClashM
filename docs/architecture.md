@@ -23,6 +23,7 @@
 - `AppBootstrap`
 - `ProductPlatformProfile`
 - `AndroidEntrypoint`
+- `ProductProviderAdvisory`
 - `ProductProfilePipeline`
 - `ProfileCompiler`
 - `SecurityPolicy` / `AndroidSecurityPolicy`
@@ -107,8 +108,9 @@
 ## Thin consumers
 
 - `GlobalState` теперь только грузит `RawProfile`, строит локальный context для product pipeline и проецирует compiled metadata в UI-facing notifiers.
-- `AppController` остается UI/runtime consumer: запускает manager, делегирует Android platform policies и не собирает runtime config сам.
+- `AppController` остается UI/runtime consumer: запускает manager, делегирует Android platform policies и применяет typed product advisory patch, не разбирая raw provider headers.
 - `AndroidEntrypoint` обрабатывает tile intents и вызывает product/runtime boundary.
+- `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 
 ## Android-only правила
 

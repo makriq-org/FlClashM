@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:emoji_regex/emoji_regex.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/providers/providers.dart';
@@ -43,7 +42,8 @@ class AnnounceWidget extends ConsumerWidget {
 
     for (final match in urlPattern.allMatches(text)) {
       if (match.start > lastIndex) {
-        spans.addAll(_emojiAware(text.substring(lastIndex, match.start), baseStyle));
+        spans.addAll(
+            _emojiAware(text.substring(lastIndex, match.start), baseStyle));
       }
       final url = match.group(0)!;
       spans.add(TextSpan(
@@ -64,29 +64,10 @@ class AnnounceWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(currentProfileProvider);
-
-    if (profile == null) {
-      return const SizedBox.shrink();
-    }
-
-    final encodedText = profile.providerHeaders['announce'];
-    String? announceText;
-
-    if (encodedText != null && encodedText.isNotEmpty) {
-      var textToDecode = encodedText;
-      if (encodedText.startsWith('base64:')) {
-        textToDecode = encodedText.substring(7);
-      }
-      try {
-        final normalized = base64.normalize(textToDecode);
-        announceText = utf8.decode(base64.decode(normalized));
-      } catch (e) {
-        announceText = encodedText;
-      }
-    }
-
-    if (announceText == null || announceText.isEmpty) {
+    final announceText = ref.watch(
+      currentProductDisplayHintsProvider.select((state) => state.announcement),
+    );
+    if (announceText.isEmpty) {
       return const SizedBox.shrink();
     }
 

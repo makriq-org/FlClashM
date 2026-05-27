@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../product/platform/platform_profile.dart';
+import '../product/subscription/product_subscription.dart';
 import 'app.dart';
 import 'config.dart';
 
@@ -439,39 +440,64 @@ Profile? currentProfile(Ref ref) {
   );
 }
 
-@riverpod
-bool globalModeEnabled(Ref ref) {
-  final profile = ref.watch(currentProfileProvider);
-  final value = profile?.providerHeaders['flclashx-globalmode'];
-  return value?.toLowerCase() != 'false';
-}
+final currentProductAdvisoryProvider =
+    Provider.autoDispose<ProductProviderAdvisory>((ref) =>
+        ProductProviderAdvisory.fromProfile(ref.watch(currentProfileProvider)));
+
+final currentProductDisplayHintsProvider =
+    Provider.autoDispose<ProductDisplayHints>(
+        (ref) => ref.watch(currentProductAdvisoryProvider).display);
+
+final effectiveNewDashboardProvider = Provider.autoDispose<bool>((ref) {
+  final settingValue = ref.watch(
+    appSettingProvider.select((state) => state.newDashboard),
+  );
+  final productValue = ref.watch(
+    currentProductDisplayHintsProvider.select((state) => state.newDashboard),
+  );
+  return settingValue ?? productValue;
+});
+
+final dashboardEditingLockedProvider = Provider.autoDispose<bool>((ref) {
+  final effectiveNewDashboard = ref.watch(effectiveNewDashboardProvider);
+  final productHints = ref.watch(currentProductDisplayHintsProvider);
+  return productHints.denyDashboardEditing || effectiveNewDashboard;
+});
 
 @riverpod
-bool hasAnnounceData(Ref ref) {
-  final profile = ref.watch(currentProfileProvider);
-  final value = profile?.providerHeaders['announce'];
-  return value != null && value.isNotEmpty;
-}
+bool globalModeEnabled(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.globalModeEnabled,
+      ),
+    );
 
 @riverpod
-bool hasServiceInfoData(Ref ref) {
-  final profile = ref.watch(currentProfileProvider);
-  final value = profile?.providerHeaders['flclashx-servicename'];
-  return value != null && value.isNotEmpty;
-}
+bool hasAnnounceData(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.hasAnnouncement,
+      ),
+    );
 
 @riverpod
-bool hasServerInfoData(Ref ref) {
-  final profile = ref.watch(currentProfileProvider);
-  final value = profile?.providerHeaders['flclashx-serverinfo'];
-  return value != null && value.isNotEmpty;
-}
+bool hasServiceInfoData(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.hasServiceInfo,
+      ),
+    );
 
 @riverpod
-String? backgroundUrl(Ref ref) {
-  final profile = ref.watch(currentProfileProvider);
-  return profile?.providerHeaders['flclashx-background'];
-}
+bool hasServerInfoData(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.hasServerInfo,
+      ),
+    );
+
+@riverpod
+String? backgroundUrl(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.backgroundUrlOrNull,
+      ),
+    );
 
 @riverpod
 int getProxiesColumns(Ref ref) {

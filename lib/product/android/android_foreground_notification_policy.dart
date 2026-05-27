@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
 import '../../common/common.dart';
 import '../../models/models.dart';
 import '../../plugins/vpn.dart';
+import '../subscription/product_subscription.dart';
 
 @immutable
 class AndroidForegroundNotificationSnapshot {
@@ -39,13 +38,10 @@ class AndroidForegroundNotificationPolicy {
       );
     }
 
+    final displayHints = ProductProviderAdvisory.fromProfile(profile).display;
     final profileName = profile.label ?? profile.id;
-    final serviceName = decodeProviderHeader(
-      profile.providerHeaders['flclashx-servicename'],
-    );
-    final serverGroupName = decodeProviderHeader(
-      profile.providerHeaders['flclashx-serverinfo'],
-    );
+    final serviceName = displayHints.serviceName;
+    final serverGroupName = displayHints.serverInfoGroupName;
     final serverName = _resolveServerName(
       profile: profile,
       groups: groups,
@@ -82,9 +78,9 @@ class AndroidForegroundNotificationPolicy {
       return appName;
     }
 
-    final serverGroupName = decodeProviderHeader(
-      profile.providerHeaders['flclashx-serverinfo'],
-    );
+    final serverGroupName = ProductProviderAdvisory.fromProfile(profile)
+        .display
+        .serverInfoGroupName;
     if (serverGroupName.isNotEmpty && groupName != serverGroupName) {
       return null;
     }
@@ -118,18 +114,6 @@ class AndroidForegroundNotificationPolicy {
       return;
     }
     await vpn?.updateNotification(title: title);
-  }
-
-  String decodeProviderHeader(String? value) {
-    if (value == null || value.isEmpty) {
-      return '';
-    }
-    try {
-      final normalized = base64.normalize(value);
-      return utf8.decode(base64.decode(normalized)).trim();
-    } catch (_) {
-      return value.trim();
-    }
   }
 
   String _resolveServerName({

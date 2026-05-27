@@ -6,10 +6,10 @@ import 'dart:isolate';
 import 'package:archive/archive.dart';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/archive.dart';
-import 'package:flclashx/services/subscription_notification_service.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/services/subscription_notification_service.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/dialog.dart';
 import 'package:flutter/foundation.dart';
@@ -22,6 +22,7 @@ import 'common/common.dart';
 import 'models/models.dart';
 import 'product/android/product_android.dart';
 import 'product/runtime/product_runtime.dart';
+import 'product/subscription/product_subscription.dart';
 import 'views/profiles/override_profile.dart';
 
 class AppController {
@@ -280,157 +281,40 @@ class AppController {
     _ref.read(localIpProvider.notifier).value = await utils.getLocalIpAddress();
   }
 
-  void applySubscriptionSettings(Set<String>? settings) {
-    try {
-      final currentSettings = _ref.read(appSettingProvider);
-      if (currentSettings.overrideProviderSettings) {
-        commonPrint.log(
-          "Override provider settings enabled - ignoring subscription settings",
-        );
-        return;
-      }
-
-      // If settings is null (header removed), reset to defaults (false)
-      final effectiveSettings = settings ?? {};
-
-      _ref.read(appSettingProvider.notifier).updateState(
-            (state) => state.copyWith(
-              minimizeOnExit: effectiveSettings.contains('minimize'),
-              autoLaunch: effectiveSettings.contains('autorun'),
-              silentLaunch: effectiveSettings.contains('shadowstart'),
-              autoRun: effectiveSettings.contains('autostart'),
-              autoCheckUpdate: effectiveSettings.contains('autoupdate'),
-            ),
-          );
-    } catch (e) {
-      // Silently ignore subscription settings errors
+  void _applyProductCustomization(Profile profile,
+      {required bool isNewProfile}) {
+    if (profile.providerHeaders.isEmpty) {
+      return;
     }
-  }
 
-  void _applyAllHeaderSettings(Profile profile, {required bool isNewProfile}) {
-    final headers = profile.providerHeaders;
-    if (headers.isEmpty) return;
-
-    final customBehavior = headers['flclashx-custom'];
-
-    final shouldApply = switch (customBehavior) {
-      'add' => isNewProfile,
-      'update' => true,
-      _ => false,
-    };
-
-    if (!shouldApply) return;
-
-    _applyProviderSettings(headers);
-    _applyThemeColor(headers);
-    _applyCustomViewSettings(profile);
-  }
-
-  void _applyProviderSettings(Map<String, String> headers) {
-    try {
-      final currentSettings = _ref.read(appSettingProvider);
-      if (currentSettings.overrideProviderSettings) {
-        commonPrint.log(
-          "Override provider settings enabled - ignoring provider settings",
-        );
-        return;
-      }
-
-      final settingsHeader = headers['flclashx-settings'];
-      if (settingsHeader != null) {
-        final settings = settingsHeader
-            .split(',')
-            .map((s) => s.trim().toLowerCase())
-            .where((s) => s.isNotEmpty)
-            .toSet();
-        applySubscriptionSettings(settings);
-      }
-    } catch (e) {
-      commonPrint.log("Failed to apply provider settings: $e");
-    }
-  }
-
-  void _applyThemeColor(Map<String, String> headers) {
-    try {
-      final hexHeader = headers['flclashx-hex'];
-      if (hexHeader != null && hexHeader.isNotEmpty) {
-        _applyThemeColorFromHex(hexHeader);
-      }
-    } catch (e) {
-      commonPrint.log("Failed to apply theme color: $e");
-    }
-  }
-
-  void _applyThemeColorFromHex(String hexHeader) {
-    try {
-      final parts = hexHeader.split(':');
-      final hexString = parts[0].trim().replaceAll('#', '');
-      final variantName = parts.length > 1 ? parts[1].trim() : null;
-
-      // Check for pureblack flag in any position after color
-      bool enablePureBlack = false;
-      for (int i = 1; i < parts.length; i++) {
-        final part = parts[i].trim().toLowerCase();
-        if (part == 'pureblack') {
-          enablePureBlack = true;
-          break;
-        }
-      }
-
-      if (hexString.length != 6 && hexString.length != 8) {
-        commonPrint.log('Invalid hex color length: $hexString');
-        return;
-      }
-
-      final colorValue = int.parse(
-        hexString.length == 6 ? 'FF$hexString' : hexString,
-        radix: 16,
-      );
-
-      commonPrint.log(
-        'Applying theme from flclashx-hex: #${hexString.toUpperCase()}'
-        '${variantName != null ? ', variant=$variantName' : ''}'
-        '${enablePureBlack ? ', pureBlack=true' : ''}',
-      );
-
-      _ref.read(themeSettingProvider.notifier).updateState((state) {
-        final updatedColors = [...state.primaryColors];
-        if (!updatedColors.contains(colorValue)) {
-          updatedColors.add(colorValue);
-        }
-
-        DynamicSchemeVariant? newVariant;
-        if (variantName != null && variantName.toLowerCase() != 'pureblack') {
-          try {
-            newVariant = DynamicSchemeVariant.values.firstWhere(
-              (v) => v.name.toLowerCase() == variantName.toLowerCase(),
+    final appSetting = _ref.read(appSettingProvider);
+    final patch =
+        ProductProviderAdvisory.fromProfile(profile).customization.buildPatch(
+              isNewProfile: isNewProfile,
+              appSetting: appSetting,
+              themeProps: _ref.read(themeSettingProvider),
+              proxiesStyle: _ref.read(proxiesStyleSettingProvider),
+              overrideProviderSettings: appSetting.overrideProviderSettings,
             );
-            commonPrint.log('Using scheme variant: ${newVariant.name}');
-          } catch (e) {
-            commonPrint.log(
-              'Unknown variant: $variantName, using current: ${state.schemeVariant.name}',
-            );
-          }
-        }
+    if (patch.isEmpty) {
+      return;
+    }
 
-        commonPrint.log(
-          'Theme updated: primaryColor=#${colorValue.toRadixString(16).toUpperCase()}'
-          '${enablePureBlack ? ', pureBlack=true' : ''}',
-        );
-
-        return state.copyWith(
-          primaryColor: colorValue,
-          primaryColors: updatedColors,
-          schemeVariant: newVariant ?? state.schemeVariant,
-          pureBlack: enablePureBlack,
-        );
-      });
-
+    if (patch.appSetting != null) {
+      _ref
+          .read(appSettingProvider.notifier)
+          .updateState((_) => patch.appSetting!);
+    }
+    if (patch.themeProps != null) {
+      _ref
+          .read(themeSettingProvider.notifier)
+          .updateState((_) => patch.themeProps!);
       savePreferencesDebounce();
-
-      commonPrint.log('Theme applied successfully');
-    } catch (e) {
-      commonPrint.log('Failed to parse hex color from header: $hexHeader - $e');
+    }
+    if (patch.proxiesStyle != null) {
+      _ref
+          .read(proxiesStyleSettingProvider.notifier)
+          .updateState((_) => patch.proxiesStyle!);
     }
   }
 
@@ -443,32 +327,17 @@ class AppController {
       final shouldSend = prefs.getBool('sendDeviceHeaders') ?? true;
       final newProfile = await profile.update(shouldSendHeaders: shouldSend);
 
-      final mergedHeaders = Map<String, String>.from(profile.providerHeaders)
-        ..addAll(newProfile.providerHeaders);
-      for (final key in ['announce', 'support-url']) {
-        if (!newProfile.providerHeaders.containsKey(key)) {
-          mergedHeaders.remove(key);
-        }
-      }
+      final mergedHeaders = ProductProviderAdvisory.mergeForRefresh(
+        previous: profile.providerHeaders,
+        incoming: newProfile.providerHeaders,
+      );
       final mergedProfile = newProfile.copyWith(
         providerHeaders: mergedHeaders,
         isUpdating: false,
       );
 
-      if (mergedHeaders.isNotEmpty) {
-        _applyAllHeaderSettings(mergedProfile, isNewProfile: false);
-      }
-
-      final showHwidLimit =
-          mergedHeaders['x-hwid-max-devices-reached']?.toLowerCase() == 'true';
-      final announceText = mergedHeaders['announce'];
-      if (showHwidLimit && announceText != null && announceText.isNotEmpty) {
-        _showHwidLimitNotice(announceText, mergedHeaders['support-url']);
-      }
-
-      if (mergedHeaders['x-hwid-not-supported']?.toLowerCase() == 'true') {
-        _showHwidNotSupportedNotice();
-      }
+      _applyProductCustomization(mergedProfile, isNewProfile: false);
+      _showProductNotices(mergedProfile);
 
       _ref.read(profilesProvider.notifier).setProfile(mergedProfile);
 
@@ -478,7 +347,8 @@ class AppController {
 
       // Check subscription expiration and show notification if needed
       unawaited(
-        SubscriptionNotificationService.checkAndNotify(newProfile).catchError((
+        SubscriptionNotificationService.checkAndNotify(mergedProfile)
+            .catchError((
           e,
         ) {
           commonPrint.log("Error checking subscription: $e");
@@ -500,62 +370,63 @@ class AppController {
     );
   }
 
-  void _showHwidLimitNotice(String encodedText, String? supportUrl) {
-    String? announceText;
-    var textToDecode = encodedText;
+  void _showProductNotices(Profile profile) {
+    final advisory = ProductProviderAdvisory.fromProfile(profile);
+    if (advisory.notices.hwidLimitReached && advisory.display.hasAnnouncement) {
+      _showHwidLimitNotice(
+        advisory.display.announcement,
+        advisory.display.supportUrlOrNull,
+      );
+    }
+    if (advisory.notices.hwidNotSupported) {
+      _showHwidNotSupportedNotice();
+    }
+  }
 
-    if (encodedText.startsWith('base64:')) {
-      textToDecode = encodedText.substring(7);
+  void _showHwidLimitNotice(String announceText, String? supportUrl) {
+    if (announceText.isEmpty) {
+      return;
     }
 
-    try {
-      final normalized = base64.normalize(textToDecode);
-      announceText = utf8.decode(base64.decode(normalized));
-    } catch (e) {
-      announceText = encodedText;
-    }
+    final actions = <Widget>[];
 
-    if (announceText.isNotEmpty) {
-      final actions = <Widget>[];
-
-      if (supportUrl != null && supportUrl.isNotEmpty) {
-        actions.add(
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              globalState.openUrl(supportUrl);
-            },
-            child: Text(appLocalizations.support),
-          ),
-        );
-      }
-
+    if (supportUrl != null && supportUrl.isNotEmpty) {
       actions.add(
         TextButton(
           onPressed: () {
             Navigator.of(context).pop();
+            globalState.openUrl(supportUrl);
           },
-          child: Text(appLocalizations.confirm),
-        ),
-      );
-
-      globalState.showCommonDialog(
-        child: CommonDialog(
-          title: appLocalizations.tip,
-          actions: actions,
-          child: Container(
-            width: 300,
-            constraints: const BoxConstraints(maxHeight: 200),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                announceText,
-                style: const TextStyle(overflow: TextOverflow.visible),
-              ),
-            ),
-          ),
+          child: Text(appLocalizations.support),
         ),
       );
     }
+
+    actions.add(
+      TextButton(
+        onPressed: () {
+          Navigator.of(context).pop();
+        },
+        child: Text(appLocalizations.confirm),
+      ),
+    );
+
+    globalState.showCommonDialog(
+      child: CommonDialog(
+        title: appLocalizations.tip,
+        actions: actions,
+        child: Container(
+          width: 300,
+          constraints: const BoxConstraints(maxHeight: 200),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              announceText,
+              style: const TextStyle(overflow: TextOverflow.visible),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void setProfile(Profile profile) {
@@ -755,7 +626,7 @@ class AppController {
       );
 
       if (currentProfile.providerHeaders.isNotEmpty) {
-        _applyAllHeaderSettings(currentProfile, isNewProfile: false);
+        _applyProductCustomization(currentProfile, isNewProfile: false);
       }
     }
 
@@ -1180,18 +1051,8 @@ class AppController {
       }, title: "${appLocalizations.add}${appLocalizations.profile}");
 
       if (profile != null) {
-        _applyAllHeaderSettings(profile, isNewProfile: true);
-
-        final headers = profile.providerHeaders;
-        final showHwidLimit =
-            headers['x-hwid-max-devices-reached']?.toLowerCase() == 'true';
-        final announceText = headers['announce'];
-        if (showHwidLimit && announceText != null && announceText.isNotEmpty) {
-          _showHwidLimitNotice(announceText, headers['support-url']);
-        }
-        if (headers['x-hwid-not-supported']?.toLowerCase() == 'true') {
-          _showHwidNotSupportedNotice();
-        }
+        _applyProductCustomization(profile, isNewProfile: true);
+        _showProductNotices(profile);
 
         await addProfile(profile);
       }
@@ -1300,122 +1161,6 @@ class AppController {
     _ref.read(networkSettingProvider.notifier).updateState(
           (state) => state.copyWith(systemProxy: !state.systemProxy),
         );
-  }
-
-  void _applyCustomViewSettings(Profile profile) {
-    final headers = profile.providerHeaders;
-
-    final dashboardLayout = headers['flclashx-widgets'];
-    if (dashboardLayout != null && dashboardLayout.isNotEmpty) {
-      final newLayout = DashboardWidgetParser.parseLayout(dashboardLayout);
-      if (newLayout.isNotEmpty) {
-        _ref.read(appSettingProvider.notifier).updateState(
-              (state) => state.copyWith(dashboardWidgets: newLayout),
-            );
-      }
-    }
-
-    final proxiesView = headers['flclashx-view'];
-    if (proxiesView != null && proxiesView.isNotEmpty) {
-      final proxiesStyleNotifier = _ref.read(
-        proxiesStyleSettingProvider.notifier,
-      );
-      proxiesStyleNotifier.updateState((currentState) {
-        var newState = currentState;
-        final settings = proxiesView.split(';');
-        for (final setting in settings) {
-          final parts = setting.split(':');
-          if (parts.length == 2) {
-            final key = parts[0].trim().toLowerCase();
-            final value = parts[1].trim().toLowerCase();
-            switch (key) {
-              case 'type':
-                switch (value) {
-                  case 'list':
-                    newState = newState.copyWith(type: ProxiesType.list);
-                    break;
-                  case 'tab':
-                    newState = newState.copyWith(type: ProxiesType.tab);
-                    break;
-                }
-                break;
-              case 'sort':
-                switch (value) {
-                  case 'none':
-                    newState = newState.copyWith(
-                      sortType: ProxiesSortType.none,
-                    );
-                    break;
-                  case 'delay':
-                    newState = newState.copyWith(
-                      sortType: ProxiesSortType.delay,
-                    );
-                    break;
-                  case 'name':
-                    newState = newState.copyWith(
-                      sortType: ProxiesSortType.name,
-                    );
-                    break;
-                }
-                break;
-              case 'layout':
-                switch (value) {
-                  case 'loose':
-                    newState = newState.copyWith(layout: ProxiesLayout.loose);
-                    break;
-                  case 'standard':
-                    newState = newState.copyWith(
-                      layout: ProxiesLayout.standard,
-                    );
-                    break;
-                  case 'tight':
-                    newState = newState.copyWith(layout: ProxiesLayout.tight);
-                    break;
-                }
-                break;
-              case 'icon':
-                switch (value) {
-                  case 'standard':
-                  case 'icon':
-                    newState = newState.copyWith(
-                      iconStyle: ProxiesIconStyle.icon,
-                    );
-                    break;
-                  case 'none':
-                    newState = newState.copyWith(
-                      iconStyle: ProxiesIconStyle.none,
-                    );
-                    break;
-                }
-                break;
-              case 'card':
-                switch (value) {
-                  case 'expand':
-                    newState = newState.copyWith(
-                      cardType: ProxyCardType.expand,
-                    );
-                    break;
-                  case 'shrink':
-                    newState = newState.copyWith(
-                      cardType: ProxyCardType.shrink,
-                    );
-                    break;
-                  case 'min':
-                    newState = newState.copyWith(cardType: ProxyCardType.min);
-                    break;
-                  case 'oneline':
-                    newState = newState.copyWith(
-                      cardType: ProxyCardType.oneline,
-                    );
-                    break;
-                }
-                break;
-            }
-          }
-        }
-        return newState;
-      });
-    }
   }
 
   Future<List<Package>> getPackages() async {

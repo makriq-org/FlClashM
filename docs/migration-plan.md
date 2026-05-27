@@ -13,6 +13,7 @@
 - advisory provider hints и client-enforced policy разведены по отдельным типам
 - runtime seam выделен через `EngineManager`, `EngineAdapter`, `RuntimeRegistry`
 - Android platform seam вынесен в `lib/product/android/**`
+- provider-driven display/customization seam вынесен в `lib/product/subscription/**`
 - `mihomo` поддержан как единственный enabled engine
 - `olcrtc`, `naiveproxy`, `byedpi` остаются disabled с guardrails и rollback/update notes
 
@@ -39,5 +40,4 @@
 ## Риски
 
 - в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
-- часть display/branding поведения по provider headers по-прежнему живет рядом с UI/controller и еще не оформлена как отдельный product service
 - новые runtime пока есть только как registrations и guardrails, без production adapters

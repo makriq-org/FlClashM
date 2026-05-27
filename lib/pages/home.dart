@@ -32,16 +32,15 @@ class HomePage extends StatelessWidget {
               navigationItems: navigationItems,
               currentIndex: currentIndex,
             );
-            final headerNewBoard = ref.watch(currentProfileProvider
-                    .select((p) => p?.providerHeaders['flclashx-newboard'])) == 'true';
-            final settingNewDashboard = ref.watch(appSettingProvider.select((s) => s.newDashboard));
-            final isNewDashboard = (settingNewDashboard ?? headerNewBoard)
-                && pageLabel == PageLabel.dashboard;
-            final showBottomBar = viewMode == ViewMode.mobile && !isNewDashboard;
+            final isNewDashboard = ref.watch(effectiveNewDashboardProvider) &&
+                pageLabel == PageLabel.dashboard;
+            final showBottomBar =
+                viewMode == ViewMode.mobile && !isNewDashboard;
             final bottomNavigationBar = viewMode == ViewMode.mobile
                 ? AnimatedSize(
                     duration: const Duration(milliseconds: 200),
-                    child: showBottomBar ? navigationBar : const SizedBox.shrink(),
+                    child:
+                        showBottomBar ? navigationBar : const SizedBox.shrink(),
                   )
                 : null;
             final sideNavigationBar =
@@ -326,14 +325,15 @@ class _NavigationBarDefaultsM3 extends NavigationBarThemeData {
 
   @override
   WidgetStateProperty<IconThemeData?>? get iconTheme =>
-      WidgetStateProperty.resolveWith((Set<WidgetState> states) => IconThemeData(
-            size: 24.0,
-            color: states.contains(WidgetState.disabled)
-                ? _colors.onSurfaceVariant.opacity38
-                : states.contains(WidgetState.selected)
-                    ? _colors.onSecondaryContainer
-                    : _colors.onSurfaceVariant,
-          ));
+      WidgetStateProperty.resolveWith(
+          (Set<WidgetState> states) => IconThemeData(
+                size: 24.0,
+                color: states.contains(WidgetState.disabled)
+                    ? _colors.onSurfaceVariant.opacity38
+                    : states.contains(WidgetState.selected)
+                        ? _colors.onSecondaryContainer
+                        : _colors.onSurfaceVariant,
+              ));
 
   @override
   Color? get indicatorColor => _colors.secondaryContainer;
@@ -343,8 +343,8 @@ class _NavigationBarDefaultsM3 extends NavigationBarThemeData {
 
   @override
   WidgetStateProperty<TextStyle?>? get labelTextStyle =>
-      WidgetStateProperty.resolveWith((Set<WidgetState> states) =>
-          _textTheme.labelMedium!.apply(
+      WidgetStateProperty.resolveWith(
+          (Set<WidgetState> states) => _textTheme.labelMedium!.apply(
               overflow: TextOverflow.ellipsis,
               color: states.contains(WidgetState.disabled)
                   ? _colors.onSurfaceVariant.opacity38

@@ -66,12 +66,12 @@ class StatsGrid extends ConsumerWidget {
               Row(
                 children: [
                   if (hasExpire)
-                    Expanded(child: _ExpiryPill(timestamp: sub!.expire))
+                    Expanded(child: _ExpiryPill(timestamp: sub.expire))
                   else
                     const Expanded(child: SizedBox.shrink()),
                   const SizedBox(width: 8),
                   if (hasTraffic)
-                    Expanded(child: _TrafficPill(sub: sub!))
+                    Expanded(child: _TrafficPill(sub: sub))
                   else
                     const Expanded(child: SizedBox.shrink()),
                 ],
@@ -129,13 +129,16 @@ class _IpPill extends StatelessWidget {
           children: [
             if (isLoading)
               SizedBox(
-                width: 14, height: 14,
+                width: 14,
+                height: 14,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2, color: colorScheme.onSurfaceVariant,
+                  strokeWidth: 2,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               )
             else
-              Icon(Icons.public_rounded, size: 14, color: colorScheme.onSurfaceVariant),
+              Icon(Icons.public_rounded,
+                  size: 14, color: colorScheme.onSurfaceVariant),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -144,7 +147,8 @@ class _IpPill extends StatelessWidget {
                   color: colorScheme.onSurfaceVariant,
                   fontFamily: FontFamily.jetBrainsMono.value,
                 ),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             if (flag != null) ...[
@@ -192,7 +196,8 @@ class _TrafficPill extends StatelessWidget {
               color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
               child: Row(
                 children: [
-                  Icon(Icons.data_usage_rounded, size: 14, color: colorScheme.onSurfaceVariant),
+                  Icon(Icons.data_usage_rounded,
+                      size: 14, color: colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -200,7 +205,8 @@ class _TrafficPill extends StatelessWidget {
                       style: context.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -247,7 +253,8 @@ class _ExpiryPill extends StatelessWidget {
           Icon(
             isExpired ? Icons.warning_amber_rounded : Icons.event_rounded,
             size: 14,
-            color: isExpired ? Colors.red.shade400 : colorScheme.onSurfaceVariant,
+            color:
+                isExpired ? Colors.red.shade400 : colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 6),
           if (!isExpired)
@@ -261,9 +268,12 @@ class _ExpiryPill extends StatelessWidget {
             child: Text(
               formatted,
               style: context.textTheme.labelSmall?.copyWith(
-                color: isExpired ? Colors.red.shade400 : colorScheme.onSurfaceVariant,
+                color: isExpired
+                    ? Colors.red.shade400
+                    : colorScheme.onSurfaceVariant,
               ),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -301,7 +311,8 @@ class _StatPill extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
                 fontFamily: FontFamily.jetBrainsMono.value,
               ),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
