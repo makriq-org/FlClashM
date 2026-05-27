@@ -6,6 +6,8 @@ import '../../common/common.dart';
 import '../../models/models.dart';
 import '../compile/product_compile.dart';
 import 'engine_adapter.dart';
+import 'runtime_registry.dart';
+import 'runtime_types.dart';
 
 typedef RuntimeUpdateTask = FutureOr<void> Function();
 typedef RuntimeUpdateTasks = List<RuntimeUpdateTask>;
@@ -68,16 +70,28 @@ class AppliedRuntimePlan {
   final RuntimePlan runtimePlan;
 }
 
+@immutable
+class _CompiledRuntimePlan {
+  const _CompiledRuntimePlan({
+    required this.appliedRuntimePlan,
+    required this.resolvedRuntime,
+  });
+
+  final AppliedRuntimePlan appliedRuntimePlan;
+  final ResolvedRuntimeSelection resolvedRuntime;
+}
+
 class EngineManager {
   EngineManager({
-    required EngineAdapter adapter,
+    required RuntimeRegistry runtimeRegistry,
     required LoadCurrentRawProfileCallback loadCurrentRawProfile,
     required ResolveProfilePatchCallback resolveProfilePatch,
     required BuildRuntimePlanCallback buildRuntimePlan,
     required ApplyRuntimePlanCallback applyRuntimePlan,
     required BuildCoreStateCallback buildCoreState,
     required BuildInitParamsCallback buildInitParams,
-  })  : _adapter = adapter,
+  })  : _runtimeRegistry = runtimeRegistry,
+        _activeRuntime = runtimeRegistry.resolveSelection(),
         _loadCurrentRawProfile = loadCurrentRawProfile,
         _resolveProfilePatch = resolveProfilePatch,
         _buildRuntimePlan = buildRuntimePlan,
@@ -85,7 +99,8 @@ class EngineManager {
         _buildCoreState = buildCoreState,
         _buildInitParams = buildInitParams;
 
-  final EngineAdapter _adapter;
+  final RuntimeRegistry _runtimeRegistry;
+  ResolvedRuntimeSelection _activeRuntime;
   final LoadCurrentRawProfileCallback _loadCurrentRawProfile;
   final ResolveProfilePatchCallback _resolveProfilePatch;
   final BuildRuntimePlanCallback _buildRuntimePlan;
@@ -96,6 +111,13 @@ class EngineManager {
   Timer? _updateTimer;
   RuntimeUpdateTasks _updateTasks = const [];
   DateTime? _startTime;
+
+  EngineAdapter get _adapter => _activeRuntime.engine.adapter;
+
+  RuntimeId get activeEngineId =>
+      _activeRuntime.engine.registration.descriptor.id;
+
+  RuntimeSelection get activeRuntimeSelection => _activeRuntime.selection;
 
   DateTime? get startTime => _startTime;
 
@@ -149,23 +171,17 @@ class EngineManager {
     EngineRuntimePlanRequest request, {
     ClashConfig? coldStartPatchConfig,
   }) async {
-    final appliedRuntimePlan = await _compileRuntimePlan(request);
-    if (appliedRuntimePlan == null) {
+    final compiledRuntimePlan = await _compileRuntimePlan(request);
+    if (compiledRuntimePlan == null) {
       return null;
     }
 
-    final message = await _adapter.setupRuntimePlan(
-      appliedRuntimePlan.runtimePlan,
+    await _setupCompiledRuntimePlan(
+      compiledRuntimePlan,
+      coldStartPatchConfig: coldStartPatchConfig,
     );
-    if (message.isNotEmpty) {
-      throw Exception(message);
-    }
 
-    if (coldStartPatchConfig != null) {
-      await persistColdStart(pathConfig: coldStartPatchConfig);
-    }
-
-    return appliedRuntimePlan;
+    return compiledRuntimePlan.appliedRuntimePlan;
   }
 
   Future<bool> updateConfig(
@@ -197,22 +213,26 @@ class EngineManager {
     required EngineRuntimePlanRequest runtimePlanRequest,
     required ClashConfig coldStartPatchConfig,
   }) async {
-    await _adapter.applyPendingUpdate();
+    final compiledRuntimePlan = await _compileRuntimePlan(runtimePlanRequest);
+    if (compiledRuntimePlan == null) {
+      return false;
+    }
 
-    if (!await _adapter.isInitialized()) {
-      await _adapter.initialize(
+    final targetAdapter = compiledRuntimePlan.resolvedRuntime.engine.adapter;
+
+    await targetAdapter.applyPendingUpdate();
+
+    if (!await targetAdapter.isInitialized()) {
+      await targetAdapter.initialize(
         initParams: await _buildInitParams(),
         state: _buildCoreState(),
       );
     }
 
-    final appliedRuntimePlan = await setupRuntimePlan(
-      runtimePlanRequest,
+    await _setupCompiledRuntimePlan(
+      compiledRuntimePlan,
       coldStartPatchConfig: coldStartPatchConfig,
     );
-    if (appliedRuntimePlan == null) {
-      return false;
-    }
 
     return true;
   }
@@ -251,16 +271,17 @@ class EngineManager {
 
   Future<void> persistColdStart({required ClashConfig pathConfig}) async {
     try {
-      final appliedRuntimePlan = await _compileRuntimePlan(
+      final compiledRuntimePlan = await _compileRuntimePlan(
         EngineRuntimePlanRequest(patchConfig: pathConfig),
       );
-      if (appliedRuntimePlan == null) {
+      if (compiledRuntimePlan == null) {
         return;
       }
 
-      await _adapter.persistColdStart(
+      await compiledRuntimePlan.resolvedRuntime.engine.adapter.persistColdStart(
         initParams: await _buildInitParams(),
-        setupParams: appliedRuntimePlan.runtimePlan.toSetupParams(),
+        setupParams:
+            compiledRuntimePlan.appliedRuntimePlan.runtimePlan.toSetupParams(),
         state: _buildCoreState(),
       );
     } catch (e) {
@@ -309,7 +330,7 @@ class EngineManager {
     _updateTimer = null;
   }
 
-  Future<AppliedRuntimePlan?> _compileRuntimePlan(
+  Future<_CompiledRuntimePlan?> _compileRuntimePlan(
     EngineRuntimePlanRequest request,
   ) async {
     await request.refreshProfile?.call();
@@ -337,11 +358,14 @@ class EngineManager {
       rawProfile: rawProfile,
       patchConfig: realPatchConfig,
     );
-    _applyRuntimePlan(runtimePlan);
+    final resolvedRuntime = _resolveRuntimeSelection(runtimePlan.runtime);
 
-    return AppliedRuntimePlan(
-      patchConfig: realPatchConfig,
-      runtimePlan: runtimePlan,
+    return _CompiledRuntimePlan(
+      appliedRuntimePlan: AppliedRuntimePlan(
+        patchConfig: realPatchConfig,
+        runtimePlan: runtimePlan,
+      ),
+      resolvedRuntime: resolvedRuntime,
     );
   }
 
@@ -379,5 +403,39 @@ class EngineManager {
     }
 
     return updateParams.copyWith.tun(enable: resolvedTunAccess.enableTun);
+  }
+
+  Future<void> _setupCompiledRuntimePlan(
+    _CompiledRuntimePlan compiledRuntimePlan, {
+    ClashConfig? coldStartPatchConfig,
+  }) async {
+    final targetAdapter = compiledRuntimePlan.resolvedRuntime.engine.adapter;
+    final message = await targetAdapter.setupRuntimePlan(
+      compiledRuntimePlan.appliedRuntimePlan.runtimePlan,
+    );
+    if (message.isNotEmpty) {
+      throw Exception(message);
+    }
+
+    _activeRuntime = compiledRuntimePlan.resolvedRuntime;
+    _applyRuntimePlan(compiledRuntimePlan.appliedRuntimePlan.runtimePlan);
+
+    if (coldStartPatchConfig != null) {
+      await persistColdStart(pathConfig: coldStartPatchConfig);
+    }
+  }
+
+  ResolvedRuntimeSelection _resolveRuntimeSelection(
+      RuntimeSelection selection) {
+    if (_activeRuntime.selection == selection) {
+      return _activeRuntime;
+    }
+    if (isStarted) {
+      throw UnsupportedRuntimeSelectionException(
+        'Runtime switch from ${_activeRuntime.selection.engine.label} '
+        'to ${selection.engine.label} requires a full stop/restart boundary.',
+      );
+    }
+    return _runtimeRegistry.resolveSelection(selection);
   }
 }

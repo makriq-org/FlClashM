@@ -6,11 +6,12 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/security/android_security_policy.dart';
 import 'package:flutter/foundation.dart';
 
+import '../runtime/runtime_types.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
 
-typedef ProviderAssetPathResolver =
-    Future<String> Function(String profileId, String type, String url);
+typedef ProviderAssetPathResolver = Future<String> Function(
+    String profileId, String type, String url);
 
 @immutable
 class ProfileCompileContext {
@@ -53,8 +54,8 @@ class ProfileCompiler {
               ipv6: providerSettings.ipv6 ?? patchConfig.ipv6,
               allowLan: providerSettings.allowLan ?? patchConfig.allowLan,
               mixedPort: providerSettings.mixedPort ?? patchConfig.mixedPort,
-              findProcessMode:
-                  providerSettings.findProcessMode ?? patchConfig.findProcessMode,
+              findProcessMode: providerSettings.findProcessMode ??
+                  patchConfig.findProcessMode,
             )
             .copyWith
             .tun(stack: providerSettings.tunStack ?? patchConfig.tun.stack);
@@ -135,6 +136,7 @@ class ProfileCompiler {
       config: rawConfig,
       selectedMap: selectedMap,
       testUrl: testUrl,
+      runtime: const RuntimeSelection.mihomo(),
       metadata: metadata,
     );
   }

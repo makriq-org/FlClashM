@@ -32,8 +32,9 @@ class GlobalState {
   }
 
   GlobalState._internal() {
+    runtimeRegistry = RuntimeRegistry.flClashM();
     engineManager = EngineManager(
-      adapter: const MihomoEngineAdapter(),
+      runtimeRegistry: runtimeRegistry,
       loadCurrentRawProfile: loadCurrentRawProfile,
       resolveProfilePatch: resolveProfilePatchConfig,
       buildRuntimePlan: buildRuntimePlan,
@@ -78,6 +79,7 @@ class GlobalState {
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
   bool isInit = false;
   final ProfileCompiler _profileCompiler = const ProfileCompiler();
+  late final RuntimeRegistry runtimeRegistry;
   late final EngineManager engineManager;
 
   bool get isStart => engineManager.isStarted;

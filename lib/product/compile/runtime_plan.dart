@@ -1,6 +1,8 @@
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import '../runtime/runtime_types.dart';
+
 @immutable
 class CompiledProfileMetadata {
   const CompiledProfileMetadata({
@@ -37,18 +39,21 @@ class RuntimePlan {
     required this.config,
     required this.selectedMap,
     required this.testUrl,
+    this.runtime = const RuntimeSelection.mihomo(),
     required this.metadata,
   });
 
   const RuntimePlan.empty({
     required this.selectedMap,
     required this.testUrl,
+    this.runtime = const RuntimeSelection.mihomo(),
   })  : config = const <String, dynamic>{},
         metadata = null;
 
   final Map<String, dynamic> config;
   final Map<String, String> selectedMap;
   final String testUrl;
+  final RuntimeSelection runtime;
   final CompiledProfileMetadata? metadata;
 
   SetupParams toSetupParams() => SetupParams(

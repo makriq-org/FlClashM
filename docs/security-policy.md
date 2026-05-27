@@ -50,6 +50,17 @@ Android VPN access-control для runtime старта собирается кл
 - runtime получает уже собранный client-side policy payload
 - future updater/install flow не должен обходить этот boundary
 
+### 5. Runtime allowlist задаётся клиентом
+
+Выбор engine/helper идёт только через `RuntimeRegistry`.
+
+Это значит:
+
+- неподдержанные runtime registrations остаются disabled, даже если upstream уже существует
+- helper integration не может сам владеть Android VPN/TUN lifecycle
+- `byedpi` может появиться только как attachable helper, а не как основной engine
+- `olcrtc` и `naiveproxy` нельзя включать до pinned artifact path и rollback policy
+
 ## Границы ответственности
 
 ### Клиент решает

@@ -36,6 +36,7 @@
 
 - основной runtime: `mihomo`
 - будущие engine adapters: `olcrtc`, `naiveproxy`
+- `RuntimeRegistry` как allowlist и selection seam
 
 ### 4. Helper Layer
 
@@ -116,13 +117,15 @@
 
 - `EngineManager` владеет setup/start/stop/restart/update boundary
 - `MihomoEngineAdapter` инкапсулирует текущий `clashCore`/Android bridge path
+- `RuntimePlan` несет `RuntimeSelection`, а `RuntimeRegistry` решает какой engine/helper вообще допускается
 - `state`, `controller` и `AndroidEntrypoint` выступают thin consumers этого seam
 - app lifecycle consumers только pause/resume polling, без дублирования start/stop логики
 
 Следующий шаг после этого seam:
 
 - отделить Android platform policy от runtime orchestration
-- готовить подключение новых engine adapters без переписывания bootstrap
+- подключать новые engine adapters через registry/descriptor path без переписывания bootstrap
+- держать helper integrations вне engine lifecycle, пока для них не появится отдельный supervisor
 
 ## Android platform seam
 
