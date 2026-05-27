@@ -1,0 +1,17 @@
+{
+  "applicationId": "com.makriq.flclash",
+  "releaseRepository": "makriq-org/FlClashM",
+  "requiredReleaseSecrets": [
+    "KEYSTORE",
+    "KEY_ALIAS",
+    "STORE_PASSWORD",
+    "KEY_PASSWORD"
+  ],
+  "versionCodeFloor": 2026050102,
+  "continuityBaseline": {
+    "sourceProject": "FlClash-my",
+    "sourceTag": "v0.9.2",
+    "publishedAt": "2026-05-01",
+    "sourcePubspecVersion": "0.9.2+2026050102"
+  }
+}

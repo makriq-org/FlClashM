@@ -8,6 +8,7 @@ on:
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CONTINUITY_RELEASE_REPOSITORY: makriq-org/FlClashM
 
 jobs:
   build:
@@ -15,13 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup Android signing
-        run: |
-          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -37,6 +31,16 @@ jobs:
 
       - name: Flutter version
         run: flutter --version
+
+      - name: Check release continuity
+        run: dart tool/check_release_continuity.dart --github-repository "${GITHUB_REPOSITORY}"
+
+      - name: Setup Android signing
+        run: |
+          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -129,7 +133,7 @@ jobs:
         run: |
           tags=($(git tag --merged $(git rev-parse HEAD) --sort=-creatordate))
           if [ "${{ env.IS_STABLE }}" == "true" ]; then
-            preTag=$(curl --silent "https://api.github.com/repos/makriq-org/FlClashM/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+            preTag=$(curl --silent "https://api.github.com/repos/${CONTINUITY_RELEASE_REPOSITORY}/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
           else
             preTag=""
             for tag in "${tags[@]}"; do
@@ -139,7 +143,7 @@ jobs:
               fi
             done
             if [ -z "$preTag" ]; then
-              preTag=$(curl --silent "https://api.github.com/repos/makriq-org/FlClashM/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+              preTag=$(curl --silent "https://api.github.com/repos/${CONTINUITY_RELEASE_REPOSITORY}/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
             fi
           fi
 

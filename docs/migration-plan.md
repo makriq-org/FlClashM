@@ -13,6 +13,7 @@
 - Android навигация зафиксирована как compact/mobile-first surface
 - provider-driven `flclashx-androidsecure` убран из обязательной runtime policy
 - release/build pipeline сокращён до Android-only
+- continuity baseline и release guard зафиксированы в tooling/CI
 
 ## Ближайшие шаги
 
@@ -39,6 +40,7 @@
 - release signing continuity
 - `versionCode` monotonic upgrade against public `FlClash-my`
 - release channel `makriq-org/FlClashM`
+- automatic guard before release и в отдельной CI-проверке
 
 ## Риски
 

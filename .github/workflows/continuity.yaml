@@ -1,0 +1,41 @@
+name: continuity
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build.yaml"
+      - ".github/workflows/continuity.yaml"
+      - "android/app/build.gradle.kts"
+      - "lib/common/constant.dart"
+      - "pubspec.yaml"
+      - "tool/check_release_continuity.dart"
+      - "tool/release_continuity_baseline.json"
+  push:
+    paths:
+      - ".github/workflows/build.yaml"
+      - ".github/workflows/continuity.yaml"
+      - "android/app/build.gradle.kts"
+      - "lib/common/constant.dart"
+      - "pubspec.yaml"
+      - "tool/check_release_continuity.dart"
+      - "tool/release_continuity_baseline.json"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release-continuity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Check release continuity
+        run: dart tool/check_release_continuity.dart
