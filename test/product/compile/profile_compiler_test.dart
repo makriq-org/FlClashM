@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/runtime/naiveproxy_release.dart';
+import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -381,6 +385,163 @@ void main() {
       );
 
       expect(runtimePlan.config['rule'], ['MATCH,DIRECT']);
+    });
+
+    test('builds naiveproxy runtime artifacts and local SOCKS bridge',
+        () async {
+      const profile = Profile(
+        id: 'profile-naiveproxy',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'dns': {
+            'enable': true,
+            'nameserver': ['1.1.1.1'],
+          },
+          'x-flclashm-runtime': {
+            'engine': 'naiveproxy',
+            'naiveproxy': {
+              'proxy': 'https://user:pass@example.com',
+              'extra': {
+                'host-resolver-rules': 'MAP * ~NOTFOUND , EXCLUDE localhost',
+              },
+            },
+          },
+        },
+      );
+
+      const patchConfig = ClashConfig(
+        mixedPort: 7890,
+        socksPort: 0,
+        port: 8080,
+        tun: Tun(
+          enable: true,
+          stack: TunStack.system,
+        ),
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: patchConfig,
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {'Main': 'ignored'},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(
+        runtimePlan.runtime,
+        const RuntimeSelection(engine: RuntimeId.naiveproxy),
+      );
+      expect(runtimePlan.config['socks-port'], 0);
+      expect(runtimePlan.config['proxies'][0]['server'], '127.0.0.1');
+      expect(
+        runtimePlan.config['proxies'][0]['port'],
+        naiveProxyDefaultListenerPort,
+      );
+      expect(
+        runtimePlan.selectedMap,
+        const {
+          naiveProxyBridgeGroupName: naiveProxyBridgeProxyName,
+        },
+      );
+
+      final configJson = runtimePlan.files[naiveProxyRuntimeArtifactConfigPath];
+      expect(configJson, isNotNull);
+      final runtimeConfig = Map<String, dynamic>.from(
+        json.decode(configJson!) as Map,
+      );
+      expect(
+        runtimeConfig['listen'],
+        'socks://127.0.0.1:$naiveProxyDefaultListenerPort',
+      );
+      expect(runtimeConfig['proxy'], 'https://user:pass@example.com');
+      expect(
+        runtimeConfig['host-resolver-rules'],
+        'MAP * ~NOTFOUND , EXCLUDE localhost',
+      );
+    });
+
+    test('rejects naiveproxy listener port collisions with runtime ports',
+        () async {
+      const profile = Profile(
+        id: 'profile-naiveproxy-port-collision',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'x-flclashm-runtime': {
+            'engine': 'naiveproxy',
+            'naiveproxy': {
+              'proxy': 'https://user:pass@example.com',
+            },
+          },
+        },
+      );
+
+      const patchConfig = ClashConfig(
+        socksPort: naiveProxyDefaultListenerPort,
+        redirPort: naiveProxyDefaultListenerPort,
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: patchConfig,
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      await expectLater(
+        () => compiler.buildRuntimePlan(
+          rawProfile: rawProfile,
+          context: const RuntimePlanBuildContext(
+            overrideNetworkSettings: false,
+            overrideDns: false,
+            routeMode: RouteMode.config,
+            hasCurrentScript: false,
+          ),
+          securedProfile: SecuredProfilePatch(
+            patchConfig: compiledProfile.patchConfig,
+            metadata: compiledProfile.metadata,
+          ),
+          runtimePatchConfig: compiledProfile.patchConfig,
+          selectedMap: const {},
+          testUrl: 'https://cp.cloudflare.com/generate_204',
+          providerAssetPathResolver: (profileId, type, url) async =>
+              '/tmp/$profileId/$type/$url',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('naiveproxy local SOCKS listener port is unavailable'),
+          ),
+        ),
+      );
     });
   });
 }

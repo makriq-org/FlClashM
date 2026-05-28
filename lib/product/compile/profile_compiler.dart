@@ -5,6 +5,7 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import '../runtime/naiveproxy_release.dart';
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
 import 'raw_profile.dart';
@@ -103,6 +104,17 @@ class ProfileCompiler {
           overrideNetworkSettings: context.overrideNetworkSettings,
         );
 
+    if (rawProfile.runtimeHints.selection.engine == RuntimeId.naiveproxy) {
+      return _buildNaiveProxyRuntimePlan(
+        rawProfile: rawProfile,
+        patchConfig: patchConfig,
+        securedProfile: securedProfile,
+        metadata: metadata,
+        context: context,
+        testUrl: testUrl,
+      );
+    }
+
     _applyCoreRuntimeSettings(
       rawConfig: rawConfig,
       patchConfig: patchConfig,
@@ -140,6 +152,134 @@ class ProfileCompiler {
       testUrl: testUrl,
       runtime: const RuntimeSelection.mihomo(),
       metadata: metadata,
+    );
+  }
+
+  RuntimePlan _buildNaiveProxyRuntimePlan({
+    required RawProfile rawProfile,
+    required ClashConfig patchConfig,
+    required SecuredProfilePatch securedProfile,
+    required CompiledProfileMetadata metadata,
+    required RuntimePlanBuildContext context,
+    required String testUrl,
+  }) {
+    final naiveProxy = rawProfile.runtimeHints.naiveproxy;
+    if (naiveProxy == null || naiveProxy.proxy.trim().isEmpty) {
+      throw StateError(
+        'naiveproxy runtime selection requires '
+        'x-flclashm-runtime.naiveproxy.proxy.',
+      );
+    }
+
+    final rawConfig = <String, dynamic>{
+      'proxies': [
+        {
+          'name': naiveProxyBridgeProxyName,
+          'type': 'socks5',
+          'server': localhost,
+          'port': _resolveNaiveProxyListenerPort(patchConfig),
+          'udp': false,
+        },
+        {
+          'name': 'DIRECT',
+          'type': 'direct',
+        },
+      ],
+      'proxy-groups': [
+        {
+          'name': naiveProxyBridgeGroupName,
+          'type': 'select',
+          'proxies': [
+            naiveProxyBridgeProxyName,
+            'DIRECT',
+          ],
+        },
+      ],
+      'rules': ['MATCH,$naiveProxyBridgeGroupName'],
+    };
+
+    _applyCoreRuntimeSettings(
+      rawConfig: rawConfig,
+      patchConfig: patchConfig,
+      metadata: metadata,
+      overrideNetworkSettings: context.overrideNetworkSettings,
+    );
+    _applyTunSettings(
+      rawConfig: rawConfig,
+      patchConfig: patchConfig,
+      overrideNetworkSettings: context.overrideNetworkSettings,
+      runtimeConstraints: securedProfile.runtimeConstraints,
+    );
+    _mergeGeoXUrl(rawConfig: rawConfig, patchConfig: patchConfig);
+    _mergeHosts(rawConfig: rawConfig, patchConfig: patchConfig);
+    _mergeDns(
+      rawConfig: rawConfig,
+      patchConfig: patchConfig,
+      overrideDns: context.overrideDns,
+    );
+
+    // The local SOCKS listener is owned by naiveproxy, so the bridge core
+    // keeps its own SOCKS inbound disabled to avoid port collisions.
+    rawConfig['socks-port'] = 0;
+    rawConfig['sniffer'] = {'enable': false};
+
+    return RuntimePlan(
+      config: rawConfig,
+      selectedMap: const {
+        naiveProxyBridgeGroupName: naiveProxyBridgeProxyName,
+      },
+      testUrl: testUrl,
+      runtime: rawProfile.runtimeHints.selection,
+      files: {
+        naiveProxyRuntimeArtifactConfigPath: json.encode(
+          _buildNaiveProxyRuntimeConfig(
+            patchConfig: patchConfig,
+            naiveProxy: naiveProxy,
+          ),
+        ),
+      },
+      metadata: metadata,
+    );
+  }
+
+  Map<String, dynamic> _buildNaiveProxyRuntimeConfig({
+    required ClashConfig patchConfig,
+    required NaiveProxyRuntimeHints naiveProxy,
+  }) {
+    final extraConfig = Map<String, dynamic>.from(naiveProxy.extraConfig);
+    if (extraConfig.containsKey('listen') || extraConfig.containsKey('proxy')) {
+      throw StateError(
+        'naiveproxy extra config must not override listen/proxy; '
+        'those are owned by the client runtime contract.',
+      );
+    }
+
+    return <String, dynamic>{
+      'listen':
+          'socks://127.0.0.1:${_resolveNaiveProxyListenerPort(patchConfig)}',
+      'proxy': naiveProxy.proxy,
+      ...extraConfig,
+    };
+  }
+
+  int _resolveNaiveProxyListenerPort(ClashConfig patchConfig) {
+    final reservedPorts = <int>{
+      if (patchConfig.port > 0) patchConfig.port,
+      if (patchConfig.mixedPort > 0) patchConfig.mixedPort,
+      if (patchConfig.redirPort > 0) patchConfig.redirPort,
+      if (patchConfig.tproxyPort > 0) patchConfig.tproxyPort,
+    };
+
+    final preferredPort = patchConfig.socksPort;
+    if (preferredPort > 0 && !reservedPorts.contains(preferredPort)) {
+      return preferredPort;
+    }
+    if (!reservedPorts.contains(naiveProxyDefaultListenerPort)) {
+      return naiveProxyDefaultListenerPort;
+    }
+    throw StateError(
+      'naiveproxy local SOCKS listener port is unavailable. '
+      'Configure a non-conflicting socks-port.',
     );
   }
 

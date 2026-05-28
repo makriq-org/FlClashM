@@ -1,6 +1,11 @@
 // ignore_for_file: avoid_print
 
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 
 const _appName = 'FlClashM';
 const _coreDir = 'core';
@@ -8,6 +13,7 @@ const _distDir = 'dist';
 const _libclashDir = 'libclash/android';
 const _coreVersionFile = 'lib/core_version.dart';
 const _ndkVersion = '28.0.13004108';
+const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 
 final _androidArches = <String, AndroidArch>{
   'arm': const AndroidArch(
@@ -52,13 +58,18 @@ Future<void> main(List<String> args) async {
   if (command.target != 'android') {
     stderr.writeln(
       'FlClashM is Android-only. Supported command: dart setup.dart android '
-      '[--arch arm|arm64|amd64] [--env stable|pre] [--out app|core]',
+      '[--arch arm|arm64|amd64] [--env stable|pre] '
+      '[--out app|core|runtime-assets]',
     );
     exitCode = 64;
     return;
   }
 
   await _syncCoreVersionDartFile();
+  await _syncNaiveProxyAssets();
+  if (command.out == 'runtime-assets') {
+    return;
+  }
   final coreVersion = await _extractCoreVersion();
   final arches = command.arch == null
       ? _androidArches.values.toList()
@@ -109,7 +120,7 @@ CommandArgs _parseArgs(List<String> args) {
     }
   }
 
-  if (out != 'app' && out != 'core') {
+  if (out != 'app' && out != 'core' && out != 'runtime-assets') {
     throw ArgumentError('Invalid --out value: $out');
   }
 
@@ -357,6 +368,84 @@ Future<void> _syncCoreVersionDartFile() async {
     "/// Embedded mihomo version (see core/constant/version.go).\n"
     "const String kCoreVersionFromSource = '$version';\n",
   );
+}
+
+Future<void> _syncNaiveProxyAssets() async {
+  final stamp = File(_join(_naiveProxyStampFile));
+  final expectedStamp = _buildNaiveProxyStamp();
+  final assetFilesExist = naiveProxyReleaseAssets.values.every(
+    (asset) => File(_join(asset.bundledAssetPath)).existsSync(),
+  );
+
+  if (assetFilesExist &&
+      stamp.existsSync() &&
+      (await stamp.readAsString()).trim() == expectedStamp) {
+    return;
+  }
+
+  final targetRoot = Directory(_join(naiveProxyBundledAssetRoot));
+  if (!targetRoot.existsSync()) {
+    targetRoot.createSync(recursive: true);
+  }
+
+  for (final asset in naiveProxyReleaseAssets.values) {
+    final target = File(_join(asset.bundledAssetPath));
+    target.parent.createSync(recursive: true);
+    final apkBytes = await _downloadBytes(Uri.parse(asset.downloadUrl));
+    final apkSha256 = sha256.convert(apkBytes).toString();
+    if (apkSha256 != asset.apkSha256) {
+      throw StateError(
+        'naiveproxy asset digest mismatch for ${asset.apkName}: '
+        'expected ${asset.apkSha256}, got $apkSha256',
+      );
+    }
+
+    final archive = ZipDecoder().decodeBytes(apkBytes, verify: true);
+    final binary = archive.findFile('lib/${asset.abi}/libnaive.so');
+    if (binary == null) {
+      throw StateError(
+        'lib/${asset.abi}/libnaive.so not found in ${asset.apkName}',
+      );
+    }
+
+    await target.writeAsBytes(
+      Uint8List.fromList(binary.content as List<int>),
+      flush: true,
+    );
+  }
+
+  stamp.parent.createSync(recursive: true);
+  await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+String _buildNaiveProxyStamp() {
+  final lines = <String>[
+    naiveProxyPinnedReleaseTag,
+    ...naiveProxyReleaseAssets.values.map(
+      (asset) => '${asset.abi}:${asset.apkName}:${asset.apkSha256}',
+    ),
+  ];
+  return lines.join('\n');
+}
+
+Future<Uint8List> _downloadBytes(Uri uri) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(uri);
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok) {
+      throw HttpException(
+        'Unexpected HTTP ${response.statusCode} for $uri',
+        uri: uri,
+      );
+    }
+
+    final bytes = BytesBuilder(copy: false);
+    await response.forEach(bytes.add);
+    return bytes.takeBytes();
+  } finally {
+    client.close(force: true);
+  }
 }
 
 Future<void> _exec(

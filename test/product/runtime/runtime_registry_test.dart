@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('RuntimeRegistry', () {
     final registry = RuntimeRegistry.flClashM(
-      readMihomoAccessControl: () => const AccessControl(),
+      readAccessControl: () => const AccessControl(),
     );
 
     test('resolves bundled mihomo by default', () {
@@ -33,6 +33,19 @@ void main() {
             ),
           ),
         ),
+      );
+    });
+
+    test('resolves naiveproxy as a supported engine', () {
+      final resolved = registry.resolveSelection(
+        const RuntimeSelection(engine: RuntimeId.naiveproxy),
+      );
+
+      expect(resolved.selection.engine, RuntimeId.naiveproxy);
+      expect(resolved.engine.registration.availability.isSupported, isTrue);
+      expect(
+        resolved.engine.registration.descriptor.capabilities,
+        contains(RuntimeCapability.pendingBinarySwap),
       );
     });
 

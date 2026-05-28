@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'engine_adapter.dart';
 import 'mihomo_engine_adapter.dart';
+import 'naiveproxy_engine_adapter.dart';
 import 'runtime_types.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
@@ -10,6 +11,13 @@ EngineAdapter _buildMihomoEngineAdapter(
   ReadAccessControlCallback readAccessControl,
 ) =>
     MihomoEngineAdapter(
+      readAccessControl: readAccessControl,
+    );
+
+EngineAdapter _buildNaiveProxyEngineAdapter(
+  ReadNaiveProxyAccessControlCallback readAccessControl,
+) =>
+    NaiveProxyEngineAdapter(
       readAccessControl: readAccessControl,
     );
 
@@ -80,7 +88,7 @@ class RuntimeRegistry {
   }
 
   factory RuntimeRegistry.flClashM({
-    required ReadAccessControlCallback readMihomoAccessControl,
+    required ReadAccessControlCallback readAccessControl,
   }) =>
       RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
@@ -101,8 +109,7 @@ class RuntimeRegistry {
               rollbackPath:
                   'Fallback stays on the bundled mihomo path and current cold-start snapshot.',
             ),
-            adapterFactory: () =>
-                _buildMihomoEngineAdapter(readMihomoAccessControl),
+            adapterFactory: () => _buildMihomoEngineAdapter(readAccessControl),
           ),
           const EngineRuntimeRegistration(
             descriptor: RuntimeDescriptor(
@@ -123,23 +130,24 @@ class RuntimeRegistry {
                   'Keep olcrtc unavailable in the registry and fall back to mihomo until binary, config, and migration paths are versioned.',
             ),
           ),
-          const EngineRuntimeRegistration(
-            descriptor: RuntimeDescriptor(
+          EngineRuntimeRegistration(
+            descriptor: const RuntimeDescriptor(
               id: RuntimeId.naiveproxy,
               role: RuntimeRole.engine,
               capabilities: {
                 RuntimeCapability.localSocks5Listener,
+                RuntimeCapability.pendingBinarySwap,
                 RuntimeCapability.externalServerDependency,
               },
             ),
-            availability: RuntimeAvailability.unsupported(
-              reason:
-                  'naiveproxy binary packaging, config.json generation, and Android SOCKS-to-VPN orchestration are not integrated.',
+            availability: const RuntimeAvailability.supported(
               updatePath:
-                  'Ship pinned release tags only, add config generation, and bridge the local SOCKS listener into Android VPN policy.',
+                  'setup.dart extracts the pinned stable naiveproxy plugin APK into bundled Android assets, then the adapter stages app-upgrade binaries through .pending activation in app data.',
               rollbackPath:
-                  'Disable naiveproxy selection and return to mihomo if the packaged binary or bridge regresses.',
+                  'Failed pending activation restores the previous runtime binary, keeps .pending for retry, and clears unsupported always-on cold-start state.',
             ),
+            adapterFactory: () =>
+                _buildNaiveProxyEngineAdapter(readAccessControl),
           ),
         ],
         helpers: [

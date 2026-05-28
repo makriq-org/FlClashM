@@ -35,9 +35,10 @@
 ### 3. Runtime Layer
 
 - основной runtime: `mihomo`
+- отдельный engine adapter: `naiveproxy`
 - `EngineAdapter`
 - `RuntimeRegistry` как allowlist и selection seam
-- disabled registrations для `olcrtc`, `naiveproxy`, `byedpi`
+- disabled registrations для `olcrtc`, `byedpi`
 
 ### 4. Helper Layer
 
@@ -49,7 +50,7 @@
 - permissions
 - foreground service
 - quick settings tile
-- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
+- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`, `AndroidNaiveProxyRuntimeBridge`)
 
 ## Текущий handoff
 
@@ -155,7 +156,8 @@
 - `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access/android-shell product services и применяет typed product advisory patch, не разбирая raw provider headers.
 - `AndroidEntrypoint` принимает tile команды, но shell transport/hook details делегирует в `AndroidShellService`.
 - `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
-- `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
+- `AccessView`, `MihomoEngineAdapter` и `NaiveProxyEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
+- `NaiveProxyEngineAdapter` держит process lifecycle в `AndroidNaiveProxyRuntimeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
 - `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 

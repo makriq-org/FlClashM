@@ -59,6 +59,13 @@ object SavedParams {
 
     fun isVpnActive(): Boolean = activeFile.exists()
 
+    fun clearQuickStartParams() {
+        runCatching {
+            paramsFile.delete()
+            activeFile.delete()
+        }.onFailure { GlobalState.log("clearQuickStartParams error: ${it.message}") }
+    }
+
     fun saveNotificationTitle(title: String) {
         runCatching { writeAtomic(notifTitleFile, title) }
             .onFailure { GlobalState.log("saveNotificationTitle error: ${it.message}") }

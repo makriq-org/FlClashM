@@ -40,6 +40,7 @@ class RuntimePlan {
     required this.selectedMap,
     required this.testUrl,
     this.runtime = const RuntimeSelection.mihomo(),
+    this.files = const {},
     required this.metadata,
   });
 
@@ -47,6 +48,7 @@ class RuntimePlan {
     required this.selectedMap,
     required this.testUrl,
     this.runtime = const RuntimeSelection.mihomo(),
+    this.files = const {},
   })  : config = const <String, dynamic>{},
         metadata = null;
 
@@ -54,6 +56,7 @@ class RuntimePlan {
   final Map<String, String> selectedMap;
   final String testUrl;
   final RuntimeSelection runtime;
+  final Map<String, String> files;
   final CompiledProfileMetadata? metadata;
 
   SetupParams toSetupParams() => SetupParams(

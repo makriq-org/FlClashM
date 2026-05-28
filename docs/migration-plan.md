@@ -17,8 +17,9 @@
 - `AppUpdateService` вынес updater policy над `AndroidUpdateBridge`
 - `AccessControlService` вынес split tunneling/access-control policy над `AndroidRuntimeAccessPolicy`
 - `AndroidShellService` вынес Android shell orchestration над `AndroidShellBridge`
-- `mihomo` поддержан как единственный enabled engine
-- `olcrtc`, `naiveproxy`, `byedpi` остаются disabled с guardrails и rollback/update notes
+- `mihomo` поддержан как production baseline
+- `naiveproxy` интегрирован как отдельный engine adapter с pinned release/update/rollback path
+- `olcrtc` и `byedpi` остаются disabled с guardrails и rollback/update notes
 
 ## Этап 4: platform shell consolidation
 
@@ -35,7 +36,7 @@
 
 Сделано:
 
-- `mihomo` зафиксирован как production baseline, пока `olcrtc`/`naiveproxy` остаются disabled
+- на конец этапа 5 `mihomo` был зафиксирован как production baseline, пока `olcrtc`/`naiveproxy` оставались disabled
 - `MihomoEngineAdapter` покрыт focused runtime tests, а не только общими `EngineManager` сценариями
 - pending core update path переведен на transactional swap с rollback к предыдущему binary и сохранением `.pending` при неуспешной активации
 - start/stop boundary усилен: listener/VPN rollback и cleanup теперь идут best-effort по обеим сторонам runtime boundary
@@ -45,10 +46,10 @@
 
 ## Следующие шаги
 
-### 1. Интеграция runtime по одному
+### 1. Дальше по runtime
 
+- hardening/telemetry для `naiveproxy`
 - `olcrtc`
-- `naiveproxy`
 - `byedpi` как helper-only path
 
 ### 2. Дальше по базе
@@ -61,4 +62,4 @@
 - в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
 - часть update/install UX все еще зависит от старого UI scaffolding (`loadingRun`, dialog helpers), хотя policy уже вынесена в product services
 - часть Android lifecycle/runtime UX все еще опирается на legacy `GlobalState`/controller wiring, хотя `mihomo` baseline уже стабилизирован на runtime/product service boundary
-- новые runtime пока есть только как registrations и guardrails, без production adapters
+- `naiveproxy` пока без always-on cold-start path: adapter сознательно очищает quick-start snapshot, пока engine selection/process handoff не будет перенесен в native cold-start flow

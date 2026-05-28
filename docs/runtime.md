@@ -20,11 +20,14 @@ Runtime слой подготавливается через явную product 
 - `EngineManager` вызывает стадии в явном порядке `compile -> security -> runtimePlan`
 - direct `updateConfig` path тоже проходит через product security floor до adapter bridge
 - `RuntimePlan.runtime` несет явный `RuntimeSelection`
+- `RuntimePlan.files` несет engine-specific runtime artifacts
 - `RuntimeRegistry` остается allowlist для engine/helper registrations
 - `MihomoEngineAdapter` остается default supported engine и production baseline
+- `NaiveProxyEngineAdapter` держит transport в отдельном процессе и отдает Android VPN boundary текущему `clashCore` seam через локальный SOCKS bridge
 - Android VPN start/stop path для `mihomo` проходит через `AccessControlService -> AndroidRuntimeAccessPolicy`
 - access-control snapshot для `mihomo` подается в adapter через runtime composition boundary, а не читается внутри него напрямую
 - pending `mihomo` core update применяется через transactional swap с rollback на предыдущий binary path
+- pending `naiveproxy` update stage-ится тем же `.pending -> active -> .rollback` boundary в app data
 - `mihomo` start path считает foreground title best-effort и откатывает listener/VPN handoff при неуспешном старте
 - `mihomo` stop path всегда пытается снять и listener, и VPN boundary, даже если одна из сторон падает
 - `EngineManager` читает runtime start time у adapter и на fresh attach, и после stop failure boundary, чтобы reattach state не дрейфовал; при недоступном probe после успешного `start` он падает назад на локальный timestamp, а не роняет старт
@@ -81,6 +84,7 @@ Runtime слой подготавливается через явную product 
 
 - полный config для engine setup
 - `RuntimeSelection`
+- engine-specific files для runtime handoff
 - metadata для UI handoff
 
 ### `EngineManager`
@@ -126,8 +130,14 @@ Runtime слой подготавливается через явную product 
   - engine registration без включения
   - unavailable до pinned Android AAR, `gomobile` bridge и client-side compile path
 - `naiveproxy`
-  - engine registration без включения
-  - unavailable до packaged release binary, `config.json` generation и Android SOCKS-to-VPN bridge
+  - supported engine adapter
+  - selection contract: `x-flclashm-runtime.engine=naiveproxy` + `x-flclashm-runtime.naiveproxy.proxy`
+  - config contract: `x-flclashm-runtime.naiveproxy.extra` может передавать дополнительные upstream keys, но не может переопределять `listen` и `proxy`
+  - update path: `setup.dart` вытягивает pinned stable release `v148.0.7778.96-5` из официальных plugin APK assets и пакует `libnaive.so` в bundled Flutter assets
+  - activation path: adapter копирует bundled binary в app data, пишет `naiveproxy/config.json` из `RuntimePlan.files`, рестартует `naiveproxy` process только после записи нового runtime artifact и откатывает config/process к предыдущему состоянию, если bridge handoff не применился
+  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальный SOCKS listener `naiveproxy`
+  - rollback path: failed pending activation восстанавливает предыдущий binary и сохраняет `.pending` для следующей попытки
+  - limitation: quick-start/always-on snapshot очищается, потому что native cold-start engine selection для `naiveproxy` пока не поддержан
 - `byedpi`
   - helper-only registration
   - unavailable до helper supervisor и явного attach contract
@@ -135,6 +145,7 @@ Runtime слой подготавливается через явную product 
 ## Ограничения
 
 - Provider hints не определяют runtime floor.
+- `naiveproxy` listener path определяется клиентом, а не profile metadata.
 - Unsupported runtime нельзя включить без registry change.
 - Helper integration не владеет Android VPN/TUN lifecycle.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.

@@ -87,6 +87,18 @@ class ServicePlugin :
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
+            "startNaiveProxy" -> handleStartNaiveProxy(call, result)
+            "stopNaiveProxy" -> launch {
+                Service.stopNaiveProxy()
+                result.successOnMain(true)
+            }
+            "getNaiveProxyRunTime" -> launch {
+                result.successOnMain(Service.getNaiveProxyRunTime())
+            }
+            "clearQuickStartParams" -> {
+                com.follow.clashx.common.SavedParams.clearQuickStartParams()
+                result.successOnMain(true)
+            }
             "showSubscriptionNotification" -> handleShowSubscriptionNotification(call, result)
             "saveParams" -> {
                 val args = call.arguments as? Map<*, *>
@@ -177,6 +189,19 @@ class ServicePlugin :
             } ?: doStartService(options, result)
         } else {
             doStartService(options, result)
+        }
+    }
+
+    private fun handleStartNaiveProxy(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path") ?: ""
+        val workingDirectory = call.argument<String>("workingDirectory") ?: ""
+        if (path.isBlank() || workingDirectory.isBlank()) {
+            result.successOnMain(0L)
+            return
+        }
+        launch {
+            val runTime = Service.startNaiveProxy(path, workingDirectory)
+            result.successOnMain(runTime)
         }
     }
 

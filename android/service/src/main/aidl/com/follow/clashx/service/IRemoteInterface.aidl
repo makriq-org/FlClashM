@@ -38,6 +38,14 @@ interface IRemoteInterface {
 
     String getTotalTraffic();
 
+    void startNaiveProxy(in String executablePath,
+                         in String workingDirectory,
+                         in IResultInterface result);
+
+    void stopNaiveProxy(in IResultInterface result);
+
+    long getNaiveProxyRunTime();
+
     void startListener();
 
     void stopListener();

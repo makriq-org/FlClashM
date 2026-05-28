@@ -154,6 +154,19 @@ object Service {
     suspend fun getTotalTraffic(): String =
         delegate.useService { it.totalTraffic }.getOrNull() ?: ""
 
+    suspend fun startNaiveProxy(executablePath: String, workingDirectory: String): Long =
+        delegate.useService(timeoutMillis = 15_000L) { proxy ->
+            awaitResult { cb -> proxy.startNaiveProxy(executablePath, workingDirectory, cb) }
+        }.getOrNull() ?: 0L
+
+    suspend fun stopNaiveProxy(): Long =
+        delegate.useService(timeoutMillis = 15_000L) { proxy ->
+            awaitResult { cb -> proxy.stopNaiveProxy(cb) }
+        }.getOrNull() ?: 0L
+
+    suspend fun getNaiveProxyRunTime(): Long =
+        delegate.useService { it.naiveProxyRunTime }.getOrNull() ?: 0L
+
     suspend fun startListener(): Result<Unit> =
         delegate.useService { it.startListener() }
 

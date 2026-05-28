@@ -2,6 +2,8 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import '../runtime/runtime_types.dart';
+
 @immutable
 class RawProfile {
   const RawProfile({
@@ -9,6 +11,7 @@ class RawProfile {
     required this.config,
     required this.groupDescriptions,
     required this.providerHints,
+    required this.runtimeHints,
   });
 
   factory RawProfile.fromConfig({
@@ -36,12 +39,14 @@ class RawProfile {
           externalController:
               _trimmedString(config["external-controller"]) ?? "",
         ),
+        runtimeHints: _parseRuntimeHints(config),
       );
 
   final Profile profile;
   final Map<String, dynamic> config;
   final Map<String, String> groupDescriptions;
   final ProviderAdvisoryHints providerHints;
+  final ProductRuntimeHints runtimeHints;
 
   static Map<String, String> _parseGroupDescriptions(Object? groups) {
     final descriptions = <String, String>{};
@@ -111,6 +116,40 @@ class RawProfile {
     }
     return null;
   }
+
+  static ProductRuntimeHints _parseRuntimeHints(Map<String, dynamic> config) {
+    final runtimeConfig = config["x-flclashm-runtime"];
+    if (runtimeConfig is! Map) {
+      return const ProductRuntimeHints();
+    }
+
+    final engine = _trimmedString(runtimeConfig["engine"]);
+    if (engine == null || engine.toLowerCase() != RuntimeId.naiveproxy.label) {
+      return const ProductRuntimeHints();
+    }
+
+    final naiveProxy = runtimeConfig["naiveproxy"];
+    if (naiveProxy is! Map) {
+      return const ProductRuntimeHints(
+        selection: RuntimeSelection(engine: RuntimeId.naiveproxy),
+      );
+    }
+
+    final proxy = _trimmedString(naiveProxy["proxy"]);
+    final extraConfig = naiveProxy["extra"];
+
+    return ProductRuntimeHints(
+      selection: const RuntimeSelection(engine: RuntimeId.naiveproxy),
+      naiveproxy: proxy == null
+          ? null
+          : NaiveProxyRuntimeHints(
+              proxy: proxy,
+              extraConfig: extraConfig is Map
+                  ? Map<String, dynamic>.from(extraConfig)
+                  : const {},
+            ),
+    );
+  }
 }
 
 @immutable
@@ -156,4 +195,26 @@ class ProviderRuntimeHints {
   final bool? unifiedDelay;
   final String? logLevel;
   final int? keepAliveInterval;
+}
+
+@immutable
+class ProductRuntimeHints {
+  const ProductRuntimeHints({
+    this.selection = const RuntimeSelection.mihomo(),
+    this.naiveproxy,
+  });
+
+  final RuntimeSelection selection;
+  final NaiveProxyRuntimeHints? naiveproxy;
+}
+
+@immutable
+class NaiveProxyRuntimeHints {
+  const NaiveProxyRuntimeHints({
+    required this.proxy,
+    this.extraConfig = const {},
+  });
+
+  final String proxy;
+  final Map<String, dynamic> extraConfig;
 }

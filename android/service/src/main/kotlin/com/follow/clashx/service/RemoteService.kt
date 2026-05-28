@@ -176,6 +176,7 @@ class RemoteService : Service() {
                             proxy.handleStop()
                         }
                     }
+                    runCatching { NaiveProxyProcessManager.stop() }
                     delegate.unbind()
                     State.delegate = null
                     State.intent = null
@@ -218,6 +219,29 @@ class RemoteService : Service() {
         override fun getTraffic(): String = Core.getTraffic()
         override fun getTotalTraffic(): String = Core.getTotalTraffic()
 
+        override fun startNaiveProxy(
+            executablePath: String,
+            workingDirectory: String,
+            result: IResultInterface,
+        ) {
+            GlobalState.launch {
+                val startTime = NaiveProxyProcessManager.start(
+                    executablePath = executablePath,
+                    workingDirectory = workingDirectory,
+                )
+                result.onResult(startTime)
+            }
+        }
+
+        override fun stopNaiveProxy(result: IResultInterface) {
+            GlobalState.launch {
+                val stoppedAt = NaiveProxyProcessManager.stop()
+                result.onResult(stoppedAt)
+            }
+        }
+
+        override fun getNaiveProxyRunTime(): Long = NaiveProxyProcessManager.readStartTime()
+
         override fun startListener() {
             Core.startListener()
         }
@@ -240,6 +264,7 @@ class RemoteService : Service() {
     override fun onDestroy() {
         eventListener.set(null)
         runCatching { Core.setEventListener(null) }
+        GlobalState.launch { NaiveProxyProcessManager.stop() }
         super.onDestroy()
     }
 
