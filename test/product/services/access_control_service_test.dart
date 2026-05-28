@@ -186,6 +186,27 @@ void main() {
       expect(platform.lastIconPackageName, 'com.example.with.icon');
     });
 
+    test('prioritizes profile-driven access control over manual state', () {
+      const service = AccessControlService();
+      const manualAccessControl = AccessControl(
+        enable: true,
+        mode: AccessControlMode.rejectSelected,
+        rejectList: ['com.example.manual'],
+      );
+      const profileAccessControl = AccessControl(
+        enable: true,
+        mode: AccessControlMode.acceptSelected,
+        acceptList: ['com.example.profile'],
+      );
+
+      final resolved = service.resolveVpnAccessControl(
+        accessControl: manualAccessControl,
+        profileAccessControl: profileAccessControl,
+      );
+
+      expect(resolved, profileAccessControl);
+    });
+
     test('delegates runtime access orchestration to the platform bridge',
         () async {
       final platform = _FakeRuntimeAccessPlatform();

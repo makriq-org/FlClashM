@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../runtime/naiveproxy_release.dart';
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
+import 'profile_split_tunneling.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
 
@@ -28,16 +29,24 @@ class ProfilePatchContext {
 @immutable
 class RuntimePlanBuildContext {
   const RuntimePlanBuildContext({
+    required this.isAndroid,
     required this.overrideNetworkSettings,
     required this.overrideDns,
     required this.routeMode,
     required this.hasCurrentScript,
+    required this.profilesPath,
+    required this.profilePath,
+    required this.readInstalledPackageNames,
   });
 
+  final bool isAndroid;
   final bool overrideNetworkSettings;
   final bool overrideDns;
   final RouteMode routeMode;
   final bool hasCurrentScript;
+  final String profilesPath;
+  final String profilePath;
+  final Future<List<String>> Function() readInstalledPackageNames;
 }
 
 class ProfileCompiler {
@@ -93,7 +102,7 @@ class ProfileCompiler {
       );
     }
 
-    final rawConfig = _cloneConfig(rawProfile.config);
+    var rawConfig = _cloneConfig(rawProfile.config);
     final patchConfig = runtimePatchConfig.copyWith(
       tun: runtimePatchConfig.tun.getRealTun(context.routeMode),
     );
@@ -103,6 +112,13 @@ class ProfileCompiler {
           patchConfig: runtimePatchConfig,
           overrideNetworkSettings: context.overrideNetworkSettings,
         );
+    final resolvedProfileSplitTunneling =
+        await _resolveProfileSplitTunnelingOverride(
+      rawConfig: rawConfig,
+      rawProfile: rawProfile,
+      context: context,
+    );
+    rawConfig = resolvedProfileSplitTunneling.config;
 
     if (rawProfile.runtimeHints.selection.engine == RuntimeId.naiveproxy) {
       return _buildNaiveProxyRuntimePlan(
@@ -112,6 +128,7 @@ class ProfileCompiler {
         metadata: metadata,
         context: context,
         testUrl: testUrl,
+        profileSplitTunneling: resolvedProfileSplitTunneling,
       );
     }
 
@@ -152,17 +169,19 @@ class ProfileCompiler {
       testUrl: testUrl,
       runtime: const RuntimeSelection.mihomo(),
       metadata: metadata,
+      profileAccessControl: resolvedProfileSplitTunneling.accessControl,
     );
   }
 
-  RuntimePlan _buildNaiveProxyRuntimePlan({
+  Future<RuntimePlan> _buildNaiveProxyRuntimePlan({
     required RawProfile rawProfile,
     required ClashConfig patchConfig,
     required SecuredProfilePatch securedProfile,
     required CompiledProfileMetadata metadata,
     required RuntimePlanBuildContext context,
     required String testUrl,
-  }) {
+    required ResolvedProfileSplitTunneling profileSplitTunneling,
+  }) async {
     final naiveProxy = rawProfile.runtimeHints.naiveproxy;
     if (naiveProxy == null || naiveProxy.proxy.trim().isEmpty) {
       throw StateError(
@@ -197,6 +216,10 @@ class ProfileCompiler {
       ],
       'rules': ['MATCH,$naiveProxyBridgeGroupName'],
     };
+    final normalizedTun = profileSplitTunneling.config['tun'];
+    if (normalizedTun is Map) {
+      rawConfig['tun'] = Map<String, dynamic>.from(normalizedTun);
+    }
 
     _applyCoreRuntimeSettings(
       rawConfig: rawConfig,
@@ -239,6 +262,35 @@ class ProfileCompiler {
         ),
       },
       metadata: metadata,
+      profileAccessControl: profileSplitTunneling.accessControl,
+    );
+  }
+
+  Future<ResolvedProfileSplitTunneling> _resolveProfileSplitTunnelingOverride({
+    required Map<String, dynamic> rawConfig,
+    required RawProfile rawProfile,
+    required RuntimePlanBuildContext context,
+  }) async {
+    if (!context.isAndroid) {
+      return ResolvedProfileSplitTunneling(
+        config: rawConfig,
+        accessControl: null,
+      );
+    }
+
+    final installedPackageNames =
+        requiresInstalledPackageInventoryForProfileSplitTunneling(
+      rawConfig,
+      isAndroid: context.isAndroid,
+    )
+            ? await context.readInstalledPackageNames()
+            : const <String>[];
+    return resolveAndroidProfileSplitTunneling(
+      rawConfig: rawConfig,
+      isAndroid: context.isAndroid,
+      profilesPath: context.profilesPath,
+      profileId: rawProfile.profile.id,
+      installedPackageNames: installedPackageNames,
     );
   }
 

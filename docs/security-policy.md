@@ -39,6 +39,9 @@ Product-level security boundary теперь выражена типами:
 - тот же `AndroidSecurityPolicy` принудительно включает TUN и для live `updateConfig` path
 - runtime plan builder применяет Android tun hardening по `RuntimeSecurityConstraints`
 - `AccessControlService` собирает Android VPN access-control client-side из локального `vpnProps.accessControl`
+- profile-driven split tunneling из профиля имеет явный client-managed приоритет над manual `vpnProps.accessControl`; explicit include-mode с пустым resolved set не откатывается назад к manual ACL
+- file/url-backed package lists ограничены каталогом профилей и кешируются per-profile с fallback только на последнюю валидную локально сохраненную копию
+- Android app updater принимает только APK, прошедший SHA256 verification перед installer handoff
 
 ## Provider headers
 
@@ -48,6 +51,7 @@ Product-level security boundary теперь выражена типами:
 - display/customization header parsing локализован в `lib/product/subscription/**`
 - updater/access-control services не используют provider headers как policy input
 - raw provider headers не должны использоваться как product API в base/UI слоях
+- provider metadata не может ослабить path validation, checksum verification или profile-vs-manual priority rules
 
 ## Advisory profile hints
 

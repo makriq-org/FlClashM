@@ -22,6 +22,7 @@ import 'common/common.dart';
 import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
+import 'plugins/app.dart';
 import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/security/product_security.dart';
@@ -35,6 +36,7 @@ class GlobalState {
   GlobalState._internal() {
     runtimeRegistry = RuntimeRegistry.flClashM(
       readAccessControl: () => config.vpnProps.accessControl,
+      readProfileAccessControl: () => activeProfileAccessControl,
     );
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,
@@ -64,6 +66,7 @@ class GlobalState {
   late Color accentColor;
   CorePalette? corePalette;
   Map<String, dynamic>? lastRuntimeConfig;
+  AccessControl? _activeProfileAccessControl;
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -92,6 +95,8 @@ class GlobalState {
   DateTime? get startTime => engineManager.startTime;
 
   AppController get appController => _appController!;
+
+  AccessControl? get activeProfileAccessControl => _activeProfileAccessControl;
 
   set appController(AppController appController) {
     _appController = appController;
@@ -243,10 +248,16 @@ class GlobalState {
     }
   }
 
-  CoreState getCoreState() {
+  CoreState getCoreState({
+    AccessControl? profileAccessControl,
+  }) {
     final currentProfile = config.currentProfile;
     return CoreState(
-      vpnProps: config.vpnProps,
+      vpnProps: config.vpnProps.copyWith(
+        accessControl: profileAccessControl ??
+            activeProfileAccessControl ??
+            config.vpnProps.accessControl,
+      ),
       onlyStatisticsProxy: false,
       currentProfileName: currentProfile?.label ?? currentProfile?.id ?? "",
       bypassDomain: config.networkProps.bypassDomain,
@@ -261,7 +272,13 @@ class GlobalState {
       return null;
     }
     final configMap = await getProfileConfig(profile.id);
-    final rawConfig = await handleEvaluate(configMap);
+    final profilePath = await appPath.getProfilePath(profile.id);
+    final restoredConfig = await restoreAndroidProfileSplitTunnelingFields(
+      configMap,
+      isAndroid: Platform.isAndroid,
+      profilePath: profilePath,
+    );
+    final rawConfig = await handleEvaluate(restoredConfig);
     return RawProfile.fromConfig(
       profile: profile,
       config: rawConfig,
@@ -305,21 +322,29 @@ class GlobalState {
     required RawProfile? rawProfile,
     required SecuredProfilePatch securedProfile,
     required ClashConfig runtimePatchConfig,
-  }) =>
-      _profilePipeline.buildRuntimePlan(
-        rawProfile: rawProfile,
-        context: _buildRuntimePlanContext(),
-        securedProfile: securedProfile,
-        runtimePatchConfig: runtimePatchConfig,
-        selectedMap: config.currentProfile?.selectedMap ?? {},
-        testUrl: config.appSetting.testUrl,
-        providerAssetPathResolver: (
-          profileId,
-          type,
-          url,
-        ) async =>
-            appPath.getProvidersFilePath(profileId, type, url),
-      );
+  }) async {
+    final profilesPath = await appPath.profilesPath;
+    final profilePath = rawProfile == null
+        ? ''
+        : await appPath.getProfilePath(rawProfile.profile.id);
+    return _profilePipeline.buildRuntimePlan(
+      rawProfile: rawProfile,
+      context: _buildRuntimePlanContext(
+        profilesPath: profilesPath,
+        profilePath: profilePath,
+      ),
+      securedProfile: securedProfile,
+      runtimePatchConfig: runtimePatchConfig,
+      selectedMap: config.currentProfile?.selectedMap ?? {},
+      testUrl: config.appSetting.testUrl,
+      providerAssetPathResolver: (
+        profileId,
+        type,
+        url,
+      ) async =>
+          appPath.getProvidersFilePath(profileId, type, url),
+    );
+  }
 
   UpdateParams buildRuntimeUpdateParams({
     required ClashConfig patchConfig,
@@ -339,6 +364,7 @@ class GlobalState {
 
   void applyRuntimePlan(RuntimePlan runtimePlan) {
     lastRuntimeConfig = runtimePlan.config;
+    _activeProfileAccessControl = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
   }
 
@@ -357,12 +383,28 @@ class GlobalState {
         isAndroid: Platform.isAndroid,
       );
 
-  RuntimePlanBuildContext _buildRuntimePlanContext() => RuntimePlanBuildContext(
+  RuntimePlanBuildContext _buildRuntimePlanContext({
+    required String profilesPath,
+    required String profilePath,
+  }) =>
+      RuntimePlanBuildContext(
+        isAndroid: Platform.isAndroid,
         overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
         overrideDns: config.overrideDns,
         routeMode: config.networkProps.routeMode,
         hasCurrentScript: config.scriptProps.currentScript != null,
+        profilesPath: profilesPath,
+        profilePath: profilePath,
+        readInstalledPackageNames: _readInstalledPackageNames,
       );
+
+  Future<List<String>> _readInstalledPackageNames() async {
+    final packages = await app?.getPackages() ?? const <Package>[];
+    return {
+      for (final package in packages)
+        if (package.packageName.trim().isNotEmpty) package.packageName.trim(),
+    }.toList(growable: false);
+  }
 
   void _applyCompiledProfileMetadata(CompiledProfileMetadata? metadata) {
     if (metadata == null) {

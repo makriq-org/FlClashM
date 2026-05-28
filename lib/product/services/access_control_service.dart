@@ -227,6 +227,12 @@ class AccessControlService {
   Future<ImageProvider?> readPackageIcon(String packageName) =>
       platform.readPackageIcon(packageName);
 
+  AccessControl resolveVpnAccessControl({
+    required AccessControl accessControl,
+    AccessControl? profileAccessControl,
+  }) =>
+      profileAccessControl ?? accessControl;
+
   Future<bool> startVpn({required AccessControl accessControl}) =>
       platform.startVpn(accessControl: accessControl);
 

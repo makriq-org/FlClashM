@@ -73,6 +73,8 @@
 
 - читать `RawProfile`
 - применять только advisory provider hints
+- восстанавливать client-only Android split-tunneling поля из raw profile source перед runtime-plan stage
+- нормализовать `tun.include/exclude-package*` в точные package names и typed profile access-control override
 - собирать `CompiledProfilePatch` и metadata
 
 Не должен:
@@ -115,6 +117,7 @@
 
 - product policy для auto/manual update check
 - result handling policy поверх Android update bridge
+- оркестрировать Android updater path с ABI selection, SHA256 verification и installer handoff
 - отделить UI/controller от Android update transport details
 
 Не должен:
@@ -129,6 +132,7 @@
 - централизовать split tunneling/access-control session state
 - держать handoff `UI state -> AccessControl -> Android runtime access path`
 - держать package inventory/icon handoff для access UI внутри product/platform seam
+- применять client-managed приоритет profile split tunneling над persisted manual access-control state
 - отдавать TUN authorization orchestration в platform seam без размазывания по controller/view/runtime adapter
 
 Не должен:
@@ -157,6 +161,7 @@
 - `AndroidEntrypoint` принимает tile команды, но shell transport/hook details делегирует в `AndroidShellService`.
 - `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
 - `AccessView`, `MihomoEngineAdapter` и `NaiveProxyEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
+- `RuntimePlan` несет normalized profile split-tunneling override, а adapters читают его через composition boundary вместо парсинга profile YAML на старте VPN.
 - `NaiveProxyEngineAdapter` держит process lifecycle в `AndroidNaiveProxyRuntimeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
 - `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.

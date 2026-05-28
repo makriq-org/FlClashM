@@ -38,15 +38,13 @@ class AboutView extends StatelessWidget {
     if (commonScaffoldState?.mounted != true) {
       return;
     }
+    Future<T?> runTask<T>(Future<T> Function() task, {String? title}) =>
+        commonScaffoldState!.loadingRun<T>(
+          task,
+          title: title,
+        );
     await productServices.appUpdate.manualCheck(
-      runCheck: (
-        task, {
-        title,
-      }) =>
-          commonScaffoldState!.loadingRun<Map<String, dynamic>?>(
-        task,
-        title: title,
-      ),
+      runTask: runTask,
       loadingTitle: appLocalizations.checkUpdate,
     );
   }

@@ -1,3 +1,4 @@
+import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 import 'engine_adapter.dart';
@@ -9,16 +10,20 @@ typedef EngineAdapterFactory = EngineAdapter Function();
 
 EngineAdapter _buildMihomoEngineAdapter(
   ReadAccessControlCallback readAccessControl,
+  AccessControl? Function()? readProfileAccessControl,
 ) =>
     MihomoEngineAdapter(
       readAccessControl: readAccessControl,
+      readProfileAccessControl: readProfileAccessControl,
     );
 
 EngineAdapter _buildNaiveProxyEngineAdapter(
   ReadNaiveProxyAccessControlCallback readAccessControl,
+  AccessControl? Function()? readProfileAccessControl,
 ) =>
     NaiveProxyEngineAdapter(
       readAccessControl: readAccessControl,
+      readProfileAccessControl: readProfileAccessControl,
     );
 
 @immutable
@@ -89,6 +94,7 @@ class RuntimeRegistry {
 
   factory RuntimeRegistry.flClashM({
     required ReadAccessControlCallback readAccessControl,
+    AccessControl? Function()? readProfileAccessControl,
   }) =>
       RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
@@ -109,7 +115,10 @@ class RuntimeRegistry {
               rollbackPath:
                   'Fallback stays on the bundled mihomo path and current cold-start snapshot.',
             ),
-            adapterFactory: () => _buildMihomoEngineAdapter(readAccessControl),
+            adapterFactory: () => _buildMihomoEngineAdapter(
+              readAccessControl,
+              readProfileAccessControl,
+            ),
           ),
           const EngineRuntimeRegistration(
             descriptor: RuntimeDescriptor(
@@ -146,8 +155,10 @@ class RuntimeRegistry {
               rollbackPath:
                   'Failed pending activation restores the previous runtime binary, keeps .pending for retry, and clears unsupported always-on cold-start state.',
             ),
-            adapterFactory: () =>
-                _buildNaiveProxyEngineAdapter(readAccessControl),
+            adapterFactory: () => _buildNaiveProxyEngineAdapter(
+              readAccessControl,
+              readProfileAccessControl,
+            ),
           ),
         ],
         helpers: [

@@ -29,7 +29,9 @@ typedef BuildRuntimePlanCallback = Future<RuntimePlan> Function({
   required ClashConfig runtimePatchConfig,
 });
 typedef ApplyRuntimePlanCallback = void Function(RuntimePlan runtimePlan);
-typedef BuildCoreStateCallback = CoreState Function();
+typedef BuildCoreStateCallback = CoreState Function({
+  AccessControl? profileAccessControl,
+});
 typedef BuildInitParamsCallback = Future<InitParams> Function();
 typedef ResolveTunAccessCallback = FutureOr<ResolvedTunAccess> Function({
   required bool requestedTunEnable,
@@ -267,7 +269,10 @@ class EngineManager {
     if (!await targetAdapter.isInitialized()) {
       await targetAdapter.initialize(
         initParams: await _buildInitParams(),
-        state: _buildCoreState(),
+        state: _buildCoreState(
+          profileAccessControl: compiledRuntimePlan
+              .appliedRuntimePlan.runtimePlan.profileAccessControl,
+        ),
       );
     }
 
@@ -324,7 +329,10 @@ class EngineManager {
         initParams: await _buildInitParams(),
         setupParams:
             compiledRuntimePlan.appliedRuntimePlan.runtimePlan.toSetupParams(),
-        state: _buildCoreState(),
+        state: _buildCoreState(
+          profileAccessControl: compiledRuntimePlan
+              .appliedRuntimePlan.runtimePlan.profileAccessControl,
+        ),
       );
     } catch (e) {
       commonPrint.log("persistColdStartParams: $e");

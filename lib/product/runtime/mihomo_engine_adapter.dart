@@ -9,6 +9,7 @@ import '../services/product_services.dart';
 import 'engine_adapter.dart';
 
 typedef ReadAccessControlCallback = AccessControl Function();
+typedef ReadProfileAccessControlCallback = AccessControl? Function();
 
 abstract interface class MihomoCoreBridge {
   Future<void> shutdown();
@@ -183,15 +184,19 @@ class MihomoEngineAdapter implements EngineAdapter {
     this.platform = const DefaultMihomoPlatformBridge(),
     this.update = const DefaultMihomoUpdateBridge(),
     required ReadAccessControlCallback readAccessControl,
-  }) : _readAccessControl = readAccessControl;
+    ReadProfileAccessControlCallback? readProfileAccessControl,
+  })  : _readAccessControl = readAccessControl,
+        _readProfileAccessControl = readProfileAccessControl;
 
   final MihomoCoreBridge core;
   final MihomoLifecycleBridge lifecycle;
   final MihomoPlatformBridge platform;
   final MihomoUpdateBridge update;
   final ReadAccessControlCallback _readAccessControl;
+  final ReadProfileAccessControlCallback? _readProfileAccessControl;
 
   AccessControl get _accessControl => _readAccessControl();
+  AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
 
   String get _coreRollbackPath => '${update.corePath}.rollback';
 
@@ -299,7 +304,10 @@ class MihomoEngineAdapter implements EngineAdapter {
 
       vpnStartAttempted = true;
       final started = await platform.startVpn(
-        accessControl: _accessControl,
+        accessControl: productServices.accessControl.resolveVpnAccessControl(
+          accessControl: _accessControl,
+          profileAccessControl: _profileAccessControl,
+        ),
       );
       if (started) {
         return true;

@@ -54,15 +54,21 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     }
 
     try {
-      final map = json.decode(optionsJson) as Map<String, dynamic>;
-      if (accessControl.enable) {
-        map['accessControl'] = {
-          'mode': accessControl.mode.name,
-          'acceptList': accessControl.acceptList,
-          'rejectList': accessControl.rejectList,
-        };
-      }
-      return json.encode(map);
+      return json.encode(
+        (json.decode(optionsJson) as Map<String, dynamic>)
+          ..remove('accessControl')
+          ..addAll(
+            accessControl.enable
+                ? {
+                    'accessControl': {
+                      'mode': accessControl.mode.name,
+                      'acceptList': accessControl.acceptList,
+                      'rejectList': accessControl.rejectList,
+                    },
+                  }
+                : const {},
+          ),
+      );
     } catch (_) {
       return optionsJson;
     }

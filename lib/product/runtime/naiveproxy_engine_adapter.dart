@@ -16,6 +16,7 @@ import 'engine_adapter.dart';
 import 'naiveproxy_release.dart';
 
 typedef ReadNaiveProxyAccessControlCallback = AccessControl Function();
+typedef ReadNaiveProxyProfileAccessControlCallback = AccessControl? Function();
 typedef WaitForNaiveProxyListenerCallback = Future<void> Function(
   String configPath,
 );
@@ -278,7 +279,9 @@ class NaiveProxyEngineAdapter implements EngineAdapter {
     this.binary = const DefaultNaiveProxyBinaryBridge(),
     this.waitForListener = _waitForNaiveProxyListener,
     required ReadNaiveProxyAccessControlCallback readAccessControl,
-  }) : _readAccessControl = readAccessControl;
+    ReadNaiveProxyProfileAccessControlCallback? readProfileAccessControl,
+  })  : _readAccessControl = readAccessControl,
+        _readProfileAccessControl = readProfileAccessControl;
 
   final NaiveProxyCoreBridge core;
   final NaiveProxyLifecycleBridge lifecycle;
@@ -287,8 +290,10 @@ class NaiveProxyEngineAdapter implements EngineAdapter {
   final NaiveProxyBinaryBridge binary;
   final WaitForNaiveProxyListenerCallback waitForListener;
   final ReadNaiveProxyAccessControlCallback _readAccessControl;
+  final ReadNaiveProxyProfileAccessControlCallback? _readProfileAccessControl;
 
   AccessControl get _accessControl => _readAccessControl();
+  AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
 
   @override
   Future<void> applyPendingUpdate() async {
@@ -490,7 +495,10 @@ class NaiveProxyEngineAdapter implements EngineAdapter {
 
       vpnStartAttempted = true;
       final started = await platform.startVpn(
-        accessControl: _accessControl,
+        accessControl: productServices.accessControl.resolveVpnAccessControl(
+          accessControl: _accessControl,
+          profileAccessControl: _profileAccessControl,
+        ),
       );
       if (started) {
         return true;

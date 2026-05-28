@@ -20,6 +20,8 @@
 - `mihomo` поддержан как production baseline
 - `naiveproxy` интегрирован как отдельный engine adapter с pinned release/update/rollback path
 - `olcrtc` и `byedpi` остаются disabled с guardrails и rollback/update notes
+- этап 7 перенес Android app updater в product/platform path с download + SHA256 verify + installer handoff
+- этап 7 перенес profile-driven split tunneling в compile/runtime/access seams с file/url selectors, cache/fallback и явным profile priority
 
 ## Этап 4: platform shell consolidation
 
@@ -60,6 +62,6 @@
 ## Риски
 
 - в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
-- часть update/install UX все еще зависит от старого UI scaffolding (`loadingRun`, dialog helpers), хотя policy уже вынесена в product services
+- часть update/install UX все еще зависит от старого UI scaffolding (`loadingRun`, dialog helpers), хотя policy и transport уже вынесены в product/platform seams
 - часть Android lifecycle/runtime UX все еще опирается на legacy `GlobalState`/controller wiring, хотя `mihomo` baseline уже стабилизирован на runtime/product service boundary
 - `naiveproxy` пока без always-on cold-start path: adapter сознательно очищает quick-start snapshot, пока engine selection/process handoff не будет перенесен в native cold-start flow

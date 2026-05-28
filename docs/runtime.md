@@ -21,6 +21,7 @@ Runtime слой подготавливается через явную product 
 - direct `updateConfig` path тоже проходит через product security floor до adapter bridge
 - `RuntimePlan.runtime` несет явный `RuntimeSelection`
 - `RuntimePlan.files` несет engine-specific runtime artifacts
+- `RuntimePlan.profileAccessControl` несет normalized profile-driven split tunneling override для Android VPN handoff
 - `RuntimeRegistry` остается allowlist для engine/helper registrations
 - `MihomoEngineAdapter` остается default supported engine и production baseline
 - `NaiveProxyEngineAdapter` держит transport в отдельном процессе и отдает Android VPN boundary текущему `clashCore` seam через локальный SOCKS bridge
@@ -85,6 +86,7 @@ Runtime слой подготавливается через явную product 
 - полный config для engine setup
 - `RuntimeSelection`
 - engine-specific files для runtime handoff
+- normalized Android split-tunneling policy и `profileAccessControl` override
 - metadata для UI handoff
 
 ### `EngineManager`
@@ -150,3 +152,4 @@ Runtime слой подготавливается через явную product 
 - Helper integration не владеет Android VPN/TUN lifecycle.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.
 - split tunneling/access-control orchestration не должна обходить `AccessControlService`.
+- client-only `tun.include/exclude-package-file|url` поля восстанавливаются из raw profile YAML и нормализуются до exact package names до Android VPN handoff.

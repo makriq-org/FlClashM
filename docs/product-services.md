@@ -16,14 +16,18 @@
 
 - владеет policy для `auto-check`, `manual-check` и result handling
 - решает, когда update path вообще выполняется
+- оркестрирует Android app update path: release resolution -> ABI selection -> SHA256 verification -> APK staging -> installer handoff
 - делегирует transport-действия в `AndroidUpdateBridge`
 
 `AndroidUpdateBridge` после этого отвечает только за:
 
 - `checkForAppUpdate`
-- prompt/download dialog
+- GitHub release transport
+- ABI inventory
+- APK download/text fetch
+- best-effort runtime stop перед installer handoff
 - explicit error dialog
-- open latest release page
+- open release page / package install handoff
 - package install handoff
 
 Thin consumers:
@@ -38,6 +42,7 @@ Thin consumers:
 - централизует editable session state для split tunneling/access-control
 - переводит UI state <-> `VpnProps.accessControl`
 - управляет package inventory/icon handoff для access UI
+- разрешает приоритет между manual `vpnProps.accessControl` и profile-driven split tunneling
 - делегирует runtime access orchestration в `AndroidRuntimeAccessPolicy`
 
 `AndroidRuntimeAccessPolicy` после этого отвечает только за:
@@ -60,6 +65,7 @@ Thin consumers:
 - provider headers не участвуют в Android access-control policy
 - UI не должен напрямую знать о `AndroidUpdateBridge` и `AndroidRuntimeAccessPolicy`
 - runtime adapter не должен собирать access-control rules сам
+- profile-driven split tunneling из runtime plan имеет явный приоритет над manual app-side access control на VPN start boundary
 
 ## `AndroidShellService`
 

@@ -42,6 +42,7 @@ class RuntimePlan {
     this.runtime = const RuntimeSelection.mihomo(),
     this.files = const {},
     required this.metadata,
+    this.profileAccessControl,
   });
 
   const RuntimePlan.empty({
@@ -49,6 +50,7 @@ class RuntimePlan {
     required this.testUrl,
     this.runtime = const RuntimeSelection.mihomo(),
     this.files = const {},
+    this.profileAccessControl,
   })  : config = const <String, dynamic>{},
         metadata = null;
 
@@ -58,6 +60,7 @@ class RuntimePlan {
   final RuntimeSelection runtime;
   final Map<String, String> files;
   final CompiledProfileMetadata? metadata;
+  final AccessControl? profileAccessControl;
 
   SetupParams toSetupParams() => SetupParams(
         config: config,

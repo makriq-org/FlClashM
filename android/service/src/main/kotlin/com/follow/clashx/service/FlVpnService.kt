@@ -217,6 +217,12 @@ class FlVpnService : VpnService(), IBaseService {
             val ac = options.accessControl
             val include = options.includePackage.orEmpty()
             val exclude = options.excludePackage.orEmpty()
+            val includeModeRequested =
+                ac?.mode == com.follow.clashx.common.AccessControlMode.acceptSelected ||
+                    options.includePackage != null
+            val excludeModeRequested =
+                ac?.mode == com.follow.clashx.common.AccessControlMode.rejectSelected ||
+                    options.excludePackage != null
 
             val allInclude = mutableSetOf<String>()
             val allExclude = mutableSetOf<String>()
@@ -232,13 +238,13 @@ class FlVpnService : VpnService(), IBaseService {
             allInclude.addAll(include)
             allExclude.addAll(exclude)
 
-            if (allInclude.isNotEmpty()) {
+            if (includeModeRequested) {
                 if (allExclude.isNotEmpty()) {
                     GlobalState.log("Access control: include-package active, exclude-package ignored (Android limitation)")
                 }
                 allInclude.add(packageName)
                 allInclude.forEach { runCatching { builder.addAllowedApplication(it) } }
-            } else if (allExclude.isNotEmpty()) {
+            } else if (excludeModeRequested) {
                 allExclude.forEach { runCatching { builder.addDisallowedApplication(it) } }
             }
         }
