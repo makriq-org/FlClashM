@@ -122,6 +122,7 @@ class ReleaseContract {
     required this.applicationId,
     required this.releaseRepository,
     required this.requiredReleaseSecrets,
+    required this.continuitySigner,
     required this.versionCodeFloor,
     required this.releaseArtifacts,
     required this.releaseMetadataFileName,
@@ -135,6 +136,9 @@ class ReleaseContract {
         requiredReleaseSecrets: _readStringList(
           json,
           key: 'requiredReleaseSecrets',
+        ),
+        continuitySigner: ReleaseSigner.fromJson(
+          _readMap(json, key: 'continuitySigner'),
         ),
         versionCodeFloor: _readInt(json, key: 'versionCodeFloor'),
         releaseArtifacts: _readStringList(json, key: 'releaseArtifacts'),
@@ -150,6 +154,7 @@ class ReleaseContract {
   final String applicationId;
   final String releaseRepository;
   final List<String> requiredReleaseSecrets;
+  final ReleaseSigner continuitySigner;
   final int versionCodeFloor;
   final List<String> releaseArtifacts;
   final String releaseMetadataFileName;
@@ -169,6 +174,21 @@ class ReleaseContract {
     }
     return artifact.substring(0, markerIndex);
   }
+}
+
+class ReleaseSigner {
+  const ReleaseSigner({
+    required this.subjectDn,
+    required this.sha256,
+  });
+
+  factory ReleaseSigner.fromJson(Map<String, dynamic> json) => ReleaseSigner(
+        subjectDn: _readString(json, key: 'subjectDn'),
+        sha256: _readString(json, key: 'sha256').toLowerCase(),
+      );
+
+  final String subjectDn;
+  final String sha256;
 }
 
 class ContinuityBaseline {

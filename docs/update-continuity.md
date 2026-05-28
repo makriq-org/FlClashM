@@ -6,6 +6,7 @@
   - Android continuity package
   - release repository
   - release secret names
+  - expected continuity signer DN/SHA-256
   - expected Android release artifacts
   - release metadata filename
   - `versionCodeFloor` и provenance последнего публичного continuity release, зафиксированного как floor
@@ -31,6 +32,8 @@ Guard: `tool/check_release_continuity.dart`
 - `setup.dart`: expected Android release artifact names обязаны оставаться в release path.
 - `.github/release_template.md` и `.github/pre_release_template.md`: release page обязана продолжать ссылаться на все Android artifacts и metadata asset.
 - `.github/workflows/build.yaml`: должны оставаться ожидаемые release secret names `KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, `KEY_PASSWORD`, и их wiring в `android/local.properties`.
+- `.github/workflows/build.yaml`: tag-release workflow не должен публиковать артефакты без полного набора release secrets.
+- `.github/workflows/build.yaml`: post-build signer check обязан подтверждать тот же continuity signer SHA-256, что у последнего публичного `FlClash-my`.
 - `.github/workflows/build.yaml`: должен быть зафиксирован `CONTINUITY_RELEASE_REPOSITORY`.
 - `.github/workflows/build.yaml`: release lookup обязан идти через `CONTINUITY_RELEASE_REPOSITORY`, а tag workflow обязан вызывать guard до setup signing и до Android build.
 - `.github/workflows/build.yaml`: tag workflow обязан генерировать `FlClashM-android-release-metadata.json` и прогонять post-build artifact guard.
@@ -50,6 +53,7 @@ Artifact guard: `tool/check_android_release_artifacts.dart`
 - Локально для pre-release tag guard: `nix shell nixpkgs#flutter --command dart tool/check_release_continuity.dart --github-repository makriq-org/FlClashM --github-ref-name v0.10.0-rc.1`
 - CI: `.github/workflows/continuity.yaml` и `.github/workflows/android-base-verification.yaml`
 - Tag release pipeline: ранний шаг `Check release continuity` в `.github/workflows/build.yaml`
+- Post-build signer continuity check: шаг `Assert Android release signing continuity` в `.github/workflows/build.yaml`
 - Post-build artifact guard: шаг `Assert Android release artifacts` в `.github/workflows/build.yaml`
 
 ## Как обновлять floor

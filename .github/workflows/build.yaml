@@ -7,6 +7,7 @@ on:
 
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
+  HAS_RELEASE_SIGNING: ${{ secrets.KEYSTORE != '' && secrets.KEY_ALIAS != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CONTINUITY_RELEASE_REPOSITORY: makriq-org/FlClashM
 
@@ -51,6 +52,12 @@ jobs:
           go-version: "1.26.0"
           cache-dependency-path: core/go.sum
 
+      - name: Require continuity signing for tag releases
+        if: env.HAS_RELEASE_SIGNING != 'true'
+        run: |
+          echo "Tag releases must use the FlClash continuity signing secrets." >&2
+          exit 1
+
       - name: Setup Android signing
         run: |
           echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
@@ -65,6 +72,9 @@ jobs:
 
       - name: Build Android release artifacts
         run: dart setup.dart android ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
+
+      - name: Assert Android release signing continuity
+        run: dart tool/check_android_release_signing.dart dist/FlClashM-android-arm64-v8a.apk
 
       - name: Generate release metadata
         run: |

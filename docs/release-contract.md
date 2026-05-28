@@ -10,6 +10,7 @@
   - continuity package: `com.makriq.flclash`
   - continuity release channel: `makriq-org/FlClashM`
   - expected release secret names
+  - expected continuity signer fingerprint
   - expected Android release artifacts
   - release metadata filename
   - `versionCodeFloor` и provenance последнего публичного continuity release
@@ -44,6 +45,7 @@
   - `STORE_PASSWORD`
   - `KEY_PASSWORD`
 - Release signing bridge обязан принимать continuity keystore как в `JKS`, так и в `PKCS12`, без смены набора secrets.
+- Итоговый опубликованный APK обязан иметь тот же signer SHA-256, что и последний публичный continuity release `FlClash-my`.
 - Stable release обязан публиковаться только в `makriq-org/FlClashM`.
 
 ## Release Payload
@@ -79,15 +81,17 @@ Tag release workflow: `.github/workflows/build.yaml`
    - проверяет tag contract against `pubspec.yaml`
 2. `Build Android release artifacts`
    - собирает split APKs, universal APK и AAB через `setup.dart`
-3. `Generate release metadata`
+3. `Assert Android release signing continuity`
+   - проверяет, что arm64 release APK подписан тем же continuity-сертификатом
+4. `Generate release metadata`
    - пишет machine-readable provenance в `dist/FlClashM-android-release-metadata.json`
-4. `Generate sha256`
+5. `Generate sha256`
    - только для stable release
-5. `Assert Android release artifacts`
+6. `Assert Android release artifacts`
    - проверяет expected files
    - для stable проверяет, что `.sha256` совпадает с фактическими файлами
    - проверяет, что metadata JSON совпадает с source of truth
-6. Release upload
+7. Release upload
    - stable: GitHub Release
    - pre-release: GitHub pre-release
 

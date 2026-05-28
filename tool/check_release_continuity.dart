@@ -203,6 +203,12 @@ void _checkAndroidSigningContract({
       failures: failures,
     );
   }
+  _expectPatternExists(
+    content: gradle,
+    pattern: RegExp(r'applicationIdSuffix\s*=\s*"\.dev"'),
+    label: 'debug-signed fallback package suffix in `$androidGradlePath`',
+    failures: failures,
+  );
 }
 
 void _checkBuildWorkflow({
@@ -214,6 +220,13 @@ void _checkBuildWorkflow({
     content: content,
     name: 'CONTINUITY_RELEASE_REPOSITORY',
     expected: contract.releaseRepository,
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern:
+        RegExp(r"HAS_RELEASE_SIGNING:\s*\$\{\{\s*secrets\.KEYSTORE\s*!=\s*''"),
+    label: 'release signing presence gate in `$buildWorkflowPath`',
     failures: failures,
   );
 
@@ -277,6 +290,14 @@ void _checkBuildWorkflow({
   _expectPatternExists(
     content: content,
     pattern: RegExp(
+      r'dart\s+tool/check_android_release_signing\.dart\s+dist/FlClashM-android-arm64-v8a\.apk',
+    ),
+    label: 'release signing continuity check in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
       '--out\\s+dist/${RegExp.escape(contract.releaseMetadataFileName)}',
     ),
     label: 'release metadata output path in `$buildWorkflowPath`',
@@ -293,8 +314,10 @@ void _checkBuildWorkflow({
     content: content,
     labels: const [
       'name: Check release continuity',
+      'name: Require continuity signing for tag releases',
       'name: Setup Android signing',
       'name: Build Android release artifacts',
+      'name: Assert Android release signing continuity',
       'name: Generate release metadata',
       'name: Generate sha256',
       'name: Assert Android release artifacts',

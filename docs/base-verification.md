@@ -19,6 +19,7 @@
 - `push` ограничен branch pushes, чтобы gate не дублировал tag-release pipeline: GitHub не применяет `paths`-фильтр к tag push.
 - signed release, full multi-ABI packaging и release upload остаются в `.github/workflows/build.yaml`.
 - release signing bridge в tag-release path auto-detect'ит `JKS`/`PKCS12`; локальный smoke без release secrets это не проверяет.
+- continuity signer SHA-256 теперь проверяется только в tag-release path после реальной сборки подписанного APK.
 - Полный tag-release contract, rollback/update правила и post-build guards зафиксированы в `docs/release-contract.md`.
 
 ## Локально на свежей NixOS

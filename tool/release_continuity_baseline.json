@@ -7,6 +7,10 @@
     "STORE_PASSWORD",
     "KEY_PASSWORD"
   ],
+  "continuitySigner": {
+    "subjectDn": "C=RU, O=makriq, CN=makriq3 FlClash Release",
+    "sha256": "bc26204b8663b7c429facda45d7cb54dac53f5a9ea93b089b16d1662193a4f77"
+  },
   "releaseArtifacts": [
     "FlClashM-android-universal.apk",
     "FlClashM-android-arm64-v8a.apk",

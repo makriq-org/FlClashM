@@ -62,7 +62,7 @@ jobs:
         run: flutter test test/product
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   android-smoke:
     needs: base-guards
