@@ -126,7 +126,7 @@ Runtime слой подготавливается через явную product 
   - default engine
   - supported
   - hardened production baseline для Android lifecycle/recovery/update path
-  - update path: bundled Android core через `setup.dart` -> `libclash/android`
+  - update path: bundled Android core через `setup.dart` -> repo-root `libclash/android`, независимо от `core/` working directory
   - rollback path: bundled core + existing cold-start snapshot
 - `olcrtc`
   - engine registration без включения

@@ -11,7 +11,6 @@ import 'package:flclashx/state.dart';
 import 'package:flutter/cupertino.dart';
 
 class Request {
-
   Request() {
     _dio = Dio(
       BaseOptions(
@@ -54,13 +53,12 @@ class Request {
       ),
     );
 
-    if (firstResponse.isRedirect == true) {
+    if (firstResponse.isRedirect) {
       final newUrl = firstResponse.headers.value('location');
       if (newUrl == null) {
         throw Exception('Redirect detected, but no location header was found.');
       }
 
-      print('↪️ Redirecting to: $newUrl');
       final finalResponse = await dio.get<Uint8List>(
         newUrl,
         options: Options(
@@ -116,7 +114,8 @@ class Request {
     return data;
   }
 
-  Future<Map<String, dynamic>?> checkForCoreUpdate(String currentCoreVersion) async {
+  Future<Map<String, dynamic>?> checkForCoreUpdate(
+      String currentCoreVersion) async {
     final response = await _dio.get(
       "https://api.github.com/repos/$repository/releases",
       options: Options(responseType: ResponseType.json),
@@ -128,7 +127,8 @@ class Request {
     for (final release in releases) {
       final tag = release['tag_name'] as String? ?? '';
       if (!tag.startsWith('core-')) continue;
-      final remote = tag.replaceFirst('core-', '').replaceAll(RegExp(r'^v'), '');
+      final remote =
+          tag.replaceFirst('core-', '').replaceAll(RegExp(r'^v'), '');
       if (remote == current) return null;
       return release as Map<String, dynamic>;
     }
@@ -148,9 +148,9 @@ class Request {
         onReceiveProgress: onProgress,
       );
       final tmpFile = File(tmpPath);
-      if (!await tmpFile.exists()) return 'Download failed';
+      if (!tmpFile.existsSync()) return 'Download failed';
       final target = File(targetPath);
-      if (await target.exists()) await target.delete();
+      if (target.existsSync()) target.deleteSync();
       await tmpFile.rename(targetPath);
       return null;
     } catch (e) {
@@ -176,23 +176,25 @@ class Request {
           responseType: ResponseType.json,
         ),
       );
-      future.then((res) {
-        if (res.statusCode == HttpStatus.ok && res.data != null) {
-          completer.complete(Result.success(source.value(res.data!)));
-        } else {
+      unawaited(
+        future.then((res) {
+          if (res.statusCode == HttpStatus.ok && res.data != null) {
+            completer.complete(Result.success(source.value(res.data!)));
+          } else {
+            failureCount++;
+            if (failureCount == _ipInfoSources.length) {
+              completer.complete(Result.success(null));
+            }
+          }
+        }).catchError((e) {
           failureCount++;
-          if (failureCount == _ipInfoSources.length) {
+          if (e is DioException && e.type == DioExceptionType.cancel) {
+            completer.complete(Result.error("cancelled"));
+          } else if (failureCount == _ipInfoSources.length) {
             completer.complete(Result.success(null));
           }
-        }
-      }).catchError((e) {
-        failureCount++;
-        if (e is DioException && e.type == DioExceptionType.cancel) {
-          completer.complete(Result.error("cancelled"));
-        } else if (failureCount == _ipInfoSources.length) {
-          completer.complete(Result.success(null));
-        }
-      });
+        }),
+      );
       return completer.future;
     });
     final res = await Future.any(futures);
@@ -274,12 +276,14 @@ class Request {
     try {
       final addr = globalState.effectiveExternalController.value;
       if (addr.isEmpty) return null;
-      final response = await _dio.get<Map<String, dynamic>>(
-        "http://$addr/version",
-        options: Options(
-          responseType: ResponseType.json,
-        ),
-      ).timeout(const Duration(seconds: 2));
+      final response = await _dio
+          .get<Map<String, dynamic>>(
+            "http://$addr/version",
+            options: Options(
+              responseType: ResponseType.json,
+            ),
+          )
+          .timeout(const Duration(seconds: 2));
 
       if (response.statusCode != HttpStatus.ok) return null;
       return response.data;

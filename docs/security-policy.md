@@ -42,6 +42,7 @@ Product-level security boundary теперь выражена типами:
 - profile-driven split tunneling из профиля имеет явный client-managed приоритет над manual `vpnProps.accessControl`; explicit include-mode с пустым resolved set не откатывается назад к manual ACL
 - file/url-backed package lists ограничены каталогом профилей и кешируются per-profile с fallback только на последнюю валидную локально сохраненную копию
 - Android app updater принимает только APK, прошедший SHA256 verification перед installer handoff
+- Flutter HTTP path не отключает TLS-проверку глобально; loopback bypass для control-plane остается отдельным proxy-routing правилом, а не `badCertificateCallback=true`
 
 ## Provider headers
 

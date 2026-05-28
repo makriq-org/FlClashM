@@ -234,8 +234,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
             "openFile" -> {
                 val path = call.argument<String>("path") ?: run { result.success(false); return }
-                openFile(path)
-                result.success(true)
+                result.success(openFile(path))
             }
 
             else -> {
@@ -244,13 +243,24 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
-    private fun openFile(path: String) {
+    private fun openFile(path: String): Boolean {
         val file = File(path)
-        val uri = FileProvider.getUriForFile(
-            FlClashXApplication.getAppContext(),
-            "${FlClashXApplication.getAppContext().packageName}.fileProvider",
-            file
-        )
+        if (!file.exists()) {
+            tip("File not found: ${file.name}")
+            return false
+        }
+
+        val appContext = FlClashXApplication.getAppContext()
+        val uri = try {
+            FileProvider.getUriForFile(
+                appContext,
+                "${appContext.packageName}.fileProvider",
+                file
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("AppPlugin", "openFile uri handoff failed", e)
+            return false
+        }
 
         val mimeType = getMimeType(file)
         val intent = if (mimeType == APK_MIME_TYPE) {
@@ -275,11 +285,15 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
 
         try {
-            activityRef?.get()?.startActivity(launchIntent)
+            val launcher = activityRef?.get() ?: appContext
+            launcher.startActivity(launchIntent)
+            return true
         } catch (_: ActivityNotFoundException) {
             tip("No app found to open ${file.name}")
+            return false
         } catch (e: Exception) {
             android.util.Log.w("AppPlugin", "openFile failed", e)
+            return false
         }
     }
 
@@ -332,7 +346,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 Package(
                     packageName = it.packageName,
                     label = it.applicationInfo?.loadLabel(packageManager).toString(),
-                    system = (it.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM)) == 1,
+                    system = ((it.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM) != 0,
                     lastUpdateTime = it.lastUpdateTime,
                     internet = it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
                 )

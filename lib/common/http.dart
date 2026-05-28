@@ -4,12 +4,23 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/state.dart';
 
 class FlClashHttpOverrides extends HttpOverrides {
+  static bool _isLoopbackHost(String host) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (normalized == 'localhost' || normalized == localhost) {
+      return true;
+    }
+    final address = InternetAddress.tryParse(normalized);
+    return address?.isLoopback ?? false;
+  }
+
   static String handleFindProxy(Uri url) {
-    if ([localhost].contains(url.host)) {
+    if (_isLoopbackHost(url.host)) {
       return "DIRECT";
     }
     final isStart = globalState.appState.runTime != null;
-    commonPrint.log("find $url proxy:$isStart");
     if (!isStart) return "DIRECT";
     // When TUN is handling traffic, let the OS network stack send the request
     // so it gets captured by TUN and processed by the core via rules. This
@@ -40,10 +51,6 @@ class FlClashHttpOverrides extends HttpOverrides {
   }
 
   @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    final client = super.createHttpClient(context);
-    client.badCertificateCallback = (_, __, ___) => true;
-    client.findProxy = handleFindProxy;
-    return client;
-  }
+  HttpClient createHttpClient(SecurityContext? context) =>
+      super.createHttpClient(context)..findProxy = handleFindProxy;
 }

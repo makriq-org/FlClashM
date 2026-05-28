@@ -52,12 +52,19 @@ nix shell nixpkgs#flutter nixpkgs#go --command bash -lc '
 
 - `ANDROID_SDK_ROOT` или `ANDROID_HOME`
 - Android NDK `28.0.13004108` в `$ANDROID_SDK_ROOT/ndk/28.0.13004108` или явный `ANDROID_NDK`
+- Android SDK platform/build-tools `34`, `35`, `36` и `cmake;3.22.1`
 - JDK 17
+
+На свежей NixOS:
+
+- AGP может пытаться запускать maven-downloaded `aapt2`, который падает на stub-ld.
+- Для локальной сборки задавай `GRADLE_OPTS=-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt2`.
 
 Команда:
 
 ```bash
 nix shell nixpkgs#flutter nixpkgs#go nixpkgs#jdk17 nixpkgs#android-tools --command bash -lc '
+  export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt2" &&
   flutter pub get &&
   dart setup.dart android --arch arm64 --out core &&
   core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\''\\(.*\\)'\'';$/\\1/p" lib/core_version.dart) &&

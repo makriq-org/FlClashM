@@ -13,13 +13,14 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     required this.updateDirectoryPath,
     this.checkResult,
     this.promptResult,
+    this.installResult = true,
     this.openReleasePageOnError = false,
   });
 
   final AppRelease? checkResult;
   final bool? promptResult;
   final List<String> supportedAbis = const ['arm64-v8a'];
-  final bool installResult = true;
+  final bool installResult;
   final bool openReleasePageOnError;
   final String updateDirectoryPath;
 
@@ -368,6 +369,54 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
       expect(installed, isTrue);
       expect(bridge.installCalls, 1);
       expect(bridge.lastInstallPath, '/tmp/app.apk');
+    });
+
+    test('reports installer handoff failures to the user', () async {
+      final bytes = utf8.encode('arm64-release');
+      final digest = sha256.convert(bytes).toString();
+      final release = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: 'https://example.com/releases/v1.2.3',
+        assets: [
+          ReleaseAsset(
+            name: 'FlClashM-android-arm64-v8a.apk',
+            browserDownloadUrl: 'https://example.com/arm64.apk',
+            size: bytes.length,
+            digest: 'sha256:$digest',
+          ),
+        ],
+        prerelease: false,
+        draft: false,
+      );
+      final bridge = _FakeUpdateBridge(
+        updateDirectoryPath: tempDir.path,
+        checkResult: release,
+        promptResult: true,
+        installResult: false,
+        openReleasePageOnError: true,
+      )..assetBytesByUrl['https://example.com/arm64.apk'] = bytes;
+      final service = AppUpdateService(platform: bridge);
+
+      await service.handleCheckResult(
+        release: release,
+        trigger: AppUpdateCheckTrigger.manual,
+      );
+
+      expect(bridge.prepareCalls, 1);
+      expect(bridge.installCalls, 1);
+      expect(
+        bridge.installErrorMessage,
+        contains('Unable to open the Android installer'),
+      );
+      expect(
+        bridge.installErrorReleaseUrl,
+        'https://example.com/releases/v1.2.3',
+      );
+      expect(
+        bridge.openedReleaseUrls,
+        ['https://example.com/releases/v1.2.3'],
+      );
     });
   });
 }
