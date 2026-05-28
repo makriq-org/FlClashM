@@ -4,8 +4,10 @@ import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/android/product_android.dart';
+import 'package:flclashx/state.dart';
 
 import '../compile/product_compile.dart';
+import '../services/product_services.dart';
 import 'engine_adapter.dart';
 
 class MihomoEngineAdapter implements EngineAdapter {
@@ -85,7 +87,9 @@ class MihomoEngineAdapter implements EngineAdapter {
       return true;
     }
 
-    final started = await androidPlatform.runtimeAccess.startVpn();
+    final started = await productServices.accessControl.startVpn(
+      accessControl: globalState.config.vpnProps.accessControl,
+    );
     if (!started) {
       await clashCore.stopListener();
     }
@@ -95,7 +99,7 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<void> stop() async {
     await clashCore.stopListener();
-    await androidPlatform.runtimeAccess.stopVpn();
+    await productServices.accessControl.stopVpn();
   }
 
   @override

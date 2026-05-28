@@ -22,6 +22,7 @@ Runtime слой подготавливается через явную product 
 - `RuntimePlan.runtime` несет явный `RuntimeSelection`
 - `RuntimeRegistry` остается allowlist для engine/helper registrations
 - `MihomoEngineAdapter` остается default supported engine
+- Android VPN start/stop path для `mihomo` проходит через `AccessControlService -> AndroidRuntimeAccessPolicy`
 
 ## Контракты
 
@@ -93,6 +94,7 @@ Runtime слой подготавливается через явную product 
 
 - конкретный bridge для runtime
 - скрыть low-level детали `clashCore` / Android service path / cold-start persistence
+- брать уже вычисленный access-control handoff из product service, а не собирать policy локально
 
 ## Текущие регистрации
 
@@ -117,3 +119,4 @@ Runtime слой подготавливается через явную product 
 - Unsupported runtime нельзя включить без registry change.
 - Helper integration не владеет Android VPN/TUN lifecycle.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.
+- split tunneling/access-control orchestration не должна обходить `AccessControlService`.

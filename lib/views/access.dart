@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,27 +19,16 @@ class AccessView extends ConsumerStatefulWidget {
 class _AccessViewState extends ConsumerState<AccessView> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  final _loadCompleter = Completer();
-
-  String _query = '';
-  bool _showSystem = false;
-  bool _showNoInternet = false;
-  bool _enabled = false;
-  AccessControlMode _mode = AccessControlMode.rejectSelected;
-
-  late Set<String> _selectedSet;
-  bool _dirty = false;
+  final _loadCompleter = Completer<List<Package>>();
+  late AccessControlEditorState _editorState;
 
   @override
   void initState() {
     super.initState();
-    final ac = ref.read(vpnSettingProvider).accessControl;
-    _mode = ac.mode;
-    _selectedSet = Set.from(ac.currentList);
-    _enabled = ac.enable;
-    _showSystem = !ac.isFilterSystemApp;
-    _showNoInternet = !ac.isFilterNonInternetApp;
-    _loadCompleter.complete(globalState.appController.getPackages());
+    _editorState = productServices.accessControl.createEditorState(
+      ref.read(vpnSettingProvider).accessControl,
+    );
+    _loadCompleter.complete(_loadPackages());
   }
 
   @override
@@ -52,74 +40,51 @@ class _AccessViewState extends ConsumerState<AccessView> {
   }
 
   void _persist() {
-    if (!_dirty) return;
-    final notifier = ref.read(vpnSettingProvider.notifier);
-    notifier.updateState(
-      (state) => state.copyWith.accessControl(
-        enable: _enabled,
-        acceptList: _mode == AccessControlMode.acceptSelected
-            ? _selectedSet.toList()
-            : [],
-        rejectList: _mode == AccessControlMode.rejectSelected
-            ? _selectedSet.toList()
-            : [],
-        mode: _mode,
-        isFilterSystemApp: !_showSystem,
-        isFilterNonInternetApp: !_showNoInternet,
-      ),
-    );
+    if (!_editorState.dirty) {
+      return;
+    }
+    ref.read(vpnSettingProvider.notifier).updateState(
+          (state) => productServices.accessControl.applyEditorState(
+            state,
+            _editorState,
+          ),
+        );
+    _editorState = _editorState.copyWith(dirty: false);
   }
 
   void _toggleApp(String pkg) {
     setState(() {
-      _dirty = true;
-      if (_selectedSet.contains(pkg)) {
-        _selectedSet.remove(pkg);
-      } else {
-        _selectedSet.add(pkg);
-      }
+      _editorState = productServices.accessControl.togglePackage(
+        _editorState,
+        pkg,
+      );
     });
   }
 
   void _switchMode() {
     setState(() {
-      _dirty = true;
-      _mode = _mode == AccessControlMode.acceptSelected
-          ? AccessControlMode.rejectSelected
-          : AccessControlMode.acceptSelected;
-      _selectedSet.clear();
+      _editorState = productServices.accessControl.switchMode(_editorState);
     });
   }
 
-  List<Package> _filter(List<Package> packages) {
-    final q = _query.toLowerCase();
-    return packages.where((p) {
-      if (!_showSystem && p.system) return false;
-      if (!_showNoInternet && !p.internet) return false;
-      if (q.isNotEmpty &&
-          !p.label.toLowerCase().contains(q) &&
-          !p.packageName.toLowerCase().contains(q)) {
-        return false;
-      }
-      return true;
-    }).toList()
-      ..sort((a, b) {
-        final sa = _selectedSet.contains(a.packageName) ? 0 : 1;
-        final sb = _selectedSet.contains(b.packageName) ? 0 : 1;
-        final c = sa.compareTo(sb);
-        return c != 0 ? c : a.label.compareTo(b.label);
-      });
-  }
+  Future<List<Package>> _loadPackages() =>
+      productServices.accessControl.ensurePackagesLoaded(
+        isMobileView: ref.read(isMobileViewProvider),
+        cachedPackages: ref.read(packagesProvider),
+        onPackagesLoaded: (packages) {
+          ref.read(packagesProvider.notifier).value = packages;
+        },
+      );
 
   void _showModeHelp() {
     final appLocale = AppLocalizations.of(context);
-    final title = _mode == AccessControlMode.acceptSelected
+    final title = _editorState.mode == AccessControlMode.acceptSelected
         ? appLocale.includeInVpn
         : appLocale.excludeFromVpn;
-    final desc = _mode == AccessControlMode.acceptSelected
+    final desc = _editorState.mode == AccessControlMode.acceptSelected
         ? appLocale.whitelistModeDesc
         : appLocale.blacklistModeDesc;
-    showDialog(
+    unawaited(showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(title),
@@ -131,15 +96,18 @@ class _AccessViewState extends ConsumerState<AccessView> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final packages = ref.watch(packagesProvider);
-    final filtered = _filter(packages);
+    final filtered = productServices.accessControl.filterPackages(
+      packages: packages,
+      editorState: _editorState,
+    );
     final appLocale = AppLocalizations.of(context);
-    final isWhitelist = _mode == AccessControlMode.acceptSelected;
+    final isWhitelist = _editorState.isWhitelist;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -150,22 +118,24 @@ class _AccessViewState extends ConsumerState<AccessView> {
           ListItem.switchItem(
             title: Text(appLocale.appAccessControl),
             delegate: SwitchDelegate(
-              value: _enabled,
+              value: _editorState.enabled,
               onChanged: (v) => setState(() {
-                _enabled = v;
-                _dirty = true;
+                _editorState = productServices.accessControl.setEnabled(
+                  _editorState,
+                  enabled: v,
+                );
               }),
             ),
           ),
           const Divider(height: 1),
           Expanded(
             child: DisabledMask(
-              status: !_enabled,
+              status: !_editorState.enabled,
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: GestureDetector(
                       onLongPress: _showModeHelp,
                       child: SegmentedButton<AccessControlMode>(
@@ -183,7 +153,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
                                 size: 18),
                           ),
                         ],
-                        selected: {_mode},
+                        selected: {_editorState.mode},
                         onSelectionChanged: (_) => _switchMode(),
                         showSelectedIcon: false,
                       ),
@@ -202,50 +172,63 @@ class _AccessViewState extends ConsumerState<AccessView> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        suffixIcon: _query.isNotEmpty
+                        suffixIcon: _editorState.query.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
                                   _searchController.clear();
-                                  setState(() => _query = '');
+                                  setState(() {
+                                    _editorState =
+                                        productServices.accessControl.setQuery(
+                                      _editorState,
+                                      '',
+                                    );
+                                  });
                                 },
                               )
                             : null,
                       ),
-                      onChanged: (v) => setState(() => _query = v),
+                      onChanged: (value) => setState(() {
+                        _editorState = productServices.accessControl.setQuery(
+                          _editorState,
+                          value,
+                        );
+                      }),
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       children: [
                         IconButton(
                           icon: const Icon(Icons.android),
                           tooltip: appLocale.systemApp,
-                          isSelected: _showSystem,
+                          isSelected: _editorState.showSystemApps,
                           onPressed: () => setState(() {
-                            _showSystem = !_showSystem;
-                            _dirty = true;
+                            _editorState = productServices.accessControl
+                                .toggleShowSystemApps(_editorState);
                           }),
                         ),
                         IconButton(
                           icon: const Icon(Icons.wifi_off),
                           tooltip: appLocale.noNetworkApp,
-                          isSelected: _showNoInternet,
+                          isSelected: _editorState.showNoInternetApps,
                           onPressed: () => setState(() {
-                            _showNoInternet = !_showNoInternet;
-                            _dirty = true;
+                            _editorState = productServices.accessControl
+                                .toggleShowNoInternetApps(_editorState);
                           }),
                         ),
                         const Spacer(),
-                        if (_selectedSet.isNotEmpty)
+                        if (_editorState.selectedPackages.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all, size: 18),
-                            label: Text('${_selectedSet.length}'),
+                            label: Text(
+                              '${_editorState.selectedPackages.length}',
+                            ),
                             onPressed: () => setState(() {
-                              _selectedSet.clear();
-                              _dirty = true;
+                              _editorState = productServices.accessControl
+                                  .clearSelection(_editorState);
                             }),
                           ),
                       ],
@@ -273,8 +256,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           itemExtent: 72,
                           itemBuilder: (_, i) {
                             final pkg = filtered[i];
-                            final selected =
-                                _selectedSet.contains(pkg.packageName);
+                            final selected = _editorState.selectedPackages
+                                .contains(pkg.packageName);
                             return _AppTile(
                               package: pkg,
                               selected: selected,
@@ -331,7 +314,9 @@ class _AppTile extends StatelessWidget {
               width: 48,
               height: 48,
               child: FutureBuilder<ImageProvider?>(
-                future: app?.getPackageIcon(package.packageName),
+                future: productServices.accessControl.readPackageIcon(
+                  package.packageName,
+                ),
                 builder: (_, snap) {
                   if (snap.data == null) return const SizedBox();
                   return Image(

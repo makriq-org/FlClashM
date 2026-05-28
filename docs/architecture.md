@@ -28,7 +28,8 @@
 - `ProfileCompiler`
 - `SecurityPolicy` / `AndroidSecurityPolicy`
 - `EngineManager`
-- Android platform policies (`AndroidForegroundNotificationPolicy`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
+- `AppUpdateService`
+- `AccessControlService`
 
 ### 3. Runtime Layer
 
@@ -47,6 +48,7 @@
 - permissions
 - foreground service
 - quick settings tile
+- Android platform policies (`AndroidForegroundNotificationPolicy`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
 
 ## Текущий handoff
 
@@ -105,11 +107,40 @@
 - содержать engine-specific bridge details
 - принимать provider-specific product decisions
 
+### `AppUpdateService`
+
+Ответственность:
+
+- product policy для auto/manual update check
+- result handling policy поверх Android update bridge
+- отделить UI/controller от Android update transport details
+
+Не должен:
+
+- знать про widget state кроме переданного loading runner
+- смешивать update policy с runtime orchestration
+
+### `AccessControlService`
+
+Ответственность:
+
+- централизовать split tunneling/access-control session state
+- держать handoff `UI state -> AccessControl -> Android runtime access path`
+- держать package inventory/icon handoff для access UI внутри product/platform seam
+- отдавать TUN authorization orchestration в platform seam без размазывания по controller/view/runtime adapter
+
+Не должен:
+
+- читать provider headers
+- жить внутри Android transport bridge
+
 ## Thin consumers
 
 - `GlobalState` теперь только грузит `RawProfile`, строит локальный context для product pipeline и проецирует compiled metadata в UI-facing notifiers.
-- `AppController` остается UI/runtime consumer: запускает manager, делегирует Android platform policies и применяет typed product advisory patch, не разбирая raw provider headers.
+- `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access product services и применяет typed product advisory patch, не разбирая raw provider headers.
 - `AndroidEntrypoint` обрабатывает tile intents и вызывает product/runtime boundary.
+- `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
+- `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 
 ## Android-only правила

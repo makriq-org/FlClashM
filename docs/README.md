@@ -12,6 +12,7 @@
 Основные документы:
 
 - `architecture.md`
+- `product-services.md`
 - `runtime.md`
 - `security-policy.md`
 - `migration-plan.md`

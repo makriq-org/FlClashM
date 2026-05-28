@@ -38,7 +38,7 @@ Product-level security boundary теперь выражена типами:
 - `AndroidSecurityPolicy` принудительно включает TUN на security stage
 - тот же `AndroidSecurityPolicy` принудительно включает TUN и для live `updateConfig` path
 - runtime plan builder применяет Android tun hardening по `RuntimeSecurityConstraints`
-- Android VPN access-control по-прежнему собирается client-side из локального `vpnProps.accessControl`
+- `AccessControlService` собирает Android VPN access-control client-side из локального `vpnProps.accessControl`
 
 ## Provider headers
 
@@ -46,6 +46,7 @@ Product-level security boundary теперь выражена типами:
 - `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints
 - branding/custom view headers не могут менять runtime floor
 - display/customization header parsing локализован в `lib/product/subscription/**`
+- updater/access-control services не используют provider headers как policy input
 - raw provider headers не должны использоваться как product API в base/UI слоях
 
 ## Advisory profile hints

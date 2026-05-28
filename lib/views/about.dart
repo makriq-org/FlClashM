@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/product/android/product_android.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -35,14 +35,19 @@ class AboutView extends StatelessWidget {
 
   Future<void> _checkUpdate(BuildContext context) async {
     final commonScaffoldState = context.commonScaffoldState;
-    if (commonScaffoldState?.mounted != true) return;
-    final data = await commonScaffoldState?.loadingRun<Map<String, dynamic>?>(
-      androidPlatform.updateBridge.checkForAppUpdate,
-      title: appLocalizations.checkUpdate,
-    );
-    await androidPlatform.updateBridge.handleAppUpdateCheckResult(
-      data: data,
-      handleError: true,
+    if (commonScaffoldState?.mounted != true) {
+      return;
+    }
+    await productServices.appUpdate.manualCheck(
+      runCheck: (
+        task, {
+        title,
+      }) =>
+          commonScaffoldState!.loadingRun<Map<String, dynamic>?>(
+        task,
+        title: title,
+      ),
+      loadingTitle: appLocalizations.checkUpdate,
     );
   }
 
@@ -124,34 +129,34 @@ class AboutView extends StatelessWidget {
           ListItem(
             title: Text(appLocalizations.checkUpdate),
             onTap: () {
-              _checkUpdate(context);
+              unawaited(_checkUpdate(context));
             },
             trailing: const Icon(Icons.update),
           ),
           ListItem(
             title: Text(appLocalizations.project),
             onTap: () {
-              globalState.openUrl(
+              unawaited(globalState.openUrl(
                 "https://github.com/$repository",
-              );
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
           ListItem(
             title: Text(appLocalizations.originalRepository),
             onTap: () {
-              globalState.openUrl(
+              unawaited(globalState.openUrl(
                 "https://github.com/chen08209/FlClash",
-              );
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
           ListItem(
             title: Text(appLocalizations.core),
             onTap: () {
-              globalState.openUrl(
+              unawaited(globalState.openUrl(
                 "https://github.com/pluralplay/xHomo",
-              );
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
@@ -228,7 +233,7 @@ class AboutView extends StatelessWidget {
                 ],
               ),
               onEasterEgg: () {
-                showDialog(
+                unawaited(showDialog(
                   context: context,
                   barrierDismissible: false,
                   builder: (dialogContext) => AlertDialog(
@@ -252,7 +257,7 @@ class AboutView extends StatelessWidget {
                         const SizedBox(height: 16),
                         InkWell(
                           onTap: () {
-                            globalState.openUrl('https://docs.rw');
+                            unawaited(globalState.openUrl('https://docs.rw'));
                           },
                           child: const Text(
                             'TRY REMNAWAVE',
@@ -275,7 +280,7 @@ class AboutView extends StatelessWidget {
                       ),
                     ],
                   ),
-                );
+                ));
               },
             ),
             const SizedBox(
@@ -363,7 +368,7 @@ class Avatar extends StatelessWidget {
     if (contributor.clickable) {
       return GestureDetector(
         onTap: () {
-          globalState.openUrl(contributor.link);
+          unawaited(globalState.openUrl(contributor.link));
         },
         child: avatarWidget,
       );

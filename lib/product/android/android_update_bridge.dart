@@ -5,58 +5,35 @@ import '../../common/common.dart';
 import '../../plugins/app.dart';
 import '../../state.dart';
 
-class AndroidUpdateBridge {
+abstract interface class AppUpdatePlatformBridge {
+  String get latestReleaseUrl;
+
+  Future<Map<String, dynamic>?> checkForAppUpdate();
+
+  Future<bool?> promptForUpdateDownload({
+    required String tagName,
+    required List<String> submits,
+  });
+
+  Future<void> showUpdateCheckError();
+
+  Future<bool> openLatestReleasePage();
+
+  Future<bool> installPackage(String path);
+}
+
+class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   const AndroidUpdateBridge();
 
+  @override
   String get latestReleaseUrl =>
       'https://github.com/$repository/releases/latest';
 
+  @override
   Future<Map<String, dynamic>?> checkForAppUpdate() => request.checkForUpdate();
 
-  Future<void> autoCheckForAppUpdate({required bool enabled}) async {
-    if (!enabled) {
-      return;
-    }
-    final data = await checkForAppUpdate();
-    await handleAppUpdateCheckResult(data: data);
-  }
-
-  Future<void> checkAndHandleAppUpdate({bool handleError = false}) async {
-    final data = await checkForAppUpdate();
-    await handleAppUpdateCheckResult(
-      data: data,
-      handleError: handleError,
-    );
-  }
-
-  Future<void> handleAppUpdateCheckResult({
-    Map<String, dynamic>? data,
-    bool handleError = false,
-  }) async {
-    if (globalState.isPre) {
-      return;
-    }
-
-    if (data != null) {
-      final tagName = data['tag_name'];
-      final body = data['body'];
-      final submits = utils.parseReleaseBody(body);
-      final res = await promptForUpdateDownload(
-        tagName: '$tagName',
-        submits: submits,
-      );
-      if (res ?? false) {
-        await openLatestReleasePage();
-      }
-      return;
-    }
-
-    if (handleError) {
-      await showUpdateCheckError();
-    }
-  }
-
   @visibleForTesting
+  @override
   Future<bool?> promptForUpdateDownload({
     required String tagName,
     required List<String> submits,
@@ -78,6 +55,7 @@ class AndroidUpdateBridge {
   }
 
   @visibleForTesting
+  @override
   Future<void> showUpdateCheckError() async {
     await globalState.showMessage(
       title: appLocalizations.checkUpdate,
@@ -86,9 +64,11 @@ class AndroidUpdateBridge {
   }
 
   @visibleForTesting
+  @override
   Future<bool> openLatestReleasePage() =>
       launchUrl(Uri.parse(latestReleaseUrl));
 
+  @override
   Future<bool> installPackage(String path) async =>
       await app?.openFile(path) ?? false;
 }

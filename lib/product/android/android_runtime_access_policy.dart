@@ -1,25 +1,60 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 
 import '../../clash/clash.dart';
 import '../../common/common.dart';
 import '../../enum/enum.dart';
+import '../../models/models.dart';
+import '../../plugins/app.dart';
 import '../../plugins/vpn.dart';
-import '../../product/runtime/product_runtime.dart';
-import '../../state.dart';
+import '../runtime/engine_manager.dart';
 
-class AndroidRuntimeAccessPolicy {
+abstract interface class RuntimeAccessPlatformBridge {
+  Future<List<Package>> readPackages();
+
+  Future<ImageProvider?> readPackageIcon(String packageName);
+
+  String mergeVpnOptions(
+    String optionsJson, {
+    required AccessControl accessControl,
+  });
+
+  Future<bool> startVpn({required AccessControl accessControl});
+
+  Future<void> stopVpn();
+
+  Future<ResolvedTunAccess> resolveTunAccess({
+    required bool requestedTunEnable,
+    required bool realTunEnable,
+    required Future<void> Function() onAuthorizeRestart,
+    required ValueChanged<bool> onResolvedTunEnable,
+    Future<AuthorizeCode> Function()? authorizeCore,
+  });
+}
+
+class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   const AndroidRuntimeAccessPolicy();
 
-  String mergeVpnOptions(String optionsJson) {
+  @override
+  Future<List<Package>> readPackages() async => await app?.getPackages() ?? [];
+
+  @override
+  Future<ImageProvider?> readPackageIcon(String packageName) =>
+      app?.getPackageIcon(packageName) ?? Future.value(null);
+
+  @override
+  String mergeVpnOptions(
+    String optionsJson, {
+    required AccessControl accessControl,
+  }) {
     if (optionsJson.isEmpty) {
       return optionsJson;
     }
 
     try {
       final map = json.decode(optionsJson) as Map<String, dynamic>;
-      final accessControl = globalState.config.vpnProps.accessControl;
       if (accessControl.enable) {
         map['accessControl'] = {
           'mode': accessControl.mode.name,
@@ -33,16 +68,22 @@ class AndroidRuntimeAccessPolicy {
     }
   }
 
-  Future<bool> startVpn() async {
+  @override
+  Future<bool> startVpn({required AccessControl accessControl}) async {
     final optionsJson = await clashLib?.getAndroidVpnOptions() ?? '';
-    final mergedOptions = mergeVpnOptions(optionsJson);
+    final mergedOptions = mergeVpnOptions(
+      optionsJson,
+      accessControl: accessControl,
+    );
     return await vpn?.start(optionsJson: mergedOptions) ?? false;
   }
 
+  @override
   Future<void> stopVpn() async {
     await vpn?.stop();
   }
 
+  @override
   Future<ResolvedTunAccess> resolveTunAccess({
     required bool requestedTunEnable,
     required bool realTunEnable,

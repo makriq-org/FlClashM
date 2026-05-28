@@ -7,7 +7,6 @@ import 'package:archive/archive.dart';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/archive.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/services/subscription_notification_service.dart';
 import 'package:flclashx/state.dart';
@@ -22,6 +21,7 @@ import 'common/common.dart';
 import 'models/models.dart';
 import 'product/android/product_android.dart';
 import 'product/runtime/product_runtime.dart';
+import 'product/services/product_services.dart';
 import 'product/subscription/product_subscription.dart';
 import 'views/profiles/override_profile.dart';
 
@@ -530,7 +530,7 @@ class AppController {
     required bool requestedTunEnable,
   }) async {
     final realTunEnable = _ref.read(realTunEnableProvider);
-    return androidPlatform.runtimeAccess.resolveTunAccess(
+    return productServices.accessControl.resolveRuntimeAccess(
       requestedTunEnable: requestedTunEnable,
       realTunEnable: realTunEnable,
       onAuthorizeRestart: restartCore,
@@ -883,7 +883,7 @@ class AppController {
   }
 
   Future<void> autoCheckUpdate() async {
-    await androidPlatform.updateBridge.autoCheckForAppUpdate(
+    await productServices.appUpdate.autoCheck(
       enabled: _ref.read(appSettingProvider).autoCheckUpdate,
     );
   }
@@ -1161,17 +1161,6 @@ class AppController {
     _ref.read(networkSettingProvider.notifier).updateState(
           (state) => state.copyWith(systemProxy: !state.systemProxy),
         );
-  }
-
-  Future<List<Package>> getPackages() async {
-    if (_ref.read(isMobileViewProvider)) {
-      await Future.delayed(commonDuration);
-    }
-    if (_ref.read(packagesProvider).isEmpty) {
-      _ref.read(packagesProvider.notifier).value =
-          await app?.getPackages() ?? [];
-    }
-    return _ref.read(packagesProvider);
   }
 
   void updateStart() {

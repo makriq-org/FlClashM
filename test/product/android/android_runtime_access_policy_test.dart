@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/android/android_runtime_access_policy.dart';
-import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -11,18 +10,14 @@ void main() {
 
   group('AndroidRuntimeAccessPolicy', () {
     test('merges access control into vpn options on the client side', () {
-      globalState.config = const Config(
-        themeProps: defaultThemeProps,
-        vpnProps: VpnProps(
-          accessControl: AccessControl(
-            enable: true,
-            mode: AccessControlMode.acceptSelected,
-            acceptList: ['com.example.app'],
-          ),
+      final merged = policy.mergeVpnOptions(
+        '{"dns-hijack":["any:53"]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.example.app'],
         ),
       );
-
-      final merged = policy.mergeVpnOptions('{"dns-hijack":["any:53"]}');
       final decoded = json.decode(merged) as Map<String, dynamic>;
 
       expect(decoded['dns-hijack'], ['any:53']);
