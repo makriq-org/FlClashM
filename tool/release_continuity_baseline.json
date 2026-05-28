@@ -7,6 +7,14 @@
     "STORE_PASSWORD",
     "KEY_PASSWORD"
   ],
+  "releaseArtifacts": [
+    "FlClashM-android-universal.apk",
+    "FlClashM-android-arm64-v8a.apk",
+    "FlClashM-android-armeabi-v7a.apk",
+    "FlClashM-android-x86_64.apk",
+    "FlClashM-android-release.aab"
+  ],
+  "releaseMetadataFileName": "FlClashM-android-release-metadata.json",
   "versionCodeFloor": 2026050102,
   "continuityBaseline": {
     "sourceProject": "FlClash-my",

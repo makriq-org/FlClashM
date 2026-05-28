@@ -13,15 +13,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.26.0"
-          cache-dependency-path: core/go.sum
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -33,7 +29,16 @@ jobs:
         run: flutter --version
 
       - name: Check release continuity
-        run: dart tool/check_release_continuity.dart --github-repository "${GITHUB_REPOSITORY}"
+        run: |
+          dart tool/check_release_continuity.dart \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --github-ref-name "${{ github.ref_name }}"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.0"
+          cache-dependency-path: core/go.sum
 
       - name: Setup Android signing
         run: |
@@ -50,6 +55,39 @@ jobs:
       - name: Build Android release artifacts
         run: dart setup.dart android ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
 
+      - name: Generate release metadata
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          dart tool/write_release_metadata.dart \
+            --out dist/FlClashM-android-release-metadata.json \
+            --github-ref-name "${{ github.ref_name }}" \
+            --github-sha "${{ github.sha }}" \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --release-channel "$release_channel"
+
+      - name: Generate sha256
+        if: env.IS_STABLE == 'true'
+        run: |
+          cd ./dist
+          while IFS= read -r -d '' file; do
+            sha256sum "$file" > "${file}.sha256"
+          done < <(find . -type f -not -name "*.sha256" -print0)
+
+      - name: Assert Android release artifacts
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          dart tool/check_android_release_artifacts.dart \
+            --dist dist \
+            --release-channel "$release_channel" \
+            --github-ref-name "${{ github.ref_name }}" \
+            --github-repository "${GITHUB_REPOSITORY}"
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -60,6 +98,8 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     needs: [build]
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -114,7 +154,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   upload:
-    permissions: write-all
+    permissions:
+      contents: write
     needs: [build]
     if: always() && (needs.build.result == 'success')
     runs-on: ubuntu-latest
@@ -180,14 +221,6 @@ jobs:
           else
             sed "s|VERSION|$version|g" ./.github/pre_release_template.md >> release.md
           fi
-
-      - name: Generate sha256
-        if: env.IS_STABLE == 'true'
-        run: |
-          cd ./dist
-          while IFS= read -r -d '' file; do
-            sha256sum "$file" > "${file}.sha256"
-          done < <(find . -type f -not -name "*.sha256" -print0)
 
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}

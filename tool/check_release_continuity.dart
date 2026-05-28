@@ -1,36 +1,48 @@
-import 'dart:convert';
 import 'dart:io';
 
-const _baselinePath = 'tool/release_continuity_baseline.json';
-const _pubspecPath = 'pubspec.yaml';
-const _androidGradlePath = 'android/app/build.gradle.kts';
-const _runtimeConstantsPath = 'lib/common/constant.dart';
-const _buildWorkflowPath = '.github/workflows/build.yaml';
-const _continuityWorkflowPath = '.github/workflows/continuity.yaml';
+import 'release_contract.dart';
 
 void main(List<String> args) {
-  final baseline = _readBaseline();
+  final options = GuardOptions.parse(args);
+  final contract = readReleaseContract();
   final failures = <String>[];
 
-  final pubspec = _readFile(_pubspecPath, failures);
-  final gradle = _readFile(_androidGradlePath, failures);
-  final runtimeConstants = _readFile(_runtimeConstantsPath, failures);
-  final buildWorkflow = _readFile(_buildWorkflowPath, failures);
-  final continuityWorkflow = _readFile(_continuityWorkflowPath, failures);
+  final pubspec = readFileIfExists(pubspecPath, failures);
+  final gradle = readFileIfExists(androidGradlePath, failures);
+  final runtimeConstants = readFileIfExists(runtimeConstantsPath, failures);
+  final buildWorkflow = readFileIfExists(buildWorkflowPath, failures);
+  final continuityWorkflow = readFileIfExists(continuityWorkflowPath, failures);
+  final setup = readFileIfExists(setupPath, failures);
+  final releaseTemplate = readFileIfExists(releaseTemplatePath, failures);
+  final preReleaseTemplate = readFileIfExists(preReleaseTemplatePath, failures);
 
   if (pubspec != null) {
-    _checkVersionCodeFloor(
-      pubspec: pubspec,
-      versionCodeFloor: baseline.versionCodeFloor,
+    final pubspecVersion = tryParsePubspecVersion(
+      pubspec,
+      path: pubspecPath,
       failures: failures,
     );
+    if (pubspecVersion != null) {
+      _checkVersionCodeFloor(
+        pubspecVersion: pubspecVersion,
+        versionCodeFloor: contract.versionCodeFloor,
+        failures: failures,
+      );
+      if (options.githubRefName != null && options.githubRefName!.isNotEmpty) {
+        _checkTagContract(
+          refName: options.githubRefName!,
+          pubspecVersion: pubspecVersion,
+          failures: failures,
+        );
+      }
+    }
   }
 
   if (gradle != null) {
     _expectQuotedValue(
       content: gradle,
       pattern: RegExp(r'applicationId\s*=\s*"([^"]+)"'),
-      expected: baseline.applicationId,
+      expected: contract.applicationId,
       label: 'android applicationId',
       failures: failures,
     );
@@ -41,15 +53,41 @@ void main(List<String> args) {
     _expectQuotedValue(
       content: runtimeConstants,
       pattern: RegExp(r'const\s+packageName\s*=\s*"([^"]+)";'),
-      expected: baseline.applicationId,
+      expected: contract.applicationId,
       label: 'runtime packageName',
       failures: failures,
     );
     _expectQuotedValue(
       content: runtimeConstants,
       pattern: RegExp(r'const\s+repository\s*=\s*"([^"]+)";'),
-      expected: baseline.releaseRepository,
+      expected: contract.releaseRepository,
       label: 'runtime release repository',
+      failures: failures,
+    );
+  }
+
+  if (setup != null) {
+    _checkSetupContract(
+      content: setup,
+      contract: contract,
+      failures: failures,
+    );
+  }
+
+  if (releaseTemplate != null) {
+    _checkReleaseTemplate(
+      content: releaseTemplate,
+      contract: contract,
+      templatePath: releaseTemplatePath,
+      failures: failures,
+    );
+  }
+
+  if (preReleaseTemplate != null) {
+    _checkReleaseTemplate(
+      content: preReleaseTemplate,
+      contract: contract,
+      templatePath: preReleaseTemplatePath,
       failures: failures,
     );
   }
@@ -57,7 +95,7 @@ void main(List<String> args) {
   if (buildWorkflow != null) {
     _checkBuildWorkflow(
       content: buildWorkflow,
-      baseline: baseline,
+      contract: contract,
       failures: failures,
     );
   }
@@ -69,12 +107,12 @@ void main(List<String> args) {
     );
   }
 
-  final githubRepository = _parseGithubRepository(args);
-  if (githubRepository != null && githubRepository.isNotEmpty) {
-    if (githubRepository != baseline.releaseRepository) {
+  if (options.githubRepository != null &&
+      options.githubRepository!.isNotEmpty) {
+    if (options.githubRepository != contract.releaseRepository) {
       failures.add(
         'Workflow repository mismatch: expected '
-        '`${baseline.releaseRepository}`, got `$githubRepository`.',
+        '`${contract.releaseRepository}`, got `${options.githubRepository}`.',
       );
     }
   }
@@ -91,43 +129,56 @@ void main(List<String> args) {
   stdout
     ..writeln('Release continuity guard passed.')
     ..writeln(
-      'versionCode floor: ${baseline.versionCodeFloor}, '
-      'release repository: ${baseline.releaseRepository}',
+      'versionCode floor: ${contract.versionCodeFloor}, '
+      'release repository: ${contract.releaseRepository}',
     );
 }
 
-String? _parseGithubRepository(List<String> args) {
-  for (var i = 0; i < args.length; i++) {
-    final arg = args[i];
-    if (arg == '--github-repository') {
-      if (i + 1 >= args.length) {
-        throw ArgumentError('Missing value for --github-repository');
+class GuardOptions {
+  const GuardOptions({
+    this.githubRepository,
+    this.githubRefName,
+  });
+
+  factory GuardOptions.parse(List<String> args) {
+    String? githubRepository;
+    String? githubRefName;
+
+    for (var index = 0; index < args.length; index++) {
+      final arg = args[index];
+      if (arg == '--github-repository') {
+        if (index + 1 >= args.length) {
+          throw ArgumentError('Missing value for --github-repository');
+        }
+        githubRepository = args[++index];
+        continue;
       }
-      return args[i + 1];
+      if (arg.startsWith('--github-repository=')) {
+        githubRepository = arg.substring('--github-repository='.length);
+        continue;
+      }
+      if (arg == '--github-ref-name') {
+        if (index + 1 >= args.length) {
+          throw ArgumentError('Missing value for --github-ref-name');
+        }
+        githubRefName = args[++index];
+        continue;
+      }
+      if (arg.startsWith('--github-ref-name=')) {
+        githubRefName = arg.substring('--github-ref-name='.length);
+        continue;
+      }
+      throw ArgumentError('Unknown argument: $arg');
     }
-    if (arg.startsWith('--github-repository=')) {
-      return arg.split('=').last;
-    }
-  }
-  return null;
-}
 
-ContinuityBaseline _readBaseline() {
-  final file = File(_baselinePath);
-  if (!file.existsSync()) {
-    throw StateError('Missing continuity baseline file `$_baselinePath`.');
+    return GuardOptions(
+      githubRepository: githubRepository,
+      githubRefName: githubRefName,
+    );
   }
-  final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-  return ContinuityBaseline.fromJson(data);
-}
 
-String? _readFile(String path, List<String> failures) {
-  final file = File(path);
-  if (!file.existsSync()) {
-    failures.add('Missing required file `$path`.');
-    return null;
-  }
-  return file.readAsStringSync();
+  final String? githubRepository;
+  final String? githubRefName;
 }
 
 void _checkAndroidSigningContract({
@@ -137,19 +188,18 @@ void _checkAndroidSigningContract({
   _expectPatternExists(
     content: gradle,
     pattern: RegExp(r'file\("keystore\.jks"\)'),
-    label: 'release keystore path in `$_androidGradlePath`',
+    label: 'release keystore path in `$androidGradlePath`',
     failures: failures,
   );
   for (final propertyName in const [
     'keyAlias',
     'storePassword',
-    'keyPassword'
+    'keyPassword',
   ]) {
     _expectPatternExists(
       content: gradle,
       pattern: RegExp('getProperty\\("$propertyName"\\)'),
-      label:
-          'release signing property `$propertyName` in `$_androidGradlePath`',
+      label: 'release signing property `$propertyName` in `$androidGradlePath`',
       failures: failures,
     );
   }
@@ -157,13 +207,13 @@ void _checkAndroidSigningContract({
 
 void _checkBuildWorkflow({
   required String content,
-  required ContinuityBaseline baseline,
+  required ReleaseContract contract,
   required List<String> failures,
 }) {
   _expectEnvValue(
     content: content,
     name: 'CONTINUITY_RELEASE_REPOSITORY',
-    expected: baseline.releaseRepository,
+    expected: contract.releaseRepository,
     failures: failures,
   );
 
@@ -173,10 +223,9 @@ void _checkBuildWorkflow({
     'STORE_PASSWORD': r'storePassword=\$\{\{\s*secrets\.STORE_PASSWORD\s*\}\}',
     'KEY_PASSWORD': r'keyPassword=\$\{\{\s*secrets\.KEY_PASSWORD\s*\}\}',
   };
-  for (final secret in baseline.requiredReleaseSecrets) {
+  for (final secret in contract.requiredReleaseSecrets) {
     if (!content.contains('secrets.$secret')) {
-      failures
-          .add('Missing release secret `$secret` in `$_buildWorkflowPath`.');
+      failures.add('Missing release secret `$secret` in `$buildWorkflowPath`.');
       continue;
     }
     final pattern = signingBridgePatterns[secret];
@@ -184,7 +233,7 @@ void _checkBuildWorkflow({
       _expectPatternExists(
         content: content,
         pattern: RegExp(pattern),
-        label: 'workflow signing bridge for `$secret` in `$_buildWorkflowPath`',
+        label: 'workflow signing bridge for `$secret` in `$buildWorkflowPath`',
         failures: failures,
       );
     }
@@ -196,15 +245,48 @@ void _checkBuildWorkflow({
       r'https://api\.github\.com/repos/\$(?:\{CONTINUITY_RELEASE_REPOSITORY\}|CONTINUITY_RELEASE_REPOSITORY)/releases/latest',
     ),
     label:
-        'release lookup via `CONTINUITY_RELEASE_REPOSITORY` in `$_buildWorkflowPath`',
+        'release lookup via `CONTINUITY_RELEASE_REPOSITORY` in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'dart\s+tool/check_release_continuity\.dart(?:\s|$)'),
+    label: 'release continuity guard invocation in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'--github-repository\s+"?\$\{GITHUB_REPOSITORY\}"?'),
+    label: 'release continuity repository pin in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(
     content: content,
     pattern: RegExp(
-      r'dart\s+tool/check_release_continuity\.dart\s+--github-repository\s+"?\$\{GITHUB_REPOSITORY\}"?',
+      r'--github-ref-name\s+"?\$\{\{\s*github\.ref_name\s*\}\}"?',
     ),
-    label: 'release continuity guard invocation in `$_buildWorkflowPath`',
+    label: 'release continuity tag pin in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'dart\s+tool/write_release_metadata\.dart(?:\s|$)'),
+    label: 'release metadata generation in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      '--out\\s+dist/${RegExp.escape(contract.releaseMetadataFileName)}',
+    ),
+    label: 'release metadata output path in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern:
+        RegExp(r'dart\s+tool/check_android_release_artifacts\.dart(?:\s|$)'),
+    label: 'release artifact guard in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectOrdering(
@@ -213,44 +295,138 @@ void _checkBuildWorkflow({
       'name: Check release continuity',
       'name: Setup Android signing',
       'name: Build Android release artifacts',
+      'name: Generate release metadata',
+      'name: Generate sha256',
+      'name: Assert Android release artifacts',
     ],
     description:
-        'release continuity guard must run before signing setup and Android release build',
+        'release continuity guard must run before signing, build, metadata and artifact assertions',
     failures: failures,
   );
 }
 
-void _checkVersionCodeFloor({
-  required String pubspec,
-  required int versionCodeFloor,
+void _checkSetupContract({
+  required String content,
+  required ReleaseContract contract,
   required List<String> failures,
 }) {
-  final versionMatch =
-      RegExp(r'^version:\s*(\S+)\s*$', multiLine: true).firstMatch(pubspec);
-  if (versionMatch == null) {
-    failures.add('Unable to parse `version` from `$_pubspecPath`.');
-    return;
+  _expectQuotedValue(
+    content: content,
+    pattern: RegExp(r"const _appName = '([^']+)';"),
+    expected: contract.appName,
+    label: 'release app name in `$setupPath`',
+    failures: failures,
+  );
+
+  for (final artifact in contract.releaseArtifacts) {
+    final expectedSourceName =
+        artifact.replaceFirst(contract.appName, r'$_appName');
+    _expectPatternExists(
+      content: content,
+      pattern: RegExp(RegExp.escape(expectedSourceName)),
+      label: 'release artifact `$artifact` target in `$setupPath`',
+      failures: failures,
+    );
+  }
+}
+
+void _checkReleaseTemplate({
+  required String content,
+  required ReleaseContract contract,
+  required String templatePath,
+  required List<String> failures,
+}) {
+  final expectedReleaseTagUrl =
+      'https://github.com/${contract.releaseRepository}/releases/tag/vVERSION';
+  if (!content.contains(expectedReleaseTagUrl)) {
+    failures.add(
+      'Missing release tag page `$expectedReleaseTagUrl` in `$templatePath`.',
+    );
   }
 
-  final version = versionMatch.group(1)!;
-  final plusIndex = version.lastIndexOf('+');
-  if (plusIndex <= 0 || plusIndex == version.length - 1) {
+  final expectedDownloadBadgePrefix =
+      'https://img.shields.io/github/downloads/${contract.releaseRepository}/vVERSION/total';
+  if (!content.contains(expectedDownloadBadgePrefix)) {
     failures.add(
-      'Expected `pubspec.yaml` version to contain a numeric build suffix, '
-      'got `$version`.',
+      'Missing release download badge for `${contract.releaseRepository}` in '
+      '`$templatePath`.',
+    );
+  }
+
+  for (final assetName in [
+    ...contract.releaseArtifacts,
+    contract.releaseMetadataFileName,
+  ]) {
+    final expectedUrl =
+        'https://github.com/${contract.releaseRepository}/releases/download/vVERSION/$assetName';
+    if (!content.contains(expectedUrl)) {
+      failures.add(
+        'Missing release asset `$assetName` in `$templatePath`.',
+      );
+    }
+  }
+}
+
+void _checkContinuityWorkflow({
+  required String content,
+  required List<String> failures,
+}) {
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'dart\s+tool/check_release_continuity\.dart(?:\s|$)'),
+    label: 'continuity guard invocation in `$continuityWorkflowPath`',
+    failures: failures,
+  );
+  if (content.contains('--github-repository')) {
+    failures.add(
+      'Expected `$continuityWorkflowPath` to skip repository pinning so fork PR/push checks remain usable.',
+    );
+  }
+  if (content.contains('--github-ref-name')) {
+    failures.add(
+      'Expected `$continuityWorkflowPath` to skip tag pinning so branch PR/push checks remain usable.',
+    );
+  }
+}
+
+void _checkTagContract({
+  required String refName,
+  required PubspecVersion pubspecVersion,
+  required List<String> failures,
+}) {
+  final expectedStableTag = 'v${pubspecVersion.versionName}';
+  if (!refName.startsWith('v')) {
+    failures.add(
+      'Expected release tag to start with `v`, got `$refName`.',
     );
     return;
   }
 
-  final versionCode = int.tryParse(version.substring(plusIndex + 1));
-  if (versionCode == null) {
-    failures.add('Unable to parse `versionCode` from `$version`.');
+  if (refName.contains('-')) {
+    final expectedPrefix = '$expectedStableTag-';
+    if (!refName.startsWith(expectedPrefix) || refName == expectedPrefix) {
+      failures.add(
+        'Expected pre-release tag to start with `$expectedPrefix`, got `$refName`.',
+      );
+    }
     return;
   }
 
-  if (versionCode <= versionCodeFloor) {
+  if (refName != expectedStableTag) {
     failures.add(
-      'Expected `versionCode` > $versionCodeFloor, got $versionCode.',
+      'Expected stable release tag `$expectedStableTag`, got `$refName`.',
+    );
+  }
+}
+
+void _checkVersionCodeFloor({
+  required PubspecVersion pubspecVersion,
+  required int versionCodeFloor,
+  required List<String> failures,
+}) {
+  if (pubspecVersion.versionCode <= versionCodeFloor) {
+    failures.add(
+      'Expected `versionCode` > $versionCodeFloor, got ${pubspecVersion.versionCode}.',
     );
   }
 }
@@ -283,7 +459,7 @@ void _expectEnvValue({
   final match = RegExp('^\\s*$name:\\s*([^\\s#]+)\\s*\$', multiLine: true)
       .firstMatch(content);
   if (match == null) {
-    failures.add('Unable to locate `$name` in `$_buildWorkflowPath`.');
+    failures.add('Unable to locate `$name` in `$buildWorkflowPath`.');
     return;
   }
 
@@ -323,51 +499,4 @@ void _expectOrdering({
     }
     previousIndex = currentIndex;
   }
-}
-
-void _checkContinuityWorkflow({
-  required String content,
-  required List<String> failures,
-}) {
-  _expectPatternExists(
-    content: content,
-    pattern: RegExp(r'dart\s+tool/check_release_continuity\.dart(?:\s|$)'),
-    label: 'continuity guard invocation in `$_continuityWorkflowPath`',
-    failures: failures,
-  );
-  if (content.contains('--github-repository')) {
-    failures.add(
-      'Expected `$_continuityWorkflowPath` to skip repository pinning so fork PR/push checks remain usable.',
-    );
-  }
-}
-
-class ContinuityBaseline {
-  const ContinuityBaseline({
-    required this.applicationId,
-    required this.releaseRepository,
-    required this.requiredReleaseSecrets,
-    required this.versionCodeFloor,
-  });
-
-  factory ContinuityBaseline.fromJson(Map<String, dynamic> json) {
-    final secrets = json['requiredReleaseSecrets'];
-    if (secrets is! List) {
-      throw StateError(
-        '`requiredReleaseSecrets` must be a list in `$_baselinePath`.',
-      );
-    }
-
-    return ContinuityBaseline(
-      applicationId: json['applicationId'] as String,
-      releaseRepository: json['releaseRepository'] as String,
-      requiredReleaseSecrets: secrets.cast<String>(),
-      versionCodeFloor: json['versionCodeFloor'] as int,
-    );
-  }
-
-  final String applicationId;
-  final String releaseRepository;
-  final List<String> requiredReleaseSecrets;
-  final int versionCodeFloor;
 }

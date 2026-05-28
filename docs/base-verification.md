@@ -8,7 +8,7 @@
 
 - `dart tool/check_release_continuity.dart`
 - `flutter test test/product`
-- `flutter analyze --fatal-infos lib/product test/product tool/check_release_continuity.dart setup.dart lib/common/constant.dart lib/core_version.dart`
+- `flutter analyze --fatal-infos lib/product test/product tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart`
 - Android smoke: `dart setup.dart android --arch arm64 --out core` + `flutter build apk --release --target-platform android-arm64`
 
 Почему именно так:
@@ -17,6 +17,7 @@
 - smoke собирает `arm64` в `release`, потому что это ближе к реальному Android path, чем `debug`, но заметно дешевле полного tag-release с split APK, universal APK и AAB.
 - `push` ограничен branch pushes, чтобы gate не дублировал tag-release pipeline: GitHub не применяет `paths`-фильтр к tag push.
 - signed release, full multi-ABI packaging и release upload остаются в `.github/workflows/build.yaml`.
+- Полный tag-release contract, rollback/update правила и post-build guards зафиксированы в `docs/release-contract.md`.
 
 ## Локально на свежей NixOS
 
@@ -31,6 +32,9 @@ nix shell nixpkgs#flutter nixpkgs#go --command bash -lc '
     lib/product \
     test/product \
     tool/check_release_continuity.dart \
+    tool/check_android_release_artifacts.dart \
+    tool/write_release_metadata.dart \
+    tool/release_contract.dart \
     setup.dart \
     lib/common/constant.dart \
     lib/core_version.dart

@@ -5,22 +5,34 @@ on:
     paths:
       - ".github/workflows/build.yaml"
       - ".github/workflows/continuity.yaml"
+      - ".github/release_template.md"
+      - ".github/pre_release_template.md"
       - "android/app/build.gradle.kts"
       - "lib/common/constant.dart"
       - "pubspec.yaml"
+      - "setup.dart"
+      - "tool/check_android_release_artifacts.dart"
       - "tool/check_release_continuity.dart"
+      - "tool/release_contract.dart"
       - "tool/release_continuity_baseline.json"
+      - "tool/write_release_metadata.dart"
   push:
     branches:
       - "**"
     paths:
       - ".github/workflows/build.yaml"
       - ".github/workflows/continuity.yaml"
+      - ".github/release_template.md"
+      - ".github/pre_release_template.md"
       - "android/app/build.gradle.kts"
       - "lib/common/constant.dart"
       - "pubspec.yaml"
+      - "setup.dart"
+      - "tool/check_android_release_artifacts.dart"
       - "tool/check_release_continuity.dart"
+      - "tool/release_contract.dart"
       - "tool/release_continuity_baseline.json"
+      - "tool/write_release_metadata.dart"
   workflow_dispatch:
 
 env:
@@ -29,6 +41,8 @@ env:
 jobs:
   release-continuity:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5

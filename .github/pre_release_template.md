@@ -49,8 +49,16 @@ FlClashM is based on FlClashX.
                 <a href="https://github.com/makriq-org/FlClashM/releases/download/vVERSION/FlClashM-android-release.aab"><img src="https://img.shields.io/badge/AAB-release-3ddc84.svg?logo=android"></a>
             </td>
         </tr>
+        <tr>
+            <td>Release Metadata</td>
+            <td>
+                <a href="https://github.com/makriq-org/FlClashM/releases/download/vVERSION/FlClashM-android-release-metadata.json"><img src="https://img.shields.io/badge/JSON-metadata-4f7cff.svg?logo=github"></a>
+            </td>
+        </tr>
     </tbody>
 </table>
+
+Pre-releases keep the same metadata asset, but skip checksum sidecars because in-app updater is disabled for `APP_ENV=pre`.
 
 </div>
 
