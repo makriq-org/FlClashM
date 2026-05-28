@@ -1,0 +1,121 @@
+{
+  "allowedProductImports": [
+    {
+      "path": "lib/application.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "App bootstrap may initialize Android shell shortcuts.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/common/android.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/common/system.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "System helpers may delegate Android task-back behavior into AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/controller.dart",
+      "boundary": "runtime-orchestration",
+      "reason": "AppController is the thin base orchestrator between global state and product runtime/service contracts.",
+      "targets": [
+        "lib/product/runtime/product_runtime.dart",
+        "lib/product/services/product_services.dart",
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/main.dart",
+      "boundary": "bootstrap-entrypoint",
+      "reason": "Main stays a single bootstrap handoff into AppBootstrap.",
+      "targets": [
+        "lib/product/bootstrap/app_bootstrap.dart"
+      ]
+    },
+    {
+      "path": "lib/manager/android_manager.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "AndroidManager stays a thin consumer for exclude-from-recents shell sync.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/manager/app_state_manager.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "AppStateManager may forward runtime mode and global-mode changes into AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/config.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "Config providers may refresh Android tile state after persisted profile changes.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/state.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "State selectors may consume platform profile and subscription advisory display hints.",
+      "targets": [
+        "lib/product/platform/platform_profile.dart",
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/services/subscription_notification_service.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "Subscription notifications may read advisory display hints, but not provider policy.",
+      "targets": [
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/state.dart",
+      "boundary": "global-runtime-wiring",
+      "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
+      "targets": [
+        "lib/product/compile/product_compile.dart",
+        "lib/product/runtime/product_runtime.dart",
+        "lib/product/security/product_security.dart"
+      ]
+    },
+    {
+      "path": "lib/views/about.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "AboutView may trigger AppUpdateService, but not AndroidUpdateBridge directly.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/views/access.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "AccessView may consume AccessControlService editor state without embedding Android policy.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/profiles.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "ProfilesView may consume advisory display hints and selector state only.",
+      "targets": [
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    }
+  ]
+}

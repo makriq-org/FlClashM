@@ -8,7 +8,15 @@
 
 `RawProfile -> ProfileCompiler -> SecurityPolicy -> RuntimePlan -> EngineManager -> EngineAdapter`
 
-На этапе `bootstrap/rebrand` эта цепочка собрана в `lib/product/**` без размазывания product policy по upstream-friendly base.
+На выходе из `bootstrap/rebrand` эта цепочка собрана в `lib/product/**` без размазывания product policy по upstream-friendly base.
+
+Граница между `FlClashX Base` и `FlClashM` теперь дополнительно зафиксирована через:
+
+- `docs/upstream-maintenance.md`
+- `tool/product_touchpoints.json`
+- `dart tool/check_product_boundaries.dart`
+
+Guard сравнивает base touchpoints с каноническими product-targets в `lib/product/**`, а не с конкретным стилем import/export записи.
 
 ## Слои
 
@@ -172,3 +180,4 @@
 - Android runtime policy задаётся клиентом, не подпиской.
 - Security-critical поведение не определяется provider headers.
 - Release continuity держится относительно `FlClash-my`.
+- Base вне `lib/product/**` может зависеть от product layer только через intentional touchpoints из `tool/product_touchpoints.json`.

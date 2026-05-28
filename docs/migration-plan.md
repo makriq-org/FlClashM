@@ -2,7 +2,9 @@
 
 ## Фаза
 
-`bootstrap/rebrand`
+`bootstrap/rebrand` завершена.
+
+Текущий режим: `maintenance/cheap-upstream`
 
 ## Уже сделано
 
@@ -22,6 +24,7 @@
 - `olcrtc` и `byedpi` остаются disabled с guardrails и rollback/update notes
 - этап 7 перенес Android app updater в product/platform path с download + SHA256 verify + installer handoff
 - этап 7 перенес profile-driven split tunneling в compile/runtime/access seams с file/url selectors, cache/fallback и явным profile priority
+- cheap upstream update contract зафиксирован через `docs/upstream-maintenance.md`, `tool/product_touchpoints.json` и `dart tool/check_product_boundaries.dart`
 
 ## Этап 4: platform shell consolidation
 
@@ -58,6 +61,7 @@
 
 - Android smoke/regression на реальном устройстве после каждого нового engine adapter
 - cleanup legacy runtime/UI wiring вокруг `GlobalState`/controller без сноса текущего baseline
+- держать новые base->product зависимости только через allowlist touchpoints, чтобы updates из `FlClashX` оставались дешевыми
 
 ## Риски
 

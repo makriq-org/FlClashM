@@ -12,6 +12,7 @@
 Основные документы:
 
 - `architecture.md`
+- `upstream-maintenance.md`
 - `product-services.md`
 - `runtime.md`
 - `security-policy.md`

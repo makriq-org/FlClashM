@@ -6,9 +6,10 @@
 
 Он проверяет:
 
+- `dart tool/check_product_boundaries.dart`
 - `dart tool/check_release_continuity.dart`
 - `flutter test test/product`
-- `flutter analyze --fatal-infos lib/product test/product tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart`
+- `flutter analyze --fatal-infos lib/product test/product tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart`
 - Android smoke: `dart setup.dart android --arch arm64 --out core` + `flutter build apk --release --target-platform android-arm64`
 
 Почему именно так:
@@ -26,11 +27,13 @@
 ```bash
 nix shell nixpkgs#flutter nixpkgs#go --command bash -lc '
   flutter pub get &&
+  dart tool/check_product_boundaries.dart &&
   dart tool/check_release_continuity.dart &&
   flutter test test/product &&
   flutter analyze --fatal-infos \
     lib/product \
     test/product \
+    tool/check_product_boundaries.dart \
     tool/check_release_continuity.dart \
     tool/check_android_release_artifacts.dart \
     tool/write_release_metadata.dart \
