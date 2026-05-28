@@ -18,6 +18,7 @@
 - smoke собирает `arm64` в `release`, потому что это ближе к реальному Android path, чем `debug`, но заметно дешевле полного tag-release с split APK, universal APK и AAB.
 - `push` ограничен branch pushes, чтобы gate не дублировал tag-release pipeline: GitHub не применяет `paths`-фильтр к tag push.
 - signed release, full multi-ABI packaging и release upload остаются в `.github/workflows/build.yaml`.
+- release signing bridge в tag-release path auto-detect'ит `JKS`/`PKCS12`; локальный smoke без release secrets это не проверяет.
 - Полный tag-release contract, rollback/update правила и post-build guards зафиксированы в `docs/release-contract.md`.
 
 ## Локально на свежей NixOS

@@ -26,7 +26,7 @@ Guard: `tool/check_release_continuity.dart`
 - `android/app/build.gradle.kts`: `applicationId` обязан оставаться `com.makriq.flclash`.
 - Android common/app runtime IPC не должен хардкодить legacy source package как installed package:
   explicit intents, internal broadcast `setPackage(...)` и `${applicationId}.permission.RECEIVE_BROADCASTS` должны вычисляться от runtime `applicationId`, а не от `com.follow.clashx`.
-- `android/app/build.gradle.kts`: release signing bridge обязан продолжать читать `keystore.jks`, `keyAlias`, `storePassword`, `keyPassword`.
+- `android/app/build.gradle.kts`: release signing bridge обязан продолжать читать `keystore.jks`, `keyAlias`, `storePassword`, `keyPassword` и корректно принимать continuity keystore как в `JKS`, так и в `PKCS12`.
 - `lib/common/constant.dart`: `packageName` обязан совпадать с Android continuity package, `repository` обязан оставаться `makriq-org/FlClashM`.
 - `setup.dart`: expected Android release artifact names обязаны оставаться в release path.
 - `.github/release_template.md` и `.github/pre_release_template.md`: release page обязана продолжать ссылаться на все Android artifacts и metadata asset.

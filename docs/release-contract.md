@@ -43,6 +43,7 @@
   - `KEY_ALIAS`
   - `STORE_PASSWORD`
   - `KEY_PASSWORD`
+- Release signing bridge обязан принимать continuity keystore как в `JKS`, так и в `PKCS12`, без смены набора secrets.
 - Stable release обязан публиковаться только в `makriq-org/FlClashM`.
 
 ## Release Payload
