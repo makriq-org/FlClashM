@@ -168,17 +168,42 @@ class EngineManager {
       return false;
     }
 
-    _startTime = wasStarted
-        ? (_startTime ?? await _adapter.readStartTime())
-        : DateTime.now();
+    DateTime? runtimeStartTime;
+    try {
+      runtimeStartTime = await _adapter.readStartTime();
+    } catch (e) {
+      commonPrint.log(
+        "EngineManager failed to read runtime start time after start: $e",
+      );
+    }
+    _startTime = runtimeStartTime ?? (wasStarted ? _startTime : DateTime.now());
     await _startUpdateTasks(updateTasks);
     return true;
   }
 
   Future<void> stop() async {
-    _startTime = null;
-    await _adapter.stop();
-    _stopUpdateTasks();
+    Object? error;
+    StackTrace? stackTrace;
+
+    try {
+      await _adapter.stop();
+    } catch (e, s) {
+      error = e;
+      stackTrace = s;
+    } finally {
+      _stopUpdateTasks();
+    }
+
+    if (error == null) {
+      _startTime = null;
+      return;
+    }
+
+    try {
+      _startTime = await _adapter.readStartTime();
+    } catch (_) {}
+
+    Error.throwWithStackTrace(error, stackTrace!);
   }
 
   Future<AppliedRuntimePlan?> setupRuntimePlan(

@@ -6,7 +6,12 @@ import 'runtime_types.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
 
-EngineAdapter _buildMihomoEngineAdapter() => const MihomoEngineAdapter();
+EngineAdapter _buildMihomoEngineAdapter(
+  ReadAccessControlCallback readAccessControl,
+) =>
+    MihomoEngineAdapter(
+      readAccessControl: readAccessControl,
+    );
 
 @immutable
 class EngineRuntimeRegistration {
@@ -74,11 +79,14 @@ class RuntimeRegistry {
     _validateRegistryTopology();
   }
 
-  factory RuntimeRegistry.flClashM() => RuntimeRegistry(
+  factory RuntimeRegistry.flClashM({
+    required ReadAccessControlCallback readMihomoAccessControl,
+  }) =>
+      RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
         engines: [
-          const EngineRuntimeRegistration(
-            descriptor: RuntimeDescriptor(
+          EngineRuntimeRegistration(
+            descriptor: const RuntimeDescriptor(
               id: RuntimeId.mihomo,
               role: RuntimeRole.engine,
               capabilities: {
@@ -87,13 +95,14 @@ class RuntimeRegistry {
                 RuntimeCapability.pendingBinarySwap,
               },
             ),
-            availability: RuntimeAvailability.supported(
+            availability: const RuntimeAvailability.supported(
               updatePath:
                   'Bundled Android core is built by setup.dart into libclash/android.',
               rollbackPath:
                   'Fallback stays on the bundled mihomo path and current cold-start snapshot.',
             ),
-            adapterFactory: _buildMihomoEngineAdapter,
+            adapterFactory: () =>
+                _buildMihomoEngineAdapter(readMihomoAccessControl),
           ),
           const EngineRuntimeRegistration(
             descriptor: RuntimeDescriptor(

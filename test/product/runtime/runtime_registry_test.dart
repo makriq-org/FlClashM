@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('RuntimeRegistry', () {
-    final registry = RuntimeRegistry.flClashM();
+    final registry = RuntimeRegistry.flClashM(
+      readMihomoAccessControl: () => const AccessControl(),
+    );
 
     test('resolves bundled mihomo by default', () {
       final resolved = registry.resolveSelection();

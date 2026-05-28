@@ -33,7 +33,9 @@ class GlobalState {
   }
 
   GlobalState._internal() {
-    runtimeRegistry = RuntimeRegistry.flClashM();
+    runtimeRegistry = RuntimeRegistry.flClashM(
+      readMihomoAccessControl: () => config.vpnProps.accessControl,
+    );
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,
       loadCurrentRawProfile: loadCurrentRawProfile,

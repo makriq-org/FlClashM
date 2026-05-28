@@ -31,23 +31,34 @@
 - прямые `app/tile/vpn` shell вызовы убраны из `controller`, `providers/config`, `app_state_manager`, `AndroidManager`, `Application`
 - `AndroidForegroundNotificationPolicy` очищена до pure policy без transport side effects
 
+## Этап 5: mihomo runtime hardening
+
+Сделано:
+
+- `mihomo` зафиксирован как production baseline, пока `olcrtc`/`naiveproxy` остаются disabled
+- `MihomoEngineAdapter` покрыт focused runtime tests, а не только общими `EngineManager` сценариями
+- pending core update path переведен на transactional swap с rollback к предыдущему binary и сохранением `.pending` при неуспешной активации
+- start/stop boundary усилен: listener/VPN rollback и cleanup теперь идут best-effort по обеим сторонам runtime boundary
+- reattach/readStartTime и stop-failure state sync усилены в `EngineManager`, чтобы cold-start/runtime attach state был предсказуемее
+- access-control handoff для `mihomo` теперь собирается на composition boundary, а не читается adapter напрямую из global state
+- failed rollback после `start`/pending update больше не маскируется как обычный `false`: runtime boundary явно сигнализирует о broken cleanup
+
 ## Следующие шаги
 
-### 1. Стабилизация базы
-
-- runtime start/stop regressions
-- VPN behavior
-- update/install flow
-
-### 2. Интеграция runtime по одному
+### 1. Интеграция runtime по одному
 
 - `olcrtc`
 - `naiveproxy`
 - `byedpi` как helper-only path
 
+### 2. Дальше по базе
+
+- Android smoke/regression на реальном устройстве после каждого нового engine adapter
+- cleanup legacy runtime/UI wiring вокруг `GlobalState`/controller без сноса текущего baseline
+
 ## Риски
 
 - в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
 - часть update/install UX все еще зависит от старого UI scaffolding (`loadingRun`, dialog helpers), хотя policy уже вынесена в product services
-- часть Android lifecycle/runtime UX все еще опирается на legacy `GlobalState`/controller wiring, хотя shell transport уже локализован
+- часть Android lifecycle/runtime UX все еще опирается на legacy `GlobalState`/controller wiring, хотя `mihomo` baseline уже стабилизирован на runtime/product service boundary
 - новые runtime пока есть только как registrations и guardrails, без production adapters

@@ -105,6 +105,30 @@ void main() {
       expect(manager.startTime, mihomoAdapter.runtimeStartTime);
     });
 
+    test('uses adapter runtime start time on fresh attach without pre-sync',
+        () async {
+      mihomoAdapter.runtimeStartTime = DateTime(2026, 2, 3, 4, 5, 6);
+
+      final started = await manager.start();
+
+      expect(started, isTrue);
+      expect(manager.startTime, mihomoAdapter.runtimeStartTime);
+    });
+
+    test('keeps successful start when runtime start time probe fails',
+        () async {
+      mihomoAdapter.readStartTimeError = StateError('runtime probe failed');
+      final beforeStart = DateTime.now();
+
+      final started = await manager.start();
+
+      final afterStart = DateTime.now();
+      expect(started, isTrue);
+      expect(manager.startTime, isNotNull);
+      expect(manager.startTime!.isBefore(beforeStart), isFalse);
+      expect(manager.startTime!.isAfter(afterStart), isFalse);
+    });
+
     test('persists cold-start params after setupRuntimePlan', () async {
       final applied = await manager.setupRuntimePlan(
         const EngineRuntimePlanRequest(
@@ -290,6 +314,20 @@ void main() {
       expect(mihomoAdapter.setupRuntimePlanCalls, 0);
       expect(applyRuntimePlanCalls, 0);
     });
+
+    test('keeps runtime attached state when adapter stop fails', () async {
+      mihomoAdapter.runtimeStartTime = DateTime(2026, 3, 4, 5, 6, 7);
+      await manager.syncStartTime();
+      mihomoAdapter.stopError = StateError('listener stop failed');
+
+      await expectLater(
+        manager.stop,
+        throwsA(isA<StateError>()),
+      );
+
+      expect(manager.startTime, mihomoAdapter.runtimeStartTime);
+      expect(mihomoAdapter.stopCalls, 1);
+    });
   });
 }
 
@@ -297,10 +335,14 @@ class _FakeEngineAdapter implements EngineAdapter {
   DateTime? runtimeStartTime;
   bool isInitializedValue = true;
   String setupRuntimePlanMessage = '';
+  bool startResult = true;
+  Error? readStartTimeError;
+  Error? stopError;
   int applyPendingUpdateCalls = 0;
   int initializeCalls = 0;
   int setupRuntimePlanCalls = 0;
   int startCalls = 0;
+  int stopCalls = 0;
   int updateConfigCalls = 0;
   int persistColdStartCalls = 0;
   SetupParams? lastPersistedSetupParams;
@@ -342,14 +384,24 @@ class _FakeEngineAdapter implements EngineAdapter {
   @override
   Future<bool> start({String? notificationTitle}) async {
     startCalls++;
-    return true;
+    return startResult;
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stopCalls++;
+    if (stopError != null) {
+      throw stopError!;
+    }
+  }
 
   @override
-  Future<DateTime?> readStartTime() async => runtimeStartTime;
+  Future<DateTime?> readStartTime() async {
+    if (readStartTimeError != null) {
+      throw readStartTimeError!;
+    }
+    return runtimeStartTime;
+  }
 
   @override
   Future<void> persistColdStart({
