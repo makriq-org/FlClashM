@@ -250,9 +250,10 @@ Future<void> _buildAndroidArtifacts({
     final name = _basename(entity.path);
     final targetName = splitNames[name];
     if (targetName != null && entity is File) {
-      entity.copySync(_join(dist.path, targetName));
+      _relocateFile(entity, _join(dist.path, targetName));
     }
   }
+  _deleteBuildAppDir();
 
   await _exec(
     [
@@ -267,9 +268,11 @@ Future<void> _buildAndroidArtifacts({
     workingDirectory: _projectRoot,
     name: 'flutter build apk (universal)',
   );
-  File(_join(splitDir.path, 'app-release.apk')).copySync(
+  _relocateFile(
+    File(_join(splitDir.path, 'app-release.apk')),
     _join(dist.path, '$_appName-android-universal.apk'),
   );
+  _deleteBuildAppDir();
 
   await _exec(
     [
@@ -284,10 +287,43 @@ Future<void> _buildAndroidArtifacts({
     workingDirectory: _projectRoot,
     name: 'flutter build appbundle',
   );
-  File(
-    _projectPath(
-        'build', 'app', 'outputs', 'bundle', 'release', 'app-release.aab'),
-  ).copySync(_join(dist.path, '$_appName-android-release.aab'));
+  _relocateFile(
+    File(
+      _projectPath(
+        'build',
+        'app',
+        'outputs',
+        'bundle',
+        'release',
+        'app-release.aab',
+      ),
+    ),
+    _join(dist.path, '$_appName-android-release.aab'),
+  );
+  _deleteBuildAppDir();
+}
+
+void _relocateFile(File source, String targetPath) {
+  final target = File(targetPath);
+  target.parent.createSync(recursive: true);
+  if (target.existsSync()) {
+    target.deleteSync();
+  }
+
+  try {
+    source.renameSync(target.path);
+  } on FileSystemException {
+    source
+      ..copySync(target.path)
+      ..deleteSync();
+  }
+}
+
+void _deleteBuildAppDir() {
+  final buildAppDir = Directory(_projectPath('build', 'app'));
+  if (buildAppDir.existsSync()) {
+    buildAppDir.deleteSync(recursive: true);
+  }
 }
 
 Directory _resolveNdkBinDir() {
