@@ -5,7 +5,6 @@ export 'connectivity_manager.dart';
 export 'message_manager.dart';
 export 'proxy_manager.dart';
 export 'theme_manager.dart';
-export 'tile_manager.dart';
 export 'tray_manager.dart';
 export 'vpn_manager.dart';
 export 'window_manager.dart';

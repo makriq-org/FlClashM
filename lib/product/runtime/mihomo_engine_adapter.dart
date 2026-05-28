@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/android/product_android.dart';
 import 'package:flclashx/state.dart';
 
 import '../compile/product_compile.dart';
@@ -79,7 +78,9 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<bool> start({String? notificationTitle}) async {
     if (notificationTitle != null && notificationTitle.isNotEmpty) {
-      await androidPlatform.foregroundNotification.pushTitle(notificationTitle);
+      await productServices.androidShell.pushForegroundNotificationTitle(
+        notificationTitle,
+      );
     }
 
     await clashCore.startListener();

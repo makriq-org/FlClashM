@@ -3,13 +3,12 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/input.dart';
 import 'package:flutter/services.dart';
 
 class System {
-
   factory System() {
     _instance ??= System._internal();
     return _instance!;
@@ -28,7 +27,8 @@ class System {
       final result = Process.runSync('reg', [
         'query',
         r'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize',
-        '/v', 'SystemUsesLightTheme',
+        '/v',
+        'SystemUsesLightTheme',
       ]);
       if (result.exitCode != 0) return null;
       final match = RegExp(r'0x(\d+)').firstMatch(result.stdout.toString());
@@ -101,7 +101,7 @@ class System {
       if (startedWithoutUac == true) {
         return AuthorizeCode.success;
       }
-      
+
       // Service not installed or couldn't start - need to install with UAC
       final result = await windows?.installService();
       if (result == true) {
@@ -117,9 +117,12 @@ class System {
       );
       if (password == null) return AuthorizeCode.error;
       final proc = await Process.start('sudo', [
-        '-S', 'sh', '-c',
+        '-S',
+        'sh',
+        '-c',
         'chown root:root "\$1" && chmod +sx "\$1"',
-        'sh', corePath,
+        'sh',
+        corePath,
       ]);
       proc.stdin.writeln(password);
       await proc.stdin.close();
@@ -227,7 +230,7 @@ class System {
   }
 
   Future<void> back() async {
-    await app?.moveTaskToBack();
+    await productServices.androidShell.moveTaskToBack();
     await window?.hide();
   }
 

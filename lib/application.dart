@@ -5,7 +5,7 @@ import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/manager/manager.dart';
-import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +52,7 @@ class ApplicationState extends ConsumerState<Application> {
       }
       await globalState.appController.init();
       globalState.appController.initLink();
-      unawaited(app?.initShortcuts());
+      unawaited(productServices.androidShell.initShortcuts());
     });
   }
 
@@ -72,8 +72,7 @@ class ApplicationState extends ConsumerState<Application> {
     });
   }
 
-  Widget _buildPlatformState(Widget child) =>
-      AndroidManager(child: TileManager(child: child));
+  Widget _buildPlatformState(Widget child) => AndroidManager(child: child);
 
   Widget _buildState(Widget child) => AppStateManager(
         child: ClashManager(

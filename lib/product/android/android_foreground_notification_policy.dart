@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../common/common.dart';
 import '../../models/models.dart';
-import '../../plugins/vpn.dart';
 import '../subscription/product_subscription.dart';
 
 @immutable
@@ -61,14 +60,6 @@ class AndroidForegroundNotificationPolicy {
   }) =>
       buildSnapshot(profile, groups: groups).title;
 
-  Future<void> syncCurrentProfile({
-    required Profile? profile,
-    Iterable<Group> groups = const [],
-  }) async {
-    final snapshot = buildSnapshot(profile, groups: groups);
-    await pushTitle(snapshot.title);
-  }
-
   String? buildTitleForProxyChange(
     Profile? profile, {
     required String groupName,
@@ -91,29 +82,6 @@ class AndroidForegroundNotificationPolicy {
       serviceName: snapshot.serviceName,
       serverName: proxyName,
     ).title;
-  }
-
-  Future<void> syncProxyChange({
-    required Profile? profile,
-    required String groupName,
-    required String proxyName,
-  }) async {
-    final title = buildTitleForProxyChange(
-      profile,
-      groupName: groupName,
-      proxyName: proxyName,
-    );
-    if (title == null || title.isEmpty) {
-      return;
-    }
-    await pushTitle(title);
-  }
-
-  Future<void> pushTitle(String title) async {
-    if (title.isEmpty) {
-      return;
-    }
-    await vpn?.updateNotification(title: title);
   }
 
   String _resolveServerName({

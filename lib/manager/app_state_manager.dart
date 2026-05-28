@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/plugins/tile.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/foundation.dart';
@@ -66,7 +66,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       patchClashConfigProvider.select((state) => state.mode),
       (prev, next) {
         if (prev != next) {
-          tile?.updateMode(next.name);
+          unawaited(productServices.androidShell.syncTileMode(next));
         }
       },
       fireImmediately: true,
@@ -75,7 +75,9 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       globalModeEnabledProvider,
       (prev, next) {
         if (prev != next) {
-          tile?.updateGlobalModeEnabled(next);
+          unawaited(
+            productServices.androidShell.syncGlobalModeEnabled(enabled: next),
+          );
         }
       },
       fireImmediately: true,

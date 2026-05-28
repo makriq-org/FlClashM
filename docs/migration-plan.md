@@ -16,8 +16,20 @@
 - provider-driven display/customization seam вынесен в `lib/product/subscription/**`
 - `AppUpdateService` вынес updater policy над `AndroidUpdateBridge`
 - `AccessControlService` вынес split tunneling/access-control policy над `AndroidRuntimeAccessPolicy`
+- `AndroidShellService` вынес Android shell orchestration над `AndroidShellBridge`
 - `mihomo` поддержан как единственный enabled engine
 - `olcrtc`, `naiveproxy`, `byedpi` остаются disabled с guardrails и rollback/update notes
+
+## Этап 4: platform shell consolidation
+
+Сделано:
+
+- foreground notification sync/title handoff локализован в `AndroidShellService`
+- tile signaling/sync (`serviceReady`, profile change, mode, global-mode visibility) локализован в `AndroidShellService`
+- task-back handoff локализован в `AndroidShellService`
+- `AndroidEntrypoint` стал thin consumer и делегирует shell feedback/hooks в product service
+- прямые `app/tile/vpn` shell вызовы убраны из `controller`, `providers/config`, `app_state_manager`, `AndroidManager`, `Application`
+- `AndroidForegroundNotificationPolicy` очищена до pure policy без transport side effects
 
 ## Следующие шаги
 
@@ -37,4 +49,5 @@
 
 - в репозитории еще остается legacy desktop/base code, хотя продукт и release policy уже Android-only
 - часть update/install UX все еще зависит от старого UI scaffolding (`loadingRun`, dialog helpers), хотя policy уже вынесена в product services
+- часть Android lifecycle/runtime UX все еще опирается на legacy `GlobalState`/controller wiring, хотя shell transport уже локализован
 - новые runtime пока есть только как registrations и guardrails, без production adapters

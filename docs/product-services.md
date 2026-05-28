@@ -8,6 +8,7 @@
 
 - `AppUpdateService`
 - `AccessControlService`
+- `AndroidShellService`
 
 ## `AppUpdateService`
 
@@ -58,3 +59,35 @@ Thin consumers:
 - provider headers не участвуют в Android access-control policy
 - UI не должен напрямую знать о `AndroidUpdateBridge` и `AndroidRuntimeAccessPolicy`
 - runtime adapter не должен собирать access-control rules сам
+
+## `AndroidShellService`
+
+Контракт:
+
+- централизует Android shell orchestration для foreground notification, tile и app-shell hooks
+- строит foreground title через `AndroidForegroundNotificationPolicy` и отдает transport в `AndroidShellBridge`
+- владеет tile/service hooks: `serviceReady`, profile-change sync, mode sync, global-mode sync
+- владеет app-shell hooks: `tip`, shortcuts, `moveTaskToBack`, `excludeFromRecents`, exit hook
+
+`AndroidShellBridge` после этого отвечает только за:
+
+- `app` plugin handoff (`tip`, shortcuts, move-task-to-back, exclude-from-recents, exit callback)
+- `tile` plugin handoff (`serviceReady`, `updateTile`, `updateMode`, `updateGlobalModeEnabled`)
+- `vpn` notification handoff (`updateNotification`)
+
+Thin consumers:
+
+- `AndroidEntrypoint`
+- `AppController`
+- `providers/config`
+- `AppStateManager`
+- `AndroidManager`
+- `Application`
+- `MihomoEngineAdapter`
+
+Границы:
+
+- `AndroidEntrypoint` не должен знать про `app?/tile?/vpn?` plugin детали
+- UI/providers/managers не должны напрямую вызывать Android shell plugins
+- `AndroidForegroundNotificationPolicy` остается pure policy без transport side effects
+- profile-change tile refresh должен идти после persistence, потому что native side читает сохраненный `flutter.config`

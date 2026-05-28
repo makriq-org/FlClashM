@@ -30,6 +30,7 @@
 - `EngineManager`
 - `AppUpdateService`
 - `AccessControlService`
+- `AndroidShellService`
 
 ### 3. Runtime Layer
 
@@ -48,7 +49,7 @@
 - permissions
 - foreground service
 - quick settings tile
-- Android platform policies (`AndroidForegroundNotificationPolicy`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
+- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`)
 
 ## Текущий handoff
 
@@ -134,13 +135,28 @@
 - читать provider headers
 - жить внутри Android transport bridge
 
+### `AndroidShellService`
+
+Ответственность:
+
+- локализовать foreground notification sync/title handoff для Android runtime shell
+- локализовать tile sync/signaling (`serviceReady`, profile change, mode, global-mode visibility)
+- локализовать app-shell hooks (`tip`, shortcuts, move-task-to-back, exclude-from-recents, exit hook)
+- держать `AndroidEntrypoint` тонким consumer'ом product/runtime событий
+
+Не должен:
+
+- содержать `MethodChannel`/plugin детали
+- принимать runtime policy decisions вне shell orchestration
+
 ## Thin consumers
 
 - `GlobalState` теперь только грузит `RawProfile`, строит локальный context для product pipeline и проецирует compiled metadata в UI-facing notifiers.
-- `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access product services и применяет typed product advisory patch, не разбирая raw provider headers.
-- `AndroidEntrypoint` обрабатывает tile intents и вызывает product/runtime boundary.
+- `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access/android-shell product services и применяет typed product advisory patch, не разбирая raw provider headers.
+- `AndroidEntrypoint` принимает tile команды, но shell transport/hook details делегирует в `AndroidShellService`.
 - `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
 - `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
+- `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 
 ## Android-only правила

@@ -1,13 +1,16 @@
 import 'dart:io';
 
-import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 
 class Android {
   Future<void> init() async {
-    app?.onExit = () async {
+    productServices.androidShell.installExitHook(() async {
+      if (!globalState.isInit) {
+        return;
+      }
       await globalState.appController.savePreferences();
-    };
+    });
   }
 }
 

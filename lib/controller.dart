@@ -19,7 +19,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'common/common.dart';
 import 'models/models.dart';
-import 'product/android/product_android.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/services/product_services.dart';
 import 'product/subscription/product_subscription.dart';
@@ -80,7 +79,7 @@ class AppController {
   }
 
   Future<void> syncAndroidForegroundNotification() async {
-    await androidPlatform.foregroundNotification.syncCurrentProfile(
+    await productServices.androidShell.syncForegroundNotification(
       profile: globalState.config.currentProfile,
       groups: _ref.read(groupsProvider),
     );
@@ -90,7 +89,7 @@ class AppController {
     required String groupName,
     required String proxyName,
   }) async {
-    await androidPlatform.foregroundNotification.syncProxyChange(
+    await productServices.androidShell.syncForegroundNotificationForProxyChange(
       profile: globalState.config.currentProfile,
       groupName: groupName,
       proxyName: proxyName,
@@ -109,8 +108,9 @@ class AppController {
       ),
       resumeIfStarted: wasStarted,
       updateTasks: [updateTraffic],
-      notificationTitle: androidPlatform.foregroundNotification.buildTitle(
-        globalState.config.currentProfile,
+      notificationTitle:
+          productServices.androidShell.buildForegroundNotificationTitle(
+        profile: globalState.config.currentProfile,
         groups: _ref.read(groupsProvider),
       ),
     );
@@ -129,8 +129,9 @@ class AppController {
       await syncAndroidForegroundNotification();
       final started = await globalState.engineManager.start(
         updateTasks: [updateTraffic],
-        notificationTitle: androidPlatform.foregroundNotification.buildTitle(
-          globalState.config.currentProfile,
+        notificationTitle:
+            productServices.androidShell.buildForegroundNotificationTitle(
+          profile: globalState.config.currentProfile,
           groups: _ref.read(groupsProvider),
         ),
       );

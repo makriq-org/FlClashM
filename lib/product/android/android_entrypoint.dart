@@ -1,13 +1,9 @@
-import 'dart:async';
-
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/plugins/app.dart';
-import 'package:flclashx/plugins/tile.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 
 import '../../common/common.dart';
-import '../../models/models.dart';
-import 'android_platform.dart';
 
 class AndroidEntrypoint {
   AndroidEntrypoint._();
@@ -15,19 +11,21 @@ class AndroidEntrypoint {
   static final AndroidEntrypoint instance = AndroidEntrypoint._();
 
   Future<void> init() async {
-    tile?.addListener(_MainTileListener(this));
-    // Let the Kotlin side replay pending START/STOP/CHANGE intents after the
-    // Flutter engine is ready.
-    unawaited(tile?.signalServiceReady());
+    productServices.androidShell.bindTileCommands(
+      onStart: handleStart,
+      onStop: handleStop,
+      onChangeMode: handleChangeMode,
+    );
+    await productServices.androidShell.signalServiceReady();
   }
 
   Future<void> handleStart() async {
     try {
-      unawaited(app?.tip(appLocalizations.startVpn));
+      await productServices.androidShell.notifyStartRequested();
 
       final profileId = globalState.config.currentProfileId;
       if (profileId == null) {
-        unawaited(app?.tip("No profile selected"));
+        await productServices.androidShell.notifyNoProfileSelected();
         return;
       }
 
@@ -37,12 +35,15 @@ class AndroidEntrypoint {
       );
       if (!isReady) {
         commonPrint.log("Tile start: runtime is not ready");
-        unawaited(app?.tip("Runtime is not ready"));
+        await productServices.androidShell.notifyRuntimeNotReady();
         return;
       }
 
       final profile = globalState.config.currentProfile;
-      final title = androidPlatform.foregroundNotification.buildTitle(profile);
+      final title =
+          productServices.androidShell.buildForegroundNotificationTitle(
+        profile: profile,
+      );
       final started = await globalState.engineManager.start(
         updateTasks: globalState.isInit
             ? [globalState.appController.updateTraffic]
@@ -51,7 +52,7 @@ class AndroidEntrypoint {
       );
       if (!started) {
         commonPrint.log("Tile start: runtime start failed");
-        unawaited(app?.tip("VPN start failed"));
+        await productServices.androidShell.notifyVpnStartFailed();
         return;
       }
 
@@ -62,13 +63,13 @@ class AndroidEntrypoint {
       }
     } catch (e, stackTrace) {
       commonPrint.log("Tile onStart error: $e\n$stackTrace");
-      unawaited(app?.tip("Start error: $e"));
+      await productServices.androidShell.notifyStartError(e);
     }
   }
 
   Future<void> handleStop() async {
     try {
-      unawaited(app?.tip(appLocalizations.stopVpn));
+      await productServices.androidShell.notifyStopRequested();
       await globalState.engineManager.stop();
       if (globalState.isInit) {
         await globalState.appController.onRuntimeStopped();
@@ -105,31 +106,10 @@ class AndroidEntrypoint {
       if (!updated) {
         return;
       }
-      unawaited(tile?.updateMode(mode));
+      await productServices.androidShell.syncTileMode(modeEnum);
     } catch (e) {
       commonPrint.log("Tile onChangeMode error: $e");
     }
-  }
-}
-
-class _MainTileListener with TileListener {
-  _MainTileListener(this.entrypoint);
-
-  final AndroidEntrypoint entrypoint;
-
-  @override
-  void onStart() {
-    unawaited(entrypoint.handleStart());
-  }
-
-  @override
-  void onStop() {
-    unawaited(entrypoint.handleStop());
-  }
-
-  @override
-  void onChangeMode(String mode) {
-    unawaited(entrypoint.handleChangeMode(mode));
   }
 }
 
