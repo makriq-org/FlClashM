@@ -131,7 +131,7 @@
         <service
             android:name=".services.FlClashMTileService"
             android:exported="true"
-            android:icon="@drawable/ic"
+            android:icon="@mipmap/ic_launcher"
             android:label="FlClashM"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             tools:targetApi="n">
