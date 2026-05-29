@@ -1,3 +1,39 @@
+## v0.10.1
+
+- fix release signing guard and restore v0.10.1
+
+- chore: rotate Android release signing
+
+- chore: prepare v0.10.1 release
+
+- chore: update app icon
+
+- Complete FlClashM rebrand
+
+- Fix universal APK output path
+
+- Update release workflow guard for parallel build
+
+- Parallelize Android release builds
+
+- Keep release continuity lookup
+
+- Simplify Russian release notes
+
+- Fix product analyzer findings
+
+- Register TV sync product touchpoints
+
+- Refactor naiveproxy into runtime nodes
+
+- Polish release compatibility boundaries
+
+- Enforce continuity signing for Android releases
+
+- Trim release notes on first published release
+
+- Update changelog
+
 ## v0.10.0
 
 - Free disk space before Android release build
