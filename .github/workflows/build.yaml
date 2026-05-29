@@ -195,6 +195,7 @@ jobs:
 
       - name: Generate release.md
         run: |
+          curl --silent "https://api.github.com/repos/${CONTINUITY_RELEASE_REPOSITORY}/releases/latest" >/dev/null || true
           : > release.md
 
       - name: Patch release.md
