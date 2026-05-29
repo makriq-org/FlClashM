@@ -30,10 +30,8 @@ enum class RunState { START, PENDING, STOP }
 object GlobalState {
     private const val TAG = "GlobalState"
 
-    // Keep legacy channel IDs to preserve user-configured notification
-    // preferences across continuity updates.
-    const val NOTIFICATION_CHANNEL = "FlClashX"
-    const val SUBSCRIPTION_NOTIFICATION_CHANNEL = "FlClashX_Subscription"
+    const val NOTIFICATION_CHANNEL = "FlClashM"
+    const val SUBSCRIPTION_NOTIFICATION_CHANNEL = "FlClashM_Subscription"
     const val NOTIFICATION_ID = 1
     const val SUBSCRIPTION_NOTIFICATION_ID = 2
 
@@ -64,7 +62,7 @@ object GlobalState {
                     }
                     if (state != RunState.PENDING) {
                         runCatching {
-                            com.follow.clashx.services.FlClashXTileService.requestUpdate(
+                            com.follow.clashx.services.FlClashMTileService.requestUpdate(
                                 CommonGlobalState.application,
                             )
                         }

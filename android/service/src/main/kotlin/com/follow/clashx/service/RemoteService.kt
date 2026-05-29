@@ -274,6 +274,8 @@ class RemoteService : Service() {
     private fun deleteStaleChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching { mgr.deleteNotificationChannel("FlClashX") }
+        runCatching { mgr.deleteNotificationChannel("FlClashX_Subscription") }
         runCatching { mgr.deleteNotificationChannel("FlClashX_Core") }
     }
 }

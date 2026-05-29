@@ -77,7 +77,7 @@ fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashM"): 
         )
     } else null
     val stopIntent = android.content.Intent(this, this::class.java)
-        .setAction("com.follow.clashx.service.STOP")
+        .setAction("com.makriq.flclash.service.STOP")
     val piFlags = android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
     val stopPending = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         android.app.PendingIntent.getForegroundService(this, 1, stopIntent, piFlags)

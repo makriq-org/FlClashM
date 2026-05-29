@@ -19,10 +19,10 @@ class ModeWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val TAG = "ModeWidgetProvider"
 
-        const val ACTION_TOGGLE = "com.follow.clashx.widget.ACTION_TOGGLE"
-        const val ACTION_MODE_RULE = "com.follow.clashx.widget.ACTION_MODE_RULE"
-        const val ACTION_MODE_GLOBAL = "com.follow.clashx.widget.ACTION_MODE_GLOBAL"
-        const val ACTION_MODE_DIRECT = "com.follow.clashx.widget.ACTION_MODE_DIRECT"
+        const val ACTION_TOGGLE = "com.makriq.flclash.widget.ACTION_TOGGLE"
+        const val ACTION_MODE_RULE = "com.makriq.flclash.widget.ACTION_MODE_RULE"
+        const val ACTION_MODE_GLOBAL = "com.makriq.flclash.widget.ACTION_MODE_GLOBAL"
+        const val ACTION_MODE_DIRECT = "com.makriq.flclash.widget.ACTION_MODE_DIRECT"
 
         @Volatile
         private var observersAttached = false

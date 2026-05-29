@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/product/services/product_services.dart';
-import 'package:flclashx/state.dart';
-import 'package:flclashx/widgets/widgets.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/product/services/product_services.dart';
+import 'package:flclashm/state.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
 @immutable

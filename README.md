@@ -45,15 +45,15 @@
 - Добавлена новая кнопка «Поддержка» в профиле, которая подтягивает supportUrl с панели.
 - Параметр autoupdateinterval для профиля теперь корректно передаётся с панели.
 - Добавлен виджет "MetaInfo". Передаёт параметры с подписки на виджет. Сколько трафика осталось, когда заканчивается подписка, имя профиля, и крупно отображает сколько дней до окончании подписки осталось (за 3 дня до окончания).
-- Добавлен виджет "serviceInfo". Передаёт название вашего сервиса. Можно передать дополнительно хедер `flclashx-servicelogo` для кастомного лого (поддерживается ссылка svg/png), дополнительно по клику открыватеся ссылка на поддержку (supportURL)
+- Добавлен виджет "serviceInfo". Передаёт название вашего сервиса. Можно передать дополнительно хедер `flclashm-servicelogo` для кастомного лого (поддерживается ссылка svg/png), дополнительно по клику открыватеся ссылка на поддержку (supportURL)
 - Добавлен виджет "changeServerButton". По клику перенаправляет на страницу прокси.
 
 ### Добавлен парсинг кастомных хедеров со страницы подписки:
 
-Legacy namespace `flclashx-*` здесь сохранен намеренно ради совместимости с существующими подписками. Для новых product surface используется бренд `FlClashM`.
+Продуктовый namespace кастомных хедеров в `FlClashM` — `flclashm-*`.
 
 <details>
-<summary><strong>flclashx-widgets</strong></summary>
+<summary><strong>flclashm-widgets</strong></summary>
 
 Выстраивает виджеты в порядке, полученным с подписки
 
@@ -72,17 +72,17 @@ Legacy namespace `flclashx-*` здесь сохранен намеренно р�
 |     `memoryInfo`     | Использование памяти                                        |
 |      `metainfo`      | Информация о подписке                                       |
 | `changeServerButton` | Кнопка смены сервера                                        |
-|    `serviceInfo`     | Информация о сервисе (работает только с header flclashx-servicename) |
+|    `serviceInfo`     | Информация о сервисе (работает только с header flclashm-servicename) |
 
 Использование:
 
 ```bash
-flclashx-widgets: announce,metainfo,outboundModeV2,networkDetection
+flclashm-widgets: announce,metainfo,outboundModeV2,networkDetection
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-view</strong></summary>
+<summary><strong>flclashm-view</strong></summary>
 
 Настраивает вид страницы прокси, полученным с подписки
 
@@ -97,12 +97,12 @@ flclashx-widgets: announce,metainfo,outboundModeV2,networkDetection
 Использование:
 
 ```bash
-flclashx-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
+flclashm-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-custom</strong></summary>
+<summary><strong>flclashm-custom</strong></summary>
 
 Управляет состоянием применения стилей для Dashboard и ProxyView
 
@@ -114,48 +114,48 @@ flclashx-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
 Использование:
 
 ```bash
-flclashx-custom: update
+flclashm-custom: update
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-denywidgets</strong></summary>
+<summary><strong>flclashm-denywidgets</strong></summary>
 
 При true — запрещает редактировать страницу Dashboard. Имеет значение true/false.
 
 Использование:
 
 ```bash
-flclashx-denywidgets: true
+flclashm-denywidgets: true
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-servicename</strong></summary>
+<summary><strong>flclashm-servicename</strong></summary>
 
 Название вашего сервиса, отображаемое в виджете ServiceInfo.
 
 Использование:
 
 ```bash
-flclashx-servicename: FlClashM
+flclashm-servicename: FlClashM
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-servicelogo</strong></summary>
+<summary><strong>flclashm-servicelogo</strong></summary>
 
-Ваш логотип, используемый в виджете ServiceInfo (работает только с активным хедером flclashx-servicename). Поддерживает png/svg.
+Ваш логотип, используемый в виджете ServiceInfo (работает только с активным хедером flclashm-servicename). Поддерживает png/svg.
 
 Использование:
 
 ```bash
-flclashx-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/remnawave.svg
+flclashm-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/remnawave.svg
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-serverinfo</strong></summary>
+<summary><strong>flclashm-serverinfo</strong></summary>
 
 Название прокси-группы для отображения в виджете ChangeServerButton. Виджет показывает активный сервер из указанной группы с флагом страны, пингом и кнопкой для быстрого переключения. Если не передаётся — работает фолбек на «Изменить сервер»
 
@@ -168,12 +168,12 @@ flclashx-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/sv
 Использование:
 
 ```bash
-flclashx-serverinfo: Proxy
+flclashm-serverinfo: Proxy
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-background</strong></summary>
+<summary><strong>flclashm-background</strong></summary>
 
 Устанавливает пользовательское фоновое изображение для приложения. Укажите прямую ссылку на изображение.
 
@@ -187,12 +187,12 @@ flclashx-serverinfo: Proxy
 Использование:
 
 ```bash
-flclashx-background: https://example.com/background.jpg
+flclashm-background: https://example.com/background.jpg
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-settings</strong></summary>
+<summary><strong>flclashm-settings</strong></summary>
 
 Управление настройками приложения через хедер (с возможностью переопределения со стороны клиента). По умолчанию все параметры выключены. Если вы передаёте параметр, то он будет включён. Если не передаёте — останется выключенным.
 
@@ -208,23 +208,23 @@ Desktop-only флаги `minimize`, `autorun` и `shadowstart` в Android-only �
 Использование:
 
 ```bash
-flclashx-settings: autostart, autoupdate
+flclashm-settings: autostart, autoupdate
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-globalmode</strong></summary>
+<summary><strong>flclashm-globalmode</strong></summary>
 
 Данный хедер при FALSE позволяет скрыть все настройки режима прокси из клиента (трей, страница прокси, виджеты смены режима)
 
 Использование:
 ```bash
-flclashx-globalmode: false
+flclashm-globalmode: false
 ```
 </details>
 
 <details>
-<summary><strong>flclashx-hex</strong></summary>
+<summary><strong>flclashm-hex</strong></summary>
 
 Данный хедер позволяет настроить тему в приложении, возможность передать основной цвет, вариант, и выбрать "Чисто черный режим" параметром `pureBlack`
 
@@ -243,15 +243,15 @@ flclashx-globalmode: false
 
 Использование:
 ```bash
-flclashx-hex: FF5733
-flclashx-hex: FF5733:vibrant
-flclashx-hex: FF5733:vibrant:pureblack
+flclashm-hex: FF5733
+flclashm-hex: FF5733:vibrant
+flclashm-hex: FF5733:vibrant:pureblack
 ```
 Так-же можно параметры использовать по отдельности:
 ```bash
-flclashx-hex: FF5733
-flclashx-hex: vibrant
-flclashx-hex: pureblack
+flclashm-hex: FF5733
+flclashm-hex: vibrant
+flclashm-hex: pureblack
 ```
 HEX-коды стандартных тем:
 |   HEX    | ЦВЕТ|
@@ -266,7 +266,7 @@ HEX-коды стандартных тем:
 </details>
 
 <details>
-<summary><strong>flclashx-androidsecure</strong></summary>
+<summary><strong>flclashm-androidsecure</strong></summary>
 
 В `FlClashM` этот header больше не используется как обязательная Android security policy.
 
@@ -274,7 +274,7 @@ HEX-коды стандартных тем:
 
 Использование:
 ```bash
-flclashx-androidsecure: true
+flclashm-androidsecure: true
 ```
 </details>
 

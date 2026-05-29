@@ -1,4 +1,4 @@
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 import '../runtime/built_in_proxy_types.dart';

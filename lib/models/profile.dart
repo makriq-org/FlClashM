@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flclashx/clash/core.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/utils/device_info_service.dart';
+import 'package:flclashm/clash/core.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/utils/device_info_service.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'clash_config.dart';
@@ -218,7 +218,7 @@ extension ProfileExtension on Profile {
     }
 
     response.headers.forEach((name, values) {
-      if (name.toLowerCase().startsWith('flclashx-') && values.isNotEmpty) {
+      if (name.toLowerCase().startsWith('flclashm-') && values.isNotEmpty) {
         providerHeaders[name.toLowerCase()] = values.first;
       }
     });
@@ -233,7 +233,7 @@ extension ProfileExtension on Profile {
     }
 
     String updatedUrl = url;
-    final newDomain = providerHeaders['flclashx-newdomain'];
+    final newDomain = providerHeaders['flclashm-newdomain'];
     if (newDomain != null && newDomain.isNotEmpty) {
       final currentUri = Uri.tryParse(url);
       if (currentUri != null && currentUri.host != newDomain) {

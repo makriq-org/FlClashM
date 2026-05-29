@@ -89,7 +89,7 @@ class Tile {
   }
 
   /// Tell the native side whether the Global-mode button should be shown
-  /// in the home-screen widget. Driven by the `flclashx-globalmode`
+  /// in the home-screen widget. Driven by the `flclashm-globalmode`
   /// subscription header.
   Future<void> updateGlobalModeEnabled(bool enabled) async {
     try {

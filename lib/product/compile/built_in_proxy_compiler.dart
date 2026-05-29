@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/runtime/built_in_proxy_registry.dart';
-import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/runtime/built_in_proxy_registry.dart';
+import 'package:flclashm/product/runtime/built_in_proxy_types.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable

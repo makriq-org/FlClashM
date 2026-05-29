@@ -12,13 +12,13 @@ import com.follow.clashx.GlobalState
 import com.follow.clashx.RunState
 
 @RequiresApi(Build.VERSION_CODES.N)
-class FlClashXTileService : TileService() {
+class FlClashMTileService : TileService() {
 
     companion object {
         fun requestUpdate(context: Context) {
             requestListeningState(
                 context,
-                ComponentName(context, FlClashXTileService::class.java),
+                ComponentName(context, FlClashMTileService::class.java),
             )
         }
 

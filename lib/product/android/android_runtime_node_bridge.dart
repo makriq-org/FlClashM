@@ -24,7 +24,7 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   const AndroidRuntimeNodeBridge();
 
   static const MethodChannel _channel =
-      MethodChannel('com.follow.clashx/service');
+      MethodChannel('com.makriq.flclash/service');
 
   @override
   Future<bool> startNode({

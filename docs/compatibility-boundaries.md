@@ -1,40 +1,32 @@
 # Compatibility Boundaries
 
-Этот документ фиксирует legacy-идентификаторы, которые в `FlClashM` оставлены намеренно как слой совместимости, а не как незавершенный rebrand.
+Этот документ фиксирует границы совместимости, которые в `FlClashM` еще остаются после завершения ребрендинга.
 
-## Что уже должно быть ребрендировано
+## Что уже ребрендировано
 
-- app label, launcher assets, widget labels и notification channel display names
+- app label, launcher assets, widget labels и notification channel IDs
 - release artifacts и release metadata
 - release repository: `makriq-org/FlClashM`
 - Android continuity package: `com.makriq.flclash`
 - product docs и пользовательские action examples
+- product deep link: `flclashm://`
+- product custom headers: `flclashm-*`
+- TV sync payload type: `flclashm_tv_sync`
 
-## Что оставлено как compatibility layer
+## Что еще остается как техническая совместимость
 
-- Dart package name `flclashx`
-  - Причина: дешевый upstream merge и отсутствие массовой churn по imports.
 - Android namespace/class package `com.follow.clashx*`
-  - Причина: текущая база и generated wiring все еще собраны вокруг этого namespace.
-- provider header namespace `flclashx-*`
-  - Причина: уже существующая provider ecosystem и подписки.
-- deep link scheme `flclashx://`
-  - Причина: не ломать старые ссылки и интеграции.
-- Quick Settings tile service class `FlClashXTileService`
-  - Причина: уже закрепленные пользователем tiles должны переживать update.
-- Android notification channel IDs `FlClashX` и `FlClashX_Subscription`
-  - Причина: сохранить пользовательские notification preferences после update.
-- persisted Android helper filenames `flclashx_*`
-  - Причина: continuity always-on/runtime state across updates.
-- TV sync payload type `flclashx_tv_sync`
-  - Статус: принимается как legacy input.
-  - Новый canonical type: `flclashm_tv_sync`.
+  - Причина: текущая Android-база и generated wiring все еще собраны вокруг этого source namespace.
+  - Статус: это внутренний кодовый слой, а не публичный брендовый контракт.
+- старые Android helper files `flclashx_*`
+  - Причина: нужны только как вход для одноразового переноса данных в `flclashm_*`.
+  - Статус: новые записи идут только в `flclashm_*`.
 
 ## Правило на будущее
 
-Если новый public/product surface можно назвать `FlClashM` без поломки continuity, так и нужно делать.
+Если появляется новый публичный идентификатор, он должен называться в стиле `FlClashM` или `flclashm`.
 
-Если legacy-имя нужно оставить, это должно быть:
+Если временно остается старое имя, это должно быть:
 
 - явно локализовано в compatibility boundary
 - коротко объяснено в коде или документации

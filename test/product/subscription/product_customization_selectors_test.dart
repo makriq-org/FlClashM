@@ -1,6 +1,6 @@
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/providers/providers.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,7 +22,7 @@ void main() {
           id: 'profile-1',
           autoUpdateDuration: Duration.zero,
           providerHeaders: {
-            'flclashx-newboard': 'true',
+            'flclashm-newboard': 'true',
           },
         ),
       ],
@@ -45,8 +45,8 @@ void main() {
           id: 'profile-1',
           autoUpdateDuration: Duration.zero,
           providerHeaders: {
-            'flclashx-newboard': 'true',
-            'flclashx-denywidgets': 'true',
+            'flclashm-newboard': 'true',
+            'flclashm-denywidgets': 'true',
           },
         ),
       ],

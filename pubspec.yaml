@@ -1,5 +1,5 @@
-name: flclashx
-description: FlClashM is an Android-only FlClashX-based client with preserved Android package continuity from makriq.
+name: flclashm
+description: FlClashM is an Android-only client with preserved Android package continuity from makriq.
 publish_to: "none"
 version: 0.10.0+2026052601
 

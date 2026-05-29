@@ -2,10 +2,10 @@
 
 import 'dart:io';
 
-import 'package:flclashx/views/dashboard/widgets/announce_widget.dart';
-import 'package:flclashx/views/dashboard/widgets/metainfo_widget.dart';
-import 'package:flclashx/views/dashboard/widgets/widgets.dart';
-import 'package:flclashx/widgets/widgets.dart';
+import 'package:flclashm/views/dashboard/widgets/announce_widget.dart';
+import 'package:flclashm/views/dashboard/widgets/metainfo_widget.dart';
+import 'package:flclashm/views/dashboard/widgets/widgets.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';

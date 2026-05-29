@@ -46,10 +46,10 @@ Provider-driven display/customization hints должны проходить че
 - Raw header keys допустимы только:
   - в transport boundary (`Profile.update`)
   - в product parser/normalizer (`lib/product/subscription/**`)
-- `controller/providers/views/services` не должны знать конкретные `flclashx-*` header names.
+- `controller/providers/views/services` не должны знать конкретные `flclashm-*` header names.
 - Base/UI consumer должен использовать typed advisory data или thin selectors.
 - Новые provider-driven display/customization rules добавляются в `lib/product/subscription/**`, а не точечно в widgets.
-- `effectiveNewDashboard` считается derived state: явный user override важнее advisory `flclashx-newboard`.
+- `effectiveNewDashboard` считается derived state: явный user override важнее advisory `flclashm-newboard`.
 
 ## Security Boundary
 

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/product/platform/tv_sync_contract.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/product/platform/tv_sync_contract.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';

@@ -11,6 +11,7 @@
 
 Основные документы:
 
+- `branding.md`
 - `architecture.md`
 - `upstream-maintenance.md`
 - `product-services.md`

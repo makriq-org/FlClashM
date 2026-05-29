@@ -1,7 +1,7 @@
-import 'package:flclashx/common/file_logger.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/common/file_logger.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/cupertino.dart';
 
 class CommonPrint {
@@ -24,7 +24,7 @@ class CommonPrint {
   };
 
   void log(String? text) {
-    final payload = "[FlClashX] $text";
+    final payload = "[FlClashM] $text";
     debugPrint(payload);
 
     fileLogger.log(payload);

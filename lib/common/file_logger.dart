@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashx/common/path.dart';
+import 'package:flclashm/common/path.dart';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
@@ -53,9 +53,9 @@ class FileLogger {
 
   String _getLogFileName(String date, {int index = 0}) {
     if (index == 0) {
-      return 'FlClashX_$date.log';
+      return 'FlClashM_$date.log';
     }
-    return 'FlClashX_$date\_$index.log';
+    return 'FlClashM_$date\_$index.log';
   }
 
   Future<void> _rotateLogs() async {

@@ -38,7 +38,7 @@ class StatusBarController {
         
         if let statusBarButton = statusItem.button {
             
-            if let icon = NSImage(systemSymbolName: "xmark.rectangle", accessibilityDescription: "FlClashX") {
+            if let icon = NSImage(systemSymbolName: "xmark.rectangle", accessibilityDescription: "FlClashM") {
                 let config = NSImage.SymbolConfiguration(scale: .large)
                 let configuredIcon = icon.withSymbolConfiguration(config)
                 statusBarButton.image = configuredIcon
@@ -60,7 +60,7 @@ class StatusBarController {
         let menu = NSMenu()
         
         let quitItem = NSMenuItem(
-            title: "Quit FlClashX",
+            title: "Quit FlClashM",
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -116,7 +116,7 @@ class StatusBarController {
     func updateIcon(isVpnConnected: Bool) {
         if let button = statusItem.button {
             let imageName = isVpnConnected ? "checkmark.rectangle.fill" : "xmark.rectangle"
-            if let icon = NSImage(systemSymbolName: imageName, accessibilityDescription: "FlClashX") {
+            if let icon = NSImage(systemSymbolName: imageName, accessibilityDescription: "FlClashM") {
                 let config = NSImage.SymbolConfiguration(scale: .large)
                 let configuredIcon = icon.withSymbolConfiguration(config)
                 button.image = configuredIcon

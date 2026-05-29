@@ -59,8 +59,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="clash" />
-                <data android:scheme="flclash" />
-                <data android:scheme="flclashx" />
+                <data android:scheme="flclashm" />
 
                 <data android:host="install-config" />
             </intent-filter>
@@ -106,10 +105,10 @@
             android:label="@string/fl_clashm">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.follow.clashx.widget.ACTION_TOGGLE" />
-                <action android:name="com.follow.clashx.widget.ACTION_MODE_RULE" />
-                <action android:name="com.follow.clashx.widget.ACTION_MODE_GLOBAL" />
-                <action android:name="com.follow.clashx.widget.ACTION_MODE_DIRECT" />
+                <action android:name="com.makriq.flclash.widget.ACTION_TOGGLE" />
+                <action android:name="com.makriq.flclash.widget.ACTION_MODE_RULE" />
+                <action android:name="com.makriq.flclash.widget.ACTION_MODE_GLOBAL" />
+                <action android:name="com.makriq.flclash.widget.ACTION_MODE_DIRECT" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -122,7 +121,7 @@
             android:label="@string/fl_clashm">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.follow.clashx.widget.ACTION_ONOFF_TOGGLE" />
+                <action android:name="com.makriq.flclash.widget.ACTION_ONOFF_TOGGLE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -130,7 +129,7 @@
         </receiver>
 
         <service
-            android:name=".services.FlClashXTileService"
+            android:name=".services.FlClashMTileService"
             android:exported="true"
             android:icon="@drawable/ic"
             android:label="FlClashM"

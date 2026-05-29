@@ -1,16 +1,16 @@
 import 'dart:ui';
 
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart' hide Action;
-import 'package:flclashx/pages/pages.dart';
-import 'package:flclashx/product/subscription/product_subscription.dart';
-import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
-import 'package:flclashx/views/profiles/edit_profile.dart';
-import 'package:flclashx/views/profiles/override_profile.dart';
-import 'package:flclashx/views/profiles/scripts.dart';
-import 'package:flclashx/widgets/widgets.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart' hide Action;
+import 'package:flclashm/pages/pages.dart';
+import 'package:flclashm/product/subscription/product_subscription.dart';
+import 'package:flclashm/providers/providers.dart';
+import 'package:flclashm/state.dart';
+import 'package:flclashm/views/profiles/edit_profile.dart';
+import 'package:flclashm/views/profiles/override_profile.dart';
+import 'package:flclashm/views/profiles/scripts.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';

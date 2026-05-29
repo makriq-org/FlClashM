@@ -36,6 +36,9 @@ class ServicePlugin :
     FlutterPlugin,
     MethodChannel.MethodCallHandler,
     CoroutineScope {
+    companion object {
+        private const val CHANNEL_NAMESPACE = "com.makriq.flclash"
+    }
 
     private var job = SupervisorJob()
     override val coroutineContext get() = job + Dispatchers.Main
@@ -47,7 +50,7 @@ class ServicePlugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
-        channel = MethodChannel(binding.binaryMessenger, "${Components.PACKAGE_NAME}/service")
+        channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
         attached = true
     }

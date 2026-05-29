@@ -39,7 +39,7 @@ class FilesProvider : DocumentsProvider() {
     override fun queryRoots(projection: Array<out String>?): Cursor {
         val cursor = MatrixCursor(projection ?: defaultRootColumns)
         cursor.newRow().apply {
-            add(DocumentsContract.Root.COLUMN_ROOT_ID, "flclashx")
+            add(DocumentsContract.Root.COLUMN_ROOT_ID, "flclashm")
             add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY)
             add(DocumentsContract.Root.COLUMN_TITLE, "FlClashM")
             add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, docIdOf(rootDir))

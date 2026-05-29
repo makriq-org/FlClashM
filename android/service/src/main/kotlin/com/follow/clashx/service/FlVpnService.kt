@@ -77,7 +77,7 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     companion object {
-        const val ACTION_STOP = "com.follow.clashx.service.STOP"
+        const val ACTION_STOP = "com.makriq.flclash.service.STOP"
     }
 
     data class ColdStartRuntimeNode(

@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/android/android_runtime_access_policy.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/android/android_runtime_access_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

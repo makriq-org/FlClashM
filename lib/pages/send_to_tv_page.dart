@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/product/platform/tv_sync_contract.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/product/platform/tv_sync_contract.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';

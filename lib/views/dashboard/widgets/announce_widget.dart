@@ -1,8 +1,8 @@
 import 'package:emoji_regex/emoji_regex.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
-import 'package:flclashx/widgets/widgets.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/providers/providers.dart';
+import 'package:flclashm/state.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

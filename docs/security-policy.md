@@ -47,14 +47,14 @@ Product-level security boundary теперь выражена типами:
 
 ## Provider headers
 
-- `flclashx-androidsecure` считается legacy и не участвует в обязательной policy
-- `flclashx-servicename` и `flclashx-serverinfo` остаются display-only hints
+- `flclashm-androidsecure` считается advisory hint и не участвует в обязательной policy
+- `flclashm-servicename` и `flclashm-serverinfo` остаются display-only hints
 - branding/custom view headers не могут менять runtime floor
 - display/customization header parsing локализован в `lib/product/subscription/**`
 - updater/access-control services не используют provider headers как policy input
 - raw provider headers не должны использоваться как product API в base/UI слоях
 - provider metadata не может ослабить path validation, checksum verification или profile-vs-manual priority rules
-- legacy naming, сохраненный только ради compatibility, зафиксирован в `docs/compatibility-boundaries.md`
+- brand contract и остаточные compatibility boundaries зафиксированы в `docs/branding.md` и `docs/compatibility-boundaries.md`
 
 ## Advisory profile hints
 

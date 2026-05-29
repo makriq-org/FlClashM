@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/subscription/product_subscription.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/subscription/product_subscription.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -12,14 +12,14 @@ void main() {
         'announce':
             'base64:${base64.encode(utf8.encode('Maintenance tonight'))}',
         'support-url': 'https://example.com/support',
-        'flclashx-servicename': base64.encode(utf8.encode('Service Name')),
-        'flclashx-servicelogo':
+        'flclashm-servicename': base64.encode(utf8.encode('Service Name')),
+        'flclashm-servicelogo':
             base64.encode(utf8.encode('https://example.com/logo.svg')),
-        'flclashx-serverinfo': base64.encode(utf8.encode('Auto')),
-        'flclashx-background': 'https://example.com/bg.webp',
-        'flclashx-globalmode': 'FALSE',
-        'flclashx-newboard': 'true',
-        'flclashx-denywidgets': 'true',
+        'flclashm-serverinfo': base64.encode(utf8.encode('Auto')),
+        'flclashm-background': 'https://example.com/bg.webp',
+        'flclashm-globalmode': 'FALSE',
+        'flclashm-newboard': 'true',
+        'flclashm-denywidgets': 'true',
         'x-hwid-max-devices-reached': 'true',
         'x-hwid-not-supported': 'true',
       });
@@ -45,10 +45,10 @@ void main() {
           'support-url': 'https://old.example.com/support',
           'x-hwid-max-devices-reached': 'true',
           'x-hwid-not-supported': 'true',
-          'flclashx-servicename': 'service',
+          'flclashm-servicename': 'service',
         },
         incoming: {
-          'flclashx-background': 'https://example.com/bg.webp',
+          'flclashm-background': 'https://example.com/bg.webp',
         },
       );
 
@@ -56,18 +56,18 @@ void main() {
       expect(merged.containsKey('support-url'), isFalse);
       expect(merged.containsKey('x-hwid-max-devices-reached'), isFalse);
       expect(merged.containsKey('x-hwid-not-supported'), isFalse);
-      expect(merged['flclashx-servicename'], 'service');
-      expect(merged['flclashx-background'], 'https://example.com/bg.webp');
+      expect(merged['flclashm-servicename'], 'service');
+      expect(merged['flclashm-background'], 'https://example.com/bg.webp');
     });
 
     test('builds customization patch for add flow', () {
       final advisory = ProductProviderAdvisory.fromHeaders(const {
-        'flclashx-custom': 'add',
-        'flclashx-settings':
+        'flclashm-custom': 'add',
+        'flclashm-settings':
             'minimize, autorun, shadowstart, autostart, autoupdate',
-        'flclashx-hex': '#112233:pureblack',
-        'flclashx-widgets': 'serviceInfo, metainfo',
-        'flclashx-view':
+        'flclashm-hex': '#112233:pureblack',
+        'flclashm-widgets': 'serviceInfo, metainfo',
+        'flclashm-view':
             'type:tab;sort:name;layout:tight;icon:none;card:oneline',
       });
 
@@ -102,10 +102,10 @@ void main() {
 
     test('keeps provider settings overridden but still applies view hints', () {
       final advisory = ProductProviderAdvisory.fromHeaders(const {
-        'flclashx-custom': 'update',
-        'flclashx-settings': 'autorun, autostart',
-        'flclashx-widgets': 'serviceInfo',
-        'flclashx-view': 'sort:delay',
+        'flclashm-custom': 'update',
+        'flclashm-settings': 'autorun, autostart',
+        'flclashm-widgets': 'serviceInfo',
+        'flclashm-view': 'sort:delay',
       });
 
       final patch = advisory.customization.buildPatch(
@@ -124,8 +124,8 @@ void main() {
 
     test('does not apply add-only customization to existing profiles', () {
       final advisory = ProductProviderAdvisory.fromHeaders(const {
-        'flclashx-custom': 'add',
-        'flclashx-settings': 'autorun',
+        'flclashm-custom': 'add',
+        'flclashm-settings': 'autorun',
       });
 
       final patch = advisory.customization.buildPatch(

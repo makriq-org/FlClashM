@@ -38,7 +38,7 @@ class CommonService : Service(), IBaseService {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "com.follow.clashx.service.STOP") {
+        if (intent?.action == "com.makriq.flclash.service.STOP") {
             GlobalState.launch { State.runLock.withLock { handleStop() } }
             return START_NOT_STICKY
         }

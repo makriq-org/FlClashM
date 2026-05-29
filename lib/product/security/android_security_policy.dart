@@ -1,4 +1,4 @@
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/models/models.dart';
 
 import '../compile/runtime_plan.dart';
 import 'security_policy.dart';
@@ -6,7 +6,7 @@ import 'security_policy.dart';
 class AndroidSecurityPolicy implements SecurityPolicy {
   const AndroidSecurityPolicy();
 
-  static const ignoredProviderHint = 'flclashx-androidsecure';
+  static const ignoredProviderHint = 'flclashm-androidsecure';
 
   @override
   ClashConfig securePatchConfig({

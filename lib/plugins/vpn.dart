@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashx/clash/clash.dart';
-import 'package:flclashx/common/common.dart';
+import 'package:flclashm/clash/clash.dart';
+import 'package:flclashm/common/common.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -78,7 +78,7 @@ class Vpn {
 class MethodChannelShim {
   const MethodChannelShim();
   Future<T?> invoke<T>(String method, dynamic arguments) async {
-    const channel = MethodChannel('com.follow.clashx/service');
+    const channel = MethodChannel('com.makriq.flclash/service');
     return channel.invokeMethod<T>(method, arguments);
   }
 }

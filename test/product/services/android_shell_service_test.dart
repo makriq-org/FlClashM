@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/android/android_shell_bridge.dart';
-import 'package:flclashx/product/services/android_shell_service.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/android/android_shell_bridge.dart';
+import 'package:flclashm/product/services/android_shell_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -19,8 +19,8 @@ void main() {
         autoUpdateDuration: Duration.zero,
         selectedMap: const {'Auto': 'Selected Proxy'},
         providerHeaders: {
-          'flclashx-servicename': base64.encode(utf8.encode('Service Name')),
-          'flclashx-serverinfo': base64.encode(utf8.encode('Auto')),
+          'flclashm-servicename': base64.encode(utf8.encode('Service Name')),
+          'flclashm-serverinfo': base64.encode(utf8.encode('Auto')),
         },
       );
 
@@ -47,8 +47,8 @@ void main() {
         label: 'Profile',
         autoUpdateDuration: Duration.zero,
         providerHeaders: {
-          'flclashx-servicename': base64.encode(utf8.encode('Service Name')),
-          'flclashx-serverinfo': base64.encode(utf8.encode('Auto')),
+          'flclashm-servicename': base64.encode(utf8.encode('Service Name')),
+          'flclashm-serverinfo': base64.encode(utf8.encode('Auto')),
         },
       );
 

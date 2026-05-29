@@ -47,14 +47,14 @@ on Mobile:
 
 🪪
 - Added "Meta-Info" widget. Transmits subscription parameters to the widget: remaining traffic, subscription expiration date, profile name, and prominently displays days remaining until subscription expires (3 days before expiration).
-- Added "serviceInfo" widget. Displays your service name. You can additionally pass the `flclashx-servicelogo` header for a custom logo (supports svg/png links), and clicking opens the support link (supportURL).
+- Added "serviceInfo" widget. Displays your service name. You can additionally pass the `flclashm-servicelogo` header for a custom logo (supports svg/png links), and clicking opens the support link (supportURL).
 - Added "changeServerButton" widget. Clicking redirects to the proxy page.
 
 🌐 Added parsing of custom headers from the subscription page:
 
-The legacy `flclashx-*` header namespace is intentionally preserved for subscription compatibility. New product-facing surfaces should use the `FlClashM` brand.
+The product custom-header namespace in `FlClashM` is `flclashm-*`.
 
-- flclashx-widgets: arranges widgets in the order received from the subscription.
+- flclashm-widgets: arranges widgets in the order received from the subscription.
 
   |        Value         | Name widget                                                 |
   | :------------------: | ----------------------------------------------------------- |
@@ -71,15 +71,15 @@ The legacy `flclashx-*` header namespace is intentionally preserved for subscrip
   |     `memoryInfo`     | Memory usage                                                |
   |      `metainfo`      | Profile information                                         |
   | `changeServerButton` | Change server button                                        |
-  |    `serviceInfo`     | Service information (only with header flclashx-servicename) |
+  |    `serviceInfo`     | Service information (only with header flclashm-servicename) |
 
 Usage:
 
 ```bash
-    flclashx-widgets: announce,metainfo,outboundModeV2,networkDetection
+    flclashm-widgets: announce,metainfo,outboundModeV2,networkDetection
 ```
 
-- flclashx-view: Configures the appearance of the proxy page obtained from the subscription.
+- flclashm-view: Configures the appearance of the proxy page obtained from the subscription.
 
 |  Value   | Description                   | Possible values                   |
 | :------: | ----------------------------- | --------------------------------- |
@@ -92,10 +92,10 @@ Usage:
 Usage:
 
 ```bash
-    flclashx-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
+    flclashm-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
 ```
 
-- flclashx-custom: Controls the application of styles for Dashboard and ProxyView.
+- flclashm-custom: Controls the application of styles for Dashboard and ProxyView.
 
 |  Value   | Description                                                  |
 | :------: | ------------------------------------------------------------ |
@@ -105,34 +105,34 @@ Usage:
 Usage:
 
 ```bash
-    flclashx-custom: update
+    flclashm-custom: update
 ```
 
-- flclashx-denywidgets: When set to true, editing the Dashboard page is disabled. Accepts true/false.
+- flclashm-denywidgets: When set to true, editing the Dashboard page is disabled. Accepts true/false.
 
 Usage:
 
 ```bash
-    flclashx-denywidgets: true
+    flclashm-denywidgets: true
 ```
 
-- flclashx-servicename: Your service name displayed in the ServiceInfo widget.
+- flclashm-servicename: Your service name displayed in the ServiceInfo widget.
 
 Usage:
 
 ```bash
-    flclashx-servicename: FlClashM
+    flclashm-servicename: FlClashM
 ```
 
-- flclashx-servicelogo: Your logo used in the ServiceInfo widget (works only with active flclashx-servicename header). Supports png/svg.
+- flclashm-servicelogo: Your logo used in the ServiceInfo widget (works only with active flclashm-servicename header). Supports png/svg.
 
 Usage:
 
 ```bash
-    flclashx-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/remnawave.svg
+    flclashm-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/remnawave.svg
 ```
 
-- flclashx-serverinfo: Proxy group name to display in the ChangeServerButton widget. The widget shows the active server from the specified group with country flag, ping, and a quick switch button.
+- flclashm-serverinfo: Proxy group name to display in the ChangeServerButton widget. The widget shows the active server from the specified group with country flag, ping, and a quick switch button.
 
 **Displayed elements:**
   - Country flag (automatically extracted from serverDescription or proxy name)
@@ -143,10 +143,10 @@ Usage:
 Usage:
 
 ```bash
-    flclashx-serverinfo: Proxy
+    flclashm-serverinfo: Proxy
 ```
 
-- flclashx-background: Sets a custom background image for the application. Provide a direct link to an image.
+- flclashm-background: Sets a custom background image for the application. Provide a direct link to an image.
 
 **Image Recommendations:**
   - Format: PNG, JPG, or WebP
@@ -158,10 +158,10 @@ Usage:
 Usage:
 
 ```bash
-    flclashx-background: https://example.com/background.jpg
+    flclashm-background: https://example.com/background.jpg
 ```
 
-- flclashx-settings: Manage application settings via header (with client-side override option). By default, all parameters are **disabled**. If you pass a parameter, it will be **enabled**. If you don't pass it - it stays **disabled**.
+- flclashm-settings: Manage application settings via header (with client-side override option). By default, all parameters are **disabled**. If you pass a parameter, it will be **enabled**. If you don't pass it - it stays **disabled**.
 
 |   Parameter   | Description                                      | Default      |
 | :-----------: | ------------------------------------------------ | :----------: |
@@ -175,7 +175,7 @@ Desktop-only flags `minimize`, `autorun`, and `shadowstart` are treated as legac
 Usage:
 
 ```bash
-    flclashx-settings: autostart, autoupdate
+    flclashm-settings: autostart, autoupdate
 ```
 
 ### Configuration Settings Override

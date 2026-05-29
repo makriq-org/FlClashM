@@ -1,5 +1,5 @@
-import 'package:flclashx/models/config.dart';
-import 'package:flclashx/providers/config.dart';
+import 'package:flclashm/models/config.dart';
+import 'package:flclashm/providers/config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

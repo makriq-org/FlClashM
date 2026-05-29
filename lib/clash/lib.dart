@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/models/models.dart';
 import 'package:flutter/services.dart';
 
 import 'interface.dart';
 
-/// Android-only bridge to the `com.follow.clashx/service` AIDL service living
+/// Android-only bridge to the `com.makriq.flclash/service` AIDL service living
 /// in the `:remote` process. Replaces the old FFI + dart-port / service-isolate
 /// architecture: every call now goes through a MethodChannel and is forwarded
 /// across AIDL to the Go core.
@@ -22,7 +22,7 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   final MethodChannel _channel =
-      const MethodChannel('com.follow.clashx/service');
+      const MethodChannel('com.makriq.flclash/service');
   Completer<bool> _initCompleter = Completer<bool>();
 
   static const int _maxCrashRetries = 5;
