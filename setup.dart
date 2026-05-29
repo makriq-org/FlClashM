@@ -60,7 +60,7 @@ Future<void> main(List<String> args) async {
     stderr.writeln(
       'FlClashM is Android-only. Supported command: dart setup.dart android '
       '[--arch arm|arm64|amd64] [--env stable|pre] '
-      '[--out app|core|runtime-assets]',
+      '[--out app|core|runtime-assets|split-apk|universal-apk|appbundle]',
     );
     exitCode = 64;
     return;
@@ -72,18 +72,30 @@ Future<void> main(List<String> args) async {
     return;
   }
   final coreVersion = await _extractCoreVersion();
-  final arches = command.arch == null
-      ? _androidArches.values.toList()
-      : [_requireArch(command.arch!)];
+  if (command.out == 'app' || command.out == 'core') {
+    final arches = command.arch == null
+        ? _androidArches.values.toList()
+        : [_requireArch(command.arch!)];
+    await _buildAndroidCore(arches: arches, coreVersion: coreVersion);
+  }
 
-  await _buildAndroidCore(arches: arches, coreVersion: coreVersion);
+  if (command.out == 'core') {
+    return;
+  }
 
   if (command.out == 'app') {
     await _buildAndroidArtifacts(
       env: command.env,
       coreVersion: coreVersion,
     );
+    return;
   }
+
+  await _buildAndroidArtifact(
+    out: command.out,
+    env: command.env,
+    coreVersion: coreVersion,
+  );
 }
 
 CommandArgs _parseArgs(List<String> args) {
@@ -121,7 +133,12 @@ CommandArgs _parseArgs(List<String> args) {
     }
   }
 
-  if (out != 'app' && out != 'core' && out != 'runtime-assets') {
+  if (out != 'app' &&
+      out != 'core' &&
+      out != 'runtime-assets' &&
+      out != 'split-apk' &&
+      out != 'universal-apk' &&
+      out != 'appbundle') {
     throw ArgumentError('Invalid --out value: $out');
   }
 
@@ -217,12 +234,81 @@ Future<void> _buildAndroidArtifacts({
   required String coreVersion,
 }) async {
   final dist = Directory(_projectPath(_distDir));
+  _resetDistDirectory(dist);
+  final flutterEnvironment = _buildFlutterEnvironment();
+
+  await _buildSplitApks(
+    dist: dist,
+    flutterEnvironment: flutterEnvironment,
+    env: env,
+    coreVersion: coreVersion,
+  );
+  await _buildUniversalApk(
+    dist: dist,
+    flutterEnvironment: flutterEnvironment,
+    env: env,
+    coreVersion: coreVersion,
+  );
+  await _buildAppBundle(
+    dist: dist,
+    flutterEnvironment: flutterEnvironment,
+    env: env,
+    coreVersion: coreVersion,
+  );
+}
+
+Future<void> _buildAndroidArtifact({
+  required String out,
+  required String env,
+  required String coreVersion,
+}) async {
+  final dist = Directory(_projectPath(_distDir));
+  _resetDistDirectory(dist);
+  final flutterEnvironment = _buildFlutterEnvironment();
+
+  switch (out) {
+    case 'split-apk':
+      await _buildSplitApks(
+        dist: dist,
+        flutterEnvironment: flutterEnvironment,
+        env: env,
+        coreVersion: coreVersion,
+      );
+      break;
+    case 'universal-apk':
+      await _buildUniversalApk(
+        dist: dist,
+        flutterEnvironment: flutterEnvironment,
+        env: env,
+        coreVersion: coreVersion,
+      );
+      break;
+    case 'appbundle':
+      await _buildAppBundle(
+        dist: dist,
+        flutterEnvironment: flutterEnvironment,
+        env: env,
+        coreVersion: coreVersion,
+      );
+      break;
+    default:
+      throw ArgumentError('Invalid Android artifact output: $out');
+  }
+}
+
+void _resetDistDirectory(Directory dist) {
   if (dist.existsSync()) {
     dist.deleteSync(recursive: true);
   }
   dist.createSync(recursive: true);
-  final flutterEnvironment = _buildFlutterEnvironment();
+}
 
+Future<void> _buildSplitApks({
+  required Directory dist,
+  required Map<String, String> flutterEnvironment,
+  required String env,
+  required String coreVersion,
+}) async {
   await _exec(
     [
       'flutter',
@@ -254,7 +340,14 @@ Future<void> _buildAndroidArtifacts({
     }
   }
   _deleteBuildAppDir();
+}
 
+Future<void> _buildUniversalApk({
+  required Directory dist,
+  required Map<String, String> flutterEnvironment,
+  required String env,
+  required String coreVersion,
+}) async {
   await _exec(
     [
       'flutter',
@@ -273,7 +366,14 @@ Future<void> _buildAndroidArtifacts({
     _join(dist.path, '$_appName-android-universal.apk'),
   );
   _deleteBuildAppDir();
+}
 
+Future<void> _buildAppBundle({
+  required Directory dist,
+  required Map<String, String> flutterEnvironment,
+  required String env,
+  required String coreVersion,
+}) async {
   await _exec(
     [
       'flutter',

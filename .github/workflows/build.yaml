@@ -70,8 +70,115 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Android release artifacts
-        run: dart setup.dart android ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
+      - name: Build Android core artifacts
+        run: dart setup.dart android --out core
+
+      - name: Upload Android core artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: artifact-core-android
+          path: |
+            libclash/android
+            lib/core_version.dart
+          overwrite: true
+
+  build-android-artifacts:
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - out: split-apk
+            artifact: artifact-android-split-apk
+          - out: universal-apk
+            artifact: artifact-android-universal-apk
+          - out: appbundle
+            artifact: artifact-android-appbundle
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/.ghcup
+          sudo docker image prune --all --force || true
+          df -h
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Require continuity signing for tag releases
+        if: env.HAS_RELEASE_SIGNING != 'true'
+        run: |
+          echo "Tag releases must use the FlClash continuity signing secrets." >&2
+          exit 1
+
+      - name: Setup Android signing
+        run: |
+          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
+          {
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+            echo "storePassword=${{ secrets.STORE_PASSWORD }}"
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+          } >> android/local.properties
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Download Android core artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: artifact-core-android
+          path: .
+
+      - name: Build Android ${{ matrix.out }} artifact
+        run: dart setup.dart android --out ${{ matrix.out }} ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
+
+      - name: Upload Android ${{ matrix.out }} artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./dist
+          overwrite: true
+
+  package:
+    runs-on: ubuntu-latest
+    needs: [build-android-artifacts]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Download Android release artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: ./dist/
+          pattern: artifact-android-*
+          merge-multiple: true
 
       - name: Assert Android release signing continuity
         run: dart tool/check_android_release_signing.dart dist/FlClashM-android-arm64-v8a.apk
@@ -118,7 +225,7 @@ jobs:
 
   changelog:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [package]
     permissions:
       contents: write
     steps:
@@ -177,8 +284,8 @@ jobs:
   upload:
     permissions:
       contents: write
-    needs: [build]
-    if: always() && (needs.build.result == 'success')
+    needs: [package]
+    if: always() && (needs.package.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
