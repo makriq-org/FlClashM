@@ -361,8 +361,11 @@ Future<void> _buildUniversalApk({
     workingDirectory: _projectRoot,
     name: 'flutter build apk (universal)',
   );
+  final apkDir = Directory(
+    _projectPath('build', 'app', 'outputs', 'flutter-apk'),
+  );
   _relocateFile(
-    File(_join(splitDir.path, 'app-release.apk')),
+    File(_join(apkDir.path, 'app-release.apk')),
     _join(dist.path, '$_appName-android-universal.apk'),
   );
   _deleteBuildAppDir();
