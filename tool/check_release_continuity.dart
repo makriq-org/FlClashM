@@ -359,32 +359,45 @@ void _checkReleaseTemplate({
   required String templatePath,
   required List<String> failures,
 }) {
-  final expectedReleaseTagUrl =
-      'https://github.com/${contract.releaseRepository}/releases/tag/vVERSION';
-  if (!content.contains(expectedReleaseTagUrl)) {
+  final lines = content
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  final bulletLines = lines.where((line) => line.startsWith('- ')).toList();
+
+  if (lines.isEmpty || lines.length > 3) {
     failures.add(
-      'Missing release tag page `$expectedReleaseTagUrl` in `$templatePath`.',
+      'Release template `$templatePath` must contain 1-3 non-empty bullet points.',
     );
   }
 
-  final expectedDownloadBadgePrefix =
-      'https://img.shields.io/github/downloads/${contract.releaseRepository}/vVERSION/total';
-  if (!content.contains(expectedDownloadBadgePrefix)) {
+  if (bulletLines.length != lines.length) {
     failures.add(
-      'Missing release download badge for `${contract.releaseRepository}` in '
-      '`$templatePath`.',
+      'Release template `$templatePath` must contain only Markdown bullet lines.',
     );
   }
 
-  for (final assetName in [
-    ...contract.releaseArtifacts,
-    contract.releaseMetadataFileName,
-  ]) {
-    final expectedUrl =
-        'https://github.com/${contract.releaseRepository}/releases/download/vVERSION/$assetName';
-    if (!content.contains(expectedUrl)) {
+  if (!content.contains('VERSION')) {
+    failures.add('Release template `$templatePath` must keep VERSION placeholder.');
+  }
+
+  if (!content.contains(contract.appName)) {
+    failures.add('Release template `$templatePath` must mention `${contract.appName}`.');
+  }
+
+  if (RegExp(r'https?://|<[^>]+>|CHANGELOG|ChangeLog|changelog|img\.shields')
+      .hasMatch(content)) {
+    failures.add(
+      'Release template `$templatePath` must stay concise: no links, HTML, badges or changelog references.',
+    );
+  }
+
+  final cyrillic = RegExp(r'[А-Яа-яЁё]');
+  for (final line in bulletLines) {
+    if (!cyrillic.hasMatch(line)) {
       failures.add(
-        'Missing release asset `$assetName` in `$templatePath`.',
+        'Release template `$templatePath` must use Russian text in every bullet.',
       );
     }
   }
