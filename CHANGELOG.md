@@ -1,3 +1,13 @@
+## v0.10.2
+
+- Слить codex/fix-naiveproxy-assets в main
+
+- Обновить иконку уведомлений для v0.10.2
+
+- Добавить ассеты naiveproxy в пакет
+
+- Update changelog
+
 ## v0.10.1
 
 - fix release signing guard and restore v0.10.1
