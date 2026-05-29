@@ -37,16 +37,8 @@ void main(List<String> args) {
   }
 
   final output = '${result.stdout}\n${result.stderr}';
-  final shaMatch = RegExp(
-    r'Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
-  ).firstMatch(output);
-  final dnMatch =
-      RegExp(r'Signer #1 certificate DN:\s*(.+)').firstMatch(output);
-
-  final actualSha256 = shaMatch?.group(1)?.toLowerCase();
-  final actualDn = dnMatch?.group(1)?.trim();
-
-  if (actualSha256 == null || actualDn == null) {
+  final signerInfo = tryParseSignerInfo(output);
+  if (signerInfo == null) {
     stderr
       ..writeln('Unable to parse signer information from apksigner output.')
       ..writeln(output);
@@ -55,21 +47,49 @@ void main(List<String> args) {
   }
 
   final expectedSigner = contract.continuitySigner;
-  if (actualSha256 != expectedSigner.sha256) {
+  if (signerInfo.sha256 != expectedSigner.sha256) {
     stderr
       ..writeln(
         'Release signing mismatch: expected SHA-256 '
-        '${expectedSigner.sha256}, got $actualSha256.',
+        '${expectedSigner.sha256}, got ${signerInfo.sha256}.',
       )
       ..writeln('Expected signer DN: ${expectedSigner.subjectDn}')
-      ..writeln('Actual signer DN:   $actualDn');
+      ..writeln('Actual signer DN:   ${signerInfo.subjectDn}');
     exitCode = 1;
     return;
   }
 
   stdout.writeln(
-    'Android release signing OK: $actualDn (${expectedSigner.sha256})',
+    'Android release signing OK: ${signerInfo.subjectDn} (${expectedSigner.sha256})',
   );
+}
+
+SignerInfo? tryParseSignerInfo(String output) {
+  // Newer build-tools print `V2 Signer: certificate ...`, older ones keep
+  // `Signer #1 certificate ...`. Accept both to keep the guard stable.
+  final shaMatch = RegExp(
+    r'(?:Signer #\d+\s+|V\d+ Signer:\s+)certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
+    multiLine: true,
+  ).firstMatch(output);
+  final dnMatch = RegExp(
+    r'(?:Signer #\d+\s+|V\d+ Signer:\s+)certificate DN:\s*(.+)',
+    multiLine: true,
+  ).firstMatch(output);
+
+  final sha256 = shaMatch?.group(1)?.toLowerCase();
+  final subjectDn = dnMatch?.group(1)?.trim();
+  if (sha256 == null || subjectDn == null) {
+    return null;
+  }
+
+  return SignerInfo(sha256: sha256, subjectDn: subjectDn);
+}
+
+class SignerInfo {
+  const SignerInfo({required this.sha256, required this.subjectDn});
+
+  final String sha256;
+  final String subjectDn;
 }
 
 String _resolveApkSigner() {

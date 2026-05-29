@@ -2,19 +2,19 @@
 import os
 import sys
 import requests
-import json
 
-def send_telegram_message(bot_token, chat_id, message, parse_mode='Markdown'):
+def send_telegram_message(bot_token, chat_id, message, parse_mode=None):
     """Send a message to a Telegram chat."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    
+
     payload = {
         'chat_id': chat_id,
         'text': message,
-        'parse_mode': parse_mode,
         'disable_web_page_preview': False
     }
-    
+    if parse_mode:
+        payload['parse_mode'] = parse_mode
+
     try:
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
@@ -50,7 +50,7 @@ def main():
     is_stable = os.environ.get('IS_STABLE', 'false').lower() == 'true'
 
     if not all([bot_token, channel_id_1, channel_id_2, channel_id_3, version, commits, release_url]):
-        print("Error: Missing required environment variables")
+        print("Warning: Missing required environment variables, skip Telegram notification")
         print(f"TELEGRAM_BOT_TOKEN: {'✓' if bot_token else '✗'}")
         print(f"TELEGRAM_CHANNEL_ID_1: {'✓' if channel_id_1 else '✗'}")
         print(f"TELEGRAM_CHANNEL_ID_2: {'✓' if channel_id_2 else '✗'}")
@@ -58,7 +58,7 @@ def main():
         print(f"VERSION: {'✓' if version else '✗'}")
         print(f"COMMITS: {'✓' if commits else '✗'}")
         print(f"RELEASE_URL: {'✓' if release_url else '✗'}")
-        sys.exit(1)
+        return
     
     # Full release message for channels 1 and 2
     message = format_release_message(version, commits, release_url, is_stable)
@@ -96,12 +96,17 @@ def main():
         success_count += 1
     else:
         print("✗ Channel 3: Failed")
-    
+
     print(f"\nSent to {success_count}/{total_channels} channels")
-    
+
+    if success_count == 0:
+        print("Warning: release is published, but Telegram delivery failed for all channels")
+        return
+
     if success_count < total_channels:
-        sys.exit(1)
-    
+        print("Warning: release is published, but delivery completed only partially")
+        return
+
     print("All notifications sent successfully!")
 
 if __name__ == '__main__':
