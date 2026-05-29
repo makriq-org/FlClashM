@@ -1,7 +1,7 @@
 export 'built_in_proxy_compiler.dart';
 export 'product_profile_pipeline.dart';
-export 'profile_compiler.dart';
 export 'product_profile_validator.dart';
+export 'profile_compiler.dart';
 export 'profile_split_tunneling.dart';
 export 'profile_yaml.dart';
 export 'raw_profile.dart';

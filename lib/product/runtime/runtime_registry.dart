@@ -118,7 +118,7 @@ class RuntimeRegistry {
   ResolvedRuntimeSelection resolveSelection([RuntimeSelection? selection]) {
     final requestedSelection = selection ?? defaultSelection;
     if (requestedSelection.helpers.isNotEmpty) {
-      throw UnsupportedRuntimeSelectionException(
+      throw const UnsupportedRuntimeSelectionException(
         'Helper runtime selection is not used in FlClashM. '
         'Built-in transports must be declared as proxy nodes inside the profile, not as runtime helpers.',
       );

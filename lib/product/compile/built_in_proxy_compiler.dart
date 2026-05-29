@@ -110,21 +110,20 @@ class BuiltInProxyCompiler {
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
-  }) {
-    return switch (definition.type) {
-      BuiltInProxyType.naiveproxy => _buildNaiveProxyPlan(
-          definition: definition,
-          descriptor: descriptor,
-          nodeId: nodeId,
-          listenPort: listenPort,
-        ),
-      BuiltInProxyType.byedpi ||
-      BuiltInProxyType.olcrtc =>
-        throw UnsupportedBuiltInProxyException(
-          registry.buildUnsupportedMessage(descriptor),
-        ),
-    };
-  }
+  }) =>
+      switch (definition.type) {
+        BuiltInProxyType.naiveproxy => _buildNaiveProxyPlan(
+            definition: definition,
+            descriptor: descriptor,
+            nodeId: nodeId,
+            listenPort: listenPort,
+          ),
+        BuiltInProxyType.byedpi ||
+        BuiltInProxyType.olcrtc =>
+          throw UnsupportedBuiltInProxyException(
+            registry.buildUnsupportedMessage(descriptor),
+          ),
+      };
 
   BuiltInProxyNodePlan _buildNaiveProxyPlan({
     required BuiltInProxyNodeDefinition definition,
