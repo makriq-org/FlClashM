@@ -14,10 +14,9 @@ void main() {
 
       expect(resolved.selection, const RuntimeSelection.mihomo());
       expect(resolved.engine.registration.descriptor.id, RuntimeId.mihomo);
-      expect(resolved.helpers, isEmpty);
     });
 
-    test('rejects unsupported olcrtc engine with guardrail details', () {
+    test('rejects unregistered olcrtc engine selection', () {
       expect(
         () => registry.resolveSelection(
           const RuntimeSelection(engine: RuntimeId.olcrtc),
@@ -26,30 +25,28 @@ void main() {
           isA<UnsupportedRuntimeSelectionException>().having(
             (error) => error.message,
             'message',
-            allOf(
-              contains('olcrtc is not available'),
-              contains('Update path:'),
-              contains('Rollback path:'),
-            ),
+            contains('Engine olcrtc is not registered.'),
           ),
         ),
       );
     });
 
-    test('resolves naiveproxy as a supported engine', () {
-      final resolved = registry.resolveSelection(
-        const RuntimeSelection(engine: RuntimeId.naiveproxy),
-      );
-
-      expect(resolved.selection.engine, RuntimeId.naiveproxy);
-      expect(resolved.engine.registration.availability.isSupported, isTrue);
+    test('rejects naiveproxy runtime selection in the product registry', () {
       expect(
-        resolved.engine.registration.descriptor.capabilities,
-        contains(RuntimeCapability.pendingBinarySwap),
+        () => registry.resolveSelection(
+          const RuntimeSelection(engine: RuntimeId.naiveproxy),
+        ),
+        throwsA(
+          isA<UnsupportedRuntimeSelectionException>().having(
+            (error) => error.message,
+            'message',
+            contains('Engine naiveproxy is not registered.'),
+          ),
+        ),
       );
     });
 
-    test('rejects engine registrations in helper slot', () {
+    test('rejects helper runtime selection in product registry', () {
       expect(
         () => registry.resolveSelection(
           const RuntimeSelection(
@@ -61,13 +58,13 @@ void main() {
           isA<UnsupportedRuntimeSelectionException>().having(
             (error) => error.message,
             'message',
-            contains('cannot be selected as a helper'),
+            contains('Helper runtime selection is not used in FlClashM'),
           ),
         ),
       );
     });
 
-    test('rejects unsupported byedpi helper selection', () {
+    test('rejects byedpi helper selection in product registry', () {
       expect(
         () => registry.resolveSelection(
           const RuntimeSelection(
@@ -79,7 +76,7 @@ void main() {
           isA<UnsupportedRuntimeSelectionException>().having(
             (error) => error.message,
             'message',
-            contains('byedpi is not available'),
+            contains('Helper runtime selection is not used in FlClashM'),
           ),
         ),
       );
@@ -126,7 +123,7 @@ void main() {
       );
     });
 
-    test('rejects helper registrations that reference unknown engines', () {
+    test('rejects non-engine registrations at construction time', () {
       expect(
         () => RuntimeRegistry(
           defaultSelection: const RuntimeSelection.mihomo(),
@@ -143,9 +140,7 @@ void main() {
               ),
               adapterFactory: _FakeEngineAdapter.new,
             ),
-          ],
-          helpers: [
-            const HelperRuntimeRegistration(
+            const EngineRuntimeRegistration(
               descriptor: RuntimeDescriptor(
                 id: RuntimeId.byedpi,
                 role: RuntimeRole.helper,
@@ -156,8 +151,7 @@ void main() {
                 updatePath: 'supervisor',
                 rollbackPath: 'detach',
               ),
-              attachment: HelperAttachment.alongsideEngine,
-              supportedEngines: {RuntimeId.naiveproxy},
+              adapterFactory: _FakeEngineAdapter.new,
             ),
           ],
         ),
@@ -165,7 +159,7 @@ void main() {
           isA<ArgumentError>().having(
             (error) => error.message,
             'message',
-            contains('references unknown engine'),
+            contains('must be registered with engine role'),
           ),
         ),
       );
@@ -207,7 +201,7 @@ class _FakeEngineAdapter implements EngineAdapter {
   @override
   Future<void> persistColdStart({
     required InitParams initParams,
-    required SetupParams setupParams,
+    required RuntimePlan runtimePlan,
     required CoreState state,
   }) async {}
 }

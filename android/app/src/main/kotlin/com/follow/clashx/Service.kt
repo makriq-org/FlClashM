@@ -154,18 +154,22 @@ object Service {
     suspend fun getTotalTraffic(): String =
         delegate.useService { it.totalTraffic }.getOrNull() ?: ""
 
-    suspend fun startNaiveProxy(executablePath: String, workingDirectory: String): Long =
+    suspend fun startRuntimeNode(
+        nodeId: String,
+        executablePath: String,
+        workingDirectory: String,
+    ): Long =
         delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.startNaiveProxy(executablePath, workingDirectory, cb) }
+            awaitResult { cb -> proxy.startRuntimeNode(nodeId, executablePath, workingDirectory, cb) }
         }.getOrNull() ?: 0L
 
-    suspend fun stopNaiveProxy(): Long =
+    suspend fun stopRuntimeNode(nodeId: String): Long =
         delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.stopNaiveProxy(cb) }
+            awaitResult { cb -> proxy.stopRuntimeNode(nodeId, cb) }
         }.getOrNull() ?: 0L
 
-    suspend fun getNaiveProxyRunTime(): Long =
-        delegate.useService { it.naiveProxyRunTime }.getOrNull() ?: 0L
+    suspend fun getRuntimeNodeRunTime(nodeId: String): Long =
+        delegate.useService { it.getRuntimeNodeRunTime(nodeId) }.getOrNull() ?: 0L
 
     suspend fun startListener(): Result<Unit> =
         delegate.useService { it.startListener() }

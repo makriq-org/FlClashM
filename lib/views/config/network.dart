@@ -38,7 +38,10 @@ class OverrideNetworkSettingsItemNetwork extends ConsumerWidget {
         if (!overrideNetworkSettings)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.5),
             child: Row(
               children: [
                 Icon(
@@ -244,7 +247,6 @@ class TunStackItem extends ConsumerWidget {
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
-    commonPrint.log("TunStackItem.build: stack=${stack.name}, isEnabled=$isEnabled");
 
     return AbsorbPointer(
       absorbing: !isEnabled,
@@ -310,32 +312,32 @@ class BypassDomainItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListItem.open(
-      title: Text(appLocalizations.bypassDomain),
-      subtitle: Text(appLocalizations.bypassDomainDesc),
-      delegate: OpenDelegate(
-        blur: false,
-        title: appLocalizations.bypassDomain,
-        widget: Consumer(
-          builder: (_, ref, __) {
-            _initActions(context, ref);
-            final bypassDomain = ref.watch(
-                networkSettingProvider.select((state) => state.bypassDomain));
-            return ListInputPage(
-              title: appLocalizations.bypassDomain,
-              items: bypassDomain,
-              titleBuilder: Text.new,
-              onChange: (items) {
-                ref.read(networkSettingProvider.notifier).updateState(
-                      (state) => state.copyWith(
-                        bypassDomain: List.from(items),
-                      ),
-                    );
-              },
-            );
-          },
+        title: Text(appLocalizations.bypassDomain),
+        subtitle: Text(appLocalizations.bypassDomainDesc),
+        delegate: OpenDelegate(
+          blur: false,
+          title: appLocalizations.bypassDomain,
+          widget: Consumer(
+            builder: (_, ref, __) {
+              _initActions(context, ref);
+              final bypassDomain = ref.watch(
+                  networkSettingProvider.select((state) => state.bypassDomain));
+              return ListInputPage(
+                title: appLocalizations.bypassDomain,
+                items: bypassDomain,
+                titleBuilder: Text.new,
+                onChange: (items) {
+                  ref.read(networkSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          bypassDomain: List.from(items),
+                        ),
+                      );
+                },
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
 }
 
 class RouteModeItem extends ConsumerWidget {

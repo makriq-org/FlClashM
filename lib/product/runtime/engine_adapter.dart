@@ -26,7 +26,7 @@ abstract interface class EngineAdapter {
 
   Future<void> persistColdStart({
     required InitParams initParams,
-    required SetupParams setupParams,
+    required RuntimePlan runtimePlan,
     required CoreState state,
   });
 }

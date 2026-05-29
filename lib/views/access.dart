@@ -5,6 +5,7 @@ import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,26 +22,54 @@ class _AccessViewState extends ConsumerState<AccessView> {
   final _scrollController = ScrollController();
   final _loadCompleter = Completer<List<Package>>();
   late AccessControlEditorState _editorState;
+  bool _profileManaged = false;
 
   @override
   void initState() {
     super.initState();
-    _editorState = productServices.accessControl.createEditorState(
-      ref.read(vpnSettingProvider).accessControl,
-    );
+    _syncResolvedAccessControl();
+    globalState.activeProfileAccessControlNotifier
+        .addListener(_handleProfileAccessControlChanged);
     _loadCompleter.complete(_loadPackages());
   }
 
   @override
   void dispose() {
+    globalState.activeProfileAccessControlNotifier
+        .removeListener(_handleProfileAccessControlChanged);
     _persist();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
+  void _handleProfileAccessControlChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(_syncResolvedAccessControl);
+  }
+
+  void _syncResolvedAccessControl() {
+    final profileAccessControl = globalState.activeProfileAccessControl;
+    _editorState = productServices.accessControl.resolveEditorState(
+      accessControl: ref.read(vpnSettingProvider).accessControl,
+      profileAccessControl: profileAccessControl,
+      previousState: _editorStateOrNull,
+    );
+    _profileManaged = profileAccessControl != null;
+  }
+
+  AccessControlEditorState? get _editorStateOrNull {
+    try {
+      return _editorState;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _persist() {
-    if (!_editorState.dirty) {
+    if (_profileManaged || !_editorState.dirty) {
       return;
     }
     ref.read(vpnSettingProvider.notifier).updateState(
@@ -116,15 +145,26 @@ class _AccessViewState extends ConsumerState<AccessView> {
       child: Column(
         children: [
           ListItem.switchItem(
-            title: Text(appLocale.appAccessControl),
+            title: Row(
+              children: [
+                Text(appLocale.appAccessControl),
+                if (_profileManaged) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.lock_outline, size: 16),
+                ],
+              ],
+            ),
+            subtitle: Text(appLocale.accessControlDesc),
             delegate: SwitchDelegate(
               value: _editorState.enabled,
-              onChanged: (v) => setState(() {
-                _editorState = productServices.accessControl.setEnabled(
-                  _editorState,
-                  enabled: v,
-                );
-              }),
+              onChanged: _profileManaged
+                  ? null
+                  : (v) => setState(() {
+                        _editorState = productServices.accessControl.setEnabled(
+                          _editorState,
+                          enabled: v,
+                        );
+                      }),
             ),
           ),
           const Divider(height: 1),
@@ -154,7 +194,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           ),
                         ],
                         selected: {_editorState.mode},
-                        onSelectionChanged: (_) => _switchMode(),
+                        onSelectionChanged:
+                            _profileManaged ? null : (_) => _switchMode(),
                         showSelectedIcon: false,
                       ),
                     ),
@@ -220,7 +261,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           }),
                         ),
                         const Spacer(),
-                        if (_editorState.selectedPackages.isNotEmpty)
+                        if (!_profileManaged &&
+                            _editorState.selectedPackages.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all, size: 18),
                             label: Text(
@@ -262,7 +304,9 @@ class _AccessViewState extends ConsumerState<AccessView> {
                               package: pkg,
                               selected: selected,
                               isWhitelist: isWhitelist,
-                              onTap: () => _toggleApp(pkg.packageName),
+                              onTap: _profileManaged
+                                  ? null
+                                  : () => _toggleApp(pkg.packageName),
                             );
                           },
                         );
@@ -290,7 +334,7 @@ class _AppTile extends StatelessWidget {
   final Package package;
   final bool selected;
   final bool isWhitelist;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

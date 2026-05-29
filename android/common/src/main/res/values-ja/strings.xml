@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="notification_stop">停止</string>
+    <string name="subscription_notification_channel_name">サブスクリプション更新</string>
+    <string name="notification_open">開く</string>
 </resources>

@@ -19,6 +19,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
+import 'common/yaml_dump.dart';
 import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
@@ -66,7 +67,8 @@ class GlobalState {
   late Color accentColor;
   CorePalette? corePalette;
   Map<String, dynamic>? lastRuntimeConfig;
-  AccessControl? _activeProfileAccessControl;
+  final activeProfileAccessControlNotifier =
+      ValueNotifier<AccessControl?>(null);
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -87,6 +89,8 @@ class GlobalState {
   bool isInit = false;
   final ProductProfilePipeline _profilePipeline =
       const ProductProfilePipeline();
+  final ProductProfileValidator _profileValidator =
+      const ProductProfileValidator();
   late final RuntimeRegistry runtimeRegistry;
   late final EngineManager engineManager;
 
@@ -96,7 +100,8 @@ class GlobalState {
 
   AppController get appController => _appController!;
 
-  AccessControl? get activeProfileAccessControl => _activeProfileAccessControl;
+  AccessControl? get activeProfileAccessControl =>
+      activeProfileAccessControlNotifier.value;
 
   set appController(AppController appController) {
     _appController = appController;
@@ -271,14 +276,10 @@ class GlobalState {
     if (profile == null) {
       return null;
     }
-    final configMap = await getProfileConfig(profile.id);
     final profilePath = await appPath.getProfilePath(profile.id);
-    final restoredConfig = await restoreAndroidProfileSplitTunnelingFields(
-      configMap,
-      isAndroid: Platform.isAndroid,
-      profilePath: profilePath,
+    final rawConfig = await handleEvaluate(
+      await loadProfileConfigFromFile(profilePath),
     );
-    final rawConfig = await handleEvaluate(restoredConfig);
     return RawProfile.fromConfig(
       profile: profile,
       config: rawConfig,
@@ -364,7 +365,7 @@ class GlobalState {
 
   void applyRuntimePlan(RuntimePlan runtimePlan) {
     lastRuntimeConfig = runtimePlan.config;
-    _activeProfileAccessControl = runtimePlan.profileAccessControl;
+    activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
   }
 
@@ -425,10 +426,19 @@ class GlobalState {
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {
-    final configMap = await clashCore.getConfig(profileId);
-    configMap["rules"] = configMap["rule"];
-    configMap.remove("rule");
-    return configMap;
+    final profilePath = await appPath.getProfilePath(profileId);
+    return loadProfileConfigFromFile(profilePath);
+  }
+
+  Future<String> validateProfileConfigText(String text) async {
+    try {
+      final normalizedConfig = _profileValidator.normalizeForValidation(text);
+      final yamlBuffer = StringBuffer();
+      yamlDump(yamlBuffer, normalizedConfig, 0);
+      return clashCore.validateConfig(yamlBuffer.toString());
+    } catch (error) {
+      return error.toString();
+    }
   }
 
   Future<Map<String, dynamic>> handleEvaluate(

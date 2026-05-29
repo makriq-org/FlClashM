@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
-import 'package:flclashx/product/runtime/naiveproxy_release.dart';
+import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -495,15 +495,22 @@ void main() {
             'enable': true,
             'nameserver': ['1.1.1.1'],
           },
-          'x-flclashm-runtime': {
-            'engine': 'naiveproxy',
-            'naiveproxy': {
+          'proxies': [
+            {
+              'name': 'NaiveProxy Local',
+              'type': 'naiveproxy',
               'proxy': 'https://user:pass@example.com',
-              'extra': {
-                'host-resolver-rules': 'MAP * ~NOTFOUND , EXCLUDE localhost',
-              },
+              'host-resolver-rules': 'MAP * ~NOTFOUND , EXCLUDE localhost',
             },
-          },
+          ],
+          'proxy-groups': [
+            {
+              'name': 'Main',
+              'type': 'select',
+              'proxies': ['NaiveProxy Local'],
+            },
+          ],
+          'rules': ['MATCH,Main'],
         },
       );
 
@@ -550,29 +557,33 @@ void main() {
 
       expect(
         runtimePlan.runtime,
-        const RuntimeSelection(engine: RuntimeId.naiveproxy),
+        const RuntimeSelection.mihomo(),
       );
-      expect(runtimePlan.config['socks-port'], 0);
+      expect(runtimePlan.selectedMap, const {'Main': 'ignored'});
+      expect(runtimePlan.builtInProxyNodes, hasLength(1));
+      final builtInNode = runtimePlan.builtInProxyNodes.single;
+      expect(builtInNode.type, BuiltInProxyType.naiveproxy);
+      expect(builtInNode.listenPort, inInclusiveRange(35000, 35511));
       expect(runtimePlan.config['proxies'][0]['server'], '127.0.0.1');
+      expect(runtimePlan.config['proxies'][0]['port'], builtInNode.listenPort);
       expect(
-        runtimePlan.config['proxies'][0]['port'],
-        naiveProxyDefaultListenerPort,
+        runtimePlan.config['proxies'][0]['type'],
+        'socks5',
       );
       expect(
-        runtimePlan.selectedMap,
-        const {
-          naiveProxyBridgeGroupName: naiveProxyBridgeProxyName,
-        },
+        runtimePlan.config['proxy-groups'][0]['proxies'],
+        ['NaiveProxy Local'],
       );
 
-      final configJson = runtimePlan.files[naiveProxyRuntimeArtifactConfigPath];
+      final configJson = runtimePlan.files[
+          'built-in-proxies/naiveproxy/${builtInNode.nodeId}/config.json'];
       expect(configJson, isNotNull);
       final runtimeConfig = Map<String, dynamic>.from(
         json.decode(configJson!) as Map,
       );
       expect(
         runtimeConfig['listen'],
-        'socks://127.0.0.1:$naiveProxyDefaultListenerPort',
+        'socks://127.0.0.1:${builtInNode.listenPort}',
       );
       expect(runtimeConfig['proxy'], 'https://user:pass@example.com');
       expect(
@@ -581,7 +592,7 @@ void main() {
       );
     });
 
-    test('rejects naiveproxy listener port collisions with runtime ports',
+    test('skips reserved runtime ports when allocating naiveproxy listeners',
         () async {
       const profile = Profile(
         id: 'profile-naiveproxy-port-collision',
@@ -591,18 +602,20 @@ void main() {
       final rawProfile = RawProfile.fromConfig(
         profile: profile,
         config: const <String, dynamic>{
-          'x-flclashm-runtime': {
-            'engine': 'naiveproxy',
-            'naiveproxy': {
+          'proxies': [
+            {
+              'name': 'NaiveProxy Local',
+              'type': 'naiveproxy',
               'proxy': 'https://user:pass@example.com',
             },
-          },
+          ],
         },
       );
 
       const patchConfig = ClashConfig(
-        socksPort: naiveProxyDefaultListenerPort,
-        redirPort: naiveProxyDefaultListenerPort,
+        mixedPort: 35000,
+        socksPort: 35001,
+        redirPort: 35002,
       );
 
       final compiledProfile = compiler.compileProfilePatch(
@@ -613,37 +626,32 @@ void main() {
         ),
       );
 
-      await expectLater(
-        () => compiler.buildRuntimePlan(
-          rawProfile: rawProfile,
-          context: const RuntimePlanBuildContext(
-            isAndroid: false,
-            overrideNetworkSettings: false,
-            overrideDns: false,
-            routeMode: RouteMode.config,
-            hasCurrentScript: false,
-            profilesPath: '',
-            profilePath: '',
-            readInstalledPackageNames: _readNoInstalledPackages,
-          ),
-          securedProfile: SecuredProfilePatch(
-            patchConfig: compiledProfile.patchConfig,
-            metadata: compiledProfile.metadata,
-          ),
-          runtimePatchConfig: compiledProfile.patchConfig,
-          selectedMap: const {},
-          testUrl: 'https://cp.cloudflare.com/generate_204',
-          providerAssetPathResolver: (profileId, type, url) async =>
-              '/tmp/$profileId/$type/$url',
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: false,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
         ),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            contains('naiveproxy local SOCKS listener port is unavailable'),
-          ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
         ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
       );
+
+      final builtInNode = runtimePlan.builtInProxyNodes.single;
+      expect(builtInNode.listenPort, isNot(anyOf(35000, 35001, 35002)));
+      expect(builtInNode.listenPort, inInclusiveRange(35000, 35511));
     });
   });
 }

@@ -2,4 +2,6 @@
 <resources>
     <string name="notification_stop">Stop</string>
     <string name="notification_channel_name">FlClashM</string>
+    <string name="subscription_notification_channel_name">Subscription updates</string>
+    <string name="notification_open">Open</string>
 </resources>

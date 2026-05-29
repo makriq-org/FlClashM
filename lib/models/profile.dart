@@ -15,6 +15,9 @@ part 'generated/profile.freezed.dart';
 part 'generated/profile.g.dart';
 
 typedef SelectedMap = Map<String, String>;
+typedef ValidateProfileConfigCallback = Future<String> Function(
+  String configText,
+);
 
 @freezed
 class SubscriptionInfo with _$SubscriptionInfo {
@@ -71,12 +74,13 @@ class Profile with _$Profile {
   factory Profile.normal({
     String? label,
     String url = '',
-  }) => Profile(
-      label: label,
-      url: url,
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      autoUpdateDuration: defaultUpdateDuration,
-    );
+  }) =>
+      Profile(
+        label: label,
+        url: url,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        autoUpdateDuration: defaultUpdateDuration,
+      );
 }
 
 @freezed
@@ -167,7 +171,10 @@ extension ProfileExtension on Profile {
     return (await file.lastModified()).microsecondsSinceEpoch;
   }
 
-  Future<Profile> update({bool shouldSendHeaders = true}) async {
+  Future<Profile> update({
+    bool shouldSendHeaders = true,
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
     final headers = <String, dynamic>{};
 
     if (shouldSendHeaders) {
@@ -187,35 +194,35 @@ extension ProfileExtension on Profile {
 
     final disposition = response.headers.value("content-disposition");
     final userinfo = response.headers.value('subscription-userinfo');
-    
+
     final responseData = response.data;
     if (responseData == null) {
       throw Exception("Failed to get profile data from response.");
     }
 
     final providerHeaders = <String, String>{};
-    
+
     final headersToCollect = [
       'announce',
-      'support-url', 
+      'support-url',
       'profile-update-interval',
       'x-hwid-max-devices-reached',
       'x-hwid-not-supported',
     ];
-    
+
     for (final headerName in headersToCollect) {
       final value = response.headers.value(headerName);
       if (value != null && value.isNotEmpty) {
         providerHeaders[headerName] = value;
       }
     }
-    
+
     response.headers.forEach((name, values) {
       if (name.toLowerCase().startsWith('flclashx-') && values.isNotEmpty) {
         providerHeaders[name.toLowerCase()] = values.first;
       }
     });
-    
+
     Duration? durationFromHeader;
     final updateIntervalHeader = providerHeaders['profile-update-interval'];
     if (updateIntervalHeader != null) {
@@ -240,11 +247,18 @@ extension ProfileExtension on Profile {
       subscriptionInfo: SubscriptionInfo.formHString(userinfo),
       autoUpdateDuration: durationFromHeader ?? autoUpdateDuration,
       providerHeaders: providerHeaders,
-    ).saveFile(responseData);
+    ).saveFile(
+      responseData,
+      validateConfig: validateConfig,
+    );
   }
 
-  Future<Profile> saveFile(Uint8List bytes) async {
-    final message = await clashCore.validateConfig(utf8.decode(bytes));
+  Future<Profile> saveFile(
+    Uint8List bytes, {
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
+    final validator = validateConfig ?? clashCore.validateConfig;
+    final message = await validator(utf8.decode(bytes));
     if (message.isNotEmpty) {
       throw message;
     }
@@ -253,8 +267,12 @@ extension ProfileExtension on Profile {
     return copyWith(lastUpdateDate: DateTime.now());
   }
 
-  Future<Profile> saveFileWithString(String value) async {
-    final message = await clashCore.validateConfig(value);
+  Future<Profile> saveFileWithString(
+    String value, {
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
+    final validator = validateConfig ?? clashCore.validateConfig;
+    final message = await validator(value);
     if (message.isNotEmpty) {
       throw message;
     }

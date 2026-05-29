@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="notification_stop">Остановить</string>
+    <string name="subscription_notification_channel_name">Обновления подписки</string>
+    <string name="notification_open">Открыть</string>
 </resources>

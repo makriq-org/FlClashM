@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/runtime/built_in_proxy_supervisor.dart';
+import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/mihomo_engine_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,6 +13,7 @@ void main() {
     late _FakeMihomoLifecycleBridge lifecycle;
     late _FakeMihomoPlatformBridge platform;
     late _FakeMihomoUpdateBridge update;
+    late _FakeBuiltInProxySupervisor builtInProxySupervisor;
     late Directory tempDir;
 
     MihomoEngineAdapter buildAdapter({
@@ -21,6 +24,7 @@ void main() {
           lifecycle: lifecycle,
           platform: platform,
           update: update,
+          builtInProxySupervisor: builtInProxySupervisor,
           readAccessControl: () => accessControl ?? const AccessControl(),
         );
 
@@ -28,6 +32,7 @@ void main() {
       core = _FakeMihomoCoreBridge();
       lifecycle = _FakeMihomoLifecycleBridge();
       platform = _FakeMihomoPlatformBridge();
+      builtInProxySupervisor = _FakeBuiltInProxySupervisor();
       tempDir = await Directory.systemTemp.createTemp('flclashm-mihomo-');
       update = _FakeMihomoUpdateBridge(
         corePath: '${tempDir.path}/FlClashCore',
@@ -138,6 +143,65 @@ void main() {
       expect(lifecycle.restartCalls, 1);
     });
 
+    test('stages and commits built-in proxy nodes on runtime plan setup',
+        () async {
+      final adapter = buildAdapter();
+      const runtimePlan = RuntimePlan(
+        config: {},
+        selectedMap: {},
+        testUrl: 'https://example.com',
+        builtInProxyNodes: [
+          BuiltInProxyNodePlan(
+            nodeId: 'node-a',
+            name: 'Node A',
+            type: BuiltInProxyType.naiveproxy,
+            listenHost: '127.0.0.1',
+            listenPort: 35010,
+            protocol: BuiltInProxyProtocol.socks5,
+            udp: false,
+          ),
+        ],
+        metadata: null,
+      );
+
+      final message = await adapter.setupRuntimePlan(runtimePlan);
+
+      expect(message, isEmpty);
+      expect(core.setupRuntimePlanCalls, 1);
+      expect(builtInProxySupervisor.stageCalls, 1);
+      expect(builtInProxySupervisor.commitCalls, 1);
+      expect(builtInProxySupervisor.rollbackCalls, 0);
+    });
+
+    test('rolls staged built-in nodes back when core setup fails', () async {
+      core.setupRuntimePlanMessage = 'core setup failed';
+      final adapter = buildAdapter();
+      const runtimePlan = RuntimePlan(
+        config: {},
+        selectedMap: {},
+        testUrl: 'https://example.com',
+        builtInProxyNodes: [
+          BuiltInProxyNodePlan(
+            nodeId: 'node-a',
+            name: 'Node A',
+            type: BuiltInProxyType.naiveproxy,
+            listenHost: '127.0.0.1',
+            listenPort: 35010,
+            protocol: BuiltInProxyProtocol.socks5,
+            udp: false,
+          ),
+        ],
+        metadata: null,
+      );
+
+      final message = await adapter.setupRuntimePlan(runtimePlan);
+
+      expect(message, contains('core setup failed'));
+      expect(builtInProxySupervisor.stageCalls, 1);
+      expect(builtInProxySupervisor.commitCalls, 0);
+      expect(builtInProxySupervisor.rollbackCalls, 1);
+    });
+
     test('atomically swaps in a pending core update', () async {
       final adapter = buildAdapter();
       final target = File(update.corePath);
@@ -151,6 +215,7 @@ void main() {
       expect(pending.existsSync(), isFalse);
       expect(File('${update.corePath}.rollback').existsSync(), isFalse);
       expect(update.setExecutableCalls, 1);
+      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
     });
 
     test('restores the previous core when pending activation fails', () async {
@@ -169,6 +234,7 @@ void main() {
       expect(await target.readAsString(), 'old-core');
       expect(await pending.readAsString(), 'new-core');
       expect(File('${update.corePath}.rollback').existsSync(), isFalse);
+      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
     });
 
     test('delegates runtime start time and cold-start persistence', () async {
@@ -178,8 +244,7 @@ void main() {
       final startTime = await adapter.readStartTime();
       await adapter.persistColdStart(
         initParams: const InitParams(homeDir: '/tmp/flclashm', version: 1),
-        setupParams: const SetupParams(
-          config: {},
+        runtimePlan: const RuntimePlan.empty(
           selectedMap: {},
           testUrl: 'https://example.com',
         ),
@@ -193,8 +258,53 @@ void main() {
       expect(startTime, lifecycle.runtimeStartTime);
       expect(lifecycle.persistColdStartCalls, 1);
       expect(lifecycle.lastPersistedSetupParams, isNotNull);
+      expect(builtInProxySupervisor.persistColdStartCalls, 1);
     });
   });
+}
+
+class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
+  int applyPendingUpdateCalls = 0;
+  int stageCalls = 0;
+  int commitCalls = 0;
+  int rollbackCalls = 0;
+  int persistColdStartCalls = 0;
+
+  @override
+  Future<void> applyPendingUpdate() async {
+    applyPendingUpdateCalls++;
+  }
+
+  @override
+  Future<void> prepareForRestart() async {}
+
+  @override
+  Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
+    stageCalls++;
+    return '';
+  }
+
+  @override
+  Future<String> rollbackStagedRuntimePlan() async {
+    rollbackCalls++;
+    return '';
+  }
+
+  @override
+  Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
+    commitCalls++;
+  }
+
+  @override
+  Future<bool> start() async => true;
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> persistColdStart() async {
+    persistColdStartCalls++;
+  }
 }
 
 class _FakeMihomoCoreBridge implements MihomoCoreBridge {
@@ -202,8 +312,10 @@ class _FakeMihomoCoreBridge implements MihomoCoreBridge {
   Error? shutdownError;
   Error? startListenerError;
   Error? stopListenerError;
+  String setupRuntimePlanMessage = '';
   int shutdownCalls = 0;
   int initializeCalls = 0;
+  int setupRuntimePlanCalls = 0;
   int startListenerCalls = 0;
   int stopListenerCalls = 0;
 
@@ -228,7 +340,10 @@ class _FakeMihomoCoreBridge implements MihomoCoreBridge {
   }
 
   @override
-  Future<String> setupRuntimePlan(RuntimePlan runtimePlan) async => '';
+  Future<String> setupRuntimePlan(RuntimePlan runtimePlan) async {
+    setupRuntimePlanCalls++;
+    return setupRuntimePlanMessage;
+  }
 
   @override
   Future<String> updateRuntimeConfig(UpdateParams updateParams) async => '';

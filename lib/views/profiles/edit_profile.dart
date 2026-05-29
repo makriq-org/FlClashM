@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -12,7 +11,6 @@ import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileView extends StatefulWidget {
-
   const EditProfileView({
     super.key,
     required this.context,
@@ -79,7 +77,12 @@ class _EditProfileViewState extends State<EditProfileView> {
           );
         }
       }
-      appController.setProfileAndAutoApply(await profile.saveFile(fileData!));
+      appController.setProfileAndAutoApply(
+        await profile.saveFile(
+          fileData!,
+          validateConfig: globalState.validateProfileConfigText,
+        ),
+      );
     } else if (!hasUpdate) {
       appController.setProfileAndAutoApply(profile);
     } else {
@@ -122,7 +125,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   Future<void> _handleSaveEdit(BuildContext context, String data) async {
     final message = await globalState.safeRun<String>(
       () async {
-        final message = await clashCore.validateConfig(data);
+        final message = await globalState.validateProfileConfigText(data);
         return message;
       },
       silence: false,
@@ -289,44 +292,44 @@ class _EditProfileViewState extends State<EditProfileView> {
       ValueListenableBuilder<FileInfo?>(
         valueListenable: fileInfoNotifier,
         builder: (_, fileInfo, __) => FadeThroughBox(
-            child: fileInfo == null
-                ? Container()
-                : ListItem(
-                    title: Text(
-                      appLocalizations.profile,
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(
-                          height: 4,
-                        ),
-                        Text(
-                          fileInfo.desc,
-                        ),
-                        const SizedBox(
-                          height: 8,
-                        ),
-                        Wrap(
-                          runSpacing: 6,
-                          spacing: 12,
-                          children: [
-                            CommonChip(
-                              avatar: const Icon(Icons.edit),
-                              label: appLocalizations.edit,
-                              onPressed: _editProfileFile,
-                            ),
-                            CommonChip(
-                              avatar: const Icon(Icons.upload),
-                              label: appLocalizations.upload,
-                              onPressed: _uploadProfileFile,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+          child: fileInfo == null
+              ? Container()
+              : ListItem(
+                  title: Text(
+                    appLocalizations.profile,
                   ),
-          ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Text(
+                        fileInfo.desc,
+                      ),
+                      const SizedBox(
+                        height: 8,
+                      ),
+                      Wrap(
+                        runSpacing: 6,
+                        spacing: 12,
+                        children: [
+                          CommonChip(
+                            avatar: const Icon(Icons.edit),
+                            label: appLocalizations.edit,
+                            onPressed: _editProfileFile,
+                          ),
+                          CommonChip(
+                            avatar: const Icon(Icons.upload),
+                            label: appLocalizations.upload,
+                            onPressed: _uploadProfileFile,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+        ),
       ),
     ];
     return CommonPopScope(
@@ -358,8 +361,8 @@ class _EditProfileViewState extends State<EditProfileView> {
               ),
               itemBuilder: (_, index) => items[index],
               separatorBuilder: (_, __) => const SizedBox(
-                  height: 24,
-                ),
+                height: 24,
+              ),
               itemCount: items.length,
             ),
           ),

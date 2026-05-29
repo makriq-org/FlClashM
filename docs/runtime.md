@@ -19,19 +19,23 @@ Runtime слой подготавливается через явную product 
 - `RuntimePlan` строится уже после security stage
 - `EngineManager` вызывает стадии в явном порядке `compile -> security -> runtimePlan`
 - direct `updateConfig` path тоже проходит через product security floor до adapter bridge
-- `RuntimePlan.runtime` несет явный `RuntimeSelection`
-- `RuntimePlan.files` несет engine-specific runtime artifacts
+- `RuntimePlan.runtime` остается явным, но product registry в `FlClashM` резолвит только `mihomo`
+- `RuntimePlan.files` несет runtime artifacts для built-in proxy nodes
+- `RuntimePlan.builtInProxyNodes` несет typed планы локальных встроенных узлов
 - `RuntimePlan.profileAccessControl` несет normalized profile-driven split tunneling override для Android VPN handoff
-- `RuntimeRegistry` остается allowlist для engine/helper registrations
+- `RuntimeRegistry` остается allowlist только для main engine registrations
+- `BuiltInProxyRegistry` держит allowlist built-in proxy node types и их availability/update/rollback guardrails
 - `MihomoEngineAdapter` остается default supported engine и production baseline
-- `NaiveProxyEngineAdapter` держит transport в отдельном процессе и отдает Android VPN boundary текущему `clashCore` seam через локальный SOCKS bridge
+- `BuiltInProxySupervisor` оркестрирует lifecycle built-in proxy nodes вокруг `MihomoEngineAdapter`
+- `NaiveProxyNodeController` держит multi-instance `naiveproxy` процессы и отдает `clashCore` локальные SOCKS5 listeners как обычные profile nodes
 - Android VPN start/stop path для `mihomo` проходит через `AccessControlService -> AndroidRuntimeAccessPolicy`
 - access-control snapshot для `mihomo` подается в adapter через runtime composition boundary, а не читается внутри него напрямую
 - pending `mihomo` core update применяется через transactional swap с rollback на предыдущий binary path
-- pending `naiveproxy` update stage-ится тем же `.pending -> active -> .rollback` boundary в app data
+- pending `naiveproxy` update stage-ится как shared binary swap через `.pending -> active -> .rollback` boundary в app data
 - `mihomo` start path считает foreground title best-effort и откатывает listener/VPN handoff при неуспешном старте
-- `mihomo` stop path всегда пытается снять и listener, и VPN boundary, даже если одна из сторон падает
+- `mihomo` start/stop path теперь так же учитывает built-in proxy node start/stop/rollback
 - `EngineManager` читает runtime start time у adapter и на fresh attach, и после stop failure boundary, чтобы reattach state не дрейфовал; при недоступном probe после успешного `start` он падает назад на локальный timestamp, а не роняет старт
+- Android always-on/cold-start path теперь поднимает сохраненные runtime nodes до `Core.quickStart`
 
 ## Контракты
 
@@ -84,8 +88,9 @@ Runtime слой подготавливается через явную product 
 Выход:
 
 - полный config для engine setup
-- `RuntimeSelection`
-- engine-specific files для runtime handoff
+- `RuntimeSelection` для main engine
+- `builtInProxyNodes` для встроенных локальных узлов
+- runtime files для node-specific handoff
 - normalized Android split-tunneling policy и `profileAccessControl` override
 - metadata для UI handoff
 
@@ -128,28 +133,29 @@ Runtime слой подготавливается через явную product 
   - hardened production baseline для Android lifecycle/recovery/update path
   - update path: bundled Android core через `setup.dart` -> repo-root `libclash/android`, независимо от `core/` working directory
   - rollback path: bundled core + existing cold-start snapshot
-- `olcrtc`
-  - engine registration без включения
-  - unavailable до pinned Android AAR, `gomobile` bridge и client-side compile path
 - `naiveproxy`
-  - supported engine adapter
-  - selection contract: `x-flclashm-runtime.engine=naiveproxy` + `x-flclashm-runtime.naiveproxy.proxy`
-  - config contract: `x-flclashm-runtime.naiveproxy.extra` может передавать дополнительные upstream keys, но не может переопределять `listen` и `proxy`
+  - supported built-in proxy node type
+  - integration contract: профиль описывает `naiveproxy` через обычный `proxies` entry с `type: naiveproxy`
+  - routing contract: узел сохраняет свое имя после compile stage, поэтому его можно включать в обычные `proxy-groups` и использовать в правилах без отдельного runtime режима
+  - config contract: built-in node обязан иметь `name` и `proxy`; client сам владеет `listen`, `server` и `port`
   - update path: `setup.dart` вытягивает pinned stable release `v148.0.7778.96-5` из официальных plugin APK assets и пакует `libnaive.so` в bundled Flutter assets
-  - activation path: adapter копирует bundled binary в app data, пишет `naiveproxy/config.json` из `RuntimePlan.files`, рестартует `naiveproxy` process только после записи нового runtime artifact и откатывает config/process к предыдущему состоянию, если bridge handoff не применился
-  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальный SOCKS listener `naiveproxy`
-  - rollback path: failed pending activation восстанавливает предыдущий binary и сохраняет `.pending` для следующей попытки
-  - limitation: quick-start/always-on snapshot очищается, потому что native cold-start engine selection для `naiveproxy` пока не поддержан
+  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет runtime artifact в `RuntimePlan.files`; `NaiveProxyNodeController` пишет per-node `config.json`, рестартует только затронутые процессы и откатывает node config/process к предыдущему commit state, если `core.setupRuntimePlan` не применился
+  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальные SOCKS5 listeners `naiveproxy`
+  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
+  - cold-start path: adapter сохраняет runtime-node manifest, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
+- `olcrtc`
+  - built-in proxy node registration без включения
+  - unavailable до pinned Android runtime, room/key compile path и node-local lifecycle contract
 - `byedpi`
-  - helper-only registration
-  - unavailable до helper supervisor и явного attach contract
+  - built-in proxy node registration без включения
+  - unavailable до pinned Android binary и node-local lifecycle contract
 
 ## Ограничения
 
 - Provider hints не определяют runtime floor.
 - `naiveproxy` listener path определяется клиентом, а не profile metadata.
-- Unsupported runtime нельзя включить без registry change.
-- Helper integration не владеет Android VPN/TUN lifecycle.
+- built-in proxy nodes поддерживаются только в `proxies`, а не в `proxy-providers`.
+- Unsupported runtime/node нельзя включить без registry change.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.
 - split tunneling/access-control orchestration не должна обходить `AccessControlService`.
-- client-only `tun.include/exclude-package-file|url` поля восстанавливаются из raw profile YAML и нормализуются до exact package names до Android VPN handoff.
+- raw profile читается напрямую из YAML на клиенте, чтобы compile stage видел built-in proxy nodes и client-only Android fields до handoff в core.

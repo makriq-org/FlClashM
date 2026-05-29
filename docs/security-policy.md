@@ -43,6 +43,7 @@ Product-level security boundary теперь выражена типами:
 - file/url-backed package lists ограничены каталогом профилей и кешируются per-profile с fallback только на последнюю валидную локально сохраненную копию
 - Android app updater принимает только APK, прошедший SHA256 verification перед installer handoff
 - Flutter HTTP path не отключает TLS-проверку глобально; loopback bypass для control-plane остается отдельным proxy-routing правилом, а не `badCertificateCallback=true`
+- built-in proxy nodes не могут задавать `listen/server/port` сами: локальный bind и портовая политика принадлежат клиенту
 
 ## Provider headers
 
@@ -53,6 +54,7 @@ Product-level security boundary теперь выражена типами:
 - updater/access-control services не используют provider headers как policy input
 - raw provider headers не должны использоваться как product API в base/UI слоях
 - provider metadata не может ослабить path validation, checksum verification или profile-vs-manual priority rules
+- legacy naming, сохраненный только ради compatibility, зафиксирован в `docs/compatibility-boundaries.md`
 
 ## Advisory profile hints
 

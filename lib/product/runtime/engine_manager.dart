@@ -327,8 +327,7 @@ class EngineManager {
 
       await compiledRuntimePlan.resolvedRuntime.engine.adapter.persistColdStart(
         initParams: await _buildInitParams(),
-        setupParams:
-            compiledRuntimePlan.appliedRuntimePlan.runtimePlan.toSetupParams(),
+        runtimePlan: compiledRuntimePlan.appliedRuntimePlan.runtimePlan,
         state: _buildCoreState(
           profileAccessControl: compiledRuntimePlan
               .appliedRuntimePlan.runtimePlan.profileAccessControl,

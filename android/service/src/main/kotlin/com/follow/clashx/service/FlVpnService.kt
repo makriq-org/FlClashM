@@ -18,10 +18,15 @@ import com.follow.clashx.service.modules.HealthCheckModule
 import com.follow.clashx.service.modules.NetworkObserveModule
 import com.follow.clashx.service.modules.NotificationModule
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.Socket
 import kotlin.coroutines.resume
 
 class FlVpnService : VpnService(), IBaseService {
@@ -75,6 +80,14 @@ class FlVpnService : VpnService(), IBaseService {
         const val ACTION_STOP = "com.follow.clashx.service.STOP"
     }
 
+    data class ColdStartRuntimeNode(
+        val nodeId: String,
+        val executablePath: String,
+        val workingDirectory: String,
+        val host: String,
+        val port: Int,
+    )
+
     private suspend fun coldStart() {
         State.runLock.withLock {
             if (State.runTime != 0L) return@withLock
@@ -102,6 +115,27 @@ class FlVpnService : VpnService(), IBaseService {
                 return@withLock
             }
 
+            val runtimeNodes = try {
+                loadColdStartRuntimeNodes()
+            } catch (e: Exception) {
+                GlobalState.log("Always-on: runtime-node state is invalid: ${e.message}")
+                SavedParams.setVpnActive(false)
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
+
+            try {
+                startColdStartRuntimeNodes(runtimeNodes)
+            } catch (e: Exception) {
+                GlobalState.log("Always-on: failed to start runtime nodes: ${e.message}")
+                SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
+
             val coreResult = withTimeoutOrNull(15_000L) {
                 suspendCancellableCoroutine { cont ->
                     Core.quickStart(params.init, params.setup, params.state, object : InvokeInterface {
@@ -115,13 +149,9 @@ class FlVpnService : VpnService(), IBaseService {
             if (coreResult == null) {
                 GlobalState.log("Always-on: quickStart timed out")
                 SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
                 runCatching { com.follow.clashx.core.Core.stopTun() }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
+                stopForegroundCompat()
                 stopSelf()
                 return@withLock
             }
@@ -129,13 +159,9 @@ class FlVpnService : VpnService(), IBaseService {
             if (coreResult.isNotEmpty()) {
                 GlobalState.log("Always-on: quickStart returned error, aborting: $coreResult")
                 SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
                 runCatching { com.follow.clashx.core.Core.stopTun() }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
+                stopForegroundCompat()
                 stopSelf()
                 return@withLock
             }
@@ -156,13 +182,9 @@ class FlVpnService : VpnService(), IBaseService {
             }.onFailure {
                 GlobalState.log("Always-on: handleStart failed: ${it.message}")
                 SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
                 runCatching { com.follow.clashx.core.Core.stopTun() }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
+                stopForegroundCompat()
                 stopSelf()
                 return@withLock
             }
@@ -183,11 +205,82 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override fun onDestroy() {
+        runCatching { runBlocking { withTimeoutOrNull(3000L) { RuntimeNodeProcessManager.stopAll() } } }
         runCatching { com.follow.clashx.core.Core.stopTun() }
         runCatching { runBlocking { withTimeoutOrNull(3000L) { loader.stop() } } }
         tunActive = false
         handleDestroy()
         super.onDestroy()
+    }
+
+    private fun stopForegroundCompat() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    private fun loadColdStartRuntimeNodes(): List<ColdStartRuntimeNode> {
+        val state = SavedParams.loadRuntimeNodesState() ?: return emptyList()
+        val root = JSONObject(state)
+        val rawNodes = root.optJSONArray("nodes") ?: JSONArray()
+        return buildList {
+            for (index in 0 until rawNodes.length()) {
+                val rawNode = rawNodes.optJSONObject(index) ?: continue
+                val nodeId = rawNode.optString("nodeId", "").trim()
+                val executablePath = rawNode.optString("executablePath", "").trim()
+                val workingDirectory = rawNode.optString("workingDirectory", "").trim()
+                val host = rawNode.optString("host", "").trim()
+                val port = rawNode.optInt("port", 0)
+                if (nodeId.isEmpty() || executablePath.isEmpty() || workingDirectory.isEmpty() ||
+                    host.isEmpty() || port <= 0
+                ) {
+                    throw IllegalStateException("Runtime node state is incomplete at index $index")
+                }
+                add(
+                    ColdStartRuntimeNode(
+                        nodeId = nodeId,
+                        executablePath = executablePath,
+                        workingDirectory = workingDirectory,
+                        host = host,
+                        port = port,
+                    ),
+                )
+            }
+        }
+    }
+
+    private suspend fun startColdStartRuntimeNodes(nodes: List<ColdStartRuntimeNode>) {
+        for (node in nodes) {
+            val startedAt = RuntimeNodeProcessManager.start(
+                nodeId = node.nodeId,
+                executablePath = node.executablePath,
+                workingDirectory = node.workingDirectory,
+            )
+            if (startedAt <= 0L) {
+                throw IllegalStateException("Runtime node `${node.nodeId}` did not start")
+            }
+            waitForRuntimeNodeListener(node.host, node.port)
+        }
+    }
+
+    private suspend fun waitForRuntimeNodeListener(host: String, port: Int) {
+        withContext(Dispatchers.IO) {
+            repeat(50) { attempt ->
+                runCatching {
+                    Socket(host, port).use { socket ->
+                        socket.soTimeout = 200
+                    }
+                    return@withContext
+                }
+                if (attempt == 49) {
+                    throw IllegalStateException("Timed out waiting for runtime node listener on $host:$port")
+                }
+                kotlinx.coroutines.delay(100L)
+            }
+        }
     }
 
     override suspend fun handleStart(options: VpnOptions) {

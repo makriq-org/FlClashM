@@ -207,6 +207,51 @@ void main() {
       expect(resolved, profileAccessControl);
     });
 
+    test(
+      'builds editor state from profile-driven access control and keeps view filters',
+      () {
+        const service = AccessControlService();
+        final previousState = service
+            .createEditorState(
+              const AccessControl(
+                enable: true,
+                mode: AccessControlMode.rejectSelected,
+                rejectList: ['com.example.manual'],
+                isFilterSystemApp: false,
+                isFilterNonInternetApp: false,
+              ),
+            )
+            .copyWith(
+              query: 'telegram',
+              showSystemApps: true,
+              showNoInternetApps: true,
+            );
+        const profileAccessControl = AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['org.telegram.messenger'],
+          sort: AccessSortType.time,
+        );
+
+        final resolved = service.resolveEditorState(
+          accessControl: const AccessControl(
+            enable: true,
+            mode: AccessControlMode.rejectSelected,
+            rejectList: ['com.example.manual'],
+          ),
+          profileAccessControl: profileAccessControl,
+          previousState: previousState,
+        );
+
+        expect(resolved.mode, AccessControlMode.acceptSelected);
+        expect(resolved.selectedPackages, {'org.telegram.messenger'});
+        expect(resolved.query, 'telegram');
+        expect(resolved.showSystemApps, isTrue);
+        expect(resolved.showNoInternetApps, isTrue);
+        expect(resolved.sort, AccessSortType.time);
+      },
+    );
+
     test('delegates runtime access orchestration to the platform bridge',
         () async {
       final platform = _FakeRuntimeAccessPlatform();

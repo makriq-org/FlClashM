@@ -87,16 +87,28 @@ class ServicePlugin :
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
-            "startNaiveProxy" -> handleStartNaiveProxy(call, result)
-            "stopNaiveProxy" -> launch {
-                Service.stopNaiveProxy()
+            "startRuntimeNode" -> handleStartRuntimeNode(call, result)
+            "stopRuntimeNode" -> launch {
+                val nodeId = call.argument<String>("nodeId") ?: ""
+                Service.stopRuntimeNode(nodeId)
                 result.successOnMain(true)
             }
-            "getNaiveProxyRunTime" -> launch {
-                result.successOnMain(Service.getNaiveProxyRunTime())
+            "getRuntimeNodeRunTime" -> launch {
+                val nodeId = call.argument<String>("nodeId") ?: ""
+                result.successOnMain(Service.getRuntimeNodeRunTime(nodeId))
             }
             "clearQuickStartParams" -> {
                 com.follow.clashx.common.SavedParams.clearQuickStartParams()
+                result.successOnMain(true)
+            }
+            "saveRuntimeNodesState" -> {
+                val args = call.arguments as? Map<*, *>
+                val nodes = args?.get("nodes") as? String ?: ""
+                com.follow.clashx.common.SavedParams.saveRuntimeNodesState(nodes)
+                result.successOnMain(true)
+            }
+            "clearRuntimeNodesState" -> {
+                com.follow.clashx.common.SavedParams.clearRuntimeNodesState()
                 result.successOnMain(true)
             }
             "showSubscriptionNotification" -> handleShowSubscriptionNotification(call, result)
@@ -192,15 +204,16 @@ class ServicePlugin :
         }
     }
 
-    private fun handleStartNaiveProxy(call: MethodCall, result: MethodChannel.Result) {
+    private fun handleStartRuntimeNode(call: MethodCall, result: MethodChannel.Result) {
+        val nodeId = call.argument<String>("nodeId") ?: ""
         val path = call.argument<String>("path") ?: ""
         val workingDirectory = call.argument<String>("workingDirectory") ?: ""
-        if (path.isBlank() || workingDirectory.isBlank()) {
+        if (nodeId.isBlank() || path.isBlank() || workingDirectory.isBlank()) {
             result.successOnMain(0L)
             return
         }
         launch {
-            val runTime = Service.startNaiveProxy(path, workingDirectory)
+            val runTime = Service.startRuntimeNode(nodeId, path, workingDirectory)
             result.successOnMain(runTime)
         }
     }
@@ -276,7 +289,7 @@ class ServicePlugin :
             if (manager.getNotificationChannel(GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL) == null) {
                 val ch = NotificationChannel(
                     GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL,
-                    "Subscription Updates",
+                    ctx.getString(com.follow.clashx.common.R.string.subscription_notification_channel_name),
                     NotificationManager.IMPORTANCE_HIGH,
                 )
                 manager.createNotificationChannel(ch)
@@ -296,7 +309,13 @@ class ServicePlugin :
                 ctx, 0, openIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            builder.addAction(0, actionLabel.ifBlank { "Open" }, pi)
+            builder.addAction(
+                0,
+                actionLabel.ifBlank {
+                    ctx.getString(com.follow.clashx.common.R.string.notification_open)
+                },
+                pi,
+            )
             builder.setContentIntent(pi)
         }
 

@@ -176,7 +176,7 @@ class RemoteService : Service() {
                             proxy.handleStop()
                         }
                     }
-                    runCatching { NaiveProxyProcessManager.stop() }
+                    runCatching { RuntimeNodeProcessManager.stopAll() }
                     delegate.unbind()
                     State.delegate = null
                     State.intent = null
@@ -219,13 +219,15 @@ class RemoteService : Service() {
         override fun getTraffic(): String = Core.getTraffic()
         override fun getTotalTraffic(): String = Core.getTotalTraffic()
 
-        override fun startNaiveProxy(
+        override fun startRuntimeNode(
+            nodeId: String,
             executablePath: String,
             workingDirectory: String,
             result: IResultInterface,
         ) {
             GlobalState.launch {
-                val startTime = NaiveProxyProcessManager.start(
+                val startTime = RuntimeNodeProcessManager.start(
+                    nodeId = nodeId,
                     executablePath = executablePath,
                     workingDirectory = workingDirectory,
                 )
@@ -233,14 +235,15 @@ class RemoteService : Service() {
             }
         }
 
-        override fun stopNaiveProxy(result: IResultInterface) {
+        override fun stopRuntimeNode(nodeId: String, result: IResultInterface) {
             GlobalState.launch {
-                val stoppedAt = NaiveProxyProcessManager.stop()
+                val stoppedAt = RuntimeNodeProcessManager.stop(nodeId)
                 result.onResult(stoppedAt)
             }
         }
 
-        override fun getNaiveProxyRunTime(): Long = NaiveProxyProcessManager.readStartTime()
+        override fun getRuntimeNodeRunTime(nodeId: String): Long =
+            RuntimeNodeProcessManager.readStartTime(nodeId)
 
         override fun startListener() {
             Core.startListener()
@@ -264,7 +267,7 @@ class RemoteService : Service() {
     override fun onDestroy() {
         eventListener.set(null)
         runCatching { Core.setEventListener(null) }
-        GlobalState.launch { NaiveProxyProcessManager.stop() }
+        GlobalState.launch { RuntimeNodeProcessManager.stopAll() }
         super.onDestroy()
     }
 

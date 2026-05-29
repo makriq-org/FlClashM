@@ -1,7 +1,10 @@
+export 'built_in_proxy_registry.dart';
+export 'built_in_proxy_supervisor.dart';
+export 'built_in_proxy_types.dart';
 export 'engine_adapter.dart';
 export 'engine_manager.dart';
 export 'mihomo_engine_adapter.dart';
-export 'naiveproxy_engine_adapter.dart';
+export 'naiveproxy_node_controller.dart';
 export 'naiveproxy_release.dart';
 export 'runtime_registry.dart';
 export 'runtime_types.dart';

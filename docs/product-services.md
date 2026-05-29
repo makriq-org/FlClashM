@@ -57,7 +57,6 @@ Thin consumers:
 - `AccessView`
 - `AppController._resolveTunAccess`
 - `MihomoEngineAdapter.start/stop`
-- `NaiveProxyEngineAdapter.start/stop`
 
 ## Границы
 
@@ -91,7 +90,6 @@ Thin consumers:
 - `AndroidManager`
 - `Application`
 - `MihomoEngineAdapter`
-- `NaiveProxyEngineAdapter`
 
 Границы:
 

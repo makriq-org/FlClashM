@@ -1,6 +1,7 @@
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import '../runtime/built_in_proxy_types.dart';
 import '../runtime/runtime_types.dart';
 
 @immutable
@@ -41,6 +42,7 @@ class RuntimePlan {
     required this.testUrl,
     this.runtime = const RuntimeSelection.mihomo(),
     this.files = const {},
+    this.builtInProxyNodes = const [],
     required this.metadata,
     this.profileAccessControl,
   });
@@ -50,6 +52,7 @@ class RuntimePlan {
     required this.testUrl,
     this.runtime = const RuntimeSelection.mihomo(),
     this.files = const {},
+    this.builtInProxyNodes = const [],
     this.profileAccessControl,
   })  : config = const <String, dynamic>{},
         metadata = null;
@@ -59,6 +62,7 @@ class RuntimePlan {
   final String testUrl;
   final RuntimeSelection runtime;
   final Map<String, String> files;
+  final List<BuiltInProxyNodePlan> builtInProxyNodes;
   final CompiledProfileMetadata? metadata;
   final AccessControl? profileAccessControl;
 

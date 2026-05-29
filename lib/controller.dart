@@ -326,7 +326,10 @@ class AppController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final shouldSend = prefs.getBool('sendDeviceHeaders') ?? true;
-      final newProfile = await profile.update(shouldSendHeaders: shouldSend);
+      final newProfile = await profile.update(
+        shouldSendHeaders: shouldSend,
+        validateConfig: globalState.validateProfileConfigText,
+      );
 
       final mergedHeaders = ProductProviderAdvisory.mergeForRefresh(
         previous: profile.providerHeaders,
@@ -851,11 +854,11 @@ class AppController {
       }
 
       // Delete cache and temporary files
-      final filesToDelete = [
+      final filesToDelete = <String>[
         'cache.db',
         'libCachedImageData.json',
-        'FlClashX.lock',
       ];
+      final lockFilePath = await appPath.lockFilePath;
 
       for (final fileName in filesToDelete) {
         final file = File(join(homePath, fileName));
@@ -866,6 +869,15 @@ class AppController {
           } catch (e) {
             commonPrint.log("failed to delete $fileName: $e");
           }
+        }
+      }
+      final lockFile = File(lockFilePath);
+      if (await lockFile.exists()) {
+        try {
+          await lockFile.delete();
+          commonPrint.log("deleted ${basename(lockFilePath)}");
+        } catch (e) {
+          commonPrint.log("failed to delete ${basename(lockFilePath)}: $e");
         }
       }
 
@@ -1078,7 +1090,10 @@ class AppController {
     if (commonScaffoldState?.mounted != true) return;
     final profile = await commonScaffoldState?.loadingRun<Profile?>(() async {
       await Future.delayed(const Duration(milliseconds: 300));
-      return Profile.normal(label: platformFile?.name).saveFile(bytes);
+      return Profile.normal(label: platformFile?.name).saveFile(
+        bytes,
+        validateConfig: globalState.validateProfileConfigText,
+      );
     }, title: "${appLocalizations.add}${appLocalizations.profile}");
     if (profile != null) {
       await addProfile(profile);

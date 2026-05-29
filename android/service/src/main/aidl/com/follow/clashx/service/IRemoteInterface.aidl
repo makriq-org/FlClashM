@@ -38,13 +38,14 @@ interface IRemoteInterface {
 
     String getTotalTraffic();
 
-    void startNaiveProxy(in String executablePath,
+    void startRuntimeNode(in String nodeId,
+                         in String executablePath,
                          in String workingDirectory,
                          in IResultInterface result);
 
-    void stopNaiveProxy(in IResultInterface result);
+    void stopRuntimeNode(in String nodeId, in IResultInterface result);
 
-    long getNaiveProxyRunTime();
+    long getRuntimeNodeRunTime(in String nodeId);
 
     void startListener();
 

@@ -43,14 +43,19 @@ Guard сравнивает base touchpoints с каноническими produc
 ### 3. Runtime Layer
 
 - основной runtime: `mihomo`
-- отдельный engine adapter: `naiveproxy`
+- `BuiltInProxyRegistry`
+- `BuiltInProxySupervisor`
+- `NaiveProxyNodeController`
 - `EngineAdapter`
-- `RuntimeRegistry` как allowlist и selection seam
-- disabled registrations для `olcrtc`, `byedpi`
+- `RuntimeRegistry` как allowlist только для main engine selection
+- built-in node registrations для `naiveproxy`, `byedpi`, `olcrtc`
 
-### 4. Helper Layer
+### 4. Built-in Node Layer
 
-- `byedpi` только как helper registration, не как основной engine
+- built-in transports оформляются как обычные profile nodes, а не как отдельные engines/helpers
+- per-node lifecycle/config/rollback идет через runtime supervisor
+- current supported path: `naiveproxy`
+- current guarded-but-disabled paths: `byedpi`, `olcrtc`
 
 ### 5. Platform Layer
 
@@ -58,7 +63,7 @@ Guard сравнивает base touchpoints с каноническими produc
 - permissions
 - foreground service
 - quick settings tile
-- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`, `AndroidNaiveProxyRuntimeBridge`)
+- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`, `AndroidRuntimeNodeBridge`)
 
 ## Текущий handoff
 
@@ -168,9 +173,9 @@ Guard сравнивает base touchpoints с каноническими produc
 - `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access/android-shell product services и применяет typed product advisory patch, не разбирая raw provider headers.
 - `AndroidEntrypoint` принимает tile команды, но shell transport/hook details делегирует в `AndroidShellService`.
 - `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
-- `AccessView`, `MihomoEngineAdapter` и `NaiveProxyEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
+- `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
 - `RuntimePlan` несет normalized profile split-tunneling override, а adapters читают его через composition boundary вместо парсинга profile YAML на старте VPN.
-- `NaiveProxyEngineAdapter` держит process lifecycle в `AndroidNaiveProxyRuntimeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
+- `NaiveProxyNodeController` держит multi-instance process lifecycle в `AndroidRuntimeNodeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
 - `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 

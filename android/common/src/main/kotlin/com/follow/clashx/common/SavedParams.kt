@@ -6,10 +6,12 @@ import java.io.FileOutputStream
 
 object SavedParams {
     private const val PARAMS_FILE = "flclashx_always_on.json"
+    private const val RUNTIME_NODES_FILE = "flclashx_runtime_nodes.json"
     private const val ACTIVE_FILE = "flclashx_vpn_active"
     private const val NOTIF_TITLE_FILE = "flclashx_notif_title"
 
     private val paramsFile by lazy { File(GlobalState.application.filesDir, PARAMS_FILE) }
+    private val runtimeNodesFile by lazy { File(GlobalState.application.filesDir, RUNTIME_NODES_FILE) }
     private val activeFile by lazy { File(GlobalState.application.filesDir, ACTIVE_FILE) }
     private val notifTitleFile by lazy { File(GlobalState.application.filesDir, NOTIF_TITLE_FILE) }
 
@@ -62,8 +64,25 @@ object SavedParams {
     fun clearQuickStartParams() {
         runCatching {
             paramsFile.delete()
+            runtimeNodesFile.delete()
             activeFile.delete()
         }.onFailure { GlobalState.log("clearQuickStartParams error: ${it.message}") }
+    }
+
+    fun saveRuntimeNodesState(nodesJson: String) {
+        runCatching { writeAtomic(runtimeNodesFile, nodesJson) }
+            .onFailure { GlobalState.log("saveRuntimeNodesState error: ${it.message}") }
+    }
+
+    fun loadRuntimeNodesState(): String? =
+        runCatching { runtimeNodesFile.readText() }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+    fun clearRuntimeNodesState() {
+        runCatching { runtimeNodesFile.delete() }
+            .onFailure { GlobalState.log("clearRuntimeNodesState error: ${it.message}") }
     }
 
     fun saveNotificationTitle(title: String) {

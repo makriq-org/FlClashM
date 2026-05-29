@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 
 import 'engine_adapter.dart';
 import 'mihomo_engine_adapter.dart';
-import 'naiveproxy_engine_adapter.dart';
 import 'runtime_types.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
@@ -13,15 +12,6 @@ EngineAdapter _buildMihomoEngineAdapter(
   AccessControl? Function()? readProfileAccessControl,
 ) =>
     MihomoEngineAdapter(
-      readAccessControl: readAccessControl,
-      readProfileAccessControl: readProfileAccessControl,
-    );
-
-EngineAdapter _buildNaiveProxyEngineAdapter(
-  ReadNaiveProxyAccessControlCallback readAccessControl,
-  AccessControl? Function()? readProfileAccessControl,
-) =>
-    NaiveProxyEngineAdapter(
       readAccessControl: readAccessControl,
       readProfileAccessControl: readProfileAccessControl,
     );
@@ -37,25 +27,6 @@ class EngineRuntimeRegistration {
   final RuntimeDescriptor descriptor;
   final RuntimeAvailability availability;
   final EngineAdapterFactory? adapterFactory;
-}
-
-enum HelperAttachment {
-  alongsideEngine,
-}
-
-@immutable
-class HelperRuntimeRegistration {
-  const HelperRuntimeRegistration({
-    required this.descriptor,
-    required this.availability,
-    required this.attachment,
-    required this.supportedEngines,
-  });
-
-  final RuntimeDescriptor descriptor;
-  final RuntimeAvailability availability;
-  final HelperAttachment attachment;
-  final Set<RuntimeId> supportedEngines;
 }
 
 @immutable
@@ -74,23 +45,17 @@ class ResolvedRuntimeSelection {
   const ResolvedRuntimeSelection({
     required this.selection,
     required this.engine,
-    required this.helpers,
   });
 
   final RuntimeSelection selection;
   final ResolvedEngineRuntime engine;
-  final List<HelperRuntimeRegistration> helpers;
 }
 
 class RuntimeRegistry {
   RuntimeRegistry({
     required this.defaultSelection,
     required List<EngineRuntimeRegistration> engines,
-    List<HelperRuntimeRegistration> helpers = const [],
-  })  : _engines = _buildEngineMap(engines),
-        _helpers = _buildHelperMap(helpers) {
-    _validateRegistryTopology();
-  }
+  }) : _engines = _buildEngineMap(engines);
 
   factory RuntimeRegistry.flClashM({
     required ReadAccessControlCallback readAccessControl,
@@ -120,78 +85,11 @@ class RuntimeRegistry {
               readProfileAccessControl,
             ),
           ),
-          const EngineRuntimeRegistration(
-            descriptor: RuntimeDescriptor(
-              id: RuntimeId.olcrtc,
-              role: RuntimeRole.engine,
-              capabilities: {
-                RuntimeCapability.localSocks5Listener,
-                RuntimeCapability.vpnProtect,
-                RuntimeCapability.externalServerDependency,
-              },
-            ),
-            availability: RuntimeAvailability.unsupported(
-              reason:
-                  'olcrtc Android packaging, gomobile bridge, and client-side room/key compilation are not integrated.',
-              updatePath:
-                  'Ship a pinned Android AAR plus Dart/Kotlin bridge for Start/Stop/SetProtector before enabling selection.',
-              rollbackPath:
-                  'Keep olcrtc unavailable in the registry and fall back to mihomo until binary, config, and migration paths are versioned.',
-            ),
-          ),
-          EngineRuntimeRegistration(
-            descriptor: const RuntimeDescriptor(
-              id: RuntimeId.naiveproxy,
-              role: RuntimeRole.engine,
-              capabilities: {
-                RuntimeCapability.localSocks5Listener,
-                RuntimeCapability.pendingBinarySwap,
-                RuntimeCapability.externalServerDependency,
-              },
-            ),
-            availability: const RuntimeAvailability.supported(
-              updatePath:
-                  'setup.dart extracts the pinned stable naiveproxy plugin APK into bundled Android assets, then the adapter stages app-upgrade binaries through .pending activation in app data.',
-              rollbackPath:
-                  'Failed pending activation restores the previous runtime binary, keeps .pending for retry, and clears unsupported always-on cold-start state.',
-            ),
-            adapterFactory: () => _buildNaiveProxyEngineAdapter(
-              readAccessControl,
-              readProfileAccessControl,
-            ),
-          ),
-        ],
-        helpers: [
-          const HelperRuntimeRegistration(
-            descriptor: RuntimeDescriptor(
-              id: RuntimeId.byedpi,
-              role: RuntimeRole.helper,
-              capabilities: {
-                RuntimeCapability.localSocks5Listener,
-                RuntimeCapability.transparentProxy,
-              },
-            ),
-            availability: RuntimeAvailability.unsupported(
-              reason:
-                  'byedpi helper supervision, lifecycle hooks, and Android routing policy are not integrated.',
-              updatePath:
-                  'Add an explicit helper supervisor and attachment contract to an engine before enabling byedpi.',
-              rollbackPath:
-                  'Detach byedpi from the registry and keep traffic on the client-controlled VPN path.',
-            ),
-            attachment: HelperAttachment.alongsideEngine,
-            supportedEngines: {
-              RuntimeId.mihomo,
-              RuntimeId.olcrtc,
-              RuntimeId.naiveproxy,
-            },
-          ),
         ],
       );
 
   final RuntimeSelection defaultSelection;
   final Map<RuntimeId, EngineRuntimeRegistration> _engines;
-  final Map<RuntimeId, HelperRuntimeRegistration> _helpers;
 
   static Map<RuntimeId, EngineRuntimeRegistration> _buildEngineMap(
     List<EngineRuntimeRegistration> engines,
@@ -214,54 +112,17 @@ class RuntimeRegistry {
     return registrations;
   }
 
-  static Map<RuntimeId, HelperRuntimeRegistration> _buildHelperMap(
-    List<HelperRuntimeRegistration> helpers,
-  ) {
-    final registrations = <RuntimeId, HelperRuntimeRegistration>{};
-    for (final helper in helpers) {
-      final runtimeId = helper.descriptor.id;
-      if (helper.descriptor.role != RuntimeRole.helper) {
-        throw ArgumentError(
-          'Runtime ${runtimeId.label} must be registered with helper role.',
-        );
-      }
-      if (registrations.containsKey(runtimeId)) {
-        throw ArgumentError(
-          'Helper ${runtimeId.label} is registered more than once.',
-        );
-      }
-      registrations[runtimeId] = helper;
-    }
-    return registrations;
-  }
-
-  List<RuntimeDescriptor> get descriptors => [
-        ..._engines.values.map((engine) => engine.descriptor),
-        ..._helpers.values.map((helper) => helper.descriptor),
-      ];
-
-  void _validateRegistryTopology() {
-    for (final helper in _helpers.values) {
-      final helperId = helper.descriptor.id;
-      if (_engines.containsKey(helperId)) {
-        throw ArgumentError(
-          'Runtime ${helperId.label} cannot be registered as both engine and helper.',
-        );
-      }
-
-      for (final engineId in helper.supportedEngines) {
-        if (!_engines.containsKey(engineId)) {
-          throw ArgumentError(
-            'Helper ${helperId.label} references unknown engine ${engineId.label}.',
-          );
-        }
-      }
-    }
-  }
+  List<RuntimeDescriptor> get descriptors =>
+      _engines.values.map((engine) => engine.descriptor).toList();
 
   ResolvedRuntimeSelection resolveSelection([RuntimeSelection? selection]) {
     final requestedSelection = selection ?? defaultSelection;
-    _validateHelperSelection(requestedSelection.helpers);
+    if (requestedSelection.helpers.isNotEmpty) {
+      throw UnsupportedRuntimeSelectionException(
+        'Helper runtime selection is not used in FlClashM. '
+        'Built-in transports must be declared as proxy nodes inside the profile, not as runtime helpers.',
+      );
+    }
 
     final engineRegistration = _engines[requestedSelection.engine];
     if (engineRegistration == null) {
@@ -285,55 +146,13 @@ class RuntimeRegistry {
       );
     }
 
-    final resolvedHelpers = <HelperRuntimeRegistration>[];
-    for (final helperId in requestedSelection.helpers) {
-      final helperRegistration = _helpers[helperId];
-      if (helperRegistration == null) {
-        throw UnsupportedRuntimeSelectionException(
-          'Helper ${helperId.label} is not registered.',
-        );
-      }
-      if (!helperRegistration.availability.isSupported) {
-        throw UnsupportedRuntimeSelectionException(
-          _buildUnsupportedMessage(
-            runtimeId: helperId,
-            availability: helperRegistration.availability,
-          ),
-        );
-      }
-      if (!helperRegistration.supportedEngines
-          .contains(requestedSelection.engine)) {
-        throw UnsupportedRuntimeSelectionException(
-          'Helper ${helperId.label} does not support engine ${requestedSelection.engine.label}.',
-        );
-      }
-      resolvedHelpers.add(helperRegistration);
-    }
-
     return ResolvedRuntimeSelection(
       selection: requestedSelection,
       engine: ResolvedEngineRuntime(
         registration: engineRegistration,
         adapter: adapterFactory(),
       ),
-      helpers: resolvedHelpers,
     );
-  }
-
-  void _validateHelperSelection(List<RuntimeId> helperIds) {
-    if (helperIds.toSet().length != helperIds.length) {
-      throw const UnsupportedRuntimeSelectionException(
-        'Helper runtime selection contains duplicates.',
-      );
-    }
-
-    for (final helperId in helperIds) {
-      if (_engines.containsKey(helperId)) {
-        throw UnsupportedRuntimeSelectionException(
-          'Runtime ${helperId.label} is registered as an engine and cannot be selected as a helper.',
-        );
-      }
-    }
   }
 
   String _buildUnsupportedMessage({

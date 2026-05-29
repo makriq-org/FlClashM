@@ -144,7 +144,7 @@ void main() {
 
       expect(applied, isNotNull);
       expect(mihomoAdapter.persistColdStartCalls, 1);
-      expect(mihomoAdapter.lastPersistedSetupParams, isNotNull);
+      expect(mihomoAdapter.lastPersistedRuntimePlan, isNotNull);
     });
 
     test('persists cold-start params after updateConfig', () async {
@@ -169,7 +169,7 @@ void main() {
       expect(updated, isTrue);
       expect(mihomoAdapter.updateConfigCalls, 1);
       expect(mihomoAdapter.persistColdStartCalls, 1);
-      expect(mihomoAdapter.lastPersistedSetupParams, isNotNull);
+      expect(mihomoAdapter.lastPersistedRuntimePlan, isNotNull);
     });
 
     test('secures live runtime updates before adapter update', () async {
@@ -351,7 +351,7 @@ class _FakeEngineAdapter implements EngineAdapter {
   int stopCalls = 0;
   int updateConfigCalls = 0;
   int persistColdStartCalls = 0;
-  SetupParams? lastPersistedSetupParams;
+  RuntimePlan? lastPersistedRuntimePlan;
   UpdateParams? lastUpdateParams;
 
   @override
@@ -412,10 +412,10 @@ class _FakeEngineAdapter implements EngineAdapter {
   @override
   Future<void> persistColdStart({
     required InitParams initParams,
-    required SetupParams setupParams,
+    required RuntimePlan runtimePlan,
     required CoreState state,
   }) async {
     persistColdStartCalls++;
-    lastPersistedSetupParams = setupParams;
+    lastPersistedRuntimePlan = runtimePlan;
   }
 }

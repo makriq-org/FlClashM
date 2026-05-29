@@ -233,6 +233,27 @@ class AccessControlService {
   }) =>
       profileAccessControl ?? accessControl;
 
+  AccessControlEditorState resolveEditorState({
+    required AccessControl accessControl,
+    AccessControl? profileAccessControl,
+    AccessControlEditorState? previousState,
+  }) {
+    final editorState = createEditorState(
+      resolveVpnAccessControl(
+        accessControl: accessControl,
+        profileAccessControl: profileAccessControl,
+      ),
+    );
+    if (previousState == null) {
+      return editorState;
+    }
+    return editorState.copyWith(
+      query: previousState.query,
+      showSystemApps: previousState.showSystemApps,
+      showNoInternetApps: previousState.showNoInternetApps,
+    );
+  }
+
   Future<bool> startVpn({required AccessControl accessControl}) =>
       platform.startVpn(accessControl: accessControl);
 
