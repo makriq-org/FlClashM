@@ -8,8 +8,8 @@
     "KEY_PASSWORD"
   ],
   "continuitySigner": {
-    "subjectDn": "C=RU, O=makriq, CN=makriq3 FlClash Release",
-    "sha256": "bc26204b8663b7c429facda45d7cb54dac53f5a9ea93b089b16d1662193a4f77"
+    "subjectDn": "CN=FlClashM Release, O=makriq, C=RU",
+    "sha256": "e2425bde9387081e3259b4794b9868513ddaa0076ab5045909ce4f96f23a0672"
   },
   "releaseArtifacts": [
     "FlClashM-android-universal.apk",

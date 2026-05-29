@@ -39,13 +39,16 @@
   - Причина: Android install/update path требует больший `versionCode`.
   - Причина: in-app updater сравнивает stable releases по Git tag version against installed `versionName`.
 - `applicationId` обязан оставаться `com.makriq.flclash`.
-- Release signing обязан использовать те же continuity secrets, что и `FlClash-my`:
+- Release signing обязан использовать полный набор release secrets:
   - `KEYSTORE`
   - `KEY_ALIAS`
   - `STORE_PASSWORD`
   - `KEY_PASSWORD`
 - Release signing bridge обязан принимать continuity keystore как в `JKS`, так и в `PKCS12`, без смены набора secrets.
-- Итоговый опубликованный APK обязан иметь тот же signer SHA-256, что и последний публичный continuity release `FlClash-my`.
+- Итоговый опубликованный APK обязан иметь тот же signer SHA-256, что и текущий baseline в `tool/release_continuity_baseline.json`.
+- С `2026-05-29` старый continuity key от `FlClash-my` считается утраченным.
+  - Следствие: обновление поверх старых установок больше не гарантируется.
+  - Следствие: для перехода на релизы с новым ключом требуется переустановка приложения.
 - Stable release обязан публиковаться только в `makriq-org/FlClashM`.
 
 ## Release Payload

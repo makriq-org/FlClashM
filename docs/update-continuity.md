@@ -29,12 +29,14 @@ Guard: `tool/check_release_continuity.dart`
   explicit intents, internal broadcast `setPackage(...)` и `${applicationId}.permission.RECEIVE_BROADCASTS` должны вычисляться от runtime `applicationId`, а не от `com.follow.clashx`.
 - текущий brand contract и остаточные технические compatibility boundaries перечислены в `docs/branding.md` и `docs/compatibility-boundaries.md`.
 - `android/app/build.gradle.kts`: release signing bridge обязан продолжать читать `keystore.jks`, `keyAlias`, `storePassword`, `keyPassword` и корректно принимать continuity keystore как в `JKS`, так и в `PKCS12`.
+- С `2026-05-29` continuity signing key от `FlClash-my` утрачен и заменен новым локально сохраненным ключом `FlClashM`.
+  - update path для уже установленных сборок со старой подписью теперь требует переустановку.
 - `lib/common/constant.dart`: `packageName` обязан совпадать с Android continuity package, `repository` обязан оставаться `makriq-org/FlClashM`.
 - `setup.dart`: expected Android release artifact names обязаны оставаться в release path.
 - `.github/release_template.md` и `.github/pre_release_template.md`: release page обязана продолжать ссылаться на все Android artifacts и metadata asset.
 - `.github/workflows/build.yaml`: должны оставаться ожидаемые release secret names `KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, `KEY_PASSWORD`, и их wiring в `android/local.properties`.
 - `.github/workflows/build.yaml`: tag-release workflow не должен публиковать артефакты без полного набора release secrets.
-- `.github/workflows/build.yaml`: post-build signer check обязан подтверждать тот же continuity signer SHA-256, что у последнего публичного `FlClash-my`.
+- `.github/workflows/build.yaml`: post-build signer check обязан подтверждать signer SHA-256 из `tool/release_continuity_baseline.json`.
 - `.github/workflows/build.yaml`: должен быть зафиксирован `CONTINUITY_RELEASE_REPOSITORY`.
 - `.github/workflows/build.yaml`: release lookup обязан идти через `CONTINUITY_RELEASE_REPOSITORY`, а tag workflow обязан вызывать guard до setup signing и до Android build.
 - `.github/workflows/build.yaml`: tag workflow обязан генерировать `FlClashM-android-release-metadata.json` и прогонять post-build artifact guard.
