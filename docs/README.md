@@ -16,6 +16,7 @@
 - `product-services.md`
 - `runtime.md`
 - `security-policy.md`
+- `compatibility-boundaries.md`
 - `migration-plan.md`
 - `update-continuity.md`
 - `base-verification.md`

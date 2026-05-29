@@ -1,11 +1,11 @@
 script_template: inno_setup.iss
 app_id: 728B3532-C74B-4870-9068-BE70FE12A3E6
-app_name: FlClashX
+app_name: FlClashM
 publisher: pluralplay
-publisher_url: https://github.com/pluralplay/FlClashX
-display_name: FlClashX
-executable_name: FlClashX.exe
-output_base_file_name: FlClashX.exe
+publisher_url: https://github.com/makriq-org/FlClashM
+display_name: FlClashM
+executable_name: FlClashM.exe
+output_base_file_name: FlClashM.exe
 setup_icon_file: ..\windows\runner\resources\app_icon.ico
 locales:
   - lang: ru

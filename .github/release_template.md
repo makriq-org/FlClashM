@@ -2,7 +2,7 @@
 
 [![Release Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/vVERSION/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/tag/vVERSION)
 
-FlClashM is based on FlClashX.
+FlClashM Android release.
 
 </div>
 

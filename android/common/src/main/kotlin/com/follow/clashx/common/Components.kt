@@ -4,6 +4,8 @@ import android.content.ComponentName
 
 object Components {
     const val PACKAGE_NAME = "com.follow.clashx"
+    // Keep the legacy tile service class name so already pinned Quick Settings
+    // tiles continue to resolve after product updates.
     private const val TILE_SERVICE_CLASS = "$PACKAGE_NAME.services.FlClashXTileService"
 
     val runtimePackageName: String

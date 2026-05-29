@@ -52,6 +52,8 @@ on Mobile:
 
 🌐 Added parsing of custom headers from the subscription page:
 
+The legacy `flclashx-*` header namespace is intentionally preserved for subscription compatibility. New product-facing surfaces should use the `FlClashM` brand.
+
 - flclashx-widgets: arranges widgets in the order received from the subscription.
 
   |        Value         | Name widget                                                 |
@@ -195,11 +197,11 @@ By default, the following configuration parameters received from the subscriptio
 The following actions are supported:
 
 ```bash
- com.follow.clashx.action.START
+ com.makriq.flclash.action.START
 
- com.follow.clashx.action.STOP
+ com.makriq.flclash.action.STOP
 
- com.follow.clashx.action.CHANGE
+ com.makriq.flclash.action.CHANGE
 ```
 
 ## Download

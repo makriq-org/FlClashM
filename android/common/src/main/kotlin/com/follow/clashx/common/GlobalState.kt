@@ -9,8 +9,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 object GlobalState {
-    private const val TAG = "FlClashX"
+    private const val TAG = "FlClashM"
 
+    // Keep the legacy channel ID so Android preserves user notification
+    // settings across continuity updates.
     const val NOTIFICATION_CHANNEL = "FlClashX"
     const val NOTIFICATION_ID = 1
 

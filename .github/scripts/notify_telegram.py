@@ -29,7 +29,7 @@ def format_release_message(version, commits, release_url, is_stable):
     version_clean = version.lstrip('v')
     
     emoji = "🎉" if is_stable else "🚀"
-    release_type = "FlClashM (based on FlClashX). Stable Version on GitHub" if is_stable else "FlClashM (based on FlClashX). PreRelease Version on GitHub"
+    release_type = "FlClashM Stable release on GitHub" if is_stable else "FlClashM Pre-release on GitHub"
     
     message = f"{emoji} **{version_clean} in GitHub!** {emoji}\n\n"
     message += f"_{release_type}_\n\n"
@@ -65,7 +65,7 @@ def main():
     
     # Simple notification message for channel 3
     version_clean = version.lstrip('v')
-    simple_message = f"Новый релиз!❤️\nFlClashM {version_clean}\nНа базе FlClashX\nПосмотреть: {release_url}"
+    simple_message = f"Новый релиз!❤️\nFlClashM {version_clean}\nПосмотреть: {release_url}"
     
     # Log notification details (without secrets)
     print(f"Sending notification for version {version}...")

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="fl_clashx">FlClashM</string>
+    <string name="fl_clashm">FlClashM</string>
     <string name="widget_description">FlClashM Mode &amp; Tunnel</string>
     <string name="widget_mode_rule">Rule</string>
     <string name="widget_mode_global">Global</string>

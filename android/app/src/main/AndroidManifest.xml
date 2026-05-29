@@ -24,7 +24,7 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <application
-        android:name=".FlClashXApplication"
+        android:name=".FlClashApplication"
         android:banner="@mipmap/ic_banner"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
@@ -103,7 +103,7 @@
         <receiver
             android:name=".widgets.ModeWidgetProvider"
             android:exported="false"
-            android:label="@string/fl_clashx">
+            android:label="@string/fl_clashm">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.follow.clashx.widget.ACTION_TOGGLE" />
@@ -119,7 +119,7 @@
         <receiver
             android:name=".widgets.OnOffWidgetProvider"
             android:exported="false"
-            android:label="@string/fl_clashx">
+            android:label="@string/fl_clashm">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.follow.clashx.widget.ACTION_ONOFF_TOGGLE" />

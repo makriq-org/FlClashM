@@ -35,7 +35,7 @@ class OnOffWidgetProvider : AppWidgetProvider() {
         }
 
         private fun refreshAll() {
-            val ctx = com.follow.clashx.FlClashXApplication.getAppContext() ?: return
+            val ctx = com.follow.clashx.FlClashApplication.getAppContext() ?: return
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
             val component = ComponentName(ctx, OnOffWidgetProvider::class.java)
             val ids = mgr.getAppWidgetIds(component)

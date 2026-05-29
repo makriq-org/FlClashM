@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/platform/tv_sync_contract.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class SendToTvPage extends ConsumerStatefulWidget {
-
   const SendToTvPage({
     super.key,
     required this.profileUrl,
@@ -32,7 +33,7 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
 
     try {
       final data = jsonDecode(rawValue);
-      if (data['type'] == 'flclashx_tv_sync') {
+      if (isSupportedTvSyncPayloadType(data['type'] as String?)) {
         final ip = data['ip'];
         final port = data['port'];
         final tvUrl = 'http://$ip:$port/add-profile';
@@ -50,41 +51,43 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
     } catch (e) {
       _showResultDialog(
           appLocalizations.errorTitle, appLocalizations.invalidQrMessage);
-      print('Error sending to TV: $e');
+      commonPrint.log('Failed to send profile to TV: $e');
     }
   }
 
   void _showResultDialog(String title, String content) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('OK'),
-          ),
-        ],
+    unawaited(
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
+              },
+              child: Text(appLocalizations.confirm),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: Text(appLocalizations.sendToTvTitle)),
-      body: MobileScanner(
-        controller: _scannerController,
-        onDetect: _handleQrCode,
-      ),
-    );
+        appBar: AppBar(title: Text(appLocalizations.sendToTvTitle)),
+        body: MobileScanner(
+          controller: _scannerController,
+          onDetect: _handleQrCode,
+        ),
+      );
 
   @override
   void dispose() {
-    _scannerController.dispose();
+    unawaited(_scannerController.dispose());
     super.dispose();
   }
 }

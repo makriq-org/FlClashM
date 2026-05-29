@@ -50,6 +50,8 @@
 
 ### Добавлен парсинг кастомных хедеров со страницы подписки:
 
+Legacy namespace `flclashx-*` здесь сохранен намеренно ради совместимости с существующими подписками. Для новых product surface используется бренд `FlClashM`.
+
 <details>
 <summary><strong>flclashx-widgets</strong></summary>
 
@@ -294,11 +296,11 @@ flclashx-androidsecure: true
 Поддерживаются следующие действия:
 
 ```bash
- com.follow.clashx.action.START
+ com.makriq.flclash.action.START
 
- com.follow.clashx.action.STOP
+ com.makriq.flclash.action.STOP
 
- com.follow.clashx.action.CHANGE
+ com.makriq.flclash.action.CHANGE
 ```
 
 ## Скачать

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/platform/tv_sync_contract.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -24,49 +26,56 @@ class _ReceiveProfileDialogState extends State<ReceiveProfileDialog> {
   @override
   void initState() {
     super.initState();
-    _startServerAndGenerateQr();
+    unawaited(_startServerAndGenerateQr());
   }
 
   Future<void> _startServerAndGenerateQr() async {
     try {
       final ip = await NetworkInfo().getWifiIP();
       const port = 8899;
-
-      final router = shelf_router.Router();
-      router.post('/add-profile', (shelf.Request request) async {
-        final body = await request.readAsString();
-        final json = jsonDecode(body);
-        final url = json['url'] as String?;
-
-        if (url != null && url.isNotEmpty) {
-          print('Received subscription link: $url');
-          if (mounted) Navigator.of(context).pop(url);
-          return shelf.Response.ok('Link received by TV');
+      if (ip == null || ip.isEmpty) {
+        if (!mounted) {
+          return;
         }
-        return shelf.Response.badRequest(body: 'URL not found');
-      });
+        setState(() {
+          _isLoading = false;
+          _qrData = null;
+        });
+        return;
+      }
 
-      _server = await shelf_io.serve(router.call, ip!, port);
-      print('Server started at http://${_server?.address.host}:${_server?.port}');
+      final router = shelf_router.Router()
+        ..post('/add-profile', (shelf.Request request) async {
+          final body = await request.readAsString();
+          final json = jsonDecode(body);
+          final url = json['url'] as String?;
+
+          if (url != null && url.isNotEmpty) {
+            if (mounted) Navigator.of(context).pop(url);
+            return shelf.Response.ok('Link received by TV');
+          }
+          return shelf.Response.badRequest(body: 'URL not found');
+        });
+
+      _server = await shelf_io.serve(router.call, ip, port);
 
       setState(() {
         _qrData = jsonEncode({
-          'type': 'flclashx_tv_sync',
+          'type': tvSyncPayloadType,
           'ip': _server?.address.host,
           'port': _server?.port,
         });
         _isLoading = false;
       });
     } catch (e) {
-      print('Error starting server: $e');
+      commonPrint.log('Failed to start TV sync receiver: $e');
       if (mounted) Navigator.of(context).pop();
     }
   }
 
   @override
   void dispose() {
-    _server?.close(force: true);
-    print('Server stopped');
+    unawaited(_server?.close(force: true) ?? Future<void>.value());
     super.dispose();
   }
 
