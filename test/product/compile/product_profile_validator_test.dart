@@ -32,6 +32,27 @@ rules:
       expect(normalized.containsKey('x-flclashm-runtime'), isFalse);
     });
 
+    test('normalizes olcrtc nodes into core-compatible local proxies', () {
+      final normalized = validator.normalizeForValidation('''
+proxies:
+  - name: OLC Local
+    type: olcrtc
+    auth:
+      provider: jitsi
+    room:
+      id: https://meet.example.org/room
+    crypto:
+      key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    net:
+      transport: datachannel
+      dns: 8.8.8.8:53
+''');
+
+      expect(normalized['proxies'][0]['type'], 'socks5');
+      expect(normalized['proxies'][0]['server'], '127.0.0.1');
+      expect(normalized['proxies'][0]['port'], inInclusiveRange(35900, 36155));
+    });
+
     test('rejects legacy top-level naiveproxy runtime selection', () {
       expect(
         () => validator.normalizeForValidation('''

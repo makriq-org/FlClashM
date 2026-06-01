@@ -118,9 +118,13 @@ class BuiltInProxyCompiler {
             nodeId: nodeId,
             listenPort: listenPort,
           ),
-        BuiltInProxyType.byedpi ||
-        BuiltInProxyType.olcrtc =>
-          throw UnsupportedBuiltInProxyException(
+        BuiltInProxyType.olcrtc => _buildOlcRtcPlan(
+            definition: definition,
+            descriptor: descriptor,
+            nodeId: nodeId,
+            listenPort: listenPort,
+          ),
+        BuiltInProxyType.byedpi => throw UnsupportedBuiltInProxyException(
             registry.buildUnsupportedMessage(descriptor),
           ),
       };
@@ -171,6 +175,68 @@ class BuiltInProxyCompiler {
             ...rawConfig..remove('proxy'),
           },
         ),
+      },
+    );
+  }
+
+  BuiltInProxyNodePlan _buildOlcRtcPlan({
+    required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
+    required String nodeId,
+    required int listenPort,
+  }) {
+    final rawConfig = _cloneConfig(definition.rawConfig)
+      ..remove('name')
+      ..remove('type');
+    final udp = rawConfig.remove('udp');
+    if (udp == true) {
+      throw const FormatException(
+        'olcrtc built-in nodes do not support `udp: true`.',
+      );
+    }
+    if (rawConfig.containsKey('listen') ||
+        rawConfig.containsKey('server') ||
+        rawConfig.containsKey('port')) {
+      throw const FormatException(
+        'olcrtc built-in nodes must not override `listen`, `server`, or `port`; those are owned by the client local-node contract.',
+      );
+    }
+
+    final mode = _trimmedString(rawConfig['mode']);
+    if (mode != null && mode.toLowerCase() != 'cnc') {
+      throw const FormatException(
+        'olcrtc built-in nodes support only client `mode: cnc` in FlClashM.',
+      );
+    }
+    rawConfig['mode'] = 'cnc';
+
+    final socks = _asStringKeyedMap(rawConfig['socks']);
+    if (socks.containsKey('host') || socks.containsKey('port')) {
+      throw const FormatException(
+        'olcrtc built-in nodes must not override `socks.host` or `socks.port`; local bind is owned by the client.',
+      );
+    }
+    socks['host'] = localhost;
+    socks['port'] = listenPort;
+    rawConfig['socks'] = socks;
+
+    final crypto = _asStringKeyedMap(rawConfig['crypto']);
+    if (crypto.containsKey('key_file')) {
+      throw const FormatException(
+        'olcrtc built-in nodes do not support `crypto.key_file` in v1.',
+      );
+    }
+
+    return BuiltInProxyNodePlan(
+      nodeId: nodeId,
+      name: definition.name,
+      type: definition.type,
+      listenHost: localhost,
+      listenPort: listenPort,
+      protocol: descriptor.protocol,
+      udp: false,
+      files: {
+        'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
       },
     );
   }
@@ -258,5 +324,44 @@ class BuiltInProxyCompiler {
     }
     final normalizedValue = value.trim();
     return normalizedValue.isEmpty ? null : normalizedValue;
+  }
+
+  String _encodeYaml(Object? value, {int indent = 0}) {
+    final padding = ' ' * indent;
+    if (value is Map) {
+      return value.entries.map((entry) {
+        final key = entry.key.toString();
+        final mapValue = entry.value;
+        if (_isYamlScalar(mapValue)) {
+          return '$padding$key: ${_encodeYamlScalar(mapValue)}';
+        }
+        return '$padding$key:\n${_encodeYaml(mapValue, indent: indent + 2)}';
+      }).join('\n');
+    }
+    if (value is List) {
+      if (value.isEmpty) {
+        return '${padding}[]';
+      }
+      return value.map((item) {
+        if (_isYamlScalar(item)) {
+          return '$padding- ${_encodeYamlScalar(item)}';
+        }
+        return '$padding-\n${_encodeYaml(item, indent: indent + 2)}';
+      }).join('\n');
+    }
+    return '$padding${_encodeYamlScalar(value)}';
+  }
+
+  bool _isYamlScalar(Object? value) =>
+      value == null || value is String || value is num || value is bool;
+
+  String _encodeYamlScalar(Object? value) {
+    if (value == null) {
+      return 'null';
+    }
+    if (value is num || value is bool) {
+      return value.toString();
+    }
+    return json.encode(value.toString());
   }
 }

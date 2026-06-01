@@ -54,8 +54,8 @@ Guard сравнивает base touchpoints с каноническими produc
 
 - built-in transports оформляются как обычные profile nodes, а не как отдельные engines/helpers
 - per-node lifecycle/config/rollback идет через runtime supervisor
-- current supported path: `naiveproxy`
-- current guarded-but-disabled paths: `byedpi`, `olcrtc`
+- current supported paths: `naiveproxy`, `olcrtc`
+- current guarded-but-disabled path: `byedpi`
 
 ### 5. Platform Layer
 

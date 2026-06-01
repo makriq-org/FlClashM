@@ -26,17 +26,14 @@ void main() {
       );
     });
 
-    test('rejects olcrtc until node integration exists', () {
-      expect(
-        () => builtInProxyRegistry.resolveSupported(BuiltInProxyType.olcrtc),
-        throwsA(
-          isA<UnsupportedBuiltInProxyException>().having(
-            (error) => error.message,
-            'message',
-            contains('olcrtc built-in node is not available'),
-          ),
-        ),
+    test('resolves olcrtc as a supported built-in node type', () {
+      final descriptor = builtInProxyRegistry.resolveSupported(
+        BuiltInProxyType.olcrtc,
       );
+
+      expect(descriptor.type, BuiltInProxyType.olcrtc);
+      expect(descriptor.protocol, BuiltInProxyProtocol.socks5);
+      expect(descriptor.availability.isSupported, isTrue);
     });
   });
 }

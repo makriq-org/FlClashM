@@ -1,7 +1,7 @@
 name: flclashm
 description: FlClashM is an Android-only client with preserved Android package continuity from makriq.
 publish_to: "none"
-version: 0.10.2+2026052903
+version: 0.10.3+2026060103
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -88,6 +88,10 @@ flutter:
     - assets/runtimes/naiveproxy/android/armeabi-v7a/
     - assets/runtimes/naiveproxy/android/arm64-v8a/
     - assets/runtimes/naiveproxy/android/x86_64/
+    - assets/runtimes/olcrtc/android/
+    - assets/runtimes/olcrtc/android/armeabi-v7a/
+    - assets/runtimes/olcrtc/android/arm64-v8a/
+    - assets/runtimes/olcrtc/android/x86_64/
   fonts:
     - family: JetBrainsMono
       fonts:
