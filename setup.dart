@@ -630,7 +630,7 @@ Future<void> _syncOlcRtcAssets() async {
         'go',
         'build',
         '-trimpath',
-        '-ldflags=-s -w',
+        '-ldflags=-s -w -checklinkname=0',
         '-o',
         target.path,
         './cmd/olcrtc',
