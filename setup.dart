@@ -18,6 +18,7 @@ const _ndkVersion = '28.0.13004108';
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
 const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
+const _androidRuntimeJniRoot = 'android/app/src/main/jniLibs';
 final _projectRoot = File.fromUri(Platform.script).parent.absolute.path;
 
 final _androidArches = <String, AndroidArch>{
@@ -74,6 +75,7 @@ Future<void> main(List<String> args) async {
   await _syncNaiveProxyAssets();
   await _syncByedpiAssets();
   await _syncOlcRtcAssets();
+  await _syncAndroidRuntimeNativeLibraries();
   if (command.out == 'runtime-assets') {
     return;
   }
@@ -573,6 +575,44 @@ Future<void> _syncNaiveProxyAssets() async {
 
   stamp.parent.createSync(recursive: true);
   await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<void> _syncAndroidRuntimeNativeLibraries() async {
+  for (final asset in naiveProxyReleaseAssets.values) {
+    await _copyRuntimeNativeLibrary(
+      sourcePath: asset.bundledAssetPath,
+      abi: asset.abi,
+      fileName: naiveProxyAndroidNativeLibraryFileName,
+    );
+  }
+  for (final asset in olcRtcReleaseAssets.values) {
+    await _copyRuntimeNativeLibrary(
+      sourcePath: asset.bundledAssetPath,
+      abi: asset.abi,
+      fileName: olcRtcAndroidNativeLibraryFileName,
+    );
+  }
+  for (final asset in byedpiReleaseAssets.values) {
+    await _copyRuntimeNativeLibrary(
+      sourcePath: asset.bundledAssetPath,
+      abi: asset.abi,
+      fileName: byedpiAndroidNativeLibraryFileName,
+    );
+  }
+}
+
+Future<void> _copyRuntimeNativeLibrary({
+  required String sourcePath,
+  required String abi,
+  required String fileName,
+}) async {
+  final source = File(_projectPath(sourcePath));
+  if (!source.existsSync()) {
+    throw StateError('Runtime asset is missing: ${source.path}');
+  }
+  final target = File(_projectPath(_androidRuntimeJniRoot, abi, fileName));
+  target.parent.createSync(recursive: true);
+  await source.copy(target.path);
 }
 
 String _buildNaiveProxyStamp() {

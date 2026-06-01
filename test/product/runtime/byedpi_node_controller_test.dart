@@ -15,11 +15,13 @@ void main() {
     late _FakeByedpiBinaryBridge binary;
     late _FakeRuntimeNodeBridge runtime;
     late List<bool> checkResults;
+    late int nextProbePort;
 
     ByedpiNodeController buildController() => ByedpiNodeController(
           binary: binary,
           runtime: runtime,
           waitForListener: (_, __) async {},
+          allocateProbePort: () async => nextProbePort++,
           siteCheck: ({
             required host,
             required port,
@@ -46,6 +48,7 @@ void main() {
       binary = _FakeByedpiBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
       checkResults = <bool>[];
+      nextProbePort = 45610;
     });
 
     tearDown(() {
@@ -97,8 +100,14 @@ void main() {
       expect(await controller.startNodes([plan]), isTrue);
 
       expect(runtime.startArguments, [
-        ['--ip', '127.0.0.1', '--port', '35610', '--fake', '-1'],
+        ['--ip', '127.0.0.1', '--port', '45610', '--fake', '-1'],
+        ['--ip', '127.0.0.1', '--port', '45611', '--disorder', '1'],
         ['--ip', '127.0.0.1', '--port', '35610', '--disorder', '1'],
+      ]);
+      expect(runtime.runningNodes.keys, ['byedpi-a']);
+      expect(runtime.stoppedNodeIds, [
+        'byedpi-a-probe-66b26ed526a75edec7b122545e5aea12',
+        'byedpi-a-probe-50f8c09d8c922a6a5677208a7742918d',
       ]);
       final cache = File('${sharedLayout.nodesDirectoryPath}/byedpi-a/'
           'strategy-cache.json');
@@ -114,6 +123,7 @@ void main() {
         binary: binary,
         runtime: runtime,
         waitForListener: (_, __) async {},
+        allocateProbePort: () async => nextProbePort++,
         siteCheck: ({
           required host,
           required port,
@@ -242,6 +252,7 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   final Map<String, DateTime> runningNodes = {};
   final List<List<String>> startArguments = [];
   final List<bool> startResults = [];
+  final List<String> stoppedNodeIds = [];
   String? savedManifest;
 
   @override
@@ -276,6 +287,7 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
 
   @override
   Future<void> stopNode({required String nodeId}) async {
+    stoppedNodeIds.add(nodeId);
     runningNodes.remove(nodeId);
   }
 }

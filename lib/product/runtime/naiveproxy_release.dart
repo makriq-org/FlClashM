@@ -3,6 +3,7 @@ const naiveProxyBundledAssetRoot = 'assets/runtimes/naiveproxy/android';
 const naiveProxyRuntimeArtifactConfigPath = 'naiveproxy/config.json';
 const naiveProxyRuntimeDirectoryName = 'naiveproxy';
 const naiveProxyExecutableFileName = 'naiveproxy';
+const naiveProxyAndroidNativeLibraryFileName = 'libflclashm_naiveproxy.so';
 const naiveProxyBundledVersionFileName = 'bundled.version';
 const naiveProxyPendingVersionFileName = 'bundled.pending.version';
 const naiveProxyConfigFileName = 'config.json';

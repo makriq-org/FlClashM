@@ -16,6 +16,8 @@ object RuntimeNodeProcessManager {
     private data class RunningNode(
         val process: Process,
         val startTimeMillis: Long,
+        val executablePath: String,
+        val arguments: List<String>,
         val logJob: Job?,
     )
 
@@ -41,7 +43,12 @@ object RuntimeNodeProcessManager {
                 GlobalState.log("runtime node binary is missing: $executablePath")
                 return@withContext 0L
             }
-            executable.setExecutable(true, true)
+            if (executable.canWrite()) {
+                executable.setExecutable(true, true)
+            } else if (!executable.canExecute()) {
+                GlobalState.log("runtime node binary is not executable: $executablePath")
+                return@withContext 0L
+            }
 
             val runtimeDir = File(workingDirectory)
             if (!runtimeDir.exists()) {
@@ -78,6 +85,8 @@ object RuntimeNodeProcessManager {
             runningNodes[nodeId] = RunningNode(
                 process = started,
                 startTimeMillis = startTimeMillis,
+                executablePath = executablePath,
+                arguments = arguments,
                 logJob = logJob,
             )
             startTimeMillis
@@ -114,9 +123,6 @@ object RuntimeNodeProcessManager {
         }
 
         runCatching {
-            previous.process.outputStream.close()
-            previous.process.inputStream.close()
-            previous.process.errorStream.close()
             previous.process.destroy()
             if (!previous.process.waitFor(3, TimeUnit.SECONDS)) {
                 previous.process.destroyForcibly()
@@ -125,8 +131,63 @@ object RuntimeNodeProcessManager {
         }.onFailure {
             GlobalState.log("Failed to stop runtime node `$nodeId`: ${it.message}")
         }
+        killMatchingRuntimeProcesses(
+            nodeId = nodeId,
+            executablePath = previous.executablePath,
+            arguments = previous.arguments,
+        )
 
+        runCatching { previous.process.outputStream.close() }
+        runCatching { previous.process.inputStream.close() }
+        runCatching { previous.process.errorStream.close() }
         previous.logJob?.cancelAndJoin()
         return previous.startTimeMillis
+    }
+
+    private fun killMatchingRuntimeProcesses(
+        nodeId: String,
+        executablePath: String,
+        arguments: List<String>,
+    ) {
+        val expected = listOf(executablePath) + arguments
+        val selfPid = android.os.Process.myPid()
+        val procDir = File("/proc")
+        val entries = procDir.listFiles() ?: return
+        for (entry in entries) {
+            val pid = entry.name.toIntOrNull() ?: continue
+            if (pid == selfPid) continue
+            val cmdline = readProcessCmdline(pid) ?: continue
+            if (cmdline != expected) continue
+            runCatching {
+                android.os.Process.killProcess(pid)
+                waitForProcessExit(pid)
+                if (File("/proc/$pid").exists()) {
+                    android.os.Process.killProcess(pid)
+                    waitForProcessExit(pid)
+                }
+            }.onFailure {
+                GlobalState.log(
+                    "Failed to kill runtime node `$nodeId` child process $pid: ${it.message}"
+                )
+            }
+        }
+    }
+
+    private fun readProcessCmdline(pid: Int): List<String>? {
+        return runCatching {
+            File("/proc/$pid/cmdline")
+                .readBytes()
+                .toString(Charsets.UTF_8)
+                .split('\u0000')
+                .filter { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    private fun waitForProcessExit(pid: Int) {
+        val procPath = File("/proc/$pid")
+        val deadline = System.currentTimeMillis() + 1000L
+        while (procPath.exists() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50L)
+        }
     }
 }

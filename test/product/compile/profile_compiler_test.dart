@@ -593,6 +593,98 @@ void main() {
       );
     });
 
+    test(
+        'starts only selected built-in proxy nodes from selector route while keeping full core config',
+        () async {
+      const profile = Profile(
+        id: 'profile-selected-built-in',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'proxies': [
+            {
+              'name': 'NaiveProxy Local',
+              'type': 'naiveproxy',
+              'proxy': 'https://user:pass@example.com',
+            },
+            {
+              'name': 'ByeDPI Local',
+              'type': 'byedpi',
+              'mode': 'manual',
+              'args': '--disorder 1',
+            },
+            {
+              'name': 'OLC Local',
+              'type': 'olcrtc',
+              'auth': {'provider': 'jitsi'},
+              'room': {'id': 'https://meet.example.org/room'},
+              'crypto': {
+                'key':
+                    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+              },
+              'net': {
+                'transport': 'datachannel',
+                'dns': '8.8.8.8:53',
+              },
+            },
+          ],
+          'proxy-groups': [
+            {
+              'name': 'Main',
+              'type': 'select',
+              'proxies': [
+                'NaiveProxy Local',
+                'ByeDPI Local',
+                'OLC Local',
+              ],
+            },
+          ],
+          'rules': ['MATCH,Main'],
+        },
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: false,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {'Main': 'OLC Local'},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(runtimePlan.config['proxies'], hasLength(3));
+      expect(runtimePlan.builtInProxyNodes, hasLength(1));
+      expect(runtimePlan.builtInProxyNodes.single.name, 'OLC Local');
+      expect(runtimePlan.files.keys, [
+        'built-in-proxies/olcrtc/${runtimePlan.builtInProxyNodes.single.nodeId}/config.yaml',
+      ]);
+    });
+
     test('skips reserved runtime ports when allocating naiveproxy listeners',
         () async {
       const profile = Profile(
@@ -803,6 +895,7 @@ void main() {
       expect(configYaml, isNotNull);
       final runtimeConfig = loadYaml(configYaml!) as YamlMap;
       expect(runtimeConfig['mode'], 'cnc');
+      expect(runtimeConfig['data'], 'data');
       expect(runtimeConfig['auth']['provider'], 'jitsi');
       expect(runtimeConfig['room']['id'], 'https://meet.example.org/room');
       expect(runtimeConfig['socks']['host'], '127.0.0.1');

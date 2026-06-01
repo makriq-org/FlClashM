@@ -24,6 +24,8 @@ typedef ByedpiSiteCheckCallback = Future<bool> Function({
   required Duration timeout,
 });
 
+typedef ByedpiProbePortAllocator = Future<int> Function();
+
 @immutable
 class ByedpiSharedInstallLayout {
   const ByedpiSharedInstallLayout({
@@ -36,6 +38,7 @@ class ByedpiSharedInstallLayout {
     required this.versionPath,
     required this.pendingVersionPath,
     required this.bundledAssetPath,
+    this.managedBinaryUpdateEnabled = true,
   });
 
   final String abi;
@@ -47,6 +50,7 @@ class ByedpiSharedInstallLayout {
   final String versionPath;
   final String pendingVersionPath;
   final String bundledAssetPath;
+  final bool managedBinaryUpdateEnabled;
 }
 
 @immutable
@@ -75,7 +79,11 @@ abstract interface class ByedpiBinaryBridge {
 }
 
 class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
-  const DefaultByedpiBinaryBridge();
+  const DefaultByedpiBinaryBridge({
+    this.nativeLibrary = const AndroidRuntimeNodeNativeLibraryBridge(),
+  });
+
+  final AndroidRuntimeNodeNativeLibraryBridge nativeLibrary;
 
   @override
   String get bundledReleaseTag => byedpiPinnedReleaseTag;
@@ -105,12 +113,22 @@ class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
       byedpiRuntimeDirectoryName,
       asset.abi,
     );
+    final executablePath = await nativeLibrary.resolvePath(
+      byedpiAndroidNativeLibraryFileName,
+    );
+    if (executablePath == null) {
+      throw StateError(
+        'Bundled native byedpi library $byedpiAndroidNativeLibraryFileName '
+        'is missing. Run `dart setup.dart android --out runtime-assets` '
+        'before building.',
+      );
+    }
 
     return ByedpiSharedInstallLayout(
       abi: asset.abi,
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
-      executablePath: path.join(runtimeRootPath, byedpiExecutableFileName),
+      executablePath: executablePath,
       pendingPath: path.join(
         runtimeRootPath,
         '$byedpiExecutableFileName.pending',
@@ -125,6 +143,7 @@ class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
         byedpiPendingVersionFileName,
       ),
       bundledAssetPath: asset.bundledAssetPath,
+      managedBinaryUpdateEnabled: false,
     );
   }
 
@@ -204,6 +223,27 @@ class _ByedpiConfig {
   final int failureThreshold;
 
   bool get isAuto => mode == 'auto';
+
+  _ByedpiConfig copyWith({
+    int? listenPort,
+  }) =>
+      _ByedpiConfig(
+        mode: mode,
+        listenHost: listenHost,
+        listenPort: listenPort ?? this.listenPort,
+        args: args,
+        strategies: strategies,
+        strategyList: strategyList,
+        testUrls: testUrls,
+        testSni: testSni,
+        timeout: timeout,
+        requests: requests,
+        concurrency: concurrency,
+        minSuccessRatio: minSuccessRatio,
+        cacheTtl: cacheTtl,
+        recheckAfter: recheckAfter,
+        failureThreshold: failureThreshold,
+      );
 }
 
 @immutable
@@ -253,6 +293,7 @@ class ByedpiNodeController {
     this.runtime = const AndroidRuntimeNodeBridge(),
     this.waitForListener = _waitForRuntimeNodeListener,
     this.siteCheck = _checkUrlViaSocks,
+    this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
   }) : now = now ?? DateTime.now;
 
@@ -260,6 +301,7 @@ class ByedpiNodeController {
   final RuntimeNodePlatformBridge runtime;
   final ByedpiWaitForRuntimeNodeListenerCallback waitForListener;
   final ByedpiSiteCheckCallback siteCheck;
+  final ByedpiProbePortAllocator allocateProbePort;
   final DateTime Function() now;
 
   _ByedpiStageState? _stagedState;
@@ -268,6 +310,9 @@ class ByedpiNodeController {
     final layout = await binary.resolveSharedInstallLayout();
     await Directory(layout.runtimeRootPath).create(recursive: true);
     await Directory(layout.nodesDirectoryPath).create(recursive: true);
+    if (!layout.managedBinaryUpdateEnabled) {
+      return;
+    }
 
     final active = File(layout.executablePath);
     final pending = File(layout.pendingPath);
@@ -604,7 +649,7 @@ class ByedpiNodeController {
           failures: 0,
         ),
       );
-      return true;
+      return _startWithStrategy(sharedLayout, plan, config, selected);
     }
 
     if (cached != null && cached.fingerprint == fingerprint) {
@@ -639,20 +684,27 @@ class ByedpiNodeController {
     List<String> strategies,
   ) async {
     for (final strategy in strategies) {
+      final probePort = await allocateProbePort();
+      final probeConfig = config.copyWith(listenPort: probePort);
+      final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
       final started = await _startWithStrategy(
         sharedLayout,
         plan,
-        config,
+        probeConfig,
         strategy,
+        nodeId: probeNodeId,
       );
       if (!started) {
         continue;
       }
-      final passed = await _checkStrategy(strategy, config);
-      if (passed) {
-        return strategy;
+      try {
+        final passed = await _checkStrategy(strategy, probeConfig);
+        if (passed) {
+          return strategy;
+        }
+      } finally {
+        await runtime.stopNode(nodeId: probeNodeId);
       }
-      await runtime.stopNode(nodeId: plan.nodeId);
     }
     return null;
   }
@@ -661,11 +713,12 @@ class ByedpiNodeController {
     ByedpiSharedInstallLayout sharedLayout,
     BuiltInProxyNodePlan plan,
     _ByedpiConfig config,
-    String strategy,
-  ) async {
+    String strategy, {
+    String? nodeId,
+  }) async {
     final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
     final started = await runtime.startNode(
-      nodeId: plan.nodeId,
+      nodeId: nodeId ?? plan.nodeId,
       executablePath: sharedLayout.executablePath,
       workingDirectory: layout.workingDirectoryPath,
       arguments: _buildArguments(strategy, config),
@@ -673,7 +726,7 @@ class ByedpiNodeController {
     if (!started) {
       return false;
     }
-    await waitForListener(plan.listenHost, plan.listenPort);
+    await waitForListener(config.listenHost, config.listenPort);
     return true;
   }
 
@@ -1036,6 +1089,13 @@ class ByedpiNodeController {
         await Future.delayed(const Duration(milliseconds: 100));
       }
     }
+  }
+
+  static Future<int> _allocateLoopbackPort() async {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = socket.port;
+    await socket.close();
+    return port;
   }
 
   static Future<bool> _checkUrlViaSocks({

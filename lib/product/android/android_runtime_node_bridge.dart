@@ -89,3 +89,21 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     await _channel.invokeMethod('clearRuntimeNodesState');
   }
 }
+
+class AndroidRuntimeNodeNativeLibraryBridge {
+  const AndroidRuntimeNodeNativeLibraryBridge();
+
+  static const MethodChannel _channel =
+      MethodChannel('com.makriq.flclash/service');
+
+  Future<String?> resolvePath(String fileName) async {
+    final path = await _channel.invokeMethod<String>(
+      'resolveNativeRuntimeLibrary',
+      <String, String>{'name': fileName},
+    );
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    return path;
+  }
+}
