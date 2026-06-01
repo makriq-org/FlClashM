@@ -251,6 +251,8 @@ object GlobalState {
             val intent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
             runStateFlow.tryEmit(RunState.START)
+            getCurrentAppPlugin()?.requestNotificationsPermission()
+            requestBatteryOptimizationExemption()
         }.onFailure {
             Log.w(TAG, "Direct VPN start failed: ${it.message}")
             com.follow.clashx.common.SavedParams.setVpnActive(false)

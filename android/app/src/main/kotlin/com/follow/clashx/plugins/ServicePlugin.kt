@@ -228,6 +228,9 @@ class ServicePlugin :
             GlobalState.runTime = rt
             if (rt == 0L) {
                 com.follow.clashx.common.SavedParams.setVpnActive(false)
+            } else {
+                GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
+                GlobalState.requestBatteryOptimizationExemption()
             }
             GlobalState.runStateFlow.tryEmit(if (rt == 0L) RunState.STOP else RunState.START)
             result.successOnMain(rt)

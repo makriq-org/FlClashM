@@ -22,7 +22,7 @@ class OlcRtcReleaseAsset {
   final String goArch;
   final String? goArm;
 
-  String get bundledAssetPath => '$olcRtcBundledAssetRoot/$abi/olcrtc';
+  String get bundledAssetPath => '$olcRtcBundledAssetRoot/$abi/olcrtc.bin';
 }
 
 const olcRtcReleaseAssets = <String, OlcRtcReleaseAsset>{
