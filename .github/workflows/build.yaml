@@ -90,6 +90,7 @@ jobs:
         with:
           name: artifact-runtime-assets-android
           path: |
+            assets/runtimes/byedpi
             assets/runtimes/naiveproxy
             assets/runtimes/olcrtc
           overwrite: true
