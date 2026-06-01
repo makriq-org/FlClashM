@@ -9,16 +9,16 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
-import 'naiveproxy_release.dart';
+import 'olcrtc_release.dart';
 
-typedef WaitForRuntimeNodeListenerCallback = Future<void> Function(
+typedef OlcRtcWaitForRuntimeNodeListenerCallback = Future<void> Function(
   String host,
   int port,
 );
 
 @immutable
-class NaiveProxySharedInstallLayout {
-  const NaiveProxySharedInstallLayout({
+class OlcRtcSharedInstallLayout {
+  const OlcRtcSharedInstallLayout({
     required this.abi,
     required this.runtimeRootPath,
     required this.nodesDirectoryPath,
@@ -42,8 +42,8 @@ class NaiveProxySharedInstallLayout {
 }
 
 @immutable
-class NaiveProxyNodeLayout {
-  const NaiveProxyNodeLayout({
+class OlcRtcNodeLayout {
+  const OlcRtcNodeLayout({
     required this.nodeId,
     required this.workingDirectoryPath,
     required this.configPath,
@@ -54,26 +54,26 @@ class NaiveProxyNodeLayout {
   final String configPath;
 }
 
-abstract interface class NaiveProxyBinaryBridge {
+abstract interface class OlcRtcBinaryBridge {
   String get bundledReleaseTag;
 
-  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout();
+  Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout();
 
   Future<Uint8List> loadBundledBinary(String assetPath);
 }
 
-class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
-  const DefaultNaiveProxyBinaryBridge();
+class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
+  const DefaultOlcRtcBinaryBridge();
 
   @override
-  String get bundledReleaseTag => naiveProxyPinnedReleaseTag;
+  String get bundledReleaseTag => olcRtcPinnedReleaseTag;
 
   @override
-  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
+  Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout() async {
     final deviceInfo = await DeviceInfoPlugin().androidInfo;
-    NaiveProxyReleaseAsset? asset;
+    OlcRtcReleaseAsset? asset;
     for (final abi in deviceInfo.supportedAbis) {
-      final candidate = naiveProxyReleaseAssets[abi];
+      final candidate = olcRtcReleaseAssets[abi];
       if (candidate != null) {
         asset = candidate;
         break;
@@ -81,7 +81,7 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
     }
     if (asset == null) {
       throw UnsupportedError(
-        'naiveproxy is not packaged for Android ABIs: '
+        'olcrtc is not packaged for Android ABIs: '
         '${deviceInfo.supportedAbis.join(', ')}',
       );
     }
@@ -90,30 +90,30 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
     final runtimeRootPath = path.join(
       homeDir,
       'runtimes',
-      naiveProxyRuntimeDirectoryName,
+      olcRtcRuntimeDirectoryName,
       asset.abi,
     );
 
-    return NaiveProxySharedInstallLayout(
+    return OlcRtcSharedInstallLayout(
       abi: asset.abi,
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
-      executablePath: path.join(runtimeRootPath, naiveProxyExecutableFileName),
+      executablePath: path.join(runtimeRootPath, olcRtcExecutableFileName),
       pendingPath: path.join(
         runtimeRootPath,
-        '$naiveProxyExecutableFileName.pending',
+        '$olcRtcExecutableFileName.pending',
       ),
       rollbackPath: path.join(
         runtimeRootPath,
-        '$naiveProxyExecutableFileName.rollback',
+        '$olcRtcExecutableFileName.rollback',
       ),
       versionPath: path.join(
         runtimeRootPath,
-        naiveProxyBundledVersionFileName,
+        olcRtcBundledVersionFileName,
       ),
       pendingVersionPath: path.join(
         runtimeRootPath,
-        naiveProxyPendingVersionFileName,
+        olcRtcPendingVersionFileName,
       ),
       bundledAssetPath: asset.bundledAssetPath,
     );
@@ -126,8 +126,8 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
   }
 }
 
-class _NaiveProxyCleanupFailure {
-  const _NaiveProxyCleanupFailure({
+class _OlcRtcCleanupFailure {
+  const _OlcRtcCleanupFailure({
     required this.message,
     required this.stackTrace,
   });
@@ -137,8 +137,8 @@ class _NaiveProxyCleanupFailure {
 }
 
 @immutable
-class _NaiveProxyNodeMutation {
-  const _NaiveProxyNodeMutation({
+class _OlcRtcNodeMutation {
+  const _OlcRtcNodeMutation({
     required this.plan,
     required this.previousPlan,
     required this.layout,
@@ -148,14 +148,14 @@ class _NaiveProxyNodeMutation {
 
   final BuiltInProxyNodePlan plan;
   final BuiltInProxyNodePlan? previousPlan;
-  final NaiveProxyNodeLayout layout;
+  final OlcRtcNodeLayout layout;
   final String? previousConfig;
   final bool wasRunning;
 }
 
 @immutable
-class _NaiveProxyStageState {
-  const _NaiveProxyStageState({
+class _OlcRtcStageState {
+  const _OlcRtcStageState({
     required this.previousPlans,
     required this.nextPlans,
     required this.mutations,
@@ -164,22 +164,22 @@ class _NaiveProxyStageState {
 
   final List<BuiltInProxyNodePlan> previousPlans;
   final List<BuiltInProxyNodePlan> nextPlans;
-  final List<_NaiveProxyNodeMutation> mutations;
+  final List<_OlcRtcNodeMutation> mutations;
   final List<BuiltInProxyNodePlan> removedPlans;
 }
 
-class NaiveProxyNodeController {
-  NaiveProxyNodeController({
-    this.binary = const DefaultNaiveProxyBinaryBridge(),
+class OlcRtcNodeController {
+  OlcRtcNodeController({
+    this.binary = const DefaultOlcRtcBinaryBridge(),
     this.runtime = const AndroidRuntimeNodeBridge(),
     this.waitForListener = _waitForRuntimeNodeListener,
   });
 
-  final NaiveProxyBinaryBridge binary;
+  final OlcRtcBinaryBridge binary;
   final RuntimeNodePlatformBridge runtime;
-  final WaitForRuntimeNodeListenerCallback waitForListener;
+  final OlcRtcWaitForRuntimeNodeListenerCallback waitForListener;
 
-  _NaiveProxyStageState? _stagedState;
+  _OlcRtcStageState? _stagedState;
 
   Future<void> applyPendingUpdate() async {
     final layout = await binary.resolveSharedInstallLayout();
@@ -244,7 +244,7 @@ class NaiveProxyNodeController {
       if (rollbackFailure != null) {
         Error.throwWithStackTrace(
           StateError(
-            'Failed to apply pending naiveproxy update: $e. '
+            'Failed to apply pending olcrtc update: $e. '
             'Rollback also failed: ${rollbackFailure.message}',
           ),
           rollbackFailure.stackTrace,
@@ -259,7 +259,7 @@ class NaiveProxyNodeController {
     required List<BuiltInProxyNodePlan> nextPlans,
   }) async {
     if (_stagedState != null) {
-      return 'naiveproxy runtime plan stage is already active.';
+      return 'olcrtc runtime plan stage is already active.';
     }
 
     final sharedLayout = await binary.resolveSharedInstallLayout();
@@ -272,12 +272,12 @@ class NaiveProxyNodeController {
     final nextById = {
       for (final plan in nextPlans) plan.nodeId: plan,
     };
-    final mutations = <_NaiveProxyNodeMutation>[];
+    final mutations = <_OlcRtcNodeMutation>[];
 
     try {
       for (final plan in nextPlans) {
         final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
-        final configJson = _readConfigArtifact(plan);
+        final configYaml = _readConfigArtifact(plan);
         final configFile = File(layout.configPath);
         final previousConfig =
             configFile.existsSync() ? await configFile.readAsString() : null;
@@ -285,14 +285,14 @@ class NaiveProxyNodeController {
             await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
         final previousPlan = currentById[plan.nodeId];
 
-        final configChanged = previousConfig != configJson;
+        final configChanged = previousConfig != configYaml;
         final isNewPlan = previousPlan == null;
         if (!isNewPlan && !configChanged) {
           continue;
         }
 
         mutations.add(
-          _NaiveProxyNodeMutation(
+          _OlcRtcNodeMutation(
             plan: plan,
             previousPlan: previousPlan,
             layout: layout,
@@ -302,7 +302,7 @@ class NaiveProxyNodeController {
         );
 
         await Directory(layout.workingDirectoryPath).create(recursive: true);
-        await configFile.writeAsString(configJson, flush: true);
+        await configFile.writeAsString(configYaml, flush: true);
 
         if (wasRunning) {
           await runtime.stopNode(nodeId: plan.nodeId);
@@ -315,7 +315,7 @@ class NaiveProxyNodeController {
             return _rollbackStageFailure(
               mutations: mutations,
               failureMessage:
-                  'naiveproxy node `${plan.name}` failed to restart after config update.',
+                  'olcrtc node `${plan.name}` failed to restart after config update.',
             );
           }
           await waitForListener(plan.listenHost, plan.listenPort);
@@ -324,11 +324,11 @@ class NaiveProxyNodeController {
     } catch (e) {
       return _rollbackStageFailure(
         mutations: mutations,
-        failureMessage: 'naiveproxy runtime plan staging failed: $e',
+        failureMessage: 'olcrtc runtime plan staging failed: $e',
       );
     }
 
-    _stagedState = _NaiveProxyStageState(
+    _stagedState = _OlcRtcStageState(
       previousPlans: currentPlans,
       nextPlans: nextPlans,
       mutations: mutations,
@@ -347,10 +347,10 @@ class NaiveProxyNodeController {
     }
     final message = await _rollbackStageFailure(
       mutations: stagedState.mutations,
-      failureMessage: 'naiveproxy runtime plan rollback failed.',
+      failureMessage: 'olcrtc runtime plan rollback failed.',
     );
     _stagedState = null;
-    return message == 'naiveproxy runtime plan rollback failed.' ? '' : message;
+    return message == 'olcrtc runtime plan rollback failed.' ? '' : message;
   }
 
   Future<void> commitStagedRuntimePlan() async {
@@ -400,7 +400,7 @@ class NaiveProxyNodeController {
       if (rollbackFailure != null) {
         Error.throwWithStackTrace(
           StateError(
-            'naiveproxy node start failed: $e. '
+            'olcrtc node start failed: $e. '
             'Cleanup also failed: ${rollbackFailure.message}',
           ),
           rollbackFailure.stackTrace,
@@ -468,34 +468,34 @@ class NaiveProxyNodeController {
   }
 
   String _readConfigArtifact(BuiltInProxyNodePlan plan) {
-    final configJson =
-        plan.files['built-in-proxies/naiveproxy/${plan.nodeId}/config.json'];
-    if (configJson == null || configJson.isEmpty) {
+    final configYaml =
+        plan.files['built-in-proxies/olcrtc/${plan.nodeId}/config.yaml'];
+    if (configYaml == null || configYaml.isEmpty) {
       throw StateError(
-        'naiveproxy node `${plan.name}` is missing config.json artifact.',
+        'olcrtc node `${plan.name}` is missing config.yaml artifact.',
       );
     }
-    return configJson;
+    return configYaml;
   }
 
-  NaiveProxyNodeLayout _resolveNodeLayout(
-    NaiveProxySharedInstallLayout sharedLayout,
+  OlcRtcNodeLayout _resolveNodeLayout(
+    OlcRtcSharedInstallLayout sharedLayout,
     String nodeId,
   ) {
     final workingDirectoryPath =
         path.join(sharedLayout.nodesDirectoryPath, nodeId);
-    return NaiveProxyNodeLayout(
+    return OlcRtcNodeLayout(
       nodeId: nodeId,
       workingDirectoryPath: workingDirectoryPath,
-      configPath: path.join(workingDirectoryPath, naiveProxyConfigFileName),
+      configPath: path.join(workingDirectoryPath, olcRtcConfigFileName),
     );
   }
 
   Future<String> _rollbackStageFailure({
-    required List<_NaiveProxyNodeMutation> mutations,
+    required List<_OlcRtcNodeMutation> mutations,
     required String failureMessage,
   }) async {
-    _NaiveProxyCleanupFailure? rollbackFailure;
+    _OlcRtcCleanupFailure? rollbackFailure;
 
     void captureFailure(
       String message,
@@ -503,7 +503,7 @@ class NaiveProxyNodeController {
       StackTrace stackTrace,
     ) {
       commonPrint.log('$message: $error');
-      rollbackFailure ??= _NaiveProxyCleanupFailure(
+      rollbackFailure ??= _OlcRtcCleanupFailure(
         message: '$message: $error',
         stackTrace: stackTrace,
       );
@@ -514,7 +514,7 @@ class NaiveProxyNodeController {
         await runtime.stopNode(nodeId: mutation.plan.nodeId);
       } catch (e, s) {
         captureFailure(
-          'Failed to stop naiveproxy node during rollback',
+          'Failed to stop olcrtc node during rollback',
           e,
           s,
         );
@@ -532,7 +532,7 @@ class NaiveProxyNodeController {
         }
       } catch (e, s) {
         captureFailure(
-          'Failed to restore previous naiveproxy node config.json',
+          'Failed to restore previous olcrtc node config.yaml',
           e,
           s,
         );
@@ -549,7 +549,7 @@ class NaiveProxyNodeController {
           );
           if (!restarted) {
             captureFailure(
-              'Failed to restart previous naiveproxy node during rollback',
+              'Failed to restart previous olcrtc node during rollback',
               StateError('startNode returned false'),
               StackTrace.current,
             );
@@ -561,7 +561,7 @@ class NaiveProxyNodeController {
           }
         } catch (e, s) {
           captureFailure(
-            'Failed to restart previous naiveproxy node during rollback',
+            'Failed to restart previous olcrtc node during rollback',
             e,
             s,
           );
@@ -581,23 +581,23 @@ class NaiveProxyNodeController {
         await runtime.stopNode(nodeId: plan.nodeId);
       } catch (e) {
         commonPrint.log(
-          'Failed to stop naiveproxy node `${plan.name}` during start rollback: $e',
+          'Failed to stop olcrtc node `${plan.name}` during start rollback: $e',
         );
       }
     }
   }
 
-  Future<_NaiveProxyCleanupFailure?> _rollbackFailedStart(
+  Future<_OlcRtcCleanupFailure?> _rollbackFailedStart(
     List<BuiltInProxyNodePlan> plans,
   ) async {
-    _NaiveProxyCleanupFailure? failure;
+    _OlcRtcCleanupFailure? failure;
     for (final plan in plans.reversed) {
       try {
         await runtime.stopNode(nodeId: plan.nodeId);
       } catch (e, s) {
-        failure ??= _NaiveProxyCleanupFailure(
+        failure ??= _OlcRtcCleanupFailure(
           message:
-              'Failed to stop naiveproxy node `${plan.name}` during rollback: $e',
+              'Failed to stop olcrtc node `${plan.name}` during rollback: $e',
           stackTrace: s,
         );
       }
@@ -606,7 +606,7 @@ class NaiveProxyNodeController {
   }
 
   Future<void> _writeBundledBinary(
-    NaiveProxySharedInstallLayout layout,
+    OlcRtcSharedInstallLayout layout,
     File target,
   ) async {
     try {
@@ -614,7 +614,7 @@ class NaiveProxyNodeController {
       await target.writeAsBytes(bytes, flush: true);
     } catch (e) {
       throw StateError(
-        'Bundled naiveproxy asset ${layout.bundledAssetPath} is missing. '
+        'Bundled olcrtc asset ${layout.bundledAssetPath} is missing. '
         'Run `dart setup.dart android --out runtime-assets` first. $e',
       );
     }
@@ -631,14 +631,14 @@ class NaiveProxyNodeController {
   Future<void> _writeVersionFile(File file, String version) =>
       file.writeAsString(version, flush: true);
 
-  Future<_NaiveProxyCleanupFailure?> _rollbackPendingUpdate({
+  Future<_OlcRtcCleanupFailure?> _rollbackPendingUpdate({
     required File active,
     required File pending,
     required File rollback,
     required bool activeMovedToRollback,
     required bool pendingMovedToActive,
   }) async {
-    _NaiveProxyCleanupFailure? failure;
+    _OlcRtcCleanupFailure? failure;
 
     void captureFailure(
       String message,
@@ -646,7 +646,7 @@ class NaiveProxyNodeController {
       StackTrace stackTrace,
     ) {
       commonPrint.log('$message: $error');
-      failure ??= _NaiveProxyCleanupFailure(
+      failure ??= _OlcRtcCleanupFailure(
         message: '$message: $error',
         stackTrace: stackTrace,
       );
@@ -659,8 +659,7 @@ class NaiveProxyNodeController {
         await _renameWithRetry(active, pending.path);
       }
     } catch (e, s) {
-      captureFailure(
-          'Failed to move new naiveproxy binary back to pending', e, s);
+      captureFailure('Failed to move new olcrtc binary back to pending', e, s);
     }
 
     if (activeMovedToRollback) {
@@ -671,7 +670,7 @@ class NaiveProxyNodeController {
         }
       } catch (e, s) {
         captureFailure(
-          'Failed to restore previous naiveproxy binary after update error',
+          'Failed to restore previous olcrtc binary after update error',
           e,
           s,
         );
@@ -680,7 +679,7 @@ class NaiveProxyNodeController {
           await _deleteWithRetry(rollback);
         } catch (e, s) {
           captureFailure(
-            'Failed to clean naiveproxy rollback binary after update error',
+            'Failed to clean olcrtc rollback binary after update error',
             e,
             s,
           );

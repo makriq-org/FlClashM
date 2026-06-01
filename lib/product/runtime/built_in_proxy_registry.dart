@@ -39,13 +39,11 @@ class BuiltInProxyRegistry {
             supportsUdp: false,
             listenPortRangeStart: 35900,
             listenPortRangeSize: 256,
-            availability: BuiltInProxyAvailability.unsupported(
-              reason:
-                  'olcrtc Android packaging, gomobile bridge, and node-local config/lifecycle contracts are not integrated yet.',
+            availability: BuiltInProxyAvailability.supported(
               updatePath:
-                  'Ship a pinned Android runtime plus Start/Stop/health contracts before enabling `type: olcrtc`.',
+                  'setup.dart builds the pinned olcrtc Android executable from source into bundled Android assets, then runtime activation swaps the shared binary through .pending in app data.',
               rollbackPath:
-                  'Reject the node at compile time and keep traffic on mihomo until the local-node integration is versioned.',
+                  'Failed pending activation restores the previous shared binary, keeps .pending for retry, and rolls node configs/processes back to the last committed runtime plan.',
             ),
           ),
         };

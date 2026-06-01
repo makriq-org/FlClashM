@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flclashm/product/runtime/naiveproxy_release.dart';
+import 'package:flclashm/product/runtime/olcrtc_release.dart';
 
 const _appName = 'FlClashM';
 const _coreDir = 'core';
@@ -14,6 +15,7 @@ const _libclashDir = 'libclash/android';
 const _coreVersionFile = 'lib/core_version.dart';
 const _ndkVersion = '28.0.13004108';
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
+const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
 final _projectRoot = File.fromUri(Platform.script).parent.absolute.path;
 
 final _androidArches = <String, AndroidArch>{
@@ -68,6 +70,7 @@ Future<void> main(List<String> args) async {
 
   await _syncCoreVersionDartFile();
   await _syncNaiveProxyAssets();
+  await _syncOlcRtcAssets();
   if (command.out == 'runtime-assets') {
     return;
   }
@@ -574,6 +577,120 @@ String _buildNaiveProxyStamp() {
     naiveProxyPinnedReleaseTag,
     ...naiveProxyReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.apkName}:${asset.apkSha256}',
+    ),
+  ];
+  return lines.join('\n');
+}
+
+Future<void> _syncOlcRtcAssets() async {
+  final stamp = File(_projectPath(_olcRtcStampFile));
+  final expectedStamp = _buildOlcRtcStamp();
+  final assetFilesExist = olcRtcReleaseAssets.values.every(
+    (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
+  );
+
+  if (assetFilesExist &&
+      stamp.existsSync() &&
+      (await stamp.readAsString()).trim() == expectedStamp) {
+    return;
+  }
+
+  final sourceDir = await _prepareOlcRtcSource();
+  final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
+  if (!targetRoot.existsSync()) {
+    targetRoot.createSync(recursive: true);
+  }
+
+  final ndkBin = _resolveNdkBinDir();
+  for (final asset in olcRtcReleaseAssets.values) {
+    final arch = _androidArches[asset.cliArch];
+    if (arch == null) {
+      throw StateError('Unknown olcrtc Android arch ${asset.cliArch}');
+    }
+
+    final target = File(_projectPath(asset.bundledAssetPath));
+    target.parent.createSync(recursive: true);
+    if (target.existsSync()) {
+      await target.delete();
+    }
+
+    final env = <String, String>{
+      ...Platform.environment,
+      'GOOS': 'android',
+      'GOARCH': asset.goArch,
+      'CGO_ENABLED': '1',
+      'CC': _join(ndkBin.path, arch.toolchain),
+    };
+    if (asset.goArm != null) {
+      env['GOARM'] = asset.goArm!;
+    }
+
+    await _exec(
+      [
+        'go',
+        'build',
+        '-trimpath',
+        '-ldflags=-s -w',
+        '-o',
+        target.path,
+        './cmd/olcrtc',
+      ],
+      environment: env,
+      workingDirectory: sourceDir.path,
+      name: 'build olcrtc Android ${asset.abi}',
+    );
+  }
+
+  stamp.parent.createSync(recursive: true);
+  await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<Directory> _prepareOlcRtcSource() async {
+  final override = Platform.environment['OLCRTC_SOURCE_DIR'];
+  if (override != null && override.trim().isNotEmpty) {
+    final sourceDir = Directory(override.trim());
+    if (!sourceDir.existsSync()) {
+      throw StateError('OLCRTC_SOURCE_DIR does not exist: ${sourceDir.path}');
+    }
+    await _exec(
+      ['git', 'checkout', '--detach', olcRtcPinnedCommit],
+      workingDirectory: sourceDir.path,
+      name: 'checkout olcrtc pinned commit',
+    );
+    return sourceDir;
+  }
+
+  final cacheDir = Directory(_projectPath('.dart_tool', 'olcrtc-source'));
+  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
+    if (cacheDir.existsSync()) {
+      await cacheDir.delete(recursive: true);
+    }
+    await cacheDir.parent.create(recursive: true);
+    await _exec(
+      ['git', 'clone', olcRtcSourceRepository, cacheDir.path],
+      name: 'clone olcrtc source',
+    );
+  }
+
+  await _exec(
+    ['git', 'fetch', '--depth', '1', 'origin', olcRtcPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'fetch olcrtc pinned commit',
+  );
+  await _exec(
+    ['git', 'checkout', '--detach', olcRtcPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'checkout olcrtc pinned commit',
+  );
+  return cacheDir;
+}
+
+String _buildOlcRtcStamp() {
+  final lines = <String>[
+    olcRtcPinnedReleaseTag,
+    olcRtcSourceRepository,
+    ...olcRtcReleaseAssets.values.map(
+      (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
     ),
   ];
   return lines.join('\n');

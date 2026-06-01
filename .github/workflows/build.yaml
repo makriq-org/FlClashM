@@ -10,6 +10,7 @@ env:
   HAS_RELEASE_SIGNING: ${{ secrets.KEYSTORE != '' && secrets.KEY_ALIAS != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CONTINUITY_RELEASE_REPOSITORY: makriq-org/FlClashM
+  NDK_VERSION: "28.0.13004108"
 
 jobs:
   build:
@@ -36,6 +37,14 @@ jobs:
         with:
           flutter-version: "3.41.7"
           cache: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
       - name: Flutter version
         run: flutter --version
@@ -70,8 +79,20 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Build Android runtime assets
+        run: dart setup.dart android --out runtime-assets
+
       - name: Build Android core artifacts
         run: dart setup.dart android --out core
+
+      - name: Upload Android runtime assets
+        uses: actions/upload-artifact@v6
+        with:
+          name: artifact-runtime-assets-android
+          path: |
+            assets/runtimes/naiveproxy
+            assets/runtimes/olcrtc
+          overwrite: true
 
       - name: Upload Android core artifacts
         uses: actions/upload-artifact@v6
@@ -140,6 +161,12 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           name: artifact-core-android
+          path: .
+
+      - name: Download Android runtime assets
+        uses: actions/download-artifact@v6
+        with:
+          name: artifact-runtime-assets-android
           path: .
 
       - name: Build Android ${{ matrix.out }} artifact

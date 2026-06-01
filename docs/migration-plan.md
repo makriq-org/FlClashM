@@ -22,7 +22,8 @@
 - `mihomo` поддержан как production baseline
 - built-in proxy node contract вынесен отдельно от main engine
 - `naiveproxy` интегрирован как supported built-in proxy node с pinned release/update/rollback path
-- `olcrtc` и `byedpi` перенесены в ту же node registry модель, но остаются disabled с guardrails и rollback/update notes
+- `olcrtc` интегрирован как supported built-in proxy node с pinned source commit/update/rollback path
+- `byedpi` перенесен в ту же node registry модель, но остается disabled с guardrails и rollback/update notes
 - этап 7 перенес Android app updater в product/platform path с download + SHA256 verify + installer handoff
 - этап 7 перенес profile-driven split tunneling в compile/runtime/access seams с file/url selectors, cache/fallback и явным profile priority
 - cheap upstream update contract зафиксирован через `docs/upstream-maintenance.md`, `tool/product_touchpoints.json` и `dart tool/check_product_boundaries.dart`
@@ -42,7 +43,7 @@
 
 Сделано:
 
-- на конец этапа 5 `mihomo` был зафиксирован как production baseline, пока `olcrtc`/`naiveproxy` оставались disabled
+- на конец этапа 5 `mihomo` был зафиксирован как production baseline, пока новые built-in nodes оставались guarded path
 - `MihomoEngineAdapter` покрыт focused runtime tests, а не только общими `EngineManager` сценариями
 - pending core update path переведен на transactional swap с rollback к предыдущему binary и сохранением `.pending` при неуспешной активации
 - start/stop boundary усилен: listener/VPN rollback и cleanup теперь идут best-effort по обеим сторонам runtime boundary
@@ -55,7 +56,7 @@
 ### 1. Дальше по runtime
 
 - hardening/telemetry для `naiveproxy`
-- `olcrtc`
+- hardening/telemetry для `olcrtc`
 - `byedpi` как built-in proxy node path
 
 ### 2. Дальше по базе

@@ -9,6 +9,7 @@ import 'package:flclashm/product/runtime/runtime_types.dart';
 import 'package:flclashm/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
+import 'package:yaml/yaml.dart';
 
 void main() {
   const compiler = ProfileCompiler();
@@ -652,6 +653,199 @@ void main() {
       final builtInNode = runtimePlan.builtInProxyNodes.single;
       expect(builtInNode.listenPort, isNot(anyOf(35000, 35001, 35002)));
       expect(builtInNode.listenPort, inInclusiveRange(35000, 35511));
+    });
+
+    test('builds olcrtc runtime artifacts and local SOCKS bridge', () async {
+      const profile = Profile(
+        id: 'profile-olcrtc',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'proxies': [
+            {
+              'name': 'OLC Local',
+              'type': 'olcrtc',
+              'auth': {'provider': 'jitsi'},
+              'room': {'id': 'https://meet.example.org/room'},
+              'crypto': {
+                'key':
+                    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+              },
+              'net': {
+                'transport': 'datachannel',
+                'dns': '8.8.8.8:53',
+              },
+              'debug': true,
+            },
+          ],
+        },
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: false,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(runtimePlan.builtInProxyNodes, hasLength(1));
+      final builtInNode = runtimePlan.builtInProxyNodes.single;
+      expect(builtInNode.type, BuiltInProxyType.olcrtc);
+      expect(builtInNode.listenPort, inInclusiveRange(35900, 36155));
+      expect(runtimePlan.config['proxies'][0]['type'], 'socks5');
+      expect(runtimePlan.config['proxies'][0]['server'], '127.0.0.1');
+      expect(runtimePlan.config['proxies'][0]['port'], builtInNode.listenPort);
+
+      final configYaml = runtimePlan
+          .files['built-in-proxies/olcrtc/${builtInNode.nodeId}/config.yaml'];
+      expect(configYaml, isNotNull);
+      final runtimeConfig = loadYaml(configYaml!) as YamlMap;
+      expect(runtimeConfig['mode'], 'cnc');
+      expect(runtimeConfig['auth']['provider'], 'jitsi');
+      expect(runtimeConfig['room']['id'], 'https://meet.example.org/room');
+      expect(runtimeConfig['socks']['host'], '127.0.0.1');
+      expect(runtimeConfig['socks']['port'], builtInNode.listenPort);
+      expect(runtimeConfig['debug'], isTrue);
+    });
+
+    test('rejects unsafe olcrtc local bind overrides', () async {
+      const profile = Profile(
+        id: 'profile-olcrtc-bind',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'proxies': [
+            {
+              'name': 'OLC Local',
+              'type': 'olcrtc',
+              'socks': {'host': '0.0.0.0'},
+            },
+          ],
+        },
+      );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      await expectLater(
+        compiler.buildRuntimePlan(
+          rawProfile: rawProfile,
+          context: const RuntimePlanBuildContext(
+            isAndroid: false,
+            overrideNetworkSettings: false,
+            overrideDns: false,
+            routeMode: RouteMode.config,
+            hasCurrentScript: false,
+            profilesPath: '',
+            profilePath: '',
+            readInstalledPackageNames: _readNoInstalledPackages,
+          ),
+          securedProfile: SecuredProfilePatch(
+            patchConfig: compiledProfile.patchConfig,
+            metadata: compiledProfile.metadata,
+          ),
+          runtimePatchConfig: compiledProfile.patchConfig,
+          selectedMap: const {},
+          testUrl: 'https://cp.cloudflare.com/generate_204',
+          providerAssetPathResolver: (profileId, type, url) async =>
+              '/tmp/$profileId/$type/$url',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects non-client olcrtc modes and key files', () async {
+      const profile = Profile(
+        id: 'profile-olcrtc-mode',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      Future<void> expectRejected(Map<String, dynamic> proxy) async {
+        final rawProfile = RawProfile.fromConfig(
+          profile: profile,
+          config: {
+            'proxies': [proxy],
+          },
+        );
+        final compiledProfile = compiler.compileProfilePatch(
+          rawProfile: rawProfile,
+          context: const ProfilePatchContext(
+            patchConfig: ClashConfig(),
+            overrideNetworkSettings: false,
+          ),
+        );
+
+        await expectLater(
+          compiler.buildRuntimePlan(
+            rawProfile: rawProfile,
+            context: const RuntimePlanBuildContext(
+              isAndroid: false,
+              overrideNetworkSettings: false,
+              overrideDns: false,
+              routeMode: RouteMode.config,
+              hasCurrentScript: false,
+              profilesPath: '',
+              profilePath: '',
+              readInstalledPackageNames: _readNoInstalledPackages,
+            ),
+            securedProfile: SecuredProfilePatch(
+              patchConfig: compiledProfile.patchConfig,
+              metadata: compiledProfile.metadata,
+            ),
+            runtimePatchConfig: compiledProfile.patchConfig,
+            selectedMap: const {},
+            testUrl: 'https://cp.cloudflare.com/generate_204',
+            providerAssetPathResolver: (profileId, type, url) async =>
+                '/tmp/$profileId/$type/$url',
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      }
+
+      await expectRejected({
+        'name': 'OLC Server',
+        'type': 'olcrtc',
+        'mode': 'srv',
+      });
+      await expectRejected({
+        'name': 'OLC Key File',
+        'type': 'olcrtc',
+        'crypto': {'key_file': './olcrtc.key'},
+      });
     });
   });
 }

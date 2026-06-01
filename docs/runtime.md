@@ -144,8 +144,15 @@ Runtime слой подготавливается через явную product 
   - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
   - cold-start path: adapter сохраняет runtime-node manifest, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
 - `olcrtc`
-  - built-in proxy node registration без включения
-  - unavailable до pinned Android runtime, room/key compile path и node-local lifecycle contract
+  - supported built-in proxy node type
+  - integration contract: профиль описывает `olcrtc` через обычный `proxies` entry с `type: olcrtc`
+  - routing contract: узел сохраняет свое имя после compile stage и используется в обычных `proxy-groups`/`rules`
+  - config contract: built-in node всегда запускается как `mode: cnc`; client сам владеет `socks.host`, `socks.port`, `listen`, `server` и `port`; `crypto.key_file` в v1 запрещен
+  - update path: `setup.dart` собирает pinned commit `5dd6822d807e3352fe4452a3b071e043d958a020` из `openlibrecommunity/olcrtc` в bundled Android assets
+  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет `config.yaml` в `RuntimePlan.files`; `OlcRtcNodeController` пишет per-node config, рестартует только затронутые процессы и откатывает node config/process к предыдущему commit state
+  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальные SOCKS5 listeners `olcrtc`
+  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
+  - cold-start path: общий runtime-node manifest теперь объединяет `naiveproxy` и `olcrtc`, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
 - `byedpi`
   - built-in proxy node registration без включения
   - unavailable до pinned Android binary и node-local lifecycle contract
@@ -154,6 +161,7 @@ Runtime слой подготавливается через явную product 
 
 - Provider hints не определяют runtime floor.
 - `naiveproxy` listener path определяется клиентом, а не profile metadata.
+- `olcrtc` local SOCKS bind определяется клиентом, а не profile metadata.
 - built-in proxy nodes поддерживаются только в `proxies`, а не в `proxy-providers`.
 - Unsupported runtime/node нельзя включить без registry change.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.
