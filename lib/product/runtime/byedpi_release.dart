@@ -22,7 +22,7 @@ class ByedpiReleaseAsset {
   final String abi;
   final String cliArch;
 
-  String get bundledAssetPath => '$byedpiBundledAssetRoot/$abi/ciadpi';
+  String get bundledAssetPath => '$byedpiBundledAssetRoot/$abi/ciadpi.bin';
 }
 
 const byedpiReleaseAssets = <String, ByedpiReleaseAsset>{

@@ -6,7 +6,6 @@ import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.DocumentsProvider
-import com.follow.clashx.common.GlobalState
 import java.io.File
 
 class FilesProvider : DocumentsProvider() {
@@ -32,7 +31,7 @@ class FilesProvider : DocumentsProvider() {
     )
 
     private val rootDir: File
-        get() = GlobalState.application.filesDir
+        get() = requireNotNull(context).filesDir
 
     override fun onCreate(): Boolean = true
 
