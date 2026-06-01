@@ -13,17 +13,14 @@ void main() {
       expect(descriptor.availability.isSupported, isTrue);
     });
 
-    test('rejects byedpi until node integration exists', () {
-      expect(
-        () => builtInProxyRegistry.resolveSupported(BuiltInProxyType.byedpi),
-        throwsA(
-          isA<UnsupportedBuiltInProxyException>().having(
-            (error) => error.message,
-            'message',
-            contains('byedpi built-in node is not available'),
-          ),
-        ),
+    test('resolves byedpi as a supported built-in node type', () {
+      final descriptor = builtInProxyRegistry.resolveSupported(
+        BuiltInProxyType.byedpi,
       );
+
+      expect(descriptor.type, BuiltInProxyType.byedpi);
+      expect(descriptor.protocol, BuiltInProxyProtocol.socks5);
+      expect(descriptor.availability.isSupported, isTrue);
     });
 
     test('resolves olcrtc as a supported built-in node type', () {

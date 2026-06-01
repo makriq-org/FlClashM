@@ -5,6 +5,7 @@ abstract interface class RuntimeNodePlatformBridge {
     required String nodeId,
     required String executablePath,
     required String workingDirectory,
+    List<String> arguments = const [],
   });
 
   Future<void> stopNode({
@@ -31,13 +32,15 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     required String nodeId,
     required String executablePath,
     required String workingDirectory,
+    List<String> arguments = const [],
   }) async {
     final runTime = await _channel.invokeMethod<int>(
       'startRuntimeNode',
-      <String, String>{
+      <String, Object>{
         'nodeId': nodeId,
         'path': executablePath,
         'workingDirectory': workingDirectory,
+        'arguments': arguments,
       },
     );
     return (runTime ?? 0) > 0;

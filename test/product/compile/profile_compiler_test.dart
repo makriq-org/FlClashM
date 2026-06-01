@@ -655,6 +655,81 @@ void main() {
       expect(builtInNode.listenPort, inInclusiveRange(35000, 35511));
     });
 
+    test('builds byedpi runtime artifacts and local SOCKS bridge', () async {
+      const profile = Profile(
+        id: 'profile-byedpi',
+        autoUpdateDuration: Duration.zero,
+      );
+
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'proxies': [
+            {
+              'name': 'ByeDPI Local',
+              'type': 'byedpi',
+              'mode': 'auto',
+              'strategy-list': 'byebyeedpi',
+              'test': {
+                'urls': ['https://example.com/'],
+                'sni': 'example.com',
+              },
+            },
+          ],
+        },
+      );
+
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: false,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(runtimePlan.builtInProxyNodes, hasLength(1));
+      final builtInNode = runtimePlan.builtInProxyNodes.single;
+      expect(builtInNode.type, BuiltInProxyType.byedpi);
+      expect(builtInNode.listenPort, inInclusiveRange(35600, 35855));
+      expect(runtimePlan.config['proxies'][0]['type'], 'socks5');
+      expect(runtimePlan.config['proxies'][0]['server'], '127.0.0.1');
+      expect(runtimePlan.config['proxies'][0]['port'], builtInNode.listenPort);
+
+      final configJson = runtimePlan
+          .files['built-in-proxies/byedpi/${builtInNode.nodeId}/config.json'];
+      expect(configJson, isNotNull);
+      final runtimeConfig = Map<String, dynamic>.from(
+        json.decode(configJson!) as Map,
+      );
+      expect(runtimeConfig['mode'], 'auto');
+      expect(runtimeConfig['strategyList'], 'byebyeedpi');
+      expect(runtimeConfig['listenPort'], builtInNode.listenPort);
+      expect(runtimeConfig['test']['urls'], ['https://example.com/']);
+    });
+
     test('builds olcrtc runtime artifacts and local SOCKS bridge', () async {
       const profile = Profile(
         id: 'profile-olcrtc',

@@ -45,6 +45,8 @@ Product-level security boundary теперь выражена типами:
 - Flutter HTTP path не отключает TLS-проверку глобально; loopback bypass для control-plane остается отдельным proxy-routing правилом, а не `badCertificateCallback=true`
 - built-in proxy nodes не могут задавать `listen/server/port` сами: локальный bind и портовая политика принадлежат клиенту
 - `olcrtc` nodes не могут задавать `socks.host`/`socks.port`, `mode: srv/gen` или `crypto.key_file`; Android client поддерживает только локальный `mode: cnc`
+- `byedpi` nodes не могут задавать `ip`, `port`, `listen` или `server`; Android client сам добавляет локальный SOCKS bind в аргументы процесса
+- `byedpi mode: auto` проверяет только URL, явно заданные профилем в `test.urls`; встроенный список ByeByeDPI содержит только стратегии, а не цели сетевых проверок
 
 ## Provider headers
 
@@ -56,6 +58,7 @@ Product-level security boundary теперь выражена типами:
 - raw provider headers не должны использоваться как product API в base/UI слоях
 - provider metadata не может ослабить path validation, checksum verification или profile-vs-manual priority rules
 - provider metadata не может ослабить local-bind ограничения `olcrtc` или перевести Android client в server/gen mode
+- provider metadata не может ослабить local-bind ограничения `byedpi` или подменить цели автоподбора
 - brand contract и остаточные compatibility boundaries зафиксированы в `docs/branding.md` и `docs/compatibility-boundaries.md`
 
 ## Advisory profile hints

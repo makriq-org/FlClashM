@@ -26,6 +26,7 @@ object RuntimeNodeProcessManager {
         nodeId: String,
         executablePath: String,
         workingDirectory: String,
+        arguments: List<String> = emptyList(),
     ): Long = processLock.withLock {
         withContext(Dispatchers.IO) {
             val running = runningNodes[nodeId]
@@ -48,7 +49,7 @@ object RuntimeNodeProcessManager {
             }
 
             val started = try {
-                ProcessBuilder(executablePath)
+                ProcessBuilder(listOf(executablePath) + arguments)
                     .directory(runtimeDir)
                     .redirectErrorStream(true)
                     .start()

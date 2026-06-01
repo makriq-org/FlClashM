@@ -1,4 +1,5 @@
 import 'built_in_proxy_types.dart';
+import 'byedpi_node_controller.dart';
 import 'naiveproxy_node_controller.dart';
 import 'olcrtc_node_controller.dart';
 
@@ -23,11 +24,14 @@ abstract interface class BuiltInProxySupervisor {
 class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   DefaultBuiltInProxySupervisor({
     NaiveProxyNodeController? naiveProxy,
+    ByedpiNodeController? byedpi,
     OlcRtcNodeController? olcRtc,
   })  : naiveProxy = naiveProxy ?? NaiveProxyNodeController(),
+        byedpi = byedpi ?? ByedpiNodeController(),
         olcRtc = olcRtc ?? OlcRtcNodeController();
 
   final NaiveProxyNodeController naiveProxy;
+  final ByedpiNodeController byedpi;
   final OlcRtcNodeController olcRtc;
 
   List<BuiltInProxyNodePlan> _currentPlans = const [];
@@ -38,6 +42,10 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
 
   List<BuiltInProxyNodePlan> get _currentOlcRtcPlans => _currentPlans
       .where((plan) => plan.type == BuiltInProxyType.olcrtc)
+      .toList(growable: false);
+
+  List<BuiltInProxyNodePlan> get _currentByedpiPlans => _currentPlans
+      .where((plan) => plan.type == BuiltInProxyType.byedpi)
       .toList(growable: false);
 
   List<BuiltInProxyNodePlan> _filterNaiveProxyPlans(
@@ -54,9 +62,17 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
           .where((plan) => plan.type == BuiltInProxyType.olcrtc)
           .toList(growable: false);
 
+  List<BuiltInProxyNodePlan> _filterByedpiPlans(
+    List<BuiltInProxyNodePlan> plans,
+  ) =>
+      plans
+          .where((plan) => plan.type == BuiltInProxyType.byedpi)
+          .toList(growable: false);
+
   @override
   Future<void> applyPendingUpdate() async {
     await naiveProxy.applyPendingUpdate();
+    await byedpi.applyPendingUpdate();
     await olcRtc.applyPendingUpdate();
   }
 
@@ -73,6 +89,18 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       return naiveProxyMessage;
     }
 
+    final byedpiMessage = await byedpi.stageRuntimePlan(
+      currentPlans: _currentByedpiPlans,
+      nextPlans: _filterByedpiPlans(plans),
+    );
+    if (byedpiMessage.isNotEmpty) {
+      final rollbackMessage = await naiveProxy.rollbackStagedRuntimePlan();
+      if (rollbackMessage.isEmpty) {
+        return byedpiMessage;
+      }
+      return '$byedpiMessage Local-node rollback failed: $rollbackMessage';
+    }
+
     final olcRtcMessage = await olcRtc.stageRuntimePlan(
       currentPlans: _currentOlcRtcPlans,
       nextPlans: _filterOlcRtcPlans(plans),
@@ -81,7 +109,13 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       return '';
     }
 
-    final rollbackMessage = await naiveProxy.rollbackStagedRuntimePlan();
+    final byedpiRollbackMessage = await byedpi.rollbackStagedRuntimePlan();
+    final naiveProxyRollbackMessage =
+        await naiveProxy.rollbackStagedRuntimePlan();
+    final rollbackMessage = [
+      if (byedpiRollbackMessage.isNotEmpty) byedpiRollbackMessage,
+      if (naiveProxyRollbackMessage.isNotEmpty) naiveProxyRollbackMessage,
+    ].join(' ');
     if (rollbackMessage.isEmpty) {
       return olcRtcMessage;
     }
@@ -91,9 +125,11 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<String> rollbackStagedRuntimePlan() async {
     final olcRtcMessage = await olcRtc.rollbackStagedRuntimePlan();
+    final byedpiMessage = await byedpi.rollbackStagedRuntimePlan();
     final naiveProxyMessage = await naiveProxy.rollbackStagedRuntimePlan();
     return [
       if (olcRtcMessage.isNotEmpty) olcRtcMessage,
+      if (byedpiMessage.isNotEmpty) byedpiMessage,
       if (naiveProxyMessage.isNotEmpty) naiveProxyMessage,
     ].join(' ');
   }
@@ -101,6 +137,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     await naiveProxy.commitStagedRuntimePlan();
+    await byedpi.commitStagedRuntimePlan();
     await olcRtc.commitStagedRuntimePlan();
     _currentPlans = List<BuiltInProxyNodePlan>.unmodifiable(plans);
   }
@@ -113,10 +150,16 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     if (!naiveProxyStarted) {
       return false;
     }
+    final byedpiStarted = await byedpi.startNodes(_currentByedpiPlans);
+    if (!byedpiStarted) {
+      await naiveProxy.stopNodes(_currentNaiveProxyPlans);
+      return false;
+    }
     final olcRtcStarted = await olcRtc.startNodes(_currentOlcRtcPlans);
     if (olcRtcStarted) {
       return true;
     }
+    await byedpi.stopNodes(_currentByedpiPlans);
     await naiveProxy.stopNodes(_currentNaiveProxyPlans);
     return false;
   }
@@ -127,6 +170,12 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     StackTrace? stackTrace;
     try {
       await olcRtc.stopNodes(_currentOlcRtcPlans);
+    } catch (e, s) {
+      error ??= e;
+      stackTrace ??= s;
+    }
+    try {
+      await byedpi.stopNodes(_currentByedpiPlans);
     } catch (e, s) {
       error ??= e;
       stackTrace ??= s;
@@ -146,6 +195,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   Future<void> persistColdStart() async {
     final nodes = [
       ...await naiveProxy.buildColdStartNodes(_currentNaiveProxyPlans),
+      ...await byedpi.buildColdStartNodes(_currentByedpiPlans),
       ...await olcRtc.buildColdStartNodes(_currentOlcRtcPlans),
     ];
     await naiveProxy.saveColdStartNodes(nodes);

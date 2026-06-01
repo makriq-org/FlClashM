@@ -211,12 +211,13 @@ class ServicePlugin :
         val nodeId = call.argument<String>("nodeId") ?: ""
         val path = call.argument<String>("path") ?: ""
         val workingDirectory = call.argument<String>("workingDirectory") ?: ""
+        val arguments = call.argument<List<String>>("arguments") ?: emptyList()
         if (nodeId.isBlank() || path.isBlank() || workingDirectory.isBlank()) {
             result.successOnMain(0L)
             return
         }
         launch {
-            val runTime = Service.startRuntimeNode(nodeId, path, workingDirectory)
+            val runTime = Service.startRuntimeNode(nodeId, path, workingDirectory, arguments)
             result.successOnMain(runTime)
         }
     }

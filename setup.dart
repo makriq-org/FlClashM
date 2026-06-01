@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flclashm/product/runtime/byedpi_release.dart';
 import 'package:flclashm/product/runtime/naiveproxy_release.dart';
 import 'package:flclashm/product/runtime/olcrtc_release.dart';
 
@@ -16,6 +17,7 @@ const _coreVersionFile = 'lib/core_version.dart';
 const _ndkVersion = '28.0.13004108';
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
+const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
 final _projectRoot = File.fromUri(Platform.script).parent.absolute.path;
 
 final _androidArches = <String, AndroidArch>{
@@ -70,6 +72,7 @@ Future<void> main(List<String> args) async {
 
   await _syncCoreVersionDartFile();
   await _syncNaiveProxyAssets();
+  await _syncByedpiAssets();
   await _syncOlcRtcAssets();
   if (command.out == 'runtime-assets') {
     return;
@@ -577,6 +580,147 @@ String _buildNaiveProxyStamp() {
     naiveProxyPinnedReleaseTag,
     ...naiveProxyReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.apkName}:${asset.apkSha256}',
+    ),
+  ];
+  return lines.join('\n');
+}
+
+Future<void> _syncByedpiAssets() async {
+  final stamp = File(_projectPath(_byedpiStampFile));
+  final expectedStamp = _buildByedpiStamp();
+  final assetFilesExist = byedpiReleaseAssets.values.every(
+        (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
+      ) &&
+      File(_projectPath(byedpiStrategyListAssetPath)).existsSync();
+
+  if (assetFilesExist &&
+      stamp.existsSync() &&
+      (await stamp.readAsString()).trim() == expectedStamp) {
+    return;
+  }
+
+  final sourceDir = await _prepareByedpiSource();
+  final strategySourceDir = await _prepareByedpiStrategySource();
+  final strategyTarget = File(_projectPath(byedpiStrategyListAssetPath));
+  strategyTarget.parent.createSync(recursive: true);
+  await File(
+    _join(
+      strategySourceDir.path,
+      'app',
+      'src',
+      'main',
+      'assets',
+      'proxytest_strategies.list',
+    ),
+  ).copy(strategyTarget.path);
+
+  final targetRoot = Directory(_projectPath(byedpiBundledAssetRoot));
+  if (!targetRoot.existsSync()) {
+    targetRoot.createSync(recursive: true);
+  }
+
+  final ndkBin = _resolveNdkBinDir();
+  for (final asset in byedpiReleaseAssets.values) {
+    final arch = _androidArches[asset.cliArch];
+    if (arch == null) {
+      throw StateError('Unknown byedpi Android arch ${asset.cliArch}');
+    }
+    final target = File(_projectPath(asset.bundledAssetPath));
+    target.parent.createSync(recursive: true);
+    if (target.existsSync()) {
+      await target.delete();
+    }
+    await _exec(
+      ['make', 'clean'],
+      workingDirectory: sourceDir.path,
+      name: 'clean byedpi Android ${asset.abi}',
+    );
+    await _exec(
+      ['make', 'CC=${_join(ndkBin.path, arch.toolchain)}'],
+      workingDirectory: sourceDir.path,
+      name: 'build byedpi Android ${asset.abi}',
+    );
+    await File(_join(sourceDir.path, byedpiExecutableFileName))
+        .copy(target.path);
+  }
+
+  stamp.parent.createSync(recursive: true);
+  await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<Directory> _prepareByedpiSource() async {
+  final override = Platform.environment['BYEDPI_SOURCE_DIR'];
+  if (override != null && override.trim().isNotEmpty) {
+    final sourceDir = Directory(override.trim());
+    if (!sourceDir.existsSync()) {
+      throw StateError('BYEDPI_SOURCE_DIR does not exist: ${sourceDir.path}');
+    }
+    await _exec(
+      ['git', 'checkout', '--detach', byedpiPinnedCommit],
+      workingDirectory: sourceDir.path,
+      name: 'checkout byedpi pinned commit',
+    );
+    return sourceDir;
+  }
+
+  final cacheDir = Directory(_projectPath('.dart_tool', 'byedpi-source'));
+  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
+    if (cacheDir.existsSync()) {
+      await cacheDir.delete(recursive: true);
+    }
+    await cacheDir.parent.create(recursive: true);
+    await _exec(
+      ['git', 'clone', byedpiSourceRepository, cacheDir.path],
+      name: 'clone byedpi source',
+    );
+  }
+  await _exec(
+    ['git', 'fetch', '--depth', '1', 'origin', byedpiPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'fetch byedpi pinned commit',
+  );
+  await _exec(
+    ['git', 'checkout', '--detach', byedpiPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'checkout byedpi pinned commit',
+  );
+  return cacheDir;
+}
+
+Future<Directory> _prepareByedpiStrategySource() async {
+  final cacheDir =
+      Directory(_projectPath('.dart_tool', 'byebyeedpi-strategy-source'));
+  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
+    if (cacheDir.existsSync()) {
+      await cacheDir.delete(recursive: true);
+    }
+    await cacheDir.parent.create(recursive: true);
+    await _exec(
+      ['git', 'clone', byedpiStrategySourceRepository, cacheDir.path],
+      name: 'clone byebyeedpi strategy source',
+    );
+  }
+  await _exec(
+    ['git', 'fetch', '--depth', '1', 'origin', byedpiStrategyPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'fetch byebyeedpi strategy commit',
+  );
+  await _exec(
+    ['git', 'checkout', '--detach', byedpiStrategyPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'checkout byebyeedpi strategy commit',
+  );
+  return cacheDir;
+}
+
+String _buildByedpiStamp() {
+  final lines = <String>[
+    byedpiPinnedReleaseTag,
+    byedpiSourceRepository,
+    byedpiStrategySourceRepository,
+    byedpiStrategyPinnedCommit,
+    ...byedpiReleaseAssets.values.map(
+      (asset) => '${asset.abi}:${asset.cliArch}',
     ),
   ];
   return lines.join('\n');

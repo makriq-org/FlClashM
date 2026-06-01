@@ -92,6 +92,10 @@ flutter:
     - assets/runtimes/olcrtc/android/armeabi-v7a/
     - assets/runtimes/olcrtc/android/arm64-v8a/
     - assets/runtimes/olcrtc/android/x86_64/
+    - assets/runtimes/byedpi/android/
+    - assets/runtimes/byedpi/android/armeabi-v7a/
+    - assets/runtimes/byedpi/android/arm64-v8a/
+    - assets/runtimes/byedpi/android/x86_64/
   fonts:
     - family: JetBrainsMono
       fonts:

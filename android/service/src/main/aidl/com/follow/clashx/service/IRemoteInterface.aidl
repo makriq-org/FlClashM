@@ -41,6 +41,7 @@ interface IRemoteInterface {
     void startRuntimeNode(in String nodeId,
                          in String executablePath,
                          in String workingDirectory,
+                         in List<String> arguments,
                          in IResultInterface result);
 
     void stopRuntimeNode(in String nodeId, in IResultInterface result);

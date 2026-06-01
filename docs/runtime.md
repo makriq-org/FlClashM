@@ -154,14 +154,24 @@ Runtime слой подготавливается через явную product 
   - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
   - cold-start path: общий runtime-node manifest теперь объединяет `naiveproxy` и `olcrtc`, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
 - `byedpi`
-  - built-in proxy node registration без включения
-  - unavailable до pinned Android binary и node-local lifecycle contract
+  - supported built-in proxy node type
+  - integration contract: профиль описывает `byedpi` через обычный `proxies` entry с `type: byedpi`
+  - routing contract: узел сохраняет свое имя после compile stage и используется в обычных `proxy-groups`/`rules`
+  - config contract: `mode: manual` принимает строку `args`; `mode: auto` принимает `strategies` или `strategy-list: byebyeedpi` и обязательно `test.urls`
+  - strategy contract: строки совместимы с ByeByeDPI, то есть это аргументы `ciadpi` без имени исполняемого файла; поддерживается подстановка `{sni}` из `test.sni`
+  - update path: `setup.dart` собирает pinned commit `ba532298de7b28cfe854aea83d061369d13ca290` из `hufrea/byedpi` в bundled Android assets и копирует pinned GPL-3.0 список стратегий из `romanvht/ByeByeDPI`
+  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет `config.json` в `RuntimePlan.files`; `ByedpiNodeController` пишет per-node config, выбирает стратегию, кэширует рабочую стратегию и откатывает node config/process к предыдущему commit state
+  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальный SOCKS5 listener `byedpi`
+  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
+  - cold-start path: общий runtime-node manifest сохраняет выбранные аргументы byedpi; `FlVpnService` поднимает узел до `Core.quickStart`
 
 ## Ограничения
 
 - Provider hints не определяют runtime floor.
 - `naiveproxy` listener path определяется клиентом, а не profile metadata.
 - `olcrtc` local SOCKS bind определяется клиентом, а не profile metadata.
+- `byedpi` local SOCKS bind определяется клиентом; profile не может задавать `ip`, `port`, `listen` или `server`.
+- `byedpi mode: auto` не делает скрытых проверок: URL проверки задаются только в профиле через `test.urls`.
 - built-in proxy nodes поддерживаются только в `proxies`, а не в `proxy-providers`.
 - Unsupported runtime/node нельзя включить без registry change.
 - Runtime orchestration не должна разъезжаться между UI/controller/service bridge.

@@ -16,6 +16,7 @@
 - `upstream-maintenance.md`
 - `product-services.md`
 - `runtime.md`
+- `byedpi.md`
 - `security-policy.md`
 - `compatibility-boundaries.md`
 - `migration-plan.md`

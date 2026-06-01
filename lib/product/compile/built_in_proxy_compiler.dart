@@ -124,8 +124,11 @@ class BuiltInProxyCompiler {
             nodeId: nodeId,
             listenPort: listenPort,
           ),
-        BuiltInProxyType.byedpi => throw UnsupportedBuiltInProxyException(
-            registry.buildUnsupportedMessage(descriptor),
+        BuiltInProxyType.byedpi => _buildByedpiPlan(
+            definition: definition,
+            descriptor: descriptor,
+            nodeId: nodeId,
+            listenPort: listenPort,
           ),
       };
 
@@ -241,6 +244,93 @@ class BuiltInProxyCompiler {
     );
   }
 
+  BuiltInProxyNodePlan _buildByedpiPlan({
+    required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
+    required String nodeId,
+    required int listenPort,
+  }) {
+    final rawConfig = _cloneConfig(definition.rawConfig)
+      ..remove('name')
+      ..remove('type');
+    final udp = rawConfig.remove('udp');
+    if (udp == true) {
+      throw const FormatException(
+        'byedpi built-in nodes do not support `udp: true`.',
+      );
+    }
+    if (rawConfig.containsKey('listen') ||
+        rawConfig.containsKey('server') ||
+        rawConfig.containsKey('port') ||
+        rawConfig.containsKey('ip')) {
+      throw const FormatException(
+        'byedpi built-in nodes must not override `listen`, `server`, `ip`, or `port`; those are owned by the client local-node contract.',
+      );
+    }
+
+    final mode =
+        (_trimmedString(rawConfig.remove('mode')) ?? 'manual').toLowerCase();
+    if (mode != 'manual' && mode != 'auto') {
+      throw const FormatException(
+        'byedpi built-in nodes support only `mode: manual` or `mode: auto`.',
+      );
+    }
+
+    final config = <String, dynamic>{
+      'mode': mode,
+      'listenHost': localhost,
+      'listenPort': listenPort,
+      'cache': _asStringKeyedMap(rawConfig.remove('cache')),
+    };
+
+    if (mode == 'manual') {
+      final args = _trimmedString(rawConfig.remove('args'));
+      if (args == null) {
+        throw const FormatException(
+          'byedpi manual nodes require a non-empty `args` field.',
+        );
+      }
+      config['args'] = args;
+    } else {
+      final strategies = _stringList(rawConfig.remove('strategies'));
+      final strategyList =
+          _trimmedString(rawConfig.remove('strategy-list'))?.toLowerCase();
+      if (strategies.isEmpty &&
+          (strategyList == null || strategyList != 'byebyeedpi')) {
+        throw const FormatException(
+          'byedpi auto nodes require `strategies` or `strategy-list: byebyeedpi`.',
+        );
+      }
+      final test = _asStringKeyedMap(rawConfig.remove('test'));
+      final urls = _stringList(test['urls']);
+      if (urls.isEmpty) {
+        throw const FormatException(
+          'byedpi auto nodes require non-empty `test.urls`.',
+        );
+      }
+      config['strategies'] = strategies;
+      config['strategyList'] = strategies.isEmpty ? strategyList : null;
+      config['test'] = test;
+    }
+
+    if (rawConfig.isNotEmpty) {
+      config['options'] = rawConfig;
+    }
+
+    return BuiltInProxyNodePlan(
+      nodeId: nodeId,
+      name: definition.name,
+      type: definition.type,
+      listenHost: localhost,
+      listenPort: listenPort,
+      protocol: descriptor.protocol,
+      udp: false,
+      files: {
+        'built-in-proxies/byedpi/$nodeId/config.json': json.encode(config),
+      },
+    );
+  }
+
   int _allocateListenPort({
     required BuiltInProxyNodeDefinition definition,
     required BuiltInProxyDescriptor descriptor,
@@ -326,6 +416,16 @@ class BuiltInProxyCompiler {
     return normalizedValue.isEmpty ? null : normalizedValue;
   }
 
+  List<String> _stringList(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return [
+      for (final item in value)
+        if (_trimmedString(item) case final itemValue?) itemValue,
+    ];
+  }
+
   String _encodeYaml(Object? value, {int indent = 0}) {
     final padding = ' ' * indent;
     if (value is Map) {
@@ -340,7 +440,7 @@ class BuiltInProxyCompiler {
     }
     if (value is List) {
       if (value.isEmpty) {
-        return '${padding}[]';
+        return '$padding[]';
       }
       return value.map((item) {
         if (_isYamlScalar(item)) {

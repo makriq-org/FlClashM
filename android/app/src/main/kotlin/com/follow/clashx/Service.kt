@@ -158,9 +158,18 @@ object Service {
         nodeId: String,
         executablePath: String,
         workingDirectory: String,
+        arguments: List<String> = emptyList(),
     ): Long =
         delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.startRuntimeNode(nodeId, executablePath, workingDirectory, cb) }
+            awaitResult { cb ->
+                proxy.startRuntimeNode(
+                    nodeId,
+                    executablePath,
+                    workingDirectory,
+                    arguments,
+                    cb,
+                )
+            }
         }.getOrNull() ?: 0L
 
     suspend fun stopRuntimeNode(nodeId: String): Long =

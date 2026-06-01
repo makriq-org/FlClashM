@@ -328,6 +328,7 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     required String nodeId,
     required String executablePath,
     required String workingDirectory,
+    List<String> arguments = const [],
   }) async {
     startCalls.add(nodeId);
     final result = startResults.isEmpty ? true : startResults.removeAt(0);
