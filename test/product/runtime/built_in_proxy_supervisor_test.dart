@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flclashm/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashm/product/runtime/built_in_proxy_supervisor.dart';
 import 'package:flclashm/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashm/product/runtime/byedpi_node_controller.dart';
+import 'package:flclashm/product/runtime/byedpi_release.dart';
 import 'package:flclashm/product/runtime/naiveproxy_node_controller.dart';
 import 'package:flclashm/product/runtime/naiveproxy_release.dart';
 import 'package:flclashm/product/runtime/olcrtc_node_controller.dart';
@@ -16,6 +18,7 @@ void main() {
     late Directory tempDir;
     late _FakeRuntimeNodeBridge runtime;
     late NaiveProxySharedInstallLayout naiveLayout;
+    late ByedpiSharedInstallLayout byedpiLayout;
     late OlcRtcSharedInstallLayout olcLayout;
 
     DefaultBuiltInProxySupervisor buildSupervisor() =>
@@ -24,6 +27,18 @@ void main() {
             binary: _FakeNaiveProxyBinaryBridge(layout: naiveLayout),
             runtime: runtime,
             waitForListener: (_, __) async {},
+          ),
+          byedpi: ByedpiNodeController(
+            binary: _FakeByedpiBinaryBridge(layout: byedpiLayout),
+            runtime: runtime,
+            waitForListener: (_, __) async {},
+            siteCheck: ({
+              required host,
+              required port,
+              required url,
+              required timeout,
+            }) async =>
+                true,
           ),
           olcRtc: OlcRtcNodeController(
             binary: _FakeOlcRtcBinaryBridge(layout: olcLayout),
@@ -47,6 +62,17 @@ void main() {
             '${tempDir.path}/naiveproxy/bundled.pending.version',
         bundledAssetPath:
             'assets/runtimes/naiveproxy/android/arm64-v8a/libnaive.so',
+      );
+      byedpiLayout = ByedpiSharedInstallLayout(
+        abi: 'arm64-v8a',
+        runtimeRootPath: '${tempDir.path}/byedpi',
+        nodesDirectoryPath: '${tempDir.path}/byedpi/nodes',
+        executablePath: '${tempDir.path}/byedpi/ciadpi',
+        pendingPath: '${tempDir.path}/byedpi/ciadpi.pending',
+        rollbackPath: '${tempDir.path}/byedpi/ciadpi.rollback',
+        versionPath: '${tempDir.path}/byedpi/bundled.version',
+        pendingVersionPath: '${tempDir.path}/byedpi/bundled.pending.version',
+        bundledAssetPath: 'assets/runtimes/byedpi/android/arm64-v8a/ciadpi',
       );
       olcLayout = OlcRtcSharedInstallLayout(
         abi: 'arm64-v8a',
@@ -206,6 +232,27 @@ class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
       layout;
 }
 
+class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
+  const _FakeByedpiBinaryBridge({required this.layout});
+
+  final ByedpiSharedInstallLayout layout;
+
+  @override
+  String get bundledReleaseTag => byedpiPinnedReleaseTag;
+
+  @override
+  Future<Uint8List> loadBundledBinary(String assetPath) async =>
+      Uint8List.fromList('byedpi'.codeUnits);
+
+  @override
+  Future<String> loadBundledStrategyList(String assetPath) async =>
+      '--fake -1\n';
+
+  @override
+  Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async =>
+      layout;
+}
+
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   final Map<String, DateTime> runningNodes = {};
   final List<String> startCalls = [];
@@ -232,6 +279,7 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     required String nodeId,
     required String executablePath,
     required String workingDirectory,
+    List<String> arguments = const [],
   }) async {
     startCalls.add(nodeId);
     final result = startResults.isEmpty ? true : startResults.removeAt(0);

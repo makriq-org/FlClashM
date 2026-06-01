@@ -1,5 +1,4 @@
 import 'package:flclashm/product/compile/product_compile.dart';
-import 'package:flclashm/product/runtime/product_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -71,18 +70,54 @@ x-flclashm-runtime:
       );
     });
 
-    test('rejects unsupported built-in node types at validation time', () {
-      expect(
-        () => validator.normalizeForValidation('''
+    test('normalizes byedpi nodes into core-compatible local proxies', () {
+      final normalized = validator.normalizeForValidation('''
 proxies:
   - name: ByeDPI Local
     type: byedpi
+    mode: manual
+    args: "--disorder 1 --auto=torst --tlsrec 1+s"
+''');
+
+      expect(normalized['proxies'][0]['type'], 'socks5');
+      expect(normalized['proxies'][0]['server'], '127.0.0.1');
+      expect(normalized['proxies'][0]['port'], inInclusiveRange(35600, 35855));
+    });
+
+    test('rejects byedpi auto nodes without test urls', () {
+      expect(
+        () => validator.normalizeForValidation('''
+proxies:
+  - name: ByeDPI Auto
+    type: byedpi
+    mode: auto
+    strategy-list: byebyeedpi
 '''),
         throwsA(
-          isA<UnsupportedBuiltInProxyException>().having(
+          isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('byedpi built-in node is not available'),
+            contains('test.urls'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects byedpi local listener overrides', () {
+      expect(
+        () => validator.normalizeForValidation('''
+proxies:
+  - name: ByeDPI Bad
+    type: byedpi
+    mode: manual
+    args: "--fake -1"
+    port: 1080
+'''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('must not override'),
           ),
         ),
       );

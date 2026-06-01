@@ -24,13 +24,11 @@ class BuiltInProxyRegistry {
             supportsUdp: false,
             listenPortRangeStart: 35600,
             listenPortRangeSize: 256,
-            availability: BuiltInProxyAvailability.unsupported(
-              reason:
-                  'byedpi process packaging, lifecycle supervision, and client-owned local-node contract are not integrated yet.',
+            availability: BuiltInProxyAvailability.supported(
               updatePath:
-                  'Ship a pinned Android binary plus node-specific config/start/health contracts before enabling `type: byedpi`.',
+                  'setup.dart builds the pinned byedpi Android executable from source and bundles the pinned ByeByeDPI strategy list; runtime activation swaps the shared binary through .pending in app data.',
               rollbackPath:
-                  'Reject the node at compile time and keep the profile on the single-engine mihomo path until the contract is versioned.',
+                  'Failed pending activation restores the previous executable, keeps .pending for retry, and failed profile apply rolls node configs/processes back to the last committed runtime plan.',
             ),
           ),
           BuiltInProxyType.olcrtc: BuiltInProxyDescriptor(

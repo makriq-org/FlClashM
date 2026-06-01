@@ -223,6 +223,7 @@ class RemoteService : Service() {
             nodeId: String,
             executablePath: String,
             workingDirectory: String,
+            arguments: MutableList<String>,
             result: IResultInterface,
         ) {
             GlobalState.launch {
@@ -230,6 +231,7 @@ class RemoteService : Service() {
                     nodeId = nodeId,
                     executablePath = executablePath,
                     workingDirectory = workingDirectory,
+                    arguments = arguments,
                 )
                 result.onResult(startTime)
             }

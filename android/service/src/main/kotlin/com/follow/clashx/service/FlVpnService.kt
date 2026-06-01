@@ -86,6 +86,7 @@ class FlVpnService : VpnService(), IBaseService {
         val workingDirectory: String,
         val host: String,
         val port: Int,
+        val arguments: List<String> = emptyList(),
     )
 
     private suspend fun coldStart() {
@@ -234,6 +235,13 @@ class FlVpnService : VpnService(), IBaseService {
                 val workingDirectory = rawNode.optString("workingDirectory", "").trim()
                 val host = rawNode.optString("host", "").trim()
                 val port = rawNode.optInt("port", 0)
+                val rawArguments = rawNode.optJSONArray("arguments") ?: JSONArray()
+                val arguments = buildList {
+                    for (argumentIndex in 0 until rawArguments.length()) {
+                        val argument = rawArguments.optString(argumentIndex, "")
+                        if (argument.isNotEmpty()) add(argument)
+                    }
+                }
                 if (nodeId.isEmpty() || executablePath.isEmpty() || workingDirectory.isEmpty() ||
                     host.isEmpty() || port <= 0
                 ) {
@@ -246,6 +254,7 @@ class FlVpnService : VpnService(), IBaseService {
                         workingDirectory = workingDirectory,
                         host = host,
                         port = port,
+                        arguments = arguments,
                     ),
                 )
             }
@@ -258,6 +267,7 @@ class FlVpnService : VpnService(), IBaseService {
                 nodeId = node.nodeId,
                 executablePath = node.executablePath,
                 workingDirectory = node.workingDirectory,
+                arguments = node.arguments,
             )
             if (startedAt <= 0L) {
                 throw IllegalStateException("Runtime node `${node.nodeId}` did not start")
