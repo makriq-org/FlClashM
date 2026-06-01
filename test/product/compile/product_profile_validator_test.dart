@@ -52,6 +52,24 @@ proxies:
       expect(normalized['proxies'][0]['port'], inInclusiveRange(35900, 36155));
     });
 
+    test('materializes YAML merge keys before validation', () {
+      final normalized = validator.normalizeForValidation('''
+proxy-common: &proxy-common
+  type: ss
+  server: example.org
+  port: 443
+  cipher: aes-128-gcm
+  password: secret
+proxies:
+  - <<: *proxy-common
+    name: Merged Proxy
+''');
+
+      expect(normalized['proxies'][0]['type'], 'ss');
+      expect(normalized['proxies'][0]['server'], 'example.org');
+      expect(normalized['proxies'][0].containsKey('<<'), isFalse);
+    });
+
     test('rejects legacy top-level naiveproxy runtime selection', () {
       expect(
         () => validator.normalizeForValidation('''

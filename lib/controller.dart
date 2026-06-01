@@ -31,6 +31,8 @@ class AppController {
   final WidgetRef _ref;
   bool _suppressNextRuntimeConfigUpdate = false;
   bool _runtimeConfigListenerReady = false;
+  Future<void>? _applyProfileFuture;
+  bool _applyProfileAgain = false;
 
   void setupClashConfigDebounce() {
     debouncer.call(FunctionTag.setupClashConfig, () async {
@@ -252,7 +254,6 @@ class AppController {
     _ref.read(profilesProvider.notifier).setProfile(profile);
     if (_ref.read(currentProfileIdProvider) != null) return;
     _ref.read(currentProfileIdProvider.notifier).value = profile.id;
-    applyProfileDebounce(silence: true);
   }
 
   Future<void> deleteProfile(String id) async {
@@ -605,15 +606,37 @@ class AppController {
     await syncAndroidForegroundNotification();
   }
 
-  Future applyProfile({bool silence = false}) async {
-    if (silence) {
+  Future<void> _applyProfileLoop() async {
+    do {
+      _applyProfileAgain = false;
       await _applyProfile();
+    } while (_applyProfileAgain);
+  }
+
+  Future applyProfile({bool silence = false}) async {
+    final running = _applyProfileFuture;
+    if (running != null) {
+      _applyProfileAgain = true;
+      await running;
+      return;
+    }
+
+    Future<void> task;
+    if (silence) {
+      task = _applyProfileLoop();
     } else {
       final commonScaffoldState = globalState.homeScaffoldKey.currentState;
       if (commonScaffoldState?.mounted != true) return;
-      await commonScaffoldState?.loadingRun(() async {
-        await _applyProfile();
-      });
+      task =
+          commonScaffoldState!.loadingRun<void>(_applyProfileLoop).then((_) {});
+    }
+    _applyProfileFuture = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_applyProfileFuture, task)) {
+        _applyProfileFuture = null;
+      }
     }
     addCheckIpNumDebounce();
   }
@@ -1060,7 +1083,10 @@ class AppController {
       final profile = await commonScaffoldState?.loadingRun<Profile>(() async {
         final prefs = await SharedPreferences.getInstance();
         final shouldSend = prefs.getBool('sendDeviceHeaders') ?? true;
-        return Profile.normal(url: url).update(shouldSendHeaders: shouldSend);
+        return Profile.normal(url: url).update(
+          shouldSendHeaders: shouldSend,
+          validateConfig: globalState.validateProfileConfigText,
+        );
       }, title: "${appLocalizations.add}${appLocalizations.profile}");
 
       if (profile != null) {
