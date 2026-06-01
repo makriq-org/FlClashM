@@ -28,6 +28,7 @@ class OlcRtcSharedInstallLayout {
     required this.versionPath,
     required this.pendingVersionPath,
     required this.bundledAssetPath,
+    this.managedBinaryUpdateEnabled = true,
   });
 
   final String abi;
@@ -39,6 +40,7 @@ class OlcRtcSharedInstallLayout {
   final String versionPath;
   final String pendingVersionPath;
   final String bundledAssetPath;
+  final bool managedBinaryUpdateEnabled;
 }
 
 @immutable
@@ -63,7 +65,11 @@ abstract interface class OlcRtcBinaryBridge {
 }
 
 class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
-  const DefaultOlcRtcBinaryBridge();
+  const DefaultOlcRtcBinaryBridge({
+    this.nativeLibrary = const AndroidRuntimeNodeNativeLibraryBridge(),
+  });
+
+  final AndroidRuntimeNodeNativeLibraryBridge nativeLibrary;
 
   @override
   String get bundledReleaseTag => olcRtcPinnedReleaseTag;
@@ -93,12 +99,22 @@ class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
       olcRtcRuntimeDirectoryName,
       asset.abi,
     );
+    final executablePath = await nativeLibrary.resolvePath(
+      olcRtcAndroidNativeLibraryFileName,
+    );
+    if (executablePath == null) {
+      throw StateError(
+        'Bundled native olcrtc library $olcRtcAndroidNativeLibraryFileName '
+        'is missing. Run `dart setup.dart android --out runtime-assets` '
+        'before building.',
+      );
+    }
 
     return OlcRtcSharedInstallLayout(
       abi: asset.abi,
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
-      executablePath: path.join(runtimeRootPath, olcRtcExecutableFileName),
+      executablePath: executablePath,
       pendingPath: path.join(
         runtimeRootPath,
         '$olcRtcExecutableFileName.pending',
@@ -116,6 +132,7 @@ class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
         olcRtcPendingVersionFileName,
       ),
       bundledAssetPath: asset.bundledAssetPath,
+      managedBinaryUpdateEnabled: false,
     );
   }
 
@@ -185,6 +202,9 @@ class OlcRtcNodeController {
     final layout = await binary.resolveSharedInstallLayout();
     await Directory(layout.runtimeRootPath).create(recursive: true);
     await Directory(layout.nodesDirectoryPath).create(recursive: true);
+    if (!layout.managedBinaryUpdateEnabled) {
+      return;
+    }
 
     final active = File(layout.executablePath);
     final pending = File(layout.pendingPath);
@@ -310,6 +330,7 @@ class OlcRtcNodeController {
             nodeId: plan.nodeId,
             executablePath: sharedLayout.executablePath,
             workingDirectory: layout.workingDirectoryPath,
+            arguments: _buildArguments(layout),
           );
           if (!started) {
             return _rollbackStageFailure(
@@ -385,6 +406,7 @@ class OlcRtcNodeController {
             nodeId: plan.nodeId,
             executablePath: sharedLayout.executablePath,
             workingDirectory: layout.workingDirectoryPath,
+            arguments: _buildArguments(layout),
           );
           if (!started) {
             await _stopStartedNodes(startedNodes);
@@ -454,6 +476,9 @@ class OlcRtcNodeController {
           'executablePath': sharedLayout.executablePath,
           'workingDirectory': _resolveNodeLayout(sharedLayout, plan.nodeId)
               .workingDirectoryPath,
+          'arguments': _buildArguments(
+            _resolveNodeLayout(sharedLayout, plan.nodeId),
+          ),
         },
     ];
   }
@@ -477,6 +502,8 @@ class OlcRtcNodeController {
     }
     return configYaml;
   }
+
+  List<String> _buildArguments(OlcRtcNodeLayout layout) => [layout.configPath];
 
   OlcRtcNodeLayout _resolveNodeLayout(
     OlcRtcSharedInstallLayout sharedLayout,
@@ -546,6 +573,7 @@ class OlcRtcNodeController {
             nodeId: mutation.plan.nodeId,
             executablePath: sharedLayout.executablePath,
             workingDirectory: mutation.layout.workingDirectoryPath,
+            arguments: _buildArguments(mutation.layout),
           );
           if (!restarted) {
             captureFailure(
@@ -738,23 +766,25 @@ class OlcRtcNodeController {
       host: host,
       port: port,
     );
-    for (var attempt = 0; attempt < 50; attempt++) {
+    // OlcRTC can finish ICE before the datachannel-backed SOCKS listener is
+    // ready, especially on a cold Android emulator.
+    for (var attempt = 0; attempt < 240; attempt++) {
       try {
         final socket = await Socket.connect(
           uri.host,
           uri.port,
-          timeout: const Duration(milliseconds: 200),
+          timeout: const Duration(milliseconds: 250),
         );
         await socket.close();
         return;
       } catch (_) {
-        if (attempt == 49) {
+        if (attempt == 239) {
           throw StateError(
             'Timed out waiting for local runtime node listener on '
             '${uri.host}:${uri.port}.',
           );
         }
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 250));
       }
     }
   }

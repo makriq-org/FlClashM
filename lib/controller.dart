@@ -128,6 +128,15 @@ class AppController {
 
   Future<void> updateStatus(bool isStart) async {
     if (isStart) {
+      final applyingProfile = _applyProfileFuture;
+      if (applyingProfile != null) {
+        await applyingProfile;
+      }
+      final isConfigured = await _setupClashConfig();
+      if (!isConfigured) {
+        await StatusBarManager.updateIcon(isConnected: false);
+        return;
+      }
       await syncAndroidForegroundNotification();
       final started = await globalState.engineManager.start(
         updateTasks: [updateTraffic],
@@ -251,9 +260,11 @@ class AppController {
   }
 
   Future<void> addProfile(Profile profile) async {
+    final shouldSelectProfile = _ref.read(currentProfileIdProvider) == null;
     _ref.read(profilesProvider.notifier).setProfile(profile);
-    if (_ref.read(currentProfileIdProvider) != null) return;
+    if (!shouldSelectProfile) return;
     _ref.read(currentProfileIdProvider.notifier).value = profile.id;
+    await applyProfile(silence: true);
   }
 
   Future<void> deleteProfile(String id) async {

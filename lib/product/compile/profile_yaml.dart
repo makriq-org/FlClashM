@@ -26,9 +26,7 @@ Map<String, dynamic> materializeStringKeyedMap(dynamic value) {
     if (entry.key.toString() != '<<') {
       continue;
     }
-    for (final mergedMap in _materializeYamlMerge(entry.value)) {
-      result.addAll(mergedMap);
-    }
+    _materializeYamlMerge(entry.value).forEach(result.addAll);
   }
 
   for (final entry in value.entries) {

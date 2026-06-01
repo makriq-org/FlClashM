@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import java.io.File
 
 class ServicePlugin :
     FlutterPlugin,
@@ -44,12 +45,14 @@ class ServicePlugin :
     override val coroutineContext get() = job + Dispatchers.Main
 
     private lateinit var channel: MethodChannel
+    private lateinit var context: Context
     private val eventSemaphore = Semaphore(10)
     private val gson = Gson()
     @Volatile private var attached = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
+        context = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
         attached = true
@@ -99,6 +102,11 @@ class ServicePlugin :
             "getRuntimeNodeRunTime" -> launch {
                 val nodeId = call.argument<String>("nodeId") ?: ""
                 result.successOnMain(Service.getRuntimeNodeRunTime(nodeId))
+            }
+            "resolveNativeRuntimeLibrary" -> {
+                val name = call.argument<String>("name") ?: ""
+                val file = File(context.applicationInfo.nativeLibraryDir, name)
+                result.successOnMain(if (name.isNotBlank() && file.exists()) file.absolutePath else "")
             }
             "clearQuickStartParams" -> {
                 com.follow.clashx.common.SavedParams.clearQuickStartParams()

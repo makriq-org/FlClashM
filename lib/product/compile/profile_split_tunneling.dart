@@ -748,9 +748,12 @@ void _validatePackageSelectors(
 
 Future<void> _writePackageListCache(String cachePath, String content) async {
   final cacheFile = File(cachePath);
-  final tempFile = File('$cachePath.part');
-  if (tempFile.existsSync()) {
-    await tempFile.delete();
+  final tempFile = File(
+    '$cachePath.${DateTime.now().microsecondsSinceEpoch}.part',
+  );
+  final cacheDir = cacheFile.parent;
+  if (!cacheDir.existsSync()) {
+    await cacheDir.create(recursive: true);
   }
   await tempFile.writeAsString(content, flush: true);
   if (cacheFile.existsSync()) {
@@ -828,13 +831,17 @@ List<String> _resolvePackageSelectors(
     }
   }
 
-  for (var index = 0; index < compiledSelectors.length; index++) {
-    if (matchCounters[index] != 0) {
-      continue;
-    }
+  final unmatchedSelectors = <String>[
+    for (var index = 0; index < compiledSelectors.length; index++)
+      if (matchCounters[index] == 0) compiledSelectors[index].raw,
+  ];
+  if (unmatchedSelectors.isNotEmpty) {
+    final preview = unmatchedSelectors.take(5).join(', ');
+    final suffix = unmatchedSelectors.length > 5 ? ', ...' : '';
     commonPrint.log(
-      'Android package selector `${compiledSelectors[index].raw}` in '
-      '`$fieldName` matched no installed applications.',
+      'Android split tunneling `$fieldName` has '
+      '${unmatchedSelectors.length} selectors with no installed app matches: '
+      '$preview$suffix',
     );
   }
 

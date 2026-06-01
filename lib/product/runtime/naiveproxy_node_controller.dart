@@ -28,6 +28,7 @@ class NaiveProxySharedInstallLayout {
     required this.versionPath,
     required this.pendingVersionPath,
     required this.bundledAssetPath,
+    this.managedBinaryUpdateEnabled = true,
   });
 
   final String abi;
@@ -39,6 +40,7 @@ class NaiveProxySharedInstallLayout {
   final String versionPath;
   final String pendingVersionPath;
   final String bundledAssetPath;
+  final bool managedBinaryUpdateEnabled;
 }
 
 @immutable
@@ -63,7 +65,11 @@ abstract interface class NaiveProxyBinaryBridge {
 }
 
 class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
-  const DefaultNaiveProxyBinaryBridge();
+  const DefaultNaiveProxyBinaryBridge({
+    this.nativeLibrary = const AndroidRuntimeNodeNativeLibraryBridge(),
+  });
+
+  final AndroidRuntimeNodeNativeLibraryBridge nativeLibrary;
 
   @override
   String get bundledReleaseTag => naiveProxyPinnedReleaseTag;
@@ -93,12 +99,22 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
       naiveProxyRuntimeDirectoryName,
       asset.abi,
     );
+    final executablePath = await nativeLibrary.resolvePath(
+      naiveProxyAndroidNativeLibraryFileName,
+    );
+    if (executablePath == null) {
+      throw StateError(
+        'Bundled native naiveproxy library '
+        '$naiveProxyAndroidNativeLibraryFileName is missing. '
+        'Run `dart setup.dart android --out runtime-assets` before building.',
+      );
+    }
 
     return NaiveProxySharedInstallLayout(
       abi: asset.abi,
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
-      executablePath: path.join(runtimeRootPath, naiveProxyExecutableFileName),
+      executablePath: executablePath,
       pendingPath: path.join(
         runtimeRootPath,
         '$naiveProxyExecutableFileName.pending',
@@ -116,6 +132,7 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
         naiveProxyPendingVersionFileName,
       ),
       bundledAssetPath: asset.bundledAssetPath,
+      managedBinaryUpdateEnabled: false,
     );
   }
 
@@ -185,6 +202,9 @@ class NaiveProxyNodeController {
     final layout = await binary.resolveSharedInstallLayout();
     await Directory(layout.runtimeRootPath).create(recursive: true);
     await Directory(layout.nodesDirectoryPath).create(recursive: true);
+    if (!layout.managedBinaryUpdateEnabled) {
+      return;
+    }
 
     final active = File(layout.executablePath);
     final pending = File(layout.pendingPath);

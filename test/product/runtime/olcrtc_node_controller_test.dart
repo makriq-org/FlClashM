@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:flclashm/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashm/product/runtime/olcrtc_node_controller.dart';
 import 'package:flclashm/product/runtime/olcrtc_release.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 
 void main() {
   group('OlcRtcNodeController', () {
@@ -226,6 +228,10 @@ void main() {
 
       expect(started, isTrue);
       expect(runtime.startCalls, ['node-a', 'node-b']);
+      expect(runtime.startArguments, [
+        [path.join(sharedLayout.nodesDirectoryPath, 'node-a', 'config.yaml')],
+        [path.join(sharedLayout.nodesDirectoryPath, 'node-b', 'config.yaml')],
+      ]);
       expect(runtime.stopCalls, ['node-a', 'node-b']);
     });
 
@@ -263,6 +269,11 @@ void main() {
 
       await controller.persistColdStart([plan]);
       expect(runtime.savedManifest, isNotNull);
+      final manifest = json.decode(runtime.savedManifest!) as Map;
+      final nodes = manifest['nodes'] as List;
+      expect(nodes.single['arguments'], [
+        path.join(sharedLayout.nodesDirectoryPath, 'node-a', 'config.yaml'),
+      ]);
       expect(runtime.clearColdStartCalls, 0);
 
       await controller.persistColdStart(const []);
@@ -301,6 +312,7 @@ class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   final Map<String, DateTime> runningNodes = {};
   final List<String> startCalls = [];
+  final List<List<String>> startArguments = [];
   final List<String> stopCalls = [];
   final List<bool> startResults = [];
   String? savedManifest;
@@ -331,6 +343,7 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     List<String> arguments = const [],
   }) async {
     startCalls.add(nodeId);
+    startArguments.add(arguments);
     final result = startResults.isEmpty ? true : startResults.removeAt(0);
     if (!result) {
       return false;

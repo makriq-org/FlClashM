@@ -27,6 +27,7 @@ class BuiltInProxyCompiler {
   CompiledBuiltInProxyNodes compile({
     required Map<String, dynamic> rawConfig,
     required ClashConfig patchConfig,
+    Map<String, String> selectedMap = const {},
   }) {
     final normalizedConfig = _cloneConfig(rawConfig);
     final proxyEntries = normalizedConfig['proxies'];
@@ -78,7 +79,11 @@ class BuiltInProxyCompiler {
 
     return CompiledBuiltInProxyNodes(
       config: normalizedConfig,
-      nodes: compiledNodes,
+      nodes: _filterActiveNodes(
+        config: normalizedConfig,
+        nodes: compiledNodes,
+        selectedMap: selectedMap,
+      ),
     );
   }
 
@@ -103,6 +108,140 @@ class BuiltInProxyCompiler {
       type: type,
       rawConfig: normalizedProxy,
     );
+  }
+
+  List<BuiltInProxyNodePlan> _filterActiveNodes({
+    required Map<String, dynamic> config,
+    required List<BuiltInProxyNodePlan> nodes,
+    required Map<String, String> selectedMap,
+  }) {
+    if (nodes.length < 2) {
+      return nodes;
+    }
+
+    final activeProxyNames = _resolveActiveProxyNames(
+      config: config,
+      selectedMap: selectedMap,
+    );
+    if (activeProxyNames == null) {
+      return nodes;
+    }
+
+    return nodes
+        .where((node) => activeProxyNames.contains(node.name))
+        .toList(growable: false);
+  }
+
+  Set<String>? _resolveActiveProxyNames({
+    required Map<String, dynamic> config,
+    required Map<String, String> selectedMap,
+  }) {
+    final proxyNames = _collectProxyNames(config['proxies']);
+    final groups = _collectProxyGroups(config['proxy-groups']);
+    if (proxyNames.isEmpty || groups.isEmpty) {
+      return null;
+    }
+
+    final routeTargets = _collectRouteTargets(
+      rules: config['rules'],
+      proxyNames: proxyNames,
+      groupNames: groups.keys.toSet(),
+    );
+    if (routeTargets.isEmpty) {
+      return null;
+    }
+
+    final activeProxyNames = <String>{};
+    final visitedGroups = <String>{};
+
+    void visit(String name) {
+      if (proxyNames.contains(name)) {
+        activeProxyNames.add(name);
+        return;
+      }
+
+      final group = groups[name];
+      if (group == null || !visitedGroups.add(name)) {
+        return;
+      }
+
+      final proxies = _stringList(group['proxies']);
+      if (proxies.isEmpty) {
+        return;
+      }
+
+      final type = (_trimmedString(group['type']) ?? '').toLowerCase();
+      if (type == 'select' || type == 'selector') {
+        final selected = selectedMap[name];
+        final selectedProxy = selected != null && proxies.contains(selected)
+            ? selected
+            : proxies.first;
+        visit(selectedProxy);
+        return;
+      }
+
+      proxies.forEach(visit);
+    }
+
+    routeTargets.forEach(visit);
+
+    return activeProxyNames.isEmpty ? null : activeProxyNames;
+  }
+
+  Set<String> _collectProxyNames(dynamic proxies) {
+    if (proxies is! List) {
+      return const {};
+    }
+
+    return {
+      for (final proxy in proxies)
+        if (proxy is Map)
+          if (_trimmedString(_asStringKeyedMap(proxy)['name']) case final name?)
+            name,
+    };
+  }
+
+  Map<String, Map<String, dynamic>> _collectProxyGroups(dynamic proxyGroups) {
+    if (proxyGroups is! List) {
+      return const {};
+    }
+
+    return {
+      for (final group in proxyGroups)
+        if (group is Map)
+          if (_trimmedString(_asStringKeyedMap(group)['name']) case final name?)
+            name: _asStringKeyedMap(group),
+    };
+  }
+
+  Set<String> _collectRouteTargets({
+    required dynamic rules,
+    required Set<String> proxyNames,
+    required Set<String> groupNames,
+  }) {
+    if (rules is! List) {
+      return const {};
+    }
+
+    final knownTargets = {...proxyNames, ...groupNames};
+    final targets = <String>{};
+    for (final rule in rules) {
+      if (rule is! String) {
+        continue;
+      }
+      final parts = rule
+          .split(',')
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .toList(growable: false);
+      for (final part in parts.reversed) {
+        if (knownTargets.contains(part)) {
+          targets.add(part);
+          break;
+        }
+      }
+    }
+    return targets;
   }
 
   BuiltInProxyNodePlan _buildPlan({
@@ -199,11 +338,13 @@ class BuiltInProxyCompiler {
     }
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
-        rawConfig.containsKey('port')) {
+        rawConfig.containsKey('port') ||
+        rawConfig.containsKey('data')) {
       throw const FormatException(
-        'olcrtc built-in nodes must not override `listen`, `server`, or `port`; those are owned by the client local-node contract.',
+        'olcrtc built-in nodes must not override `listen`, `server`, `port`, or `data`; those are owned by the client local-node contract.',
       );
     }
+    rawConfig['data'] = 'data';
 
     final mode = _trimmedString(rawConfig['mode']);
     if (mode != null && mode.toLowerCase() != 'cnc') {
