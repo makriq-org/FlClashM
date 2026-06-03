@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flclashm/clash/clash.dart';
@@ -327,20 +328,15 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
     }
 
-    var builtInNodesStarted = false;
     var listenerStarted = false;
     var vpnStartAttempted = false;
 
     try {
-      builtInNodesStarted = await builtInProxySupervisor.start();
-      if (!builtInNodesStarted) {
-        return false;
-      }
-
       await core.startListener();
       listenerStarted = true;
 
       if (await readStartTime() != null) {
+        _startBuiltInProxyNodesInBackground();
         return true;
       }
 
@@ -352,11 +348,12 @@ class MihomoEngineAdapter implements EngineAdapter {
         ),
       );
       if (started) {
+        _startBuiltInProxyNodesInBackground();
         return true;
       }
     } catch (e, stackTrace) {
       final rollbackFailure = await _rollbackFailedStart(
-        builtInNodesStarted: builtInNodesStarted,
+        builtInNodesStarted: false,
         listenerStarted: listenerStarted,
         vpnStartAttempted: vpnStartAttempted,
       );
@@ -373,7 +370,7 @@ class MihomoEngineAdapter implements EngineAdapter {
     }
 
     final rollbackFailure = await _rollbackFailedStart(
-      builtInNodesStarted: builtInNodesStarted,
+      builtInNodesStarted: false,
       listenerStarted: listenerStarted,
       vpnStartAttempted: vpnStartAttempted,
     );
@@ -387,6 +384,20 @@ class MihomoEngineAdapter implements EngineAdapter {
       );
     }
     return false;
+  }
+
+  void _startBuiltInProxyNodesInBackground() {
+    // Auto-probing helpers can take longer than VPN setup. They must not block
+    // the main tunnel from becoming usable.
+    unawaited(
+      builtInProxySupervisor.start().then((started) {
+        if (!started) {
+          commonPrint.log('Built-in proxy nodes did not start.');
+        }
+      }).catchError((Object e, StackTrace s) {
+        commonPrint.log('Failed to start built-in proxy nodes: $e');
+      }),
+    );
   }
 
   @override

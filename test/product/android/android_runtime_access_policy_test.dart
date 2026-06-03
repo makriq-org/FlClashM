@@ -28,6 +28,68 @@ void main() {
       });
     });
 
+    test('forces self package bypass when access control is disabled', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"dns-hijack":["any:53"]}',
+        accessControl: const AccessControl(),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['accessControl'], {
+        'mode': 'rejectSelected',
+        'acceptList': <String>[],
+        'rejectList': ['com.makriq.flclash.dev'],
+      });
+    });
+
+    test('keeps self package out of include mode', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"dns-hijack":["any:53"]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.example.app', 'com.makriq.flclash.dev'],
+        ),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['accessControl'], {
+        'mode': 'acceptSelected',
+        'acceptList': ['com.example.app'],
+        'rejectList': <String>[],
+      });
+    });
+
+    test('adds self package to reject mode', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"dns-hijack":["any:53"]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.example.blocked'],
+        ),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['accessControl'], {
+        'mode': 'rejectSelected',
+        'acceptList': <String>[],
+        'rejectList': ['com.example.blocked', 'com.makriq.flclash.dev'],
+      });
+    });
+
     test('aborts and requests restart after successful authorization',
         () async {
       var restarted = false;

@@ -176,6 +176,39 @@ void main() {
         '-1',
       ]);
     });
+
+    test('starts bundled fallback when auto strategy check fails', () async {
+      final controller = buildController();
+      final plan = _buildAutoPlan();
+      checkResults.addAll([false, false]);
+
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+      await controller.commitStagedRuntimePlan();
+
+      expect(await controller.startNodes([plan]), isTrue);
+      expect(runtime.runningNodes.keys, ['byedpi-a']);
+      expect(runtime.startArguments.last, [
+        '--ip',
+        '127.0.0.1',
+        '--port',
+        '35610',
+        '--disorder',
+        '1',
+        '--auto=torst',
+        '--tlsrec',
+        '1+s',
+      ]);
+
+      final cache = File('${sharedLayout.nodesDirectoryPath}/byedpi-a/'
+          'strategy-cache.json');
+      expect(
+        json.decode(await cache.readAsString())['strategy'],
+        '--disorder 1 --auto=torst --tlsrec 1+s',
+      );
+    });
   });
 }
 

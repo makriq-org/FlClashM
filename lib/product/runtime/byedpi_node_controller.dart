@@ -26,6 +26,10 @@ typedef ByedpiSiteCheckCallback = Future<bool> Function({
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
 
+const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
+const _byedpiAutoMaxProbeCount = 4;
+const _byedpiAutoProbeTimeout = Duration(seconds: 1);
+
 @immutable
 class ByedpiSharedInstallLayout {
   const ByedpiSharedInstallLayout({
@@ -226,6 +230,7 @@ class _ByedpiConfig {
 
   _ByedpiConfig copyWith({
     int? listenPort,
+    Duration? timeout,
   }) =>
       _ByedpiConfig(
         mode: mode,
@@ -236,7 +241,7 @@ class _ByedpiConfig {
         strategyList: strategyList,
         testUrls: testUrls,
         testSni: testSni,
-        timeout: timeout,
+        timeout: timeout ?? this.timeout,
         requests: requests,
         concurrency: concurrency,
         minSuccessRatio: minSuccessRatio,
@@ -472,24 +477,41 @@ class ByedpiNodeController {
     final sharedLayout = await binary.resolveSharedInstallLayout();
     final startedNodes = <BuiltInProxyNodePlan>[];
     try {
-      for (final plan in plans) {
-        final alreadyRunning =
-            await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
-        if (!alreadyRunning) {
-          final started = await _startPlan(sharedLayout, plan);
-          if (!started) {
-            await _stopStartedNodes(startedNodes);
-            return false;
-          }
-          startedNodes.add(plan);
-        }
-        await waitForListener(plan.listenHost, plan.listenPort);
+      final started = await Future.wait([
+        for (final plan in plans)
+          _startNodePlan(
+            sharedLayout: sharedLayout,
+            plan: plan,
+            startedNodes: startedNodes,
+          ),
+      ]);
+      if (started.every((value) => value)) {
+        return true;
       }
-      return true;
+      await _stopStartedNodes(startedNodes);
+      return false;
     } catch (e, stackTrace) {
       await _stopStartedNodes(startedNodes);
       Error.throwWithStackTrace(e, stackTrace);
     }
+  }
+
+  Future<bool> _startNodePlan({
+    required ByedpiSharedInstallLayout sharedLayout,
+    required BuiltInProxyNodePlan plan,
+    required List<BuiltInProxyNodePlan> startedNodes,
+  }) async {
+    final alreadyRunning =
+        await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
+    if (!alreadyRunning) {
+      final started = await _startPlan(sharedLayout, plan);
+      if (!started) {
+        return false;
+      }
+      startedNodes.add(plan);
+    }
+    await waitForListener(plan.listenHost, plan.listenPort);
+    return true;
   }
 
   Future<void> stopNodes(List<BuiltInProxyNodePlan> plans) async {
@@ -659,7 +681,25 @@ class ByedpiNodeController {
       return _startWithStrategy(sharedLayout, plan, config, cached.strategy);
     }
 
-    throw StateError('byedpi node `${plan.name}` could not select strategy.');
+    commonPrint.log(
+      'byedpi node `${plan.name}` did not select a strategy quickly; '
+      'using bundled fallback.',
+    );
+    await _writeCache(
+      layout,
+      _ByedpiStrategyCache(
+        fingerprint: fingerprint,
+        strategy: _byedpiAutoFallbackStrategy,
+        checkedAt: now(),
+        failures: 0,
+      ),
+    );
+    return _startWithStrategy(
+      sharedLayout,
+      plan,
+      config,
+      _byedpiAutoFallbackStrategy,
+    );
   }
 
   Future<List<String>?> _resolveColdStartArguments(
@@ -683,9 +723,12 @@ class ByedpiNodeController {
     _ByedpiConfig config,
     List<String> strategies,
   ) async {
-    for (final strategy in strategies) {
+    for (final strategy in strategies.take(_byedpiAutoMaxProbeCount)) {
       final probePort = await allocateProbePort();
-      final probeConfig = config.copyWith(listenPort: probePort);
+      final probeConfig = config.copyWith(
+        listenPort: probePort,
+        timeout: _shorterDuration(config.timeout, _byedpiAutoProbeTimeout),
+      );
       final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
       final started = await _startWithStrategy(
         sharedLayout,
@@ -809,6 +852,9 @@ class ByedpiNodeController {
         .where((line) => line.isNotEmpty && !line.startsWith('#'))
         .toList(growable: false);
   }
+
+  Duration _shorterDuration(Duration left, Duration right) =>
+      left <= right ? left : right;
 
   Future<_ByedpiConfig> _readNodeConfig(
     BuiltInProxyNodePlan plan,

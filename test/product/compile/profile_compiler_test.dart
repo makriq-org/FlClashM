@@ -594,7 +594,7 @@ void main() {
     });
 
     test(
-        'starts only selected built-in proxy nodes from selector route while keeping full core config',
+        'keeps all built-in proxy runtime nodes from selector route with full core config',
         () async {
       const profile = Profile(
         id: 'profile-selected-built-in',
@@ -678,11 +678,19 @@ void main() {
       );
 
       expect(runtimePlan.config['proxies'], hasLength(3));
-      expect(runtimePlan.builtInProxyNodes, hasLength(1));
-      expect(runtimePlan.builtInProxyNodes.single.name, 'OLC Local');
-      expect(runtimePlan.files.keys, [
-        'built-in-proxies/olcrtc/${runtimePlan.builtInProxyNodes.single.nodeId}/config.yaml',
+      expect(runtimePlan.builtInProxyNodes.map((node) => node.name), [
+        'NaiveProxy Local',
+        'ByeDPI Local',
+        'OLC Local',
       ]);
+      expect(
+        runtimePlan.files.keys,
+        containsAll([
+          'built-in-proxies/naiveproxy/${runtimePlan.builtInProxyNodes[0].nodeId}/config.json',
+          'built-in-proxies/byedpi/${runtimePlan.builtInProxyNodes[1].nodeId}/config.json',
+          'built-in-proxies/olcrtc/${runtimePlan.builtInProxyNodes[2].nodeId}/config.yaml',
+        ]),
+      );
     });
 
     test('skips reserved runtime ports when allocating naiveproxy listeners',

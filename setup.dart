@@ -935,11 +935,41 @@ String? _resolveNixAapt2Override() {
     return null;
   }
 
-  final candidate = File(_join(sdkRoot, 'build-tools', '34.0.0', 'aapt2'));
-  if (!candidate.existsSync()) {
+  final buildToolsDir = Directory(_join(sdkRoot, 'build-tools'));
+  if (!buildToolsDir.existsSync()) {
     return null;
   }
-  return candidate.path;
+
+  final candidates = buildToolsDir
+      .listSync()
+      .whereType<Directory>()
+      .map((dir) => File(_join(dir.path, 'aapt2')))
+      .where((file) => file.existsSync())
+      .toList()
+    ..sort((a, b) => _compareVersionPath(a.parent.path, b.parent.path));
+  return candidates.isEmpty ? null : candidates.last.path;
+}
+
+int _compareVersionPath(String left, String right) {
+  final leftParts = _basename(left)
+      .split('.')
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList();
+  final rightParts = _basename(right)
+      .split('.')
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList();
+  final length = leftParts.length > rightParts.length
+      ? leftParts.length
+      : rightParts.length;
+  for (var i = 0; i < length; i++) {
+    final diff = (i < leftParts.length ? leftParts[i] : 0) -
+        (i < rightParts.length ? rightParts[i] : 0);
+    if (diff != 0) {
+      return diff;
+    }
+  }
+  return 0;
 }
 
 Future<void> _exec(

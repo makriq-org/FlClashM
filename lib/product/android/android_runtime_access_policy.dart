@@ -35,7 +35,11 @@ abstract interface class RuntimeAccessPlatformBridge {
 }
 
 class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
-  const AndroidRuntimeAccessPolicy();
+  const AndroidRuntimeAccessPolicy({
+    this.selfPackageNames = const [packageName, '$packageName.dev'],
+  });
+
+  final List<String> selfPackageNames;
 
   @override
   Future<List<Package>> readPackages() async => await app?.getPackages() ?? [];
@@ -52,18 +56,19 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     if (optionsJson.isEmpty) {
       return optionsJson;
     }
+    final hardenedAccessControl = _withSelfBypass(accessControl);
 
     try {
       return json.encode(
         (json.decode(optionsJson) as Map<String, dynamic>)
           ..remove('accessControl')
           ..addAll(
-            accessControl.enable
+            hardenedAccessControl.enable
                 ? {
                     'accessControl': {
-                      'mode': accessControl.mode.name,
-                      'acceptList': accessControl.acceptList,
-                      'rejectList': accessControl.rejectList,
+                      'mode': hardenedAccessControl.mode.name,
+                      'acceptList': hardenedAccessControl.acceptList,
+                      'rejectList': hardenedAccessControl.rejectList,
                     },
                   }
                 : const {},
@@ -82,6 +87,38 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
       accessControl: accessControl,
     );
     return await vpn?.start(optionsJson: mergedOptions) ?? false;
+  }
+
+  AccessControl _withSelfBypass(AccessControl accessControl) {
+    final selfPackages = selfPackageNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    if (selfPackages.isEmpty) {
+      return accessControl;
+    }
+
+    if (!accessControl.enable) {
+      return accessControl.copyWith(
+        enable: true,
+        mode: AccessControlMode.rejectSelected,
+        rejectList: selfPackages.toList(growable: false),
+      );
+    }
+
+    return switch (accessControl.mode) {
+      AccessControlMode.acceptSelected => accessControl.copyWith(
+          acceptList: accessControl.acceptList
+              .where((name) => !selfPackages.contains(name))
+              .toList(growable: false),
+        ),
+      AccessControlMode.rejectSelected => accessControl.copyWith(
+          rejectList: {
+            ...accessControl.rejectList,
+            ...selfPackages,
+          }.toList(growable: false),
+        ),
+    };
   }
 
   @override

@@ -345,9 +345,10 @@ class FlVpnService : VpnService(), IBaseService {
                 if (allExclude.isNotEmpty()) {
                     GlobalState.log("Access control: include-package active, exclude-package ignored (Android limitation)")
                 }
-                allInclude.add(packageName)
+                allInclude.remove(packageName)
                 allInclude.forEach { runCatching { builder.addAllowedApplication(it) } }
             } else if (excludeModeRequested) {
+                allExclude.add(packageName)
                 allExclude.forEach { runCatching { builder.addDisallowedApplication(it) } }
             }
         }

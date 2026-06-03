@@ -144,23 +144,21 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
 
   @override
   Future<bool> start() async {
-    final naiveProxyStarted = await naiveProxy.startNodes(
-      _currentNaiveProxyPlans,
-    );
-    if (!naiveProxyStarted) {
-      return false;
+    try {
+      final started = await Future.wait([
+        naiveProxy.startNodes(_currentNaiveProxyPlans),
+        byedpi.startNodes(_currentByedpiPlans),
+        olcRtc.startNodes(_currentOlcRtcPlans),
+      ]);
+      if (started.every((value) => value)) {
+        return true;
+      }
+    } catch (e, stackTrace) {
+      await stop();
+      Error.throwWithStackTrace(e, stackTrace);
     }
-    final byedpiStarted = await byedpi.startNodes(_currentByedpiPlans);
-    if (!byedpiStarted) {
-      await naiveProxy.stopNodes(_currentNaiveProxyPlans);
-      return false;
-    }
-    final olcRtcStarted = await olcRtc.startNodes(_currentOlcRtcPlans);
-    if (olcRtcStarted) {
-      return true;
-    }
-    await byedpi.stopNodes(_currentByedpiPlans);
-    await naiveProxy.stopNodes(_currentNaiveProxyPlans);
+
+    await stop();
     return false;
   }
 
