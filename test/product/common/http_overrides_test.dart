@@ -54,4 +54,39 @@ void main() {
       'DIRECT',
     );
   });
+
+  test('FlClashHttpOverrides can force mixed-port for runtime IP checks', () {
+    globalState.appState = globalState.appState.copyWith(runTime: 1);
+
+    expect(
+      FlClashHttpOverrides.handleFindProxy(
+        Uri.parse('https://example.com'),
+        forceMixedPort: true,
+      ),
+      'PROXY localhost:7890',
+    );
+    expect(
+      FlClashHttpOverrides.handleFindProxy(
+        Uri.parse('http://127.0.0.1:9090'),
+        forceMixedPort: true,
+      ),
+      'DIRECT',
+    );
+  });
+
+  test('FlClashHttpOverrides does not force disabled mixed-port', () {
+    globalState
+      ..appState = globalState.appState.copyWith(runTime: 1)
+      ..config = globalState.config.copyWith(
+        patchClashConfig: const ClashConfig(mixedPort: 0),
+      );
+
+    expect(
+      FlClashHttpOverrides.handleFindProxy(
+        Uri.parse('https://example.com'),
+        forceMixedPort: true,
+      ),
+      'DIRECT',
+    );
+  });
 }

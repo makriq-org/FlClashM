@@ -16,12 +16,19 @@ class FlClashHttpOverrides extends HttpOverrides {
     return address?.isLoopback ?? false;
   }
 
-  static String handleFindProxy(Uri url) {
+  static String handleFindProxy(
+    Uri url, {
+    bool forceMixedPort = false,
+  }) {
     if (_isLoopbackHost(url.host)) {
       return "DIRECT";
     }
     final isStart = globalState.appState.runTime != null;
     if (!isStart) return "DIRECT";
+    final port = globalState.config.patchClashConfig.mixedPort;
+    if (forceMixedPort) {
+      return port == 0 ? "DIRECT" : "PROXY localhost:$port";
+    }
     // When TUN is handling traffic, let the OS network stack send the request
     // so it gets captured by TUN and processed by the core via rules. This
     // avoids depending on the mixed-port inbound at all, which removes issues
@@ -40,7 +47,6 @@ class FlClashHttpOverrides extends HttpOverrides {
     if (tunHandlesTraffic) {
       return "DIRECT";
     }
-    final port = globalState.config.patchClashConfig.mixedPort;
     if (port == 0) {
       // Mixed-port is disabled and TUN isn't handling traffic — we have no
       // inbound to route through. Go DIRECT; at worst the request leaks, but

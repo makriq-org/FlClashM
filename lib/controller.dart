@@ -36,6 +36,7 @@ class AppController {
   Future<bool>? _setupClashConfigFuture;
   ClashConfig? _lastAppliedPatchConfig;
   bool _applyProfileAgain = false;
+  DateTime? _lastRuntimeGroupsSync;
 
   void setupClashConfigDebounce() {
     debouncer.call(FunctionTag.setupClashConfig, () async {
@@ -191,6 +192,7 @@ class AppController {
       await StatusBarManager.updateIcon(isConnected: true);
     }
 
+    _lastRuntimeGroupsSync = null;
     startRunTimeTimer();
     if (!checkProfileModified) {
       return;
@@ -215,6 +217,7 @@ class AppController {
     }
 
     stopRunTimeTimer();
+    _lastRuntimeGroupsSync = null;
     clashCore.resetTraffic();
     _ref.read(trafficsProvider.notifier).clear();
     _ref.read(totalTrafficProvider.notifier).value = Traffic();
@@ -253,6 +256,20 @@ class AppController {
     _ref.read(trafficsProvider.notifier).addTraffic(traffic);
     _ref.read(totalTrafficProvider.notifier).value =
         await clashCore.getTotalTraffic();
+    await _syncRuntimeGroupsForNotification();
+  }
+
+  Future<void> _syncRuntimeGroupsForNotification() async {
+    if (!Platform.isAndroid || !_ref.read(runTimeProvider.notifier).isStart) {
+      return;
+    }
+    final now = DateTime.now();
+    final lastSync = _lastRuntimeGroupsSync;
+    if (lastSync != null && now.difference(lastSync).inSeconds < 6) {
+      return;
+    }
+    _lastRuntimeGroupsSync = now;
+    await updateGroups(syncNotification: true);
   }
 
   void markRuntimeConfigListenerReady() {
@@ -854,7 +871,7 @@ class AppController {
     }
   }
 
-  Future<void> updateGroups() async {
+  Future<void> updateGroups({bool syncNotification = false}) async {
     try {
       final newGroups = await retry(
         task: () async => clashCore.getProxiesGroups(),
@@ -865,6 +882,9 @@ class AppController {
         _ref.read(groupsProvider.notifier).value = newGroups;
         _ref.read(versionProvider.notifier).value =
             _ref.read(versionProvider) + 1;
+        if (syncNotification) {
+          await syncAndroidForegroundNotification();
+        }
       } else {
         commonPrint.log(
           "updateGroups: received empty groups, keeping old state",

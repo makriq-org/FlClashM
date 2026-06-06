@@ -28,9 +28,22 @@ class Request {
       };
       return client;
     });
+    _ipDio = Dio();
+    _ipDio.httpClientAdapter = IOHttpClientAdapter(createHttpClient: () {
+      final client = HttpClient();
+      client.findProxy = (uri) {
+        client.userAgent = globalState.ua;
+        return FlClashHttpOverrides.handleFindProxy(
+          uri,
+          forceMixedPort: true,
+        );
+      };
+      return client;
+    });
   }
   late final Dio _dio;
   late final Dio _clashDio;
+  late final Dio _ipDio;
   String? userAgent;
 
   Future<Response<Uint8List>> getFileResponseForUrl(
@@ -169,7 +182,7 @@ class Request {
     var failureCount = 0;
     final futures = _ipInfoSources.entries.map((source) async {
       final completer = Completer<Result<IpInfo?>>();
-      final future = _clashDio.get<Map<String, dynamic>>(
+      final future = _ipDio.get<Map<String, dynamic>>(
         source.key,
         cancelToken: cancelToken,
         options: Options(
