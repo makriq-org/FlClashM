@@ -14,6 +14,11 @@ abstract interface class BuiltInProxySupervisor {
 
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans);
 
+  Future<bool> startRuntimePlan(
+    List<BuiltInProxyNodePlan> plans, {
+    bool stopAllOnFailure = true,
+  });
+
   Future<bool> start();
 
   Future<void> stop();
@@ -143,43 +148,55 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
-  Future<bool> start() async {
+  Future<bool> startRuntimePlan(
+    List<BuiltInProxyNodePlan> plans, {
+    bool stopAllOnFailure = true,
+  }) async {
     try {
       final started = await Future.wait([
-        naiveProxy.startNodes(_currentNaiveProxyPlans),
-        byedpi.startNodes(_currentByedpiPlans),
-        olcRtc.startNodes(_currentOlcRtcPlans),
+        naiveProxy.startNodes(_filterNaiveProxyPlans(plans)),
+        byedpi.startNodes(_filterByedpiPlans(plans)),
+        olcRtc.startNodes(_filterOlcRtcPlans(plans)),
       ]);
       if (started.every((value) => value)) {
         return true;
       }
     } catch (e, stackTrace) {
-      await stop();
+      if (stopAllOnFailure) {
+        await _stopRuntimePlan(plans);
+      }
       Error.throwWithStackTrace(e, stackTrace);
     }
 
-    await stop();
+    if (stopAllOnFailure) {
+      await _stopRuntimePlan(plans);
+    }
     return false;
   }
 
   @override
-  Future<void> stop() async {
+  Future<bool> start() => startRuntimePlan(_currentPlans);
+
+  @override
+  Future<void> stop() => _stopRuntimePlan(_currentPlans);
+
+  Future<void> _stopRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     Object? error;
     StackTrace? stackTrace;
     try {
-      await olcRtc.stopNodes(_currentOlcRtcPlans);
+      await olcRtc.stopNodes(_filterOlcRtcPlans(plans));
     } catch (e, s) {
       error ??= e;
       stackTrace ??= s;
     }
     try {
-      await byedpi.stopNodes(_currentByedpiPlans);
+      await byedpi.stopNodes(_filterByedpiPlans(plans));
     } catch (e, s) {
       error ??= e;
       stackTrace ??= s;
     }
     try {
-      await naiveProxy.stopNodes(_currentNaiveProxyPlans);
+      await naiveProxy.stopNodes(_filterNaiveProxyPlans(plans));
     } catch (e, s) {
       error ??= e;
       stackTrace ??= s;

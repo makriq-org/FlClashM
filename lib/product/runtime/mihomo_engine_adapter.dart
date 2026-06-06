@@ -8,6 +8,7 @@ import 'package:flclashm/models/models.dart';
 import '../compile/product_compile.dart';
 import '../services/product_services.dart';
 import 'built_in_proxy_supervisor.dart';
+import 'built_in_proxy_types.dart';
 import 'engine_adapter.dart';
 
 typedef ReadAccessControlCallback = AccessControl Function();
@@ -298,6 +299,18 @@ class MihomoEngineAdapter implements EngineAdapter {
       return stageMessage;
     }
 
+    final startMessage = await _startBuiltInProxyNodes(
+      runtimePlan.builtInProxyNodes,
+    );
+    if (startMessage.isNotEmpty) {
+      final rollbackMessage =
+          await builtInProxySupervisor.rollbackStagedRuntimePlan();
+      if (rollbackMessage.isEmpty) {
+        return startMessage;
+      }
+      return '$startMessage Local-node rollback failed: $rollbackMessage';
+    }
+
     final message = await core.setupRuntimePlan(runtimePlan);
     if (message.isEmpty) {
       await builtInProxySupervisor.commitStagedRuntimePlan(
@@ -387,17 +400,34 @@ class MihomoEngineAdapter implements EngineAdapter {
   }
 
   void _startBuiltInProxyNodesInBackground() {
-    // Auto-probing helpers can take longer than VPN setup. They must not block
-    // the main tunnel from becoming usable.
     unawaited(
-      builtInProxySupervisor.start().then((started) {
-        if (!started) {
-          commonPrint.log('Built-in proxy nodes did not start.');
+      _startBuiltInProxyNodes().then((message) {
+        if (message.isNotEmpty) {
+          commonPrint.log(message);
         }
       }).catchError((Object e, StackTrace s) {
         commonPrint.log('Failed to start built-in proxy nodes: $e');
       }),
     );
+  }
+
+  Future<String> _startBuiltInProxyNodes([
+    List<BuiltInProxyNodePlan>? runtimePlan,
+  ]) async {
+    try {
+      final started = runtimePlan == null
+          ? await builtInProxySupervisor.start()
+          : await builtInProxySupervisor.startRuntimePlan(
+              runtimePlan,
+              stopAllOnFailure: false,
+            );
+      if (started) {
+        return '';
+      }
+      return 'Built-in proxy nodes did not start.';
+    } catch (e) {
+      return 'Failed to start built-in proxy nodes: $e';
+    }
   }
 
   @override

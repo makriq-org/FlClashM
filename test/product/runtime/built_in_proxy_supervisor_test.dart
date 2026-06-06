@@ -122,6 +122,23 @@ void main() {
       expect(nodes.map((node) => node['type']), ['naiveproxy', 'olcrtc']);
     });
 
+    test('lets staged setup handle rollback after start failure', () async {
+      final supervisor = buildSupervisor();
+      final naivePlan = _buildNaivePlan();
+      final olcPlan = _buildOlcPlan();
+      runtime.startResults.addAll([true, false]);
+
+      final started = await supervisor.startRuntimePlan(
+        [naivePlan, olcPlan],
+        stopAllOnFailure: false,
+      );
+
+      expect(started, isFalse);
+      expect(runtime.startCalls, ['naive-a', 'olc-a']);
+      expect(runtime.stopCalls, isEmpty);
+      expect(runtime.runningNodes.keys, contains('naive-a'));
+    });
+
     test('rolls naiveproxy stage back when olcrtc stage fails', () async {
       final supervisor = buildSupervisor();
       final currentNaive = _buildNaivePlan(proxy: 'https://old.example');

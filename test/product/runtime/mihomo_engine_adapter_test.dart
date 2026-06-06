@@ -14,6 +14,7 @@ void main() {
     late _FakeMihomoPlatformBridge platform;
     late _FakeMihomoUpdateBridge update;
     late _FakeBuiltInProxySupervisor builtInProxySupervisor;
+    late List<String> callOrder;
     late Directory tempDir;
 
     MihomoEngineAdapter buildAdapter({
@@ -30,9 +31,12 @@ void main() {
 
     setUp(() async {
       core = _FakeMihomoCoreBridge();
+      callOrder = [];
+      core.callOrder = callOrder;
       lifecycle = _FakeMihomoLifecycleBridge();
       platform = _FakeMihomoPlatformBridge();
       builtInProxySupervisor = _FakeBuiltInProxySupervisor();
+      builtInProxySupervisor.callOrder = callOrder;
       tempDir = await Directory.systemTemp.createTemp('flclashm-mihomo-');
       update = _FakeMihomoUpdateBridge(
         corePath: '${tempDir.path}/FlClashCore',
@@ -170,7 +174,51 @@ void main() {
       expect(core.setupRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.stageCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 1);
+      expect(builtInProxySupervisor.startCalls, 1);
       expect(builtInProxySupervisor.rollbackCalls, 0);
+      expect(callOrder, [
+        'stageLocalNodes',
+        'startLocalNodes',
+        'setupCore',
+        'commitLocalNodes',
+      ]);
+    });
+
+    test('reports built-in proxy start failure during runtime plan setup',
+        () async {
+      builtInProxySupervisor.startResult = false;
+      final adapter = buildAdapter();
+      const runtimePlan = RuntimePlan(
+        config: {},
+        selectedMap: {},
+        testUrl: 'https://example.com',
+        builtInProxyNodes: [
+          BuiltInProxyNodePlan(
+            nodeId: 'node-a',
+            name: 'Node A',
+            type: BuiltInProxyType.byedpi,
+            listenHost: '127.0.0.1',
+            listenPort: 35010,
+            protocol: BuiltInProxyProtocol.socks5,
+            udp: false,
+          ),
+        ],
+        metadata: null,
+      );
+
+      final message = await adapter.setupRuntimePlan(runtimePlan);
+
+      expect(message, contains('Built-in proxy nodes did not start'));
+      expect(core.setupRuntimePlanCalls, 0);
+      expect(builtInProxySupervisor.stageCalls, 1);
+      expect(builtInProxySupervisor.commitCalls, 0);
+      expect(builtInProxySupervisor.startCalls, 1);
+      expect(builtInProxySupervisor.rollbackCalls, 1);
+      expect(callOrder, [
+        'stageLocalNodes',
+        'startLocalNodes',
+        'rollbackLocalNodes',
+      ]);
     });
 
     test('rolls staged built-in nodes back when core setup fails', () async {
@@ -268,7 +316,10 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   int stageCalls = 0;
   int commitCalls = 0;
   int rollbackCalls = 0;
+  int startCalls = 0;
   int persistColdStartCalls = 0;
+  bool startResult = true;
+  List<String>? callOrder;
 
   @override
   Future<void> applyPendingUpdate() async {
@@ -281,22 +332,35 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     stageCalls++;
+    callOrder?.add('stageLocalNodes');
     return '';
   }
 
   @override
   Future<String> rollbackStagedRuntimePlan() async {
     rollbackCalls++;
+    callOrder?.add('rollbackLocalNodes');
     return '';
   }
 
   @override
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     commitCalls++;
+    callOrder?.add('commitLocalNodes');
   }
 
   @override
-  Future<bool> start() async => true;
+  Future<bool> startRuntimePlan(
+    List<BuiltInProxyNodePlan> plans, {
+    bool stopAllOnFailure = true,
+  }) async {
+    startCalls++;
+    callOrder?.add('startLocalNodes');
+    return startResult;
+  }
+
+  @override
+  Future<bool> start() async => startRuntimePlan(const []);
 
   @override
   Future<void> stop() async {}
@@ -318,6 +382,7 @@ class _FakeMihomoCoreBridge implements MihomoCoreBridge {
   int setupRuntimePlanCalls = 0;
   int startListenerCalls = 0;
   int stopListenerCalls = 0;
+  List<String>? callOrder;
 
   @override
   Future<void> shutdown() async {
@@ -342,6 +407,7 @@ class _FakeMihomoCoreBridge implements MihomoCoreBridge {
   @override
   Future<String> setupRuntimePlan(RuntimePlan runtimePlan) async {
     setupRuntimePlanCalls++;
+    callOrder?.add('setupCore');
     return setupRuntimePlanMessage;
   }
 
