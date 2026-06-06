@@ -1036,8 +1036,18 @@ class AppController {
   }
 
   Future<void> autoCheckUpdate() async {
+    final appSetting = _ref.read(appSettingProvider);
     await productServices.appUpdate.autoCheck(
-      enabled: _ref.read(appSettingProvider).autoCheckUpdate,
+      enabled: appSetting.autoCheckUpdate,
+      includePrerelease: appSetting.includePrereleaseUpdates,
+      skippedTagName: appSetting.skippedAppUpdateTagName,
+      onSkipRelease: (tagName) async {
+        _ref.read(appSettingProvider.notifier).updateState(
+              (state) => state.copyWith(
+                skippedAppUpdateTagName: tagName,
+              ),
+            );
+      },
     );
   }
 

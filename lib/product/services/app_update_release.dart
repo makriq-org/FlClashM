@@ -61,8 +61,9 @@ class AppRelease {
     final rawAssets = json['assets'];
     final assets = rawAssets is List
         ? rawAssets
-            .whereType<Map<String, dynamic>>()
-            .map(ReleaseAsset.fromJson)
+            .whereType<Map>()
+            .map((item) =>
+                ReleaseAsset.fromJson(Map<String, dynamic>.from(item)))
             .toList()
         : <ReleaseAsset>[];
     return AppRelease(
@@ -190,9 +191,19 @@ Future<String> computeFileSha256(File file) async {
 }
 
 AppRelease? selectLatestStableRelease(Iterable<AppRelease> releases) {
+  return selectLatestAppRelease(
+    releases,
+    includePrerelease: false,
+  );
+}
+
+AppRelease? selectLatestAppRelease(
+  Iterable<AppRelease> releases, {
+  required bool includePrerelease,
+}) {
   AppRelease? latestRelease;
   for (final release in releases) {
-    if (release.draft || release.prerelease) {
+    if (release.draft || (!includePrerelease && release.prerelease)) {
       continue;
     }
     if (latestRelease == null ||

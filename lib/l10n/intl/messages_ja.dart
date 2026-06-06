@@ -87,6 +87,12 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCheckUpdateDesc": MessageLookupByLibrary.simpleMessage(
       "起動時に更新を自動チェック",
     ),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage(
+      "プレリリース更新",
+    ),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage(
+      "ベータ版とプレリリース版を表示",
+    ),
     "autoCloseConnections": MessageLookupByLibrary.simpleMessage("接続を自動閉じる"),
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "ノード変更後に接続を自動閉じる",
@@ -188,6 +194,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "doYouWantToPass": MessageLookupByLibrary.simpleMessage("プロファイルを追加中"),
     "domain": MessageLookupByLibrary.simpleMessage("ドメイン"),
     "download": MessageLookupByLibrary.simpleMessage("ダウンロード"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage("更新をダウンロード中"),
     "edit": MessageLookupByLibrary.simpleMessage("編集"),
     "emptyTip": m2,
     "en": MessageLookupByLibrary.simpleMessage("英語"),
@@ -278,6 +285,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "ipv6Desc": MessageLookupByLibrary.simpleMessage("有効化するとIPv6トラフィックを受信可能"),
     "ipv6InboundDesc": MessageLookupByLibrary.simpleMessage("IPv6インバウンドを許可"),
     "ja": MessageLookupByLibrary.simpleMessage("日本語"),
+    "later": MessageLookupByLibrary.simpleMessage("後で"),
     "just": MessageLookupByLibrary.simpleMessage("たった今"),
     "keepAliveIntervalDesc": MessageLookupByLibrary.simpleMessage(
       "TCPキープアライブ間隔",
@@ -521,6 +529,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "shrink": MessageLookupByLibrary.simpleMessage("縮小"),
     "silentLaunch": MessageLookupByLibrary.simpleMessage("バックグラウンド起動"),
     "silentLaunchDesc": MessageLookupByLibrary.simpleMessage("バックグラウンドで起動"),
+    "skipVersion": MessageLookupByLibrary.simpleMessage(
+      "このバージョンをスキップ",
+    ),
     "size": MessageLookupByLibrary.simpleMessage("サイズ"),
     "socksPort": MessageLookupByLibrary.simpleMessage("Socksポート"),
     "sort": MessageLookupByLibrary.simpleMessage("並び替え"),

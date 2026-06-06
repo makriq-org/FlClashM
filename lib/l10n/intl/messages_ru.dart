@@ -113,6 +113,12 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCheckUpdateDesc": MessageLookupByLibrary.simpleMessage(
       "Проверять обновления при запуске",
     ),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage(
+      "Предварительные версии",
+    ),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage(
+      "Показывать предварительные сборки приложения",
+    ),
     "autoCloseConnections": MessageLookupByLibrary.simpleMessage(
       "Автозакрытие соединений",
     ),
@@ -264,6 +270,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "domain": MessageLookupByLibrary.simpleMessage("Домен"),
     "download": MessageLookupByLibrary.simpleMessage("Загрузка"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage(
+      "Скачивание обновления",
+    ),
     "edit": MessageLookupByLibrary.simpleMessage("Редактировать"),
     "emptyTip": m2,
     "en": MessageLookupByLibrary.simpleMessage("Английский"),
@@ -400,6 +409,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Разрешить входящий IPv6",
     ),
     "ja": MessageLookupByLibrary.simpleMessage("Японский"),
+    "later": MessageLookupByLibrary.simpleMessage("Позже"),
     "just": MessageLookupByLibrary.simpleMessage("Только что"),
     "keepAliveIntervalDesc": MessageLookupByLibrary.simpleMessage(
       "Интервал поддержания TCP-соединения",
@@ -737,6 +747,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "silentLaunchDesc": MessageLookupByLibrary.simpleMessage(
       "Запускать в свернутом виде",
     ),
+    "skipVersion": MessageLookupByLibrary.simpleMessage("Пропустить версию"),
     "size": MessageLookupByLibrary.simpleMessage("Размер"),
     "socksPort": MessageLookupByLibrary.simpleMessage("Socks-порт"),
     "sort": MessageLookupByLibrary.simpleMessage("Сортировка"),

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,6 +10,7 @@ import '../../clash/clash.dart';
 import '../../common/common.dart';
 import '../../plugins/app.dart';
 import '../../state.dart';
+import '../../widgets/dialog.dart';
 import '../services/app_update_release.dart';
 
 final Dio _appUpdateDio = Dio(
@@ -23,9 +24,12 @@ final Dio _appUpdateDio = Dio(
 abstract interface class AppUpdatePlatformBridge {
   String get latestReleaseUrl;
 
-  Future<AppRelease?> checkForAppUpdate();
+  Future<AppRelease?> checkForAppUpdate({
+    required bool includePrerelease,
+    required String skippedTagName,
+  });
 
-  Future<bool?> promptForUpdateDownload({
+  Future<AppUpdatePromptAction?> promptForUpdateDownload({
     required AppRelease release,
     required List<String> submits,
   });
@@ -47,6 +51,14 @@ abstract interface class AppUpdatePlatformBridge {
     void Function(int received, int total)? onReceiveProgress,
   });
 
+  Future<T> showDownloadProgress<T>({
+    required AppRelease release,
+    required ReleaseAsset asset,
+    required Future<T> Function(
+      void Function(int received, int total) onReceiveProgress,
+    ) downloadTask,
+  });
+
   Future<String> getUpdateDirectoryPath();
 
   Future<void> prepareInstallHandoff();
@@ -54,6 +66,12 @@ abstract interface class AppUpdatePlatformBridge {
   Future<bool> openReleasePage(String url);
 
   Future<bool> installPackage(String path);
+}
+
+enum AppUpdatePromptAction {
+  download,
+  later,
+  skip,
 }
 
 class AndroidUpdateBridge implements AppUpdatePlatformBridge {
@@ -64,10 +82,13 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
       'https://github.com/$repository/releases/latest';
 
   @override
-  Future<AppRelease?> checkForAppUpdate() async {
+  Future<AppRelease?> checkForAppUpdate({
+    required bool includePrerelease,
+    required String skippedTagName,
+  }) async {
     try {
-      final response = await _appUpdateDio.get<Map<String, dynamic>>(
-        'https://api.github.com/repos/$repository/releases/latest',
+      final response = await _appUpdateDio.get<List<dynamic>>(
+        'https://api.github.com/repos/$repository/releases?per_page=20',
         options: Options(responseType: ResponseType.json),
       );
       final data = response.data;
@@ -75,7 +96,18 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
         return null;
       }
 
-      final release = AppRelease.fromJson(Map<String, dynamic>.from(data));
+      final releases = data
+          .whereType<Map>()
+          .map((item) => AppRelease.fromJson(Map<String, dynamic>.from(item)))
+          .toList(growable: false);
+      final release = selectLatestAppRelease(
+        releases,
+        includePrerelease: includePrerelease,
+      );
+      if (release == null || release.tagName == skippedTagName.trim()) {
+        return null;
+      }
+
       final hasUpdate = utils.compareVersions(
               release.version, globalState.packageInfo.version) >
           0;
@@ -88,23 +120,53 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
 
   @visibleForTesting
   @override
-  Future<bool?> promptForUpdateDownload({
+  Future<AppUpdatePromptAction?> promptForUpdateDownload({
     required AppRelease release,
     required List<String> submits,
   }) async {
     final textTheme = globalState.navigatorKey.currentContext?.textTheme;
-    return globalState.showMessage(
-      title: appLocalizations.discoverNewVersion,
-      message: TextSpan(
-        text: '${release.tagName} \n',
-        style: textTheme?.headlineSmall,
-        children: [
-          TextSpan(text: "\n", style: textTheme?.bodyMedium),
-          for (final submit in submits)
-            TextSpan(text: "- $submit \n", style: textTheme?.bodyMedium),
-        ],
+    return globalState.showCommonDialog<AppUpdatePromptAction>(
+      child: Builder(
+        builder: (context) => CommonDialog(
+          title: appLocalizations.discoverNewVersion,
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(AppUpdatePromptAction.skip);
+              },
+              child: Text(appLocalizations.skipVersion),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(AppUpdatePromptAction.later);
+              },
+              child: Text(appLocalizations.later),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(AppUpdatePromptAction.download);
+              },
+              child: Text(appLocalizations.goDownload),
+            ),
+          ],
+          child: SelectableText.rich(
+            TextSpan(
+              text: '${release.tagName}\n',
+              style: textTheme?.headlineSmall,
+              children: [
+                if (release.prerelease)
+                  TextSpan(
+                    text: '${appLocalizations.includePrereleaseUpdates}\n',
+                    style: textTheme?.labelMedium,
+                  ),
+                TextSpan(text: '\n', style: textTheme?.bodyMedium),
+                for (final submit in submits)
+                  TextSpan(text: '- $submit\n', style: textTheme?.bodyMedium),
+              ],
+            ),
+          ),
+        ),
       ),
-      confirmText: appLocalizations.goDownload,
     );
   }
 
@@ -175,6 +237,63 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     );
   }
 
+  @visibleForTesting
+  @override
+  Future<T> showDownloadProgress<T>({
+    required AppRelease release,
+    required ReleaseAsset asset,
+    required Future<T> Function(
+      void Function(int received, int total) onReceiveProgress,
+    ) downloadTask,
+  }) async {
+    final progress = ValueNotifier<_DownloadProgress>(
+      const _DownloadProgress(received: 0, total: 0),
+    );
+    BuildContext? dialogContext;
+    final dialogFuture = globalState.showCommonDialog<void>(
+      dismissible: false,
+      child: Builder(
+        builder: (context) {
+          dialogContext ??= context;
+          return _UpdateDownloadProgressDialog(
+            release: release,
+            asset: asset,
+            progress: progress,
+          );
+        },
+      ),
+    );
+
+    try {
+      await Future<void>.delayed(Duration.zero);
+      final result = await downloadTask((received, total) {
+        progress.value = _DownloadProgress(
+          received: received,
+          total: total,
+        );
+      });
+      _closeProgressDialog(dialogContext);
+      await dialogFuture;
+      return result;
+    } catch (_) {
+      _closeProgressDialog(dialogContext);
+      await dialogFuture;
+      rethrow;
+    } finally {
+      progress.dispose();
+    }
+  }
+
+  void _closeProgressDialog(BuildContext? context) {
+    if (context == null) {
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
   @override
   Future<String> getUpdateDirectoryPath() async {
     final homeDir = await appPath.homeDirPath;
@@ -237,4 +356,95 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   @override
   Future<bool> installPackage(String path) async =>
       await app?.openFile(path) ?? false;
+}
+
+class _UpdateDownloadProgressDialog extends StatelessWidget {
+  const _UpdateDownloadProgressDialog({
+    required this.release,
+    required this.asset,
+    required this.progress,
+  });
+
+  final AppRelease release;
+  final ReleaseAsset asset;
+  final ValueNotifier<_DownloadProgress> progress;
+
+  @override
+  Widget build(BuildContext context) => CommonDialog(
+        title: appLocalizations.downloadUpdate,
+        overrideScroll: true,
+        child: ValueListenableBuilder<_DownloadProgress>(
+          valueListenable: progress,
+          builder: (context, value, _) {
+            final fraction = value.fraction;
+            final percent = fraction == null
+                ? appLocalizations.download
+                : '${(fraction * 100).clamp(0, 100).toStringAsFixed(0)}%';
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  release.tagName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  asset.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(value: fraction),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(percent),
+                    Text(value.sizeText),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+}
+
+class _DownloadProgress {
+  const _DownloadProgress({
+    required this.received,
+    required this.total,
+  });
+
+  final int received;
+  final int total;
+
+  double? get fraction {
+    if (total <= 0) {
+      return null;
+    }
+    return received / total;
+  }
+
+  String get sizeText {
+    if (total <= 0) {
+      return _formatBytes(received);
+    }
+    return '${_formatBytes(received)} / ${_formatBytes(total)}';
+  }
+
+  static String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    if (unitIndex == 0) {
+      return '${value.toStringAsFixed(0)} ${units[unitIndex]}';
+    }
+    return '${value.toStringAsFixed(1)} ${units[unitIndex]}';
+  }
 }

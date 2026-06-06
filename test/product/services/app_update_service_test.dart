@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flclashm/common/common.dart';
 import 'package:flclashm/product/android/android_update_bridge.dart';
 import 'package:flclashm/product/services/app_update_release.dart';
 import 'package:flclashm/product/services/app_update_service.dart';
@@ -18,7 +19,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   });
 
   final AppRelease? checkResult;
-  final bool? promptResult;
+  final AppUpdatePromptAction? promptResult;
   final List<String> supportedAbis = const ['arm64-v8a'];
   final bool installResult;
   final bool openReleasePageOnError;
@@ -28,6 +29,9 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   int errorCalls = 0;
   int installCalls = 0;
   int prepareCalls = 0;
+  int downloadProgressCalls = 0;
+  final includePrereleaseArgs = <bool>[];
+  final skippedTagNameArgs = <String>[];
   String? lastInstallPath;
   AppRelease? promptedRelease;
   List<String>? promptedSubmits;
@@ -42,13 +46,18 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   String get latestReleaseUrl => 'https://example.com/releases/latest';
 
   @override
-  Future<AppRelease?> checkForAppUpdate() async {
+  Future<AppRelease?> checkForAppUpdate({
+    required bool includePrerelease,
+    required String skippedTagName,
+  }) async {
     checkCalls++;
+    includePrereleaseArgs.add(includePrerelease);
+    skippedTagNameArgs.add(skippedTagName);
     return checkResult;
   }
 
   @override
-  Future<bool?> promptForUpdateDownload({
+  Future<AppUpdatePromptAction?> promptForUpdateDownload({
     required AppRelease release,
     required List<String> submits,
   }) async {
@@ -99,6 +108,18 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   }
 
   @override
+  Future<T> showDownloadProgress<T>({
+    required AppRelease release,
+    required ReleaseAsset asset,
+    required Future<T> Function(
+      void Function(int received, int total) onReceiveProgress,
+    ) downloadTask,
+  }) async {
+    downloadProgressCalls++;
+    return downloadTask((received, total) {});
+  }
+
+  @override
   Future<String> getUpdateDirectoryPath() async => updateDirectoryPath;
 
   @override
@@ -135,16 +156,33 @@ void main() {
       }
     });
 
-    test('skips automatic checks when disabled or pre-release', () async {
+    test('skips automatic checks when disabled', () async {
       final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
       final service = AppUpdateService(platform: bridge);
 
-      await service.autoCheck(enabled: false);
-      globalState.isPre = true;
-      await service.autoCheck(enabled: true);
+      await service.autoCheck(
+        enabled: false,
+        includePrerelease: false,
+        skippedTagName: '',
+      );
 
       expect(bridge.checkCalls, 0);
       expect(bridge.errorCalls, 0);
+    });
+
+    test('passes update channel and skipped tag to automatic checks', () async {
+      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
+      final service = AppUpdateService(platform: bridge);
+
+      await service.autoCheck(
+        enabled: true,
+        includePrerelease: true,
+        skippedTagName: 'v1.2.3',
+      );
+
+      expect(bridge.checkCalls, 1);
+      expect(bridge.includePrereleaseArgs, [true]);
+      expect(bridge.skippedTagNameArgs, ['v1.2.3']);
     });
 
     test('downloads verifies and installs a compatible Android APK', () async {
@@ -168,7 +206,7 @@ void main() {
       final bridge = _FakeUpdateBridge(
         updateDirectoryPath: tempDir.path,
         checkResult: release,
-        promptResult: true,
+        promptResult: AppUpdatePromptAction.download,
       )..assetBytesByUrl['https://example.com/arm64.apk'] = bytes;
       final service = AppUpdateService(platform: bridge);
       final runnerTitles = <String?>[];
@@ -180,6 +218,8 @@ void main() {
 
       await service.manualCheck(
         runTask: runTask,
+        includePrerelease: false,
+        skippedTagName: '',
         loadingTitle: 'Check update',
       );
 
@@ -190,11 +230,12 @@ void main() {
       expect(bridge.promptedRelease?.tagName, 'v1.2.3');
       expect(bridge.promptedSubmits, ['first change', 'second change']);
       expect(bridge.downloadedAssets, ['https://example.com/arm64.apk']);
+      expect(bridge.downloadProgressCalls, 1);
       expect(bridge.prepareCalls, 1);
       expect(bridge.installCalls, 1);
       expect(bridge.lastInstallPath, installedFile.path);
       expect(installedFile.existsSync(), isTrue);
-      expect(runnerTitles, ['Check update', 'Update']);
+      expect(runnerTitles, ['Check update']);
       expect(bridge.installErrorMessage, isNull);
     });
 
@@ -228,7 +269,7 @@ void main() {
       final bridge = _FakeUpdateBridge(
         updateDirectoryPath: tempDir.path,
         checkResult: release,
-        promptResult: true,
+        promptResult: AppUpdatePromptAction.download,
       )..remoteTexts['https://example.com/arm64.apk.sha256'] =
           '$digest  FlClashM-1.2.3-android-arm64-v8a.apk\n';
       final service = AppUpdateService(platform: bridge);
@@ -273,7 +314,7 @@ void main() {
       final bridge = _FakeUpdateBridge(
         updateDirectoryPath: tempDir.path,
         checkResult: release,
-        promptResult: true,
+        promptResult: AppUpdatePromptAction.download,
       )
         ..assetBytesByUrl['https://example.com/arm64.apk'] = bytes
         ..remoteTexts['https://example.com/arm64.apk.sha256'] = '''
@@ -308,6 +349,8 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
 
       await service.manualCheck(
         runTask: runTask,
+        includePrerelease: false,
+        skippedTagName: '',
         loadingTitle: 'Check update',
       );
 
@@ -337,7 +380,7 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
       final bridge = _FakeUpdateBridge(
         updateDirectoryPath: tempDir.path,
         checkResult: release,
-        promptResult: true,
+        promptResult: AppUpdatePromptAction.download,
         openReleasePageOnError: true,
       )..assetBytesByUrl['https://example.com/arm64.apk'] = [1, 2, 3, 4];
       final service = AppUpdateService(platform: bridge);
@@ -392,7 +435,7 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
       final bridge = _FakeUpdateBridge(
         updateDirectoryPath: tempDir.path,
         checkResult: release,
-        promptResult: true,
+        promptResult: AppUpdatePromptAction.download,
         installResult: false,
         openReleasePageOnError: true,
       )..assetBytesByUrl['https://example.com/arm64.apk'] = bytes;
@@ -417,6 +460,71 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
         bridge.openedReleaseUrls,
         ['https://example.com/releases/v1.2.3'],
       );
+    });
+
+    test('skips selected release without downloading', () async {
+      final release = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: 'https://example.com/releases/v1.2.3',
+        assets: const [],
+        prerelease: false,
+        draft: false,
+      );
+      final skippedTags = <String>[];
+      final bridge = _FakeUpdateBridge(
+        updateDirectoryPath: tempDir.path,
+        checkResult: release,
+        promptResult: AppUpdatePromptAction.skip,
+      );
+      final service = AppUpdateService(platform: bridge);
+
+      await service.handleCheckResult(
+        release: release,
+        trigger: AppUpdateCheckTrigger.manual,
+        onSkipRelease: (tagName) async => skippedTags.add(tagName),
+      );
+
+      expect(skippedTags, ['v1.2.3']);
+      expect(bridge.downloadedAssets, isEmpty);
+      expect(bridge.installCalls, 0);
+    });
+
+    test('selects latest pre-release only when requested', () {
+      final stable = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: '',
+        assets: const [],
+        prerelease: false,
+        draft: false,
+      );
+      final preRelease = AppRelease(
+        tagName: 'v1.2.4-pre10',
+        body: '',
+        htmlUrl: '',
+        assets: const [],
+        prerelease: true,
+        draft: false,
+      );
+
+      expect(
+        selectLatestAppRelease(
+          [stable, preRelease],
+          includePrerelease: false,
+        )?.tagName,
+        'v1.2.3',
+      );
+      expect(
+        selectLatestAppRelease(
+          [stable, preRelease],
+          includePrerelease: true,
+        )?.tagName,
+        'v1.2.4-pre10',
+      );
+      expect(
+          utils.compareVersions('1.2.4-pre10', '1.2.4-pre4'), greaterThan(0));
+      expect(utils.compareVersions('1.2.4', '1.2.4-pre10'), greaterThan(0));
     });
   });
 }

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flclashm/common/common.dart';
 import 'package:flclashm/product/services/product_services.dart';
+import 'package:flclashm/providers/config.dart';
 import 'package:flclashm/state.dart';
 import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
 class Contributor {
@@ -30,14 +32,15 @@ class ThanksPerson {
   final String name;
 }
 
-class AboutView extends StatelessWidget {
+class AboutView extends ConsumerWidget {
   const AboutView({super.key});
 
-  Future<void> _checkUpdate(BuildContext context) async {
+  Future<void> _checkUpdate(BuildContext context, WidgetRef ref) async {
     final commonScaffoldState = context.commonScaffoldState;
     if (commonScaffoldState?.mounted != true) {
       return;
     }
+    final appSetting = ref.read(appSettingProvider);
     Future<T?> runTask<T>(Future<T> Function() task, {String? title}) =>
         commonScaffoldState!.loadingRun<T>(
           task,
@@ -45,6 +48,15 @@ class AboutView extends StatelessWidget {
         );
     await productServices.appUpdate.manualCheck(
       runTask: runTask,
+      includePrerelease: appSetting.includePrereleaseUpdates,
+      skippedTagName: appSetting.skippedAppUpdateTagName,
+      onSkipRelease: (tagName) async {
+        ref.read(appSettingProvider.notifier).updateState(
+              (state) => state.copyWith(
+                skippedAppUpdateTagName: tagName,
+              ),
+            );
+      },
       loadingTitle: appLocalizations.checkUpdate,
     );
   }
@@ -120,14 +132,15 @@ class AboutView extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildMoreSection(BuildContext context) => generateSection(
+  List<Widget> _buildMoreSection(BuildContext context, WidgetRef ref) =>
+      generateSection(
         separated: false,
         title: appLocalizations.more,
         items: [
           ListItem(
             title: Text(appLocalizations.checkUpdate),
             onTap: () {
-              unawaited(_checkUpdate(context));
+              unawaited(_checkUpdate(context, ref));
             },
             trailing: const Icon(Icons.update),
           ),
@@ -195,7 +208,7 @@ class AboutView extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final items = [
       ListTile(
         title: Column(
@@ -297,7 +310,7 @@ class AboutView extends StatelessWidget {
       ..._buildContributorsSection(),
       ..._buildThanksForContributionSection(context),
       ..._buildGratitudeSection(context),
-      ..._buildMoreSection(context),
+      ..._buildMoreSection(context, ref),
     ];
     return Padding(
       padding: kMaterialListPadding.copyWith(

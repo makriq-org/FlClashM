@@ -494,6 +494,26 @@ class AppLocalizations {
     );
   }
 
+  /// `Pre-release updates`
+  String get includePrereleaseUpdates {
+    return Intl.message(
+      'Pre-release updates',
+      name: 'includePrereleaseUpdates',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Show beta and pre-release app versions`
+  String get includePrereleaseUpdatesDesc {
+    return Intl.message(
+      'Show beta and pre-release app versions',
+      name: 'includePrereleaseUpdatesDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `AccessControl`
   String get accessControl {
     return Intl.message(
@@ -1284,6 +1304,31 @@ class AppLocalizations {
     return Intl.message(
       'Go to download',
       name: 'goDownload',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Later`
+  String get later {
+    return Intl.message('Later', name: 'later', desc: '', args: []);
+  }
+
+  /// `Skip version`
+  String get skipVersion {
+    return Intl.message(
+      'Skip version',
+      name: 'skipVersion',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Downloading update`
+  String get downloadUpdate {
+    return Intl.message(
+      'Downloading update',
+      name: 'downloadUpdate',
       desc: '',
       args: [],
     );

@@ -17,6 +17,8 @@ enum AppUpdateCheckTrigger {
   manual,
 }
 
+typedef SkipAppUpdateRelease = Future<void> Function(String tagName);
+
 class AppUpdateService {
   const AppUpdateService({
     this.platform = const AndroidUpdateBridge(),
@@ -24,60 +26,65 @@ class AppUpdateService {
 
   final AppUpdatePlatformBridge platform;
 
-  Future<void> autoCheck({required bool enabled}) async {
-    if (!enabled || globalState.isPre) {
+  Future<void> autoCheck({
+    required bool enabled,
+    required bool includePrerelease,
+    required String skippedTagName,
+    SkipAppUpdateRelease? onSkipRelease,
+  }) async {
+    if (!enabled) {
       return;
     }
 
-    final release = await platform.checkForAppUpdate();
+    final release = await platform.checkForAppUpdate(
+      includePrerelease: includePrerelease,
+      skippedTagName: skippedTagName,
+    );
     await handleCheckResult(
       release: release,
       trigger: AppUpdateCheckTrigger.automatic,
+      onSkipRelease: onSkipRelease,
     );
   }
 
   Future<void> manualCheck({
     required AsyncTaskRunner runTask,
+    required bool includePrerelease,
+    required String skippedTagName,
+    SkipAppUpdateRelease? onSkipRelease,
     String? loadingTitle,
-    String? installTitle,
   }) async {
-    if (globalState.isPre) {
-      return;
-    }
-
     final release = await runTask(
-      platform.checkForAppUpdate,
+      () => platform.checkForAppUpdate(
+        includePrerelease: includePrerelease,
+        skippedTagName: skippedTagName,
+      ),
       title: loadingTitle,
     );
     await handleCheckResult(
       release: release,
       trigger: AppUpdateCheckTrigger.manual,
-      runTask: runTask,
-      installTitle: installTitle,
+      onSkipRelease: onSkipRelease,
     );
   }
 
   Future<void> handleCheckResult({
     required AppRelease? release,
     required AppUpdateCheckTrigger trigger,
-    AsyncTaskRunner? runTask,
-    String? installTitle,
+    SkipAppUpdateRelease? onSkipRelease,
   }) async {
     if (release != null) {
-      final confirmed = await platform.promptForUpdateDownload(
+      final action = await platform.promptForUpdateDownload(
         release: release,
         submits: utils.parseReleaseBody(release.body),
       );
-      if (confirmed ?? false) {
+      if (action == AppUpdatePromptAction.skip) {
+        await onSkipRelease?.call(release.tagName);
+        return;
+      }
+      if (action == AppUpdatePromptAction.download) {
         try {
-          if (runTask != null) {
-            await runTask<void>(
-              () => _downloadAndInstallRelease(release),
-              title: installTitle ?? _defaultInstallTitle,
-            );
-          } else {
-            await _downloadAndInstallRelease(release);
-          }
+          await _downloadAndInstallRelease(release);
         } catch (error) {
           await platform.showUpdateInstallError(
             message: '$error',
@@ -136,9 +143,14 @@ class AppUpdateService {
       tempFile.deleteSync();
     }
 
-    await platform.downloadReleaseAsset(
-      androidAsset.apkAsset,
-      tempFile.path,
+    await platform.showDownloadProgress<void>(
+      release: release,
+      asset: androidAsset.apkAsset,
+      downloadTask: (onReceiveProgress) => platform.downloadReleaseAsset(
+        androidAsset.apkAsset,
+        tempFile.path,
+        onReceiveProgress: onReceiveProgress,
+      ),
     );
 
     final actualSha256 = await computeFileSha256(tempFile);
@@ -184,14 +196,6 @@ class AppUpdateService {
     final installed = await platform.installPackage(path);
     if (!installed) {
       throw StateError('Unable to open the Android installer.');
-    }
-  }
-
-  String get _defaultInstallTitle {
-    try {
-      return appLocalizations.update;
-    } catch (_) {
-      return 'Update';
     }
   }
 
