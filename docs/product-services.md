@@ -16,7 +16,10 @@
 
 - владеет policy для `auto-check`, `manual-check` и result handling
 - решает, когда update path вообще выполняется
+- по умолчанию выбирает только stable-релизы; pre-release включается явной настройкой
+- хранит отказ от найденной версии, чтобы не показывать тот же релиз повторно
 - оркестрирует Android app update path: release resolution -> ABI selection -> SHA256 verification -> APK staging -> installer handoff
+- отдает UI ходу скачивания численный progress, если транспорт знает размер файла
 - делегирует transport-действия в `AndroidUpdateBridge`
 
 `AndroidUpdateBridge` после этого отвечает только за:

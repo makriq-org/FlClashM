@@ -54,8 +54,7 @@ Guard сравнивает base touchpoints с каноническими produc
 
 - built-in transports оформляются как обычные profile nodes, а не как отдельные engines/helpers
 - per-node lifecycle/config/rollback идет через runtime supervisor
-- current supported paths: `naiveproxy`, `olcrtc`
-- current guarded-but-disabled path: `byedpi`
+- current supported paths: `naiveproxy`, `olcrtc`, `byedpi`
 
 ### 5. Platform Layer
 
@@ -176,6 +175,7 @@ Guard сравнивает base touchpoints с каноническими produc
 - `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
 - `RuntimePlan` несет normalized profile split-tunneling override, а adapters читают его через composition boundary вместо парсинга profile YAML на старте VPN.
 - `NaiveProxyNodeController` держит multi-instance process lifecycle в `AndroidRuntimeNodeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
+- `ByedpiNodeController` запускается до применения профиля в `mihomo`, чтобы локальный SOCKS5 listener участвовал в первых проверках доступности и fallback selection.
 - `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
 - `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
 

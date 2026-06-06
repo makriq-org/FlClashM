@@ -23,7 +23,8 @@
 - built-in proxy node contract вынесен отдельно от main engine
 - `naiveproxy` интегрирован как supported built-in proxy node с pinned release/update/rollback path
 - `olcrtc` интегрирован как supported built-in proxy node с pinned source commit/update/rollback path
-- `byedpi` перенесен в ту же node registry модель, но остается disabled с guardrails и rollback/update notes
+- `byedpi` поддержан как built-in proxy node с guardrails, rollback/update notes и проверкой до применения профиля
+- built-in proxy nodes поднимаются до `mihomo` setup, чтобы участвовать в первом health check и fallback selection
 - этап 7 перенес Android app updater в product/platform path с download + SHA256 verify + installer handoff
 - этап 7 перенес profile-driven split tunneling в compile/runtime/access seams с file/url selectors, cache/fallback и явным profile priority
 - cheap upstream update contract зафиксирован через `docs/upstream-maintenance.md`, `tool/product_touchpoints.json` и `dart tool/check_product_boundaries.dart`
@@ -57,7 +58,8 @@
 
 - hardening/telemetry для `naiveproxy`
 - hardening/telemetry для `olcrtc`
-- `byedpi` как built-in proxy node path
+- hardening/telemetry для `byedpi`
+- регрессии fallback-групп и cold-start для всех built-in nodes
 
 ### 2. Дальше по базе
 

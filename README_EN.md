@@ -1,212 +1,47 @@
-<div>
+# FlClashM
 
-[**Russian**](README.md)
-
-</div>
-
-## FlClashM
+[Russian](README.md)
 
 [![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` is an Android-only product client based on `FlClashX`, with Android continuity preserved from `FlClash-my`.
+`FlClashM` is an Android client for `mihomo`, based on `FlClashX`.
 
-on Mobile:
+The project keeps the Android package `com.makriq.flclash` and publishes
+releases under `makriq-org/FlClashM`, preserving the update path from the older
+Android branch `FlClash-my`.
 
-<p style="text-align: center;">
-    <img alt="mobile" src="snapshots/mobile.gif">
-</p>
+## Features
 
-## Added Functionality
+- VPN/TUN connection through `mihomo`.
+- Profiles from links, files, QR codes, and Android TV transfer.
+- `rule`, `global`, and `direct` modes, group delay checks, and node selection.
+- Built-in local nodes: `naiveproxy`, `olcrtc`, and `byedpi`.
+- Dashboard widgets for profile, traffic, IP, mode, node switching, and service info.
+- Safe `flclashm-*` provider hints for display and convenience settings.
+- App updater with stable/pre-release selection, skipped versions, "Later", and download progress.
+- Android foreground notification and Quick Settings tile.
 
-🛠️ Fixed default settings: process search mode on, TUN mode on, system proxy mode off, proxy list display mode set to 'list', changed camera behavior when adding a subscription via QR.
+## Differences From The Base
 
-📱 **Android 120Hz Display Support:** Added support for high refresh rate displays (120Hz) on Android devices for smoother animations and scrolling.
-
-🗑️ **Clear Application Data:** Added "Clear Data" button in Application Settings that removes all profiles from the profiles folder. Useful for troubleshooting or resetting the application.
-
-🇷🇺 Redesigned localization with an Android-only product focus.
-
-✈️ Transmit HWID to the panel (Works only with <a href="https://github.com/remnawave/panel">Remnawave</a>).
-
-💻 Added a new "Announcements" widget. It transmits announcements from the panel to the widget. (Works only with <a href="https://github.com/remnawave/panel">Remnawave</a>).
-
-📺 Optimized controls for Android TV:
-
-- Added a "Paste" button to the menu for adding a subscription via a link.
-- Added a profile selection button.
-- Added the ability to transfer a profile from the mobile app via a QR code.
-
-🪪 Redesigned the profile card:
-
-- Uses a traffic volume indicator with color change (not displayed if traffic is unlimited).
-- Displays subscription expiration date (if the year is 2099, it displays "Your subscription is permanent").
-- Added a new "Support" button in the profile, which pulls the supportUrl from the panel.
-- The autoupdateinterval parameter for the profile is now correctly transmitted from the panel.
-
-🪪
-- Added "Meta-Info" widget. Transmits subscription parameters to the widget: remaining traffic, subscription expiration date, profile name, and prominently displays days remaining until subscription expires (3 days before expiration).
-- Added "serviceInfo" widget. Displays your service name. You can additionally pass the `flclashm-servicelogo` header for a custom logo (supports svg/png links), and clicking opens the support link (supportURL).
-- Added "changeServerButton" widget. Clicking redirects to the proxy page.
-
-🌐 Added parsing of custom headers from the subscription page:
-
-The product custom-header namespace in `FlClashM` is `flclashm-*`.
-
-- flclashm-widgets: arranges widgets in the order received from the subscription.
-
-  |        Value         | Name widget                                                 |
-  | :------------------: | ----------------------------------------------------------- |
-  |      `announce`      | Announce Badge                                              |
-  |    `networkSpeed`    | Network speed                                               |
-  |   `outboundModeV2`   | Proxy mode (new type)                                       |
-  |    `outboundMode`    | Proxy mode (old type)                                       |
-  |    `trafficUsage`    | Traffic usage                                               |
-  |  `networkDetection`  | Determining location and IP                                 |
-  |     `tunButton`      | Legacy desktop widget, unused in Android-only releases      |
-  |     `vpnButton`      | VPN button (Android only)                                   |
-  | `systemProxyButton`  | Legacy desktop widget, unused in Android-only releases      |
-  |     `intranetIp`     | Local IP-Address                                            |
-  |     `memoryInfo`     | Memory usage                                                |
-  |      `metainfo`      | Profile information                                         |
-  | `changeServerButton` | Change server button                                        |
-  |    `serviceInfo`     | Service information (only with header flclashm-servicename) |
-
-Usage:
-
-```bash
-    flclashm-widgets: announce,metainfo,outboundModeV2,networkDetection
-```
-
-- flclashm-view: Configures the appearance of the proxy page obtained from the subscription.
-
-|  Value   | Description                   | Possible values                   |
-| :------: | ----------------------------- | --------------------------------- |
-|  `type`  | Display mode                  | `list`,`tab`                      |
-|  `sort`  | Sorting type                  | `none`,`delay`,`name`             |
-| `layout` | Layout                        | `loose`,`standard`,`tight`        |
-|  `icon`  | Icon style (for list display) | `none`,`icon`          |
-|  `card`  | Card size                     | `expand`,`shrink`,`min`,`oneline` |
-
-Usage:
-
-```bash
-    flclashm-view: type:list; sort:delay; layout:tight; icon:icon; card:shrink
-```
-
-- flclashm-custom: Controls the application of styles for Dashboard and ProxyView.
-
-|  Value   | Description                                                  |
-| :------: | ------------------------------------------------------------ |
-|  `add`   | Styles are applied only when the subscription is first added |
-| `update` | Styles are applied every time the subscription is updated    |
-
-Usage:
-
-```bash
-    flclashm-custom: update
-```
-
-- flclashm-denywidgets: When set to true, editing the Dashboard page is disabled. Accepts true/false.
-
-Usage:
-
-```bash
-    flclashm-denywidgets: true
-```
-
-- flclashm-servicename: Your service name displayed in the ServiceInfo widget.
-
-Usage:
-
-```bash
-    flclashm-servicename: FlClashM
-```
-
-- flclashm-servicelogo: Your logo used in the ServiceInfo widget (works only with active flclashm-servicename header). Supports png/svg.
-
-Usage:
-
-```bash
-    flclashm-servicelogo: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/remnawave.svg
-```
-
-- flclashm-serverinfo: Proxy group name to display in the ChangeServerButton widget. The widget shows the active server from the specified group with country flag, ping, and a quick switch button.
-
-**Displayed elements:**
-  - Country flag (automatically extracted from serverDescription or proxy name)
-  - Active server name
-  - Current ping with color indication (green < 600ms, orange >= 600ms, red - timeout)
-  - Quick navigation button to proxy page
-
-Usage:
-
-```bash
-    flclashm-serverinfo: Proxy
-```
-
-- flclashm-background: Sets a custom background image for the application. Provide a direct link to an image.
-
-**Image Recommendations:**
-  - Format: PNG, JPG, or WebP
-  - Resolution: 1080x1920 or higher for mobile
-  - File size: Keep under 2MB for better performance
-  - Content: Use images with subtle patterns or gradients; avoid too bright or busy images
-  - Contrast: Ensure good readability of text over the background
-
-Usage:
-
-```bash
-    flclashm-background: https://example.com/background.jpg
-```
-
-- flclashm-settings: Manage application settings via header (with client-side override option). By default, all parameters are **disabled**. If you pass a parameter, it will be **enabled**. If you don't pass it - it stays **disabled**.
-
-|   Parameter   | Description                                      | Default      |
-| :-----------: | ------------------------------------------------ | :----------: |
-|  `autostart`  | Automatically start proxy on application launch  | ❌ Disabled  |
-| `autoupdate`  | Automatically check for application updates      | ❌ Disabled  |
-
-Desktop-only flags `minimize`, `autorun`, and `shadowstart` are treated as legacy and ignored in the Android-only product.
-
-**Client-side override:** Users can enable "Override provider settings" in Application Settings to apply their local configuration instead of subscription settings.
-
-Usage:
-
-```bash
-    flclashm-settings: autostart, autoupdate
-```
-
-### Configuration Settings Override
-
-By default, the following configuration parameters received from the subscription are **not overridden** by the client:
-
-- `allow-lan` - Allow LAN connections
-- `ipv6` - Enable IPv6 support
-- `find-process-mode` - Process search mode
-- `tun-stack` - TUN mode network stack
-- `mixed-port` - Mixed port for HTTP/SOCKS proxy
-
-**Client-side override:** Users can enable "Override provider settings" or "Override network settings" in Application Settings to apply their local configuration instead of subscription settings. This is useful when you need custom network settings.
-
-## Application Usage
-
-### Android
-
-The following actions are supported:
-
-```bash
- com.makriq.flclash.action.START
-
- com.makriq.flclash.action.STOP
-
- com.makriq.flclash.action.CHANGE
-```
+- Android is the only supported release target. Other platform code remains in
+  the tree as inherited base code, but it is not part of the release target.
+- Product logic is kept in `lib/product/**`: profile compilation, security
+  policy, runtime startup, app updates, and Android bridges.
+- Security-sensitive behavior is decided by the client. A subscription can
+  provide metadata and hints, but it cannot weaken the Android security floor.
+- `naiveproxy`, `olcrtc`, and `byedpi` are exposed as normal profile nodes
+  through local SOCKS5 listeners.
+- Active core: [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo).
+- Base project: [pluralplay/FlClashX](https://github.com/pluralplay/FlClashX).
 
 ## Download
 
-Release artifacts are published for Android only:
+Release builds are published in
+[GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
+
+Android artifacts:
 
 - `FlClashM-android-universal.apk`
 - `FlClashM-android-arm64-v8a.apk`
@@ -214,10 +49,53 @@ Release artifacts are published for Android only:
 - `FlClashM-android-x86_64.apk`
 - `FlClashM-android-release.aab`
 
-<a href="https://github.com/makriq-org/FlClashM/releases"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" width="200px"/></a>
+By default, the in-app updater shows stable releases only. Pre-releases must be
+enabled explicitly in settings.
 
-## Star
+## Build
 
-<p style="text-align: center;">
-The easiest way to support the developers is to click the star (⭐) at the top of the page.<br>
-</p>
+You need Flutter 3.41.x, JDK 17, Android SDK/NDK, and Go 1.26.x.
+On NixOS, run the commands from a clean shell containing those packages.
+
+```bash
+flutter pub get
+dart setup.dart android --arch arm64 --out core
+flutter test test/product
+flutter build apk --debug
+```
+
+Release-path checks are documented in [docs/base-verification.md](docs/base-verification.md).
+Signed public releases are built by GitHub Actions and require
+`KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, and `KEY_PASSWORD`.
+
+## Provider Hints
+
+Subscriptions may send `flclashm-*` headers for display and convenience:
+
+- `flclashm-widgets` — dashboard widget order.
+- `flclashm-view` — proxy page layout.
+- `flclashm-custom` — when display hints are applied: add or update.
+- `flclashm-denywidgets` — dashboard editing lock.
+- `flclashm-servicename`, `flclashm-servicelogo`, `flclashm-serverinfo` — service info.
+- `flclashm-background`, `flclashm-hex` — appearance.
+- `flclashm-settings` — autostart and update-check hints.
+- `flclashm-globalmode` — mode-selector visibility.
+
+Full contract: [docs/product-customization.md](docs/product-customization.md).
+Security policy: [docs/security-policy.md](docs/security-policy.md).
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Runtime and built-in nodes](docs/runtime.md)
+- [ByeDPI](docs/byedpi.md)
+- [Security policy](docs/security-policy.md)
+- [Migration plan](docs/migration-plan.md)
+- [Release contract](docs/release-contract.md)
+- [Compatibility boundaries](docs/compatibility-boundaries.md)
+
+## License
+
+The app code is licensed under GPL-3.0. Third-party cores and bundled binaries
+keep their own licenses; see `assets/runtimes/**/README.md` and the related
+documents under `docs/**`.

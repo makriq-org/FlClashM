@@ -1,24 +1,28 @@
 # Docs
 
-Здесь живет продуктовая и техническая документация `FlClashM` поверх базы `FlClashX`.
+Здесь находится продуктовая и техническая документация `FlClashM`.
 
-Текущий фокус:
+Проект развивается как Android-клиент на базе `FlClashX`, но публичные релизы,
+политика безопасности и обновления принадлежат каналу `makriq-org/FlClashM`.
 
-- зафиксировать Android-only продукт
-- удержать Android continuity относительно `FlClash-my`
-- держать product runtime pipeline узко в `lib/product/**`
-- держать security policy на стороне клиента, а не подписки
+## Основные документы
 
-Основные документы:
+- `architecture.md` — слои и границы product-кода.
+- `runtime.md` — `mihomo`, план среды выполнения и встроенные узлы.
+- `security-policy.md` — Android security floor и правила для подписок.
+- `product-customization.md` — контракт `flclashm-*` подсказок.
+- `product-services.md` — обновления, раздельная маршрутизация и оболочка Android.
+- `branding.md` — публичные имена, каналы и перенос старых данных.
+- `compatibility-boundaries.md` — оставшиеся допустимые следы базы.
+- `migration-plan.md` — текущее состояние миграции.
+- `release-contract.md` — правила релизов и артефактов.
+- `update-continuity.md` — непрерывность обновлений для Android-пакета и подписи.
+- `base-verification.md` — локальные и CI-проверки.
+- `byedpi.md` — профильный контракт встроенного `byedpi` узла.
 
-- `branding.md`
-- `architecture.md`
-- `upstream-maintenance.md`
-- `product-services.md`
-- `runtime.md`
-- `byedpi.md`
-- `security-policy.md`
-- `compatibility-boundaries.md`
-- `migration-plan.md`
-- `update-continuity.md`
-- `base-verification.md`
+## Правила
+
+- Продуктовую логику держать в `lib/product/**` или в явно разрешенных точках.
+- Критичное для безопасности поведение не должно зависеть от заголовков подписки.
+- Новые интеграции среды выполнения и helper-компонентов требуют контракт, ограничения, обновление и откат.
+- Все изменения, видимые в приложении, проверяются на Android-эмуляторе.
