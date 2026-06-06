@@ -303,12 +303,10 @@ class MihomoEngineAdapter implements EngineAdapter {
       runtimePlan.builtInProxyNodes,
     );
     if (startMessage.isNotEmpty) {
-      final rollbackMessage =
-          await builtInProxySupervisor.rollbackStagedRuntimePlan();
-      if (rollbackMessage.isEmpty) {
-        return startMessage;
-      }
-      return '$startMessage Local-node rollback failed: $rollbackMessage';
+      commonPrint.log(
+        '$startMessage Continuing profile setup; core health checks will '
+        'mark unavailable local nodes as failed.',
+      );
     }
 
     final message = await core.setupRuntimePlan(runtimePlan);

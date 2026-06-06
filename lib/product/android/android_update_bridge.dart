@@ -249,12 +249,12 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     final progress = ValueNotifier<_DownloadProgress>(
       const _DownloadProgress(received: 0, total: 0),
     );
-    BuildContext? dialogContext;
+    NavigatorState? progressNavigator;
     final dialogFuture = globalState.showCommonDialog<void>(
       dismissible: false,
       child: Builder(
         builder: (context) {
-          dialogContext ??= context;
+          progressNavigator ??= Navigator.of(context);
           return _UpdateDownloadProgressDialog(
             release: release,
             asset: asset,
@@ -272,11 +272,11 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
           total: total,
         );
       });
-      _closeProgressDialog(dialogContext);
+      _closeProgressDialog(progressNavigator);
       await dialogFuture;
       return result;
     } catch (_) {
-      _closeProgressDialog(dialogContext);
+      _closeProgressDialog(progressNavigator);
       await dialogFuture;
       rethrow;
     } finally {
@@ -284,11 +284,10 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     }
   }
 
-  void _closeProgressDialog(BuildContext? context) {
-    if (context == null) {
+  void _closeProgressDialog(NavigatorState? navigator) {
+    if (navigator == null) {
       return;
     }
-    final navigator = Navigator.of(context);
     if (navigator.canPop()) {
       navigator.pop();
     }

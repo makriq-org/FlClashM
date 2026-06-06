@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import '../../common/common.dart';
-import '../../state.dart';
 import '../android/android_update_bridge.dart';
 import 'app_update_release.dart';
 

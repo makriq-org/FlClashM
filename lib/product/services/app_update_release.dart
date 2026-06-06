@@ -190,12 +190,11 @@ Future<String> computeFileSha256(File file) async {
   return digest.toString();
 }
 
-AppRelease? selectLatestStableRelease(Iterable<AppRelease> releases) {
-  return selectLatestAppRelease(
-    releases,
-    includePrerelease: false,
-  );
-}
+AppRelease? selectLatestStableRelease(Iterable<AppRelease> releases) =>
+    selectLatestAppRelease(
+      releases,
+      includePrerelease: false,
+    );
 
 AppRelease? selectLatestAppRelease(
   Iterable<AppRelease> releases, {

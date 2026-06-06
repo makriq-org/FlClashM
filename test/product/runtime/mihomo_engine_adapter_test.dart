@@ -30,13 +30,12 @@ void main() {
         );
 
     setUp(() async {
-      core = _FakeMihomoCoreBridge();
       callOrder = [];
-      core.callOrder = callOrder;
+      core = _FakeMihomoCoreBridge()..callOrder = callOrder;
       lifecycle = _FakeMihomoLifecycleBridge();
       platform = _FakeMihomoPlatformBridge();
-      builtInProxySupervisor = _FakeBuiltInProxySupervisor();
-      builtInProxySupervisor.callOrder = callOrder;
+      builtInProxySupervisor = _FakeBuiltInProxySupervisor()
+        ..callOrder = callOrder;
       tempDir = await Directory.systemTemp.createTemp('flclashm-mihomo-');
       update = _FakeMihomoUpdateBridge(
         corePath: '${tempDir.path}/FlClashCore',
@@ -184,7 +183,7 @@ void main() {
       ]);
     });
 
-    test('reports built-in proxy start failure during runtime plan setup',
+    test('continues runtime plan setup when built-in proxy start fails',
         () async {
       builtInProxySupervisor.startResult = false;
       final adapter = buildAdapter();
@@ -208,16 +207,17 @@ void main() {
 
       final message = await adapter.setupRuntimePlan(runtimePlan);
 
-      expect(message, contains('Built-in proxy nodes did not start'));
-      expect(core.setupRuntimePlanCalls, 0);
+      expect(message, isEmpty);
+      expect(core.setupRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.stageCalls, 1);
-      expect(builtInProxySupervisor.commitCalls, 0);
+      expect(builtInProxySupervisor.commitCalls, 1);
       expect(builtInProxySupervisor.startCalls, 1);
-      expect(builtInProxySupervisor.rollbackCalls, 1);
+      expect(builtInProxySupervisor.rollbackCalls, 0);
       expect(callOrder, [
         'stageLocalNodes',
         'startLocalNodes',
-        'rollbackLocalNodes',
+        'setupCore',
+        'commitLocalNodes',
       ]);
     });
 
