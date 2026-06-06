@@ -1054,10 +1054,10 @@ class AppLocalizations {
     );
   }
 
-  /// `A multi-platform proxy client based on ClashMeta, simple and easy to use, open-source and ad-free.`
+  /// `Android proxy client based on FlClashX with the mihomo core, open-source and ad-free.`
   String get desc {
     return Intl.message(
-      'A multi-platform proxy client based on ClashMeta, simple and easy to use, open-source and ad-free.',
+      'Android proxy client based on FlClashX with the mihomo core, open-source and ad-free.',
       name: 'desc',
       desc: '',
       args: [],

@@ -157,7 +157,7 @@ class AboutView extends ConsumerWidget {
             title: Text(appLocalizations.originalRepository),
             onTap: () {
               unawaited(globalState.openUrl(
-                "https://github.com/chen08209/FlClash",
+                "https://github.com/pluralplay/FlClashX",
               ));
             },
             trailing: const Icon(Icons.insert_link),
@@ -166,7 +166,7 @@ class AboutView extends ConsumerWidget {
             title: Text(appLocalizations.core),
             onTap: () {
               unawaited(globalState.openUrl(
-                "https://github.com/pluralplay/xHomo",
+                "https://github.com/MetaCubeX/mihomo",
               ));
             },
             trailing: const Icon(Icons.insert_link),
@@ -185,6 +185,10 @@ class AboutView extends ConsumerWidget {
         avatar: "assets/images/avatars/kastov.jpg",
         name: "kastov",
         link: "https://github.com/kastov",
+      ),
+      Contributor(
+        name: "makriq",
+        link: "https://github.com/makriq",
       ),
     ];
     return generateSection(

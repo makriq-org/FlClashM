@@ -239,7 +239,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "deleteMultipTip": m0,
     "deleteTip": m1,
     "desc": MessageLookupByLibrary.simpleMessage(
-      "Многоплатформенный прокси-клиент на основе ClashMeta, простой и удобный в использовании, с открытым исходным кодом и без рекламы.",
+      "Android-клиент на базе FlClashX с ядром mihomo, открытым исходным кодом и без рекламы.",
     ),
     "detectionTip": MessageLookupByLibrary.simpleMessage(
       "Использует сторонний API. Только для справки",

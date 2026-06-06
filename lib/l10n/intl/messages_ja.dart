@@ -175,7 +175,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "deleteMultipTip": m0,
     "deleteTip": m1,
     "desc": MessageLookupByLibrary.simpleMessage(
-      "ClashMetaベースのマルチプラットフォームプロキシクライアント。シンプルで使いやすく、オープンソースで広告なし。",
+      "FlClashX をベースに mihomo コアを使用する Android 向けプロキシクライアント。オープンソースで広告なし。",
     ),
     "detectionTip": MessageLookupByLibrary.simpleMessage("サードパーティAPIに依存（参考値）"),
     "developerMode": MessageLookupByLibrary.simpleMessage("デベロッパーモード"),

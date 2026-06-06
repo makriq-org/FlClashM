@@ -131,7 +131,7 @@
   "project": "プロジェクト",
   "core": "コア",
   "tabAnimation": "タブアニメーション",
-  "desc": "ClashMetaベースのマルチプラットフォームプロキシクライアント。シンプルで使いやすく、オープンソースで広告なし。",
+  "desc": "FlClashX をベースに mihomo コアを使用する Android 向けプロキシクライアント。オープンソースで広告なし。",
   "startVpn": "VPNを開始中...",
   "stopVpn": "VPNを停止中...",
   "discovery": "新しいバージョンを発見",
