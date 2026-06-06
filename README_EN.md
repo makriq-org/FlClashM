@@ -8,15 +8,33 @@
 
 `FlClashM` is an Android client for `mihomo`.
 
-## Features
+## Exclusive Features
+
+### Built-in nodes
+
+Three node types are declared directly in the profile and participate in regular proxy groups and rules — no separate apps, no manual port setup.
+
+**NaiveProxy** (`type: naiveproxy`) — the app runs the bundled naiveproxy binary, writes a config, and substitutes a local SOCKS5 listener for the node. The profile only needs `name` and `proxy`.
+
+**ByeDPI** (`type: byedpi`) — bundled ciadpi with DPI circumvention. `mode: manual` accepts a raw ciadpi argument string; `mode: auto` cycles through strategies from the ByeByeDPI set, caches the working one, and applies it on cold start. `{sni}` substitution is supported.
+
+**OlcRTC** (`type: olcrtc`) — bundled olcrtc in CNC mode. The app manages the listener and config; the profile only specifies `name` and the server connection parameters.
+
+### Profile-driven split tunneling
+
+Split tunneling is configured in the profile via `profileAccessControl`. The compilation pipeline normalizes the rules before passing them to mihomo — no manual VPN exclusions needed.
+
+### In-app updater
+
+The app checks for updates on its own and offers to install them from the UI. Stable releases are shown by default; pre-releases can be enabled in settings.
+
+## Other features
 
 - VPN/TUN connection through `mihomo`.
 - Profiles from links, files, QR codes, and Android TV transfer.
 - `rule`, `global`, and `direct` modes, group delay checks, and node selection.
-- Built-in local nodes: `naiveproxy`, `olcrtc`, and `byedpi`.
 - Dashboard widgets for profile, traffic, IP, mode, node switching, and service info.
 - Display customization via provider hints.
-- In-app updater with stable and pre-release support.
 - Android foreground notification and Quick Settings tile.
 
 ## Download
