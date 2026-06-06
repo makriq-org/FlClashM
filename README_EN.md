@@ -6,11 +6,7 @@
 [![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` is an Android client for `mihomo`, based on `FlClashX`.
-
-The project keeps the Android package `com.makriq.flclash` and publishes
-releases under `makriq-org/FlClashM`, preserving the update path from the older
-Android branch `FlClash-my`.
+`FlClashM` is an Android client for `mihomo`.
 
 ## Features
 
@@ -19,22 +15,9 @@ Android branch `FlClash-my`.
 - `rule`, `global`, and `direct` modes, group delay checks, and node selection.
 - Built-in local nodes: `naiveproxy`, `olcrtc`, and `byedpi`.
 - Dashboard widgets for profile, traffic, IP, mode, node switching, and service info.
-- Safe `flclashm-*` provider hints for display and convenience settings.
-- App updater with stable/pre-release selection, skipped versions, "Later", and download progress.
+- Display customization via provider hints.
+- In-app updater with stable and pre-release support.
 - Android foreground notification and Quick Settings tile.
-
-## Differences From The Base
-
-- Android is the only supported release target. Other platform code remains in
-  the tree as inherited base code, but it is not part of the release target.
-- Product logic is kept in `lib/product/**`: profile compilation, security
-  policy, runtime startup, app updates, and Android bridges.
-- Security-sensitive behavior is decided by the client. A subscription can
-  provide metadata and hints, but it cannot weaken the Android security floor.
-- `naiveproxy`, `olcrtc`, and `byedpi` are exposed as normal profile nodes
-  through local SOCKS5 listeners.
-- Active core: [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo).
-- Base project: [pluralplay/FlClashX](https://github.com/pluralplay/FlClashX).
 
 ## Download
 
@@ -64,9 +47,9 @@ flutter test test/product
 flutter build apk --debug
 ```
 
-Release-path checks are documented in [docs/base-verification.md](docs/base-verification.md).
 Signed public releases are built by GitHub Actions and require
 `KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, and `KEY_PASSWORD`.
+The full release process is described in [docs/release-contract.md](docs/release-contract.md).
 
 ## Provider Hints
 
@@ -90,12 +73,12 @@ Security policy: [docs/security-policy.md](docs/security-policy.md).
 - [Runtime and built-in nodes](docs/runtime.md)
 - [ByeDPI](docs/byedpi.md)
 - [Security policy](docs/security-policy.md)
-- [Migration plan](docs/migration-plan.md)
 - [Release contract](docs/release-contract.md)
+- [Upstream maintenance](docs/upstream-maintenance.md)
 - [Compatibility boundaries](docs/compatibility-boundaries.md)
 
 ## License
 
 The app code is licensed under GPL-3.0. Third-party cores and bundled binaries
 keep their own licenses; see `assets/runtimes/**/README.md` and the related
-documents under `docs/**`.
+documents under `docs/`.

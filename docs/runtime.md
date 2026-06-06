@@ -1,41 +1,41 @@
-# Runtime
+# Среда выполнения
 
-## Цепочка
+## Цепочка обработки профиля
 
-Runtime слой подготавливается через явную product chain:
+Подготовка среды выполнения проходит через явную продуктовую цепочку:
 
-`RawProfile -> ProfileCompiler -> SecurityPolicy -> RuntimePlan`
+`RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan`
 
-После этого lifecycle идет через:
+После этого жизненный цикл управляется через:
 
-`EngineManager -> EngineAdapter`
+`EngineManager → EngineAdapter`
 
 ## Текущее состояние
 
-- `RawProfile` живет в `lib/product/compile/raw_profile.dart`
-- `ProductProfilePipeline` живет в `lib/product/compile/product_profile_pipeline.dart`
-- `ProfileCompiler` выдает `CompiledProfilePatch`
+- `RawProfile` — `lib/product/compile/raw_profile.dart`
+- `ProductProfilePipeline` — `lib/product/compile/product_profile_pipeline.dart`
+- `ProfileCompiler` выдаёт `CompiledProfilePatch`
 - `AndroidSecurityPolicy` превращает его в `SecuredProfilePatch`
-- `RuntimePlan` строится уже после security stage
-- `EngineManager` вызывает стадии в явном порядке `compile -> security -> runtimePlan`
-- direct `updateConfig` path тоже проходит через product security floor до adapter bridge
-- `RuntimePlan.runtime` остается явным, но product registry в `FlClashM` резолвит только `mihomo`
-- `RuntimePlan.files` несет runtime artifacts для built-in proxy nodes
-- `RuntimePlan.builtInProxyNodes` несет typed планы локальных встроенных узлов
-- `RuntimePlan.profileAccessControl` несет normalized profile-driven split tunneling override для Android VPN handoff
-- `RuntimeRegistry` остается allowlist только для main engine registrations
-- `BuiltInProxyRegistry` держит allowlist built-in proxy node types и их availability/update/rollback guardrails
-- `MihomoEngineAdapter` остается default supported engine и production baseline
-- `BuiltInProxySupervisor` оркестрирует lifecycle built-in proxy nodes вокруг `MihomoEngineAdapter`
-- `NaiveProxyNodeController` держит multi-instance `naiveproxy` процессы и отдает `clashCore` локальные SOCKS5 listeners как обычные profile nodes
-- Android VPN start/stop path для `mihomo` проходит через `AccessControlService -> AndroidRuntimeAccessPolicy`
-- access-control snapshot для `mihomo` подается в adapter через runtime composition boundary, а не читается внутри него напрямую
-- pending `mihomo` core update применяется через transactional swap с rollback на предыдущий binary path
-- pending `naiveproxy` update stage-ится как shared binary swap через `.pending -> active -> .rollback` boundary в app data
-- `mihomo` start path считает foreground title best-effort и откатывает listener/VPN handoff при неуспешном старте
-- `mihomo` start/stop path теперь так же учитывает built-in proxy node start/stop/rollback
-- `EngineManager` читает runtime start time у adapter и на fresh attach, и после stop failure boundary, чтобы reattach state не дрейфовал; при недоступном probe после успешного `start` он падает назад на локальный timestamp, а не роняет старт
-- Android always-on/cold-start path теперь поднимает сохраненные runtime nodes до `Core.quickStart`
+- `RuntimePlan` строится после этапа политики безопасности
+- `EngineManager` вызывает стадии в явном порядке: компиляция → политика → план
+- Путь прямого `updateConfig` тоже проходит через продуктовую политику безопасности
+- `RuntimePlan.runtime` явный, но в `FlClashM` реестр резолвит только `mihomo`
+- `RuntimePlan.files` несёт артефакты для встроенных узлов
+- `RuntimePlan.builtInProxyNodes` несёт планы встроенных локальных узлов
+- `RuntimePlan.profileAccessControl` несёт нормализованный profile-driven split-tunneling
+- `RuntimeRegistry` — список разрешённых регистраций основных движков
+- `BuiltInProxyRegistry` — список разрешённых типов встроенных узлов с защитами обновления и отката
+- `MihomoEngineAdapter` — поддерживаемый движок и рабочий эталон
+- `BuiltInProxySupervisor` оркестрирует жизненный цикл встроенных узлов вокруг `MihomoEngineAdapter`
+- `NaiveProxyNodeController` держит процессы `naiveproxy` и отдаёт локальные SOCKS5-слушатели как обычные узлы профиля
+- Путь запуска/остановки Android VPN для `mihomo` идёт через `AccessControlService → AndroidRuntimeAccessPolicy`
+- Снимок управления доступом для `mihomo` подаётся в адаптер через границу компоновки, а не читается адаптером напрямую
+- Ожидающее обновление ядра `mihomo` применяется транзакционным обменом с откатом к предыдущему двоичному файлу
+- Ожидающее обновление `naiveproxy` проходит через `.pending → active → .rollback` в данных приложения
+- Путь запуска `mihomo` считает заголовок уведомления второстепенным и откатывает слушателя/VPN при неуспешном старте
+- Путь запуска/остановки `mihomo` учитывает запуск, остановку и откат встроенных узлов
+- `EngineManager` читает время запуска у адаптера при подключении и после сбоя остановки, чтобы состояние повторного подключения не дрейфовало
+- Путь холодного старта поднимает сохранённые узлы среды выполнения до `Core.quickStart`
 
 ## Контракты
 
@@ -44,7 +44,7 @@ Runtime слой подготавливается через явную product 
 Вход:
 
 - профиль
-- runtime config после локального script/evaluate path
+- конфигурация среды выполнения после локального выполнения скрипта
 
 Выход:
 
@@ -57,20 +57,20 @@ Runtime слой подготавливается через явную product 
 Вход:
 
 - `RawProfile`
-- локальный patch config
-- локальные override flags
+- локальная конфигурация патча
+- локальные флаги переопределения
 
 Выход:
 
 - `CompiledProfilePatch`
-- advisory-merged metadata без client hardening
+- метаданные с объединёнными рекомендательными подсказками, без принудительных правил клиента
 
 ### `SecurityPolicy`
 
 Вход:
 
 - `CompiledProfilePatch`
-- platform/client context
+- контекст платформы и клиента
 
 Выход:
 
@@ -83,97 +83,108 @@ Runtime слой подготавливается через явную product 
 
 - `RawProfile`
 - `SecuredProfilePatch`
-- runtime patch config после tun-access resolution
+- конфигурация патча после разрешения TUN-доступа
 
 Выход:
 
-- полный config для engine setup
-- `RuntimeSelection` для main engine
-- `builtInProxyNodes` для встроенных локальных узлов
-- runtime files для node-specific handoff
-- normalized Android split-tunneling policy и `profileAccessControl` override
-- metadata для UI handoff
+- полная конфигурация для настройки движка
+- `RuntimeSelection` для основного движка
+- `builtInProxyNodes` — планы встроенных локальных узлов
+- файлы среды выполнения для каждого узла
+- нормализованная политика Android split-tunneling и переопределение `profileAccessControl`
+- метаданные для передачи в UI
 
 ### `EngineManager`
 
-Ответственность:
+Отвечает за:
 
-- lifecycle engine/runtime
-- orchestration adapters через `RuntimeRegistry`
-- restart/update boundaries
-- cold-start snapshot refresh
-- start-time sync для reattach/cold-start recovery boundary
-- fail-fast guardrails для unsupported runtime selection
+- жизненный цикл движка и среды выполнения
+- оркестрацию адаптеров через `RuntimeRegistry`
+- границы перезапуска и обновления
+- обновление снимка при холодном старте
+- синхронизацию времени старта для восстановления повторного подключения
+- быстрый сбой при неподдерживаемом выборе среды выполнения
 
 ### `EngineAdapter`
 
-Ответственность:
+Отвечает за:
 
-- конкретный bridge для runtime
-- скрыть low-level детали `clashCore` / Android service path / cold-start persistence
-- брать уже вычисленный access-control handoff из product service, а не собирать policy локально
-- локально закрывать rollback/cleanup внутри runtime start/stop/update boundary, а не оставлять partial state наружу
+- конкретный мост для среды выполнения
+- сокрытие низкоуровневых деталей `clashCore`, пути Android-сервиса и холодного старта
+- получение уже вычисленного управления доступом из продуктового сервиса, а не сборку политики локально
+- локальное закрытие отката и очистки внутри границ запуска/остановки/обновления
 
-## Baseline `mihomo`
+## Эталон `mihomo`
 
-На конец этапа 5 `mihomo` считается production baseline со следующими гарантиями:
+`mihomo` считается рабочим эталоном со следующими гарантиями:
 
-- pending binary update либо целиком активируется, либо откатывается к предыдущему core с сохранением `.pending` для следующей попытки
-- runtime reattach использует `readStartTime` самого adapter, а не только локальный `EngineManager` timestamp
-- неуспешный `start` не должен оставлять висящий listener без VPN handoff
-- если rollback/cleanup после failed `start` или failed pending update сам ломается, это поднимается наружу как ошибка, а не маскируется `false`
-- `stop` и restart-prep не зависят от одного transport path: teardown/restart делаются best-effort по обеим сторонам boundary
-- cold-start persistence и runtime attach boundary зафиксированы product/runtime tests, а не только общими manager tests
+- Ожидающее обновление двоичного файла либо целиком активируется, либо откатывается
+  к предыдущему ядру, сохраняя `.pending` для следующей попытки.
+- Повторное подключение использует `readStartTime` адаптера, а не только локальную
+  временну́ю метку `EngineManager`.
+- Неуспешный запуск не оставляет висящего слушателя без VPN.
+- Если откат или очистка после неудачного запуска сами ломаются, это поднимается
+  наружу как ошибка, а не маскируется.
+- Остановка и подготовка к перезапуску не зависят от одного пути транспорта.
+- Холодный старт и граница подключения зафиксированы продуктовыми тестами.
 
-## Текущие регистрации
+## Встроенные узлы
 
-- `mihomo`
-  - default engine
-  - supported
-  - hardened production baseline для Android lifecycle/recovery/update path
-  - update path: bundled Android core через `setup.dart` -> repo-root `libclash/android`, независимо от `core/` working directory
-  - rollback path: bundled core + existing cold-start snapshot
-- `naiveproxy`
-  - supported built-in proxy node type
-  - integration contract: профиль описывает `naiveproxy` через обычный `proxies` entry с `type: naiveproxy`
-  - routing contract: узел сохраняет свое имя после compile stage, поэтому его можно включать в обычные `proxy-groups` и использовать в правилах без отдельного runtime режима
-  - config contract: built-in node обязан иметь `name` и `proxy`; client сам владеет `listen`, `server` и `port`
-  - update path: `setup.dart` вытягивает pinned stable release `v148.0.7778.96-5` из официальных plugin APK assets и пакует `libnaive.so` в bundled Flutter assets
-  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет runtime artifact в `RuntimePlan.files`; `NaiveProxyNodeController` пишет per-node `config.json`, рестартует только затронутые процессы и откатывает node config/process к предыдущему commit state, если `core.setupRuntimePlan` не применился
-  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальные SOCKS5 listeners `naiveproxy`
-  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
-  - cold-start path: adapter сохраняет runtime-node manifest, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
-- `olcrtc`
-  - supported built-in proxy node type
-  - integration contract: профиль описывает `olcrtc` через обычный `proxies` entry с `type: olcrtc`
-  - routing contract: узел сохраняет свое имя после compile stage и используется в обычных `proxy-groups`/`rules`
-  - config contract: built-in node всегда запускается как `mode: cnc`; client сам владеет `socks.host`, `socks.port`, `listen`, `server` и `port`; `crypto.key_file` в v1 запрещен
-  - update path: `setup.dart` собирает pinned commit `5dd6822d807e3352fe4452a3b071e043d958a020` из `openlibrecommunity/olcrtc` в bundled Android assets
-  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет `config.yaml` в `RuntimePlan.files`; `OlcRtcNodeController` пишет per-node config, рестартует только затронутые процессы и откатывает node config/process к предыдущему commit state
-  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальные SOCKS5 listeners `olcrtc`
-  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
-  - cold-start path: общий runtime-node manifest теперь объединяет `naiveproxy` и `olcrtc`, а `FlVpnService` поднимает нужные nodes до `Core.quickStart`
-- `byedpi`
-  - supported built-in proxy node type
-  - integration contract: профиль описывает `byedpi` через обычный `proxies` entry с `type: byedpi`
-  - routing contract: узел сохраняет свое имя после compile stage и используется в обычных `proxy-groups`/`rules`
-  - config contract: `mode: manual` принимает строку `args`; `mode: auto` принимает `strategies` или `strategy-list: byebyeedpi` и обязательно `test.urls`
-  - strategy contract: строки совместимы с ByeByeDPI, то есть это аргументы `ciadpi` без имени исполняемого файла; поддерживается подстановка `{sni}` из `test.sni`
-  - update path: `setup.dart` собирает pinned commit `ba532298de7b28cfe854aea83d061369d13ca290` из `hufrea/byedpi` в bundled Android assets и копирует pinned GPL-3.0 список стратегий из `romanvht/ByeByeDPI`
-  - activation path: compiler переписывает built-in node в локальный SOCKS5 proxy entry и кладет `config.json` в `RuntimePlan.files`; `ByedpiNodeController` пишет per-node config, быстро проверяет ограниченный набор стратегий, при отсутствии результата включает встроенную запасную стратегию, кэширует выбранные аргументы и откатывает node config/process к предыдущему commit state
-  - bridge path: Android VPN/TUN остается на текущем `clashCore` seam, который потребляет локальный SOCKS5 listener `byedpi`
-  - rollback path: failed pending activation восстанавливает предыдущий shared binary и сохраняет `.pending` для следующей попытки; failed profile apply откатывает только staging затронутых nodes
-  - cold-start path: общий runtime-node manifest сохраняет выбранные аргументы byedpi; `FlVpnService` поднимает узел до `Core.quickStart`
+### `naiveproxy`
+
+- Тип в профиле: `type: naiveproxy`
+- Узел сохраняет своё имя после компиляции и используется в обычных группах и правилах.
+- Обязательные поля в профиле: `name` и `proxy`. Поля `listen`, `server` и `port`
+  принадлежат клиенту.
+- Версия: pinned stable release `v148.0.7778.96-5` из официальных plugin APK assets.
+- Компилятор переписывает узел в локальную SOCKS5-запись; `NaiveProxyNodeController`
+  пишет `config.json`, перезапускает только затронутые процессы и откатывает при
+  неуспешном `setupRuntimePlan`.
+- При холодном старте адаптер сохраняет манифест узлов среды выполнения,
+  а `FlVpnService` поднимает нужные узлы до `Core.quickStart`.
+
+### `olcrtc`
+
+- Тип в профиле: `type: olcrtc`
+- Узел сохраняет своё имя после компиляции и используется в обычных группах и правилах.
+- Всегда запускается в режиме `mode: cnc`. Поля `socks.host`, `socks.port`, `listen`,
+  `server`, `port` и `crypto.key_file` принадлежат клиенту или запрещены.
+- Версия: pinned commit `5dd6822d807e3352fe4452a3b071e043d958a020` из `openlibrecommunity/olcrtc`.
+- Компилятор переписывает узел в локальную SOCKS5-запись; `OlcRtcNodeController`
+  пишет `config.yaml`, перезапускает только затронутые процессы и откатывает при
+  неуспехе.
+- Холодный старт: общий манифест узлов объединяет `naiveproxy` и `olcrtc`;
+  `FlVpnService` поднимает нужные узлы до `Core.quickStart`.
+
+### `byedpi`
+
+- Тип в профиле: `type: byedpi`
+- Узел сохраняет своё имя после компиляции и используется в обычных группах и правилах.
+- `mode: manual` принимает строку `args`. `mode: auto` принимает `strategies`
+  или `strategy-list: byebyeedpi` и обязательно `test.urls`.
+- Строки стратегий совместимы с ByeByeDPI — это аргументы `ciadpi` без имени
+  исполняемого файла. Поддерживается подстановка `{sni}` из `test.sni`.
+- Версия: pinned commit `ba532298de7b28cfe854aea83d061369d13ca290` из `hufrea/byedpi`
+  плюс pinned список стратегий из `romanvht/ByeByeDPI` под GPL-3.0.
+- При автоподборе клиент быстро проверяет первые стратегии; если подходящая
+  стратегия не найдена, включает запасную: `--disorder 1 --auto=torst --tlsrec 1+s`.
+  Выбранная стратегия кэшируется для холодного старта.
+- Запускается до применения профиля в `mihomo`, чтобы участвовать в первых
+  проверках доступности.
 
 ## Ограничения
 
-- Provider hints не определяют runtime floor.
-- `naiveproxy` listener path определяется клиентом, а не profile metadata.
-- `olcrtc` local SOCKS bind определяется клиентом, а не profile metadata.
-- `byedpi` local SOCKS bind определяется клиентом; profile не может задавать `ip`, `port`, `listen` или `server`.
-- `byedpi mode: auto` не делает скрытых проверок: URL проверки задаются только в профиле через `test.urls`; запасная стратегия является клиентским решением и не расширяет provider-контракт.
-- built-in proxy nodes поддерживаются только в `proxies`, а не в `proxy-providers`.
-- Unsupported runtime/node нельзя включить без registry change.
-- Runtime orchestration не должна разъезжаться между UI/controller/service bridge.
-- split tunneling/access-control orchestration не должна обходить `AccessControlService`.
-- raw profile читается напрямую из YAML на клиенте, чтобы compile stage видел built-in proxy nodes и client-only Android fields до handoff в core.
+- Подсказки провайдера не определяют политику безопасности среды выполнения.
+- Адрес слушателя `naiveproxy` определяется клиентом, не метаданными профиля.
+- Локальная привязка `olcrtc` определяется клиентом, не метаданными профиля.
+- Локальная привязка `byedpi` определяется клиентом; профиль не может задавать
+  `ip`, `port`, `listen` или `server`.
+- `byedpi mode: auto` проверяет только URL, явно заданные в `test.urls` профиля.
+  Скрытых целей для сетевых проверок нет.
+- Встроенные узлы поддерживаются только в `proxies`, не в `proxy-providers`.
+- Неподдерживаемую среду выполнения или узел нельзя включить без изменения реестра.
+- Оркестрация среды выполнения не должна расходиться между UI, контроллером
+  и мостом сервиса.
+- Оркестрация split-tunneling не должна обходить `AccessControlService`.
+- Профиль читается напрямую из YAML на клиенте, чтобы этап компиляции видел
+  встроенные узлы и клиентские поля Android до передачи в ядро.

@@ -1,45 +1,49 @@
-# Branding
+# Идентификаторы бренда
 
-Этот документ фиксирует, что именно в проекте считается брендом `FlClashM`, где это зашито и как это должно меняться дальше.
+Этот документ фиксирует, что именно считается брендом `FlClashM`, где это зашито
+и как должно меняться.
 
-## Product brand
+## Продукт
 
-- Название продукта: `FlClashM`
-- Android continuity package: `com.makriq.flclash`
-- release repository: `makriq-org/FlClashM`
-- Android artifact prefix: `FlClashM-android-*`
+- Название: `FlClashM`
+- Android-пакет для непрерывности: `com.makriq.flclash`
+- Репозиторий релизов: `makriq-org/FlClashM`
+- Префикс артефактов Android: `FlClashM-android-*`
 
-## Public identifiers
+## Публичные идентификаторы
 
-- deep link scheme: `flclashm://`
-- generic import scheme, который клиент продолжает принимать: `clash://`
-- provider customization headers: `flclashm-*`
-- TV sync payload type: `flclashm_tv_sync`
+- Схема deep link: `flclashm://`
+- Схема импорта профилей (принимается для совместимости): `clash://`
+- Заголовки подсказок провайдера: `flclashm-*`
+- Тип payload TV-синхронизации: `flclashm_tv_sync`
 - Android runtime method channels:
   - `com.makriq.flclash/service`
   - `com.makriq.flclash/device_id`
-- Android widget/service action namespace: `com.makriq.flclash.*`
+- Пространство имён действий Android-виджета и сервиса: `com.makriq.flclash.*`
 
-## Android runtime names
+## Идентификаторы Android
 
-- Quick Settings tile service class: `FlClashMTileService`
-- notification channel IDs:
+- Класс плитки быстрых настроек: `FlClashMTileService`
+- Идентификаторы каналов уведомлений:
   - `FlClashM`
   - `FlClashM_Subscription`
-- persisted helper filenames:
+- Вспомогательные файлы:
   - `flclashm_always_on.json`
   - `flclashm_runtime_nodes.json`
   - `flclashm_vpn_active`
   - `flclashm_notif_title`
-- documents provider root id: `flclashm`
+- Корневой идентификатор провайдера документов: `flclashm`
 
-## Migration notes
+## Миграция из старых версий
 
-- Из старых `flclashx_*` Android helper files выполняется тихий перенос в новые `flclashm_*` имена при первом чтении.
-- Старые notification channels `FlClashX*` удаляются при старте remote service.
-- Старый payload type `flclashx_tv_sync` и старые product headers `flclashx-*` больше не считаются частью продуктового контракта.
+- Старые вспомогательные файлы `flclashx_*` тихо переносятся в `flclashm_*`
+  при первом чтении.
+- Старые каналы уведомлений `FlClashX*` удаляются при запуске удалённого сервиса.
+- Старый тип payload `flclashx_tv_sync` и заголовки `flclashx-*` больше не входят
+  в продуктовый контракт.
 
-## Non-public implementation detail
+## Внутреннее пространство имён
 
-- Внутренний source namespace `com.follow.clashx*` в Android-коде пока остается частью унаследованной базы.
-- Это не считается брендом продукта и не должно утекать в новые публичные контракты, документацию или интеграции.
+Внутренний source namespace `com.follow.clashx*` в Android-коде пока остаётся
+частью унаследованной базы. Это не бренд продукта и не должно утекать в новые
+публичные контракты, документацию или интеграции.

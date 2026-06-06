@@ -2,28 +2,21 @@
 
 ## Контекст
 
-- Этот репозиторий — новый продуктовый bootstrap `FlClashM`.
-- База кода взята из `FlClashX`.
-- Android continuity обязательно сохраняется относительно `FlClash-my`:
-  - `applicationId`: `com.makriq.flclash`
-  - релизная подпись: те же секреты `KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, `KEY_PASSWORD`
-  - `versionCode` каждой новой версии должен быть выше последней публичной версии `FlClash-my`
-- Новый целевой release channel: `makriq-org/FlClashM`.
+- Проект: `FlClashM` — Android-клиент для `mihomo`, форк `FlClashX`.
+- Текущий режим: `maintenance/cheap-upstream`.
+- `applicationId`: `com.makriq.flclash` — не менять.
+- Релизный канал: `makriq-org/FlClashM`.
 
 ## Правила работы
 
 - Писать кратко и по существу.
 - Предпочитать простые, предсказуемые и обратимые решения.
-- Любое нетривиальное решение документировать.
 - Не размазывать product-логику по базе без явной архитектурной причины.
 - Security-critical поведение не должно зависеть от provider headers.
-- Перед любой новой runtime-интеграцией сначала определить:
-  - место в архитектуре
-  - контракт
-  - ограничения безопасности
-  - сценарий обновления и отката
+- Перед любой новой runtime-интеграцией зафиксировать: место в архитектуре,
+  контракт, ограничения безопасности, update/rollback path.
 
-## Архитектурная цель
+## Архитектура
 
 Главная цепочка:
 
@@ -31,97 +24,30 @@
 
 Слои:
 
-1. `FlClashX Base`
-- UI
-- навигация
-- базовый runtime path
-- то, что удобно обновлять из upstream
+1. `FlClashX Base` — UI, навигация, базовый runtime path.
+2. `Product Layer` (`lib/product/**`) — компиляция профиля, security policy, обновления.
+3. `Runtime Layer` — `mihomo` (baseline), built-in nodes: `naiveproxy`, `olcrtc`, `byedpi`.
+4. `Platform Layer` — Android VPN, foreground service, installer bridge.
 
-2. `Product Layer`
-- логика `FlClashM`
-- compile pipeline
-- security policy
-- update logic
+Base-код вне `lib/product/**` знает о product layer только через разрешенные
+touchpoints из `tool/product_touchpoints.json`.
 
-3. `Runtime Layer`
-- `mihomo`
-- `olcrtc`
-- `naiveproxy`
+## Документация
 
-4. `Helper Layer`
-- `byedpi` как helper, а не как основной engine
+- `docs/architecture.md` — слои, границы, контракты сервисов.
+- `docs/runtime.md` — runtime цепочка, контракты, built-in nodes.
+- `docs/security-policy.md` — Android security floor, правила подписок.
+- `docs/product-customization.md` — контракт `flclashm-*` подсказок.
+- `docs/release-contract.md` — правила релизов, pipeline, rollback.
+- `docs/upstream-maintenance.md` — как обновляться из `FlClashX`.
+- `docs/base-verification.md` — локальная и CI-проверка.
+- `docs/branding.md` — публичные идентификаторы.
+- `docs/byedpi.md` — профильный контракт byedpi.
 
-5. `Platform Layer`
-- Android VPN
-- permissions
-- installer/update bridge
-- foreground service
+## Текущие ограничения
 
-## Принципы
-
-- `FlClashX` использовать как обновляемую базу, а не как место для хаотичных патчей.
-- Все продуктовые изменения по возможности держать в узком adapter/product layer.
-- `olcrtc` и `naiveproxy` подключать как engine adapters.
-- Android security policy определяется клиентом, а не подпиской.
-- Поставщик может передавать metadata и hints, но не ослаблять security floor.
-
-## Текущий этап
-
-Фаза: `bootstrap/rebrand`
-
-Цели:
-
-1. Поднять новый репозиторий `FlClashM` на базе `FlClashX`.
-2. Сохранить Android continuity из `FlClash-my`.
-3. Зафиксировать архитектуру и правила до начала большой миграции.
-
-## Поэтапный план
-
-1. Bootstrap и rebrand
-- новый репозиторий
-- новое имя продукта
-- новый release channel
-- сохранение Android continuity
-
-2. Выделение seam в базе
-- profile loading
-- profile compile
-- runtime start/stop
-- Android VPN policy
-- update/install path
-
-3. Встраивание product layer
-- `ProfileCompiler`
-- `SecurityPolicy`
-- `EngineManager`
-- `UpdateService`
-
-4. Перенос текущих функций из `FlClash-my`
-- updater
-- split tunneling
-- нужные Android policy-части
-
-5. Стабилизация базы
-- сборка
-- запуск VPN
-- обновление
-- регрессии
-
-6. Интеграция runtime по одному
-- `olcrtc`
-- `naiveproxy`
-- `byedpi`
-
-## Что документировать обязательно
-
-- новые контракты модулей
-- security-sensitive решения
-- миграции данных и update path
-- ограничения каждого engine/helper
-
-## Ближайшие документы
-
-- `docs/architecture.md`
-- `docs/runtime.md`
-- `docs/security-policy.md`
-- `docs/migration-plan.md`
+- В дереве еще есть legacy desktop/base код — он не является целью релизов.
+- Часть UI/lifecycle wiring идет через legacy `GlobalState`/controller — не ломать
+  baseline при cleanup.
+- Cold-start и runtime-node path нужно проверять на реальных Android ABI после
+  каждой новой built-in node интеграции.

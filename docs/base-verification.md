@@ -1,10 +1,10 @@
-# Base Verification
+# Предварительная проверка
 
-## Минимальный stabilization gate
+## CI-проверка
 
-Базовый gate для `push`/`pull_request`: `.github/workflows/android-base-verification.yaml`
+Базовый шлюз для `push`/`pull_request`: `.github/workflows/android-base-verification.yaml`
 
-Он проверяет:
+Проверяет:
 
 - `dart tool/check_product_boundaries.dart`
 - `dart tool/check_release_continuity.dart`
@@ -14,17 +14,21 @@
 
 Почему именно так:
 
-- analyze намеренно ограничен product/tooling scope, чтобы gate оставался строгим, но не упирался в legacy info-шум по всему репо.
-- smoke собирает `arm64` в `release`, потому что это ближе к реальному Android path, чем `debug`, но заметно дешевле полного tag-release с split APK, universal APK и AAB.
-- `push` ограничен branch pushes, чтобы gate не дублировал tag-release pipeline: GitHub не применяет `paths`-фильтр к tag push.
-- signed release, full multi-ABI packaging и release upload остаются в `.github/workflows/build.yaml`.
-- release signing bridge в tag-release path auto-detect'ит `JKS`/`PKCS12`; локальный smoke без release secrets это не проверяет.
-- continuity signer SHA-256 теперь проверяется только в tag-release path после реальной сборки подписанного APK.
-- Полный tag-release contract, rollback/update правила и post-build guards зафиксированы в `docs/release-contract.md`.
+- Анализ намеренно ограничен продуктовым scope, чтобы шлюз оставался строгим,
+  но не упирался в legacy info-шум по всему репозиторию.
+- Smoke-сборка использует `arm64 release`, потому что это ближе к реальному
+  Android-пути, чем `debug`, но заметно дешевле полного тег-релиза с split APK,
+  universal APK и AAB.
+- Пуш ограничен ветками, чтобы шлюз не дублировал конвейер тег-релизов: GitHub
+  не применяет `paths`-фильтр к пушу тегов.
+- Подписанный релиз, полная multi-ABI упаковка и публикация остаются в
+  `.github/workflows/build.yaml`.
+- Проверка SHA-256 сертификата подписи выполняется только в конвейере тег-релизов
+  после реальной сборки подписанного APK.
 
-## Локально на свежей NixOS
+## Локально на NixOS
 
-Минимальный локальный preflight без Android SDK:
+Минимальная локальная проверка без Android SDK:
 
 ```bash
 nix shell nixpkgs#flutter nixpkgs#go --command bash -lc '
@@ -46,21 +50,23 @@ nix shell nixpkgs#flutter nixpkgs#go --command bash -lc '
 '
 ```
 
-Этого достаточно, чтобы перед `push` воспроизвести быстрые gate-части на чистой машине.
+Этого достаточно, чтобы воспроизвести быстрые части шлюза перед пушем.
 
-## Локальный Android smoke
+## Локальная Android smoke-сборка
 
 Нужны:
 
 - `ANDROID_SDK_ROOT` или `ANDROID_HOME`
 - Android NDK `28.0.13004108` в `$ANDROID_SDK_ROOT/ndk/28.0.13004108` или явный `ANDROID_NDK`
-- Android SDK platform/build-tools `34`, `35`, `36` и `cmake;3.22.1`
+- Android SDK: platform/build-tools `34`, `35`, `36` и `cmake;3.22.1`
 - JDK 17
 
-На свежей NixOS:
+На NixOS AGP может пытаться запускать скачанный через Maven `aapt2`, который
+падает на stub-ld. Для локальной сборки задайте:
 
-- AGP может пытаться запускать maven-downloaded `aapt2`, который падает на stub-ld.
-- Для локальной сборки задавай `GRADLE_OPTS=-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt2`.
+```
+GRADLE_OPTS=-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt2
+```
 
 Команда:
 
@@ -69,7 +75,7 @@ nix shell nixpkgs#flutter nixpkgs#go nixpkgs#jdk17 nixpkgs#android-tools --comma
   export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt2" &&
   flutter pub get &&
   dart setup.dart android --arch arm64 --out core &&
-  core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\''\\(.*\\)'\'';$/\\1/p" lib/core_version.dart) &&
+  core_version=$(sed -n "s/^const String kCoreVersionFromSource = '"'"'\(.*\)'"'"';$/\1/p" lib/core_version.dart) &&
   test -n "$core_version" &&
   flutter build apk \
     --release \
@@ -79,12 +85,13 @@ nix shell nixpkgs#flutter nixpkgs#go nixpkgs#jdk17 nixpkgs#android-tools --comma
 '
 ```
 
-Если SDK/NDK на машине еще нет, минимальный локальный путь заканчивается на preflight выше, а Android smoke должен пройти в CI.
+Если SDK/NDK на машине нет, минимальная локальная проверка заканчивается на
+шаге выше без Android SDK, а smoke-сборка выполняется в CI.
 
-## Что этот gate не покрывает
+## Что этот шлюз не покрывает
 
-- release signing secrets и публикацию
-- split-per-ABI release APK
-- universal release APK
-- `appbundle`
-- полный repo-wide analyze без legacy noise cleanup
+- Секреты релизной подписи и публикацию
+- Split-APK по каждому ABI
+- Universal APK
+- App bundle (AAB)
+- Полный анализ репозитория без legacy-шума

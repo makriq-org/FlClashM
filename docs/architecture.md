@@ -1,32 +1,33 @@
-# Architecture
+# Архитектура
 
 ## Цель
 
-`FlClashM` развивается как `Android-only` клиент на обновляемой базе `FlClashX`.
+`FlClashM` — Android-клиент на обновляемой базе `FlClashX`.
 
-Ключевая продуктовая цепочка в коде:
+Вся обработка профиля идёт через явную цепочку:
 
-`RawProfile -> ProfileCompiler -> SecurityPolicy -> RuntimePlan -> EngineManager -> EngineAdapter`
+`RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineManager → EngineAdapter`
 
-На выходе из `bootstrap/rebrand` эта цепочка собрана в `lib/product/**` без размазывания product policy по upstream-friendly base.
+Граница между базой `FlClashX` и продуктовым кодом зафиксирована через:
 
-Граница между `FlClashX Base` и `FlClashM` теперь дополнительно зафиксирована через:
+- `tool/product_touchpoints.json` — список разрешённых точек интеграции
+- `dart tool/check_product_boundaries.dart` — проверка этого списка
 
-- `docs/upstream-maintenance.md`
-- `tool/product_touchpoints.json`
-- `dart tool/check_product_boundaries.dart`
-
-Guard сравнивает base touchpoints с каноническими product-targets в `lib/product/**`, а не с конкретным стилем import/export записи.
+Проверка сравнивает канонические цели в `lib/product/**`, а не конкретный вид
+import-строк, поэтому package-импорт и относительный импорт считаются
+эквивалентными, если указывают в тот же файл.
 
 ## Слои
 
-### 1. FlClashX Base
+### 1. База FlClashX
 
-- Flutter UI primitives
-- upstream-friendly widgets/providers/models
-- базовый clash/runtime path
+- Элементы Flutter UI
+- Виджеты, провайдеры, модели, удобные для обновления из upstream
+- Базовый путь clash/runtime
 
-### 2. Product Layer
+### 2. Продуктовый слой
+
+Живёт в `lib/product/**`. Содержит:
 
 - `AppBootstrap`
 - `ProductPlatformProfile`
@@ -40,149 +41,159 @@ Guard сравнивает base touchpoints с каноническими produc
 - `AccessControlService`
 - `AndroidShellService`
 
-### 3. Runtime Layer
+### 3. Слой среды выполнения
 
-- основной runtime: `mihomo`
+- Основная среда выполнения: `mihomo`
 - `BuiltInProxyRegistry`
 - `BuiltInProxySupervisor`
 - `NaiveProxyNodeController`
 - `EngineAdapter`
-- `RuntimeRegistry` как allowlist только для main engine selection
-- built-in node registrations для `naiveproxy`, `byedpi`, `olcrtc`
+- `RuntimeRegistry` — список разрешённых движков
+- Регистрации встроенных узлов: `naiveproxy`, `byedpi`, `olcrtc`
 
-### 4. Built-in Node Layer
+### 4. Слой встроенных узлов
 
-- built-in transports оформляются как обычные profile nodes, а не как отдельные engines/helpers
-- per-node lifecycle/config/rollback идет через runtime supervisor
-- current supported paths: `naiveproxy`, `olcrtc`, `byedpi`
+- Встроенные транспорты оформляются как обычные узлы профиля, а не отдельные движки
+- Жизненный цикл и откат каждого узла управляются через `BuiltInProxySupervisor`
+- Поддерживаемые узлы: `naiveproxy`, `olcrtc`, `byedpi`
 
-### 5. Platform Layer
+### 5. Слой платформы
 
-- Android VPN/service bridge
-- permissions
-- foreground service
-- quick settings tile
-- Android platform policies/bridges (`AndroidForegroundNotificationPolicy`, `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`, `AndroidRuntimeNodeBridge`)
+- Android VPN/сервис
+- Разрешения
+- Постоянный сервис (foreground service)
+- Плитка быстрых настроек
+- Платформенные политики и мосты: `AndroidForegroundNotificationPolicy`,
+  `AndroidShellBridge`, `AndroidRuntimeAccessPolicy`, `AndroidUpdateBridge`,
+  `AndroidRuntimeNodeBridge`
 
-## Текущий handoff
+## Ответственность сервисов
 
 ### `ProductProfilePipeline`
 
-Ответственность:
+Отвечает за:
 
-- собрать product runtime pipeline в одном месте
-- держать явные стадии compile/security/runtime-plan
-- скрыть wiring между `GlobalState` и product contracts
+- Сборку продуктового конвейера обработки профиля в одном месте
+- Явные стадии: компиляция → политика безопасности → план среды выполнения
+- Скрытие внутренних связей между `GlobalState` и продуктовыми контрактами
 
 Не должен:
 
-- владеть lifecycle runtime
-- читать/писать UI state напрямую
+- Управлять жизненным циклом среды выполнения
+- Читать или писать состояние UI напрямую
 
 ### `ProfileCompiler`
 
-Ответственность:
+Отвечает за:
 
-- читать `RawProfile`
-- применять только advisory provider hints
-- восстанавливать client-only Android split-tunneling поля из raw profile source перед runtime-plan stage
-- нормализовать `tun.include/exclude-package*` в точные package names и typed profile access-control override
-- собирать `CompiledProfilePatch` и metadata
+- Чтение `RawProfile`
+- Применение только рекомендательных подсказок провайдера
+- Восстановление клиентских полей Android split-tunneling из источника профиля
+  до этапа планирования среды выполнения
+- Нормализацию `tun.include/exclude-package*` в точные имена пакетов
+- Сборку `CompiledProfilePatch` и метаданных
 
 Не должен:
 
-- принимать client security decisions
-- включать Android floor напрямую
+- Принимать решения, критичные для безопасности клиента
+- Напрямую включать защиты Android
 
 ### `SecurityPolicy`
 
-Ответственность:
+Отвечает за:
 
-- применять client-enforced runtime floor
-- применять тот же floor к прямым runtime updates
-- выдавать `SecuredProfilePatch`
-- отделять обязательные client rules от provider hints
+- Применение обязательных правил клиента к результату компиляции
+- Применение тех же правил к прямым обновлениям среды выполнения
+- Выдачу `SecuredProfilePatch`
+- Разделение обязательных правил клиента и рекомендательных подсказок провайдера
 
 Не должен:
 
-- зависеть от provider headers как от обязательной policy
-- ослаблять Android floor по данным подписки
+- Зависеть от заголовков провайдера как от обязательной политики
+- Ослаблять защиты Android по данным подписки
 
 ### `EngineManager`
 
-Ответственность:
+Отвечает за:
 
-- lifecycle engine/runtime
-- orchestration adapters через `RuntimeRegistry`
-- restart/update/cold-start boundaries
-- compile-to-runtime handoff через явные callbacks `compile -> security -> runtimePlan`
-- применять уже secured runtime updates перед adapter bridge
+- Жизненный цикл движка и среды выполнения
+- Оркестрацию адаптеров через `RuntimeRegistry`
+- Границы перезапуска, обновления и холодного старта
+- Явную передачу между стадиями: компиляция → политика → план среды выполнения
+- Применение уже защищённых обновлений до моста адаптера
 
 Не должен:
 
-- содержать engine-specific bridge details
-- принимать provider-specific product decisions
+- Содержать детали конкретного движка
+- Принимать продуктовые решения, специфичные для провайдера
 
 ### `AppUpdateService`
 
-Ответственность:
+Отвечает за:
 
-- product policy для auto/manual update check
-- result handling policy поверх Android update bridge
-- оркестрировать Android updater path с ABI selection, SHA256 verification и installer handoff
-- отделить UI/controller от Android update transport details
+- Политику автоматической и ручной проверки обновлений
+- Обработку результатов поверх Android-моста обновлений
+- Оркестрацию пути обновления Android: выбор ABI, проверка SHA256, передача
+  установщику
+- Разделение UI/контроллера и деталей транспорта обновлений
 
 Не должен:
 
-- знать про widget state кроме переданного loading runner
-- смешивать update policy с runtime orchestration
+- Знать о состоянии виджетов, кроме переданного загрузочного обработчика
+- Смешивать политику обновлений с оркестрацией среды выполнения
 
 ### `AccessControlService`
 
-Ответственность:
+Отвечает за:
 
-- централизовать split tunneling/access-control session state
-- держать handoff `UI state -> AccessControl -> Android runtime access path`
-- держать package inventory/icon handoff для access UI внутри product/platform seam
-- применять client-managed приоритет profile split tunneling над persisted manual access-control state
-- отдавать TUN authorization orchestration в platform seam без размазывания по controller/view/runtime adapter
+- Централизацию состояния сессии split-tunneling и управления доступом
+- Передачу между состоянием UI и `AccessControl` → путём доступа Android в среде выполнения
+- Инвентаризацию пакетов и передачу иконок для UI управления доступом
+- Явный приоритет profile-driven split tunneling над ручным управлением доступом
+- Делегирование оркестрации TUN-авторизации на платформенный уровень
 
 Не должен:
 
-- читать provider headers
-- жить внутри Android transport bridge
+- Читать заголовки провайдера
+- Жить внутри моста транспорта Android
 
 ### `AndroidShellService`
 
-Ответственность:
+Отвечает за:
 
-- локализовать foreground notification sync/title handoff для Android runtime shell
-- локализовать tile sync/signaling (`serviceReady`, profile change, mode, global-mode visibility)
-- локализовать app-shell hooks (`tip`, shortcuts, move-task-to-back, exclude-from-recents, exit hook)
-- держать `AndroidEntrypoint` тонким consumer'ом product/runtime событий
+- Синхронизацию заголовка уведомления постоянного сервиса Android
+- Синхронизацию и сигналы плитки: `serviceReady`, смена профиля, режим, видимость
+  режима
+- Хуки оболочки приложения: `tip`, ярлыки, `moveTaskToBack`, `excludeFromRecents`,
+  хук выхода
+- Сохранение `AndroidEntrypoint` тонким потребителем событий продукта и среды выполнения
 
 Не должен:
 
-- содержать `MethodChannel`/plugin детали
-- принимать runtime policy decisions вне shell orchestration
+- Содержать детали `MethodChannel` и плагинов
+- Принимать решения о политике среды выполнения вне оркестрации оболочки
 
-## Thin consumers
+## Тонкие потребители
 
-- `GlobalState` теперь только грузит `RawProfile`, строит локальный context для product pipeline и проецирует compiled metadata в UI-facing notifiers.
-- `AppController` остается UI/runtime consumer: запускает manager, делегирует update/access/android-shell product services и применяет typed product advisory patch, не разбирая raw provider headers.
-- `AndroidEntrypoint` принимает tile команды, но shell transport/hook details делегирует в `AndroidShellService`.
-- `AboutView` использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
-- `AccessView` и `MihomoEngineAdapter` используют `AccessControlService`, а не держат platform/runtime access policy локально.
-- `RuntimePlan` несет normalized profile split-tunneling override, а adapters читают его через composition boundary вместо парсинга profile YAML на старте VPN.
-- `NaiveProxyNodeController` держит multi-instance process lifecycle в `AndroidRuntimeNodeBridge`, а не размазывает `MethodChannel` детали по runtime/base коду.
-- `ByedpiNodeController` запускается до применения профиля в `mihomo`, чтобы локальный SOCKS5 listener участвовал в первых проверках доступности и fallback selection.
-- `providers/config`, `AppStateManager`, `AndroidManager` и `Application` остаются thin consumers и не знают про `app/tile/vpn` plugin детали.
-- `providers/views/services` получают display/customization hints через `lib/product/subscription/**` и thin selectors, а не через raw `providerHeaders[...]`.
+Компоненты, которые только потребляют события, не содержат логики:
 
-## Android-only правила
+- `GlobalState` — только загружает `RawProfile`, строит контекст для продуктового
+  конвейера и проецирует скомпилированные метаданные в уведомители UI.
+- `AppController` — запускает менеджер, делегирует продуктовым сервисам обновление,
+  управление доступом и оболочку Android.
+- `AndroidEntrypoint` — принимает команды плитки, но делегирует детали транспорта
+  в `AndroidShellService`.
+- `AboutView` — использует `AppUpdateService`, а не `AndroidUpdateBridge` напрямую.
+- `AccessView` и `MihomoEngineAdapter` — используют `AccessControlService`.
+- `NaiveProxyNodeController` — держит жизненный цикл процессов в `AndroidRuntimeNodeBridge`.
+- `ByedpiNodeController` — запускается до применения профиля в `mihomo`, чтобы
+  локальный SOCKS5-слушатель участвовал в первых проверках доступности.
 
-- Android считается единственной поддерживаемой runtime platform.
-- Android runtime policy задаётся клиентом, не подпиской.
-- Security-critical поведение не определяется provider headers.
-- Release continuity держится относительно `FlClash-my`.
-- Base вне `lib/product/**` может зависеть от product layer только через intentional touchpoints из `tool/product_touchpoints.json`.
+## Правила для Android
+
+- Android — единственная поддерживаемая платформа.
+- Политика безопасности Android определяется клиентом, не подпиской.
+- Решения, критичные для безопасности, не зависят от заголовков провайдера.
+- Непрерывность обновлений поддерживается относительно `FlClash-my`.
+- Код вне `lib/product/**` может зависеть от продуктового слоя только через
+  явно разрешённые точки из `tool/product_touchpoints.json`.

@@ -6,36 +6,18 @@
 [![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` — Android-клиент для `mihomo` на базе `FlClashX`.
-
-Проект сохраняет установочный пакет `com.makriq.flclash` и канал релизов
-`makriq-org/FlClashM`, чтобы обновления продолжали приходить пользователям
-старой Android-ветки `FlClash-my`.
+`FlClashM` — Android-клиент для `mihomo`.
 
 ## Возможности
 
 - VPN/TUN-подключение через `mihomo`.
-- Профили из ссылки, файла, QR-кода и передачи на Android TV.
-- Режимы `rule`, `global`, `direct`, проверка задержек и выбор узлов в группах.
-- Встроенные локальные узлы `naiveproxy`, `olcrtc` и `byedpi`.
+- Профили из ссылки, файла, QR-кода и передачи с Android TV.
+- Режимы `rule`, `global`, `direct`, проверка задержек, выбор узлов в группах.
+- Встроенные локальные узлы: `naiveproxy`, `olcrtc`, `byedpi`.
 - Виджеты главной страницы: профиль, трафик, IP, режим, смена узла, сведения сервиса.
-- Настройки внешнего вида и поведения через безопасные подсказки `flclashm-*`.
-- Загрузчик обновлений с обычными и предварительными релизами, отказом от найденной
-  версии и показом хода скачивания.
+- Настройки внешнего вида через подсказки провайдера.
+- Загрузчик обновлений со стабильными и предварительными релизами.
 - Постоянное уведомление и плитка быстрых настроек Android.
-
-## Отличия от базы
-
-- Поддерживается только Android. Код других платформ остается в дереве как часть
-  унаследованной базы, но не является целью релизов.
-- Продуктовая логика вынесена в `lib/product/**`: компиляция профиля, политика
-  безопасности, запуск ядра, обновления и Android-мосты.
-- Критичные для безопасности решения принимает клиент. Подписка может передавать только
-  сведения и подсказки, но не может ослабить базовую Android-политику.
-- `naiveproxy`, `olcrtc` и `byedpi` подключены как обычные узлы профиля через
-  локальные SOCKS5-слушатели.
-- Ссылка на используемое ядро: [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo).
-- База проекта: [pluralplay/FlClashX](https://github.com/pluralplay/FlClashX).
 
 ## Скачать
 
@@ -65,9 +47,9 @@ flutter test test/product
 flutter build apk --debug
 ```
 
-Проверка релизного пути описана в [docs/base-verification.md](docs/base-verification.md).
 Подписанные публичные релизы собираются через GitHub Actions и требуют секреты
 `KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, `KEY_PASSWORD`.
+Полный процесс описан в [docs/release-contract.md](docs/release-contract.md).
 
 ## Настройки провайдера
 
@@ -91,12 +73,12 @@ flutter build apk --debug
 - [Среда выполнения и встроенные узлы](docs/runtime.md)
 - [ByeDPI](docs/byedpi.md)
 - [Политика безопасности](docs/security-policy.md)
-- [План миграции](docs/migration-plan.md)
 - [Контракт релизов](docs/release-contract.md)
+- [Обновление базы](docs/upstream-maintenance.md)
 - [Границы совместимости](docs/compatibility-boundaries.md)
 
 ## Лицензия
 
-Код распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные
-исполняемые файлы сохраняют свои исходные лицензии; сведения о них находятся в
-`assets/runtimes/**/README.md` и профильных документах `docs/**`.
+Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные
+исполняемые файлы сохраняют свои исходные лицензии — сведения о них находятся в
+`assets/runtimes/**/README.md` и соответствующих документах в `docs/`.

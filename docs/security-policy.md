@@ -1,91 +1,105 @@
-# Security Policy
+# Политика безопасности
 
 ## Базовый принцип
 
-Android security policy определяется клиентом `FlClashM`.
+Политика безопасности Android определяется клиентом `FlClashM`.
 
 Провайдер подписки может передавать:
 
-- metadata
-- display hints
-- advisory runtime hints
+- метаданные
+- подсказки оформления
+- рекомендательные подсказки среды выполнения
 
 Провайдер не может:
 
-- ослаблять client security floor
-- задавать обязательное security-critical поведение через headers
+- ослаблять защиты клиента
+- задавать обязательное поведение, критичное для безопасности, через заголовки
 
-## Текущий контракт
+## Контракт
 
-Product-level security boundary теперь выражена типами:
+Граница безопасности выражена типами:
 
-- advisory provider side: `ProviderAdvisoryHints`, `ProviderNetworkHints`, `ProviderRuntimeHints`
-- compile result: `CompiledProfilePatch`
-- client-enforced policy result: `SecuredProfilePatch`
-- runtime hardening flags: `RuntimeSecurityConstraints`
+- Рекомендательная сторона провайдера: `ProviderAdvisoryHints`, `ProviderNetworkHints`, `ProviderRuntimeHints`
+- Результат компиляции: `CompiledProfilePatch`
+- Результат применения клиентских правил: `SecuredProfilePatch`
+- Флаги принудительной защиты: `RuntimeSecurityConstraints`
 
 Это означает:
 
-- `ProfileCompiler` только читает advisory hints
-- `SecurityPolicy` применяет обязательные client rules и для compile handoff, и для direct runtime updates
-- `EngineManager` больше не работает с объединенным “patch+policy” этапом
+- `ProfileCompiler` только читает рекомендательные подсказки
+- `SecurityPolicy` применяет обязательные правила клиента и к результату компиляции,
+  и к прямым обновлениям среды выполнения
+- `EngineManager` больше не работает с объединённым этапом "патч + политика"
 
-## Android floor
+## Защиты Android
 
-Текущий Android floor:
+- Среда выполнения Android работает через VPN/TUN.
+- `AndroidSecurityPolicy` принудительно включает TUN на этапе политики безопасности
+  и для прямых обновлений конфигурации.
+- Строитель плана среды выполнения применяет принудительные настройки TUN по
+  `RuntimeSecurityConstraints`.
+- `AccessControlService` собирает управление доступом VPN Android на стороне клиента
+  из локального `vpnProps.accessControl`.
+- Profile-driven split-tunneling из профиля имеет явный приоритет над ручным
+  управлением доступом. Явный режим включения с пустым набором пакетов не откатывается
+  к ручному управлению.
+- Файловые и URL-списки пакетов ограничены каталогом профилей и кэшируются
+  per-profile с откатом только к последней валидной локальной копии.
+- Загрузчик обновлений принимает только APK, прошедший проверку SHA256 перед
+  передачей установщику.
+- Flutter HTTP-путь не отключает глобальную проверку TLS. Локальный обход для
+  плоскости управления реализован как отдельное правило маршрутизации, а не
+  через `badCertificateCallback=true`.
+- Встроенные узлы не могут задавать `listen`, `server` или `port` самостоятельно:
+  локальная привязка и порты принадлежат клиенту.
+- Узлы `olcrtc` не могут задавать `socks.host`/`socks.port`, `mode: srv/gen`
+  или `crypto.key_file`. Клиент Android поддерживает только локальный `mode: cnc`.
+- Узлы `byedpi` не могут задавать `ip`, `port`, `listen` или `server`. Клиент сам
+  добавляет локальную SOCKS-привязку в аргументы процесса.
+- `byedpi mode: auto` проверяет только URL, явно заданные в `test.urls` профиля.
+  Встроенный список ByeByeDPI содержит только стратегии, а не цели сетевых проверок.
 
-- Android runtime идет через VPN/TUN path
-- `AndroidSecurityPolicy` принудительно включает TUN на security stage
-- тот же `AndroidSecurityPolicy` принудительно включает TUN и для live `updateConfig` path
-- runtime plan builder применяет Android tun hardening по `RuntimeSecurityConstraints`
-- `AccessControlService` собирает Android VPN access-control client-side из локального `vpnProps.accessControl`
-- profile-driven split tunneling из профиля имеет явный client-managed приоритет над manual `vpnProps.accessControl`; explicit include-mode с пустым resolved set не откатывается назад к manual ACL
-- file/url-backed package lists ограничены каталогом профилей и кешируются per-profile с fallback только на последнюю валидную локально сохраненную копию
-- Android app updater принимает только APK, прошедший SHA256 verification перед installer handoff
-- Flutter HTTP path не отключает TLS-проверку глобально; loopback bypass для control-plane остается отдельным proxy-routing правилом, а не `badCertificateCallback=true`
-- built-in proxy nodes не могут задавать `listen/server/port` сами: локальный bind и портовая политика принадлежат клиенту
-- `olcrtc` nodes не могут задавать `socks.host`/`socks.port`, `mode: srv/gen` или `crypto.key_file`; Android client поддерживает только локальный `mode: cnc`
-- `byedpi` nodes не могут задавать `ip`, `port`, `listen` или `server`; Android client сам добавляет локальный SOCKS bind в аргументы процесса
-- `byedpi mode: auto` проверяет только URL, явно заданные профилем в `test.urls`; встроенный список ByeByeDPI содержит только стратегии, а не цели сетевых проверок
+## Заголовки провайдера
 
-## Provider headers
+- `flclashm-androidsecure` считается рекомендательной подсказкой и не участвует
+  в обязательной политике.
+- `flclashm-servicename` и `flclashm-serverinfo` — только отображаемые подсказки.
+- Заголовки оформления не могут изменять защиты среды выполнения.
+- Разбор заголовков провайдера локализован в `lib/product/subscription/**`.
+- Сервисы обновления и управления доступом не используют заголовки провайдера
+  как входные данные политики.
+- Метаданные провайдера не могут ослаблять проверку путей, контрольных сумм или
+  приоритет profile-vs-manual.
+- Метаданные провайдера не могут ослаблять ограничения локальной привязки `olcrtc`
+  или `byedpi`.
 
-- `flclashm-androidsecure` считается advisory hint и не участвует в обязательной policy
-- `flclashm-servicename` и `flclashm-serverinfo` остаются display-only hints
-- branding/custom view headers не могут менять runtime floor
-- display/customization header parsing локализован в `lib/product/subscription/**`
-- updater/access-control services не используют provider headers как policy input
-- raw provider headers не должны использоваться как product API в base/UI слоях
-- provider metadata не может ослабить path validation, checksum verification или profile-vs-manual priority rules
-- provider metadata не может ослабить local-bind ограничения `olcrtc` или перевести Android client в server/gen mode
-- provider metadata не может ослабить local-bind ограничения `byedpi` или подменить цели автоподбора
-- brand contract и остаточные compatibility boundaries зафиксированы в `docs/branding.md` и `docs/compatibility-boundaries.md`
+## Рекомендательные подсказки профиля
 
-## Advisory profile hints
-
-- `overrideNetworkSettings=false` разрешает advisory hints влиять на compile result
-- `overrideNetworkSettings=true` оставляет за клиентом и network/runtime hints, и `external-controller`
+- `overrideNetworkSettings=false` разрешает рекомендательным подсказкам влиять
+  на результат компиляции.
+- `overrideNetworkSettings=true` оставляет сетевые/runtime-подсказки и
+  `external-controller` на стороне клиента.
 
 ## Границы ответственности
 
-### Клиент решает
+Клиент решает:
 
-- какой security floor обязателен
-- какие runtime adapters вообще допустимы
-- какие Android ограничения нельзя ослаблять
+- какие защиты обязательны
+- какие адаптеры среды выполнения допустимы
+- какие ограничения Android нельзя ослаблять
 
-### Подписка может только подсказывать
+Подписка может только подсказывать:
 
-- branding metadata
-- service/server display hints
-- advisory profile settings
+- метаданные оформления
+- сведения о сервисе и сервере
+- рекомендательные настройки профиля
 
-## Правила для новых runtime
+## Правила для новых интеграций
 
-Перед новой runtime-интеграцией нужно зафиксировать:
+Перед новой интеграцией среды выполнения нужно зафиксировать:
 
 1. место в архитектуре
 2. контракт
-3. security ограничения
-4. update path
-5. rollback path
+3. ограничения безопасности
+4. путь обновления
+5. путь отката

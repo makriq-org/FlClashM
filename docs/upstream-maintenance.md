@@ -1,78 +1,79 @@
-# Upstream Maintenance
+# Обновление базы из FlClashX
 
-## Цель
+## Принцип
 
-Дешевый update из `FlClashX` держится на простом правиле:
+Дешёвое обновление из `FlClashX` держится на простом правиле:
 
-- product/runtime/platform логика живет в `lib/product/**`
-- base-код вне `lib/product/**` может знать о product layer только через intentional touchpoints
-- каждый touchpoint должен оставаться thin consumer, а не местом для новой product policy
+- Продуктовая, runtime- и платформенная логика живёт в `lib/product/**`.
+- Код вне `lib/product/**` может знать о продуктовом слое только через явно
+  разрешённые точки интеграции.
+- Каждая такая точка должна оставаться тонким потребителем, а не местом для
+  новой продуктовой логики.
 
-## Source Of Truth
+## Источник истины
 
-- `docs/architecture.md` фиксирует слои и контракты сервисов
-- `tool/product_touchpoints.json` фиксирует allowlist base-файлов и канонические product-targets в `lib/product/**`
-- `dart tool/check_product_boundaries.dart` валидирует этот allowlist
+- `docs/architecture.md` — слои и контракты сервисов.
+- `tool/product_touchpoints.json` — список разрешённых файлов базы и их
+  канонических целей в `lib/product/**`.
+- `dart tool/check_product_boundaries.dart` — проверка этого списка.
 
-Guard сравнивает именно канонические product-targets, а не буквальный вид import/export URI. Поэтому package-import и relative-import считаются эквивалентными, если указывают в тот же файл внутри `lib/product/**`.
+Проверка сравнивает именно канонические цели, а не буквальный вид import-строк.
+Package-импорт и относительный импорт считаются эквивалентными, если указывают
+в тот же файл внутри `lib/product/**`.
 
-Если новый touchpoint действительно нужен:
+Если новая точка интеграции действительно нужна:
 
-1. сначала доказать, что логику нельзя удержать в `lib/product/**`
-2. добавить файл в `tool/product_touchpoints.json`
-3. кратко описать причину рядом в inventory и при необходимости обновить этот документ
+1. Сначала доказать, что логику нельзя удержать в `lib/product/**`.
+2. Добавить файл в `tool/product_touchpoints.json`.
+3. Кратко описать причину рядом в списке и при необходимости обновить этот документ.
 
-## Allowed Patch Zones
+## Разрешённые зоны изменений
 
 Всегда разрешено:
 
 - `lib/product/**`
-- product-specific tooling и docs: `tool/check_product_boundaries.dart`, `tool/product_touchpoints.json`, `docs/upstream-maintenance.md`
-- release/continuity guardrails, если меняется release contract
+- Продуктовый инструментарий и документация: `tool/check_product_boundaries.dart`,
+  `tool/product_touchpoints.json`, `docs/upstream-maintenance.md`
+- Защиты непрерывности релизов при изменении контракта релизов
 
-В base разрешены только allowlisted touchpoints из `tool/product_touchpoints.json`.
-
+В базе разрешены только точки интеграции из `tool/product_touchpoints.json`.
 Их смысл по группам:
 
 - `bootstrap-entrypoint`: `lib/main.dart`
 - `global-runtime-wiring`: `lib/state.dart`
 - `runtime-orchestration`: `lib/controller.dart`
-- `platform-shell-bootstrap`: `lib/application.dart`, `lib/common/android.dart`, `lib/common/system.dart`, `lib/manager/android_manager.dart`, `lib/manager/app_state_manager.dart`, `lib/providers/config.dart`
-- `subscription-and-platform-selectors`: `lib/providers/state.dart`, `lib/services/subscription_notification_service.dart`, `lib/views/profiles/profiles.dart`
+- `platform-shell-bootstrap`: `lib/application.dart`, `lib/common/android.dart`,
+  `lib/common/system.dart`, `lib/manager/android_manager.dart`,
+  `lib/manager/app_state_manager.dart`, `lib/providers/config.dart`
+- `subscription-and-platform-selectors`: `lib/providers/state.dart`,
+  `lib/services/subscription_notification_service.dart`,
+  `lib/views/profiles/profiles.dart`
 - `ui-thin-consumers`: `lib/views/about.dart`, `lib/views/access.dart`
 
-Что запрещено в base:
+Что запрещено в базе:
 
-- новая security policy
-- provider-driven runtime decisions
-- engine-specific bridge logic
-- Android update/install transport детали
-- новые прямые импорты из `lib/product/**` вне inventory
+- новая политика безопасности
+- решения среды выполнения, зависящие от провайдера
+- логика моста конкретного движка
+- детали транспорта обновления/установки Android
+- новые прямые импорты из `lib/product/**` вне списка
 
-## Cheap Update Flow
+## Процесс обновления
 
 1. Подтянуть `FlClashX` в отдельной ветке обновления.
 2. Сначала разбирать конфликты в `lib/product/**`.
-3. Вне `lib/product/**` трогать только файлы из `tool/product_touchpoints.json`, если upstream update реально требует thin-consumer адаптацию.
-4. Если конфликт требует новой product policy в base, это сигнал вынести change обратно в `lib/product/**`, а не плодить патч в base.
-5. После merge/rebase прогнать:
+3. Вне `lib/product/**` трогать только файлы из `tool/product_touchpoints.json`,
+   если обновление upstream действительно требует адаптации тонкого потребителя.
+4. Если конфликт требует новой продуктовой логики в базе, это сигнал вынести
+   изменение обратно в `lib/product/**`, а не добавлять патч в базу.
+5. После слияния или перебазирования прогнать:
    - `dart tool/check_product_boundaries.dart`
    - `dart tool/check_release_continuity.dart`
    - `flutter analyze --fatal-infos lib/product test/product tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart`
    - `flutter test test/product`
 
-Практический audit перед ревью:
+Быстрый аудит перед ревью:
 
-- посмотреть diff вне product layer: `git diff --stat <upstream-ref> -- lib`
-- отдельно проверить список product touchpoints: `dart tool/check_product_boundaries.dart`
-- если touchpoint изменился по смыслу, обновить inventory в том же change
-
-## Exit Result
-
-Фаза `bootstrap/rebrand` считается завершенной, когда:
-
-- product layer локализован в `lib/product/**`
-- base/product граница проверяется tooling guard'ом
-- upstream merge/rebase должен разбираться по текущим docs/contracts без скрытого знания старой patch-history
-
-После этого репозиторий входит в режим `maintenance/cheap-upstream`.
+- Посмотреть изменения вне продуктового слоя: `git diff --stat <upstream-ref> -- lib`
+- Отдельно проверить список точек интеграции: `dart tool/check_product_boundaries.dart`
+- Если смысл точки интеграции изменился, обновить список в том же коммите.

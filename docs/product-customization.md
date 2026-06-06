@@ -1,10 +1,11 @@
-# Product Customization Contract
+# Контракт подсказок провайдера
 
 ## Цель
 
-Provider-driven display/customization hints должны проходить через узкий product seam, а не размазываться по `controller/providers/views/services`.
+Подсказки оформления и настройки от провайдера должны проходить через узкую
+продуктовую границу, а не расходиться по контроллерам, провайдерам и виджетам.
 
-Текущий seam собран в `lib/product/subscription/**`.
+Текущая граница собрана в `lib/product/subscription/**`.
 
 ## Контракт
 
@@ -13,7 +14,7 @@ Provider-driven display/customization hints должны проходить че
 - `ProductProviderAdvisory.fromProfile`
 - `ProductProviderAdvisory.fromHeaders`
 
-На выходе base/UI consumer получает:
+На выходе потребитель получает:
 
 - `display: ProductDisplayHints`
   - `announcement`
@@ -26,33 +27,39 @@ Provider-driven display/customization hints должны проходить че
   - `newDashboard`
   - `denyDashboardEditing`
 - `customization: ProductCustomizationHints`
-  - trigger `add|update`
-  - advisory app settings
-  - advisory theme hint
-  - advisory dashboard layout
-  - advisory proxies view hint
+  - триггер `add|update`
+  - рекомендательные настройки приложения
+  - рекомендательная тема
+  - рекомендательный порядок виджетов главной страницы
+  - рекомендательный вид страницы узлов
 - `notices: ProductNoticeHints`
-  - HWID-related display notices
+  - служебные уведомления, связанные с идентификатором устройства
 
-Отдельно product layer держит:
+Отдельно продуктовый слой держит:
 
 - `ProductProviderAdvisory.mergeForRefresh`
-  - merge policy для update path
-  - volatile advisory headers очищаются здесь, а не в controller/UI
-  - notice headers (`announce`, `support-url`, HWID notices) не должны залипать после refresh
+  - политика объединения при обновлении профиля
+  - летучие рекомендательные заголовки очищаются здесь, а не в контроллере или UI
+  - уведомительные заголовки (`announce`, `support-url`) не должны залипать после
+    обновления
 
 ## Правила размещения
 
-- Raw header keys допустимы только:
-  - в transport boundary (`Profile.update`)
-  - в product parser/normalizer (`lib/product/subscription/**`)
-- `controller/providers/views/services` не должны знать конкретные `flclashm-*` header names.
-- Base/UI consumer должен использовать typed advisory data или thin selectors.
-- Новые provider-driven display/customization rules добавляются в `lib/product/subscription/**`, а не точечно в widgets.
-- `effectiveNewDashboard` считается derived state: явный user override важнее advisory `flclashm-newboard`.
+- Сырые ключи заголовков допустимы только:
+  - в транспортной границе (`Profile.update`)
+  - в парсере продукта (`lib/product/subscription/**`)
+- Контроллеры, провайдеры, виджеты и сервисы не должны знать конкретные имена
+  заголовков `flclashm-*`.
+- Потребитель должен использовать типизированные рекомендательные данные или
+  тонкие селекторы.
+- Новые правила оформления от провайдера добавляются в `lib/product/subscription/**`,
+  а не точечно в виджеты.
+- `effectiveNewDashboard` — производное состояние: явное переопределение пользователя
+  важнее рекомендательного `flclashm-newboard`.
 
-## Security Boundary
+## Граница безопасности
 
-- Display/customization hints остаются advisory.
-- Они не ослабляют `SecurityPolicy`, Android runtime floor или engine selection rules.
-- Provider может подсказывать branding/view behavior, но не менять security-critical поведение.
+- Подсказки оформления и настройки остаются рекомендательными.
+- Они не ослабляют `SecurityPolicy`, защиты Android или правила выбора движка.
+- Провайдер может подсказывать оформление, но не изменять поведение, критичное
+  для безопасности.
