@@ -278,6 +278,24 @@ void main() {
       expect(manager.activeEngineId, RuntimeId.naiveproxy);
     });
 
+    test('can initialize core without applying runtime plan', () async {
+      mihomoAdapter.isInitializedValue = false;
+
+      final initialized = await manager.initializeCore(
+        runtimePlanRequest: const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+        ),
+        coldStartPatchConfig: const ClashConfig(),
+        setupRuntimePlan: false,
+      );
+
+      expect(initialized, isTrue);
+      expect(mihomoAdapter.applyPendingUpdateCalls, 1);
+      expect(mihomoAdapter.initializeCalls, 1);
+      expect(mihomoAdapter.setupRuntimePlanCalls, 0);
+      expect(manager.activeEngineId, RuntimeId.mihomo);
+    });
+
     test('rejects runtime switch while started', () async {
       final started = await manager.start();
       expect(started, isTrue);

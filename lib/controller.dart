@@ -32,6 +32,9 @@ class AppController {
   bool _suppressNextRuntimeConfigUpdate = false;
   bool _runtimeConfigListenerReady = false;
   Future<void>? _applyProfileFuture;
+  Future<void>? _updateStatusFuture;
+  Future<bool>? _setupClashConfigFuture;
+  ClashConfig? _lastAppliedPatchConfig;
   bool _applyProfileAgain = false;
 
   void setupClashConfigDebounce() {
@@ -127,12 +130,35 @@ class AppController {
   }
 
   Future<void> updateStatus(bool isStart) async {
+    final running = _updateStatusFuture;
+    if (running != null) {
+      await running;
+      if (_ref.read(runTimeProvider.notifier).isStart == isStart) {
+        return;
+      }
+    }
+
+    final task = _updateStatus(isStart);
+    _updateStatusFuture = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_updateStatusFuture, task)) {
+        _updateStatusFuture = null;
+      }
+    }
+  }
+
+  Future<void> _updateStatus(bool isStart) async {
     if (isStart) {
       final applyingProfile = _applyProfileFuture;
       if (applyingProfile != null) {
         await applyingProfile;
       }
-      final isConfigured = await _setupClashConfig();
+      final isConfigured = await _setupClashConfig(
+        refreshProfile: false,
+        reuseIfCurrent: true,
+      );
       if (!isConfigured) {
         await StatusBarManager.updateIcon(isConnected: false);
         return;
@@ -587,23 +613,103 @@ class AppController {
   ClashConfig _buildColdStartPatchConfig(ClashConfig patchConfig) =>
       patchConfig.copyWith.tun(enable: false);
 
-  Future<bool> _setupClashConfig() async {
+  Future<bool> _setupClashConfig({
+    bool refreshProfile = true,
+    bool reuseIfCurrent = false,
+  }) async {
+    final patchConfig = _ref.read(patchClashConfigProvider);
+    final currentLastModified =
+        await _ref.read(currentProfileProvider)?.profileLastModified;
+
+    if (_canReuseClashConfig(
+      patchConfig: patchConfig,
+      currentLastModified: currentLastModified,
+      reuseIfCurrent: reuseIfCurrent,
+    )) {
+      return true;
+    }
+
+    final runningSetup = _setupClashConfigFuture;
+    if (runningSetup != null) {
+      await runningSetup;
+      final latestPatchConfig = _ref.read(patchClashConfigProvider);
+      final latestLastModified =
+          await _ref.read(currentProfileProvider)?.profileLastModified;
+      if (_canReuseClashConfig(
+        patchConfig: latestPatchConfig,
+        currentLastModified: latestLastModified,
+        reuseIfCurrent: reuseIfCurrent,
+      )) {
+        return true;
+      }
+      return _setupClashConfig(
+        refreshProfile: refreshProfile,
+        reuseIfCurrent: reuseIfCurrent,
+      );
+    }
+
+    final task = _runSetupClashConfig(
+      patchConfig: patchConfig,
+      currentLastModified: currentLastModified,
+      refreshProfile: refreshProfile,
+    );
+    _setupClashConfigFuture = task;
+    try {
+      return await task;
+    } finally {
+      if (identical(_setupClashConfigFuture, task)) {
+        _setupClashConfigFuture = null;
+      }
+    }
+  }
+
+  bool _canReuseClashConfig({
+    required ClashConfig patchConfig,
+    required int? currentLastModified,
+    required bool reuseIfCurrent,
+  }) =>
+      reuseIfCurrent &&
+      lastProfileModified != null &&
+      currentLastModified != null &&
+      currentLastModified <= lastProfileModified! &&
+      _lastAppliedPatchConfig == patchConfig;
+
+  Future<bool> _runSetupClashConfig({
+    required ClashConfig patchConfig,
+    required int? currentLastModified,
+    required bool refreshProfile,
+  }) async {
     final appliedRuntimePlan = await globalState.engineManager.setupRuntimePlan(
       _buildRuntimePlanRequest(
-        patchConfig: _ref.read(patchClashConfigProvider),
+        patchConfig: patchConfig,
+        refreshProfile: refreshProfile,
       ),
       coldStartPatchConfig: _buildColdStartPatchConfig(
-        _ref.read(patchClashConfigProvider),
+        patchConfig,
       ),
     );
     if (appliedRuntimePlan == null) {
       return false;
     }
 
-    lastProfileModified = await _ref.read(
-      currentProfileProvider.select((state) => state?.profileLastModified),
-    );
+    _lastAppliedPatchConfig = _ref.read(patchClashConfigProvider);
+    lastProfileModified = currentLastModified ??
+        await _ref.read(
+          currentProfileProvider.select((state) => state?.profileLastModified),
+        );
     return true;
+  }
+
+  void _preloadClashConfig() {
+    if (_ref.read(currentProfileProvider) == null) {
+      return;
+    }
+    unawaited(
+      _setupClashConfig(refreshProfile: false).catchError((Object e) {
+        commonPrint.log("preloadClashConfig failed: $e");
+        return false;
+      }),
+    );
   }
 
   Future _applyProfile() async {
@@ -960,6 +1066,7 @@ class AppController {
         coldStartPatchConfig: _buildColdStartPatchConfig(
           _ref.read(patchClashConfigProvider),
         ),
+        setupRuntimePlan: false,
       );
 
   Future<void> init() async {
@@ -972,7 +1079,11 @@ class AppController {
     } catch (e) {
       commonPrint.log("initCore failed (will retry on profile change): $e");
     }
+    _ref.read(initProvider.notifier).value = true;
     await _initStatus();
+    if (!_ref.read(runTimeProvider.notifier).isStart) {
+      _preloadClashConfig();
+    }
     autoLaunch?.updateStatus(_ref.read(appSettingProvider).autoLaunch);
     // Delay subscription update to ensure network is ready after app initialization
     Future.delayed(
@@ -990,7 +1101,6 @@ class AppController {
     }
     await _handlePreference();
     await _handlerDisclaimer();
-    _ref.read(initProvider.notifier).value = true;
   }
 
   Future<void> _initStatus() async {
@@ -1001,10 +1111,13 @@ class AppController {
         ? true
         : _ref.read(appSettingProvider).autoRun;
 
-    await updateStatus(status);
     if (!status) {
+      await StatusBarManager.updateIcon(isConnected: false);
       addCheckIpNumDebounce();
+      return;
     }
+
+    await updateStatus(true);
   }
 
   void setDelay(Delay delay) {

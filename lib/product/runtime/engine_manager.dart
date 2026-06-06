@@ -256,6 +256,7 @@ class EngineManager {
   Future<bool> initializeCore({
     required EngineRuntimePlanRequest runtimePlanRequest,
     required ClashConfig coldStartPatchConfig,
+    bool setupRuntimePlan = true,
   }) async {
     final compiledRuntimePlan = await _compileRuntimePlan(runtimePlanRequest);
     if (compiledRuntimePlan == null) {
@@ -274,6 +275,10 @@ class EngineManager {
               .appliedRuntimePlan.runtimePlan.profileAccessControl,
         ),
       );
+    }
+
+    if (!setupRuntimePlan) {
+      return true;
     }
 
     await _setupCompiledRuntimePlan(

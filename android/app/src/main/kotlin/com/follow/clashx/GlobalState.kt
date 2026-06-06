@@ -2,6 +2,8 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
@@ -132,12 +134,18 @@ object GlobalState {
     suspend fun handleSyncState() {
         runLock.withLock {
             val vpnActive = com.follow.clashx.common.SavedParams.isVpnActive()
+            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
             if (!vpnActive) {
                 runTime = 0L
                 runStateFlow.tryEmit(RunState.STOP)
                 return@withLock
             }
-            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
+            if (!isSystemVpnActive(CommonGlobalState.application) && !recentStart) {
+                com.follow.clashx.common.SavedParams.setVpnActive(false)
+                runTime = 0L
+                runStateFlow.tryEmit(RunState.STOP)
+                return@withLock
+            }
             runCatching {
                 Service.bind()
                 val rt = Service.getRunTimeString().toLongOrNull() ?: 0L
@@ -156,6 +164,14 @@ object GlobalState {
                 }
             }
         }
+    }
+
+    fun isSystemVpnActive(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val activeNetwork = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     fun hasActiveProfile(): Boolean {
