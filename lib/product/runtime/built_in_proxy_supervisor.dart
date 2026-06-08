@@ -19,7 +19,7 @@ abstract interface class BuiltInProxySupervisor {
     bool stopAllOnFailure = true,
   });
 
-  Future<bool> start();
+  Future<bool> start({bool stopAllOnFailure = true});
 
   Future<void> stop();
 
@@ -175,7 +175,10 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
-  Future<bool> start() => startRuntimePlan(_currentPlans);
+  Future<bool> start({bool stopAllOnFailure = true}) => startRuntimePlan(
+        _currentPlans,
+        stopAllOnFailure: stopAllOnFailure,
+      );
 
   @override
   Future<void> stop() => _stopRuntimePlan(_currentPlans);

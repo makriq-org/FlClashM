@@ -168,6 +168,7 @@ void main() {
       );
 
       final message = await adapter.setupRuntimePlan(runtimePlan);
+      await Future<void>.delayed(Duration.zero);
 
       expect(message, isEmpty);
       expect(core.setupRuntimePlanCalls, 1);
@@ -177,9 +178,9 @@ void main() {
       expect(builtInProxySupervisor.rollbackCalls, 0);
       expect(callOrder, [
         'stageLocalNodes',
-        'startLocalNodes',
         'setupCore',
         'commitLocalNodes',
+        'startLocalNodes',
       ]);
     });
 
@@ -206,6 +207,7 @@ void main() {
       );
 
       final message = await adapter.setupRuntimePlan(runtimePlan);
+      await Future<void>.delayed(Duration.zero);
 
       expect(message, isEmpty);
       expect(core.setupRuntimePlanCalls, 1);
@@ -215,9 +217,9 @@ void main() {
       expect(builtInProxySupervisor.rollbackCalls, 0);
       expect(callOrder, [
         'stageLocalNodes',
-        'startLocalNodes',
         'setupCore',
         'commitLocalNodes',
+        'startLocalNodes',
       ]);
     });
 
@@ -360,7 +362,8 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
-  Future<bool> start() async => startRuntimePlan(const []);
+  Future<bool> start({bool stopAllOnFailure = true}) async =>
+      startRuntimePlan(const [], stopAllOnFailure: stopAllOnFailure);
 
   @override
   Future<void> stop() async {}

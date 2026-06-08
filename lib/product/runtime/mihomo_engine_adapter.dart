@@ -201,6 +201,7 @@ class MihomoEngineAdapter implements EngineAdapter {
   final BuiltInProxySupervisor builtInProxySupervisor;
   final ReadAccessControlCallback _readAccessControl;
   final ReadProfileAccessControlCallback? _readProfileAccessControl;
+  Future<void> _builtInProxyStartChain = Future.value();
 
   AccessControl get _accessControl => _readAccessControl();
   AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
@@ -299,21 +300,12 @@ class MihomoEngineAdapter implements EngineAdapter {
       return stageMessage;
     }
 
-    final startMessage = await _startBuiltInProxyNodes(
-      runtimePlan.builtInProxyNodes,
-    );
-    if (startMessage.isNotEmpty) {
-      commonPrint.log(
-        '$startMessage Continuing profile setup; core health checks will '
-        'mark unavailable local nodes as failed.',
-      );
-    }
-
     final message = await core.setupRuntimePlan(runtimePlan);
     if (message.isEmpty) {
       await builtInProxySupervisor.commitStagedRuntimePlan(
         runtimePlan.builtInProxyNodes,
       );
+      _startBuiltInProxyNodesInBackground(runtimePlan.builtInProxyNodes);
       return '';
     }
 
@@ -397,16 +389,19 @@ class MihomoEngineAdapter implements EngineAdapter {
     return false;
   }
 
-  void _startBuiltInProxyNodesInBackground() {
-    unawaited(
-      _startBuiltInProxyNodes().then((message) {
-        if (message.isNotEmpty) {
-          commonPrint.log(message);
-        }
-      }).catchError((Object e, StackTrace s) {
-        commonPrint.log('Failed to start built-in proxy nodes: $e');
-      }),
-    );
+  void _startBuiltInProxyNodesInBackground([
+    List<BuiltInProxyNodePlan>? runtimePlan,
+  ]) {
+    final task = _builtInProxyStartChain.then((_) async {
+      final message = await _startBuiltInProxyNodes(runtimePlan);
+      if (message.isNotEmpty) {
+        commonPrint.log(message);
+      }
+    });
+    _builtInProxyStartChain = task.catchError((Object e, StackTrace s) {
+      commonPrint.log('Failed to start built-in proxy nodes: $e');
+    });
+    unawaited(_builtInProxyStartChain);
   }
 
   Future<String> _startBuiltInProxyNodes([
@@ -414,7 +409,7 @@ class MihomoEngineAdapter implements EngineAdapter {
   ]) async {
     try {
       final started = runtimePlan == null
-          ? await builtInProxySupervisor.start()
+          ? await builtInProxySupervisor.start(stopAllOnFailure: false)
           : await builtInProxySupervisor.startRuntimePlan(
               runtimePlan,
               stopAllOnFailure: false,
