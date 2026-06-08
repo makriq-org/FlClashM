@@ -116,12 +116,16 @@ class ProfileCompiler {
           patchConfig: runtimePatchConfig,
           overrideNetworkSettings: context.overrideNetworkSettings,
         );
-    final resolvedProfileSplitTunneling =
-        await _resolveProfileSplitTunnelingOverride(
-      rawConfig: rawConfig,
-      rawProfile: rawProfile,
-      context: context,
-    );
+    final resolvedProfileSplitTunneling = patchConfig.tun.enable
+        ? await _resolveProfileSplitTunnelingOverride(
+            rawConfig: rawConfig,
+            rawProfile: rawProfile,
+            context: context,
+          )
+        : ResolvedProfileSplitTunneling(
+            config: rawConfig,
+            accessControl: null,
+          );
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
@@ -158,6 +162,7 @@ class ProfileCompiler {
       profile: rawProfile.profile,
       hasCurrentScript: context.hasCurrentScript,
     );
+    _deferAndroidHealthChecks(rawConfig, isAndroid: context.isAndroid);
 
     return RuntimePlan(
       config: rawConfig,
@@ -199,6 +204,31 @@ class ProfileCompiler {
       profileId: rawProfile.profile.id,
       installedPackageNames: installedPackageNames,
     );
+  }
+
+  void _deferAndroidHealthChecks(
+    Map<String, dynamic> rawConfig, {
+    required bool isAndroid,
+  }) {
+    if (!isAndroid) {
+      return;
+    }
+    final proxyGroups = rawConfig['proxy-groups'];
+    if (proxyGroups is! List) {
+      return;
+    }
+    for (final group in proxyGroups) {
+      if (group is! Map) {
+        continue;
+      }
+      final type = group['type']?.toString();
+      if (type != 'fallback' && type != 'url-test' && type != 'load-balance') {
+        continue;
+      }
+      if (group['lazy'] == false) {
+        group['lazy'] = true;
+      }
+    }
   }
 
   CompiledProfileMetadata _buildMetadata({

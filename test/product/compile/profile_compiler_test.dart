@@ -219,6 +219,76 @@ void main() {
       expect(runtimePlan.config['tun']['stack'], 'system');
     });
 
+    test('defers Android proxy group health checks during setup', () async {
+      const profile = Profile(
+        id: 'profile-android-health-checks',
+        autoUpdateDuration: Duration.zero,
+      );
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'proxy-groups': [
+            {
+              'name': 'Fallback',
+              'type': 'fallback',
+              'lazy': false,
+            },
+            {
+              'name': 'UrlTest',
+              'type': 'url-test',
+              'lazy': false,
+            },
+            {
+              'name': 'Balance',
+              'type': 'load-balance',
+              'lazy': false,
+            },
+            {
+              'name': 'Manual',
+              'type': 'select',
+              'lazy': false,
+            },
+          ],
+        },
+      );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(tun: Tun(enable: false)),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: true,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      final groups = runtimePlan.config['proxy-groups'] as List<dynamic>;
+      expect(groups[0]['lazy'], isTrue);
+      expect(groups[1]['lazy'], isTrue);
+      expect(groups[2]['lazy'], isTrue);
+      expect(groups[3]['lazy'], isFalse);
+    });
+
     test('propagates profile split tunneling into runtime plan', () async {
       final tempDir =
           await Directory.systemTemp.createTemp('profile-compiler-split-');
@@ -297,6 +367,59 @@ void main() {
       );
 
       await tempDir.delete(recursive: true);
+    });
+
+    test('skips profile split tunneling when runtime tun is disabled',
+        () async {
+      const profile = Profile(
+        id: 'profile-split-disabled',
+        autoUpdateDuration: Duration.zero,
+      );
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'tun': {
+            'include-package': ['*.mozilla.*'],
+          },
+        },
+      );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(
+            tun: Tun(enable: false),
+          ),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: RuntimePlanBuildContext(
+          isAndroid: true,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          profilePath: '',
+          readInstalledPackageNames: () async {
+            throw StateError('package inventory should not be read');
+          },
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://cp.cloudflare.com/generate_204',
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/tmp/$profileId/$type/$url',
+      );
+
+      expect(runtimePlan.profileAccessControl, isNull);
+      expect(runtimePlan.config['tun']['enable'], isFalse);
     });
 
     test('rewrites providers and merges dns, hosts and override rules',

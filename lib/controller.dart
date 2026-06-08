@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'common/common.dart';
 import 'models/models.dart';
+import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/services/product_services.dart';
 import 'product/subscription/product_subscription.dart';
@@ -307,6 +308,7 @@ class AppController {
     _ref.read(profilesProvider.notifier).setProfile(profile);
     if (!shouldSelectProfile) return;
     _ref.read(currentProfileIdProvider.notifier).value = profile.id;
+    await _primeProfileGroupPreview();
     await applyProfile(silence: true);
   }
 
@@ -731,13 +733,41 @@ class AppController {
 
   Future _applyProfile() async {
     clashCore.requestGc();
+    await _primeProfileGroupPreview();
     final isConfigured = await setupClashConfig();
     if (!isConfigured) {
       return;
     }
     await updateGroups();
+    _refreshProxyHealthInBackground();
     await updateProviders();
     await syncAndroidForegroundNotification();
+  }
+
+  void _refreshProxyHealthInBackground() {
+    unawaited(
+      clashCore.healthCheck().catchError((Object e) {
+        commonPrint.log("proxy health check failed: $e");
+      }),
+    );
+  }
+
+  Future<void> _primeProfileGroupPreview() async {
+    if (_ref.read(runTimeProvider.notifier).isStart) {
+      return;
+    }
+    try {
+      final rawProfile = await globalState.loadCurrentRawProfile();
+      final groups = buildProfileGroupPreview(rawProfile?.config);
+      if (groups.isEmpty) {
+        return;
+      }
+      _ref.read(groupsProvider.notifier).value = groups;
+      _ref.read(versionProvider.notifier).value =
+          _ref.read(versionProvider) + 1;
+    } catch (e) {
+      commonPrint.log("profile group preview failed: $e");
+    }
   }
 
   Future<void> _applyProfileLoop() async {
