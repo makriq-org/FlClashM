@@ -400,10 +400,11 @@ class GlobalState {
       );
 
   Future<List<String>> _readInstalledPackageNames() async {
-    final packages = await app?.getPackages() ?? const <Package>[];
+    final packageNames =
+        await app?.getInstalledPackageNames() ?? const <String>[];
     return {
-      for (final package in packages)
-        if (package.packageName.trim().isNotEmpty) package.packageName.trim(),
+      for (final packageName in packageNames)
+        if (packageName.trim().isNotEmpty) packageName.trim(),
     }.toList(growable: false);
   }
 

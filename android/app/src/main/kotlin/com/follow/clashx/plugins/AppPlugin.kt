@@ -196,6 +196,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
             }
 
+            "getInstalledPackageNames" -> {
+                scope.launch(Dispatchers.IO) {
+                    val names = getInstalledPackageNames()
+                    result.successOnMain(names)
+                }
+            }
+
             "getChinaPackageNames" -> {
                 scope.launch(Dispatchers.IO) {
                     val names = getChinaPackageNames()
@@ -357,6 +364,18 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private suspend fun getPackagesToJson(): String {
         return withContext(Dispatchers.IO) {
             Gson().toJson(getPackages())
+        }
+    }
+
+    private suspend fun getInstalledPackageNames(): String {
+        return withContext(Dispatchers.IO) {
+            val packageManager = FlClashApplication.getAppContext().packageManager
+            val packageNames = packageManager
+                ?.getInstalledPackages(0)
+                ?.map { it.packageName }
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+            Gson().toJson(packageNames)
         }
     }
 
