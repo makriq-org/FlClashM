@@ -6,7 +6,7 @@
 
 > 基于 `mihomo` 的 Android 客户端，将复杂的审查规避工具隐藏在一个按钮之后。
 
-[Русская версия](README.md) | [English version](README_EN.md)
+[Русская версия](README.md) | [English version](README_EN.md) | [نسخه فارسی](README_FA.md)
 
 ---
 

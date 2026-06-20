@@ -6,7 +6,7 @@
 
 > Android-клиент для `mihomo`, который прячет сложные инструменты обхода блокировок за одной кнопкой.
 
-[English version](README_EN.md) | [中文版](README_ZH.md)
+[English version](README_EN.md) | [中文版](README_ZH.md) | [نسخه فارسی](README_FA.md)
 
 ---
 

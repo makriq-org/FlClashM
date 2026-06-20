@@ -6,7 +6,7 @@
 
 > Android client for `mihomo` that hides complex censorship circumvention tools behind a single button.
 
-[Русская версия](README.md) | [中文版](README_ZH.md)
+[Русская версия](README.md) | [中文版](README_ZH.md) | [نسخه فارسی](README_FA.md)
 
 ---
 
