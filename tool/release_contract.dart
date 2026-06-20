@@ -126,7 +126,6 @@ class ReleaseContract {
     required this.versionCodeFloor,
     required this.releaseArtifacts,
     required this.releaseMetadataFileName,
-    required this.continuityBaseline,
   });
 
   factory ReleaseContract.fromJson(Map<String, dynamic> json) =>
@@ -146,9 +145,6 @@ class ReleaseContract {
           json,
           key: 'releaseMetadataFileName',
         ),
-        continuityBaseline: ContinuityBaseline.fromJson(
-          _readMap(json, key: 'continuityBaseline'),
-        ),
       );
 
   final String applicationId;
@@ -158,7 +154,6 @@ class ReleaseContract {
   final int versionCodeFloor;
   final List<String> releaseArtifacts;
   final String releaseMetadataFileName;
-  final ContinuityBaseline continuityBaseline;
 
   String get appName {
     if (releaseArtifacts.isEmpty) {
@@ -189,39 +184,6 @@ class ReleaseSigner {
 
   final String subjectDn;
   final String sha256;
-}
-
-class ContinuityBaseline {
-  const ContinuityBaseline({
-    required this.sourceProject,
-    required this.sourceTag,
-    required this.publishedAt,
-    required this.sourcePubspecVersion,
-  });
-
-  factory ContinuityBaseline.fromJson(Map<String, dynamic> json) =>
-      ContinuityBaseline(
-        sourceProject: _readString(json, key: 'sourceProject'),
-        sourceTag: _readString(json, key: 'sourceTag'),
-        publishedAt: _readString(json, key: 'publishedAt'),
-        sourcePubspecVersion: _readString(json, key: 'sourcePubspecVersion'),
-      );
-
-  final String sourceProject;
-  final String sourceTag;
-  final String publishedAt;
-  final String sourcePubspecVersion;
-
-  Map<String, Object?> toJson({
-    required int versionCodeFloor,
-  }) =>
-      {
-        'sourceProject': sourceProject,
-        'sourceTag': sourceTag,
-        'publishedAt': publishedAt,
-        'sourcePubspecVersion': sourcePubspecVersion,
-        'versionCodeFloor': versionCodeFloor,
-      };
 }
 
 class PubspecVersion {

@@ -269,43 +269,6 @@ void _checkMetadataContract({
       failures: failures,
     );
   }
-
-  final continuity = metadata['continuity'];
-  if (continuity is! Map<String, dynamic>) {
-    failures.add('Expected `continuity` object in release metadata.');
-    return;
-  }
-
-  _expectJsonString(
-    continuity,
-    key: 'sourceProject',
-    expected: contract.continuityBaseline.sourceProject,
-    failures: failures,
-  );
-  _expectJsonString(
-    continuity,
-    key: 'sourceTag',
-    expected: contract.continuityBaseline.sourceTag,
-    failures: failures,
-  );
-  _expectJsonString(
-    continuity,
-    key: 'publishedAt',
-    expected: contract.continuityBaseline.publishedAt,
-    failures: failures,
-  );
-  _expectJsonString(
-    continuity,
-    key: 'sourcePubspecVersion',
-    expected: contract.continuityBaseline.sourcePubspecVersion,
-    failures: failures,
-  );
-  _expectJsonInt(
-    continuity,
-    key: 'versionCodeFloor',
-    expected: contract.versionCodeFloor,
-    failures: failures,
-  );
 }
 
 Map<String, dynamic>? _readJsonFile(File file, List<String> failures) {

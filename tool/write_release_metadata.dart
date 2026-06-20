@@ -28,9 +28,6 @@ void main(List<String> args) {
       'commitSha': options.githubSha,
       'releaseArtifacts': contract.releaseArtifacts,
       'releaseMetadataFileName': contract.releaseMetadataFileName,
-      'continuity': contract.continuityBaseline.toJson(
-        versionCodeFloor: contract.versionCodeFloor,
-      ),
     }),
   );
 

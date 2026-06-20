@@ -19,11 +19,5 @@
     "FlClashM-android-release.aab"
   ],
   "releaseMetadataFileName": "FlClashM-android-release-metadata.json",
-  "versionCodeFloor": 2026050102,
-  "continuityBaseline": {
-    "sourceProject": "FlClash-my",
-    "sourceTag": "v0.9.2",
-    "publishedAt": "2026-05-01",
-    "sourcePubspecVersion": "0.9.2+2026050102"
-  }
+  "versionCodeFloor": 2026050102
 }
