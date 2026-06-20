@@ -34,15 +34,17 @@ touchpoints из `tool/product_touchpoints.json`.
 
 ## Документация
 
-- `docs/architecture.md` — слои, границы, контракты сервисов.
-- `docs/runtime.md` — runtime цепочка, контракты, built-in nodes.
-- `docs/security-policy.md` — Android security floor, правила подписок.
-- `docs/product-customization.md` — контракт `flclashm-*` подсказок.
-- `docs/release-contract.md` — правила релизов, pipeline, rollback.
-- `docs/upstream-maintenance.md` — как обновляться из `FlClashX`.
-- `docs/base-verification.md` — локальная и CI-проверка.
-- `docs/branding.md` — публичные идентификаторы.
-- `docs/byedpi.md` — профильный контракт byedpi.
+- `docs/README.md` — обзор документации.
+- `docs/user-guide/README.md` — руководство пользователя.
+- `docs/user-guide/profiles.md` — встроенные узлы ByeDPI, OlcRTC, NaiveProxy.
+- `docs/user-guide/split-tunneling.md` — раздельное туннелирование через профиль.
+- `docs/user-guide/provider-hints.md` — подсказки провайдера.
+- `docs/development/architecture.md` — слои и сервисы.
+- `docs/development/runtime.md` — среда выполнения и встроенные узлы.
+- `docs/development/security.md` — политика безопасности.
+- `docs/development/release-contract.md` — релизы.
+- `docs/development/upstream-sync.md` — синхронизация с FlClashX.
+- `docs/development/verification.md` — проверка сборки.
 
 ## Текущие ограничения
 
