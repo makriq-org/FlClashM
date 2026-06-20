@@ -1,62 +1,145 @@
 # FlClashM
 
-[Russian](README.md)
-
 [![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
-[![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
+[![Latest Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-`FlClashM` is an Android client for `mihomo`.
+> Android client for `mihomo` that hides complex censorship circumvention tools behind a single button.
 
-## Exclusive Features
+[Русская версия](README.md) | [中文版](README_ZH.md)
 
-### Built-in nodes
+---
 
-Three node types are declared directly in the profile and participate in regular proxy groups and rules — no separate apps, no manual port setup.
+## Why this client
 
-**NaiveProxy** (`type: naiveproxy`) — the app runs the bundled naiveproxy binary, writes a config, and substitutes a local SOCKS5 listener for the node. The profile only needs `name` and `proxy`.
+There are several powerful tools for bypassing censorship, but each lives in its own silo:
 
-**ByeDPI** (`type: byedpi`) — bundled ciadpi with DPI circumvention. `mode: manual` accepts a raw ciadpi argument string; `mode: auto` cycles through strategies from the ByeByeDPI set, caches the working one, and applies it on cold start. `{sni}` substitution is supported.
+- **[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through packet manipulation.
+- **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — encrypted tunnel over WebRTC disguised as a video call.
+- **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — traffic parroting via Chromium's network stack.
 
-**OlcRTC** (`type: olcrtc`) — bundled olcrtc in CNC mode. The app manages the listener and config; the profile only specifies `name` and the server connection parameters.
+I was tired of assembling a working solution from dozens of different apps: one client for VPN, another for DPI circumvention, a third for traffic masking. None of them allowed configuring everything in one place and just pressing "connect".
 
-### Profile-driven split tunneling
+So I made **FlClashM**. Its goal is to become that **single button**: the provider prepares the configuration, the user flips the switch, and the connection works in any network.
 
-Split tunneling is configured in the profile via `profileAccessControl`. The compilation pipeline normalizes the rules before passing them to mihomo — no manual VPN exclusions needed.
+> ⚠️ This project is under active development. Some features are still being refined, and the interface may change.
 
-### In-app updater
+---
 
-The app checks for updates on its own and offers to install them from the UI. Stable releases are shown by default; pre-releases can be enabled in settings.
+## Key advantages
+
+### Built-in nodes directly in the profile
+
+Unlike regular clients, FlClashM can launch **special nodes directly from the YAML profile**. They look like regular proxies and participate in routing rules: one site can be routed through ByeDPI, another through OlcRTC, and everything else directly.
+
+**[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through TCP packet manipulation. FlClashM automatically cycles through strategies from the ByeByeDPI list and caches the working one.
+
+```yaml
+proxies:
+  - name: "dpi-auto"
+    type: byedpi
+    mode: auto
+    strategy-list: byebyeedpi
+    test:
+      urls:
+        - "https://example.com/"
+```
+
+**[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — encrypted TCP-over-WebRTC tunnel disguised as a video call through Jitsi Meet or Yandex Telemost. Passes through provider whitelists.
+
+```yaml
+proxies:
+  - name: "rtc"
+    type: olcrtc
+    auth:
+      provider: jitsi
+    room:
+      id: "https://meet.example.org/room"
+    crypto:
+      key: "0123456789abcdef..."
+```
+
+**[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — traffic parroting via Chromium's network stack. Resistant to TLS fingerprinting and active probing.
+
+```yaml
+proxies:
+  - name: "naive"
+    type: naiveproxy
+    proxy: "https://user:pass@example.com"
+```
+
+[More about built-in nodes](docs/user-guide/profiles.md)
+
+### Split tunneling via profile
+
+The provider can specify which apps should use VPN directly in the profile. Supports exact package names, wildcards, and regular expressions.
+
+```yaml
+tun:
+  enable: true
+  include-package:
+    - org.telegram.messenger
+    - com.termux
+  exclude-package:
+    - '*.yandex.*'
+    - '!ru.yandex.browser'
+```
+
+Lists can be loaded from files or URLs. Profile settings take priority over manual settings.
+
+[More about split tunneling](docs/user-guide/split-tunneling.md)
+
+---
 
 ## Other features
 
-- VPN/TUN connection through `mihomo`.
-- Profiles from links, files, QR codes, and Android TV transfer.
-- `rule`, `global`, and `direct` modes, group delay checks, and node selection.
-- Dashboard widgets for profile, traffic, IP, mode, node switching, and service info.
-- Display customization via provider hints.
-- Android foreground notification and Quick Settings tile.
+- **VPN/TUN connection** through `mihomo`.
+- **Profiles** from links, files, QR codes, and Android TV.
+- **Operating modes**: rules, global, direct.
+- **Widgets** and **Quick Settings tile** for VPN control.
+- **Built-in updates** with checksum verification.
+- **Notifications** about subscription expiration.
+- **Auto-start** after device reboot.
+- **Customization** via provider hints.
+
+---
 
 ## Download
 
-Release builds are published in
-[GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
+Release builds are published in [GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
 
-Android artifacts:
+| File | Description |
+|------|-------------|
+| `FlClashM-android-universal.apk` | Universal build |
+| `FlClashM-android-arm64-v8a.apk` | 64-bit ARM |
+| `FlClashM-android-armeabi-v7a.apk` | 32-bit ARM |
+| `FlClashM-android-x86_64.apk` | x86_64 |
+| `FlClashM-android-release.aab` | Android App Bundle |
 
-- `FlClashM-android-universal.apk`
-- `FlClashM-android-arm64-v8a.apk`
-- `FlClashM-android-armeabi-v7a.apk`
-- `FlClashM-android-x86_64.apk`
-- `FlClashM-android-release.aab`
+By default, the built-in updater shows only stable versions. Pre-releases can be enabled in settings.
 
-By default, the in-app updater shows stable releases only. Pre-releases must be
-enabled explicitly in settings.
+---
 
-## Build
+## Documentation
 
-You need Flutter 3.41.x, JDK 17, Android SDK/NDK, and Go 1.26.x.
-On NixOS, run the commands from a clean shell containing those packages.
+### For users
+- **[Built-in nodes](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
+- **[Split tunneling](docs/user-guide/split-tunneling.md)** — management via profile
+- **[Provider hints](docs/user-guide/provider-hints.md)** — customization and behavior
+
+### For developers
+- **[Architecture](docs/development/architecture.md)** — layers and services
+- **[Runtime](docs/development/runtime.md)** — profile processing and built-in nodes
+- **[Security](docs/development/security.md)** — security policy
+- **[Releases](docs/development/release-contract.md)** — version publishing and rollback
+- **[Upstream sync](docs/development/upstream-sync.md)** — base updates
+- **[Build verification](docs/development/verification.md)** — local and CI checks
+
+---
+
+## Building
+
+Requires Flutter 3.41.x, JDK 17, Android SDK/NDK, and Go 1.26.x.
 
 ```bash
 flutter pub get
@@ -65,38 +148,16 @@ flutter test test/product
 flutter build apk --debug
 ```
 
-Signed public releases are built by GitHub Actions and require
-`KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, and `KEY_PASSWORD`.
-The full release process is described in [docs/release-contract.md](docs/release-contract.md).
+---
 
-## Provider Hints
+## Acknowledgments
 
-Subscriptions may send `flclashm-*` headers for display and convenience:
+FlClashM is built on top of [FlClashX](https://github.com/chen08209/FlClashX) — an excellent cross-platform client for Clash/Mihomo. Huge thanks to the authors for their work and open-source code, without which this project would not have been possible.
 
-- `flclashm-widgets` — dashboard widget order.
-- `flclashm-view` — proxy page layout.
-- `flclashm-custom` — when display hints are applied: add or update.
-- `flclashm-denywidgets` — dashboard editing lock.
-- `flclashm-servicename`, `flclashm-servicelogo`, `flclashm-serverinfo` — service info.
-- `flclashm-background`, `flclashm-hex` — appearance.
-- `flclashm-settings` — autostart and update-check hints.
-- `flclashm-globalmode` — mode-selector visibility.
+Special thanks to the authors of [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), and [NaiveProxy](https://github.com/klzgrad/naiveproxy) — without their tools, censorship circumvention would not be possible.
 
-Full contract: [docs/product-customization.md](docs/product-customization.md).
-Security policy: [docs/security-policy.md](docs/security-policy.md).
-
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Runtime and built-in nodes](docs/runtime.md)
-- [ByeDPI](docs/byedpi.md)
-- [Security policy](docs/security-policy.md)
-- [Release contract](docs/release-contract.md)
-- [Upstream maintenance](docs/upstream-maintenance.md)
-- [Compatibility boundaries](docs/compatibility-boundaries.md)
+---
 
 ## License
 
-The app code is licensed under GPL-3.0. Third-party cores and bundled binaries
-keep their own licenses; see `assets/runtimes/**/README.md` and the related
-documents under `docs/`.
+The app code is distributed under the GPL-3.0 license. Third-party cores and bundled executables retain their original licenses.

@@ -1,62 +1,145 @@
 # FlClashM
 
-[English](README_EN.md)
+[![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
+[![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
+[![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
 
-[![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
-[![Last Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
-[![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+> Android-клиент для `mihomo`, который прячет сложные инструменты обхода блокировок за одной кнопкой.
 
-`FlClashM` — Android-клиент для `mihomo`.
+[English version](README_EN.md) | [中文版](README_ZH.md)
 
-## Эксклюзивные возможности
+---
 
-### Встроенные узлы
+## Зачем этот клиент
 
-Три типа узлов объявляются прямо в профиле и участвуют в обычных группах и правилах — без отдельных приложений и ручной настройки портов.
+Существует несколько мощных инструментов для обхода блокировок:
 
-**NaiveProxy** (`type: naiveproxy`) — клиент запускает встроенный бинарник naiveproxy, пишет конфиг и подставляет локальный SOCKS5-слушатель вместо узла. В профиле нужны только `name` и `proxy`.
+- **[ByeDPI](https://github.com/hufrea/byedpi)** — обход DPI для доступа к ресурсам, заблокированным "изнутри" (например, YouTube или Discord для РФ).
+- **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — обход белых списков маскировкой под WebRTC звонки разрешенных сервисов, таких как Yandex Telemost.
+- **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — обход черных списков маскировкой под трафик браузера Chrome.
 
-**ByeDPI** (`type: byedpi`) — встроенный ciadpi с обходом DPI. `mode: manual` принимает строку аргументов ciadpi; `mode: auto` перебирает стратегии из набора ByeByeDPI, кэширует найденную и применяет при холодном старте. Поддерживается подстановка `{sni}`.
+Каждая технология подходит для своей задачи и не было места, котрое объединяло бы все эти решения. Хотелось задать всё в одном месте и просто нажать «подключиться».
 
-**OlcRTC** (`type: olcrtc`) — встроенный olcrtc в режиме CNC. Клиент управляет слушателем и конфигом; в профиле задаются `name` и параметры подключения к серверу.
+Поэтому я сделал **FlClashM**. Его задача — стать той самой **одной кнопкой**: провайдер готовит конфигурацию, пользователь нажимает переключатель, и соединение работает в любой сети.
 
-### Раздельное туннелирование из профиля
+> ⚠️ Проект находится в активной разработке. Некоторые функции ещё дорабатываются, а интерфейс может меняться.
 
-Split-tunneling задаётся в профиле через `profileAccessControl`. Цепочка компиляции нормализует правила до передачи в mihomo — приложение не требует ручных VPN-исключений.
+---
 
-### Встроенный апдейтер
+## Главные преимущества
 
-Приложение проверяет обновления самостоятельно и предлагает установить их из интерфейса. По умолчанию показываются только стабильные релизы; предварительные включаются в настройках.
+### Встроенные узлы прямо в профиле
 
-## Остальные возможности
+В отличие от обычных клиентов, FlClashM умеет запускать **специальные узлы прямо из YAML-профиля**. Они выглядят как обычные прокси и участвуют в правилах маршрутизации: один сайт можно направить через ByeDPI, другой — через OlcRTC, а всё остальное — напрямую.
 
-- VPN/TUN-подключение через `mihomo`.
-- Профили из ссылки, файла, QR-кода и передачи с Android TV.
-- Режимы `rule`, `global`, `direct`, проверка задержек, выбор узлов в группах.
-- Виджеты главной страницы: профиль, трафик, IP, режим, смена узла, сведения сервиса.
-- Настройки внешнего вида через подсказки провайдера.
-- Постоянное уведомление и плитка быстрых настроек Android.
+Пример для [ByeDPI](https://github.com/hufrea/byedpi). FlClashM автоматически перебирает стратегии из списка ByeByeDPI и кэширует рабочую.
+
+```yaml
+proxies:
+  - name: "dpi-auto"
+    type: byedpi
+    mode: auto
+    strategy-list: byebyeedpi
+    test:
+      urls:
+        - "https://example.com/"
+```
+
+Пример для [OlcRTC](https://github.com/openlibrecommunity/olcrtc).
+
+```yaml
+proxies:
+  - name: "rtc"
+    type: olcrtc
+    auth:
+      provider: jitsi
+    room:
+      id: "https://meet.example.org/room"
+    crypto:
+      key: "0123456789abcdef..."
+```
+
+Пример для [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+
+```yaml
+proxies:
+  - name: "naive"
+    type: naiveproxy
+    proxy: "https://user:pass@example.com"
+```
+
+[Подробнее о встроенных узлах тут](docs/user-guide/profiles.md)
+
+## Раздельное туннелирование через профиль
+
+Провайдер может задать правила раздельного туннелирования прямо в профиле — какие приложения должны идти через VPN, а какие нет. Поддерживаются точные имена пакетов, маски и регулярные выражения.
+
+```yaml
+tun:
+  enable: true
+  include-package:
+    - org.telegram.messenger
+    - com.termux
+  exclude-package:
+    - '*.yandex.*'
+    - '!ru.yandex.browser'
+```
+
+Можно загружать списки из файлов или URL. Профиль имеет приоритет над ручными настройками.
+
+[Подробнее о раздельном туннелировании тут](docs/user-guide/split-tunneling.md)
+
+---
+
+## Что еще умеет
+
+- **VPN/TUN-подключение** через `mihomo`.
+- **Профили** по ссылке, из файла, QR-коду и с Android TV.
+- **Режимы работы**: правила, глобальный, прямое соединение.
+- **Виджеты** и **плитка быстрых настроек** для управления VPN.
+- **Встроенное обновление** с проверкой контрольных сумм.
+- **Уведомления** об истечении подписки.
+- **Автозапуск** после перезагрузки устройства.
+- **Оформление** через подсказки провайдера (хедеры).
+
+---
 
 ## Скачать
 
-Готовые сборки публикуются в
-[GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
+Готовые сборки публикуются в [GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
 
-Артефакты Android:
+| Файл | Описание |
+|------|----------|
+| `FlClashM-android-universal.apk` | Универсальная сборка |
+| `FlClashM-android-arm64-v8a.apk` | 64-битные ARM |
+| `FlClashM-android-armeabi-v7a.apk` | 32-битные ARM |
+| `FlClashM-android-x86_64.apk` | x86_64 |
+| `FlClashM-android-release.aab` | Android App Bundle |
 
-- `FlClashM-android-universal.apk`
-- `FlClashM-android-arm64-v8a.apk`
-- `FlClashM-android-armeabi-v7a.apk`
-- `FlClashM-android-x86_64.apk`
-- `FlClashM-android-release.aab`
+По умолчанию встроенный загрузчик показывает только стабильные версии. Предварительные сборки можно включить в настройках.
 
-По умолчанию встроенный загрузчик показывает только стабильные релизы.
-Предварительные сборки включаются отдельно в настройках.
+---
+
+## Документация
+
+### Для пользователей
+- **[Встроенные узлы](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
+- **[Раздельное туннелирование](docs/user-guide/split-tunneling.md)** — управление через профиль
+- **[Подсказки провайдера](docs/user-guide/provider-hints.md)** — оформление и поведение
+
+### Для разработчиков
+- **[Архитектура](docs/development/architecture.md)** — слои и сервисы
+- **[Среда выполнения](docs/development/runtime.md)** — обработка профиля и встроенные узлы
+- **[Безопасность](docs/development/security.md)** — политика безопасности
+- **[Релизы](docs/development/release-contract.md)** — публикация и откат версий
+- **[Синхронизация с FlClashX](docs/development/upstream-sync.md)** — обновление базы
+- **[Проверка сборки](docs/development/verification.md)** — локальные и CI-проверки
+
+---
 
 ## Сборка
 
 Нужны Flutter 3.41.x, JDK 17, Android SDK/NDK и Go 1.26.x.
-На NixOS удобнее запускать команды из чистой оболочки с этими пакетами.
 
 ```bash
 flutter pub get
@@ -65,38 +148,16 @@ flutter test test/product
 flutter build apk --debug
 ```
 
-Подписанные публичные релизы собираются через GitHub Actions и требуют секреты
-`KEYSTORE`, `KEY_ALIAS`, `STORE_PASSWORD`, `KEY_PASSWORD`.
-Полный процесс описан в [docs/release-contract.md](docs/release-contract.md).
+---
 
-## Настройки провайдера
+## Благодарности
 
-Подписка может передавать заголовки `flclashm-*` для оформления и удобства:
+FlClashM построен на базе [FlClashX](https://github.com/chen08209/FlClashX) — отличного кроссплатформенного клиента для Clash/Mihomo. Огромное спасибо авторам за проделанную работу и открытый код, без которого этот проект был бы невозможен.
 
-- `flclashm-widgets` — порядок виджетов главной страницы.
-- `flclashm-view` — вид страницы узлов.
-- `flclashm-custom` — когда применять оформление: при добавлении или обновлении.
-- `flclashm-denywidgets` — запрет ручного изменения главной страницы.
-- `flclashm-servicename`, `flclashm-servicelogo`, `flclashm-serverinfo` — сведения сервиса.
-- `flclashm-background`, `flclashm-hex` — оформление.
-- `flclashm-settings` — подсказки для автозапуска и проверки обновлений.
-- `flclashm-globalmode` — видимость выбора режима.
+Отдельная благодарность авторам [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc) и [NaiveProxy](https://github.com/klzgrad/naiveproxy) — без их труда обход блокировок был бы невозможен.
 
-Полный контракт: [docs/product-customization.md](docs/product-customization.md).
-Политика безопасности: [docs/security-policy.md](docs/security-policy.md).
-
-## Документация
-
-- [Архитектура](docs/architecture.md)
-- [Среда выполнения и встроенные узлы](docs/runtime.md)
-- [ByeDPI](docs/byedpi.md)
-- [Политика безопасности](docs/security-policy.md)
-- [Контракт релизов](docs/release-contract.md)
-- [Обновление базы](docs/upstream-maintenance.md)
-- [Границы совместимости](docs/compatibility-boundaries.md)
+---
 
 ## Лицензия
 
-Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные
-исполняемые файлы сохраняют свои исходные лицензии — сведения о них находятся в
-`assets/runtimes/**/README.md` и соответствующих документах в `docs/`.
+Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные исполняемые файлы сохраняют свои исходные лицензии.
