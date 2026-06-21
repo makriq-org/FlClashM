@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'common/common.dart';
 import 'models/models.dart';
+import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/services/product_services.dart';
 import 'product/subscription/product_subscription.dart';
@@ -1284,6 +1285,18 @@ class AppController {
         globalState.showMessage(message: TextSpan(text: err.toString())),
       );
     }
+  }
+
+  Future<void> addProfileFromUrlForSync(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    final shouldSend = prefs.getBool('sendDeviceHeaders') ?? true;
+    final profile = await Profile.normal(url: url).update(
+      shouldSendHeaders: shouldSend,
+      validateConfig: globalState.validateProfileConfigText,
+    );
+    _applyProductCustomization(profile, isNewProfile: true);
+    _showProductNotices(profile);
+    await addProfile(profile);
   }
 
   Future<Null> addProfileFormFile() async {

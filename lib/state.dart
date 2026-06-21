@@ -72,6 +72,9 @@ class GlobalState {
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
+  // Active profile secret/UI values are used only for external dashboard links.
+  final effectiveSecret = ValueNotifier<String>("");
+  final effectiveExternalUi = ValueNotifier<String>("");
   // Effective values for fields that follow the overrideNetworkSettings gate
   // but don't round-trip through patchClashConfigProvider. UI reads these when
   // override is OFF so it shows what's actually applied (profile or fallback).
@@ -83,6 +86,7 @@ class GlobalState {
   // (proxy-groups[*].description). Shown as the subtitle of a nested group
   // card instead of its type (Fallback/URLTest/Selector).
   final groupDescriptions = ValueNotifier<Map<String, String>>({});
+  final globalOverrideEnabled = ValueNotifier<bool>(false);
   final navigatorKey = GlobalKey<NavigatorState>();
   AppController? _appController;
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
@@ -367,6 +371,7 @@ class GlobalState {
     lastRuntimeConfig = runtimePlan.config;
     activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
+    _applyRuntimeConfigState(runtimePlan.config);
   }
 
   Future<InitParams> _buildInitParams() async => InitParams(
@@ -412,10 +417,13 @@ class GlobalState {
     if (metadata == null) {
       groupDescriptions.value = const {};
       effectiveExternalController.value = "";
+      effectiveSecret.value = "";
+      effectiveExternalUi.value = "";
       effectiveTcpConcurrent.value = false;
       effectiveUnifiedDelay.value = false;
       effectiveLogLevel.value = LogLevel.info.name;
       effectiveKeepAliveInterval.value = defaultKeepAliveInterval;
+      globalOverrideEnabled.value = false;
       return;
     }
     groupDescriptions.value = metadata.groupDescriptions;
@@ -424,6 +432,39 @@ class GlobalState {
     effectiveUnifiedDelay.value = metadata.unifiedDelay;
     effectiveLogLevel.value = metadata.logLevel;
     effectiveKeepAliveInterval.value = metadata.keepAliveInterval;
+  }
+
+  void _applyRuntimeConfigState(Map<String, dynamic> runtimeConfig) {
+    if (runtimeConfig.isEmpty) {
+      effectiveSecret.value = "";
+      effectiveExternalUi.value = "";
+      globalOverrideEnabled.value = false;
+      return;
+    }
+
+    effectiveExternalController.value =
+        (runtimeConfig["external-controller"] as String?)?.trim() ??
+            effectiveExternalController.value;
+    effectiveSecret.value = (runtimeConfig["secret"] as String?)?.trim() ?? "";
+    effectiveExternalUi.value =
+        (runtimeConfig["external-ui"] as String?)?.trim() ?? "";
+
+    var parsedGlobalOverride = false;
+    final proxyGroups = runtimeConfig["proxy-groups"];
+    if (proxyGroups is List) {
+      for (final group in proxyGroups) {
+        if (group is! Map) {
+          continue;
+        }
+        final name = group["name"]?.toString().trim();
+        if (name != GroupName.GLOBAL.name) {
+          continue;
+        }
+        parsedGlobalOverride = group["flclashx-override"] == true;
+        break;
+      }
+    }
+    globalOverrideEnabled.value = parsedGlobalOverride;
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {

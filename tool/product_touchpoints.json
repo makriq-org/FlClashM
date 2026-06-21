@@ -27,8 +27,9 @@
     {
       "path": "lib/controller.dart",
       "boundary": "runtime-orchestration",
-      "reason": "AppController is the thin base orchestrator between global state and product runtime/service contracts.",
+      "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts.",
       "targets": [
+        "lib/product/compile/product_compile.dart",
         "lib/product/runtime/product_runtime.dart",
         "lib/product/services/product_services.dart",
         "lib/product/subscription/product_subscription.dart"
