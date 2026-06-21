@@ -3,8 +3,9 @@
 [![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+[![На базе FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> Android-клиент для `mihomo`, который прячет сложные инструменты обхода блокировок за одной кнопкой.
+> Android-клиент для `mihomo`, форк [FlClashX](https://github.com/pluralplay/FlClashX), который прячет сложные инструменты обхода блокировок за одной кнопкой.
 
 [English version](README_EN.md) | [中文版](README_ZH.md) | [نسخه فارسی](README_FA.md)
 
@@ -152,7 +153,7 @@ flutter build apk --debug
 
 ## Благодарности
 
-FlClashM построен на базе [FlClashX](https://github.com/chen08209/FlClashX) — отличного кроссплатформенного клиента для Clash/Mihomo. Огромное спасибо авторам за проделанную работу и открытый код, без которого этот проект был бы невозможен.
+FlClashM построен на базе [FlClashX](https://github.com/pluralplay/FlClashX) — отличного кроссплатформенного клиента для Clash/Mihomo. Огромное спасибо авторам за проделанную работу и открытый код, без которого этот проект был бы невозможен.
 
 Отдельная благодарность авторам [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc) и [NaiveProxy](https://github.com/klzgrad/naiveproxy) — без их труда обход блокировок был бы невозможен.
 

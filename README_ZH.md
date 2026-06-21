@@ -3,8 +3,9 @@
 [![下载量](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![最新版本](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![许可证](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+[![基于 FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> 基于 `mihomo` 的 Android 客户端，将复杂的审查规避工具隐藏在一个按钮之后。
+> 基于 `mihomo` 的 Android 客户端，[FlClashX](https://github.com/pluralplay/FlClashX) 的分支，将复杂的审查规避工具隐藏在一个按钮之后。
 
 [Русская версия](README.md) | [English version](README_EN.md) | [نسخه فارسی](README_FA.md)
 
@@ -152,7 +153,7 @@ flutter build apk --debug
 
 ## 致谢
 
-FlClashM 基于 [FlClashX](https://github.com/chen08209/FlClashX) 构建——一个优秀的 Clash/Mihomo 跨平台客户端。非常感谢作者的工作和开源代码，没有它这个项目将不可能实现。
+FlClashM 基于 [FlClashX](https://github.com/pluralplay/FlClashX) 构建——一个优秀的 Clash/Mihomo 跨平台客户端。非常感谢作者的工作和开源代码，没有它这个项目将不可能实现。
 
 特别感谢 [ByeDPI](https://github.com/hufrea/byedpi)、[OlcRTC](https://github.com/openlibrecommunity/olcrtc) 和 [NaiveProxy](https://github.com/klzgrad/naiveproxy) 的作者——没有他们的工具，审查规避将不可能实现。
 

@@ -3,8 +3,9 @@
 [![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Latest Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+[![Based on FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> Android client for `mihomo` that hides complex censorship circumvention tools behind a single button.
+> Android client for `mihomo`, a fork of [FlClashX](https://github.com/pluralplay/FlClashX), that hides complex censorship circumvention tools behind a single button.
 
 [Русская версия](README.md) | [中文版](README_ZH.md) | [نسخه فارسی](README_FA.md)
 
@@ -152,7 +153,7 @@ flutter build apk --debug
 
 ## Acknowledgments
 
-FlClashM is built on top of [FlClashX](https://github.com/chen08209/FlClashX) — an excellent cross-platform client for Clash/Mihomo. Huge thanks to the authors for their work and open-source code, without which this project would not have been possible.
+FlClashM is built on top of [FlClashX](https://github.com/pluralplay/FlClashX) — an excellent cross-platform client for Clash/Mihomo. Huge thanks to the authors for their work and open-source code, without which this project would not have been possible.
 
 Special thanks to the authors of [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), and [NaiveProxy](https://github.com/klzgrad/naiveproxy) — without their tools, censorship circumvention would not be possible.
 

@@ -3,8 +3,9 @@
 [![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+[![Based on FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> کلاینت اندروید برای `mihomo` که ابزارهای پیچیده دور زدن فیلترینگ را پشت یک دکمه پنهان می‌کند.
+> کلاینت اندروید برای `mihomo`، شاخه‌ای از [FlClashX](https://github.com/pluralplay/FlClashX)، که ابزارهای پیچیده دور زدن فیلترینگ را پشت یک دکمه پنهان می‌کند.
 
 [English version](README_EN.md) | [中文版](README_ZH.md) | [Русская версия](README.md) | [نسخه فارسی](README_FA.md)
 
@@ -152,7 +153,7 @@ flutter build apk --debug
 
 ## قدردانی
 
-FlClashM بر پایه [FlClashX](https://github.com/chen08209/FlClashX) ساخته شده است — یک کلاینت عالی کراس‌پلتفرم برای Clash/Mihomo. از نویسندگان آن برای کار انجام‌شده و کد بازشان بسیار سپاسگزاریم که بدون آن‌ها این پروژه ممکن نبود.
+FlClashM بر پایه [FlClashX](https://github.com/pluralplay/FlClashX) ساخته شده است — یک کلاینت عالی کراس‌پلتفرم برای Clash/Mihomo. از نویسندگان آن برای کار انجام‌شده و کد بازشان بسیار سپاسگزاریم که بدون آن‌ها این پروژه ممکن نبود.
 
 قدردانی ویژه از نویسندگان [ByeDPI](https://github.com/hufrea/byedpi)، [OlcRTC](https://github.com/openlibrecommunity/olcrtc) و [NaiveProxy](https://github.com/klzgrad/naiveproxy) — بدون تلاش آن‌ها دور زدن فیلترینگ ممکن نبود.
 
