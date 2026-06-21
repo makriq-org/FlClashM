@@ -7,7 +7,7 @@
 
 > Android-клиент для `mihomo`, форк [FlClashX](https://github.com/pluralplay/FlClashX), который прячет сложные инструменты обхода блокировок за одной кнопкой.
 
-[English version](README_EN.md) | [中文版](README_ZH.md) | [نسخه فارسی](README_FA.md)
+[English version](i18n/en/README.md) | [中文版](i18n/zh/README.md) | [نسخه فارسی](i18n/fa/README.md)
 
 ---
 
@@ -162,3 +162,4 @@ FlClashM построен на базе [FlClashX](https://github.com/pluralplay
 ## Лицензия
 
 Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные исполняемые файлы сохраняют свои исходные лицензии.
+                                                                                        

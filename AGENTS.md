@@ -34,17 +34,17 @@ touchpoints из `tool/product_touchpoints.json`.
 
 ## Документация
 
-- `docs/README.md` — обзор документации.
-- `docs/user-guide/README.md` — руководство пользователя.
-- `docs/user-guide/profiles.md` — встроенные узлы ByeDPI, OlcRTC, NaiveProxy.
-- `docs/user-guide/split-tunneling.md` — раздельное туннелирование через профиль.
-- `docs/user-guide/provider-hints.md` — подсказки провайдера.
-- `docs/development/architecture.md` — слои и сервисы.
-- `docs/development/runtime.md` — среда выполнения и встроенные узлы.
-- `docs/development/security.md` — политика безопасности.
-- `docs/development/release-contract.md` — релизы.
-- `docs/development/upstream-sync.md` — синхронизация с FlClashX.
-- `docs/development/verification.md` — проверка сборки.
+- `i18n/ru/docs/README.md` — обзор документации.
+- `i18n/ru/docs/user-guide/README.md` — руководство пользователя.
+- `i18n/ru/docs/user-guide/profiles.md` — встроенные узлы ByeDPI, OlcRTC, NaiveProxy.
+- `i18n/ru/docs/user-guide/split-tunneling.md` — раздельное туннелирование через профиль.
+- `i18n/ru/docs/user-guide/provider-hints.md` — подсказки провайдера.
+- `i18n/ru/docs/development/architecture.md` — слои и сервисы.
+- `i18n/ru/docs/development/runtime.md` — среда выполнения и встроенные узлы.
+- `i18n/ru/docs/development/security.md` — политика безопасности.
+- `i18n/ru/docs/development/release-contract.md` — релизы.
+- `i18n/ru/docs/development/upstream-sync.md` — синхронизация с FlClashX.
+- `i18n/ru/docs/development/verification.md` — проверка сборки.
 
 ## Текущие ограничения
 
