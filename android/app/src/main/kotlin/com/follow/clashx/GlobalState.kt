@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import com.follow.clashx.common.BroadcastAction
@@ -131,6 +135,23 @@ object GlobalState {
 
     suspend fun getText(text: String): String =
         getCurrentAppPlugin()?.getText(text) ?: ""
+
+    fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val ctx = CommonGlobalState.application
+        val pm = ctx.getSystemService(PowerManager::class.java) ?: return
+        if (pm.isIgnoringBatteryOptimizations(ctx.packageName)) return
+        val prefs = ctx.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("flutter.battery_opt_prompted", false)) return
+        prefs.edit().putBoolean("flutter.battery_opt_prompted", true).apply()
+        runCatching {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${ctx.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        }
+    }
 
 
     fun syncStatus() {
@@ -317,8 +338,8 @@ object GlobalState {
             runStateFlow.tryEmit(RunState.START)
             getCurrentAppPlugin()?.requestNotificationsPermission()
             requestBatteryOptimizationExemption()
-        }.onFailure {
-            Log.w(TAG, "Direct VPN start failed: ${it.message}")
+        }.onFailure { error: Throwable ->
+            Log.w(TAG, "Direct VPN start failed: ${error.message}")
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             runStateFlow.tryEmit(RunState.STOP)
             TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
