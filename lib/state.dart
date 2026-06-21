@@ -112,6 +112,23 @@ class GlobalState {
     isInit = true;
   }
 
+  void startGroupsUpdateTask() {
+    if (groupsUpdateTimer != null && groupsUpdateTimer!.isActive) {
+      return;
+    }
+    groupsUpdateTimer = Timer(const Duration(seconds: 60), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appController.updateGroupsDebounce();
+        startGroupsUpdateTask();
+      });
+    });
+  }
+
+  void stopGroupsUpdateTask() {
+    groupsUpdateTimer?.cancel();
+    groupsUpdateTimer = null;
+  }
+
   Future<void> initApp(int version) async {
     coreSHA256 = const String.fromEnvironment("CORE_SHA256");
     final coreVersionEnv = const String.fromEnvironment("CORE_VERSION");
