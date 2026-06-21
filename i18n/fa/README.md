@@ -2,7 +2,7 @@
 
 [![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
-[![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
+[![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](../../LICENSE)
 [![Based on FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
 > کلاینت اندروید برای `mihomo`، شاخه‌ای از [FlClashX](https://github.com/pluralplay/FlClashX)، که ابزارهای پیچیده دور زدن فیلترینگ را پشت یک دکمه پنهان می‌کند.
@@ -162,4 +162,3 @@ FlClashM بر پایه [FlClashX](https://github.com/pluralplay/FlClashX) ساخ
 ## مجوز
 
 کد اپلیکیشن تحت مجوز GPL-3.0 منتشر می‌شود. هسته‌های شخص ثالث و فایل‌های اجرایی داخلی مجوزهای اصلی خود را حفظ می‌کنند.
-                                                                                                                                                          

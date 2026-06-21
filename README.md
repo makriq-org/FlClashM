@@ -69,7 +69,7 @@ proxies:
     proxy: "https://user:pass@example.com"
 ```
 
-[Подробнее о встроенных узлах тут](docs/user-guide/profiles.md)
+[Подробнее о встроенных узлах тут](i18n/ru/docs/user-guide/profiles.md)
 
 ## Раздельное туннелирование через профиль
 
@@ -88,7 +88,7 @@ tun:
 
 Можно загружать списки из файлов или URL. Профиль имеет приоритет над ручными настройками.
 
-[Подробнее о раздельном туннелировании тут](docs/user-guide/split-tunneling.md)
+[Подробнее о раздельном туннелировании тут](i18n/ru/docs/user-guide/split-tunneling.md)
 
 ---
 
@@ -124,17 +124,17 @@ tun:
 ## Документация
 
 ### Для пользователей
-- **[Встроенные узлы](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Раздельное туннелирование](docs/user-guide/split-tunneling.md)** — управление через профиль
-- **[Подсказки провайдера](docs/user-guide/provider-hints.md)** — оформление и поведение
+- **[Встроенные узлы](i18n/ru/docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
+- **[Раздельное туннелирование](i18n/ru/docs/user-guide/split-tunneling.md)** — управление через профиль
+- **[Подсказки провайдера](i18n/ru/docs/user-guide/provider-hints.md)** — оформление и поведение
 
 ### Для разработчиков
-- **[Архитектура](docs/development/architecture.md)** — слои и сервисы
-- **[Среда выполнения](docs/development/runtime.md)** — обработка профиля и встроенные узлы
-- **[Безопасность](docs/development/security.md)** — политика безопасности
-- **[Релизы](docs/development/release-contract.md)** — публикация и откат версий
-- **[Синхронизация с FlClashX](docs/development/upstream-sync.md)** — обновление базы
-- **[Проверка сборки](docs/development/verification.md)** — локальные и CI-проверки
+- **[Архитектура](i18n/ru/docs/development/architecture.md)** — слои и сервисы
+- **[Среда выполнения](i18n/ru/docs/development/runtime.md)** — обработка профиля и встроенные узлы
+- **[Безопасность](i18n/ru/docs/development/security.md)** — политика безопасности
+- **[Релизы](i18n/ru/docs/development/release-contract.md)** — публикация и откат версий
+- **[Синхронизация с FlClashX](i18n/ru/docs/development/upstream-sync.md)** — обновление базы
+- **[Проверка сборки](i18n/ru/docs/development/verification.md)** — локальные и CI-проверки
 
 ---
 
@@ -162,4 +162,3 @@ FlClashM построен на базе [FlClashX](https://github.com/pluralplay
 ## Лицензия
 
 Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные исполняемые файлы сохраняют свои исходные лицензии.
-                                                                                        
