@@ -19,14 +19,14 @@ class Navigation {
   }) => [
       const NavigationItem(
         keep: false,
-        icon: Icon(Icons.space_dashboard),
+        icon: Icon(Icons.home_rounded),
         label: PageLabel.dashboard,
         view: DashboardView(
           key: GlobalObjectKey(PageLabel.dashboard),
         ),
       ),
       NavigationItem(
-        icon: const Icon(Icons.article),
+        icon: const Icon(Icons.travel_explore_rounded),
         label: PageLabel.proxies,
         view: const ProxiesView(
           key: GlobalObjectKey(
@@ -38,7 +38,7 @@ class Navigation {
             : [],
       ),
       const NavigationItem(
-        icon: Icon(Icons.folder),
+        icon: Icon(Icons.account_circle_rounded),
         label: PageLabel.profiles,
         view: ProfilesView(
           key: GlobalObjectKey(
@@ -47,18 +47,7 @@ class Navigation {
         ),
       ),
       const NavigationItem(
-        icon: Icon(Icons.view_timeline),
-        label: PageLabel.requests,
-        view: RequestsView(
-          key: GlobalObjectKey(
-            PageLabel.requests,
-          ),
-        ),
-        description: "requestsDesc",
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
-      ),
-      const NavigationItem(
-        icon: Icon(Icons.ballot),
+        icon: Icon(Icons.swap_horiz_rounded),
         label: PageLabel.connections,
         view: ConnectionsView(
           key: GlobalObjectKey(
@@ -93,7 +82,7 @@ class Navigation {
             : [],
       ),
       const NavigationItem(
-        icon: Icon(Icons.construction),
+        icon: Icon(Icons.settings_rounded),
         label: PageLabel.tools,
         view: ToolsView(
           key: GlobalObjectKey(

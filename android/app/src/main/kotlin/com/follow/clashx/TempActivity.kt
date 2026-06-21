@@ -54,6 +54,11 @@ class TempActivity : Activity() {
                 GlobalState.handleStart()
             } else {
                 Log.d(TAG, "VPN permission denied")
+                // Tile/widget may have optimistically flipped to ACTIVE before launching
+                // this consent flow; resync so a denied start reverts the visible state.
+                runCatching {
+                    com.follow.clashx.services.FlClashMTileService.requestUpdate(applicationContext)
+                }
             }
             finishAndRemoveTask()
         }

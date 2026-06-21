@@ -35,18 +35,36 @@ type TunHandler struct {
 }
 
 func (t *TunHandler) close() {
-	_ = t.limit.Acquire(context.TODO(), 4)
-	defer t.limit.Release(4)
+	// Bound the drain. handleProtect/handleResolveProcess hold this semaphore while
+	// calling into the JVM (Binder), which can wedge under system pressure; close()
+	// runs under tunLock, so an unbounded Acquire here would block stop AND the next
+	// start/getRunTime forever. On timeout, skip releaseObject and leak the callback
+	// global ref rather than risk a use-after-free on an in-flight Protect call.
+	// Only Release what was actually acquired (a deferred Release after a failed
+	// Acquire would drive the semaphore negative and panic).
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	drained := t.limit.Acquire(ctx, 4) == nil
+	if drained {
+		defer t.limit.Release(4)
+	} else {
+		log.Warnln("TunHandler.close: drain timed out, leaking callback global ref to avoid use-after-free")
+	}
 	removeTunHook()
 	if t.listener != nil {
 		_ = t.listener.Close()
 	}
-
-	if t.callback != nil {
-		releaseObject(t.callback)
+	if drained {
+		if t.callback != nil {
+			releaseObject(t.callback)
+		}
+		t.callback = nil
+		t.listener = nil
 	}
-	t.callback = nil
-	t.listener = nil
+	// Timeout path: intentionally leave t.callback/t.listener intact. An in-flight
+	// Protect/ResolveProcess (still holding a permit, already past its nil-guard) may
+	// read t.callback; writing nil here would race and could hand a null jobject to
+	// the JVM. The global ref is deliberately leaked (not released) so it stays valid.
 }
 
 func (t *TunHandler) handleProtect(fd int) {
@@ -102,7 +120,13 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	runLock.Lock()
 	if currentConfig == nil {
 		runLock.Unlock()
-		syscall.Close(fd)
+		// The Kotlin caller now only closes the fd when the core was never reached
+		// (loader.start threw before handing it off). Once startTun is entered the
+		// core owns it; the fd was never wrapped by sing-tun on this path, so close
+		// it here to avoid leaking it.
+		if fd != 0 {
+			_ = syscall.Close(fd)
+		}
 		if callback != nil {
 			releaseObject(callback)
 		}
@@ -123,7 +147,13 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		tunListener, err := t.Start(fd, tunCfg)
 		if err != nil {
 			log.Errorln("handleStartTun: t.Start failed: %v", err)
-			syscall.Close(fd)
+			// fd ownership: the Kotlin caller no longer closes the fd on a false
+			// return (it sets fdHandedToCore=true before Core.startTun). Once startTun
+			// is entered the fd belongs to sing-tun, which closes it exactly once via
+			// Listener.Close on a post-wrap failure (NewStack/tunStack.Start). Do NOT
+			// add an unconditional syscall.Close(fd) here — that would double-close a
+			// number sing-tun may have already closed/reused. (A rare pre-wrap sing-tun
+			// failure would leak this one fd; accepted over a double-close.)
 			removeTunHook()
 			if tunHandler != nil {
 				releaseObject(tunHandler.callback)

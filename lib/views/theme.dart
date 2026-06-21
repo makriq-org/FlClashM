@@ -474,7 +474,7 @@ class _NewDashboardItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = ref.watch(effectiveNewDashboardProvider);
+    final enabled = ref.watch(newDashboardEnabledProvider);
     return ListItem.switchItem(
       leading: const Icon(Icons.dashboard_customize),
       horizontalTitleGap: 12,
@@ -486,6 +486,9 @@ class _NewDashboardItem extends ConsumerWidget {
       ),
       delegate: SwitchDelegate(
         value: enabled,
+        // Always user-controllable. A `flclashx-newboard: true` header only sets
+        // the default (via newDashboardEnabledProvider) until the user toggles;
+        // toggling writes an explicit value that then wins over the header.
         onChanged: (value) {
           ref.read(appSettingProvider.notifier).updateState(
                 (state) => state.copyWith(newDashboard: value),

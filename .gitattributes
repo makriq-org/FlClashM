@@ -1,0 +1,3 @@
+assets/data/*.dat binary
+assets/data/*.mmdb binary
+assets/data/*.metadb binary

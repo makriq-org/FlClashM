@@ -78,6 +78,8 @@ mixin ClashInterface {
   FutureOr<bool> resetConnections();
 
   Future<bool> setState(CoreState state);
+
+  Future<bool> setUiActive(bool active);
 }
 
 mixin AndroidClashInterface {
@@ -92,6 +94,11 @@ mixin AndroidClashInterface {
 
 abstract class ClashHandlerInterface with ClashInterface {
   Map<String, Completer> callbackCompleterMap = {};
+
+  /// Per-call type-appropriate default value, so a failed call can complete the
+  /// typed completer with the right default instead of `null` (which throws a
+  /// TypeError on a non-nullable type and strands the caller until timeout).
+  Map<String, dynamic> callbackDefaultMap = {};
 
   Future<void> handleResult(ActionResult result) async {
     final completer = callbackCompleterMap[result.id];
@@ -140,6 +147,7 @@ abstract class ClashHandlerInterface with ClashInterface {
         mDefaultValue = {};
       }
     }
+    callbackDefaultMap[id] = mDefaultValue;
 
     sendMessage(
       json.encode(
@@ -155,6 +163,7 @@ abstract class ClashHandlerInterface with ClashInterface {
       timeout: timeout,
       onLast: () {
         callbackCompleterMap.remove(id);
+        callbackDefaultMap.remove(id);
       },
       onTimeout: onTimeout ??
           () => mDefaultValue as T,
@@ -172,6 +181,15 @@ abstract class ClashHandlerInterface with ClashInterface {
   Future<bool> setState(CoreState state) => invoke<bool>(
       method: ActionMethod.setState,
       data: json.encode(state),
+    );
+
+  @override
+  Future<bool> setUiActive(bool active) => invoke<bool>(
+      method: ActionMethod.setUiActive,
+      data: active,
+      // Short timeout so an older core without this handler degrades silently
+      // instead of leaving a pending completer.
+      timeout: const Duration(seconds: 2),
     );
 
   @override

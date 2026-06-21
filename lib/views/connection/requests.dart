@@ -1,46 +1,38 @@
-import 'dart:io';
-
 import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flclashm/providers/providers.dart';
 import 'package:flclashm/state.dart';
 import 'package:flclashm/widgets/widgets.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'item.dart';
 
-class RequestsView extends ConsumerStatefulWidget {
-  const RequestsView({super.key});
+/// The "Log" tab body: the accumulating reverse-scroll stream of requests fed by
+/// requestsProvider. A plain body (no PageMixin) — the merged ConnectionsView owns
+/// the app-bar; search/keywords are passed down as [query]/[keywords].
+class LogConnectionsBody extends ConsumerStatefulWidget {
+  const LogConnectionsBody({
+    super.key,
+    this.query = '',
+    this.keywords = const [],
+  });
+
+  final String query;
+  final List<String> keywords;
 
   @override
-  ConsumerState<RequestsView> createState() => _RequestsViewState();
+  ConsumerState<LogConnectionsBody> createState() => _LogConnectionsBodyState();
 }
 
-class _RequestsViewState extends ConsumerState<RequestsView> with PageMixin {
-  final _requestsStateNotifier = ValueNotifier<ConnectionsState>(
-    const ConnectionsState(loading: true),
-  );
+class _LogConnectionsBodyState extends ConsumerState<LogConnectionsBody> {
+  late final ValueNotifier<ConnectionsState> _requestsStateNotifier;
   List<Connection> _requests = [];
   final _tag = CacheTag.requests;
   late ScrollController _scrollController;
   bool _isLoad = false;
-
-  double _currentMaxWidth = 0;
-
-  @override
-  Null Function(String value) get onSearch => (value) {
-        _requestsStateNotifier.value = _requestsStateNotifier.value.copyWith(
-          query: value,
-        );
-      };
-
-  @override
-  Null Function(List<String> keywords) get onKeywordsUpdate => (keywords) {
-        _requestsStateNotifier.value =
-            _requestsStateNotifier.value.copyWith(keywords: keywords);
-      };
 
   @override
   void initState() {
@@ -50,21 +42,13 @@ class _RequestsViewState extends ConsumerState<RequestsView> with PageMixin {
       initialScrollOffset: preOffset > 0 ? preOffset : double.maxFinite,
     );
     _requests = globalState.appState.requests.list;
-    _requestsStateNotifier.value = _requestsStateNotifier.value.copyWith(
-      connections: _requests,
-    );
-    ref.listenManual(
-      isCurrentPageProvider(
-        PageLabel.requests,
-        handler: (pageLabel, viewMode) =>
-            pageLabel == PageLabel.tools && viewMode == ViewMode.mobile,
+    _requestsStateNotifier = ValueNotifier<ConnectionsState>(
+      ConnectionsState(
+        loading: true,
+        connections: _requests,
+        query: widget.query,
+        keywords: widget.keywords,
       ),
-      (prev, next) {
-        if (prev != next && next == true) {
-          initPageState();
-        }
-      },
-      fireImmediately: true,
     );
     ref.listenManual(
       requestsProvider.select((state) => state.list),
@@ -77,35 +61,25 @@ class _RequestsViewState extends ConsumerState<RequestsView> with PageMixin {
     );
   }
 
-  double _calcCacheHeight(Connection item) {
-    final size = globalState.measure.computeTextSize(
-      Text(
-        item.desc,
-        style: context.textTheme.bodyLarge,
-      ),
-      maxWidth: _currentMaxWidth,
-    );
-    final chainsText = item.chains.join("");
-    final length = item.chains.length;
-    final chainSize = globalState.measure.computeTextSize(
-      Text(
-        chainsText,
-        style: context.textTheme.bodyMedium,
-      ),
-      maxWidth: (_currentMaxWidth - (length - 1) * 6 - length * 24),
-    );
-    final baseHeight = globalState.measure.bodyMediumHeight;
-    final lines = (chainSize.height / baseHeight).round();
-    final computerHeight =
-        size.height + chainSize.height + 24 + 24 * (lines - 1);
-    return computerHeight + 8 + 32 + globalState.measure.bodyMediumHeight;
+  @override
+  void didUpdateWidget(LogConnectionsBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query ||
+        !listEquals(oldWidget.keywords, widget.keywords)) {
+      _requestsStateNotifier.value = _requestsStateNotifier.value.copyWith(
+        query: widget.query,
+        keywords: widget.keywords,
+      );
+    }
   }
+
+  // ConnectionRow is a fixed-height row, so the per-item cache is a constant.
+  double _calcCacheHeight(Connection item) => kConnRowExtent;
 
   @override
   void dispose() {
     _requestsStateNotifier.dispose();
     _scrollController.dispose();
-    _currentMaxWidth = 0;
     super.dispose();
   }
 
@@ -165,92 +139,77 @@ class _RequestsViewState extends ConsumerState<RequestsView> with PageMixin {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-      builder: (_, constraints) => Consumer(
-          builder: (_, ref, child) {
-            final value = ref.watch(
-              patchClashConfigProvider.select(
-                (state) =>
-                    state.findProcessMode == FindProcessMode.always &&
-                    Platform.isAndroid,
-              ),
-            );
-            _currentMaxWidth = constraints.maxWidth - 40 - (value ? 60 : 0);
-            return child!;
-          },
-          child: TextScaleNotification(
-            child: ValueListenableBuilder<ConnectionsState>(
-              valueListenable: _requestsStateNotifier,
-              builder: (_, state, __) {
-                _preLoad();
-                final connections = state.list;
-                final items = connections
-                    .map<Widget>(
-                      (connection) => ConnectionItem(
-                        key: Key(connection.id),
-                        connection: connection,
-                        onClickKeyword: (value) {
-                          context.commonScaffoldState?.addKeyword(value);
-                        },
-                      ),
-                    )
-                    .separated(
-                      const Divider(
-                        height: 0,
-                      ),
-                    )
-                    .toList();
-                final content = connections.isEmpty
-                    ? NullStatus(
-                        label:
-                            appLocalizations.nullTip(appLocalizations.requests),
-                      )
-                    : Align(
-                        alignment: Alignment.topCenter,
-                        child: ScrollToEndBox(
-                          controller: _scrollController,
+  Widget build(BuildContext context) => TextScaleNotification(
+        child: ValueListenableBuilder<ConnectionsState>(
+          valueListenable: _requestsStateNotifier,
+          builder: (_, state, __) {
+            _preLoad();
+            final connections = state.list;
+            final items = connections
+                .map<Widget>(
+                  (connection) => ConnectionRow(
+                    key: Key(connection.id),
+                    connection: connection,
+                    mode: ConnectionRowMode.log,
+                    onClickKeyword: (value) {
+                      context.commonScaffoldState?.addKeyword(value);
+                    },
+                  ),
+                )
+                .separated(
+                  const Divider(
+                    height: 0,
+                  ),
+                )
+                .toList();
+            final content = connections.isEmpty
+                ? NullStatus(
+                    label: appLocalizations
+                        .nullTip(appLocalizations.connectionsLog),
+                  )
+                : Align(
+                    alignment: Alignment.topCenter,
+                    child: ScrollToEndBox(
+                      controller: _scrollController,
+                      tag: _tag,
+                      dataSource: connections,
+                      child: CommonScrollBar(
+                        controller: _scrollController,
+                        child: CacheItemExtentListView(
                           tag: _tag,
-                          dataSource: connections,
-                          child: CommonScrollBar(
-                            controller: _scrollController,
-                            child: CacheItemExtentListView(
-                              tag: _tag,
-                              reverse: true,
-                              shrinkWrap: true,
-                              physics: const NextClampingScrollPhysics(),
-                              controller: _scrollController,
-                              itemExtentBuilder: (index) {
-                                if (index.isOdd) {
-                                  return 0;
-                                }
-                                return _calcCacheHeight(
-                                    connections[index ~/ 2]);
-                              },
-                              itemBuilder: (_, index) => items[index],
-                              itemCount: items.length,
-                              keyBuilder: (index) {
-                                if (index.isOdd) {
-                                  return "divider";
-                                }
-                                return connections[index ~/ 2].id;
-                              },
-                            ),
-                          ),
+                          reverse: true,
+                          shrinkWrap: true,
+                          physics: const NextClampingScrollPhysics(),
+                          controller: _scrollController,
+                          itemExtentBuilder: (index) {
+                            if (index.isOdd) {
+                              return 0;
+                            }
+                            return _calcCacheHeight(connections[index ~/ 2]);
+                          },
+                          itemBuilder: (_, index) => items[index],
+                          itemCount: items.length,
+                          keyBuilder: (index) {
+                            if (index.isOdd) {
+                              return "divider";
+                            }
+                            return connections[index ~/ 2].id;
+                          },
                         ),
-                      );
-                return FadeBox(
-                  child: state.loading
-                      ? const Center(
-                          child: CircularProgressIndicator(),
-                        )
-                      : content,
-                );
-              },
-            ),
-            onNotification: (_) {
-              globalState.cacheHeightMap[_tag]?.clear();
-            },
-          ),
+                      ),
+                    ),
+                  );
+            return FadeBox(
+              child: state.loading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : content,
+            );
+          },
         ),
-    );
+        onNotification: (_) {
+          globalState.cacheHeightMap[_tag]?.clear();
+        },
+      );
 }

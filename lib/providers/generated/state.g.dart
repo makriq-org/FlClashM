@@ -1123,6 +1123,24 @@ final globalModeEnabledProvider = AutoDisposeProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef GlobalModeEnabledRef = AutoDisposeProviderRef<bool>;
+String _$newDashboardEnabledHash() =>
+    r'1b3c5d7f9a0e2c4d6f8b0a1c3e5d7f9b1a3c5e7d';
+
+/// See also [newDashboardEnabled].
+@ProviderFor(newDashboardEnabled)
+final newDashboardEnabledProvider = AutoDisposeProvider<bool>.internal(
+  newDashboardEnabled,
+  name: r'newDashboardEnabledProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$newDashboardEnabledHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef NewDashboardEnabledRef = AutoDisposeProviderRef<bool>;
 String _$hasAnnounceDataHash() => r'518399bf6581fbf003d0fe26afbe9db97e6c0322';
 
 /// See also [hasAnnounceData].

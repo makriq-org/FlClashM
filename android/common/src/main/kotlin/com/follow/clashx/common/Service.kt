@@ -26,10 +26,10 @@ fun Context.bindServiceFlow(
     initialDelayMillis: Long = 500L,
 ): Flow<IBinder?> = callbackFlow {
     val connection = object : ServiceConnection {
+        // No linkToDeath: the framework already delivers onServiceDisconnected when
+        // the :remote process dies. A DeathRecipient here only duplicated the signal
+        // (inflating the Dart crash counter) and leaked recipients across rebinds.
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            binder?.linkToDeath({
-                onServiceDisconnected(name)
-            }, 0)
             trySend(binder)
         }
 
@@ -99,9 +99,12 @@ class ServiceDelegate<T : Any>(
         timeoutMillis: Long = defaultTimeoutMillis,
         block: suspend (T) -> R,
     ): Result<R> = runCatching {
-        val proxy = withTimeoutOrNull(timeoutMillis) {
-            proxyFlow.first { it != null }
-        } ?: error("service not available: ${intent.component}")
-        withContext(Dispatchers.Default) { block(proxy) }
+        // Timeout must cover BOTH proxy acquisition and the actual (possibly
+        // synchronous) binder transaction, otherwise a stalled remote leaves the
+        // coroutine — and the Flutter MethodChannel result — hanging forever.
+        withTimeoutOrNull(timeoutMillis) {
+            val proxy = proxyFlow.first { it != null }!!
+            withContext(Dispatchers.Default) { block(proxy) }
+        } ?: error("service timed out: ${intent.component}")
     }
 }

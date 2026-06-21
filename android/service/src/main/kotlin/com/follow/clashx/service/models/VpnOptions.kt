@@ -18,7 +18,9 @@ data class VpnOptions(
     val socksPort: Int = 7891,
     val ipv4Address: String = "172.19.0.1/30",
     val ipv6Address: String = "fdfe:dcba:9876::1/126",
-    val dnsServers: List<String> = listOf("8.8.8.8", "1.1.1.1"),
+    // In-tunnel DNS resolver address supplied by the core (json key "dnsServerAddress").
+    // The core hijacks :53 to it and resolves via the active config's dns settings.
+    val dnsServerAddress: String = "",
     val routeAddress: List<String> = emptyList(),
     val allowBypass: Boolean = false,
     val systemProxy: Boolean = true,
@@ -32,7 +34,7 @@ data class VpnOptions(
 
 @Suppress("SENSELESS_COMPARISON")
 fun VpnOptions.gsonSanitized(): VpnOptions = copy(
-    dnsServers = if (dnsServers == null) listOf("8.8.8.8", "1.1.1.1") else dnsServers,
+    dnsServerAddress = if (dnsServerAddress == null) "" else dnsServerAddress,
     routeAddress = if (routeAddress == null) emptyList() else routeAddress,
     bypassDomain = if (bypassDomain == null) emptyList() else bypassDomain,
     accessControl = accessControl?.gsonSanitized(),

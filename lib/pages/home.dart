@@ -6,6 +6,7 @@ import 'package:flclashm/models/models.dart';
 import 'package:flclashm/providers/providers.dart';
 import 'package:flclashm/state.dart';
 import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashm/views/dashboard/widgets/hero_nav_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -32,16 +33,9 @@ class HomePage extends StatelessWidget {
               navigationItems: navigationItems,
               currentIndex: currentIndex,
             );
-            final isNewDashboard = ref.watch(effectiveNewDashboardProvider) &&
-                pageLabel == PageLabel.dashboard;
-            final showBottomBar =
-                viewMode == ViewMode.mobile && !isNewDashboard;
+            final newDashboard = ref.watch(effectiveNewDashboardProvider);
             final bottomNavigationBar = viewMode == ViewMode.mobile
-                ? AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    child:
-                        showBottomBar ? navigationBar : const SizedBox.shrink(),
-                  )
+                ? (newDashboard ? const HeroNavBar() : navigationBar)
                 : null;
             final sideNavigationBar =
                 viewMode != ViewMode.mobile ? navigationBar : null;

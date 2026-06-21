@@ -27,7 +27,17 @@ class FlClashMTileService : TileService() {
         private const val DEBOUNCE_MS = 500L
     }
 
-    private val observer = Observer<RunState> { syncTile() }
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val syncRunnable = Runnable { syncTile() }
+
+    // Debounce: collapse rapid successive runState changes into a single tile update
+    // so the icon doesn't flicker when state briefly oscillates during start/stop.
+    private fun syncTileDebounced() {
+        mainHandler.removeCallbacks(syncRunnable)
+        mainHandler.postDelayed(syncRunnable, 80L)
+    }
+
+    private val observer = Observer<RunState> { syncTileDebounced() }
 
     override fun onStartListening() {
         super.onStartListening()
@@ -37,6 +47,7 @@ class FlClashMTileService : TileService() {
     }
 
     override fun onStopListening() {
+        mainHandler.removeCallbacks(syncRunnable)
         GlobalState.runState.removeObserver(observer)
         super.onStopListening()
     }
@@ -52,7 +63,11 @@ class FlClashMTileService : TileService() {
             Tile.STATE_INACTIVE -> {
                 tile.state = Tile.STATE_ACTIVE
                 tile.updateTile()
-                unlockAndRun { GlobalState.handleStart() }
+                // Don't force a screen unlock: unlockAndRun() prompts the lock screen.
+                // With VPN permission already granted + saved cold-start params the start
+                // is headless (startForegroundService, no activity), so the VPN toggles
+                // straight from the locked Quick Settings panel — like happ / v2raytun.
+                GlobalState.handleStart()
             }
             Tile.STATE_ACTIVE -> {
                 tile.state = Tile.STATE_INACTIVE
@@ -63,6 +78,7 @@ class FlClashMTileService : TileService() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(syncRunnable)
         GlobalState.runState.removeObserver(observer)
         super.onDestroy()
     }

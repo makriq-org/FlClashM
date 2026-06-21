@@ -2,6 +2,7 @@ package com.follow.clashx.common
 
 import android.app.Application
 import android.util.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,7 +18,12 @@ object GlobalState {
     lateinit var application: Application
         private set
 
-    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val exceptionHandler = CoroutineExceptionHandler { _, e ->
+        log("uncaught coroutine exception: ${e.message}")
+    }
+
+    val scope: CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
 
     fun init(app: Application) {
         application = app

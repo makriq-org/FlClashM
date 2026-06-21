@@ -27,10 +27,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import java.io.File
 
 class ServicePlugin :
@@ -46,7 +44,7 @@ class ServicePlugin :
 
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
-    private val eventSemaphore = Semaphore(10)
+    private val eventChannel = Channel<String?>(Channel.UNLIMITED)
     private val gson = Gson()
     @Volatile private var attached = false
 
@@ -56,6 +54,13 @@ class ServicePlugin :
         channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
         attached = true
+        // Single FIFO consumer so events (logs/traffic/state) reach Flutter strictly in
+        // order, instead of racing across a Semaphore-bounded parallel dispatch pool.
+        launch {
+            for (value in eventChannel) {
+                invokeOnMain("event", value)
+            }
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -158,13 +163,19 @@ class ServicePlugin :
 
     private fun onServiceDisconnected(message: String) {
         Log.w("ServicePlugin", "remote service disconnected: $message")
-        com.follow.clashx.common.SavedParams.setVpnActive(false)
-        CommonGlobalState.launch {
-            GlobalState.runLock.withLock {
-                GlobalState.runTime = 0L
-                GlobalState.runStateFlow.tryEmit(RunState.STOP)
-            }
-        }
+        // A RemoteService binder drop means the IPC bridge (the :remote process) was
+        // recycled — NOT that the tunnel died. FlVpnService is START_STICKY + foreground
+        // and recovers itself via coldStart as long as the persistent isVpnActive flag
+        // stays set. Clearing that flag / forcing STOP here was exactly what dropped the
+        // VPN on some phones when the app was reopened from background: the disconnect
+        // queued while :main was frozen fired on resume and sabotaged the sticky recovery
+        // (coldStart then saw isVpnActive == false and stopped itself). Instead, re-derive
+        // the real state from the flag + an AIDL probe — handleSyncState keeps START while
+        // the tunnel is genuinely up and only reports STOP when the flag is actually clear.
+        // Genuine teardowns are still covered by the SERVICE_DESTROYED broadcast + the
+        // explicit stop path. The "crash" signal makes Dart re-bind and re-register its
+        // event listener against the reconnected service.
+        CommonGlobalState.launch { GlobalState.handleSyncState() }
         invokeOnMain("crash", message)
     }
 
@@ -207,9 +218,22 @@ class ServicePlugin :
             VpnOptions()
         }
         if (options.enable && GlobalState.runStateFlow.value != RunState.START) {
-            GlobalState.getCurrentAppPlugin()?.requestVpnPermission {
+            val plugin = GlobalState.getCurrentAppPlugin()
+            if (plugin != null) {
+                plugin.requestVpnPermission { granted ->
+                    if (granted) {
+                        doStartService(options, result)
+                    } else {
+                        // User denied/cancelled the VPN consent dialog: resolve the
+                        // pending Flutter call with rt=0 instead of leaving it hanging.
+                        com.follow.clashx.common.SavedParams.setVpnActive(false)
+                        GlobalState.runStateFlow.tryEmit(RunState.STOP)
+                        result.successOnMain(0L)
+                    }
+                }
+            } else {
                 doStartService(options, result)
-            } ?: doStartService(options, result)
+            }
         } else {
             doStartService(options, result)
         }
@@ -232,6 +256,13 @@ class ServicePlugin :
 
     private fun doStartService(options: VpnOptions, result: MethodChannel.Result) {
         launch {
+            if (options.enable) {
+                // Arm the late-SERVICE_DESTROYED guard at the real start moment so a
+                // stale DESTROYED broadcast (e.g. delivered after :app unfreezes)
+                // can't tear down this fresh tunnel. Covers in-app and tile-with-engine
+                // starts, which bypass GlobalState.triggerStart's own arming.
+                GlobalState.startRequestedAt = android.os.SystemClock.elapsedRealtime()
+            }
             val rt = Service.startService(options, GlobalState.runTime)
             GlobalState.runTime = rt
             if (rt == 0L) {
@@ -339,11 +370,7 @@ class ServicePlugin :
     }
 
     private fun dispatchEvent(value: String?) {
-        CommonGlobalState.launch {
-            eventSemaphore.withPermit {
-                invokeOnMain("event", value)
-            }
-        }
+        eventChannel.trySend(value)
     }
 
     private fun invokeOnMain(method: String, argument: Any?) {

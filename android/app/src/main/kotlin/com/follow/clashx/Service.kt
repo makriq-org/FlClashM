@@ -86,7 +86,9 @@ object Service {
 
     suspend fun setEventListener(cb: ((String?) -> Unit)?): Result<Unit> {
         val buffers = ConcurrentHashMap<String, MutableList<ByteArray>>()
-        return delegate.useService { proxy ->
+        // Allow a slow cold-start bind (matches Dart's 15s init timeout) so the event
+        // stream still registers instead of silently giving up after the 5s default.
+        return delegate.useService(timeoutMillis = 15_000L) { proxy ->
             proxy.setEventListener(
                 if (cb == null) null else object : IEventInterface.Stub() {
                     override fun onEvent(
@@ -145,8 +147,9 @@ object Service {
     suspend fun getCurrentProfileName(): String =
         delegate.useService { it.currentProfileName }.getOrNull() ?: ""
 
-    suspend fun getRunTimeString(): String =
-        delegate.useService { it.runTime }.getOrNull() ?: ""
+    /** Returns null when the AIDL probe fails/times out (vs "" / a value on success). */
+    suspend fun getRunTimeString(): String? =
+        delegate.useService { it.runTime }.getOrNull()
 
     suspend fun getTraffic(): String =
         delegate.useService { it.traffic }.getOrNull() ?: ""

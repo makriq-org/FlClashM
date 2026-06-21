@@ -1,5 +1,6 @@
 #ifdef LIBCLASH
 #include <jni.h>
+#include <cstring>
 #include "jni_helper.h"
 #include "libclash.h"
 
@@ -36,7 +37,9 @@ call_tun_interface_resolve_process_impl(void *tun_interface, int protocol,
                                         const char *target,
                                         const int uid) {
     ATTACH_JNI();
-    if (env == nullptr) return "";
+    // Go frees this pointer via C.free, so every return path must hand back a
+    // heap-allocated buffer (strdup), never a read-only string literal.
+    if (env == nullptr) return strdup("");
     const auto jSource = new_string(source);
     const auto jTarget = new_string(target);
     const auto packageName = reinterpret_cast<jstring>(env->CallObjectMethod(
@@ -48,6 +51,13 @@ call_tun_interface_resolve_process_impl(void *tun_interface, int protocol,
             uid));
     if (jSource) env->DeleteLocalRef(jSource);
     if (jTarget) env->DeleteLocalRef(jTarget);
+    // The callback runs arbitrary Kotlin (ConnectivityManager / PackageManager).
+    // If it threw, clear the pending exception and bail before dereferencing a
+    // null jstring inside get_string().
+    if (jni_catch_exception(env) || packageName == nullptr) {
+        if (packageName) env->DeleteLocalRef(packageName);
+        return strdup("");
+    }
     const char *result = get_string(packageName);
     if (packageName) env->DeleteLocalRef(packageName);
     return result;

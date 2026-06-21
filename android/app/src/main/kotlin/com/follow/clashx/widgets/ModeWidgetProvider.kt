@@ -58,7 +58,9 @@ class ModeWidgetProvider : AppWidgetProvider() {
         private fun render(context: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_mode)
             val runState = GlobalState.runState.value ?: RunState.STOP
-            val mode = GlobalState.currentMode.value ?: "rule"
+            // Prefer the persisted mode (correct on cold start before the engine runs);
+            // fall back to the in-memory LiveData, then the default.
+            val mode = GlobalState.readPersistedMode() ?: GlobalState.currentMode.value ?: "rule"
 
             applyMode(views, mode)
             views.setOnClickPendingIntent(R.id.widget_btn_rule, pending(context, ACTION_MODE_RULE))

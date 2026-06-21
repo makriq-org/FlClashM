@@ -279,6 +279,7 @@ enum ActionMethod {
   setupConfig,
   getCoreVersion,
   healthCheck,
+  setUiActive,
 
   ///Android,
   setState,

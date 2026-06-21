@@ -10,6 +10,7 @@ import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'common.dart';
 import 'setting.dart';
 import 'tab.dart';
 
@@ -26,7 +27,19 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
   bool _isTab = false;
 
   Future<void> _pingAllGroups() async {
-    await clashCore.healthCheck();
+    // Fan out the per-group delay test (the same path the per-group ping button uses
+    // and is known to update every member) across all groups in parallel — each group
+    // tests its OWN full member list with its OWN test URL. This is both parallel and
+    // correct, unlike collecting a flat unique list where group names only resolve to
+    // their active member and inactive hosts (e.g. in SERVERS) never get tested.
+    final groups = ref.read(currentGroupsStateProvider).value;
+    if (groups.isEmpty) {
+      await clashCore.healthCheck();
+      return;
+    }
+    await Future.wait(
+      groups.map((group) => delayTest(group.all, group.testUrl)),
+    );
   }
 
   @override

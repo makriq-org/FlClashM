@@ -68,7 +68,11 @@ fun Service.ensureNotificationChannel() {
     }
 }
 
-fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashM"): android.app.Notification {
+fun Service.buildServiceNotification(
+    iconRes: Int,
+    title: String = "FlClashM",
+    stopText: String = "",
+): android.app.Notification {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     val contentIntent = if (launchIntent != null) {
         android.app.PendingIntent.getActivity(
@@ -84,7 +88,7 @@ fun Service.buildServiceNotification(iconRes: Int, title: String = "FlClashM"): 
     } else {
         android.app.PendingIntent.getService(this, 1, stopIntent, piFlags)
     }
-    val stopLabel = getString(R.string.notification_stop)
+    val stopLabel = stopText.ifBlank { getString(R.string.notification_stop) }
     return androidx.core.app.NotificationCompat.Builder(this, GlobalState.NOTIFICATION_CHANNEL)
         .setSmallIcon(iconRes)
         .setContentTitle(title)
@@ -105,10 +109,17 @@ fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM") {
 }
 
 fun Service.startForeground(id: Int, notification: Notification, foregroundServiceType: Int = 0) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && foregroundServiceType != 0) {
-        ServiceCompat.startForeground(this, id, notification, foregroundServiceType)
-    } else {
-        startForeground(id, notification)
+    // On API 31+ starting a FGS from a restricted context (e.g. BOOT_COMPLETED with
+    // a specialUse type) can throw ForegroundServiceStartNotAllowedException. Guard
+    // it so auto-start-on-boot degrades gracefully instead of crashing the service.
+    runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && foregroundServiceType != 0) {
+            ServiceCompat.startForeground(this, id, notification, foregroundServiceType)
+        } else {
+            startForeground(id, notification)
+        }
+    }.onFailure {
+        GlobalState.log("startForeground failed: ${it.message}")
     }
 }
 

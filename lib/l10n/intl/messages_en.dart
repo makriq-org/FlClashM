@@ -171,6 +171,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "cancelSelectAll": MessageLookupByLibrary.simpleMessage(
       "Cancel select all",
     ),
+    "change": MessageLookupByLibrary.simpleMessage("Change"),
     "changeServer": MessageLookupByLibrary.simpleMessage("Change Server"),
     "checkError": MessageLookupByLibrary.simpleMessage("Check error"),
     "checkUpdate": MessageLookupByLibrary.simpleMessage("Check for updates"),
@@ -178,6 +179,8 @@ class MessageLookup extends MessageLookupByLibrary {
       "The current application is already the latest version",
     ),
     "checking": MessageLookupByLibrary.simpleMessage("Checking..."),
+    "determiningIp": MessageLookupByLibrary.simpleMessage("Determining IP..."),
+    "locations": MessageLookupByLibrary.simpleMessage("Locations"),
     "clearData": MessageLookupByLibrary.simpleMessage("Clear Data"),
     "clearDataTip": MessageLookupByLibrary.simpleMessage(
       "This will delete all app data and restart the application. Are you sure?",
@@ -194,6 +197,8 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "confirm": MessageLookupByLibrary.simpleMessage("Confirm"),
     "connections": MessageLookupByLibrary.simpleMessage("Connections"),
+    "connectionsActive": MessageLookupByLibrary.simpleMessage("Active"),
+    "connectionsLog": MessageLookupByLibrary.simpleMessage("Log"),
     "connectionsDesc": MessageLookupByLibrary.simpleMessage(
       "View current connections data",
     ),

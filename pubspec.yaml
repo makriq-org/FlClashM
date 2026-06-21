@@ -1,7 +1,7 @@
 name: flclashm
 description: FlClashM is an Android-only fork of FlClashX, with preserved Android package continuity from makriq.
 publish_to: "none"
-version: 0.10.3+2026060801
+version: 0.10.4+2026062101
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -96,6 +96,7 @@ flutter:
     - assets/runtimes/byedpi/android/armeabi-v7a/
     - assets/runtimes/byedpi/android/arm64-v8a/
     - assets/runtimes/byedpi/android/x86_64/
+    - assets/images/icons/
   fonts:
     - family: JetBrainsMono
       fonts:

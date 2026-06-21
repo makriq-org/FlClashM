@@ -55,7 +55,12 @@ GroupsState currentGroupsState(Ref ref) {
   return GroupsState(
     value: switch (mode) {
       Mode.direct => [],
-      Mode.global => groups.toList(),
+      // With `flclashx-override` on GLOBAL, global mode has a single selector —
+      // show only GLOBAL (service groups belong to rule mode). Otherwise keep
+      // the original behaviour: every group.
+      Mode.global => globalState.globalOverrideEnabled.value
+          ? groups.where((item) => item.name == GroupName.GLOBAL.name).toList()
+          : groups.toList(),
       Mode.rule => groups
           .where((item) => item.hidden == false)
           .where((element) => element.name != GroupName.GLOBAL.name)
@@ -464,6 +469,18 @@ final dashboardEditingLockedProvider = Provider.autoDispose<bool>((ref) {
   return productHints.denyDashboardEditing || effectiveNewDashboard;
 });
 
+/// Single source of truth for whether the "new look" (hero) dashboard is shown.
+/// Just the `newDashboard` setting — the toggle is never locked. The
+/// `flclashx-newboard` header writes this setting via _applyCustomViewSettings under
+/// the standard `flclashx-custom` policy (`update` re-applies on every profile apply,
+/// `add` only when the subscription is first added), so the provider can switch the
+/// board on/off through the normal header pipeline rather than overriding here.
+@riverpod
+bool newDashboardEnabled(Ref ref) {
+  return ref.watch(appSettingProvider.select((state) => state.newDashboard)) ??
+      false;
+}
+
 @riverpod
 bool globalModeEnabled(Ref ref) => ref.watch(
       currentProductDisplayHintsProvider.select(
@@ -627,7 +644,13 @@ VM2<int, bool> checkIp(Ref ref) {
           state.dashboardWidgets.contains(DashboardWidget.networkDetection),
     ),
   );
-  return VM2(a: checkIpNum, b: containsDetection);
+  // The "new look" hero also shows the exit IP, so it needs the same re-check on
+  // proxy change.
+  final newDashboard = ref.watch(effectiveNewDashboardProvider);
+  return VM2(
+    a: checkIpNum,
+    b: containsDetection || newDashboard,
+  );
 }
 
 @riverpod

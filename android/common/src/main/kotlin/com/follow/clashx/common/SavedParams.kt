@@ -22,6 +22,9 @@ object SavedParams {
     private val legacyActiveFile by lazy { file(LEGACY_ACTIVE_FILE) }
     private val notifTitleFile by lazy { file(NOTIF_TITLE_FILE) }
     private val legacyNotifTitleFile by lazy { file(LEGACY_NOTIF_TITLE_FILE) }
+    private const val START_TIME_FILE = "flclashx_start_time"
+
+    private val startTimeFile by lazy { File(GlobalState.application.filesDir, START_TIME_FILE) }
 
     data class QuickStartParams(val init: String, val setup: String, val state: String)
 
@@ -71,6 +74,7 @@ object SavedParams {
             } else {
                 activeFile.delete()
                 legacyActiveFile.delete()
+                clearStartTime()
             }
         }.onFailure { GlobalState.log("setVpnActive($active) error: ${it.message}") }
     }
@@ -113,6 +117,22 @@ object SavedParams {
             legacyRuntimeNodesFile.delete()
         }
             .onFailure { GlobalState.log("clearRuntimeNodesState error: ${it.message}") }
+    }
+
+    // Persisted tunnel start timestamp (epoch ms). Lets a freshly-restarted UI process
+    // recover the real uptime — and confirm the tunnel is up — when the AIDL runtime
+    // probe isn't ready yet, instead of reading 0 and stopping the live VPN.
+    fun setStartTime(ms: Long) {
+        runCatching { writeAtomic(startTimeFile, ms.toString()) }
+            .onFailure { GlobalState.log("setStartTime error: ${it.message}") }
+    }
+
+    fun getStartTime(): Long? =
+        runCatching { startTimeFile.readText().trim().toLongOrNull() }.getOrNull()
+
+    fun clearStartTime() {
+        runCatching { if (startTimeFile.exists()) startTimeFile.delete() }
+            .onFailure { GlobalState.log("clearStartTime error: ${it.message}") }
     }
 
     fun saveNotificationTitle(title: String) {

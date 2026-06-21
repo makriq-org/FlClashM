@@ -23,7 +23,6 @@ class Application extends ConsumerStatefulWidget {
 }
 
 class ApplicationState extends ConsumerState<Application> {
-  Timer? _autoUpdateGroupTaskTimer;
   Timer? _autoUpdateProfilesTaskTimer;
 
   final _pageTransitionsTheme = const PageTransitionsTheme(
@@ -41,8 +40,7 @@ class ApplicationState extends ConsumerState<Application> {
   @override
   void initState() {
     super.initState();
-
-    _autoUpdateGroupTask();
+    globalState.startGroupsUpdateTask();
     _autoUpdateProfilesTask();
     globalState.appController = AppController(context, ref);
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
@@ -53,15 +51,6 @@ class ApplicationState extends ConsumerState<Application> {
       await globalState.appController.init();
       globalState.appController.initLink();
       unawaited(productServices.androidShell.initShortcuts());
-    });
-  }
-
-  void _autoUpdateGroupTask() {
-    _autoUpdateGroupTaskTimer = Timer(const Duration(seconds: 60), () {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        globalState.appController.updateGroupsDebounce();
-        _autoUpdateGroupTask();
-      });
     });
   }
 
@@ -154,7 +143,7 @@ class ApplicationState extends ConsumerState<Application> {
   @override
   Future<void> dispose() async {
     linkManager.destroy();
-    _autoUpdateGroupTaskTimer?.cancel();
+    globalState.stopGroupsUpdateTask();
     _autoUpdateProfilesTaskTimer?.cancel();
     await clashCore.destroy();
     await globalState.appController.savePreferences();

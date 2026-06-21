@@ -117,13 +117,20 @@ func invokeCallback(callback unsafe.Pointer, data string) {
 }
 
 func emitEvent(data string) {
+	// Hold eventListenerMu across the dispatch so setEventListener cannot
+	// releaseObject (DeleteGlobalRef) the listener while it is being invoked.
+	// The native callback only schedules async work and returns immediately,
+	// so holding the lock here does not risk a re-entrant deadlock.
 	eventListenerMu.Lock()
+	defer eventListenerMu.Unlock()
 	listener := eventListener
-	eventListenerMu.Unlock()
+	if listener == nil {
+		return
+	}
 	callbacksMu.RLock()
 	fn := globalCallbacks.eventListenerFunc
 	callbacksMu.RUnlock()
-	if fn == nil || listener == nil {
+	if fn == nil {
 		return
 	}
 	s := C.CString(data)
@@ -150,10 +157,12 @@ func registerCallbacks(
 
 //export setEventListener
 func setEventListener(listener unsafe.Pointer) {
+	// Release the previous global ref while still holding the mutex so it cannot
+	// race a concurrent emitEvent dispatching on prev.
 	eventListenerMu.Lock()
+	defer eventListenerMu.Unlock()
 	prev := eventListener
 	eventListener = listener
-	eventListenerMu.Unlock()
 	if prev != nil {
 		releaseObject(prev)
 	}

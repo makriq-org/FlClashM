@@ -57,7 +57,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     private lateinit var scope: CoroutineScope
 
-    private var vpnCallBack: (() -> Unit)? = null
+    // All requesters waiting on a single in-flight VPN consent dialog. Only the
+    // first launches the dialog; the result resolves every queued callback, so a
+    // concurrent start (double-tap, or two start paths) can't strand a pending one.
+    // Accessed only on the main thread (channel handlers + onActivityResult).
+    private val vpnCallBacks = mutableListOf<(granted: Boolean) -> Unit>()
 
     private val iconMap: MutableMap<String, String?> = Collections.synchronizedMap(
         object : LinkedHashMap<String, String?>(128, 0.75f, true) {
@@ -161,9 +165,9 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun tip(message: String?) {
-        if (GlobalState.flutterEngine == null) {
-            Toast.makeText(FlClashApplication.getAppContext(), message, Toast.LENGTH_LONG).show()
-        }
+        // Always surface the tip. The previous `flutterEngine == null` guard silently
+        // dropped every tip() coming from a Dart-invoked tile/widget flow.
+        Toast.makeText(FlClashApplication.getAppContext(), message, Toast.LENGTH_LONG).show()
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -331,7 +335,9 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     private suspend fun getPackageIcon(packageName: String): String? {
         val packageManager = FlClashApplication.getAppContext().packageManager
-        if (iconMap[packageName] == null) {
+        // containsKey, not == null: a failed/icon-less lookup caches null so we don't
+        // re-hit PackageManager on every subsequent request for the same package.
+        if (!iconMap.containsKey(packageName)) {
             iconMap[packageName] = try {
                 packageManager?.getApplicationIcon(packageName)?.getBase64()
             } catch (_: Exception) {
@@ -342,6 +348,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         return iconMap[packageName]
     }
 
+    @Synchronized
     private fun getPackages(): List<Package> {
         val packageManager = FlClashApplication.getAppContext().packageManager
         if (packages.isNotEmpty()) return packages
@@ -352,7 +359,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }?.map {
                 Package(
                     packageName = it.packageName,
-                    label = it.applicationInfo?.loadLabel(packageManager).toString(),
+                    label = it.applicationInfo?.loadLabel(packageManager)?.toString() ?: it.packageName,
                     system = ((it.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM) != 0,
                     lastUpdateTime = it.lastUpdateTime,
                     internet = it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
@@ -387,17 +394,23 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
-    fun requestVpnPermission(callBack: () -> Unit) {
-        vpnCallBack = callBack
+    fun requestVpnPermission(callBack: (granted: Boolean) -> Unit) {
         val intent = VpnService.prepare(FlClashApplication.getAppContext())
         if (intent != null) {
             val activity = activityRef?.get()
             if (activity != null) {
-                activity.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
+                val alreadyInFlight = vpnCallBacks.isNotEmpty()
+                vpnCallBacks.add(callBack)
+                // Only the first requester launches the consent dialog; the rest
+                // ride along and are resolved together in onActivityResult.
+                if (!alreadyInFlight) {
+                    activity.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
+                }
                 return
             }
         }
-        vpnCallBack?.invoke()
+        // Already granted, or no activity to host the consent dialog: proceed.
+        callBack(true)
     }
 
     fun requestNotificationsPermission() {
@@ -510,16 +523,31 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activityRef = WeakReference(binding.activity)
+        // Re-register result listeners: a non-handled config change recreates the
+        // ActivityPluginBinding and drops the old listeners, so an in-flight VPN
+        // consent result would otherwise never arrive — permanently stranding the
+        // queued vpnCallBacks (the consent dialog would never relaunch).
+        binding.addActivityResultListener(::onActivityResult)
+        binding.addRequestPermissionsResultListener(::onRequestPermissionsResultListener)
     }
 
     override fun onDetachedFromActivity() {
         channel.invokeMethod("exit", null)
         activityRef = null
+        // Resolve and clear any pending consent callbacks so waiting Dart start
+        // calls don't hang and the launch gate is re-armed for the next request
+        // (restores the old single-callback self-healing behaviour).
+        val pending = vpnCallBacks.toList()
+        vpnCallBacks.clear()
+        pending.forEach { it.invoke(false) }
     }
 
     private fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode == VPN_PERMISSION_REQUEST_CODE && resultCode == FlutterActivity.RESULT_OK) {
-            vpnCallBack?.invoke()
+        if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
+            val granted = resultCode == FlutterActivity.RESULT_OK
+            val pending = vpnCallBacks.toList()
+            vpnCallBacks.clear()
+            pending.forEach { it.invoke(granted) }
         }
         return true
     }

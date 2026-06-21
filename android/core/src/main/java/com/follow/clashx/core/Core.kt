@@ -88,7 +88,15 @@ data object Core {
             host = address.substring(0, lastColon)
             port = address.substring(lastColon + 1).toIntOrNull() ?: 0
         }
-        return InetSocketAddress.createUnresolved(host, port)
+        // ConnectivityManager.getConnectionOwnerUid requires a RESOLVED InetSocketAddress;
+        // a createUnresolved one has a null InetAddress and the lookup returns -1, which is
+        // why process/app names stopped appearing in connection logs. These are numeric
+        // socket IPs, so getByName parses them without any DNS round-trip.
+        return try {
+            InetSocketAddress(java.net.InetAddress.getByName(host), port)
+        } catch (_: Exception) {
+            InetSocketAddress.createUnresolved(host, port)
+        }
     }
 
     @Volatile

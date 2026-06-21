@@ -181,9 +181,7 @@ class NetworkObserveModule(
     private fun resetAndCheck(reason: String) {
         runCatching { com.follow.clashx.core.Core.resetConnections() }
             .onFailure { GlobalState.log("resetConnections failed: ${it.message}") }
-        healthCheck?.let { hc ->
-            GlobalState.launch { hc.runCheck(reason) }
-        }
+        healthCheck?.scheduleCheck(reason)
     }
 
     override suspend fun install() {

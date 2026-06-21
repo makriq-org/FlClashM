@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flclashm/clash/core.dart';
 import 'package:flclashm/clash/lib.dart';
 import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
@@ -24,10 +25,25 @@ class AppStateManager extends ConsumerStatefulWidget {
 
 class _AppStateManagerState extends ConsumerState<AppStateManager>
     with WidgetsBindingObserver {
+  // Serializes macOS system-DNS set/restore so concurrent listener fires (rapid
+  // toggle / TUN flap) can't interleave networksetup calls and snapshot a transient
+  // injected value as the "origin".
+  Future<void> _dnsOp = Future.value();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (Platform.isAndroid) {
+      // Assert foreground cadence as soon as the UI mounts. A headless cold-start
+      // leaves the core in background mode (uiActive=false, set by FlVpnService),
+      // and the initial 'resumed' is a state — not always a lifecycle *event* — on a
+      // fresh launch, so relying on didChangeAppLifecycleState alone could strand the
+      // UI in background cadence (no request forwarder, slow pings).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        clashCore.setUiActive(true);
+      });
+    }
     ref.listenManual(layoutChangeProvider, (prev, next) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (prev != next) {
@@ -51,15 +67,16 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
     });
     ref.listenManual(
       autoSetSystemDnsStateProvider,
-      (prev, next) async {
+      (prev, next) {
         if (prev == next) {
           return;
         }
-        if (next.a == true && next.b == true) {
-          system.setMacOSDns(false);
-        } else {
-          system.setMacOSDns(true);
-        }
+        final restore = !(next.a == true && next.b == true);
+        // Chain through _dnsOp so set/restore never overlap; catchError keeps the
+        // chain alive if one networksetup invocation throws.
+        _dnsOp = _dnsOp
+            .then((_) => system.setMacOSDns(restore))
+            .catchError((_) {});
       },
     );
     ref.listenManual(
@@ -108,8 +125,10 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
   }
 
   @override
-  void dispose() async {
-    await system.setMacOSDns(true);
+  void dispose() {
+    // The real teardown DNS restore runs in controller.handleExit (bounded + awaited
+    // before shutdown); dispose() is not awaited by the framework, so doing async
+    // work here was unreliable and delayed observer teardown.
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -123,11 +142,19 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       if (Platform.isAndroid) {
         globalState.engineManager.pauseUpdateTasks();
         globalState.appController.stopRunTimeTimer();
+        globalState.stopGroupsUpdateTask();
+        // Tell the core the UI is backgrounded: it pauses the request forwarder
+        // and stretches the health-check forwarder to a slow interval so it stops
+        // pinging every proxy every few seconds for a UI nobody is looking at.
+        clashCore.setUiActive(false);
       }
     } else {
       render?.resume();
       if (state == AppLifecycleState.resumed && Platform.isAndroid) {
         clashLib?.reconnectIfNeeded();
+        clashCore.setUiActive(true);
+        globalState.startGroupsUpdateTask();
+        globalState.appController.updateGroupsDebounce();
         if (globalState.isStart) {
           await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();

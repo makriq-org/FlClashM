@@ -24,54 +24,89 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
 
   Future<void> _handleQrCode(BarcodeCapture capture) async {
     if (_isScanComplete) return;
-    setState(() {
-      _isScanComplete = true;
-    });
+    if (capture.barcodes.isEmpty) return;
 
     final rawValue = capture.barcodes.first.rawValue;
     if (rawValue == null) return;
 
+    // The TV now encodes a plain landing-page URL (so a native phone camera can
+    // open it too); older TVs encoded a JSON descriptor. Accept both; ignore
+    // anything that isn't ours so an accidental scan doesn't lock the screen.
+    final endpoint = _parseSyncEndpoint(rawValue);
+    if (endpoint == null) return;
+
+    setState(() {
+      _isScanComplete = true;
+    });
+
     try {
-      final data = jsonDecode(rawValue);
-      if (isSupportedTvSyncPayloadType(data['type'] as String?)) {
-        final ip = data['ip'];
-        final port = data['port'];
-        final tvUrl = 'http://$ip:$port/add-profile';
-        final dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ));
-        await dio.post(
-          tvUrl,
-          data: {'url': widget.profileUrl},
-        );
-        _showResultDialog(appLocalizations.successTitle,
-            appLocalizations.sentSuccessfullyMessage);
-      }
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      await dio.post(
+        endpoint,
+        data: {'url': widget.profileUrl},
+      );
+      _showResultDialog(appLocalizations.successTitle,
+          appLocalizations.sentSuccessfullyMessage);
     } catch (e) {
+      commonPrint.log('Error sending profile to TV: $e');
       _showResultDialog(
           appLocalizations.errorTitle, appLocalizations.invalidQrMessage);
-      commonPrint.log('Failed to send profile to TV: $e');
+    }
+  }
+
+  String? _parseSyncEndpoint(String rawValue) {
+    final uri = Uri.tryParse(rawValue.trim());
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty &&
+        uri.hasPort) {
+      return Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.port,
+        path: '/add-profile',
+      ).toString();
+    }
+    try {
+      final payload = jsonDecode(rawValue);
+      if (payload is! Map<String, dynamic>) return null;
+      if (!isSupportedTvSyncPayloadType(payload['type'] as String?)) {
+        return null;
+      }
+      final ip = payload['ip'];
+      final port = payload['port'];
+      if (ip is! String || ip.isEmpty || port is! int) return null;
+      if (port < 1 || port > 65535) return null;
+      return Uri(
+        scheme: 'http',
+        host: ip,
+        port: port,
+        path: '/add-profile',
+      ).toString();
+    } catch (_) {
+      return null;
     }
   }
 
   void _showResultDialog(String title, String content) {
-    unawaited(
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(content),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: Text(appLocalizations.confirm),
-            ),
-          ],
-        ),
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop();
+            },
+            child: Text(appLocalizations.confirm),
+          ),
+        ],
       ),
     );
   }

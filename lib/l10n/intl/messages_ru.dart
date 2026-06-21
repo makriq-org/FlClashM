@@ -172,6 +172,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "cancelSelectAll": MessageLookupByLibrary.simpleMessage(
       "Отменить выбор всего",
     ),
+    "change": MessageLookupByLibrary.simpleMessage("Сменить"),
     "changeServer": MessageLookupByLibrary.simpleMessage("Изменить сервер"),
     "checkError": MessageLookupByLibrary.simpleMessage("Ошибка проверки"),
     "checkUpdate": MessageLookupByLibrary.simpleMessage("Проверить обновления"),
@@ -179,6 +180,8 @@ class MessageLookup extends MessageLookupByLibrary {
       "Текущее приложение уже является последней версией",
     ),
     "checking": MessageLookupByLibrary.simpleMessage("Проверка..."),
+    "determiningIp": MessageLookupByLibrary.simpleMessage("Определяю IP.."),
+    "locations": MessageLookupByLibrary.simpleMessage("Локации"),
     "clearData": MessageLookupByLibrary.simpleMessage("Очистить данные"),
     "clearDataTip": MessageLookupByLibrary.simpleMessage(
       "Это удалит все данные приложения и перезапустит его. Вы уверены?",
@@ -198,7 +201,9 @@ class MessageLookup extends MessageLookupByLibrary {
       "Включение приведет к потере части функциональности, но обеспечит полную совместимость с Clash",
     ),
     "confirm": MessageLookupByLibrary.simpleMessage("Подтвердить"),
-    "connections": MessageLookupByLibrary.simpleMessage("Соединения"),
+    "connections": MessageLookupByLibrary.simpleMessage("Подключения"),
+    "connectionsActive": MessageLookupByLibrary.simpleMessage("Активные"),
+    "connectionsLog": MessageLookupByLibrary.simpleMessage("Журнал"),
     "connectionsDesc": MessageLookupByLibrary.simpleMessage(
       "Просмотр текущих данных о соединениях",
     ),

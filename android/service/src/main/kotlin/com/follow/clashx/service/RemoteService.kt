@@ -25,6 +25,7 @@ import kotlin.coroutines.resume
 class RemoteService : Service() {
 
     private val eventListener = AtomicReference<com.follow.clashx.service.IEventInterface?>(null)
+    private val eventDeathRecipient = AtomicReference<IBinder.DeathRecipient?>(null)
 
     private suspend fun dispatchChunked(
         data: String,
@@ -34,23 +35,37 @@ class RemoteService : Service() {
         val chunks = bytes.chunkedForAidl().toList()
         for ((i, chunk) in chunks.withIndex()) {
             val isLast = i == chunks.lastIndex
-            val acked = kotlinx.coroutines.withTimeoutOrNull(5_000L) {
-                suspendCancellableCoroutine<Unit> { cont ->
+            // true = acked, false = send threw (peer error), null = ACK timeout.
+            val outcome = kotlinx.coroutines.withTimeoutOrNull(5_000L) {
+                suspendCancellableCoroutine<Boolean> { cont ->
                     val ack = object : IAckInterface.Stub() {
                         override fun onAck() {
-                            cont.resume(Unit)
+                            if (cont.isActive) cont.resume(true)
                         }
                     }
                     try {
                         send(chunk, isLast, ack)
                     } catch (e: RemoteException) {
-                        GlobalState.log("dispatchChunked failed: ${e.message}")
-                        cont.resume(Unit)
+                        GlobalState.log("dispatchChunked send failed on chunk ${i + 1}/${chunks.size}: ${e.message}")
+                        if (cont.isActive) cont.resume(false)
                     }
                 }
             }
-            if (acked == null) {
-                GlobalState.log("dispatchChunked: ACK timeout on chunk ${i + 1}/${chunks.size}")
+            if (outcome != true) {
+                if (outcome == null) {
+                    GlobalState.log("dispatchChunked: ACK timeout on chunk ${i + 1}/${chunks.size}")
+                }
+                // Abort the stream (do NOT keep sending as if it were ACKed). If we had
+                // not yet reached the terminal chunk, deliver a best-effort empty terminal
+                // so the consumer flushes and the awaiting Dart completer fails fast
+                // (empty/garbage -> default) instead of stranding until the 30s timeout.
+                if (!isLast) {
+                    runCatching {
+                        send(ByteArray(0), true, object : IAckInterface.Stub() {
+                            override fun onAck() {}
+                        })
+                    }
+                }
                 return
             }
         }
@@ -110,7 +125,7 @@ class RemoteService : Service() {
             GlobalState.launch {
                 State.runLock.withLock {
                     if (State.runTime != 0L) {
-                        result.onResult(State.runTime)
+                        runCatching { result.onResult(State.runTime) }
                         return@withLock
                     }
 
@@ -136,10 +151,25 @@ class RemoteService : Service() {
                     State.delegate = delegate
                     delegate.bind()
 
-                    androidx.core.content.ContextCompat.startForegroundService(
-                        this@RemoteService,
-                        serviceIntent,
-                    )
+                    val fgsResult = runCatching {
+                        androidx.core.content.ContextCompat.startForegroundService(
+                            this@RemoteService,
+                            serviceIntent,
+                        )
+                    }
+                    if (fgsResult.isFailure) {
+                        // FGS start can be rejected (e.g. ForegroundServiceStartNotAllowed
+                        // when the UID races to background on Android 12+). Fail fast and
+                        // unwind instead of letting the Dart caller hang for the full
+                        // timeout while an empty auto-created foreground service lingers.
+                        GlobalState.log("startService: startForegroundService failed: ${fgsResult.exceptionOrNull()?.message}")
+                        runCatching { delegate.unbind() }
+                        State.delegate = null
+                        State.intent = null
+                        com.follow.clashx.common.SavedParams.setVpnActive(false)
+                        runCatching { result.onResult(0L) }
+                        return@withLock
+                    }
                     val startResult = delegate.useService(timeoutMillis = 10_000L) { proxy ->
                         proxy.handleStart(options)
                     }
@@ -149,14 +179,14 @@ class RemoteService : Service() {
                         State.delegate = null
                         State.intent = null
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        result.onResult(0L)
+                        runCatching { result.onResult(0L) }
                         return@withLock
                     }
 
                     val baseRunTime = if (runTime > 0) runTime else SystemClock.uptimeMillis()
                     State.runTime = baseRunTime
                     if (options.enable) com.follow.clashx.common.SavedParams.setVpnActive(true)
-                    result.onResult(State.runTime)
+                    runCatching { result.onResult(State.runTime) }
                 }
             }
         }
@@ -166,9 +196,25 @@ class RemoteService : Service() {
                 State.runLock.withLock {
                     val delegate = State.delegate
                     if (delegate == null) {
+                        // A headless cold-start (tile/widget/Always-on) brings the tunnel up
+                        // without ever assigning State.delegate. If something is still running,
+                        // signal the worker services to tear themselves down so an in-app stop
+                        // actually kills the TUN/core instead of just zeroing the UI state.
+                        if (State.runTime != 0L) {
+                            runCatching {
+                                val stop = Intent(this@RemoteService, FlVpnService::class.java)
+                                    .setAction(FlVpnService.ACTION_STOP)
+                                androidx.core.content.ContextCompat.startForegroundService(this@RemoteService, stop)
+                            }
+                            runCatching {
+                                val stop = Intent(this@RemoteService, CommonService::class.java)
+                                    .setAction(FlVpnService.ACTION_STOP)
+                                androidx.core.content.ContextCompat.startForegroundService(this@RemoteService, stop)
+                            }
+                        }
                         State.runTime = 0L
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        result.onResult(0L)
+                        runCatching { result.onResult(0L) }
                         return@withLock
                     }
                     runCatching {
@@ -182,17 +228,30 @@ class RemoteService : Service() {
                     State.intent = null
                     State.runTime = 0L
                     com.follow.clashx.common.SavedParams.setVpnActive(false)
-                    result.onResult(0L)
+                    runCatching { result.onResult(0L) }
                 }
             }
         }
 
         override fun setEventListener(event: com.follow.clashx.service.IEventInterface?) {
-            eventListener.set(event)
+            val prev = eventListener.getAndSet(event)
+            // Release the death recipient linked to the previous listener's binder.
+            eventDeathRecipient.getAndSet(null)?.let { r ->
+                runCatching { prev?.asBinder()?.unlinkToDeath(r, 0) }
+            }
             if (event == null) {
                 Core.setEventListener(null)
                 return
             }
+            // Proactively stop dispatching the instant the :app proxy dies instead of
+            // waiting for RemoteService.onDestroy.
+            val recipient = IBinder.DeathRecipient {
+                if (eventListener.compareAndSet(event, null)) {
+                    runCatching { Core.setEventListener(null) }
+                }
+            }
+            eventDeathRecipient.set(recipient)
+            runCatching { event.asBinder().linkToDeath(recipient, 0) }
             Core.setEventListener(object : InvokeInterface {
                 override fun onResult(result: String) {
                     val id = UUID.randomUUID().toString()
@@ -267,7 +326,10 @@ class RemoteService : Service() {
     }
 
     override fun onDestroy() {
-        eventListener.set(null)
+        val ev = eventListener.getAndSet(null)
+        eventDeathRecipient.getAndSet(null)?.let { r ->
+            runCatching { ev?.asBinder()?.unlinkToDeath(r, 0) }
+        }
         runCatching { Core.setEventListener(null) }
         GlobalState.launch { RuntimeNodeProcessManager.stopAll() }
         super.onDestroy()

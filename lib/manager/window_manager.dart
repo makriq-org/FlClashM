@@ -155,6 +155,11 @@ class WindowHeaderContainer extends StatelessWidget {
   }
 }
 
+// Width of the top resize grab strip. The header's drag region is inset by this
+// amount so the very top edge stays available for resizing the window vertically
+// (the native frameless resize border is too thin to catch reliably).
+const double _kWindowResizeEdge = 8;
+
 class WindowHeader extends StatefulWidget {
   const WindowHeader({super.key});
 
@@ -292,12 +297,33 @@ class _WindowHeaderState extends State<WindowHeader> {
         ),
         child: Stack(
           children: [
-            // Draggable area
-            Positioned.fill(
+            // Draggable area — inset from the very top so the top resize strip can
+            // sit above it; otherwise the drag region swallows the thin native
+            // resize border and the window can't be stretched from the top.
+            Positioned(
+              top: _kWindowResizeEdge,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanStart: (_) => windowManager.startDragging(),
                 onDoubleTap: _updateMaximized,
+              ),
+            ),
+            // Top resize handle: reliable, comfortably-sized grab zone to resize
+            // the window from the top edge.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: _kWindowResizeEdge,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeUpDown,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (_) => windowManager.startResizing(ResizeEdge.top),
+                ),
               ),
             ),
             // Content

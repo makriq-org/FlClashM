@@ -27,8 +27,8 @@ class NotificationModule(service: Service) : Module(service) {
     override suspend fun install() {
         scope = CoroutineScope(SupervisorJob())
         ensureChannel()
-        val title = State.notificationParamsFlow.value.title
-        val notification = buildNotification(title)
+        val params = State.notificationParamsFlow.value
+        val notification = buildNotification(params.title, params.stopText)
         val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
@@ -38,7 +38,7 @@ class NotificationModule(service: Service) : Module(service) {
 
         paramsJob = scope.launch {
             State.notificationParamsFlow.collectLatest { params ->
-                val n = buildNotification(params.title)
+                val n = buildNotification(params.title, params.stopText)
                 ContextCompat.getSystemService(service, NotificationManager::class.java)
                     ?.notify(GlobalState.NOTIFICATION_ID, n)
             }
@@ -68,10 +68,11 @@ class NotificationModule(service: Service) : Module(service) {
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(title: String): android.app.Notification {
+    private fun buildNotification(title: String, stopText: String = ""): android.app.Notification {
         return service.buildServiceNotification(
             com.follow.clashx.service.R.drawable.ic_notification,
             title,
+            stopText,
         )
     }
 }
