@@ -118,14 +118,6 @@
       ]
     },
     {
-      "path": "lib/views/profiles/receive_profile_dialog.dart",
-      "boundary": "platform-compatibility-contract",
-      "reason": "ReceiveProfileDialog may publish the canonical TV sync payload type while accepting legacy compatibility through a narrow product contract.",
-      "targets": [
-        "lib/product/platform/tv_sync_contract.dart"
-      ]
-    },
-    {
       "path": "lib/pages/send_to_tv_page.dart",
       "boundary": "platform-compatibility-contract",
       "reason": "SendToTvPage may validate TV sync payload compatibility through a narrow product contract instead of embedding legacy product identifiers.",
