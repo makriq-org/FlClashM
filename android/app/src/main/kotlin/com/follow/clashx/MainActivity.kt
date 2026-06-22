@@ -62,13 +62,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        val appPlugin = AppPlugin()
-        flutterEngine.plugins.add(appPlugin)
+        flutterEngine.plugins.add(AppPlugin())
         flutterEngine.plugins.add(ServicePlugin())
         flutterEngine.plugins.add(TilePlugin())
         GlobalState.flutterEngine = flutterEngine
 
-        appPlugin.requestNotificationsPermission()
+        GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
         maybeRequestBatteryExemption()
         GlobalState.syncStatus()
     }

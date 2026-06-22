@@ -174,26 +174,9 @@ class Utils {
   }
 
   int compareVersions(String version1, String version2) {
-    final v1 = version1.split('+')[0].split('.');
-    final v2 = version2.split('+')[0].split('.');
-    final major1 = int.parse(v1[0]);
-    final major2 = int.parse(v2[0]);
-    if (major1 != major2) {
-      return major1.compareTo(major2);
-    }
-    final minor1 = v1.length > 1 ? int.parse(v1[1]) : 0;
-    final minor2 = v2.length > 1 ? int.parse(v2[1]) : 0;
-    if (minor1 != minor2) {
-      return minor1.compareTo(minor2);
-    }
-    final patch1 = v1.length > 2 ? int.parse(v1[2]) : 0;
-    final patch2 = v2.length > 2 ? int.parse(v2[2]) : 0;
-    if (patch1 != patch2) {
-      return patch1.compareTo(patch2);
-    }
-    final build1 = version1.contains('+') ? int.parse(version1.split('+')[1]) : 0;
-    final build2 = version2.contains('+') ? int.parse(version2.split('+')[1]) : 0;
-    return build1.compareTo(build2);
+    final first = _ParsedVersion.parse(version1);
+    final second = _ParsedVersion.parse(version2);
+    return first.compareTo(second);
   }
 
   String getPinyin(String value) => value.isNotEmpty
@@ -403,3 +386,93 @@ class Utils {
 }
 
 final utils = Utils();
+
+class _ParsedVersion implements Comparable<_ParsedVersion> {
+  const _ParsedVersion({
+    required this.numbers,
+    required this.prerelease,
+    required this.build,
+  });
+
+  factory _ParsedVersion.parse(String rawVersion) {
+    final normalized = rawVersion.trim().replaceFirst(RegExp(r'^[vV]'), '');
+    final buildSplit = normalized.split('+');
+    final preSplit = buildSplit.first.split('-');
+    return _ParsedVersion(
+      numbers: preSplit.first
+          .split('.')
+          .map((part) => int.tryParse(part) ?? 0)
+          .toList(growable: false),
+      prerelease: preSplit.length > 1 ? preSplit.sublist(1).join('-') : null,
+      build: buildSplit.length > 1 ? buildSplit.sublist(1).join('+') : null,
+    );
+  }
+
+  final List<int> numbers;
+  final String? prerelease;
+  final String? build;
+
+  @override
+  int compareTo(_ParsedVersion other) {
+    final numberLength = max(numbers.length, other.numbers.length);
+    for (var i = 0; i < numberLength; i++) {
+      final current = i < numbers.length ? numbers[i] : 0;
+      final next = i < other.numbers.length ? other.numbers[i] : 0;
+      if (current != next) {
+        return current.compareTo(next);
+      }
+    }
+
+    final prereleaseCompare = _comparePrerelease(prerelease, other.prerelease);
+    if (prereleaseCompare != 0) {
+      return prereleaseCompare;
+    }
+
+    return _compareBuild(build, other.build);
+  }
+
+  static int _comparePrerelease(String? first, String? second) {
+    if (first == null && second == null) return 0;
+    if (first == null) return 1;
+    if (second == null) return -1;
+
+    final firstParts = first.split(RegExp(r'[.-]'));
+    final secondParts = second.split(RegExp(r'[.-]'));
+    final length = max(firstParts.length, secondParts.length);
+    for (var i = 0; i < length; i++) {
+      if (i >= firstParts.length) return -1;
+      if (i >= secondParts.length) return 1;
+      final result = _compareIdentifier(firstParts[i], secondParts[i]);
+      if (result != 0) return result;
+    }
+    return 0;
+  }
+
+  static int _compareIdentifier(String first, String second) {
+    final firstNumber = int.tryParse(first);
+    final secondNumber = int.tryParse(second);
+    if (firstNumber != null && secondNumber != null) {
+      return firstNumber.compareTo(secondNumber);
+    }
+    if (firstNumber != null) return -1;
+    if (secondNumber != null) return 1;
+
+    final firstMatch = RegExp(r'^([A-Za-z-]+)(\d+)$').firstMatch(first);
+    final secondMatch = RegExp(r'^([A-Za-z-]+)(\d+)$').firstMatch(second);
+    if (firstMatch != null && secondMatch != null) {
+      final prefixCompare =
+          firstMatch.group(1)!.compareTo(secondMatch.group(1)!);
+      if (prefixCompare != 0) return prefixCompare;
+      return int.parse(firstMatch.group(2)!)
+          .compareTo(int.parse(secondMatch.group(2)!));
+    }
+
+    return first.compareTo(second);
+  }
+
+  static int _compareBuild(String? first, String? second) {
+    final firstNumber = first == null ? 0 : int.tryParse(first) ?? 0;
+    final secondNumber = second == null ? 0 : int.tryParse(second) ?? 0;
+    return firstNumber.compareTo(secondNumber);
+  }
+}

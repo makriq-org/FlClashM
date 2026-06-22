@@ -1,11 +1,12 @@
-import 'package:flclashx/plugins/app.dart';
+import 'dart:async';
+
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AndroidManager extends ConsumerStatefulWidget {
-
   const AndroidManager({
     super.key,
     required this.child,
@@ -24,9 +25,11 @@ class _AndroidContainerState extends ConsumerState<AndroidManager> {
     ref.listenManual(
       appSettingProvider.select((state) => state.hidden),
       (prev, next) {
-        app?.updateExcludeFromRecents(next);
+        unawaited(
+          productServices.androidShell.updateExcludeFromRecents(hidden: next),
+        );
       },
-      fireImmediately: true
+      fireImmediately: true,
     );
   }
 

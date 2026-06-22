@@ -17,7 +17,7 @@ import kotlin.reflect.KClass
 
 
 val KClass<*>.intent: Intent
-    get() = Intent().setClassName(Components.PACKAGE_NAME, java.name)
+    get() = Intent().setClassName(Components.runtimePackageName, java.name)
 
 
 fun Context.registerReceiverCompat(
@@ -40,14 +40,14 @@ fun Context.receiveBroadcastFlow(vararg actions: String): Flow<Intent> = callbac
             if (intent != null) trySend(intent)
         }
     }
-    registerReceiverCompat(receiver, filter, "${Components.PACKAGE_NAME}.permission.RECEIVE_BROADCASTS")
+    registerReceiverCompat(receiver, filter, Components.receiveBroadcastPermission)
     awaitClose { runCatching { unregisterReceiver(receiver) } }
 }
 
 fun Context.sendInternalBroadcast(action: String) {
     sendBroadcast(
-        Intent(action).setPackage(Components.PACKAGE_NAME),
-        "${Components.PACKAGE_NAME}.permission.RECEIVE_BROADCASTS",
+        Intent(action).setPackage(Components.runtimePackageName),
+        Components.receiveBroadcastPermission,
     )
 }
 
@@ -70,7 +70,7 @@ fun Service.ensureNotificationChannel() {
 
 fun Service.buildServiceNotification(
     iconRes: Int,
-    title: String = "FlClashX",
+    title: String = "FlClashM",
     stopText: String = "",
 ): android.app.Notification {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
@@ -99,7 +99,7 @@ fun Service.buildServiceNotification(
         .build()
 }
 
-fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashX") {
+fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM") {
     ensureNotificationChannel()
     val notification = buildServiceNotification(iconRes, title)
     val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

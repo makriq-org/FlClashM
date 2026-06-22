@@ -57,7 +57,6 @@ android/local.properties
 
 # Project assets
 store/
-docs/
 
 # Helper
 /services/helper/target/
@@ -75,7 +74,3 @@ docs/
 # Environment variables (contains sensitive data)
 .env
 *.local.sh
-
-
-# Landing page (deployed separately)
-docs/

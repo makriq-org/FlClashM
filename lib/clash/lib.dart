@@ -228,13 +228,18 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   /// Tells the `:remote` service to bring the TUN tunnel up using the current
   /// Go-provided `AndroidVpnOptions`, merged with UI access control settings.
-  Future<int> startVpn() async {
-    final optionsRaw = await getAndroidVpnOptions();
-    final merged = _mergeAccessControl(optionsRaw);
+  ///
+  /// Pass [optionsJson] to bypass the default options retrieval and access
+  /// control merge — used by the product runtime when it has already resolved
+  /// a profile-driven access control policy.
+  Future<int> startVpn({String? optionsJson}) async {
+    final payload = optionsJson != null
+        ? optionsJson
+        : _mergeAccessControl(await getAndroidVpnOptions());
     // Defensive backstop: the native side always replies (even on permission
     // denial -> 0), but never block the start flow indefinitely if it doesn't.
     final res = await _channel
-        .invokeMethod('start', {'data': merged})
+        .invokeMethod('start', {'data': payload})
         .timeout(const Duration(seconds: 60), onTimeout: () => 0);
     return (res is int) ? res : int.tryParse('$res') ?? 0;
   }

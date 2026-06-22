@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/plugins/tile.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -130,7 +132,8 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
     state = profilesTemp;
   }
 
-  void updateProfile(String profileId, Profile Function(Profile profile) builder) {
+  void updateProfile(
+      String profileId, Profile Function(Profile profile) builder) {
     final profilesTemp = List<Profile>.from(state);
     final index = profilesTemp.indexWhere((element) => element.id == profileId);
     if (index != -1) {
@@ -155,8 +158,14 @@ class CurrentProfileId extends _$CurrentProfileId
     globalState.config = globalState.config.copyWith(
       currentProfileId: value,
     );
-    // Notify tile service about profile change
-    tile?.updateTile();
+    unawaited(_syncTileForProfileChange());
+  }
+
+  Future<void> _syncTileForProfileChange() async {
+    // Native tile availability reads the persisted config, so refresh it only
+    // after the current profile selection has been flushed to preferences.
+    await preferences.saveConfig(globalState.config);
+    await productServices.androidShell.syncTileForProfileChange();
   }
 }
 
@@ -265,7 +274,8 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
     );
   }
 
-  bool isExits(String label) => state.scripts.indexWhere((item) => item.label == label) != -1;
+  bool isExits(String label) =>
+      state.scripts.indexWhere((item) => item.label == label) != -1;
 }
 
 @riverpod

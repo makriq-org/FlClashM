@@ -3742,6 +3742,31 @@ class AppLocalizations {
   String get collapseAll {
     return Intl.message('Collapse all', name: 'collapseAll', desc: '', args: []);
   }
+
+  /// `Later`
+  String get later {
+    return Intl.message('Later', name: 'later', desc: '', args: []);
+  }
+
+  /// `Skip version`
+  String get skipVersion {
+    return Intl.message('Skip version', name: 'skipVersion', desc: '', args: []);
+  }
+
+  /// `Pre-release updates`
+  String get includePrereleaseUpdates {
+    return Intl.message('Pre-release updates', name: 'includePrereleaseUpdates', desc: '', args: []);
+  }
+
+  /// `Show beta and pre-release app versions`
+  String get includePrereleaseUpdatesDesc {
+    return Intl.message('Show beta and pre-release app versions', name: 'includePrereleaseUpdatesDesc', desc: '', args: []);
+  }
+
+  /// `Downloading update`
+  String get downloadUpdate {
+    return Intl.message('Downloading update', name: 'downloadUpdate', desc: '', args: []);
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

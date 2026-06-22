@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/platform/tv_sync_contract.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class SendToTvPage extends ConsumerStatefulWidget {
-
   const SendToTvPage({
     super.key,
     required this.profileUrl,
@@ -18,8 +19,6 @@ class SendToTvPage extends ConsumerStatefulWidget {
 }
 
 class _SendToTvPageState extends ConsumerState<SendToTvPage> {
-  static const _syncType = 'flclashx_tv_sync';
-
   final MobileScannerController _scannerController = MobileScannerController();
   bool _isScanComplete = false;
 
@@ -58,9 +57,6 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
     }
   }
 
-  /// Resolve the `/add-profile` endpoint from a scanned code, supporting both
-  /// the URL form (`http://ip:port/`) and the legacy JSON form. Returns null
-  /// when the code isn't a FlClashX TV-sync code.
   String? _parseSyncEndpoint(String rawValue) {
     final uri = Uri.tryParse(rawValue.trim());
     if (uri != null &&
@@ -77,7 +73,9 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
     try {
       final payload = jsonDecode(rawValue);
       if (payload is! Map<String, dynamic>) return null;
-      if (payload['type'] != _syncType) return null;
+      if (!isSupportedTvSyncPayloadType(payload['type'] as String?)) {
+        return null;
+      }
       final ip = payload['ip'];
       final port = payload['port'];
       if (ip is! String || ip.isEmpty || port is! int) return null;
@@ -106,7 +104,7 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
-            child: const Text('OK'),
+            child: Text(appLocalizations.confirm),
           ),
         ],
       ),
@@ -115,16 +113,16 @@ class _SendToTvPageState extends ConsumerState<SendToTvPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: Text(appLocalizations.sendToTvTitle)),
-      body: MobileScanner(
-        controller: _scannerController,
-        onDetect: _handleQrCode,
-      ),
-    );
+        appBar: AppBar(title: Text(appLocalizations.sendToTvTitle)),
+        body: MobileScanner(
+          controller: _scannerController,
+          onDetect: _handleQrCode,
+        ),
+      );
 
   @override
   void dispose() {
-    _scannerController.dispose();
+    unawaited(_scannerController.dispose());
     super.dispose();
   }
 }

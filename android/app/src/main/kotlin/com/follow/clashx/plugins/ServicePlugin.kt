@@ -29,23 +29,29 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import java.io.File
 
 class ServicePlugin :
     FlutterPlugin,
     MethodChannel.MethodCallHandler,
     CoroutineScope {
+    companion object {
+        private const val CHANNEL_NAMESPACE = "com.follow.clashx"
+    }
 
     private var job = SupervisorJob()
     override val coroutineContext get() = job + Dispatchers.Main
 
     private lateinit var channel: MethodChannel
+    private lateinit var context: Context
     private val eventChannel = Channel<String?>(Channel.UNLIMITED)
     private val gson = Gson()
     @Volatile private var attached = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
-        channel = MethodChannel(binding.binaryMessenger, "${Components.PACKAGE_NAME}/service")
+        context = binding.applicationContext
+        channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
         attached = true
         // Single FIFO consumer so events (logs/traffic/state) reach Flutter strictly in
@@ -92,6 +98,35 @@ class ServicePlugin :
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
+            "startRuntimeNode" -> handleStartRuntimeNode(call, result)
+            "stopRuntimeNode" -> launch {
+                val nodeId = call.argument<String>("nodeId") ?: ""
+                Service.stopRuntimeNode(nodeId)
+                result.successOnMain(true)
+            }
+            "getRuntimeNodeRunTime" -> launch {
+                val nodeId = call.argument<String>("nodeId") ?: ""
+                result.successOnMain(Service.getRuntimeNodeRunTime(nodeId))
+            }
+            "resolveNativeRuntimeLibrary" -> {
+                val name = call.argument<String>("name") ?: ""
+                val file = File(context.applicationInfo.nativeLibraryDir, name)
+                result.successOnMain(if (name.isNotBlank() && file.exists()) file.absolutePath else "")
+            }
+            "clearQuickStartParams" -> {
+                com.follow.clashx.common.SavedParams.clearQuickStartParams()
+                result.successOnMain(true)
+            }
+            "saveRuntimeNodesState" -> {
+                val args = call.arguments as? Map<*, *>
+                val nodes = args?.get("nodes") as? String ?: ""
+                com.follow.clashx.common.SavedParams.saveRuntimeNodesState(nodes)
+                result.successOnMain(true)
+            }
+            "clearRuntimeNodesState" -> {
+                com.follow.clashx.common.SavedParams.clearRuntimeNodesState()
+                result.successOnMain(true)
+            }
             "showSubscriptionNotification" -> handleShowSubscriptionNotification(call, result)
             "saveParams" -> {
                 val args = call.arguments as? Map<*, *>
@@ -204,6 +239,21 @@ class ServicePlugin :
         }
     }
 
+    private fun handleStartRuntimeNode(call: MethodCall, result: MethodChannel.Result) {
+        val nodeId = call.argument<String>("nodeId") ?: ""
+        val path = call.argument<String>("path") ?: ""
+        val workingDirectory = call.argument<String>("workingDirectory") ?: ""
+        val arguments = call.argument<List<String>>("arguments") ?: emptyList()
+        if (nodeId.isBlank() || path.isBlank() || workingDirectory.isBlank()) {
+            result.successOnMain(0L)
+            return
+        }
+        launch {
+            val runTime = Service.startRuntimeNode(nodeId, path, workingDirectory, arguments)
+            result.successOnMain(runTime)
+        }
+    }
+
     private fun doStartService(options: VpnOptions, result: MethodChannel.Result) {
         launch {
             if (options.enable) {
@@ -217,6 +267,9 @@ class ServicePlugin :
             GlobalState.runTime = rt
             if (rt == 0L) {
                 com.follow.clashx.common.SavedParams.setVpnActive(false)
+            } else {
+                GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
+                GlobalState.requestBatteryOptimizationExemption()
             }
             GlobalState.runStateFlow.tryEmit(if (rt == 0L) RunState.STOP else RunState.START)
             result.successOnMain(rt)
@@ -282,7 +335,7 @@ class ServicePlugin :
             if (manager.getNotificationChannel(GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL) == null) {
                 val ch = NotificationChannel(
                     GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL,
-                    "Subscription Updates",
+                    ctx.getString(com.follow.clashx.common.R.string.subscription_notification_channel_name),
                     NotificationManager.IMPORTANCE_HIGH,
                 )
                 manager.createNotificationChannel(ch)
@@ -302,7 +355,13 @@ class ServicePlugin :
                 ctx, 0, openIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            builder.addAction(0, actionLabel.ifBlank { "Open" }, pi)
+            builder.addAction(
+                0,
+                actionLabel.ifBlank {
+                    ctx.getString(com.follow.clashx.common.R.string.notification_open)
+                },
+                pi,
+            )
             builder.setContentIntent(pi)
         }
 

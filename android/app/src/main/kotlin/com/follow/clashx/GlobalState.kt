@@ -2,6 +2,12 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import com.follow.clashx.common.BroadcastAction
@@ -27,8 +33,8 @@ enum class RunState { START, PENDING, STOP }
 object GlobalState {
     private const val TAG = "GlobalState"
 
-    const val NOTIFICATION_CHANNEL = "FlClashX"
-    const val SUBSCRIPTION_NOTIFICATION_CHANNEL = "FlClashX_Subscription"
+    const val NOTIFICATION_CHANNEL = "FlClashM"
+    const val SUBSCRIPTION_NOTIFICATION_CHANNEL = "FlClashM_Subscription"
     const val NOTIFICATION_ID = 1
     const val SUBSCRIPTION_NOTIFICATION_ID = 2
 
@@ -59,7 +65,7 @@ object GlobalState {
                     }
                     if (state != RunState.PENDING) {
                         runCatching {
-                            com.follow.clashx.services.FlClashXTileService.requestUpdate(
+                            com.follow.clashx.services.FlClashMTileService.requestUpdate(
                                 CommonGlobalState.application,
                             )
                         }
@@ -130,6 +136,23 @@ object GlobalState {
     suspend fun getText(text: String): String =
         getCurrentAppPlugin()?.getText(text) ?: ""
 
+    fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val ctx = CommonGlobalState.application
+        val pm = ctx.getSystemService(PowerManager::class.java) ?: return
+        if (pm.isIgnoringBatteryOptimizations(ctx.packageName)) return
+        val prefs = ctx.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("flutter.battery_opt_prompted", false)) return
+        prefs.edit().putBoolean("flutter.battery_opt_prompted", true).apply()
+        runCatching {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${ctx.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        }
+    }
+
 
     fun syncStatus() {
         CommonGlobalState.launch { handleSyncState() }
@@ -138,12 +161,18 @@ object GlobalState {
     suspend fun handleSyncState() {
         runLock.withLock {
             val vpnActive = com.follow.clashx.common.SavedParams.isVpnActive()
+            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
             if (!vpnActive) {
                 runTime = 0L
                 runStateFlow.tryEmit(RunState.STOP)
                 return@withLock
             }
-            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
+            if (!isSystemVpnActive(CommonGlobalState.application) && !recentStart) {
+                com.follow.clashx.common.SavedParams.setVpnActive(false)
+                runTime = 0L
+                runStateFlow.tryEmit(RunState.STOP)
+                return@withLock
+            }
             runCatching {
                 Service.bind()
                 val rtStr = Service.getRunTimeString() // null => AIDL probe failed/timed out
@@ -186,6 +215,14 @@ object GlobalState {
                 if (runStateFlow.value != RunState.START) runStateFlow.tryEmit(RunState.START)
             }
         }
+    }
+
+    fun isSystemVpnActive(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val activeNetwork = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     /**
@@ -299,8 +336,10 @@ object GlobalState {
             val intent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
             runStateFlow.tryEmit(RunState.START)
-        }.onFailure {
-            Log.w(TAG, "Direct VPN start failed: ${it.message}")
+            getCurrentAppPlugin()?.requestNotificationsPermission()
+            requestBatteryOptimizationExemption()
+        }.onFailure { error: Throwable ->
+            Log.w(TAG, "Direct VPN start failed: ${error.message}")
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             runStateFlow.tryEmit(RunState.STOP)
             TilePlugin.setPendingAction(TilePlugin.PendingAction.START)

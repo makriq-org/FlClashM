@@ -5,14 +5,25 @@ import java.io.File
 import java.io.FileOutputStream
 
 object SavedParams {
-    private const val PARAMS_FILE = "flclashx_always_on.json"
-    private const val ACTIVE_FILE = "flclashx_vpn_active"
-    private const val NOTIF_TITLE_FILE = "flclashx_notif_title"
+    private const val PARAMS_FILE = "flclashm_always_on.json"
+    private const val LEGACY_PARAMS_FILE = "flclashx_always_on.json"
+    private const val RUNTIME_NODES_FILE = "flclashm_runtime_nodes.json"
+    private const val LEGACY_RUNTIME_NODES_FILE = "flclashx_runtime_nodes.json"
+    private const val ACTIVE_FILE = "flclashm_vpn_active"
+    private const val LEGACY_ACTIVE_FILE = "flclashx_vpn_active"
+    private const val NOTIF_TITLE_FILE = "flclashm_notif_title"
+    private const val LEGACY_NOTIF_TITLE_FILE = "flclashx_notif_title"
+
+    private val paramsFile by lazy { file(PARAMS_FILE) }
+    private val legacyParamsFile by lazy { file(LEGACY_PARAMS_FILE) }
+    private val runtimeNodesFile by lazy { file(RUNTIME_NODES_FILE) }
+    private val legacyRuntimeNodesFile by lazy { file(LEGACY_RUNTIME_NODES_FILE) }
+    private val activeFile by lazy { file(ACTIVE_FILE) }
+    private val legacyActiveFile by lazy { file(LEGACY_ACTIVE_FILE) }
+    private val notifTitleFile by lazy { file(NOTIF_TITLE_FILE) }
+    private val legacyNotifTitleFile by lazy { file(LEGACY_NOTIF_TITLE_FILE) }
     private const val START_TIME_FILE = "flclashx_start_time"
 
-    private val paramsFile by lazy { File(GlobalState.application.filesDir, PARAMS_FILE) }
-    private val activeFile by lazy { File(GlobalState.application.filesDir, ACTIVE_FILE) }
-    private val notifTitleFile by lazy { File(GlobalState.application.filesDir, NOTIF_TITLE_FILE) }
     private val startTimeFile by lazy { File(GlobalState.application.filesDir, START_TIME_FILE) }
 
     data class QuickStartParams(val init: String, val setup: String, val state: String)
@@ -25,10 +36,12 @@ object SavedParams {
                 put("state", stateParams)
             }
             writeAtomic(paramsFile, json.toString())
+            legacyParamsFile.delete()
         }.onFailure { GlobalState.log("saveQuickStartParams error: ${it.message}") }
     }
 
     fun loadQuickStartParams(): QuickStartParams? {
+        migrateIfNeeded(paramsFile, legacyParamsFile)
         if (!paramsFile.exists()) return null
         val text = runCatching { paramsFile.readText() }.getOrNull()
         if (text.isNullOrBlank()) {
@@ -57,14 +70,54 @@ object SavedParams {
         runCatching {
             if (active) {
                 activeFile.writeText("1")
+                legacyActiveFile.delete()
             } else {
                 activeFile.delete()
+                legacyActiveFile.delete()
                 clearStartTime()
             }
         }.onFailure { GlobalState.log("setVpnActive($active) error: ${it.message}") }
     }
 
-    fun isVpnActive(): Boolean = activeFile.exists()
+    fun isVpnActive(): Boolean {
+        migrateIfNeeded(activeFile, legacyActiveFile)
+        return activeFile.exists()
+    }
+
+    fun clearQuickStartParams() {
+        runCatching {
+            paramsFile.delete()
+            legacyParamsFile.delete()
+            runtimeNodesFile.delete()
+            legacyRuntimeNodesFile.delete()
+            activeFile.delete()
+            legacyActiveFile.delete()
+        }.onFailure { GlobalState.log("clearQuickStartParams error: ${it.message}") }
+    }
+
+    fun saveRuntimeNodesState(nodesJson: String) {
+        runCatching {
+            writeAtomic(runtimeNodesFile, nodesJson)
+            legacyRuntimeNodesFile.delete()
+        }
+            .onFailure { GlobalState.log("saveRuntimeNodesState error: ${it.message}") }
+    }
+
+    fun loadRuntimeNodesState(): String? {
+        migrateIfNeeded(runtimeNodesFile, legacyRuntimeNodesFile)
+        return runCatching { runtimeNodesFile.readText() }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    fun clearRuntimeNodesState() {
+        runCatching {
+            runtimeNodesFile.delete()
+            legacyRuntimeNodesFile.delete()
+        }
+            .onFailure { GlobalState.log("clearRuntimeNodesState error: ${it.message}") }
+    }
 
     // Persisted tunnel start timestamp (epoch ms). Lets a freshly-restarted UI process
     // recover the real uptime — and confirm the tunnel is up — when the AIDL runtime
@@ -83,12 +136,29 @@ object SavedParams {
     }
 
     fun saveNotificationTitle(title: String) {
-        runCatching { writeAtomic(notifTitleFile, title) }
+        runCatching {
+            writeAtomic(notifTitleFile, title)
+            legacyNotifTitleFile.delete()
+        }
             .onFailure { GlobalState.log("saveNotificationTitle error: ${it.message}") }
     }
 
-    fun loadNotificationTitle(): String =
-        runCatching { notifTitleFile.readText().trim() }.getOrDefault("FlClashX")
+    fun loadNotificationTitle(): String {
+        migrateIfNeeded(notifTitleFile, legacyNotifTitleFile)
+        return runCatching { notifTitleFile.readText().trim() }.getOrDefault("FlClashM")
+    }
+
+    private fun file(name: String): File = File(GlobalState.application.filesDir, name)
+
+    private fun migrateIfNeeded(target: File, legacy: File) {
+        if (target.exists() || !legacy.exists()) return
+        runCatching {
+            writeAtomic(target, legacy.readText())
+            legacy.delete()
+        }.onFailure {
+            GlobalState.log("migrateIfNeeded(${legacy.name} -> ${target.name}) error: ${it.message}")
+        }
+    }
 
     private fun writeAtomic(target: File, content: String) {
         val tmp = File(target.parentFile, "${target.name}.tmp")

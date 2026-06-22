@@ -626,5 +626,10 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "renew": MessageLookupByLibrary.simpleMessage("更新"),
     "announcement": MessageLookupByLibrary.simpleMessage("お知らせ"),
+    "later": MessageLookupByLibrary.simpleMessage("後で"),
+    "skipVersion": MessageLookupByLibrary.simpleMessage("バージョンをスキップ"),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage("プレリリース更新"),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage("ベータおよびプレリリース版を表示"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage("更新をダウンロード中"),
   };
 }

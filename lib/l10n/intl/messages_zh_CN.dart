@@ -558,5 +558,10 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "renew": MessageLookupByLibrary.simpleMessage("续订"),
     "announcement": MessageLookupByLibrary.simpleMessage("公告"),
+    "later": MessageLookupByLibrary.simpleMessage("稍后"),
+    "skipVersion": MessageLookupByLibrary.simpleMessage("跳过版本"),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage("预发布更新"),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage("显示测试版和预发布版本"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage("正在下载更新"),
   };
 }

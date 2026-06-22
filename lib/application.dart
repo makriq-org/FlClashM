@@ -1,13 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/l10n/l10n.dart';
-import 'package:flclashx/manager/hotkey_manager.dart';
 import 'package:flclashx/manager/manager.dart';
-import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/material.dart';
@@ -18,9 +16,7 @@ import 'controller.dart';
 import 'pages/pages.dart';
 
 class Application extends ConsumerStatefulWidget {
-  const Application({
-    super.key,
-  });
+  const Application({super.key});
 
   @override
   ConsumerState<Application> createState() => ApplicationState();
@@ -32,9 +28,6 @@ class ApplicationState extends ConsumerState<Application> {
   final _pageTransitionsTheme = const PageTransitionsTheme(
     builders: <TargetPlatform, PageTransitionsBuilder>{
       TargetPlatform.android: CommonPageTransitionsBuilder(),
-      TargetPlatform.windows: CommonPageTransitionsBuilder(),
-      TargetPlatform.linux: CommonPageTransitionsBuilder(),
-      TargetPlatform.macOS: CommonPageTransitionsBuilder(),
     },
   );
 
@@ -47,11 +40,6 @@ class ApplicationState extends ConsumerState<Application> {
   @override
   void initState() {
     super.initState();
-
-    if (Platform.isWindows) {
-      windows?.enableDarkModeForApp();
-    }
-
     globalState.startGroupsUpdateTask();
     _autoUpdateProfilesTask();
     globalState.appController = AppController(context, ref);
@@ -62,7 +50,7 @@ class ApplicationState extends ConsumerState<Application> {
       }
       await globalState.appController.init();
       globalState.appController.initLink();
-      app?.initShortcuts();
+      unawaited(productServices.androidShell.initShortcuts());
     });
   }
 
@@ -73,24 +61,7 @@ class ApplicationState extends ConsumerState<Application> {
     });
   }
 
-  Widget _buildPlatformState(Widget child) {
-    if (system.isDesktop) {
-      return WindowManager(
-        child: TrayManager(
-          child: HotKeyManager(
-            child: ProxyManager(
-              child: child,
-            ),
-          ),
-        ),
-      );
-    }
-    return AndroidManager(
-      child: TileManager(
-        child: child,
-      ),
-    );
-  }
+  Widget _buildPlatformState(Widget child) => AndroidManager(child: child);
 
   Widget _buildState(Widget child) => AppStateManager(
         child: ClashManager(
@@ -99,7 +70,7 @@ class ApplicationState extends ConsumerState<Application> {
               if (!results.contains(ConnectivityResult.vpn)) {
                 clashCore.closeConnections();
               }
-              globalState.appController.updateLocalIp();
+              unawaited(globalState.appController.updateLocalIp());
               globalState.appController.addCheckIpNumDebounce();
             },
             child: child,
@@ -107,30 +78,19 @@ class ApplicationState extends ConsumerState<Application> {
         ),
       );
 
-  Widget _buildPlatformApp(Widget child) {
-    if (system.isDesktop) {
-      return WindowHeaderContainer(
-        child: child,
-      );
-    }
-    return VpnManager(
-      child: child,
-    );
-  }
+  Widget _buildPlatformApp(Widget child) => VpnManager(child: child);
 
-  Widget _buildApp(Widget child) => MessageManager(
-        child: ThemeManager(
-          child: child,
-        ),
-      );
+  Widget _buildApp(Widget child) =>
+      MessageManager(child: ThemeManager(child: child));
 
   @override
   Widget build(BuildContext context) => _buildPlatformState(
         _buildState(
           Consumer(
             builder: (_, ref, child) {
-              final locale =
-                  ref.watch(appSettingProvider.select((state) => state.locale));
+              final locale = ref.watch(
+                appSettingProvider.select((state) => state.locale),
+              );
               final themeProps = ref.watch(themeSettingProvider);
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
@@ -142,29 +102,11 @@ class ApplicationState extends ConsumerState<Application> {
                   AppLocalizations.delegate,
                   GlobalMaterialLocalizations.delegate,
                   GlobalCupertinoLocalizations.delegate,
-                  GlobalWidgetsLocalizations.delegate
+                  GlobalWidgetsLocalizations.delegate,
                 ],
-                builder: (_, child) {
-                  final Widget app = AppEnvManager(
-                    child: _buildPlatformApp(
-                      _buildApp(child!),
-                    ),
-                  );
-
-                  if (Platform.isMacOS) {
-                    return FittedBox(
-                      fit: BoxFit.contain,
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: 500,
-                        height: 800,
-                        child: app,
-                      ),
-                    );
-                  }
-
-                  return app;
-                },
+                builder: (_, child) => AppEnvManager(
+                  child: _buildPlatformApp(_buildApp(child!)),
+                ),
                 scrollBehavior: BaseScrollBehavior(),
                 title: appName,
                 locale: utils.getLocaleForString(locale),

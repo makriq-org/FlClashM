@@ -15,6 +15,9 @@ part 'generated/profile.freezed.dart';
 part 'generated/profile.g.dart';
 
 typedef SelectedMap = Map<String, String>;
+typedef ValidateProfileConfigCallback = Future<String> Function(
+  String configText,
+);
 
 @freezed
 class SubscriptionInfo with _$SubscriptionInfo {
@@ -167,7 +170,10 @@ extension ProfileExtension on Profile {
     return (await file.lastModified()).microsecondsSinceEpoch;
   }
 
-  Future<Profile> update({bool shouldSendHeaders = true}) async {
+  Future<Profile> update({
+    bool shouldSendHeaders = true,
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
     final headers = <String, dynamic>{};
 
     if (shouldSendHeaders) {
@@ -211,8 +217,10 @@ extension ProfileExtension on Profile {
     }
     
     response.headers.forEach((name, values) {
-      if (name.toLowerCase().startsWith('flclashx-') && values.isNotEmpty) {
-        providerHeaders[name.toLowerCase()] = values.first;
+      final lower = name.toLowerCase();
+      if ((lower.startsWith('flclashx-') || lower.startsWith('flclashm-')) &&
+          values.isNotEmpty) {
+        providerHeaders[lower] = values.first;
       }
     });
     
@@ -226,7 +234,8 @@ extension ProfileExtension on Profile {
     }
 
     String updatedUrl = url;
-    final newDomain = providerHeaders['flclashx-newdomain'];
+    final newDomain = providerHeaders['flclashm-newdomain'] ??
+        providerHeaders['flclashx-newdomain'];
     if (newDomain != null && newDomain.isNotEmpty) {
       final currentUri = Uri.tryParse(url);
       if (currentUri != null && currentUri.host != newDomain) {
@@ -240,11 +249,18 @@ extension ProfileExtension on Profile {
       subscriptionInfo: SubscriptionInfo.formHString(userinfo),
       autoUpdateDuration: durationFromHeader ?? autoUpdateDuration,
       providerHeaders: providerHeaders,
-    ).saveFile(responseData);
+    ).saveFile(
+      responseData,
+      validateConfig: validateConfig,
+    );
   }
 
-  Future<Profile> saveFile(Uint8List bytes) async {
-    final message = await clashCore.validateConfig(utf8.decode(bytes));
+  Future<Profile> saveFile(
+    Uint8List bytes, {
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
+    final validator = validateConfig ?? clashCore.validateConfig;
+    final message = await validator(utf8.decode(bytes));
     if (message.isNotEmpty) {
       throw message;
     }
@@ -253,8 +269,12 @@ extension ProfileExtension on Profile {
     return copyWith(lastUpdateDate: DateTime.now());
   }
 
-  Future<Profile> saveFileWithString(String value) async {
-    final message = await clashCore.validateConfig(value);
+  Future<Profile> saveFileWithString(
+    String value, {
+    ValidateProfileConfigCallback? validateConfig,
+  }) async {
+    final validator = validateConfig ?? clashCore.validateConfig;
+    final message = await validator(value);
     if (message.isNotEmpty) {
       throw message;
     }

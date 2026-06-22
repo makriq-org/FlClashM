@@ -4,6 +4,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart' hide Action;
 import 'package:flclashx/pages/pages.dart';
+import 'package:flclashx/product/subscription/product_subscription.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/views/profiles/edit_profile.dart';
@@ -30,12 +31,12 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
     showExtend(
       globalState.navigatorKey.currentState!.context,
       builder: (_, type) => AdaptiveSheetScaffold(
-          type: type,
-          body: AddProfileView(
-            context: globalState.navigatorKey.currentState!.context,
-          ),
-          title: "${appLocalizations.add}${appLocalizations.profile}",
+        type: type,
+        body: AddProfileView(
+          context: globalState.navigatorKey.currentState!.context,
         ),
+        title: "${appLocalizations.add}${appLocalizations.profile}",
+      ),
     );
   }
 
@@ -108,9 +109,9 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
             showSheet(
               context: context,
               builder: (_, type) => ReorderableProfilesSheet(
-                  type: type,
-                  profiles: profiles,
-                ),
+                type: type,
+                profiles: profiles,
+              ),
             );
           },
           icon: const Icon(Icons.sort),
@@ -130,58 +131,60 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
 
   @override
   Widget build(BuildContext context) => Consumer(
-      builder: (_, ref, __) {
-        ref.listenManual(
-          isCurrentPageProvider(PageLabel.profiles),
-          (prev, next) {
-            if (prev != next && next == true) {
-              initPageState();
-            }
-          },
-          fireImmediately: true,
-        );
-        final profilesSelectorState = ref.watch(profilesSelectorStateProvider);
-        if (profilesSelectorState.profiles.isEmpty) {
-          return NullStatus(
-            label: appLocalizations.nullProfileDesc,
+        builder: (_, ref, __) {
+          ref.listenManual(
+            isCurrentPageProvider(PageLabel.profiles),
+            (prev, next) {
+              if (prev != next && next == true) {
+                initPageState();
+              }
+            },
+            fireImmediately: true,
           );
-        }
-        return Align(
-          alignment: Alignment.topCenter,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: 88,
-            ),
-            child: Grid(
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              crossAxisCount: profilesSelectorState.columns,
-              children: [
-                for (int i = 0; i < profilesSelectorState.profiles.length; i++)
-                  GridItem(
-                    child: ProfileItem(
-                      key: Key(profilesSelectorState.profiles[i].id),
-                      profile: profilesSelectorState.profiles[i],
-                      groupValue: profilesSelectorState.currentProfileId,
-                      onChanged: (profileId) {
-                        ref.read(currentProfileIdProvider.notifier).value =
-                            profileId;
-                      },
+          final profilesSelectorState =
+              ref.watch(profilesSelectorStateProvider);
+          if (profilesSelectorState.profiles.isEmpty) {
+            return NullStatus(
+              label: appLocalizations.nullProfileDesc,
+            );
+          }
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: 88,
+              ),
+              child: Grid(
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                crossAxisCount: profilesSelectorState.columns,
+                children: [
+                  for (int i = 0;
+                      i < profilesSelectorState.profiles.length;
+                      i++)
+                    GridItem(
+                      child: ProfileItem(
+                        key: Key(profilesSelectorState.profiles[i].id),
+                        profile: profilesSelectorState.profiles[i],
+                        groupValue: profilesSelectorState.currentProfileId,
+                        onChanged: (profileId) {
+                          ref.read(currentProfileIdProvider.notifier).value =
+                              profileId;
+                        },
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
 }
 
 class ProfileItem extends StatefulWidget {
-
   const ProfileItem({
     super.key,
     required this.profile,
@@ -268,14 +271,14 @@ class _ProfileItemState extends State<ProfileItem> {
     showExtend(
       context,
       builder: (_, type) => AdaptiveSheetScaffold(
-          type: type,
-          disableBackground: false,
-          body: EditProfileView(
-            profile: widget.profile,
-            context: context,
-          ),
-          title: "${appLocalizations.edit}${appLocalizations.profile}",
+        type: type,
+        disableBackground: false,
+        body: EditProfileView(
+          profile: widget.profile,
+          context: context,
         ),
+        title: "${appLocalizations.edit}${appLocalizations.profile}",
+      ),
     );
   }
 
@@ -342,10 +345,10 @@ class _ProfileItemState extends State<ProfileItem> {
         }),
       const SizedBox(height: 6),
       Text(
-      expireDate != "N/A"
-          ? '${appLocalizations.expiresOn} $expireDate'
-          : appLocalizations.subscriptionUnlimited,
-      style: context.textTheme.bodySmall,
+        expireDate != "N/A"
+            ? '${appLocalizations.expiresOn} $expireDate'
+            : appLocalizations.subscriptionUnlimited,
+        style: context.textTheme.bodySmall,
       ),
       const SizedBox(height: 4),
       Text(
@@ -354,8 +357,6 @@ class _ProfileItemState extends State<ProfileItem> {
       ),
     ];
   }
-
-
 
   Future<void> _handleExportFile(BuildContext context) async {
     final commonScaffoldState = context.commonScaffoldState;
@@ -387,7 +388,10 @@ class _ProfileItemState extends State<ProfileItem> {
   }
 
   @override
-  Widget build(BuildContext context) => CommonCard(
+  Widget build(BuildContext context) {
+    final displayHints =
+        ProductProviderAdvisory.fromProfile(widget.profile).display;
+    return CommonCard(
       isSelected: widget.profile.id == widget.groupValue,
       onPressed: _isTV
           ? null
@@ -455,18 +459,20 @@ class _ProfileItemState extends State<ProfileItem> {
                                 icon: Icons.tv_outlined,
                                 label: appLocalizations.sendToTv,
                                 onPressed: () {
-                                  BaseNavigator.push(context,
-                                      SendToTvPage(profileUrl: widget.profile.url));
+                                  BaseNavigator.push(
+                                      context,
+                                      SendToTvPage(
+                                          profileUrl: widget.profile.url));
                                 },
                               ),
-                              if (widget.profile.providerHeaders['support-url'] != null && widget.profile.providerHeaders['support-url']!.isNotEmpty && !_isTV )
-                            PopupMenuItemData(
-                              icon: Icons.contact_support,
-                              label: appLocalizations.support,
-                              onPressed: () {
-                                globalState.openUrl(widget.profile.providerHeaders['support-url']!);
-                              },
-                            ),
+                            if (displayHints.hasSupportUrl && !_isTV)
+                              PopupMenuItemData(
+                                icon: Icons.contact_support,
+                                label: appLocalizations.support,
+                                onPressed: () {
+                                  globalState.openUrl(displayHints.supportUrl);
+                                },
+                              ),
                             PopupMenuItemData(
                               icon: Icons.extension_outlined,
                               label: appLocalizations.override,
@@ -492,19 +498,19 @@ class _ProfileItemState extends State<ProfileItem> {
                           ],
                         ),
                         targetBuilder: (open) => Focus(
-                            focusNode: _menuFocusNode,
-                            canRequestFocus: true,
-                            child: Material(
-                              color: _isMenuFocused
-                                  ? Theme.of(context).focusColor
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(20),
-                              child: IconButton(
-                                onPressed: open,
-                                icon: const Icon(Icons.more_vert),
-                              ),
+                          focusNode: _menuFocusNode,
+                          canRequestFocus: true,
+                          child: Material(
+                            color: _isMenuFocused
+                                ? Theme.of(context).focusColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            child: IconButton(
+                              onPressed: open,
+                              icon: const Icon(Icons.more_vert),
                             ),
                           ),
+                        ),
                       ),
               ),
             ),
@@ -512,10 +518,10 @@ class _ProfileItemState extends State<ProfileItem> {
         ),
       ),
     );
+  }
 }
 
 class ReorderableProfilesSheet extends StatefulWidget {
-
   const ReorderableProfilesSheet({
     super.key,
     required this.profiles,
@@ -573,64 +579,63 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
 
   @override
   Widget build(BuildContext context) => AdaptiveSheetScaffold(
-      type: widget.type,
-      actions: [
-        IconButton(
-          tooltip: appLocalizations.save,
-          onPressed: () {
-            Navigator.of(context).pop();
-            globalState.appController.setProfiles(profiles);
-          },
-          icon: const Icon(
-            Icons.save,
+        type: widget.type,
+        actions: [
+          IconButton(
+            tooltip: appLocalizations.save,
+            onPressed: () {
+              Navigator.of(context).pop();
+              globalState.appController.setProfiles(profiles);
+            },
+            icon: const Icon(
+              Icons.save,
+            ),
+          )
+        ],
+        body: Padding(
+          padding: const EdgeInsets.only(
+            bottom: 32,
+            top: 16,
           ),
-        )
-      ],
-      body: Padding(
-        padding: const EdgeInsets.only(
-          bottom: 32,
-          top: 16,
-        ),
-        child: ReorderableListView.builder(
-          buildDefaultDragHandles: false,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-          ),
-          proxyDecorator: proxyDecorator,
-          onReorder: (oldIndex, newIndex) {
-            setState(() {
-              if (oldIndex < newIndex) {
-                newIndex -= 1;
-              }
-              final profile = profiles.removeAt(oldIndex);
-              profiles.insert(newIndex, profile);
-            });
-          },
-          itemBuilder: (_, index) {
-            final profile = profiles[index];
-            return Container(
-              key: Key(profile.id),
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: CommonCard(
-                type: CommonCardType.filled,
-                child: ListTile(
-                  contentPadding: const EdgeInsets.only(
-                    right: 16,
-                    left: 16,
-                  ),
-                  title: Text(profile.label ?? profile.id),
-                  trailing: ReorderableDragStartListener(
-                    index: index,
-                    child: const Icon(Icons.drag_handle),
+          child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+            ),
+            proxyDecorator: proxyDecorator,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (oldIndex < newIndex) {
+                  newIndex -= 1;
+                }
+                final profile = profiles.removeAt(oldIndex);
+                profiles.insert(newIndex, profile);
+              });
+            },
+            itemBuilder: (_, index) {
+              final profile = profiles[index];
+              return Container(
+                key: Key(profile.id),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: CommonCard(
+                  type: CommonCardType.filled,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.only(
+                      right: 16,
+                      left: 16,
+                    ),
+                    title: Text(profile.label ?? profile.id),
+                    trailing: ReorderableDragStartListener(
+                      index: index,
+                      child: const Icon(Icons.drag_handle),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-          itemCount: profiles.length,
+              );
+            },
+            itemCount: profiles.length,
+          ),
         ),
-      ),
-      title: appLocalizations.profilesSort,
-    );
+        title: appLocalizations.profilesSort,
+      );
 }
-

@@ -1,0 +1,420 @@
+{
+  "allowedProductImports": [
+    {
+      "path": "lib/application.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "App bootstrap may initialize Android shell shortcuts.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/common/android.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/common/system.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "System helpers may delegate Android task-back behavior into AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/controller.dart",
+      "boundary": "runtime-orchestration",
+      "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts.",
+      "targets": [
+        "lib/product/compile/product_compile.dart",
+        "lib/product/runtime/product_runtime.dart",
+        "lib/product/services/product_services.dart",
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/main.dart",
+      "boundary": "bootstrap-entrypoint",
+      "reason": "Main stays a single bootstrap handoff into AppBootstrap.",
+      "targets": [
+        "lib/product/bootstrap/app_bootstrap.dart"
+      ]
+    },
+    {
+      "path": "lib/manager/android_manager.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "AndroidManager stays a thin consumer for exclude-from-recents shell sync.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/manager/app_state_manager.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "AppStateManager may forward runtime mode and global-mode changes into AndroidShellService.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/config.dart",
+      "boundary": "platform-shell-bootstrap",
+      "reason": "Config providers may refresh Android tile state after persisted profile changes.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/state.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "State selectors may consume platform profile and subscription advisory display hints.",
+      "targets": [
+        "lib/product/platform/platform_profile.dart",
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/services/subscription_notification_service.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "Subscription notifications may read advisory display hints, but not provider policy.",
+      "targets": [
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/state.dart",
+      "boundary": "global-runtime-wiring",
+      "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
+      "targets": [
+        "lib/product/compile/product_compile.dart",
+        "lib/product/runtime/product_runtime.dart",
+        "lib/product/security/product_security.dart"
+      ]
+    },
+    {
+      "path": "lib/views/about.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "AboutView may trigger AppUpdateService, but not AndroidUpdateBridge directly.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/views/access.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "AccessView may consume AccessControlService editor state without embedding Android policy.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/profiles.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "ProfilesView may consume advisory display hints and selector state only.",
+      "targets": [
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/pages/send_to_tv_page.dart",
+      "boundary": "platform-compatibility-contract",
+      "reason": "SendToTvPage may validate TV sync payload compatibility through a narrow product contract instead of embedding legacy product identifiers.",
+      "targets": [
+        "lib/product/platform/tv_sync_contract.dart"
+      ]
+    }
+  ],
+  "allowedBaseExtensions": [
+    {
+      "path": "lib/clash/lib.dart",
+      "boundary": "runtime-vpn-api",
+      "reason": "ClashLib.startVpn gains an optional optionsJson named parameter so the product runtime can pass profile-driven access control options directly, bypassing the default UI-driven merge. When optionsJson is null the upstream behaviour is preserved.",
+      "contract": "Optional named parameter on startVpn; no other changes.",
+      "security": "Profile-driven access control is resolved by the product security policy before call. No provider header influence.",
+      "rollback": "Remove the parameter; callers fall back to clashLib.getAndroidVpnOptions + _mergeAccessControl."
+    },
+    {
+      "path": "lib/common/http.dart",
+      "boundary": "http-proxy-resolution",
+      "reason": "handleFindProxy gains an optional forceMixedPort parameter so the product layer can force the IP check through the local mixed-port inbound on Android, where the app's own traffic is otherwise excluded from VPN and goes DIRECT. Also adds _isLoopbackHost for robust loopback detection (IPv6 ::1, 'localhost' string). When forceMixedPort is false the upstream behaviour is identical.",
+      "contract": "Optional named parameter on handleFindProxy; private _isLoopbackHost helper; no other changes.",
+      "security": "Only affects the app's own HTTP client proxy resolution; does not change VPN routing for other apps.",
+      "rollback": "Remove the parameter and helper; callers fall back to upstream DIRECT-on-Android behaviour."
+    },
+    {
+      "path": "lib/plugins/app.dart",
+      "boundary": "package-enumeration-api",
+      "reason": "App gains getInstalledPackageNames() that returns just package name strings (vs getPackages which returns full Package objects). Used by the product profile pipeline to validate split-tunneling package references without deserializing full Package metadata.",
+      "contract": "New method returning Future<List<String>>; no changes to existing methods.",
+      "security": "Read-only package name enumeration; no permission changes.",
+      "rollback": "Remove the method; callers use getPackages and extract names."
+    },
+    {
+      "path": "lib/models/config.dart",
+      "boundary": "app-settings-model",
+      "reason": "AppSettingProps gains includePrereleaseUpdates (bool, default false) and skippedAppUpdateTagName (String, default empty) fields for the product AppUpdateService to support pre-release channels and skip-version.",
+      "contract": "Two new fields with defaults; no changes to existing fields.",
+      "security": "User-controlled settings only; no provider influence.",
+      "rollback": "Remove the fields; AppUpdateService falls back to stable-only updates."
+    },
+    {
+      "path": "lib/models/profile.dart",
+      "boundary": "profile-validation-api",
+      "reason": "Profile update/saveFile/saveFileWithString gain an optional validateConfig callback parameter so the product layer can normalize config text before clashCore.validateConfig. Also accepts both flclashx-* and flclashm-* provider headers for backward compatibility.",
+      "contract": "Optional callback parameter on three methods; dual header prefix support; no other changes.",
+      "security": "Validation callback is provided by the product layer, not provider headers.",
+      "rollback": "Remove the parameter and dual-prefix support; callers use clashCore.validateConfig directly."
+    },
+    {
+      "path": "lib/common/utils.dart",
+      "boundary": "version-comparison",
+      "reason": "compareVersions is replaced with a semver-aware _ParsedVersion implementation that handles pre-release suffixes (e.g. 1.2.4-pre10). The upstream int.parse-based implementation crashes on pre-release versions.",
+      "contract": "Drop-in replacement for compareVersions; same int return contract; new private _ParsedVersion class.",
+      "security": "No security implications; pure version string comparison.",
+      "rollback": "Restore the upstream int.parse-based implementation; pre-release versions will not compare correctly."
+    }
+  ],
+  "allowedIdentityFiles": [
+    {
+      "path": "lib/common/constant.dart",
+      "boundary": "product-identity",
+      "reason": "packageName and repository constants identify the fork (com.makriq.flclash, makriq-org/FlClashM) rather than upstream (com.follow.clashx, pluralplay/FlClashX).",
+      "contract": "Only packageName and repository values change; all other constants unchanged.",
+      "security": "No security implications; product identity only.",
+      "rollback": "Restore upstream values; release continuity will fail until updated."
+    },
+    {
+      "path": "android/app/build.gradle.kts",
+      "boundary": "android-build-identity",
+      "reason": "applicationId changes to com.makriq.flclash and debug build gains applicationIdSuffix .dev for signed-fallback continuity.",
+      "contract": "applicationId value and debug applicationIdSuffix only; no other build config changes.",
+      "security": "No security implications; package identity only.",
+      "rollback": "Restore upstream applicationId; release continuity will fail until updated."
+    }
+  ],
+  "allowedGeneratedFiles": [
+    {
+      "path": "lib/l10n/l10n.dart",
+      "boundary": "generated-localization",
+      "reason": "Generated from arb files which include 5 product-layer localization keys (later, skipVersion, includePrereleaseUpdates, includePrereleaseUpdatesDesc, downloadUpdate). All upstream keys are preserved.",
+      "contract": "Upstream getters unchanged; 5 new product getters appended.",
+      "security": "No security implications; display strings only.",
+      "rollback": "Regenerate from upstream arb files."
+    },
+    {
+      "path": "lib/l10n/intl/messages_en.dart",
+      "boundary": "generated-localization",
+      "reason": "Generated English translations for 5 product-layer keys.",
+      "contract": "Upstream messages unchanged; 5 new product messages appended.",
+      "security": "No security implications; display strings only.",
+      "rollback": "Regenerate from upstream arb files."
+    },
+    {
+      "path": "lib/l10n/intl/messages_ja.dart",
+      "boundary": "generated-localization",
+      "reason": "Generated Japanese translations for 5 product-layer keys.",
+      "contract": "Upstream messages unchanged; 5 new product messages appended.",
+      "security": "No security implications; display strings only.",
+      "rollback": "Regenerate from upstream arb files."
+    },
+    {
+      "path": "lib/l10n/intl/messages_ru.dart",
+      "boundary": "generated-localization",
+      "reason": "Generated Russian translations for 5 product-layer keys.",
+      "contract": "Upstream messages unchanged; 5 new product messages appended.",
+      "security": "No security implications; display strings only.",
+      "rollback": "Regenerate from upstream arb files."
+    },
+    {
+      "path": "lib/l10n/intl/messages_zh_CN.dart",
+      "boundary": "generated-localization",
+      "reason": "Generated Chinese translations for 5 product-layer keys.",
+      "contract": "Upstream messages unchanged; 5 new product messages appended.",
+      "security": "No security implications; display strings only.",
+      "rollback": "Regenerate from upstream arb files."
+    },
+    {
+      "path": "lib/models/generated/config.freezed.dart",
+      "boundary": "generated-freezed",
+      "reason": "Generated from config.dart which includes 2 new AppSettingProps fields (includePrereleaseUpdates, skippedAppUpdateTagName). All upstream generated code preserved.",
+      "contract": "Upstream generated code unchanged; 2 new fields reflected in generated code.",
+      "security": "No security implications; data class generation only.",
+      "rollback": "Regenerate from upstream config.dart."
+    },
+    {
+      "path": "lib/models/generated/config.g.dart",
+      "boundary": "generated-freezed",
+      "reason": "Generated JSON serialization for 2 new AppSettingProps fields.",
+      "contract": "Upstream generated code unchanged; 2 new fields reflected in serialization.",
+      "security": "No security implications; data class serialization only.",
+      "rollback": "Regenerate from upstream config.dart."
+    }
+  ],
+  "productOwnedRoots": [
+    {
+      "path": "lib/product/",
+      "boundary": "product-layer",
+      "reason": "Product compilation, security, runtime and service policy is owned by FlClashM.",
+      "contract": "Base code may reach this root only through allowedProductImports.",
+      "security": "Security policy remains client-owned and independent of provider headers.",
+      "rollback": "Remove the product root and all declared base consumers to return to pure upstream."
+    },
+    {
+      "path": "test/product/",
+      "boundary": "product-tests",
+      "reason": "Tests cover FlClashM product contracts and integration guards.",
+      "contract": "Contains tests only; it is not shipped in the Android application.",
+      "security": "Tests assert security and rollback behaviour.",
+      "rollback": "Remove together with the product layer."
+    },
+    {
+      "path": "tool/",
+      "boundary": "product-tooling",
+      "reason": "Release, boundary and upstream-drift verification is maintained by FlClashM.",
+      "contract": "Tools are build-time only and must not affect runtime behaviour.",
+      "security": "Release tools verify identity, signing and artifact integrity.",
+      "rollback": "Remove together with FlClashM release automation."
+    },
+    {
+      "path": "i18n/",
+      "boundary": "product-documentation",
+      "reason": "Localized FlClashM architecture and user documentation is product-owned.",
+      "contract": "Documentation only; no runtime behaviour.",
+      "security": "Documents the security contract and provider limitations.",
+      "rollback": "Remove localized product documentation."
+    },
+    {
+      "path": "assets/runtimes/",
+      "boundary": "bundled-runtime-assets",
+      "reason": "Signed Android releases bundle the declared ByeDPI, OlcRTC and NaiveProxy executables.",
+      "contract": "Assets are ABI-scoped and resolved only through the product runtime supervisor.",
+      "security": "Runtime code owns local addresses, ports and arguments; profiles cannot override them.",
+      "rollback": "Remove the assets and disable the matching built-in node descriptors."
+    }
+  ],
+  "allowedFileGroups": [
+    {
+      "boundary": "repository-contract",
+      "reason": "FlClashM repository identity, maintenance rules and release history differ from upstream.",
+      "contract": "These files contain repository metadata and documentation only.",
+      "security": "No runtime authority is introduced.",
+      "rollback": "Restore the files from upstream/dev.",
+      "paths": [
+        ".gitattributes",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "README.md",
+        "README_EN.md"
+      ]
+    },
+    {
+      "boundary": "release-pipeline",
+      "reason": "FlClashM publishes Android-only artifacts under its own version, repository and verification contract.",
+      "contract": "Build-time and GitHub automation only; output names and Android version continuity are fixed by release_contract.dart.",
+      "security": "The pipeline verifies signing, checksums, artifact composition and upstream drift before publication.",
+      "rollback": "Restore upstream workflows and setup, then stop publishing FlClashM artifacts.",
+      "paths": [
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/feature_request.yml",
+        ".github/pre_release_template.md",
+        ".github/release_template.md",
+        ".github/scripts/notify_telegram.py",
+        ".github/workflows/android-base-verification.yaml",
+        ".github/workflows/build-core.yaml",
+        ".github/workflows/build.yaml",
+        ".github/workflows/continuity.yaml",
+        "Makefile",
+        "distribute_options.yaml",
+        "pubspec.lock",
+        "pubspec.yaml",
+        "setup.dart"
+      ]
+    },
+    {
+      "boundary": "android-product-identity",
+      "reason": "Android labels, icons, application class, widgets and channels identify FlClashM while preserving upstream internal channel namespaces.",
+      "contract": "Only external product identity and applicationId change; com.follow.clashx remains the internal Kotlin and MethodChannel namespace.",
+      "security": "Manifest permissions are limited to VPN operation and verified APK update installation.",
+      "rollback": "Restore upstream resources, manifests and application classes; applicationId continuity will be lost.",
+      "paths": [
+        "android/app/src/debug/AndroidManifest.xml",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/src/main/kotlin/com/follow/clashx/FlClashApplication.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/GlobalState.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/MainActivity.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/TempActivity.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/services/FlClashMTileService.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/widgets/ModeWidgetProvider.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/widgets/OnOffWidgetProvider.kt",
+        "android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png",
+        "android/app/src/main/res/drawable-hdpi/ic_launcher_monochrome.png",
+        "android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png",
+        "android/app/src/main/res/drawable-mdpi/ic_launcher_monochrome.png",
+        "android/app/src/main/res/drawable-xhdpi/ic_launcher_foreground.png",
+        "android/app/src/main/res/drawable-xhdpi/ic_launcher_monochrome.png",
+        "android/app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png",
+        "android/app/src/main/res/drawable-xxhdpi/ic_launcher_monochrome.png",
+        "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png",
+        "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_monochrome.png",
+        "android/app/src/main/res/drawable/widget_logo_color.xml",
+        "android/app/src/main/res/drawable/widget_logo_mono.xml",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+        "android/app/src/main/res/mipmap-hdpi/ic_launcher.png",
+        "android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
+        "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+        "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+        "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+        "android/app/src/main/res/values-ru/strings.xml",
+        "android/app/src/main/res/values/strings.xml",
+        "android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt",
+        "android/common/src/main/res/values-ja/strings.xml",
+        "android/common/src/main/res/values-ru/strings.xml",
+        "android/common/src/main/res/values-zh-rCN/strings.xml",
+        "android/common/src/main/res/values/strings.xml",
+        "android/service/src/main/AndroidManifest.xml",
+        "android/service/src/main/kotlin/com/follow/clashx/service/FilesProvider.kt",
+        "android/service/src/main/kotlin/com/follow/clashx/service/models/NotificationParams.kt",
+        "android/service/src/main/res/drawable/ic_notification.xml"
+      ]
+    },
+    {
+      "boundary": "android-runtime-integration",
+      "reason": "Minimal Android and core bridges expose profile access control, atomic VPN startup, DNS recovery and built-in node process lifecycle.",
+      "contract": "Dart product orchestration uses the existing upstream service channel plus explicit AIDL methods; default upstream paths remain valid without product data.",
+      "security": "Native code validates app-owned executable paths and arguments; profile policy cannot choose local binds or bypass client security.",
+      "rollback": "Remove the AIDL/runtime-node methods and restore upstream Android service and core files; built-in nodes and profile access control will be disabled.",
+      "paths": [
+        "android/app/src/main/kotlin/com/follow/clashx/Service.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/plugins/AppPlugin.kt",
+        "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
+        "android/common/src/main/kotlin/com/follow/clashx/common/Components.kt",
+        "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
+        "android/common/src/main/kotlin/com/follow/clashx/common/SavedParams.kt",
+        "android/service/src/main/aidl/com/follow/clashx/service/IRemoteInterface.aidl",
+        "android/service/src/main/kotlin/com/follow/clashx/service/FlVpnService.kt",
+        "android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt",
+        "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
+        "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
+        "core/lib_android.go"
+      ]
+    },
+    {
+      "boundary": "localization-source",
+      "reason": "Product UI touchpoints require localized update and split-tunneling labels.",
+      "contract": "Only product keys are added; upstream keys remain unchanged.",
+      "security": "Display strings only.",
+      "rollback": "Remove product keys and regenerate localization outputs.",
+      "paths": [
+        "arb/intl_en.arb",
+        "arb/intl_ja.arb",
+        "arb/intl_ru.arb",
+        "arb/intl_zh_CN.arb"
+      ]
+    }
+  ]
+}

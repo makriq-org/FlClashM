@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/providers/config.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
 class Contributor {
@@ -29,19 +32,32 @@ class ThanksPerson {
   final String name;
 }
 
-class AboutView extends StatelessWidget {
+class AboutView extends ConsumerWidget {
   const AboutView({super.key});
 
-  Future<void> _checkUpdate(BuildContext context) async {
+  Future<void> _checkUpdate(BuildContext context, WidgetRef ref) async {
     final commonScaffoldState = context.commonScaffoldState;
-    if (commonScaffoldState?.mounted != true) return;
-    final data = await commonScaffoldState?.loadingRun<Map<String, dynamic>?>(
-      request.checkForUpdate,
-      title: appLocalizations.checkUpdate,
-    );
-    globalState.appController.checkUpdateResultHandle(
-      data: data,
-      handleError: true,
+    if (commonScaffoldState?.mounted != true) {
+      return;
+    }
+    final appSetting = ref.read(appSettingProvider);
+    Future<T?> runTask<T>(Future<T> Function() task, {String? title}) =>
+        commonScaffoldState!.loadingRun<T>(
+          task,
+          title: title,
+        );
+    await productServices.appUpdate.manualCheck(
+      runTask: runTask,
+      includePrerelease: appSetting.includePrereleaseUpdates,
+      skippedTagName: appSetting.skippedAppUpdateTagName,
+      onSkipRelease: (tagName) async {
+        ref.read(appSettingProvider.notifier).updateState(
+              (state) => state.copyWith(
+                skippedAppUpdateTagName: tagName,
+              ),
+            );
+      },
+      loadingTitle: appLocalizations.checkUpdate,
     );
   }
 
@@ -116,41 +132,42 @@ class AboutView extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildMoreSection(BuildContext context) => generateSection(
+  List<Widget> _buildMoreSection(BuildContext context, WidgetRef ref) =>
+      generateSection(
         separated: false,
         title: appLocalizations.more,
         items: [
           ListItem(
             title: Text(appLocalizations.checkUpdate),
             onTap: () {
-              _checkUpdate(context);
+              unawaited(_checkUpdate(context, ref));
             },
             trailing: const Icon(Icons.update),
           ),
           ListItem(
             title: Text(appLocalizations.project),
             onTap: () {
-              globalState.openUrl(
+              unawaited(globalState.openUrl(
                 "https://github.com/$repository",
-              );
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
           ListItem(
             title: Text(appLocalizations.originalRepository),
             onTap: () {
-              globalState.openUrl(
-                "https://github.com/chen08209/FlClash",
-              );
+              unawaited(globalState.openUrl(
+                "https://github.com/pluralplay/FlClashX",
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
           ListItem(
             title: Text(appLocalizations.core),
             onTap: () {
-              globalState.openUrl(
-                "https://github.com/pluralplay/xHomo",
-              );
+              unawaited(globalState.openUrl(
+                "https://github.com/MetaCubeX/mihomo",
+              ));
             },
             trailing: const Icon(Icons.insert_link),
           ),
@@ -168,6 +185,10 @@ class AboutView extends StatelessWidget {
         avatar: "assets/images/avatars/kastov.jpg",
         name: "kastov",
         link: "https://github.com/kastov",
+      ),
+      Contributor(
+        name: "makriq",
+        link: "https://github.com/makriq",
       ),
     ];
     return generateSection(
@@ -191,7 +212,7 @@ class AboutView extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final items = [
       ListTile(
         title: Column(
@@ -227,7 +248,7 @@ class AboutView extends StatelessWidget {
                 ],
               ),
               onEasterEgg: () {
-                showDialog(
+                unawaited(showDialog(
                   context: context,
                   barrierDismissible: false,
                   builder: (dialogContext) => AlertDialog(
@@ -251,7 +272,7 @@ class AboutView extends StatelessWidget {
                         const SizedBox(height: 16),
                         InkWell(
                           onTap: () {
-                            globalState.openUrl('https://docs.rw');
+                            unawaited(globalState.openUrl('https://docs.rw'));
                           },
                           child: const Text(
                             'TRY REMNAWAVE',
@@ -274,7 +295,7 @@ class AboutView extends StatelessWidget {
                       ),
                     ],
                   ),
-                );
+                ));
               },
             ),
             const SizedBox(
@@ -293,7 +314,7 @@ class AboutView extends StatelessWidget {
       ..._buildContributorsSection(),
       ..._buildThanksForContributionSection(context),
       ..._buildGratitudeSection(context),
-      ..._buildMoreSection(context),
+      ..._buildMoreSection(context, ref),
     ];
     return Padding(
       padding: kMaterialListPadding.copyWith(
@@ -362,7 +383,7 @@ class Avatar extends StatelessWidget {
     if (contributor.clickable) {
       return GestureDetector(
         onTap: () {
-          globalState.openUrl(contributor.link);
+          unawaited(globalState.openUrl(contributor.link));
         },
         child: avatarWidget,
       );

@@ -880,5 +880,10 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "renew": MessageLookupByLibrary.simpleMessage("Продлить"),
     "announcement": MessageLookupByLibrary.simpleMessage("Объявление"),
+    "later": MessageLookupByLibrary.simpleMessage("Позже"),
+    "skipVersion": MessageLookupByLibrary.simpleMessage("Пропустить версию"),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage("Предрелизные обновления"),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage("Показывать бета- и предрелизные версии"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage("Загрузка обновления"),
   };
 }

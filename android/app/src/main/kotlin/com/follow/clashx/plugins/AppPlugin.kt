@@ -3,12 +3,15 @@ package com.follow.clashx.plugins
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.ComponentInfo
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -18,7 +21,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile
-import com.follow.clashx.FlClashXApplication
+import com.follow.clashx.FlClashApplication
 import com.follow.clashx.GlobalState
 import com.follow.clashx.R
 import com.follow.clashx.extensions.awaitResult
@@ -136,7 +139,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun initShortcuts(toggle: String, start: String, stop: String) {
-        val ctx = FlClashXApplication.getAppContext()
+        val ctx = FlClashApplication.getAppContext()
         val icon = IconCompat.createWithResource(ctx, R.mipmap.ic_launcher_round)
         val toggleShortcut = ShortcutInfoCompat.Builder(ctx, "toggle")
             .setShortLabel(toggle)
@@ -164,7 +167,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private fun tip(message: String?) {
         // Always surface the tip. The previous `flutterEngine == null` guard silently
         // dropped every tip() coming from a Dart-invoked tile/widget flow.
-        Toast.makeText(FlClashXApplication.getAppContext(), message, Toast.LENGTH_LONG).show()
+        Toast.makeText(FlClashApplication.getAppContext(), message, Toast.LENGTH_LONG).show()
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -197,6 +200,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
             }
 
+            "getInstalledPackageNames" -> {
+                scope.launch(Dispatchers.IO) {
+                    val names = getInstalledPackageNames()
+                    result.successOnMain(names)
+                }
+            }
+
             "getChinaPackageNames" -> {
                 scope.launch(Dispatchers.IO) {
                     val names = getChinaPackageNames()
@@ -219,7 +229,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                         }
                         if (iconMap["default"] == null) {
                             iconMap["default"] =
-                                FlClashXApplication.getAppContext().packageManager?.defaultActivityIcon?.getBase64()
+                                FlClashApplication.getAppContext().packageManager?.defaultActivityIcon?.getBase64()
                         }
                         result.successOnMain(iconMap["default"])
                         return@launch
@@ -235,8 +245,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
             "openFile" -> {
                 val path = call.argument<String>("path") ?: run { result.success(false); return }
-                openFile(path)
-                result.success(true)
+                result.success(openFile(path))
             }
 
             else -> {
@@ -245,44 +254,70 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
-    private fun openFile(path: String) {
+    private fun openFile(path: String): Boolean {
         val file = File(path)
-        val uri = FileProvider.getUriForFile(
-            FlClashXApplication.getAppContext(),
-            "${FlClashXApplication.getAppContext().packageName}.fileProvider",
-            file
-        )
+        if (!file.exists()) {
+            tip("File not found: ${file.name}")
+            return false
+        }
 
-        val flags =
-            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
-
-        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(
-            uri,
-            "text/plain"
-        ).addFlags(flags)
-
-        val resInfoList = FlClashXApplication.getAppContext().packageManager.queryIntentActivities(
-            intent, PackageManager.MATCH_DEFAULT_ONLY
-        )
-
-        for (resolveInfo in resInfoList) {
-            val packageName = resolveInfo.activityInfo.packageName
-            FlClashXApplication.getAppContext().grantUriPermission(
-                packageName,
-                uri,
-                flags
+        val appContext = FlClashApplication.getAppContext()
+        val uri = try {
+            FileProvider.getUriForFile(
+                appContext,
+                "${appContext.packageName}.fileProvider",
+                file
             )
+        } catch (e: Exception) {
+            android.util.Log.w("AppPlugin", "openFile uri handoff failed", e)
+            return false
+        }
+
+        val mimeType = getMimeType(file)
+        val intent = if (mimeType == APK_MIME_TYPE) {
+            Intent(Intent.ACTION_INSTALL_PACKAGE)
+        } else {
+            Intent(Intent.ACTION_VIEW)
+        }.apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            clipData = ClipData.newRawUri(file.name, uri)
+        }
+
+        val launchIntent = if (mimeType == APK_MIME_TYPE) {
+            intent
+        } else {
+            Intent.createChooser(intent, file.name).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newRawUri(file.name, uri)
+            }
         }
 
         try {
-            activityRef?.get()?.startActivity(intent)
+            val launcher = activityRef?.get() ?: appContext
+            launcher.startActivity(launchIntent)
+            return true
+        } catch (_: ActivityNotFoundException) {
+            tip("No app found to open ${file.name}")
+            return false
         } catch (e: Exception) {
             android.util.Log.w("AppPlugin", "openFile failed", e)
+            return false
         }
     }
 
+    private fun getMimeType(file: File): String {
+        val extension = file.extension.lowercase()
+        if (extension == "apk") {
+            return APK_MIME_TYPE
+        }
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
+    }
+
     private fun updateExcludeFromRecents(value: Boolean?) {
-        val am = getSystemService(FlClashXApplication.getAppContext(), ActivityManager::class.java)
+        val am = getSystemService(FlClashApplication.getAppContext(), ActivityManager::class.java)
         val task = am?.appTasks?.firstOrNull {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 it.taskInfo.taskId == activityRef?.get()?.taskId
@@ -299,7 +334,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private suspend fun getPackageIcon(packageName: String): String? {
-        val packageManager = FlClashXApplication.getAppContext().packageManager
+        val packageManager = FlClashApplication.getAppContext().packageManager
         // containsKey, not == null: a failed/icon-less lookup caches null so we don't
         // re-hit PackageManager on every subsequent request for the same package.
         if (!iconMap.containsKey(packageName)) {
@@ -315,11 +350,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     @Synchronized
     private fun getPackages(): List<Package> {
-        val packageManager = FlClashXApplication.getAppContext().packageManager
+        val packageManager = FlClashApplication.getAppContext().packageManager
         if (packages.isNotEmpty()) return packages
         packageManager?.getInstalledPackages(PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS)
             ?.filter {
-                it.packageName != FlClashXApplication.getAppContext().packageName || it.packageName == "android"
+                it.packageName != FlClashApplication.getAppContext().packageName || it.packageName == "android"
 
             }?.map {
                 Package(
@@ -339,6 +374,18 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
+    private suspend fun getInstalledPackageNames(): String {
+        return withContext(Dispatchers.IO) {
+            val packageManager = FlClashApplication.getAppContext().packageManager
+            val packageNames = packageManager
+                ?.getInstalledPackages(0)
+                ?.map { it.packageName }
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+            Gson().toJson(packageNames)
+        }
+    }
+
     private suspend fun getChinaPackageNames(): String {
         return withContext(Dispatchers.IO) {
             val packages: List<String> =
@@ -348,7 +395,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     fun requestVpnPermission(callBack: (granted: Boolean) -> Unit) {
-        val intent = VpnService.prepare(FlClashXApplication.getAppContext())
+        val intent = VpnService.prepare(FlClashApplication.getAppContext())
         if (intent != null) {
             val activity = activityRef?.get()
             if (activity != null) {
@@ -369,7 +416,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     fun requestNotificationsPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permission = ContextCompat.checkSelfPermission(
-                FlClashXApplication.getAppContext(),
+                FlClashApplication.getAppContext(),
                 Manifest.permission.POST_NOTIFICATIONS
             )
             if (permission != PackageManager.PERMISSION_GRANTED) {
@@ -394,7 +441,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun isChinaPackage(packageName: String): Boolean {
-        val packageManager = FlClashXApplication.getAppContext().packageManager ?: return false
+        val packageManager = FlClashApplication.getAppContext().packageManager ?: return false
         skipPrefixList.forEach {
             if (packageName == it || packageName.startsWith("$it.")) return false
         }
@@ -522,5 +569,9 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         } else {
             Handler(Looper.getMainLooper()).post { runCatching { success(value) } }
         }
+    }
+
+    private companion object {
+        const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     }
 }

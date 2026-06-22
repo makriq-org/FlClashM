@@ -4,8 +4,16 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/state.dart';
 
 class FlClashHttpOverrides extends HttpOverrides {
-  static String handleFindProxy(Uri url) {
-    if ([localhost].contains(url.host)) {
+  static bool _isLoopbackHost(String host) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized == 'localhost' || normalized == localhost) return true;
+    final address = InternetAddress.tryParse(normalized);
+    return address?.isLoopback ?? false;
+  }
+
+  static String handleFindProxy(Uri url, {bool forceMixedPort = false}) {
+    if (_isLoopbackHost(url.host)) {
       return "DIRECT";
     }
     final isStart = globalState.appState.runTime != null;
@@ -24,8 +32,12 @@ class FlClashHttpOverrides extends HttpOverrides {
     // running the traffic is already captured. `realTunEnable` is a desktop-
     // only flag (it tracks admin authorization for TUN on Win/macOS/Linux)
     // and stays false on Android even though TUN is effectively on.
+    //
+    // `forceMixedPort` skips the TUN short-circuit so the caller (e.g. an
+    // IP check) can route through the local mixed-port inbound even on
+    // Android, where the app's own traffic is otherwise excluded from VPN.
     final tunHandlesTraffic =
-        Platform.isAndroid || globalState.appState.realTunEnable;
+        !forceMixedPort && (Platform.isAndroid || globalState.appState.realTunEnable);
     if (tunHandlesTraffic) {
       return "DIRECT";
     }

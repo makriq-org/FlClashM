@@ -6,7 +6,6 @@ import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.DocumentsProvider
-import com.follow.clashx.common.GlobalState
 import java.io.File
 
 class FilesProvider : DocumentsProvider() {
@@ -32,16 +31,16 @@ class FilesProvider : DocumentsProvider() {
     )
 
     private val rootDir: File
-        get() = GlobalState.application.filesDir
+        get() = requireNotNull(context).filesDir
 
     override fun onCreate(): Boolean = true
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
         val cursor = MatrixCursor(projection ?: defaultRootColumns)
         cursor.newRow().apply {
-            add(DocumentsContract.Root.COLUMN_ROOT_ID, "flclashx")
+            add(DocumentsContract.Root.COLUMN_ROOT_ID, "flclashm")
             add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY)
-            add(DocumentsContract.Root.COLUMN_TITLE, "FlClashX")
+            add(DocumentsContract.Root.COLUMN_TITLE, "FlClashM")
             add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, docIdOf(rootDir))
             add(DocumentsContract.Root.COLUMN_AVAILABLE_BYTES, rootDir.usableSpace)
         }

@@ -22,6 +22,9 @@ _$AppSettingPropsImpl _$$AppSettingPropsImplFromJson(
       testUrl: json['testUrl'] as String? ?? defaultTestUrl,
       isAnimateToPage: json['isAnimateToPage'] as bool? ?? true,
       autoCheckUpdate: json['autoCheckUpdate'] as bool? ?? false,
+      includePrereleaseUpdates:
+          json['includePrereleaseUpdates'] as bool? ?? false,
+      skippedAppUpdateTagName: json['skippedAppUpdateTagName'] as String? ?? '',
       showLabel: json['showLabel'] as bool? ?? false,
       disclaimerAccepted: json['disclaimerAccepted'] as bool? ?? false,
       minimizeOnExit: json['minimizeOnExit'] as bool? ?? false,
@@ -53,6 +56,8 @@ Map<String, dynamic> _$$AppSettingPropsImplToJson(
       'testUrl': instance.testUrl,
       'isAnimateToPage': instance.isAnimateToPage,
       'autoCheckUpdate': instance.autoCheckUpdate,
+      'includePrereleaseUpdates': instance.includePrereleaseUpdates,
+      'skippedAppUpdateTagName': instance.skippedAppUpdateTagName,
       'showLabel': instance.showLabel,
       'disclaimerAccepted': instance.disclaimerAccepted,
       'minimizeOnExit': instance.minimizeOnExit,

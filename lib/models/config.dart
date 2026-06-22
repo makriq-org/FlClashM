@@ -75,6 +75,8 @@ class AppSettingProps with _$AppSettingProps {
     @Default(defaultTestUrl) String testUrl,
     @Default(true) bool isAnimateToPage,
     @Default(false) bool autoCheckUpdate,
+    @Default(false) bool includePrereleaseUpdates,
+    @Default("") String skippedAppUpdateTagName,
     @Default(false) bool showLabel,
     @Default(false) bool disclaimerAccepted,
     @Default(false) bool minimizeOnExit,

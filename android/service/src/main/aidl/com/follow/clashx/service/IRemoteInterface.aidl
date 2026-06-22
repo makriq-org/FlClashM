@@ -38,6 +38,16 @@ interface IRemoteInterface {
 
     String getTotalTraffic();
 
+    void startRuntimeNode(in String nodeId,
+                         in String executablePath,
+                         in String workingDirectory,
+                         in List<String> arguments,
+                         in IResultInterface result);
+
+    void stopRuntimeNode(in String nodeId, in IResultInterface result);
+
+    long getRuntimeNodeRunTime(in String nodeId);
+
     void startListener();
 
     void stopListener();

@@ -157,6 +157,32 @@ object Service {
     suspend fun getTotalTraffic(): String =
         delegate.useService { it.totalTraffic }.getOrNull() ?: ""
 
+    suspend fun startRuntimeNode(
+        nodeId: String,
+        executablePath: String,
+        workingDirectory: String,
+        arguments: List<String> = emptyList(),
+    ): Long =
+        delegate.useService(timeoutMillis = 15_000L) { proxy ->
+            awaitResult { cb ->
+                proxy.startRuntimeNode(
+                    nodeId,
+                    executablePath,
+                    workingDirectory,
+                    arguments,
+                    cb,
+                )
+            }
+        }.getOrNull() ?: 0L
+
+    suspend fun stopRuntimeNode(nodeId: String): Long =
+        delegate.useService(timeoutMillis = 15_000L) { proxy ->
+            awaitResult { cb -> proxy.stopRuntimeNode(nodeId, cb) }
+        }.getOrNull() ?: 0L
+
+    suspend fun getRuntimeNodeRunTime(nodeId: String): Long =
+        delegate.useService { it.getRuntimeNodeRunTime(nodeId) }.getOrNull() ?: 0L
+
     suspend fun startListener(): Result<Unit> =
         delegate.useService { it.startListener() }
 

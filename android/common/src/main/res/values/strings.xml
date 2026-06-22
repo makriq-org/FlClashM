@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="notification_stop">Stop</string>
-    <string name="notification_channel_name">FlClashX</string>
+    <string name="notification_channel_name">FlClashM</string>
+    <string name="subscription_notification_channel_name">Subscription updates</string>
+    <string name="notification_open">Open</string>
 </resources>

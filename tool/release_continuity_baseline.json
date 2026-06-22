@@ -1,0 +1,23 @@
+{
+  "applicationId": "com.makriq.flclash",
+  "releaseRepository": "makriq-org/FlClashM",
+  "requiredReleaseSecrets": [
+    "KEYSTORE",
+    "KEY_ALIAS",
+    "STORE_PASSWORD",
+    "KEY_PASSWORD"
+  ],
+  "continuitySigner": {
+    "subjectDn": "CN=FlClashM Release, O=makriq, C=RU",
+    "sha256": "e2425bde9387081e3259b4794b9868513ddaa0076ab5045909ce4f96f23a0672"
+  },
+  "releaseArtifacts": [
+    "FlClashM-android-universal.apk",
+    "FlClashM-android-arm64-v8a.apk",
+    "FlClashM-android-armeabi-v7a.apk",
+    "FlClashM-android-x86_64.apk",
+    "FlClashM-android-release.aab"
+  ],
+  "releaseMetadataFileName": "FlClashM-android-release-metadata.json",
+  "versionCodeFloor": 2026050102
+}

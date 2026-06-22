@@ -222,6 +222,7 @@ class RemoteService : Service() {
                             proxy.handleStop()
                         }
                     }
+                    runCatching { RuntimeNodeProcessManager.stopAll() }
                     delegate.unbind()
                     State.delegate = null
                     State.intent = null
@@ -277,6 +278,34 @@ class RemoteService : Service() {
         override fun getTraffic(): String = Core.getTraffic()
         override fun getTotalTraffic(): String = Core.getTotalTraffic()
 
+        override fun startRuntimeNode(
+            nodeId: String,
+            executablePath: String,
+            workingDirectory: String,
+            arguments: MutableList<String>,
+            result: IResultInterface,
+        ) {
+            GlobalState.launch {
+                val startTime = RuntimeNodeProcessManager.start(
+                    nodeId = nodeId,
+                    executablePath = executablePath,
+                    workingDirectory = workingDirectory,
+                    arguments = arguments,
+                )
+                result.onResult(startTime)
+            }
+        }
+
+        override fun stopRuntimeNode(nodeId: String, result: IResultInterface) {
+            GlobalState.launch {
+                val stoppedAt = RuntimeNodeProcessManager.stop(nodeId)
+                result.onResult(stoppedAt)
+            }
+        }
+
+        override fun getRuntimeNodeRunTime(nodeId: String): Long =
+            RuntimeNodeProcessManager.readStartTime(nodeId)
+
         override fun startListener() {
             Core.startListener()
         }
@@ -302,12 +331,15 @@ class RemoteService : Service() {
             runCatching { ev?.asBinder()?.unlinkToDeath(r, 0) }
         }
         runCatching { Core.setEventListener(null) }
+        GlobalState.launch { RuntimeNodeProcessManager.stopAll() }
         super.onDestroy()
     }
 
     private fun deleteStaleChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching { mgr.deleteNotificationChannel("FlClashX") }
+        runCatching { mgr.deleteNotificationChannel("FlClashX_Subscription") }
         runCatching { mgr.deleteNotificationChannel("FlClashX_Core") }
     }
 }

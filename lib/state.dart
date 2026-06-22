@@ -10,7 +10,6 @@ import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/theme.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/l10n/l10n.dart';
-import 'package:flclashx/plugins/service.dart';
 import 'package:flclashx/widgets/dialog.dart';
 import 'package:flclashx/widgets/scaffold.dart';
 import 'package:flutter/material.dart';
@@ -20,24 +19,41 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
+import 'common/yaml_dump.dart';
 import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
-
-typedef UpdateTasks = List<FutureOr Function()>;
+import 'plugins/app.dart';
+import 'product/compile/product_compile.dart';
+import 'product/runtime/product_runtime.dart';
+import 'product/security/product_security.dart';
 
 class GlobalState {
-
   factory GlobalState() {
     _instance ??= GlobalState._internal();
     return _instance!;
   }
 
-  GlobalState._internal();
+  GlobalState._internal() {
+    runtimeRegistry = RuntimeRegistry.flClashM(
+      readAccessControl: () => config.vpnProps.accessControl,
+      readProfileAccessControl: () => activeProfileAccessControl,
+    );
+    engineManager = EngineManager(
+      runtimeRegistry: runtimeRegistry,
+      loadCurrentRawProfile: loadCurrentRawProfile,
+      compileProfilePatch: compileProfilePatch,
+      enforceSecurityPolicy: enforceSecurityPolicy,
+      secureRuntimeUpdate: secureRuntimeUpdate,
+      buildRuntimePlan: buildRuntimePlan,
+      applyRuntimePlan: applyRuntimePlan,
+      buildCoreState: getCoreState,
+      buildInitParams: _buildInitParams,
+    );
+  }
   static GlobalState? _instance;
   Map<CacheTag, double> cacheScrollPosition = {};
   Map<CacheTag, FixedMap<String, double>> cacheHeightMap = {};
-  Timer? timer;
   Timer? groupsUpdateTimer;
   late Config config;
   late AppState appState;
@@ -50,18 +66,14 @@ class GlobalState {
   late CommonTheme theme;
   late Color accentColor;
   CorePalette? corePalette;
-  DateTime? startTime;
-  UpdateTasks tasks = [];
   Map<String, dynamic>? lastRuntimeConfig;
-  // Effective external-controller endpoint after merging subscription value
-  // over UI defaults. Empty string means disabled. Subscription value wins if
-  // present, otherwise falls back to the UI toggle default.
+  final activeProfileAccessControlNotifier =
+      ValueNotifier<AccessControl?>(null);
+  // Effective external-controller endpoint after applying the advisory/profile
+  // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
-  // The active profile's external-controller secret (rawConfig["secret"]), used to
-  // build the zashboard backend URL. Empty when the profile sets none.
+  // Active profile secret/UI values are used only for external dashboard links.
   final effectiveSecret = ValueNotifier<String>("");
-  // The external-ui sub-path (e.g. "ui") the core serves the dashboard at; part of
-  // the zashboard URL. Empty when the profile sets none.
   final effectiveExternalUi = ValueNotifier<String>("");
   // Effective values for fields that follow the overrideNetworkSettings gate
   // but don't round-trip through patchClashConfigProvider. UI reads these when
@@ -74,33 +86,49 @@ class GlobalState {
   // (proxy-groups[*].description). Shown as the subtitle of a nested group
   // card instead of its type (Fallback/URLTest/Selector).
   final groupDescriptions = ValueNotifier<Map<String, String>>({});
-  // Opt-in flag parsed from the GLOBAL proxy-group (`flclashx-override: true`).
-  // Only when this is set do we apply the curated-GLOBAL behaviour (global mode
-  // shows just GLOBAL, GLOBAL.all is curated, all groups are enumerated for rule
-  // mode). Without it everything behaves exactly as before.
   final globalOverrideEnabled = ValueNotifier<bool>(false);
-  // Curated member list for the GLOBAL group, parsed from the profile YAML
-  // (the proxy-groups entry named GLOBAL). Populated only when the override flag
-  // above is set; updateGroups then filters and reorders the core's GLOBAL group
-  // to exactly these names, in this order.
-  final globalGroupOrder = ValueNotifier<List<String>>([]);
   final navigatorKey = GlobalKey<NavigatorState>();
   AppController? _appController;
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
   bool isInit = false;
+  final ProductProfilePipeline _profilePipeline =
+      const ProductProfilePipeline();
+  final ProductProfileValidator _profileValidator =
+      const ProductProfileValidator();
+  late final RuntimeRegistry runtimeRegistry;
+  late final EngineManager engineManager;
 
-  bool get isStart => startTime != null && startTime!.isBeforeNow;
+  bool get isStart => engineManager.isStarted;
+
+  DateTime? get startTime => engineManager.startTime;
 
   AppController get appController => _appController!;
 
-  /// Whether [appController] is safe to dereference. Used to route tile/widget
-  /// events to exactly one handler: the boot-safe [_MainTileListener] before the
-  /// app is ready, and the UI's TileManager once it is.
   bool get isAppControllerReady => _appController != null;
+
+  AccessControl? get activeProfileAccessControl =>
+      activeProfileAccessControlNotifier.value;
 
   set appController(AppController appController) {
     _appController = appController;
     isInit = true;
+  }
+
+  void startGroupsUpdateTask() {
+    if (groupsUpdateTimer != null && groupsUpdateTimer!.isActive) {
+      return;
+    }
+    groupsUpdateTimer = Timer(const Duration(seconds: 60), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appController.updateGroupsDebounce();
+        startGroupsUpdateTask();
+      });
+    });
+  }
+
+  void stopGroupsUpdateTask() {
+    groupsUpdateTimer?.cancel();
+    groupsUpdateTimer = null;
   }
 
   Future<void> initApp(int version) async {
@@ -132,9 +160,7 @@ class GlobalState {
   Future<void> init() async {
     packageInfo = await PackageInfo.fromPlatform();
     config = await preferences.getConfig() ??
-        const Config(
-          themeProps: defaultThemeProps,
-        );
+        const Config(themeProps: defaultThemeProps);
     await globalState.migrateOldData(config);
     await AppLocalizations.load(
       utils.getLocaleForString(config.appSetting.locale) ??
@@ -144,85 +170,15 @@ class GlobalState {
 
   String get ua => config.patchClashConfig.globalUa ?? packageInfo.ua;
 
-  Future<void> startUpdateTasks([UpdateTasks? tasks]) async {
-    if (timer != null && timer!.isActive == true) return;
-    if (tasks != null) {
-      this.tasks = tasks;
-    }
-    await executorUpdateTask();
-    timer = Timer(const Duration(seconds: 3), () async {
-      startUpdateTasks();
-    });
-  }
-
-  Future<void> executorUpdateTask() async {
-    for (final task in tasks) {
-      await task();
-    }
-    timer = null;
-  }
-
-  void stopUpdateTasks() {
-    if (timer == null || timer?.isActive == false) return;
-    timer?.cancel();
-    timer = null;
-  }
-
-  // Background proxy-group refresh (latency/now). Paused while the app is in the
-  // background so it doesn't poll the core every 60s for a UI nobody is looking
-  // at; resumed (with an immediate refresh) when the app comes back to front.
-  void startGroupsUpdateTask() {
-    if (groupsUpdateTimer != null && groupsUpdateTimer!.isActive) return;
-    groupsUpdateTimer = Timer(const Duration(seconds: 60), () {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        appController.updateGroupsDebounce();
-        startGroupsUpdateTask();
-      });
-    });
-  }
-
-  void stopGroupsUpdateTask() {
-    groupsUpdateTimer?.cancel();
-    groupsUpdateTimer = null;
-  }
-
-  Future<bool> handleStart([UpdateTasks? tasks]) async {
-    startTime ??= DateTime.now();
-    await clashCore.startListener();
-    final started = await service?.startVpn();
-    // started == false → the Android remote bring-up failed (establish() returned
-    // null / Core.startTun failed); the service emitted STOP and the tunnel is down.
-    // null → desktop (service is null), which is success. Roll back the optimistic
-    // state so the UI doesn't show a live tunnel that isn't there (it never self-heals).
-    if (started == false) {
-      startTime = null;
-      await clashCore.stopListener();
-      stopUpdateTasks();
-      return false;
-    }
-    startUpdateTasks(tasks);
-    return true;
-  }
-
-  Future updateStartTime() async {
-    startTime = await clashLib?.getRunTime();
-  }
-
-  Future handleStop() async {
-    startTime = null;
-    await clashCore.stopListener();
-    await service?.stopVpn();
-    stopUpdateTasks();
-  }
-
   Future<bool?> showMessage({
     String? title,
     required InlineSpan message,
     String? confirmText,
     bool cancelable = true,
-  }) async => showCommonDialog<bool>(
-      child: Builder(
-        builder: (context) => CommonDialog(
+  }) async =>
+      showCommonDialog<bool>(
+        child: Builder(
+          builder: (context) => CommonDialog(
             title: title ?? appLocalizations.tip,
             actions: [
               if (cancelable)
@@ -237,7 +193,7 @@ class GlobalState {
                   Navigator.of(context).pop(true);
                 },
                 child: Text(confirmText ?? appLocalizations.confirm),
-              )
+              ),
             ],
             child: Container(
               width: 300,
@@ -248,28 +204,27 @@ class GlobalState {
                     style: Theme.of(context).textTheme.labelLarge,
                     children: [message],
                   ),
-                  style: const TextStyle(
-                    overflow: TextOverflow.visible,
-                  ),
+                  style: const TextStyle(overflow: TextOverflow.visible),
                 ),
               ),
             ),
           ),
-      ),
-    );
+        ),
+      );
 
   Future<T?> showCommonDialog<T>({
     required Widget child,
     bool dismissible = true,
-  }) async => showModal<T>(
-      context: navigatorKey.currentState!.context,
-      configuration: FadeScaleTransitionConfiguration(
-        barrierColor: Colors.black38,
-        barrierDismissible: dismissible,
-      ),
-      builder: (_) => child,
-      filter: commonFilter,
-    );
+  }) async =>
+      showModal<T>(
+        context: navigatorKey.currentState!.context,
+        configuration: FadeScaleTransitionConfiguration(
+          barrierColor: Colors.black38,
+          barrierDismissible: dismissible,
+        ),
+        builder: (_) => child,
+        filter: commonFilter,
+      );
 
   Future<T?> safeRun<T>(
     FutureOr<T> Function() futureFunction, {
@@ -286,9 +241,7 @@ class GlobalState {
       } else {
         showMessage(
           title: title ?? appLocalizations.tip,
-          message: TextSpan(
-            text: e.toString(),
-          ),
+          message: TextSpan(text: e.toString()),
         );
       }
       return null;
@@ -317,369 +270,236 @@ class GlobalState {
   Future<void> migrateOldData(Config config) async {
     final clashConfig = await preferences.getClashConfig();
     if (clashConfig != null) {
-      config = config.copyWith(
-        patchClashConfig: clashConfig,
-      );
+      config = config.copyWith(patchClashConfig: clashConfig);
       preferences.clearClashConfig();
       preferences.saveConfig(config);
     }
   }
 
-  CoreState getCoreState() {
+  CoreState getCoreState({
+    AccessControl? profileAccessControl,
+  }) {
     final currentProfile = config.currentProfile;
     return CoreState(
-      vpnProps: config.vpnProps,
+      vpnProps: config.vpnProps.copyWith(
+        accessControl: profileAccessControl ??
+            activeProfileAccessControl ??
+            config.vpnProps.accessControl,
+      ),
       onlyStatisticsProxy: false,
       currentProfileName: currentProfile?.label ?? currentProfile?.id ?? "",
       bypassDomain: config.networkProps.bypassDomain,
     );
   }
 
-  Future<SetupParams> getSetupParams({
-    required ClashConfig pathConfig,
-  }) async {
-    final clashConfig = await patchRawConfig(
-      patchConfig: pathConfig,
+  Future<void> syncRuntimeStartTime() => engineManager.syncStartTime();
+
+  Future<RawProfile?> loadCurrentRawProfile() async {
+    final profile = config.currentProfile;
+    if (profile == null) {
+      return null;
+    }
+    final profilePath = await appPath.getProfilePath(profile.id);
+    final rawConfig = await handleEvaluate(
+      await loadProfileConfigFromFile(profilePath),
     );
-    lastRuntimeConfig = clashConfig;
-    final params = SetupParams(
-      config: clashConfig,
+    return RawProfile.fromConfig(
+      profile: profile,
+      config: rawConfig,
+    );
+  }
+
+  CompiledProfilePatch compileProfilePatch({
+    required RawProfile? rawProfile,
+    required ClashConfig patchConfig,
+  }) =>
+      _profilePipeline.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: _buildProfilePatchContext(patchConfig),
+      );
+
+  SecuredProfilePatch enforceSecurityPolicy({
+    required CompiledProfilePatch compiledProfile,
+  }) =>
+      _profilePipeline.secureProfilePatch(
+        compiledProfile: compiledProfile,
+        context: _buildSecurityPolicyContext(),
+      );
+
+  ClashConfig securePatchConfig({
+    required ClashConfig patchConfig,
+  }) =>
+      _profilePipeline.securePatchConfig(
+        patchConfig: patchConfig,
+        context: _buildSecurityPolicyContext(),
+      );
+
+  UpdateParams secureRuntimeUpdate({
+    required UpdateParams updateParams,
+  }) =>
+      _profilePipeline.secureRuntimeUpdate(
+        updateParams: updateParams,
+        context: _buildSecurityPolicyContext(),
+      );
+
+  Future<RuntimePlan> buildRuntimePlan({
+    required RawProfile? rawProfile,
+    required SecuredProfilePatch securedProfile,
+    required ClashConfig runtimePatchConfig,
+  }) async {
+    final profilesPath = await appPath.profilesPath;
+    final profilePath = rawProfile == null
+        ? ''
+        : await appPath.getProfilePath(rawProfile.profile.id);
+    return _profilePipeline.buildRuntimePlan(
+      rawProfile: rawProfile,
+      context: _buildRuntimePlanContext(
+        profilesPath: profilesPath,
+        profilePath: profilePath,
+      ),
+      securedProfile: securedProfile,
+      runtimePatchConfig: runtimePatchConfig,
       selectedMap: config.currentProfile?.selectedMap ?? {},
       testUrl: config.appSetting.testUrl,
+      providerAssetPathResolver: (
+        profileId,
+        type,
+        url,
+      ) async =>
+          appPath.getProvidersFilePath(profileId, type, url),
     );
-    return params;
   }
 
-  Future<ClashConfig> syncNetworkSettingsFromProvider(ClashConfig patchConfig) async {
-    if (config.appSetting.overrideNetworkSettings) {
-      return patchConfig; // User wants to override, keep current settings
-    }
-
-    final profile = config.currentProfile;
-    if (profile == null) {
-      return patchConfig;
-    }
-
-    try {
-      final profileId = profile.id;
-      final configMap = await getProfileConfig(profileId);
-      final rawConfig = await handleEvaluate(configMap);
-
-      final providerIpv6 = rawConfig['ipv6'] as bool? ?? patchConfig.ipv6;
-      final providerAllowLan = rawConfig['allow-lan'] as bool? ?? patchConfig.allowLan;
-      final providerMixedPort = rawConfig['mixed-port'] as int? ?? patchConfig.mixedPort;
-      final providerFindProcessModeStr = rawConfig['find-process-mode'] as String?;
-      final providerFindProcessMode = providerFindProcessModeStr != null 
-          ? FindProcessMode.values.firstWhere(
-              (e) => e.name.toLowerCase() == providerFindProcessModeStr.toLowerCase(),
-              orElse: () => patchConfig.findProcessMode,
-            )
-          : patchConfig.findProcessMode;
-      
-      final providerTunStackStr = rawConfig['tun']?['stack'] as String?;
-      final providerTunStack = providerTunStackStr != null
-          ? TunStack.values.firstWhere(
-              (e) => e.name.toLowerCase() == providerTunStackStr.toLowerCase(),
-              orElse: () => patchConfig.tun.stack,
-            )
-          : patchConfig.tun.stack;
-
-      return patchConfig.copyWith(
-        ipv6: providerIpv6,
-        allowLan: providerAllowLan,
-        mixedPort: providerMixedPort,
-        findProcessMode: providerFindProcessMode,
-      ).copyWith.tun(stack: providerTunStack);
-    } catch (e) {
-      commonPrint.log("Error syncing network settings from provider: $e");
-      return patchConfig;
-    }
-  }
-
-  Future<Map<String, dynamic>> patchRawConfig({
+  UpdateParams buildRuntimeUpdateParams({
     required ClashConfig patchConfig,
-  }) async {
-    final profile = config.currentProfile;
-    if (profile == null) {
-      return {};
+  }) =>
+      UpdateParams(
+        tun: patchConfig.tun.getRealTun(config.networkProps.routeMode),
+        allowLan: patchConfig.allowLan,
+        findProcessMode: patchConfig.findProcessMode,
+        mode: patchConfig.mode,
+        logLevel: patchConfig.logLevel,
+        ipv6: patchConfig.ipv6,
+        tcpConcurrent: patchConfig.tcpConcurrent,
+        externalController: patchConfig.externalController,
+        unifiedDelay: patchConfig.unifiedDelay,
+        mixedPort: patchConfig.mixedPort,
+      );
+
+  void applyRuntimePlan(RuntimePlan runtimePlan) {
+    lastRuntimeConfig = runtimePlan.config;
+    activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
+    _applyCompiledProfileMetadata(runtimePlan.metadata);
+    _applyRuntimeConfigState(runtimePlan.config);
+  }
+
+  Future<InitParams> _buildInitParams() async => InitParams(
+        homeDir: await appPath.homeDirPath,
+        version: await system.version,
+      );
+
+  ProfilePatchContext _buildProfilePatchContext(ClashConfig patchConfig) =>
+      ProfilePatchContext(
+        patchConfig: patchConfig,
+        overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
+      );
+
+  SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
+        isAndroid: Platform.isAndroid,
+      );
+
+  RuntimePlanBuildContext _buildRuntimePlanContext({
+    required String profilesPath,
+    required String profilePath,
+  }) =>
+      RuntimePlanBuildContext(
+        isAndroid: Platform.isAndroid,
+        overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
+        overrideDns: config.overrideDns,
+        routeMode: config.networkProps.routeMode,
+        hasCurrentScript: config.scriptProps.currentScript != null,
+        profilesPath: profilesPath,
+        profilePath: profilePath,
+        readInstalledPackageNames: _readInstalledPackageNames,
+      );
+
+  Future<List<String>> _readInstalledPackageNames() async {
+    final packageNames =
+        await app?.getInstalledPackageNames() ?? const <String>[];
+    return {
+      for (final packageName in packageNames)
+        if (packageName.trim().isNotEmpty) packageName.trim(),
+    }.toList(growable: false);
+  }
+
+  void _applyCompiledProfileMetadata(CompiledProfileMetadata? metadata) {
+    if (metadata == null) {
+      groupDescriptions.value = const {};
+      effectiveExternalController.value = "";
+      effectiveSecret.value = "";
+      effectiveExternalUi.value = "";
+      effectiveTcpConcurrent.value = false;
+      effectiveUnifiedDelay.value = false;
+      effectiveLogLevel.value = LogLevel.info.name;
+      effectiveKeepAliveInterval.value = defaultKeepAliveInterval;
+      globalOverrideEnabled.value = false;
+      return;
     }
-    final profileId = profile.id;
-    final configMap = await getProfileConfig(profileId);
-    final rawConfig = await handleEvaluate(configMap);
-    
-    final realPatchConfig = patchConfig.copyWith(
-      tun: patchConfig.tun.getRealTun(config.networkProps.routeMode),
-    );
-    // Custom "description" field on proxy-groups — extracted here because
-    // mihomo's /proxies API doesn't forward arbitrary YAML keys.
-    final parsedGroupDescriptions = <String, String>{};
-    // Opt-in only: when the GLOBAL proxy-group (and only GLOBAL) carries
-    // `flclashx-override: true`, its `proxies` list is the curated set/order we
-    // show in global mode. Any other group's flag is ignored.
-    final parsedGlobalOrder = <String>[];
-    var parsedGlobalOverride = false;
-    final rawGroups = rawConfig["proxy-groups"];
-    if (rawGroups is List) {
-      for (final g in rawGroups) {
-        if (g is! Map) continue;
-        final name = g["name"];
-        if (name is! String) continue;
-        final desc = g["description"];
-        if (desc is String && desc.trim().isNotEmpty) {
-          parsedGroupDescriptions[name] = desc.trim();
-        }
-        if (name == GroupName.GLOBAL.name) {
-          final override = g["flclashx-override"];
-          parsedGlobalOverride = override == true ||
-              (override is String && override.trim().toLowerCase() == 'true');
-          if (parsedGlobalOverride) {
-            final proxies = g["proxies"];
-            if (proxies is List) {
-              for (final p in proxies) {
-                if (p is String && p.trim().isNotEmpty) {
-                  parsedGlobalOrder.add(p.trim());
-                }
-              }
-            }
-          }
-        }
-      }
+    groupDescriptions.value = metadata.groupDescriptions;
+    effectiveExternalController.value = metadata.externalController;
+    effectiveTcpConcurrent.value = metadata.tcpConcurrent;
+    effectiveUnifiedDelay.value = metadata.unifiedDelay;
+    effectiveLogLevel.value = metadata.logLevel;
+    effectiveKeepAliveInterval.value = metadata.keepAliveInterval;
+  }
+
+  void _applyRuntimeConfigState(Map<String, dynamic> runtimeConfig) {
+    if (runtimeConfig.isEmpty) {
+      effectiveSecret.value = "";
+      effectiveExternalUi.value = "";
+      globalOverrideEnabled.value = false;
+      return;
     }
-    groupDescriptions.value = parsedGroupDescriptions;
-    globalGroupOrder.value = parsedGlobalOrder;
-    globalOverrideEnabled.value = parsedGlobalOverride;
-    // external-controller: profile value always wins when present. The UI
-    // toggle only acts as a fallback because the enum hardcodes 127.0.0.1:9090
-    // and would otherwise silently override a subscription-provided endpoint
-    // (e.g. :9091). The overrideNetworkSettings gate is intentionally ignored
-    // here — users who set external-controller in their profile mean it.
-    final providerExternalController =
-        (rawConfig["external-controller"] as String?)?.trim() ?? "";
-    final effectiveExternalControllerValue = providerExternalController.isNotEmpty
-        ? providerExternalController
-        : realPatchConfig.externalController.value;
-    rawConfig["external-controller"] = effectiveExternalControllerValue;
-    effectiveExternalController.value = effectiveExternalControllerValue;
-    effectiveSecret.value = (rawConfig["secret"] as String?)?.trim() ?? "";
+
+    effectiveExternalController.value =
+        (runtimeConfig["external-controller"] as String?)?.trim() ??
+            effectiveExternalController.value;
+    effectiveSecret.value = (runtimeConfig["secret"] as String?)?.trim() ?? "";
     effectiveExternalUi.value =
-        (rawConfig["external-ui"] as String?)?.trim() ?? "";
-    if (rawConfig["external-ui"] == null || rawConfig["external-ui"] == "") {
-      rawConfig["external-ui"] = "";
-    }
-    rawConfig["interface-name"] = "";
-    if (rawConfig["external-ui-url"] == null || rawConfig["external-ui-url"] == "") {
-      rawConfig["external-ui-url"] = "";
-    }
-    // These follow the same overrideNetworkSettings gate as other fields:
-    //   override ON  → UI value wins (always written)
-    //   override OFF → profile value wins, UI is fallback only if missing
-    // Effective values are exposed so the UI reflects what's actually applied
-    // when override is OFF (otherwise widgets would still show stored UI prefs).
-    final profileTcpConcurrent = rawConfig["tcp-concurrent"] as bool?;
-    final profileUnifiedDelay = rawConfig["unified-delay"] as bool?;
-    final profileLogLevel = rawConfig["log-level"] as String?;
-    final profileKeepAlive = (rawConfig["keep-alive-interval"] as num?)?.toInt();
-    final isOverride = config.appSetting.overrideNetworkSettings;
-    final effTcpConcurrent = isOverride
-        ? realPatchConfig.tcpConcurrent
-        : (profileTcpConcurrent ?? realPatchConfig.tcpConcurrent);
-    final effUnifiedDelay = isOverride
-        ? realPatchConfig.unifiedDelay
-        : (profileUnifiedDelay ?? realPatchConfig.unifiedDelay);
-    final effLogLevel = isOverride
-        ? realPatchConfig.logLevel.name
-        : (profileLogLevel ?? realPatchConfig.logLevel.name);
-    final effKeepAlive = isOverride
-        ? realPatchConfig.keepAliveInterval
-        : (profileKeepAlive ?? realPatchConfig.keepAliveInterval);
-    rawConfig["tcp-concurrent"] = effTcpConcurrent;
-    rawConfig["unified-delay"] = effUnifiedDelay;
-    rawConfig["log-level"] = effLogLevel;
-    rawConfig["keep-alive-interval"] = effKeepAlive;
-    effectiveTcpConcurrent.value = effTcpConcurrent;
-    effectiveUnifiedDelay.value = effUnifiedDelay;
-    effectiveLogLevel.value = effLogLevel;
-    effectiveKeepAliveInterval.value = effKeepAlive;
-    rawConfig["port"] = 0;
-    rawConfig["socks-port"] = 0;
-    rawConfig["port"] = realPatchConfig.port;
-    rawConfig["socks-port"] = realPatchConfig.socksPort;
-    rawConfig["redir-port"] = realPatchConfig.redirPort;
-    rawConfig["tproxy-port"] = realPatchConfig.tproxyPort;
-    rawConfig["mode"] = realPatchConfig.mode.name;
-    
-    // Set network settings: use patchConfig if overriding, otherwise keep provider values
-    if (config.appSetting.overrideNetworkSettings) {
-      // User wants to override - use values from UI (always write)
-      rawConfig["find-process-mode"] = realPatchConfig.findProcessMode.name;
-      rawConfig["allow-lan"] = realPatchConfig.allowLan;
-      rawConfig["ipv6"] = realPatchConfig.ipv6;
-      rawConfig["mixed-port"] = realPatchConfig.mixedPort;
-    } else {
-      // Use provider values - only set if not already in rawConfig, use patchConfig values (which are synced from provider)
-      if (rawConfig["find-process-mode"] == null) {
-        rawConfig["find-process-mode"] = realPatchConfig.findProcessMode.name;
-      }
-      if (rawConfig["allow-lan"] == null) {
-        rawConfig["allow-lan"] = realPatchConfig.allowLan;
-      }
-      if (rawConfig["ipv6"] == null) {
-        rawConfig["ipv6"] = realPatchConfig.ipv6;
-      }
-      if (rawConfig["mixed-port"] == null) {
-        rawConfig["mixed-port"] = realPatchConfig.mixedPort;
-      }
-    }
+        (runtimeConfig["external-ui"] as String?)?.trim() ?? "";
 
-    // flclashx-androidsecure header: when set to "true" on Android, force
-    // mixed-port = 0 so the HTTP/SOCKS inbound is disabled and traffic can
-    // only leave through the VpnService/TUN. Applied as a final override
-    // regardless of overrideNetworkSettings or UI-configured port, because
-    // the header expresses an explicit policy from the subscription provider
-    // that should not be overridable from the app side. No-op on other
-    // platforms — desktop TUN gating is handled separately.
-    if (Platform.isAndroid) {
-      final secureHeader =
-          profile.providerHeaders['flclashx-androidsecure']?.trim().toLowerCase();
-      if (secureHeader == 'true') {
-        rawConfig["mixed-port"] = 0;
-      }
-    }
-    
-    if (rawConfig["tun"] == null) {
-      rawConfig["tun"] = {};
-    }
-    rawConfig["tun"]["enable"] = Platform.isAndroid ? true : realPatchConfig.tun.enable;
-    rawConfig["tun"]["device"] = realPatchConfig.tun.device;
-    rawConfig["tun"]["dns-hijack"] = realPatchConfig.tun.dnsHijack;
-    
-    // Set TUN stack
-    if (config.appSetting.overrideNetworkSettings) {
-      // User wants to override - use value from UI (always write)
-      rawConfig["tun"]["stack"] = realPatchConfig.tun.stack.name;
-    } else {
-      // Use provider value - only set if not already in rawConfig, use patchConfig value (which is synced from provider)
-      final currentStack = rawConfig["tun"]["stack"];
-      if (currentStack == null) {
-        rawConfig["tun"]["stack"] = realPatchConfig.tun.stack.name;
-      }
-    }
-    
-    rawConfig["tun"]["route-address"] = realPatchConfig.tun.routeAddress;
-    rawConfig["tun"]["auto-route"] = realPatchConfig.tun.autoRoute;
-    rawConfig["geodata-loader"] = realPatchConfig.geodataLoader.name;
-    if (rawConfig["sniffer"]?["sniff"] != null) {
-      for (final value in (rawConfig["sniffer"]?["sniff"] as Map).values) {
-        if (value["ports"] != null && value["ports"] is List) {
-          value["ports"] =
-              value["ports"]?.map((item) => item.toString()).toList() ?? [];
-        }
-      }
-    }
-    if (rawConfig["profile"] == null) {
-      rawConfig["profile"] = {};
-    }
-    if (rawConfig["proxy-providers"] != null) {
-      final proxyProviders = rawConfig["proxy-providers"] as Map;
-      for (final key in proxyProviders.keys) {
-        final proxyProvider = proxyProviders[key];
-        if (proxyProvider["type"] != "http") {
+    var parsedGlobalOverride = false;
+    final proxyGroups = runtimeConfig["proxy-groups"];
+    if (proxyGroups is List) {
+      for (final group in proxyGroups) {
+        if (group is! Map) {
           continue;
         }
-        if (proxyProvider["url"] != null) {
-          proxyProvider["path"] = await appPath.getProvidersFilePath(
-            profile.id,
-            "proxies",
-            proxyProvider["url"],
-          );
-        }
-      }
-    }
-
-    if (rawConfig["rule-providers"] != null) {
-      final ruleProviders = rawConfig["rule-providers"] as Map;
-      for (final key in ruleProviders.keys) {
-        final ruleProvider = ruleProviders[key];
-        if (ruleProvider["type"] != "http") {
+        final name = group["name"]?.toString().trim();
+        if (name != GroupName.GLOBAL.name) {
           continue;
         }
-        if (ruleProvider["url"] != null) {
-          ruleProvider["path"] = await appPath.getProvidersFilePath(
-            profile.id,
-            "rules",
-            ruleProvider["url"],
-          );
-        }
+        parsedGlobalOverride = group["flclashx-override"] == true;
+        break;
       }
     }
-
-    rawConfig["profile"]["store-selected"] = false;
-    
-    final mergedGeoXUrl = <String, dynamic>{};
-    final patchGeoX = realPatchConfig.geoXUrl.toJson();
-    final profileGeoX = rawConfig["geox-url"];
-    
-    mergedGeoXUrl['geoip'] = patchGeoX['geoip'];
-    mergedGeoXUrl['mmdb'] = patchGeoX['mmdb'];
-    mergedGeoXUrl['asn'] = patchGeoX['asn'];
-    mergedGeoXUrl['geosite'] = patchGeoX['geosite'];
-    
-    if (profileGeoX != null && profileGeoX is Map) {
-      if (profileGeoX['geoip'] != null) mergedGeoXUrl['geoip'] = profileGeoX['geoip'];
-      if (profileGeoX['mmdb'] != null) mergedGeoXUrl['mmdb'] = profileGeoX['mmdb'];
-      if (profileGeoX['asn'] != null) mergedGeoXUrl['asn'] = profileGeoX['asn'];
-      if (profileGeoX['geosite'] != null) mergedGeoXUrl['geosite'] = profileGeoX['geosite'];
-    }
-    
-    rawConfig["geox-url"] = mergedGeoXUrl;
-    rawConfig["global-ua"] = realPatchConfig.globalUa;
-    if (rawConfig["hosts"] == null) {
-      rawConfig["hosts"] = {};
-    }
-    for (final host in realPatchConfig.hosts.entries) {
-      rawConfig["hosts"][host.key] = host.value.splitByMultipleSeparators;
-    }
-    if (rawConfig["dns"] == null) {
-      rawConfig["dns"] = {};
-    }
-    final isEnableDns = rawConfig["dns"]["enable"] == true;
-    final overrideDns = globalState.config.overrideDns;
-    if (overrideDns || !isEnableDns) {
-      final dns = switch (!isEnableDns) {
-        true => realPatchConfig.dns.copyWith(
-            nameserver: [...realPatchConfig.dns.nameserver, "system://"]),
-        false => realPatchConfig.dns,
-      };
-      rawConfig["dns"] = dns.toJson();
-      rawConfig["dns"]["nameserver-policy"] = {};
-      for (final entry in dns.nameserverPolicy.entries) {
-        rawConfig["dns"]["nameserver-policy"][entry.key] =
-            entry.value.splitByMultipleSeparators;
-      }
-    }
-    var rules = [];
-    if (rawConfig["rules"] != null) {
-      rules = rawConfig["rules"];
-    }
-    rawConfig.remove("rules");
-
-    final overrideData = profile.overrideData;
-    if (overrideData.enable && config.scriptProps.currentScript == null) {
-      if (overrideData.rule.type == OverrideRuleType.override) {
-        rules = overrideData.runningRule;
-      } else {
-        rules = [...overrideData.runningRule, ...rules];
-      }
-    }
-    rawConfig["rule"] = rules;
-    return rawConfig;
+    globalOverrideEnabled.value = parsedGlobalOverride;
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {
-    final configMap = await clashCore.getConfig(profileId);
-    configMap["rules"] = configMap["rule"];
-    configMap.remove("rule");
-    return configMap;
+    final profilePath = await appPath.getProfilePath(profileId);
+    return loadProfileConfigFromFile(profilePath);
+  }
+
+  Future<String> validateProfileConfigText(String text) async {
+    try {
+      final normalizedConfig = _profileValidator.normalizeForValidation(text);
+      final yamlBuffer = StringBuffer();
+      yamlDump(yamlBuffer, normalizedConfig, 0);
+      return clashCore.validateConfig(yamlBuffer.toString());
+    } catch (error) {
+      return error.toString();
+    }
   }
 
   Future<Map<String, dynamic>> handleEvaluate(
@@ -712,7 +532,6 @@ class GlobalState {
 final globalState = GlobalState();
 
 class DetectionState {
-
   factory DetectionState() {
     _instance ??= DetectionState._internal();
     return _instance!;
@@ -737,9 +556,7 @@ class DetectionState {
     debouncer.call(
       FunctionTag.checkIp,
       _checkIp,
-      duration: const Duration(
-        milliseconds: 1200,
-      ),
+      duration: const Duration(milliseconds: 1200),
     );
   }
 
@@ -755,18 +572,6 @@ class DetectionState {
     return true;
   }
 
-  /// Drop any stale exit-IP immediately (e.g. the instant the tunnel starts) so the
-  /// UI shows the "determining" state right away instead of flashing the previous IP
-  /// during the ~1.2s debounce before the next [_checkIp] runs.
-  void markChecking() {
-    _clearSetTimeoutTimer();
-    state.value = state.value.copyWith(
-      isLoading: true,
-      isTesting: false,
-      ipInfo: null,
-    );
-  }
-
   Future<void> _checkIp() async {
     final appState = globalState.appState;
     final isInit = appState.isInit;
@@ -779,10 +584,7 @@ class DetectionState {
     }
     final justStarted = _preIsStart == false && isStart;
     _clearSetTimeoutTimer();
-    state.value = state.value.copyWith(
-      isLoading: true,
-      ipInfo: null,
-    );
+    state.value = state.value.copyWith(isLoading: true, ipInfo: null);
     _preIsStart = isStart;
     if (cancelToken != null) {
       cancelToken!.cancel();
@@ -792,34 +594,21 @@ class DetectionState {
       await Future.delayed(const Duration(milliseconds: 2000));
     }
     cancelToken = CancelToken();
-    state.value = state.value.copyWith(
-      isTesting: true,
-    );
+    state.value = state.value.copyWith(isTesting: true);
     final res = await request.checkIp(cancelToken: cancelToken);
     if (res.isError) {
-      state.value = state.value.copyWith(
-        isLoading: true,
-        ipInfo: null,
-      );
+      state.value = state.value.copyWith(isLoading: true, ipInfo: null);
       return;
     }
     final ipInfo = res.data;
-    state.value = state.value.copyWith(
-      isTesting: false,
-    );
+    state.value = state.value.copyWith(isTesting: false);
     if (ipInfo != null) {
-      state.value = state.value.copyWith(
-        isLoading: false,
-        ipInfo: ipInfo,
-      );
+      state.value = state.value.copyWith(isLoading: false, ipInfo: ipInfo);
       return;
     }
     _clearSetTimeoutTimer();
     _setTimeoutTimer = Timer(const Duration(milliseconds: 300), () {
-      state.value = state.value.copyWith(
-        isLoading: false,
-        ipInfo: null,
-      );
+      state.value = state.value.copyWith(isLoading: false, ipInfo: null);
     });
   }
 

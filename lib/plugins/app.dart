@@ -51,6 +51,20 @@ class App {
     });
   }
 
+  Future<List<String>> getInstalledPackageNames() async {
+    final packagesString =
+        await methodChannel.invokeMethod<String>("getPackages");
+    return Isolate.run<List<String>>(() {
+      final List<dynamic> packagesRaw =
+          packagesString != null ? json.decode(packagesString) : [];
+      return packagesRaw
+          .map((e) => (e as Map?)?['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList();
+    });
+  }
+
   Future<List<String>> getChinaPackageNames() async {
     final packageNamesString =
         await methodChannel.invokeMethod<String>("getChinaPackageNames");

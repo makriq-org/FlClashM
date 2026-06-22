@@ -841,5 +841,10 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "renew": MessageLookupByLibrary.simpleMessage("Renew"),
     "announcement": MessageLookupByLibrary.simpleMessage("Announcement"),
+    "later": MessageLookupByLibrary.simpleMessage("Later"),
+    "skipVersion": MessageLookupByLibrary.simpleMessage("Skip version"),
+    "includePrereleaseUpdates": MessageLookupByLibrary.simpleMessage("Pre-release updates"),
+    "includePrereleaseUpdatesDesc": MessageLookupByLibrary.simpleMessage("Show beta and pre-release app versions"),
+    "downloadUpdate": MessageLookupByLibrary.simpleMessage("Downloading update"),
   };
 }

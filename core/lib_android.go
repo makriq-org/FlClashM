@@ -11,8 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener/sing_tun"
@@ -249,11 +249,28 @@ func handleUpdateDns(value string) {
 		// Fallback to comma-split for backward compatibility
 		dnsServers = strings.Split(value, ",")
 	}
+	dnsServers = normalizeSystemDNSServers(dnsServers)
 	go func() {
 		log.Infoln("[DNS] updateDns %s", value)
 		dns.UpdateSystemDNS(dnsServers)
 		dns.FlushCacheWithDefaultResolver()
 	}()
+}
+
+func normalizeSystemDNSServers(dnsServers []string) []string {
+	normalized := make([]string, 0, len(dnsServers))
+	for _, server := range dnsServers {
+		server = strings.TrimSpace(server)
+		if server == "" {
+			continue
+		}
+		if _, _, err := net.SplitHostPort(server); err == nil {
+			normalized = append(normalized, server)
+			continue
+		}
+		normalized = append(normalized, net.JoinHostPort(server, "53"))
+	}
+	return normalized
 }
 
 func handleGetCurrentProfileName() string {

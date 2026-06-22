@@ -5,7 +5,7 @@ import 'package:flclashx/clash/core.dart';
 import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/plugins/tile.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/foundation.dart';
@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AppStateManager extends ConsumerStatefulWidget {
-
   const AppStateManager({
     super.key,
     required this.child,
@@ -84,7 +83,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       patchClashConfigProvider.select((state) => state.mode),
       (prev, next) {
         if (prev != next) {
-          tile?.updateMode(next.name);
+          unawaited(productServices.androidShell.syncTileMode(next));
         }
       },
       fireImmediately: true,
@@ -93,7 +92,9 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       globalModeEnabledProvider,
       (prev, next) {
         if (prev != next) {
-          tile?.updateGlobalModeEnabled(next);
+          unawaited(
+            productServices.androidShell.syncGlobalModeEnabled(enabled: next),
+          );
         }
       },
       fireImmediately: true,
@@ -139,7 +140,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         state == AppLifecycleState.inactive) {
       globalState.appController.savePreferences();
       if (Platform.isAndroid) {
-        globalState.stopUpdateTasks();
+        globalState.engineManager.pauseUpdateTasks();
         globalState.appController.stopRunTimeTimer();
         globalState.stopGroupsUpdateTask();
         // Tell the core the UI is backgrounded: it pauses the request forwarder
@@ -155,7 +156,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         globalState.startGroupsUpdateTask();
         globalState.appController.updateGroupsDebounce();
         if (globalState.isStart) {
-          globalState.startUpdateTasks();
+          await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();
         }
       }
@@ -171,15 +172,14 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
 
   @override
   Widget build(BuildContext context) => Listener(
-      onPointerHover: (_) {
-        render?.resume();
-      },
-      child: widget.child,
-    );
+        onPointerHover: (_) {
+          render?.resume();
+        },
+        child: widget.child,
+      );
 }
 
 class AppEnvManager extends StatelessWidget {
-
   const AppEnvManager({
     super.key,
     required this.child,

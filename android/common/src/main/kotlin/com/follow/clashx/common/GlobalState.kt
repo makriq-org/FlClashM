@@ -10,9 +10,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 object GlobalState {
-    private const val TAG = "FlClashX"
+    private const val TAG = "FlClashM"
 
-    const val NOTIFICATION_CHANNEL = "FlClashX"
+    const val NOTIFICATION_CHANNEL = "FlClashM"
     const val NOTIFICATION_ID = 1
 
     lateinit var application: Application

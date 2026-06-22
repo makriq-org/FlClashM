@@ -17,10 +17,12 @@ val mStoreFile: File = file("keystore.jks")
 val mStorePassword: String? = localProperties.getProperty("storePassword")
 val mKeyAlias: String? = localProperties.getProperty("keyAlias")
 val mKeyPassword: String? = localProperties.getProperty("keyPassword")
+val mStoreType: String? = detectKeystoreType(mStoreFile)
 val isRelease = mStoreFile.exists()
-        && mStorePassword != null
-        && mKeyAlias != null
-        && mKeyPassword != null
+        && !mStorePassword.isNullOrBlank()
+        && !mKeyAlias.isNullOrBlank()
+        && !mKeyPassword.isNullOrBlank()
+        && mStoreType != null
 
 android {
     namespace = "com.follow.clashx"
@@ -38,7 +40,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.follow.clashx"
+        applicationId = "com.makriq.flclash"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -52,6 +54,7 @@ android {
                 storePassword = mStorePassword
                 keyAlias = mKeyAlias
                 keyPassword = mKeyPassword
+                storeType = mStoreType
             }
         }
     }
@@ -65,6 +68,7 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
+            applicationIdSuffix = ".dev"
         }
 
         release {
@@ -72,10 +76,11 @@ android {
             isShrinkResources = true
             isDebuggable = false
 
-            signingConfig = if (isRelease) {
-                signingConfigs.getByName("release")
+            if (isRelease) {
+                signingConfig = signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                signingConfig = signingConfigs.getByName("debug")
+                applicationIdSuffix = ".dev"
             }
 
             proguardFiles(
@@ -101,4 +106,26 @@ dependencies {
         exclude(group = "com.google.guava", module = "guava")
     }
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+}
+
+fun detectKeystoreType(file: File): String? {
+    if (!file.exists()) return null
+    val header = ByteArray(4)
+    val bytesRead = file.inputStream().use { input ->
+        input.read(header)
+    }
+    if (bytesRead != header.size) return null
+
+    val jksMagic = byteArrayOf(
+        0xFE.toByte(),
+        0xED.toByte(),
+        0xFE.toByte(),
+        0xED.toByte(),
+    )
+
+    return if (header.contentEquals(jksMagic)) {
+        "JKS"
+    } else {
+        "PKCS12"
+    }
 }

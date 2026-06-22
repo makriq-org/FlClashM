@@ -57,7 +57,7 @@ class TempActivity : Activity() {
                 // Tile/widget may have optimistically flipped to ACTIVE before launching
                 // this consent flow; resync so a denied start reverts the visible state.
                 runCatching {
-                    com.follow.clashx.services.FlClashXTileService.requestUpdate(applicationContext)
+                    com.follow.clashx.services.FlClashMTileService.requestUpdate(applicationContext)
                 }
             }
             finishAndRemoveTask()
