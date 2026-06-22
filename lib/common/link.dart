@@ -18,41 +18,22 @@ class LinkManager {
   static LinkManager? _instance;
   late AppLinks _appLinks;
   StreamSubscription? subscription;
-  Uri? _lastHandledUri;
-  DateTime? _lastHandledAt;
 
   Future<void> initAppLinksListen(installConfigCallBack) async {
     commonPrint.log("initAppLinksListen");
     destroy();
     subscription = _appLinks.uriLinkStream.listen(
-      (uri) => _handleInstallConfigUri(uri, installConfigCallBack),
+      (uri) {
+        commonPrint.log('onAppLink: $uri');
+        if (uri.host == 'install-config') {
+          final parameters = uri.queryParameters;
+          final url = parameters['url'];
+          if (url != null) {
+            installConfigCallBack(url);
+          }
+        }
+      },
     );
-    final initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) {
-      _handleInstallConfigUri(initialUri, installConfigCallBack);
-    }
-  }
-
-  void _handleInstallConfigUri(
-    Uri uri,
-    InstallConfigCallBack installConfigCallBack,
-  ) {
-    final now = DateTime.now();
-    if (_lastHandledUri == uri &&
-        _lastHandledAt != null &&
-        now.difference(_lastHandledAt!) < const Duration(seconds: 1)) {
-      return;
-    }
-    _lastHandledUri = uri;
-    _lastHandledAt = now;
-    commonPrint.log('onAppLink: $uri');
-    if (uri.host != 'install-config') {
-      return;
-    }
-    final url = uri.queryParameters['url'];
-    if (url != null) {
-      installConfigCallBack(url);
-    }
   }
 
   void destroy() {

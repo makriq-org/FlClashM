@@ -18,6 +18,7 @@ class AccessView extends ConsumerStatefulWidget {
 }
 
 class _AccessViewState extends ConsumerState<AccessView> {
+  static const int _profileSummaryLimit = 8;
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final _loadCompleter = Completer<List<Package>>();
@@ -28,15 +29,17 @@ class _AccessViewState extends ConsumerState<AccessView> {
   void initState() {
     super.initState();
     _syncResolvedAccessControl();
-    globalState.activeProfileAccessControlNotifier
-        .addListener(_handleProfileAccessControlChanged);
+    globalState.activeProfileAccessControlNotifier.addListener(
+      _handleProfileAccessControlChanged,
+    );
     _loadCompleter.complete(_loadPackages());
   }
 
   @override
   void dispose() {
-    globalState.activeProfileAccessControlNotifier
-        .removeListener(_handleProfileAccessControlChanged);
+    globalState.activeProfileAccessControlNotifier.removeListener(
+      _handleProfileAccessControlChanged,
+    );
     _persist();
     _searchController.dispose();
     _scrollController.dispose();
@@ -113,19 +116,21 @@ class _AccessViewState extends ConsumerState<AccessView> {
     final desc = _editorState.mode == AccessControlMode.acceptSelected
         ? appLocale.whitelistModeDesc
         : appLocale.blacklistModeDesc;
-    unawaited(showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(desc),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    unawaited(
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(desc),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   @override
@@ -135,6 +140,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
       packages: packages,
       editorState: _editorState,
     );
+    final selectionSummary = productServices.accessControl
+        .buildSelectionSummary(editorState: _editorState, packages: packages);
     final appLocale = AppLocalizations.of(context);
     final isWhitelist = _editorState.isWhitelist;
 
@@ -174,8 +181,10 @@ class _AccessViewState extends ConsumerState<AccessView> {
               child: Column(
                 children: [
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: GestureDetector(
                       onLongPress: _showModeHelp,
                       child: SegmentedButton<AccessControlMode>(
@@ -183,14 +192,18 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           ButtonSegment(
                             value: AccessControlMode.acceptSelected,
                             label: Text(appLocale.includeInVpn),
-                            icon: const Icon(Icons.check_circle_outline,
-                                size: 18),
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                            ),
                           ),
                           ButtonSegment(
                             value: AccessControlMode.rejectSelected,
                             label: Text(appLocale.excludeFromVpn),
-                            icon: const Icon(Icons.remove_circle_outline,
-                                size: 18),
+                            icon: const Icon(
+                              Icons.remove_circle_outline,
+                              size: 18,
+                            ),
                           ),
                         ],
                         selected: {_editorState.mode},
@@ -209,7 +222,9 @@ class _AccessViewState extends ConsumerState<AccessView> {
                         prefixIcon: const Icon(Icons.search, size: 20),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -219,11 +234,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
-                                    _editorState =
-                                        productServices.accessControl.setQuery(
-                                      _editorState,
-                                      '',
-                                    );
+                                    _editorState = productServices.accessControl
+                                        .setQuery(_editorState, '');
                                   });
                                 },
                               )
@@ -237,9 +249,21 @@ class _AccessViewState extends ConsumerState<AccessView> {
                       }),
                     ),
                   ),
+                  if (_profileManaged)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: _ProfileManagedSummary(
+                        modeLabel: isWhitelist
+                            ? appLocale.includeInVpn
+                            : appLocale.excludeFromVpn,
+                        selectionSummary: selectionSummary,
+                      ),
+                    ),
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Row(
                       children: [
                         IconButton(
@@ -282,7 +306,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                       builder: (_, snap) {
                         if (snap.connectionState != ConnectionState.done) {
                           return const Center(
-                              child: CircularProgressIndicator());
+                            child: CircularProgressIndicator(),
+                          );
                         }
                         if (filtered.isEmpty) {
                           return Center(
@@ -317,6 +342,89 @@ class _AccessViewState extends ConsumerState<AccessView> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileManagedSummary extends StatelessWidget {
+  const _ProfileManagedSummary({
+    required this.modeLabel,
+    required this.selectionSummary,
+  });
+
+  final String modeLabel;
+  final AccessControlSelectionSummary selectionSummary;
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocale = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final visibleResolved = selectionSummary.resolvedPackages.take(
+      _AccessViewState._profileSummaryLimit,
+    );
+    final visibleUnresolved = selectionSummary.unresolvedPackageNames.take(
+      _AccessViewState._profileSummaryLimit - visibleResolved.length,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lock_outline, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${appLocale.profile}: $modeLabel',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            appLocale.selectedCountTitle(selectionSummary.selectedCount),
+            style: theme.textTheme.bodySmall,
+          ),
+          if (selectionSummary.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(appLocale.noData, style: theme.textTheme.bodySmall),
+          ] else ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final package in visibleResolved)
+                  Chip(
+                    label: Text(package.label),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                for (final packageName in visibleUnresolved)
+                  Chip(
+                    label: Text(packageName),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+              ],
+            ),
+            if (selectionSummary.selectedCount >
+                _AccessViewState._profileSummaryLimit) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${appLocale.selected}: ${selectionSummary.selectedCount}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
         ],
       ),
     );

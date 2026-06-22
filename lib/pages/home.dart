@@ -5,8 +5,8 @@ import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flclashm/providers/providers.dart';
 import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
 import 'package:flclashm/views/dashboard/widgets/hero_nav_bar.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -33,7 +33,9 @@ class HomePage extends StatelessWidget {
               navigationItems: navigationItems,
               currentIndex: currentIndex,
             );
-            final newDashboard = ref.watch(effectiveNewDashboardProvider);
+            // Mobile bottom bar follows the dashboard style: the hero nav bar for
+            // the new look, the classic Material NavigationBar for the old one.
+            final newDashboard = ref.watch(newDashboardEnabledProvider);
             final bottomNavigationBar = viewMode == ViewMode.mobile
                 ? (newDashboard ? const HeroNavBar() : navigationBar)
                 : null;

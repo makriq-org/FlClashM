@@ -67,7 +67,8 @@ void main() {
       ]);
     });
 
-    test('skips VPN start when runtime is already attached', () async {
+    test('still starts VPN when runtime probe reports an attached runtime',
+        () async {
       lifecycle.runtimeStartTime = DateTime(2026, 1, 2, 3, 4, 5);
       final adapter = buildAdapter();
 
@@ -75,7 +76,7 @@ void main() {
 
       expect(started, isTrue);
       expect(core.startListenerCalls, 1);
-      expect(platform.lastStartAccessControl, isNull);
+      expect(platform.lastStartAccessControl, isNotNull);
       expect(platform.stopVpnCalls, 0);
       expect(core.stopListenerCalls, 0);
     });

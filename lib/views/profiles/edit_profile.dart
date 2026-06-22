@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flclashm/clash/clash.dart';
 import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
@@ -77,12 +78,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           );
         }
       }
-      appController.setProfileAndAutoApply(
-        await profile.saveFile(
-          fileData!,
-          validateConfig: globalState.validateProfileConfigText,
-        ),
-      );
+      appController.setProfileAndAutoApply(await profile.saveFile(fileData!));
     } else if (!hasUpdate) {
       appController.setProfileAndAutoApply(profile);
     } else {
@@ -125,7 +121,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   Future<void> _handleSaveEdit(BuildContext context, String data) async {
     final message = await globalState.safeRun<String>(
       () async {
-        final message = await globalState.validateProfileConfigText(data);
+        final message = await clashCore.validateConfig(data);
         return message;
       },
       silence: false,

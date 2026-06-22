@@ -28,57 +28,41 @@ void main() {
       });
     });
 
-    test('forces self package bypass when access control is disabled', () {
-      const policy = AndroidRuntimeAccessPolicy(
-        selfPackageNames: ['com.makriq.flclash.dev'],
-      );
-
+    test('drops client-side access control when it is disabled', () {
       final merged = policy.mergeVpnOptions(
-        '{"dns-hijack":["any:53"]}',
+        '{"dns-hijack":["any:53"],"accessControl":{"mode":"rejectSelected","rejectList":["com.example.legacy"]}}',
         accessControl: const AccessControl(),
       );
       final decoded = json.decode(merged) as Map<String, dynamic>;
 
-      expect(decoded['accessControl'], {
-        'mode': 'rejectSelected',
-        'acceptList': <String>[],
-        'rejectList': ['com.makriq.flclash.dev'],
-      });
+      expect(decoded.containsKey('accessControl'), isFalse);
     });
 
-    test('keeps self package out of include mode', () {
-      const policy = AndroidRuntimeAccessPolicy(
-        selfPackageNames: ['com.makriq.flclash.dev'],
-      );
-
+    test('keeps include mode package list untouched', () {
       final merged = policy.mergeVpnOptions(
         '{"dns-hijack":["any:53"]}',
         accessControl: const AccessControl(
           enable: true,
           mode: AccessControlMode.acceptSelected,
-          acceptList: ['com.example.app', 'com.makriq.flclash.dev'],
+          acceptList: ['com.example.app', 'com.makriq.flclash'],
         ),
       );
       final decoded = json.decode(merged) as Map<String, dynamic>;
 
       expect(decoded['accessControl'], {
         'mode': 'acceptSelected',
-        'acceptList': ['com.example.app'],
+        'acceptList': ['com.example.app', 'com.makriq.flclash'],
         'rejectList': <String>[],
       });
     });
 
-    test('adds self package to reject mode', () {
-      const policy = AndroidRuntimeAccessPolicy(
-        selfPackageNames: ['com.makriq.flclash.dev'],
-      );
-
+    test('keeps reject mode package list untouched', () {
       final merged = policy.mergeVpnOptions(
         '{"dns-hijack":["any:53"]}',
         accessControl: const AccessControl(
           enable: true,
           mode: AccessControlMode.rejectSelected,
-          rejectList: ['com.example.blocked'],
+          rejectList: ['com.example.blocked', 'com.makriq.flclash'],
         ),
       );
       final decoded = json.decode(merged) as Map<String, dynamic>;
@@ -86,28 +70,30 @@ void main() {
       expect(decoded['accessControl'], {
         'mode': 'rejectSelected',
         'acceptList': <String>[],
-        'rejectList': ['com.example.blocked', 'com.makriq.flclash.dev'],
+        'rejectList': ['com.example.blocked', 'com.makriq.flclash'],
       });
     });
 
-    test('aborts and requests restart after successful authorization',
-        () async {
-      var restarted = false;
-      final resolvedValues = <bool>[];
+    test(
+      'aborts and requests restart after successful authorization',
+      () async {
+        var restarted = false;
+        final resolvedValues = <bool>[];
 
-      final result = await policy.resolveTunAccess(
-        requestedTunEnable: true,
-        realTunEnable: false,
-        onAuthorizeRestart: () async {
-          restarted = true;
-        },
-        onResolvedTunEnable: resolvedValues.add,
-        authorizeCore: () async => AuthorizeCode.success,
-      );
+        final result = await policy.resolveTunAccess(
+          requestedTunEnable: true,
+          realTunEnable: false,
+          onAuthorizeRestart: () async {
+            restarted = true;
+          },
+          onResolvedTunEnable: resolvedValues.add,
+          authorizeCore: () async => AuthorizeCode.success,
+        );
 
-      expect(result.shouldProceed, isFalse);
-      expect(restarted, isTrue);
-      expect(resolvedValues, isEmpty);
-    });
+        expect(result.shouldProceed, isFalse);
+        expect(restarted, isTrue);
+        expect(resolvedValues, isEmpty);
+      },
+    );
   });
 }

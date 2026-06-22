@@ -157,21 +157,23 @@ class AppController {
       if (applyingProfile != null) {
         await applyingProfile;
       }
-      final isConfigured = await _setupClashConfig(
-        refreshProfile: false,
-        reuseIfCurrent: true,
+      final isConfigured = await _runTimedStep(
+        'runtime.setupConfig',
+        () => _setupClashConfig(refreshProfile: false, reuseIfCurrent: true),
       );
       if (!isConfigured) {
         await StatusBarManager.updateIcon(isConnected: false);
         return;
       }
-      await syncAndroidForegroundNotification();
-      final started = await globalState.engineManager.start(
-        updateTasks: [updateTraffic],
-        notificationTitle:
-            productServices.androidShell.buildForegroundNotificationTitle(
-          profile: globalState.config.currentProfile,
-          groups: _ref.read(groupsProvider),
+      final started = await _runTimedStep(
+        'runtime.start',
+        () => globalState.engineManager.start(
+          updateTasks: [updateTraffic],
+          notificationTitle:
+              productServices.androidShell.buildForegroundNotificationTitle(
+            profile: globalState.config.currentProfile,
+            groups: _ref.read(groupsProvider),
+          ),
         ),
       );
       if (!started) {
@@ -339,8 +341,10 @@ class AppController {
     _ref.read(localIpProvider.notifier).value = await utils.getLocalIpAddress();
   }
 
-  void _applyProductCustomization(Profile profile,
-      {required bool isNewProfile}) {
+  void _applyProductCustomization(
+    Profile profile, {
+    required bool isNewProfile,
+  }) {
     if (profile.providerHeaders.isEmpty) {
       return;
     }
@@ -408,10 +412,9 @@ class AppController {
 
       // Check subscription expiration and show notification if needed
       unawaited(
-        SubscriptionNotificationService.checkAndNotify(mergedProfile)
-            .catchError((
-          e,
-        ) {
+        SubscriptionNotificationService.checkAndNotify(
+          mergedProfile,
+        ).catchError((e) {
           commonPrint.log("Error checking subscription: $e");
         }),
       );
@@ -574,13 +577,9 @@ class AppController {
     }
 
     final updated = await globalState.engineManager.updateConfig(
-      globalState.buildRuntimeUpdateParams(
-        patchConfig: securedPatchConfig,
-      ),
+      globalState.buildRuntimeUpdateParams(patchConfig: securedPatchConfig),
       resolveTunAccess: _resolveTunAccess,
-      coldStartPatchConfig: _buildColdStartPatchConfig(
-        securedPatchConfig,
-      ),
+      coldStartPatchConfig: _buildColdStartPatchConfig(securedPatchConfig),
     );
     if (!updated) {
       return;
@@ -703,9 +702,7 @@ class AppController {
         patchConfig: patchConfig,
         refreshProfile: refreshProfile,
       ),
-      coldStartPatchConfig: _buildColdStartPatchConfig(
-        patchConfig,
-      ),
+      coldStartPatchConfig: _buildColdStartPatchConfig(patchConfig),
     );
     if (appliedRuntimePlan == null) {
       return false;
@@ -734,14 +731,22 @@ class AppController {
   Future _applyProfile() async {
     clashCore.requestGc();
     await _primeProfileGroupPreview();
-    final isConfigured = await setupClashConfig();
+    final isConfigured = await _runTimedStep(
+      'runtime.apply.setup',
+      setupClashConfig,
+    );
     if (!isConfigured) {
       return;
     }
-    await updateGroups();
+    await _runTimedStep(
+      'runtime.apply.refresh',
+      () => Future.wait<void>([updateGroups(), updateProviders()]),
+    );
     _refreshProxyHealthInBackground();
-    await updateProviders();
-    await syncAndroidForegroundNotification();
+    await _runTimedStep(
+      'runtime.apply.notification',
+      syncAndroidForegroundNotification,
+    );
   }
 
   void _refreshProxyHealthInBackground() {
@@ -767,6 +772,15 @@ class AppController {
           _ref.read(versionProvider) + 1;
     } catch (e) {
       commonPrint.log("profile group preview failed: $e");
+    }
+  }
+
+  Future<T> _runTimedStep<T>(String label, Future<T> Function() step) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      return await step();
+    } finally {
+      commonPrint.log('$label finished in ${stopwatch.elapsedMilliseconds}ms');
     }
   }
 
@@ -1044,10 +1058,7 @@ class AppController {
       }
 
       // Delete cache and temporary files
-      final filesToDelete = <String>[
-        'cache.db',
-        'libCachedImageData.json',
-      ];
+      final filesToDelete = <String>['cache.db', 'libCachedImageData.json'];
       final lockFilePath = await appPath.lockFilePath;
 
       for (final fileName in filesToDelete) {
@@ -1093,9 +1104,7 @@ class AppController {
       skippedTagName: appSetting.skippedAppUpdateTagName,
       onSkipRelease: (tagName) async {
         _ref.read(appSettingProvider.notifier).updateState(
-              (state) => state.copyWith(
-                skippedAppUpdateTagName: tagName,
-              ),
+              (state) => state.copyWith(skippedAppUpdateTagName: tagName),
             );
       },
     );
@@ -1312,10 +1321,9 @@ class AppController {
     if (commonScaffoldState?.mounted != true) return;
     final profile = await commonScaffoldState?.loadingRun<Profile?>(() async {
       await Future.delayed(const Duration(milliseconds: 300));
-      return Profile.normal(label: platformFile?.name).saveFile(
-        bytes,
-        validateConfig: globalState.validateProfileConfigText,
-      );
+      return Profile.normal(
+        label: platformFile?.name,
+      ).saveFile(bytes, validateConfig: globalState.validateProfileConfigText);
     }, title: "${appLocalizations.add}${appLocalizations.profile}");
     if (profile != null) {
       await addProfile(profile);

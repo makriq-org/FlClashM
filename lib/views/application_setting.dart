@@ -156,13 +156,15 @@ class CloseConnectionsItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.autoCloseConnectionsDesc),
         delegate: SwitchDelegate(
           value: closeConnections,
-          onChanged: isEnabled ? (value) async {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    closeConnections: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (value) async {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          closeConnections: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -399,13 +401,15 @@ class OpenLogsItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.logcatDesc),
         delegate: SwitchDelegate(
           value: openLogs,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    openLogs: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          openLogs: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -446,32 +450,6 @@ class AutoCheckUpdateItem extends ConsumerWidget {
   }
 }
 
-class IncludePrereleaseUpdatesItem extends ConsumerWidget {
-  const IncludePrereleaseUpdatesItem({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final includePrereleaseUpdates = ref.watch(
-      appSettingProvider.select((state) => state.includePrereleaseUpdates),
-    );
-    return ListItem.switchItem(
-      title: Text(appLocalizations.includePrereleaseUpdates),
-      subtitle: Text(appLocalizations.includePrereleaseUpdatesDesc),
-      delegate: SwitchDelegate(
-        value: includePrereleaseUpdates,
-        onChanged: (bool value) {
-          ref.read(appSettingProvider.notifier).updateState(
-                (state) => state.copyWith(
-                  includePrereleaseUpdates: value,
-                  skippedAppUpdateTagName: "",
-                ),
-              );
-        },
-      ),
-    );
-  }
-}
-
 class ApplicationSettingView extends StatelessWidget {
   const ApplicationSettingView({super.key});
 
@@ -497,7 +475,6 @@ class ApplicationSettingView extends StatelessWidget {
       OpenLogsItem(),
       CloseConnectionsItem(),
       AutoCheckUpdateItem(),
-      IncludePrereleaseUpdatesItem(),
       if (system.isDesktop) ...[
         Padding(
           padding: const EdgeInsets.only(top: 16),

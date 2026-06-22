@@ -11,10 +11,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
-  _FakeRuntimeAccessPlatform({
-    this.packages = const [],
-    this.icon,
-  });
+  _FakeRuntimeAccessPlatform({this.packages = const [], this.icon});
 
   final List<Package> packages;
   final ImageProvider? icon;
@@ -136,11 +133,47 @@ void main() {
         editorState: editorState,
       );
 
-      expect(
-        filtered.map((item) => item.packageName).toList(),
-        ['com.example.selected', 'com.example.other'],
-      );
+      expect(filtered.map((item) => item.packageName).toList(), [
+        'com.example.selected',
+        'com.example.other',
+      ]);
     });
+
+    test(
+      'builds explicit selection summary for profile-managed access control',
+      () {
+        const service = AccessControlService();
+        final editorState = service.createEditorState(
+          const AccessControl(
+            enable: true,
+            mode: AccessControlMode.acceptSelected,
+            acceptList: ['org.telegram.messenger', 'com.example.missing'],
+          ),
+        );
+
+        final summary = service.buildSelectionSummary(
+          editorState: editorState,
+          packages: const [
+            Package(
+              packageName: 'org.telegram.messenger',
+              label: 'Telegram',
+              system: false,
+              internet: true,
+              lastUpdateTime: 1,
+            ),
+          ],
+        );
+
+        expect(summary.selectedCount, 2);
+        expect(
+          summary.resolvedPackages
+              .map((package) => package.packageName)
+              .toList(),
+          ['org.telegram.messenger'],
+        );
+        expect(summary.unresolvedPackageNames, ['com.example.missing']);
+      },
+    );
 
     test('loads packages once and then serves cached values', () async {
       const expectedPackages = [
@@ -179,8 +212,9 @@ void main() {
       final platform = _FakeRuntimeAccessPlatform(icon: icon);
       final service = AccessControlService(platform: platform);
 
-      final resolvedIcon =
-          await service.readPackageIcon('com.example.with.icon');
+      final resolvedIcon = await service.readPackageIcon(
+        'com.example.with.icon',
+      );
 
       expect(resolvedIcon, same(icon));
       expect(platform.lastIconPackageName, 'com.example.with.icon');
@@ -252,31 +286,33 @@ void main() {
       },
     );
 
-    test('delegates runtime access orchestration to the platform bridge',
-        () async {
-      final platform = _FakeRuntimeAccessPlatform();
-      final service = AccessControlService(platform: platform);
-      final resolvedValues = <bool>[];
-      const accessControl = AccessControl(
-        enable: true,
-        rejectList: ['com.example.blocked'],
-      );
+    test(
+      'delegates runtime access orchestration to the platform bridge',
+      () async {
+        final platform = _FakeRuntimeAccessPlatform();
+        final service = AccessControlService(platform: platform);
+        final resolvedValues = <bool>[];
+        const accessControl = AccessControl(
+          enable: true,
+          rejectList: ['com.example.blocked'],
+        );
 
-      final started = await service.startVpn(accessControl: accessControl);
-      final resolved = await service.resolveRuntimeAccess(
-        requestedTunEnable: true,
-        realTunEnable: false,
-        onAuthorizeRestart: () async {},
-        onResolvedTunEnable: resolvedValues.add,
-      );
-      await service.stopVpn();
+        final started = await service.startVpn(accessControl: accessControl);
+        final resolved = await service.resolveRuntimeAccess(
+          requestedTunEnable: true,
+          realTunEnable: false,
+          onAuthorizeRestart: () async {},
+          onResolvedTunEnable: resolvedValues.add,
+        );
+        await service.stopVpn();
 
-      expect(started, isTrue);
-      expect(platform.lastStartAccessControl, accessControl);
-      expect(platform.resolveCalls, 1);
-      expect(resolved.enableTun, isTrue);
-      expect(resolvedValues, [true]);
-      expect(platform.stopCalls, 1);
-    });
+        expect(started, isTrue);
+        expect(platform.lastStartAccessControl, accessControl);
+        expect(platform.resolveCalls, 1);
+        expect(resolved.enableTun, isTrue);
+        expect(resolvedValues, [true]);
+        expect(platform.stopCalls, 1);
+      },
+    );
   });
 }

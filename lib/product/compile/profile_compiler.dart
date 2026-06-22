@@ -84,10 +84,7 @@ class ProfileCompiler {
       );
     }
 
-    return CompiledProfilePatch(
-      patchConfig: patchConfig,
-      metadata: metadata,
-    );
+    return CompiledProfilePatch(patchConfig: patchConfig, metadata: metadata);
   }
 
   Future<RuntimePlan> buildRuntimePlan({
@@ -100,10 +97,7 @@ class ProfileCompiler {
     required ProviderAssetPathResolver providerAssetPathResolver,
   }) async {
     if (rawProfile == null) {
-      return RuntimePlan.empty(
-        selectedMap: selectedMap,
-        testUrl: testUrl,
-      );
+      return RuntimePlan.empty(selectedMap: selectedMap, testUrl: testUrl);
     }
 
     var rawConfig = _cloneConfig(rawProfile.config);
@@ -122,10 +116,7 @@ class ProfileCompiler {
             rawProfile: rawProfile,
             context: context,
           )
-        : ResolvedProfileSplitTunneling(
-            config: rawConfig,
-            accessControl: null,
-          );
+        : ResolvedProfileSplitTunneling(config: rawConfig, accessControl: null);
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
@@ -190,15 +181,20 @@ class ProfileCompiler {
       );
     }
 
+    final restoredRawConfig = await restoreAndroidProfileSplitTunnelingFields(
+      rawConfig,
+      isAndroid: context.isAndroid,
+      profilePath: context.profilePath,
+    );
     final installedPackageNames =
         requiresInstalledPackageInventoryForProfileSplitTunneling(
-      rawConfig,
+      restoredRawConfig,
       isAndroid: context.isAndroid,
     )
             ? await context.readInstalledPackageNames()
             : const <String>[];
     return resolveAndroidProfileSplitTunneling(
-      rawConfig: rawConfig,
+      rawConfig: restoredRawConfig,
       isAndroid: context.isAndroid,
       profilesPath: context.profilesPath,
       profileId: rawProfile.profile.id,

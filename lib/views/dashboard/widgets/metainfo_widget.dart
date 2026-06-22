@@ -93,10 +93,7 @@ class MetainfoWidget extends ConsumerWidget {
 
     final isUnlimitedTraffic = subscriptionInfo.total == 0;
     final isPerpetual = subscriptionInfo.expire == 0;
-    final supportUrl = ref.watch(
-      currentProductDisplayHintsProvider
-          .select((state) => state.supportUrlOrNull),
-    );
+    final supportUrl = currentProfile.providerHeaders['support-url'];
 
     var timeLeftValue = '';
     var timeLeftUnit = '';

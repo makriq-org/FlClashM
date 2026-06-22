@@ -1,5 +1,6 @@
 import 'package:flclashm/clash/clash.dart';
 import 'package:flclashm/common/common.dart';
+import 'package:flclashm/common/file_logger.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flclashm/providers/app.dart';
@@ -29,7 +30,6 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   void initState() {
     super.initState();
     clashMessage.addListener(this);
-    globalState.appController.markRuntimeConfigListenerReady();
     ref.listenManual(needSetupProvider, (prev, next) {
       if (prev != next) {
         globalState.appController.handleChangeProfile();
@@ -42,9 +42,6 @@ class _ClashContainerState extends ConsumerState<ClashManager>
     });
     ref.listenManual(updateParamsProvider, (prev, next) {
       if (prev != next) {
-        if (globalState.appController.consumeSuppressedRuntimeConfigUpdate()) {
-          return;
-        }
         globalState.appController.updateClashConfigDebounce();
       }
     });
@@ -64,7 +61,6 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   @override
   Future<void> dispose() async {
     clashMessage.removeListener(this);
-    globalState.appController.markRuntimeConfigListenerNotReady();
     super.dispose();
   }
 

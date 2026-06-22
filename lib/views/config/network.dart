@@ -247,6 +247,8 @@ class TunStackItem extends ConsumerWidget {
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
+    commonPrint
+        .log("TunStackItem.build: stack=${stack.name}, isEnabled=$isEnabled");
 
     return AbsorbPointer(
       absorbing: !isEnabled,

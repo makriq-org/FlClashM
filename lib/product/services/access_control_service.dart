@@ -63,6 +63,26 @@ class AccessControlEditorState {
       );
 }
 
+@immutable
+class AccessControlSelectionSummary {
+  const AccessControlSelectionSummary({
+    required this.selectedCount,
+    required this.resolvedPackages,
+    required this.unresolvedPackageNames,
+  });
+
+  const AccessControlSelectionSummary.empty()
+      : selectedCount = 0,
+        resolvedPackages = const [],
+        unresolvedPackageNames = const [];
+
+  final int selectedCount;
+  final List<Package> resolvedPackages;
+  final List<String> unresolvedPackageNames;
+
+  bool get isEmpty => selectedCount == 0;
+}
+
 class AccessControlService {
   const AccessControlService({
     this.platform = const AndroidRuntimeAccessPolicy(),
@@ -97,10 +117,7 @@ class AccessControlService {
     if (state.enabled == enabled) {
       return state;
     }
-    return state.copyWith(
-      enabled: enabled,
-      dirty: true,
-    );
+    return state.copyWith(enabled: enabled, dirty: true);
   }
 
   AccessControlEditorState togglePackage(
@@ -113,10 +130,7 @@ class AccessControlService {
     } else {
       selectedPackages.add(packageName);
     }
-    return state.copyWith(
-      selectedPackages: selectedPackages,
-      dirty: true,
-    );
+    return state.copyWith(selectedPackages: selectedPackages, dirty: true);
   }
 
   AccessControlEditorState switchMode(AccessControlEditorState state) =>
@@ -131,10 +145,7 @@ class AccessControlService {
   AccessControlEditorState toggleShowSystemApps(
     AccessControlEditorState state,
   ) =>
-      state.copyWith(
-        showSystemApps: !state.showSystemApps,
-        dirty: true,
-      );
+      state.copyWith(showSystemApps: !state.showSystemApps, dirty: true);
 
   AccessControlEditorState toggleShowNoInternetApps(
     AccessControlEditorState state,
@@ -148,19 +159,14 @@ class AccessControlService {
     if (state.selectedPackages.isEmpty) {
       return state;
     }
-    return state.copyWith(
-      selectedPackages: <String>{},
-      dirty: true,
-    );
+    return state.copyWith(selectedPackages: <String>{}, dirty: true);
   }
 
   VpnProps applyEditorState(
     VpnProps vpnProps,
     AccessControlEditorState editorState,
   ) =>
-      vpnProps.copyWith(
-        accessControl: editorState.toAccessControl(),
-      );
+      vpnProps.copyWith(accessControl: editorState.toAccessControl());
 
   List<Package> filterPackages({
     required List<Package> packages,
@@ -196,14 +202,50 @@ class AccessControlService {
 
   int _comparePackages(Package a, Package b, AccessSortType sort) =>
       switch (sort) {
-        AccessSortType.none =>
-          a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+        AccessSortType.none => a.label.toLowerCase().compareTo(
+              b.label.toLowerCase(),
+            ),
         AccessSortType.name => utils.sortByChar(
             utils.getPinyin(a.label),
             utils.getPinyin(b.label),
           ),
         AccessSortType.time => b.lastUpdateTime.compareTo(a.lastUpdateTime),
       };
+
+  AccessControlSelectionSummary buildSelectionSummary({
+    required AccessControlEditorState editorState,
+    required List<Package> packages,
+  }) {
+    if (editorState.selectedPackages.isEmpty) {
+      return const AccessControlSelectionSummary.empty();
+    }
+
+    final packagesByName = {
+      for (final package in packages) package.packageName: package,
+    };
+    final resolvedPackages = <Package>[];
+    final unresolvedPackageNames = <String>[];
+    final selectedPackages = editorState.selectedPackages.toList()..sort();
+
+    for (final packageName in selectedPackages) {
+      final package = packagesByName[packageName];
+      if (package == null) {
+        unresolvedPackageNames.add(packageName);
+        continue;
+      }
+      resolvedPackages.add(package);
+    }
+
+    resolvedPackages.sort(
+      (a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+    );
+
+    return AccessControlSelectionSummary(
+      selectedCount: editorState.selectedPackages.length,
+      resolvedPackages: List.unmodifiable(resolvedPackages),
+      unresolvedPackageNames: List.unmodifiable(unresolvedPackageNames),
+    );
+  }
 
   Future<List<Package>> ensurePackagesLoaded({
     required bool isMobileView,

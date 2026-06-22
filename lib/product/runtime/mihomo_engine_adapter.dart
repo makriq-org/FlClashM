@@ -338,11 +338,6 @@ class MihomoEngineAdapter implements EngineAdapter {
       await core.startListener();
       listenerStarted = true;
 
-      if (await readStartTime() != null) {
-        _startBuiltInProxyNodesInBackground();
-        return true;
-      }
-
       vpnStartAttempted = true;
       final started = await platform.startVpn(
         accessControl: productServices.accessControl.resolveVpnAccessControl(

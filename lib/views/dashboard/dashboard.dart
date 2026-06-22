@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math';
 
 import 'package:defer_pointer/defer_pointer.dart';
@@ -11,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'widgets/hero_connect.dart';
 import 'widgets/start_button.dart';
-import 'widgets/stats_grid.dart';
 
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
@@ -74,10 +72,15 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
             : const SizedBox()),
         Consumer(
           builder: (context, ref, child) {
-            final dashboardEditingLocked = ref.watch(
-              dashboardEditingLockedProvider,
-            );
-            if (dashboardEditingLocked) {
+            final headers = ref.watch(currentProfileProvider
+                    .select((profile) => profile?.providerHeaders)) ??
+                {};
+            final denyEditing = headers['flclashx-denywidgets'];
+            // Editing only applies to the old grid; hide it whenever the hero
+            // board is active (same decision the body makes).
+            final newDashboard = ref.watch(newDashboardEnabledProvider);
+
+            if (denyEditing == 'true' || newDashboard) {
               return const SizedBox.shrink();
             }
 
@@ -227,7 +230,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
               ),
             );
           }
-          final newDashboard = ref.watch(effectiveNewDashboardProvider);
+          final newDashboard = ref.watch(newDashboardEnabledProvider);
 
           if (!newDashboard) {
             return Expanded(
@@ -250,22 +253,11 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
             );
           }
 
-          return Expanded(
+          return const Expanded(
             child: Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 12,
-                bottom: Platform.isAndroid ? 55 : 16,
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  StatsGrid(),
-                  SizedBox(height: 12),
-                  HeroConnect(),
-                ],
-              ),
+              padding:
+                  EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 24),
+              child: HeroConnect(),
             ),
           );
         }),

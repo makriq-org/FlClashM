@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/common.dart';
@@ -9,6 +10,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChangeServerButton extends ConsumerWidget {
   const ChangeServerButton({super.key});
+
+  String? _decodeBase64IfNeeded(String? value) {
+    if (value == null || value.isEmpty) return value;
+
+    try {
+      final decoded = utf8.decode(base64.decode(value));
+      return decoded;
+    } catch (e) {
+      return value;
+    }
+  }
 
   String? _extractFlag(String text) {
     final runes = text.runes.toList();
@@ -60,13 +72,11 @@ class ChangeServerButton extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final serverInfoGroupName = ref.watch(
-      currentProductDisplayHintsProvider.select(
-        (state) => state.serverInfoGroupName,
-      ),
+    final serverInfoGroupName = _decodeBase64IfNeeded(
+      profile.providerHeaders['flclashx-serverinfo'],
     );
 
-    if (serverInfoGroupName.isEmpty) {
+    if (serverInfoGroupName == null || serverInfoGroupName.isEmpty) {
       return _buildSimpleButton(context);
     }
 

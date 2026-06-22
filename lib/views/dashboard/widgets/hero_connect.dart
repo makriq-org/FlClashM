@@ -1,5 +1,4 @@
-import 'dart:async';
-import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flclashm/common/common.dart';
@@ -11,650 +10,1031 @@ import 'package:flclashm/views/profiles/add_profile.dart';
 import 'package:flclashm/widgets/text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-class HeroConnect extends ConsumerStatefulWidget {
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+String _countryCodeToEmoji(String code) {
+  if (code.length != 2) return '🌐';
+  final upper = code.toUpperCase();
+  final first = 0x1F1E6 - 0x41 + upper.codeUnitAt(0);
+  final second = 0x1F1E6 - 0x41 + upper.codeUnitAt(1);
+  return String.fromCharCodes([first, second]);
+}
+
+// Derive an ISO country code from the first regional-indicator flag emoji found
+// in [text] (e.g. "🇳🇱 Amsterdam" -> "NL"). Returns null when there's no flag.
+String? _flagToCountryCode(String text) {
+  final runes = text.runes.toList();
+  for (var i = 0; i < runes.length - 1; i++) {
+    final a = runes[i];
+    final b = runes[i + 1];
+    if (a >= 0x1F1E6 && a <= 0x1F1FF && b >= 0x1F1E6 && b <= 0x1F1FF) {
+      final c1 = a - 0x1F1E6 + 0x41;
+      final c2 = b - 0x1F1E6 + 0x41;
+      return String.fromCharCodes([c1, c2]);
+    }
+  }
+  return null;
+}
+
+// Collect the distinct ISO country codes carried by the flag emoji in the names
+// of every proxy in [group], descending a few levels into nested groups. Used to
+// paint a faint backdrop of the group's flags behind the active one.
+List<String> _collectGroupFlags(List<Group> groups, Group group) {
+  final seen = <String>{};
+  final codes = <String>[];
+  void walk(Group g, int depth) {
+    if (depth > 4) return;
+    for (final proxy in g.all) {
+      final code = _flagToCountryCode(proxy.name);
+      if (code != null) {
+        if (seen.add(code)) codes.add(code);
+      } else {
+        final sub = groups.getGroup(proxy.name);
+        if (sub != null) walk(sub, depth + 1);
+      }
+    }
+  }
+
+  walk(group, 0);
+  return codes;
+}
+
+// Strip only the *leading* emoji run from the name — typically the flag prefix
+// (e.g. "🇳🇱 Amsterdam"), which we already render separately as the flag icon.
+// Emoji that appear later in the name are kept intact.
+String _stripLeadingEmoji(String text) {
+  bool isEmojiRune(int r) {
+    final isFlag = r >= 0x1F1E6 && r <= 0x1F1FF;
+    final isModifier =
+        r == 0x200D || r == 0xFE0F || (r >= 0x1F3FB && r <= 0x1F3FF);
+    final isPictograph = (r >= 0x1F000 && r <= 0x1FAFF) ||
+        (r >= 0x2600 && r <= 0x27BF) ||
+        (r >= 0x2190 && r <= 0x21FF) ||
+        (r >= 0x2B00 && r <= 0x2BFF) ||
+        (r >= 0x2300 && r <= 0x23FF);
+    return isFlag || isModifier || isPictograph;
+  }
+
+  bool isSpace(int r) =>
+      r == 0x20 || r == 0x09 || r == 0xA0 || r == 0x0A || r == 0x0D;
+
+  final runes = text.runes.toList();
+  var start = 0;
+  // Consume the leading run of emoji (and any whitespace around it) so a flag
+  // prefixed with or followed by spaces is still removed; stop at the first
+  // real character and keep the remainder verbatim.
+  while (start < runes.length &&
+      (isEmojiRune(runes[start]) || isSpace(runes[start]))) {
+    start++;
+  }
+  return String.fromCharCodes(runes.sublist(start))
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '0';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var value = bytes.toDouble();
+  var i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return '${value.toStringAsFixed(1)} ${units[i]}';
+}
+
+// Russian-aware plural form for "days" (mirrors MetainfoWidget's declension).
+String _daysWord(int days) {
+  if (days % 100 >= 11 && days % 100 <= 19) return appLocalizations.days;
+  switch (days % 10) {
+    case 1:
+      return appLocalizations.day;
+    case 2:
+    case 3:
+    case 4:
+      return appLocalizations.daysGenitive;
+    default:
+      return appLocalizations.days;
+  }
+}
+
+String? _decodeAnnounce(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final decoded = _decodeBase64(trimmed);
+  if (decoded == null || decoded.trim().isEmpty) return null;
+  return decoded.trim();
+}
+
+String? _decodeBase64(String? value) {
+  if (value == null || value.trim().isEmpty) return null;
+  var text = value.trim();
+  if (text.startsWith('base64:')) text = text.substring(7).trim();
+  if (text.isEmpty) return null;
+  try {
+    final normalized = base64.normalize(text);
+    final decoded = utf8.decode(base64.decode(normalized)).trim();
+    return decoded.isEmpty ? null : decoded;
+  } catch (_) {
+    return value.trim().isEmpty ? null : value.trim();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Hero
+// ----------------------------------------------------------------------------
+class HeroConnect extends ConsumerWidget {
   const HeroConnect({super.key});
 
   @override
-  ConsumerState<HeroConnect> createState() => _HeroConnectState();
-}
-
-class _HeroConnectState extends ConsumerState<HeroConnect>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _toggleController;
-  late Animation<double> _toggleAnimation;
-  bool _isStart = false;
-  bool _showSpeed = false;
-  Timer? _speedTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _isStart = globalState.appState.runTime != null;
-    _showSpeed = _isStart;
-
-    _toggleController = AnimationController(
-      vsync: this,
-      value: _isStart ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 800),
-    );
-    _toggleAnimation = CurvedAnimation(
-      parent: _toggleController,
-      curve: Curves.easeOutBack,
-    );
-
-    ref.listenManual(
-      runTimeProvider.select((state) => state != null),
-      (prev, next) {
-        if (next != _isStart) {
-          _isStart = next;
-          if (_isStart) {
-            _toggleController.forward();
-            _speedTimer?.cancel();
-            _speedTimer = Timer(const Duration(seconds: 1), () {
-              if (mounted) setState(() => _showSpeed = true);
-            });
-          } else {
-            _toggleController.reverse();
-            _speedTimer?.cancel();
-            setState(() => _showSpeed = false);
-          }
-        }
-      },
-      fireImmediately: true,
-    );
-  }
-
-  @override
-  void dispose() {
-    _speedTimer?.cancel();
-    _toggleController.dispose();
-    super.dispose();
-  }
-
-  void _handleTap() {
-    globalState.appController.updateStatus(!_isStart);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(startButtonSelectorStateProvider);
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (!state.hasProfile) {
-      return _buildEmptyCard(context, colorScheme);
-    }
+    if (!state.hasProfile) return const _EmptyHero();
 
     final isReady = state.isInit;
-    final traffics = ref.watch(trafficsProvider).list;
-    final lastTraffic = traffics.isNotEmpty ? traffics.last : null;
+    final profile = ref.watch(currentProfileProvider);
+    final headers = profile?.providerHeaders ?? {};
+    final serviceName =
+        _decodeBase64(headers['flclashx-servicename']) ?? appName;
+    final logoUrl = _decodeBase64(headers['flclashx-servicelogo']);
+    final announce = _decodeAnnounce(headers['announce']);
+    final sub = profile?.subscriptionInfo;
+    // Only show the traffic card when there's something to show — a data limit or an
+    // expiry. Unlimited + no expiry => hide it entirely.
+    final hasSub = sub != null && (sub.total > 0 || sub.expire > 0);
 
-    final groups = ref.watch(currentGroupsStateProvider).value;
-    String serverName = '';
-    for (final g in groups) {
-      final now = g.realNow;
-      if (now.isNotEmpty && now != 'DIRECT' && now != 'REJECT') {
-        serverName = now;
-        break;
+    // Buy/renew links carried by the profile. The buttons (under the traffic
+    // card) only appear when the matching condition is met:
+    //   buyplan    -> less than 3 days left (expired included), time-limited plans
+    //   buytraffic -> less than 10% of the limit remaining, capped plans
+    final buyPlanUrl = headers['flclashx-buyplan'];
+    final buyTrafficUrl = headers['flclashx-buytraffic'];
+    var showBuyPlan = false;
+    var showBuyTraffic = false;
+    if (sub != null) {
+      if (buyPlanUrl != null && buyPlanUrl.isNotEmpty && sub.expire > 0) {
+        showBuyPlan = DateTime.fromMillisecondsSinceEpoch(sub.expire * 1000)
+                .difference(DateTime.now()) <
+            const Duration(days: 3);
+      }
+      if (buyTrafficUrl != null && buyTrafficUrl.isNotEmpty && sub.total > 0) {
+        final used = sub.upload + sub.download;
+        showBuyTraffic = (sub.total - used) < sub.total * 0.1;
       }
     }
+    final showBuy = showBuyPlan || showBuyTraffic;
 
-    final profile = ref.watch(currentProfileProvider);
-    final displayHints = ref.watch(currentProductDisplayHintsProvider);
-    final serviceName = displayHints.serviceName;
-    final logoUrl = displayHints.serviceLogoUrl.isEmpty
-        ? null
-        : displayHints.serviceLogoUrl;
-    final announceText = displayHints.announcement;
-    final supportUrl = displayHints.supportUrlOrNull;
-    final mode = ref.watch(patchClashConfigProvider.select((s) => s.mode));
-    final globalModeEnabled = ref.watch(globalModeEnabledProvider);
+    final groups = ref.watch(currentGroupsStateProvider).value;
+    var serverName = '';
+    String? testUrl;
+    Group? activeGroup;
+    // Host name = the current selection of the proxy group named in the
+    // `flclashx-serverinfo` header (resolved through nested groups to the leaf),
+    // same as the foreground-notification logic. Fall back to the first real group.
+    final serverInfoHeader = headers['flclashx-serverinfo'];
+    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
+      final groupName =
+          _decodeBase64(serverInfoHeader) ?? serverInfoHeader.trim();
+      final group = groups.getGroup(groupName);
+      if (group != null) {
+        activeGroup = group;
+        serverName = groups.resolveToLeafProxy(group.realNow);
+        testUrl = group.testUrl;
+      }
+    }
+    if (serverName.isEmpty) {
+      for (final g in groups) {
+        final now = g.realNow;
+        if (now.isNotEmpty && now != 'DIRECT' && now != 'REJECT') {
+          activeGroup = g;
+          serverName = now;
+          testUrl = g.testUrl;
+          break;
+        }
+      }
+    }
+    final displayName = _stripLeadingEmoji(serverName);
+    final nameCountryCode = _flagToCountryCode(serverName);
+    final groupFlagCodes = activeGroup != null
+        ? _collectGroupFlags(groups, activeGroup)
+        : const <String>[];
+    // Other locations in the group: their distinct flag countries (shown as stacked
+    // flags behind the active one) plus a total count (the badge). Falls back to the
+    // sibling-proxy count when node names carry no flag emoji.
+    final activeUpper = nameCountryCode?.toUpperCase();
+    final otherCodes =
+        groupFlagCodes.where((c) => c.toUpperCase() != activeUpper).toList();
+    final rawOther = otherCodes.isNotEmpty
+        ? otherCodes.length
+        : (activeGroup != null ? activeGroup.all.length - 1 : 0);
+    final otherLocations = rawOther < 0 ? 0 : rawOther;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutBack,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-          width: 1.5,
-        ),
-        color: _isStart
-            ? Color.lerp(colorScheme.surfaceContainerHigh,
-                    colorScheme.primaryContainer, 0.15)!
-                .withValues(alpha: 0.75)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.85),
-      ),
-      child: Column(
-        children: [
-          // Announce banner
-          if (announceText.isNotEmpty) ...[
-            _AnnounceBanner(text: announceText),
-            const SizedBox(height: 12),
-          ],
-          // Service badge full width
-          if (serviceName.isNotEmpty)
-            _ServiceBadge(name: serviceName, logoUrl: logoUrl),
-          const SizedBox(height: 16),
-          // Connect ring center, update left, support right
-          SizedBox(
-            width: double.infinity,
-            child: Stack(
-              alignment: Alignment.center,
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
               children: [
-                AnimatedBuilder(
-                  animation: _toggleAnimation,
-                  builder: (_, __) => _ConnectRing(
-                    progress: _toggleAnimation.value,
-                    isStart: _isStart,
-                    showSpeed: _showSpeed,
-                    isReady: isReady,
-                    onTap: isReady ? _handleTap : null,
-                    colorScheme: colorScheme,
-                    lastTraffic: lastTraffic,
+                const SizedBox(height: 8),
+                _Logo(logoUrl: logoUrl),
+                const SizedBox(height: 16),
+                Text(
+                  serviceName,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (profile != null && profile.type == ProfileType.url) ...[
-                  Positioned(
-                    left: 0,
-                    child: _IconBtn(
-                      icon: Icons.refresh_rounded,
-                      isLoading: profile.isUpdating,
-                      color: colorScheme.onSecondaryContainer,
-                      bgColor:
-                          colorScheme.secondaryContainer.withValues(alpha: 0.8),
-                      onTap: profile.isUpdating
-                          ? null
-                          : () =>
-                              globalState.appController.updateProfile(profile),
-                    ),
-                  ),
+                if (announce != null && announce.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _AnnounceBanner(text: announce),
                 ],
-                if (supportUrl != null && supportUrl.isNotEmpty)
-                  Positioned(
-                    right: 0,
-                    child: _IconBtn(
-                      icon: Icons.contact_support,
-                      color: colorScheme.onSecondaryContainer,
-                      bgColor:
-                          colorScheme.secondaryContainer.withValues(alpha: 0.8),
-                      onTap: () => globalState.openUrl(supportUrl),
-                    ),
+                const SizedBox(height: 18),
+                _HeroActionRow(
+                  isUpdating: profile?.isUpdating ?? false,
+                  onUpdate: profile == null
+                      ? null
+                      : () => globalState.appController.updateProfile(profile),
+                  supportUrl: headers['support-url'],
+                ),
+                const SizedBox(height: 18),
+                if (hasSub) ...[
+                  _TrafficCard(sub: sub),
+                  const SizedBox(height: 12),
+                ],
+                if (showBuy) ...[
+                  _BuyButtons(
+                    showBuyPlan: showBuyPlan,
+                    showBuyTraffic: showBuyTraffic,
+                    buyPlanUrl: buyPlanUrl,
+                    buyTrafficUrl: buyTrafficUrl,
                   ),
+                  const SizedBox(height: 12),
+                ],
+                _ServerPanel(
+                  serverName: serverName,
+                  displayName: displayName,
+                  nameCountryCode: nameCountryCode,
+                  testUrl: testUrl,
+                  otherCodes: otherCodes,
+                  otherLocations: otherLocations,
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          // Bottom row: mode | location | nav/settings
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (globalModeEnabled)
-                _ModeButton(mode: mode, colorScheme: colorScheme)
-              else
-                const SizedBox(width: 38),
-              if (serverName.isNotEmpty)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: GestureDetector(
-                      onTap: () =>
-                          globalState.appController.toPage(PageLabel.proxies),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant
-                                .withValues(alpha: 0.7),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Flexible(
-                              child: EmojiText(
-                                serverName,
-                                style: context.textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: colorScheme.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.swap_horiz_rounded,
-                              size: 16,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                const Spacer(),
-              _NavMenuButton(colorScheme: colorScheme),
-            ],
-          ),
-        ],
-      ),
+        ),
+        // Pinned to the bottom of the hero, just above the nav bar.
+        const SizedBox(height: 14),
+        _ConnectButton(isReady: isReady),
+      ],
     );
   }
+}
 
-  Widget _buildEmptyCard(BuildContext context, ColorScheme colorScheme) {
-    final mode = ref.watch(patchClashConfigProvider.select((s) => s.mode));
-    final globalModeEnabled = ref.watch(globalModeEnabledProvider);
+// ----------------------------------------------------------------------------
+// Logo
+// ----------------------------------------------------------------------------
+class _Logo extends StatelessWidget {
+  const _Logo({this.logoUrl});
+
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 104.0;
+    final fallback = ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: Image.asset('assets/images/icon.png',
+          width: size, height: size, fit: BoxFit.cover),
+    );
+    if (logoUrl == null || logoUrl!.isEmpty) return fallback;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: logoUrl!.toLowerCase().endsWith('.svg')
+          ? SvgPicture.network(logoUrl!,
+              width: size, height: size, placeholderBuilder: (_) => fallback)
+          : CachedNetworkImage(
+              imageUrl: logoUrl!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorWidget: (_, __, ___) => fallback,
+            ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Traffic card (usage bar + amount + days left)
+// ----------------------------------------------------------------------------
+class _TrafficCard extends StatelessWidget {
+  const _TrafficCard({required this.sub});
+
+  final SubscriptionInfo sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final used = (sub.upload + sub.download).toInt();
+    final total = sub.total;
+    final unlimited = total <= 0;
+    final progress = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
+    final barColor = progress > 0.9
+        ? Colors.red.shade400
+        : progress > 0.7
+            ? Colors.orange.shade400
+            : colorScheme.primary;
+
+    int? daysLeft;
+    if (sub.expire > 0) {
+      daysLeft = DateTime.fromMillisecondsSinceEpoch(sub.expire * 1000)
+          .difference(DateTime.now())
+          .inDays;
+      if (daysLeft < 0) daysLeft = 0;
+    }
+
+    final daysUrgent = daysLeft != null && daysLeft <= 3;
+    final daysColor = daysUrgent ? Colors.red.shade400 : colorScheme.primary;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-          width: 1.5,
-        ),
-        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.85),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () async {
-              final url = await globalState.showCommonDialog<String>(
-                child: const URLFormDialog(),
-              );
-              if (url != null) {
-                globalState.appController.addProfileFormURL(url);
-              }
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-                  width: 1.5,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  unlimited
+                      ? _formatBytes(used)
+                      : '${_formatBytes(used)} / ${_formatBytes(total)}',
+                  style: context.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontFamily: FontFamily.jetBrainsMono.value,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                color:
-                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              if (daysLeft != null) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: daysColor.withValues(alpha: 0.14),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.event_rounded, size: 14, color: daysColor),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${appLocalizations.remaining} $daysLeft ${_daysWord(daysLeft)}',
+                        style: context.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: daysColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (!unlimited) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
                 children: [
-                  Icon(Icons.add_rounded,
-                      size: 20, color: colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Text(
-                    appLocalizations.addProfile,
-                    style: context.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
+                  Container(
+                      height: 9, color: colorScheme.surfaceContainerHighest),
+                  FractionallySizedBox(
+                    widthFactor: progress <= 0 ? 0.0 : progress,
+                    child: Container(
+                      height: 9,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          colors: [barColor.withValues(alpha: 0.7), barColor],
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (globalModeEnabled)
-                _ModeButton(mode: mode, colorScheme: colorScheme)
-              else
-                const SizedBox(width: 38),
-              const Spacer(),
-              _NavMenuButton(colorScheme: colorScheme),
-            ],
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ConnectRing extends StatelessWidget {
-  const _ConnectRing({
-    required this.progress,
-    required this.isStart,
-    required this.showSpeed,
-    required this.isReady,
-    required this.onTap,
-    required this.colorScheme,
-    this.lastTraffic,
+// ----------------------------------------------------------------------------
+// Buy / renew buttons (shown under the traffic card)
+// ----------------------------------------------------------------------------
+class _BuyButtons extends StatelessWidget {
+  const _BuyButtons({
+    required this.showBuyPlan,
+    required this.showBuyTraffic,
+    required this.buyPlanUrl,
+    required this.buyTrafficUrl,
   });
 
-  final double progress;
-  final bool isStart;
-  final bool showSpeed;
-  final bool isReady;
-  final VoidCallback? onTap;
-  final ColorScheme colorScheme;
-  final Traffic? lastTraffic;
+  final bool showBuyPlan;
+  final bool showBuyTraffic;
+  final String? buyPlanUrl;
+  final String? buyTrafficUrl;
 
   @override
   Widget build(BuildContext context) {
-    final disabledColor = colorScheme.onSurface.withValues(alpha: 0.12);
-    final activeColor = Colors.green.shade500;
-    final inactiveColor = colorScheme.surfaceContainerHighest;
-    final ringColor = isReady
-        ? Color.lerp(inactiveColor, activeColor, progress)!
-        : disabledColor;
-    final iconColor = isReady
-        ? Color.lerp(colorScheme.onSurfaceVariant, activeColor, progress)!
-        : colorScheme.onSurface.withValues(alpha: 0.38);
-    final bgColor = isReady
-        ? colorScheme.surfaceContainerLow
-        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
-    const size = 140.0;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: CustomPaint(
-          painter: _RingPainter(
-            progress: isReady ? progress : 0,
-            color: ringColor,
-            bgColor: bgColor,
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: !isReady
-                  ? Icon(
-                      Icons.power_settings_new_rounded,
-                      key: const ValueKey('disabled'),
-                      size: 48,
-                      color: iconColor,
-                    )
-                  : showSpeed && lastTraffic != null
-                      ? Column(
-                          key: const ValueKey('speed'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${lastTraffic!.up}',
-                              style: context.textTheme.bodySmall?.copyWith(
-                                color: activeColor,
-                                fontFamily: FontFamily.jetBrainsMono.value,
-                              ),
-                            ),
-                            Icon(Icons.swap_vert_rounded,
-                                size: 16,
-                                color: activeColor.withValues(alpha: 0.5)),
-                            Text(
-                              '${lastTraffic!.down}',
-                              style: context.textTheme.bodySmall?.copyWith(
-                                color: activeColor,
-                                fontFamily: FontFamily.jetBrainsMono.value,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Icon(
-                          Icons.power_settings_new_rounded,
-                          key: const ValueKey('power'),
-                          size: 48,
-                          color: iconColor,
-                        ),
-            ),
-          ),
-        ),
-      ),
+    final plan = _HeroBuyButton(
+      icon: Icons.autorenew_rounded,
+      label: 'Продлить подписку',
+      filled: true,
+      onTap: () => globalState.openUrl(buyPlanUrl!),
     );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  _RingPainter({
-    required this.progress,
-    required this.color,
-    required this.bgColor,
-  });
-
-  final double progress;
-  final Color color;
-  final Color bgColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 6;
-    const strokeWidth = 5.0;
-
-    // Background ring
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = bgColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth,
+    final traffic = _HeroBuyButton(
+      icon: Icons.add_rounded,
+      label: 'Докупить трафик',
+      filled: false,
+      onTap: () => globalState.openUrl(buyTrafficUrl!),
     );
 
-    // Active ring
-    if (progress > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        2 * math.pi * progress,
-        false,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round,
+    // Both triggers -> side by side, one each; a single trigger -> full width.
+    if (showBuyPlan && showBuyTraffic) {
+      return Row(
+        children: [
+          Expanded(child: plan),
+          const SizedBox(width: 10),
+          Expanded(child: traffic),
+        ],
       );
     }
-
-    // Inner fill
-    canvas.drawCircle(
-      center,
-      radius - strokeWidth - 4,
-      Paint()..color = bgColor.withValues(alpha: 0.7),
-    );
+    if (showBuyPlan) return plan;
+    if (showBuyTraffic) return traffic;
+    return const SizedBox.shrink();
   }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.progress != progress || old.color != color;
 }
 
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({
+class _HeroBuyButton extends StatelessWidget {
+  const _HeroBuyButton({
     required this.icon,
-    required this.color,
-    required this.bgColor,
-    this.onTap,
-    this.isLoading = false,
+    required this.label,
+    required this.onTap,
+    this.filled = true,
   });
 
   final IconData icon;
-  final Color color;
-  final Color bgColor;
-  final VoidCallback? onTap;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: bgColor),
-          child: Center(
-            child: isLoading
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child:
-                        CircularProgressIndicator(strokeWidth: 2, color: color),
-                  )
-                : Icon(icon, size: 20, color: color),
-          ),
-        ),
-      );
-}
-
-class _NavMenuButton extends StatelessWidget {
-  const _NavMenuButton({required this.colorScheme});
-
-  final ColorScheme colorScheme;
-
-  static const _pages = [
-    (PageLabel.profiles, Icons.folder_rounded),
-    (PageLabel.tools, Icons.settings_rounded),
-  ];
-
-  void _show(BuildContext context) {
-    final button = context.findRenderObject()! as RenderBox;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(Offset(0, button.size.height), ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset.zero),
-            ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
-    showMenu<PageLabel>(
-      context: context,
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _pages
-          .map((p) => PopupMenuItem(
-                value: p.$1,
-                child: Row(
-                  children: [
-                    Icon(p.$2, size: 18, color: colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Text(Intl.message(p.$1.name)),
-                  ],
-                ),
-              ))
-          .toList(),
-    ).then((value) {
-      if (value != null) globalState.appController.toPage(value);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: () => _show(context),
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: colorScheme.secondaryContainer.withValues(alpha: 0.8),
-          ),
-          child: Center(
-            child: Icon(Icons.settings_rounded,
-                size: 20, color: colorScheme.onSecondaryContainer),
-          ),
-        ),
-      );
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.mode, required this.colorScheme});
-
-  final Mode mode;
-  final ColorScheme colorScheme;
-
-  static IconData _modeIcon(Mode m) => switch (m) {
-        Mode.rule => Icons.rule_rounded,
-        Mode.global => Icons.public_rounded,
-        Mode.direct => Icons.arrow_forward_rounded,
-      };
-
-  static const _modes = [Mode.rule, Mode.global];
-
-  static String _modeName(Mode m) => switch (m) {
-        Mode.rule => Intl.message('rule'),
-        Mode.global => Intl.message('global'),
-        Mode.direct => Intl.message('direct'),
-      };
-
-  void _showMenu(BuildContext context) {
-    final RenderBox button = context.findRenderObject()! as RenderBox;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(Offset(0, button.size.height), ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset.zero),
-            ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
-    showMenu<Mode>(
-      context: context,
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: _modes
-          .map((m) => PopupMenuItem(
-                value: m,
-                child: Row(
-                  children: [
-                    Icon(
-                      _modeIcon(m),
-                      size: 18,
-                      color: m == mode
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _modeName(m),
-                      style: TextStyle(
-                        fontWeight:
-                            m == mode ? FontWeight.w600 : FontWeight.w400,
-                        color: m == mode ? colorScheme.primary : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ))
-          .toList(),
-    ).then((value) {
-      if (value != null) globalState.appController.changeMode(value);
-    });
-  }
+  final String label;
+  final VoidCallback onTap;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final bg = filled
+        ? colorScheme.primary
+        : colorScheme.surfaceContainerHigh.withValues(alpha: 0.6);
+    final fg = filled ? colorScheme.onPrimary : colorScheme.primary;
     return GestureDetector(
-      onTap: () => _showMenu(context),
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 38,
-        height: 38,
+        width: double.infinity,
+        height: 48,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: colorScheme.secondaryContainer.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(16),
+          color: bg,
+          border: filled
+              ? null
+              : Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
         ),
-        child: Center(
-          child: Icon(_modeIcon(mode),
-              size: 20, color: colorScheme.onSecondaryContainer),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: fg),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.titleSmall
+                    ?.copyWith(color: fg, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Server panel (flag / host / ip / ping) — tap to change server
+// ----------------------------------------------------------------------------
+class _ServerPanel extends ConsumerWidget {
+  const _ServerPanel({
+    required this.serverName,
+    required this.displayName,
+    required this.nameCountryCode,
+    required this.testUrl,
+    this.otherCodes = const [],
+    this.otherLocations = 0,
+  });
+
+  final String serverName;
+  final String displayName;
+  final String? nameCountryCode;
+  final String? testUrl;
+  final List<String> otherCodes;
+  final int otherLocations;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = context.colorScheme;
+    // select(!=null): the hero card only needs the connected/disconnected boolean,
+    // so watching the raw runTime rebuilt the entire card (flags, traffic, server
+    // panel, buy buttons, announce) every second. The elapsed-time text lives in
+    // _ConnectButton, which intentionally keeps watching the value.
+    final isConnected =
+        ref.watch(runTimeProvider.select((value) => value != null));
+    final delay = serverName.isNotEmpty
+        ? ref.watch(getDelayProvider(proxyName: serverName, testUrl: testUrl))
+        : null;
+
+    return ValueListenableBuilder(
+      valueListenable: detectionState.state,
+      builder: (_, networkState, __) {
+        final ipInfo = networkState.ipInfo;
+        // Prefer the flag carried in the server name; fall back to the detected
+        // exit-IP country, then a globe.
+        final code = nameCountryCode ?? ipInfo?.countryCode ?? '';
+        final flag = _countryCodeToEmoji(code);
+        final title = displayName.isNotEmpty ? displayName : '—';
+
+        return GestureDetector(
+          onTap: () => globalState.appController.toPage(PageLabel.proxies),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
+              border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              children: [
+                _FlagCircle(
+                  countryCode: code,
+                  fallbackEmoji: flag,
+                  otherCodes: otherCodes,
+                  stackCount: otherLocations,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: context.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // IP line: hidden while the tunnel is off. Once connected:
+                      // the real IP when known; a spinner + "determining IP" while
+                      // actively resolving; a muted dash if resolution finished
+                      // without an IP (failed / timed out).
+                      if (isConnected) ...[
+                        const SizedBox(height: 3),
+                        if (ipInfo != null)
+                          Text(
+                            ipInfo.ip,
+                            style: context.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontFamily: FontFamily.jetBrainsMono.value,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        else if (networkState.isTesting ||
+                            networkState.isLoading)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.6,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              Text(
+                                appLocalizations.determiningIp,
+                                style: context.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Text(
+                            '—',
+                            style: context.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontFamily: FontFamily.jetBrainsMono.value,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Fixed width so the bars + ms text stay horizontally centred and
+                // don't drift as the delay text width changes.
+                SizedBox(
+                  width: 46,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _SignalBars(delay: delay),
+                      if (delay != null && delay > 0) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          '$delay ms',
+                          textAlign: TextAlign.center,
+                          style: context.textTheme.labelSmall?.copyWith(
+                            color: utils.getDelayColor(delay) ??
+                                colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: FontFamily.jetBrainsMono.value,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Chevron: signals the panel is tappable (drill into the server list).
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Large circle filled with the country flag (cropped to a circle; falls back to the
+// flag emoji / globe). When the group has other locations, a couple of neutral
+// theme-coloured discs peek out from behind it as a tidy "stack" affordance.
+class _FlagCircle extends StatelessWidget {
+  const _FlagCircle({
+    required this.countryCode,
+    required this.fallbackEmoji,
+    this.otherCodes = const [],
+    this.stackCount = 0,
+  });
+
+  final String countryCode;
+  final String fallbackEmoji;
+  final List<String> otherCodes;
+  final int stackCount;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 52.0;
+    final colorScheme = context.colorScheme;
+    final cc = countryCode.trim().toLowerCase();
+
+    Widget fallback() => Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colorScheme.surfaceContainerHighest,
+          ),
+          alignment: Alignment.center,
+          child: EmojiText(fallbackEmoji,
+              style: const TextStyle(fontSize: size * 0.5)),
+        );
+
+    final active = cc.length != 2
+        ? fallback()
+        : ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: 'https://flagcdn.com/w160/$cc.png',
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => Container(
+                width: size,
+                height: size,
+                color: colorScheme.surfaceContainerHighest,
+              ),
+              errorWidget: (_, __, ___) => fallback(),
+            ),
+          );
+
+    // Up to two of the group's other-location flags peek straight up from behind the
+    // active one — smaller, ringed in the surface colour, and progressively darkened
+    // the further back they sit, so they read as a centred stack receding into depth.
+    final backs = otherCodes.take(2).toList();
+    Widget backFlag(int i, String code) {
+      final s = size * (1 - 0.14 * i);
+      return Transform.translate(
+        offset: Offset(0, -10.0 * i),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: colorScheme.surface, width: 1.5),
+          ),
+          child: ClipOval(
+            child: Stack(
+              children: [
+                CachedNetworkImage(
+                  imageUrl: 'https://flagcdn.com/w80/${code.toLowerCase()}.png',
+                  width: s,
+                  height: s,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => SizedBox(width: s, height: s),
+                  errorWidget: (_, __, ___) => Container(
+                    width: s,
+                    height: s,
+                    color: colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+                // Depth scrim: deeper cards are darker.
+                Positioned.fill(
+                  child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.15 * i)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final badge = stackCount <= 0
+        ? null
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              color: colorScheme.primary,
+              border: Border.all(color: colorScheme.surface, width: 1.5),
+            ),
+            child: Text(
+              '+$stackCount',
+              style: context.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onPrimary,
+                fontWeight: FontWeight.w700,
+                fontFamily: FontFamily.jetBrainsMono.value,
+              ),
+            ),
+          );
+
+    // The active flag with its peeking back-flags and corner badge, as one 52px unit.
+    final unit = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        for (var i = backs.length; i >= 1; i--) backFlag(i, backs[i - 1]),
+        active,
+        if (badge != null) Positioned(right: -3, bottom: -3, child: badge),
+      ],
+    );
+
+    // Reserve headroom matching how far the deepest back-flag sticks up (plus a little
+    // for the badge), so the *whole* construction — not just the active flag — is
+    // vertically centred in the row.
+    final topPeek = backs.isEmpty
+        ? 0.0
+        : (10.0 * backs.length +
+                size * (1 - 0.14 * backs.length) / 2 -
+                size / 2 +
+                2)
+            .clamp(0.0, 40.0)
+            .toDouble();
+    final bottomPeek = badge != null ? 7.0 : 0.0;
+
+    if (topPeek == 0 && bottomPeek == 0) {
+      return SizedBox(width: size, height: size, child: unit);
+    }
+    return SizedBox(
+      width: size,
+      height: size + topPeek + bottomPeek,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+              top: topPeek, left: 0, width: size, height: size, child: unit),
+        ],
+      ),
+    );
+  }
+}
+
+// Mobile-network-style signal bars representing ping quality.
+class _SignalBars extends StatelessWidget {
+  const _SignalBars({required this.delay});
+
+  final int? delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final dim = colorScheme.onSurfaceVariant.withValues(alpha: 0.25);
+
+    final int level;
+    final Color color;
+    if (delay == null || delay == 0) {
+      level = 0;
+      color = dim;
+    } else if (delay! < 0) {
+      level = 0;
+      color = Colors.red.shade400;
+    } else {
+      color = utils.getDelayColor(delay) ?? Colors.green;
+      level = delay! < 150
+          ? 4
+          : delay! < 300
+              ? 3
+              : delay! < 600
+                  ? 2
+                  : 1;
+    }
+
+    const heights = [9.0, 13.0, 17.0, 21.0];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: List.generate(
+          4,
+          (i) => Padding(
+                padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
+                child: Container(
+                  width: 4,
+                  height: heights[i],
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: i < level ? color : dim,
+                  ),
+                ),
+              )),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Connect button — shows the time counter while connected
+// ----------------------------------------------------------------------------
+class _ConnectButton extends ConsumerWidget {
+  const _ConnectButton({required this.isReady});
+
+  final bool isReady;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = context.colorScheme;
+    final runTime = ref.watch(runTimeProvider);
+    final isStart = runTime != null;
+
+    final Color bg;
+    final Color fg;
+    if (!isReady) {
+      bg = colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+      fg = colorScheme.onSurface.withValues(alpha: 0.38);
+    } else if (isStart) {
+      bg = colorScheme.surfaceContainerHigh.withValues(alpha: 0.8);
+      fg = colorScheme.primary;
+    } else {
+      bg = colorScheme.primary;
+      fg = colorScheme.onPrimary;
+    }
+
+    return GestureDetector(
+      onTap: isReady
+          ? () => globalState.appController.updateStatus(!isStart)
+          : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        width: double.infinity,
+        height: 54,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: bg,
+          border: isStart
+              ? Border.all(color: colorScheme.primary.withValues(alpha: 0.4))
+              : null,
+        ),
+        // Running: uptime only. Stopped: just a Play glyph (no "Start" label).
+        child: isStart
+            ? Text(
+                utils.getTimeText(runTime),
+                style: context.textTheme.titleSmall?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  fontFamily: FontFamily.jetBrainsMono.value,
+                ),
+              )
+            : Icon(Icons.play_arrow_rounded, size: 30, color: fg),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Empty state (no profile)
+// ----------------------------------------------------------------------------
+class _EmptyHero extends ConsumerWidget {
+  const _EmptyHero();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = context.colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 8),
+        const _Logo(),
+        const SizedBox(height: 16),
+        Text(
+          appName,
+          style: context.textTheme.headlineSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 24),
+        GestureDetector(
+          onTap: () async {
+            final url = await globalState.showCommonDialog<String>(
+              child: const URLFormDialog(),
+            );
+            if (url != null) {
+              globalState.appController.addProfileFormURL(url);
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: colorScheme.primary,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_rounded, size: 20, color: colorScheme.onPrimary),
+                const SizedBox(width: 8),
+                Text(
+                  appLocalizations.addProfile,
+                  style: context.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -666,7 +1046,7 @@ class _AnnounceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme = context.colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -674,9 +1054,11 @@ class _AnnounceBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         color: colorScheme.secondaryContainer,
       ),
-      child: Text(
+      // EmojiText (not Text): renders flag/emoji runs with the Twemoji font so
+      // they show up — plain Text drops country flags entirely on Windows.
+      child: EmojiText(
         text,
-        style: context.textTheme.bodySmall?.copyWith(
+        style: context.textTheme.bodyMedium?.copyWith(
           color: colorScheme.onSecondaryContainer,
           height: 1.4,
         ),
@@ -685,55 +1067,99 @@ class _AnnounceBanner extends StatelessWidget {
   }
 }
 
-class _ServiceBadge extends StatelessWidget {
-  const _ServiceBadge({required this.name, this.logoUrl});
+// ----------------------------------------------------------------------------
+// Hero actions: refresh / support chips
+// ----------------------------------------------------------------------------
+class _HeroActionRow extends StatelessWidget {
+  const _HeroActionRow({
+    required this.isUpdating,
+    required this.onUpdate,
+    this.supportUrl,
+  });
 
-  final String name;
-  final String? logoUrl;
+  final bool isUpdating;
+  final VoidCallback? onUpdate;
+  final String? supportUrl;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    const logoSize = 24.0;
-
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: colorScheme.secondaryContainer,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (logoUrl != null && logoUrl!.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: logoUrl!.toLowerCase().endsWith('.svg')
-                  ? SvgPicture.network(logoUrl!,
-                      width: logoSize, height: logoSize)
-                  : CachedNetworkImage(
-                      imageUrl: logoUrl!,
-                      width: logoSize,
-                      height: logoSize,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                    ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Flexible(
-            child: Text(
-              name,
-              style: context.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSecondaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    final hasSupport = supportUrl != null && supportUrl!.isNotEmpty;
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionChip(
+            icon: Icons.refresh_rounded,
+            label: appLocalizations.update,
+            busy: isUpdating,
+            onTap: onUpdate,
+          ),
+        ),
+        if (hasSupport) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ActionChip(
+              icon: Icons.support_agent_rounded,
+              label: appLocalizations.support,
+              onTap: () => globalState.openUrl(supportUrl!),
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: busy
+                  ? CircularProgressIndicator(
+                      strokeWidth: 2, color: colorScheme.primary)
+                  : Icon(icon, size: 18, color: colorScheme.primary),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: context.textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
