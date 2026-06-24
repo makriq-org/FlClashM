@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/build.yaml"
       - ".github/workflows/continuity.yaml"
+      - "CHANGELOG.md"
       - ".github/release_template.md"
       - ".github/pre_release_template.md"
       - "android/app/build.gradle.kts"
@@ -22,6 +23,7 @@ on:
     paths:
       - ".github/workflows/build.yaml"
       - ".github/workflows/continuity.yaml"
+      - "CHANGELOG.md"
       - ".github/release_template.md"
       - ".github/pre_release_template.md"
       - "android/app/build.gradle.kts"

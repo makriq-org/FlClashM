@@ -254,11 +254,26 @@ void _checkBuildWorkflow({
 
   _expectPatternExists(
     content: content,
-    pattern: RegExp(
-      r'https://api\.github\.com/repos/\$(?:\{CONTINUITY_RELEASE_REPOSITORY\}|CONTINUITY_RELEASE_REPOSITORY)/releases/latest',
-    ),
-    label:
-        'release lookup via `CONTINUITY_RELEASE_REPOSITORY` in `$buildWorkflowPath`',
+    pattern: RegExp(r'awk -v header="\$header" '),
+    label: 'CHANGELOG.md section extraction in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'CHANGELOG\.md'),
+    label: 'CHANGELOG.md usage in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'Missing CHANGELOG\.md section'),
+    label: 'missing changelog section guard in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'## Что изменилось'),
+    label: 'release notes changes heading in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(
@@ -380,11 +395,13 @@ void _checkReleaseTemplate({
   }
 
   if (!content.contains('VERSION')) {
-    failures.add('Release template `$templatePath` must keep VERSION placeholder.');
+    failures
+        .add('Release template `$templatePath` must keep VERSION placeholder.');
   }
 
   if (!content.contains(contract.appName)) {
-    failures.add('Release template `$templatePath` must mention `${contract.appName}`.');
+    failures.add(
+        'Release template `$templatePath` must mention `${contract.appName}`.');
   }
 
   if (RegExp(r'https?://|<[^>]+>|CHANGELOG|ChangeLog|changelog|img\.shields')
