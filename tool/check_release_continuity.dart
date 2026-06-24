@@ -381,6 +381,11 @@ void _checkReleaseTemplate({
       .where((line) => line.isNotEmpty)
       .toList();
   final bulletLines = lines.where((line) => line.startsWith('- ')).toList();
+  final isPreReleaseTemplate = templatePath == preReleaseTemplatePath;
+
+  if (isPreReleaseTemplate && lines.isEmpty) {
+    return;
+  }
 
   if (lines.isEmpty || lines.length > 3) {
     failures.add(

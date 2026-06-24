@@ -291,11 +291,14 @@ jobs:
           if [ "${{ env.IS_STABLE }}" == "true" ]; then
             sed "s|VERSION|$version|g" ./.github/release_template.md > release.md
           else
-            sed "s|VERSION|$version|g" ./.github/pre_release_template.md > release.md
+            : > release.md
           fi
 
           {
-            printf '\n\n## Что изменилось\n\n'
+            if [ "${{ env.IS_STABLE }}" == "true" ]; then
+              printf '\n\n'
+            fi
+            printf '## Что изменилось\n\n'
             printf '%s\n' "$changelog_block"
           } >> release.md
 
