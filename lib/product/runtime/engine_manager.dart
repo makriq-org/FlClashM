@@ -85,10 +85,14 @@ class _CompiledRuntimePlan {
   const _CompiledRuntimePlan({
     required this.appliedRuntimePlan,
     required this.resolvedRuntime,
+    required this.rawProfile,
+    required this.securedProfile,
   });
 
   final AppliedRuntimePlan appliedRuntimePlan;
   final ResolvedRuntimeSelection resolvedRuntime;
+  final RawProfile? rawProfile;
+  final SecuredProfilePatch securedProfile;
 }
 
 class EngineManager {
@@ -127,6 +131,7 @@ class EngineManager {
   Timer? _updateTimer;
   RuntimeUpdateTasks _updateTasks = const [];
   DateTime? _startTime;
+  _CompiledRuntimePlan? _lastCompiledRuntimePlan;
 
   EngineAdapter get _adapter => _activeRuntime.engine.adapter;
 
@@ -246,8 +251,12 @@ class EngineManager {
       throw Exception(message);
     }
 
+    _syncCachedRuntimePlanWithUpdate(resolvedUpdateParams);
+
     if (coldStartPatchConfig != null) {
-      await persistColdStart(pathConfig: coldStartPatchConfig);
+      _persistColdStartInBackground(
+        coldStartPatchConfig: coldStartPatchConfig,
+      );
     }
 
     return true;
@@ -323,21 +332,17 @@ class EngineManager {
 
   Future<void> persistColdStart({required ClashConfig pathConfig}) async {
     try {
-      final compiledRuntimePlan = await _compileRuntimePlan(
-        EngineRuntimePlanRequest(patchConfig: pathConfig),
-      );
+      final compiledRuntimePlan = _lastCompiledRuntimePlan;
       if (compiledRuntimePlan == null) {
-        return;
+        await _persistColdStartWithoutCompiledRuntimePlan(
+          coldStartPatchConfig: pathConfig,
+        );
+      } else {
+        await _persistColdStartFromCompiledRuntimePlan(
+          compiledRuntimePlan,
+          coldStartPatchConfig: pathConfig,
+        );
       }
-
-      await compiledRuntimePlan.resolvedRuntime.engine.adapter.persistColdStart(
-        initParams: await _buildInitParams(),
-        runtimePlan: compiledRuntimePlan.appliedRuntimePlan.runtimePlan,
-        state: _buildCoreState(
-          profileAccessControl: compiledRuntimePlan
-              .appliedRuntimePlan.runtimePlan.profileAccessControl,
-        ),
-      );
     } catch (e) {
       commonPrint.log("persistColdStartParams: $e");
     }
@@ -423,6 +428,8 @@ class EngineManager {
         runtimePlan: runtimePlan,
       ),
       resolvedRuntime: resolvedRuntime,
+      rawProfile: rawProfile,
+      securedProfile: securedProfile,
     );
   }
 
@@ -475,12 +482,206 @@ class EngineManager {
     }
 
     _activeRuntime = compiledRuntimePlan.resolvedRuntime;
+    _lastCompiledRuntimePlan = compiledRuntimePlan;
     _applyRuntimePlan(compiledRuntimePlan.appliedRuntimePlan.runtimePlan);
 
     if (coldStartPatchConfig != null) {
-      await persistColdStart(pathConfig: coldStartPatchConfig);
+      _persistColdStartInBackground(
+        coldStartPatchConfig: coldStartPatchConfig,
+      );
     }
   }
+
+  void _persistColdStartInBackground({
+    required ClashConfig coldStartPatchConfig,
+  }) {
+    final compiledRuntimePlan = _lastCompiledRuntimePlan;
+    final task = compiledRuntimePlan == null
+        ? _persistColdStartWithoutCompiledRuntimePlan(
+            coldStartPatchConfig: coldStartPatchConfig,
+          )
+        : _persistColdStartFromCompiledRuntimePlan(
+            compiledRuntimePlan,
+            coldStartPatchConfig: coldStartPatchConfig,
+          );
+    unawaited(task.catchError((Object error) {
+      commonPrint.log("persistColdStartParams: $error");
+    }));
+  }
+
+  Future<void> _persistColdStartFromCompiledRuntimePlan(
+    _CompiledRuntimePlan compiledRuntimePlan, {
+    required ClashConfig coldStartPatchConfig,
+  }) async {
+    final resolvedColdStartPatchConfig = _resolveColdStartPatchConfig(
+      runtimePatchConfig: compiledRuntimePlan.appliedRuntimePlan.patchConfig,
+      coldStartPatchConfig: coldStartPatchConfig,
+    );
+    final coldStartSecuredProfile = SecuredProfilePatch(
+      patchConfig: resolvedColdStartPatchConfig,
+      metadata: compiledRuntimePlan.securedProfile.metadata,
+      runtimeConstraints: compiledRuntimePlan.securedProfile.runtimeConstraints,
+    );
+    final coldStartRuntimePlan = await _buildRuntimePlan(
+      rawProfile: compiledRuntimePlan.rawProfile,
+      securedProfile: coldStartSecuredProfile,
+      runtimePatchConfig: resolvedColdStartPatchConfig,
+    );
+    final resolvedRuntime =
+        _resolveRuntimeSelection(coldStartRuntimePlan.runtime);
+    await resolvedRuntime.engine.adapter.persistColdStart(
+      initParams: await _buildInitParams(),
+      runtimePlan: coldStartRuntimePlan,
+      state: _buildCoreState(
+        profileAccessControl: coldStartRuntimePlan.profileAccessControl,
+      ),
+    );
+  }
+
+  Future<void> _persistColdStartWithoutCompiledRuntimePlan({
+    required ClashConfig coldStartPatchConfig,
+  }) async {
+    final coldStartRuntimePlan = await _buildRuntimePlan(
+      rawProfile: null,
+      securedProfile: SecuredProfilePatch(
+        patchConfig: coldStartPatchConfig,
+        metadata: null,
+      ),
+      runtimePatchConfig: coldStartPatchConfig,
+    );
+    final resolvedRuntime =
+        _resolveRuntimeSelection(coldStartRuntimePlan.runtime);
+    await resolvedRuntime.engine.adapter.persistColdStart(
+      initParams: await _buildInitParams(),
+      runtimePlan: coldStartRuntimePlan,
+      state: _buildCoreState(
+        profileAccessControl: coldStartRuntimePlan.profileAccessControl,
+      ),
+    );
+  }
+
+  ClashConfig _resolveColdStartPatchConfig({
+    required ClashConfig runtimePatchConfig,
+    required ClashConfig coldStartPatchConfig,
+  }) =>
+      runtimePatchConfig.copyWith.tun(enable: coldStartPatchConfig.tun.enable);
+
+  void _syncCachedRuntimePlanWithUpdate(UpdateParams updateParams) {
+    final compiledRuntimePlan = _lastCompiledRuntimePlan;
+    if (compiledRuntimePlan == null) {
+      return;
+    }
+
+    final updatedPatchConfig = _applyUpdateParamsToPatchConfig(
+      compiledRuntimePlan.appliedRuntimePlan.patchConfig,
+      updateParams,
+    );
+    final updatedRuntimePlan = _applyUpdateParamsToRuntimePlan(
+      compiledRuntimePlan.appliedRuntimePlan.runtimePlan,
+      updateParams,
+    );
+    final updatedMetadata = _applyUpdateParamsToMetadata(
+      compiledRuntimePlan.securedProfile.metadata,
+      updateParams,
+    );
+    _lastCompiledRuntimePlan = _CompiledRuntimePlan(
+      appliedRuntimePlan: AppliedRuntimePlan(
+        patchConfig: updatedPatchConfig,
+        runtimePlan: updatedRuntimePlan,
+      ),
+      resolvedRuntime: compiledRuntimePlan.resolvedRuntime,
+      rawProfile: compiledRuntimePlan.rawProfile,
+      securedProfile: SecuredProfilePatch(
+        patchConfig: updatedPatchConfig,
+        metadata: updatedMetadata,
+        runtimeConstraints:
+            compiledRuntimePlan.securedProfile.runtimeConstraints,
+      ),
+    );
+  }
+
+  ClashConfig _applyUpdateParamsToPatchConfig(
+    ClashConfig patchConfig,
+    UpdateParams updateParams,
+  ) =>
+      patchConfig.copyWith(
+        tun: updateParams.tun,
+        allowLan: updateParams.allowLan,
+        findProcessMode: updateParams.findProcessMode,
+        mode: updateParams.mode,
+        logLevel: updateParams.logLevel,
+        ipv6: updateParams.ipv6,
+        tcpConcurrent: updateParams.tcpConcurrent,
+        externalController: updateParams.externalController,
+        unifiedDelay: updateParams.unifiedDelay,
+        mixedPort: updateParams.mixedPort,
+      );
+
+  RuntimePlan _applyUpdateParamsToRuntimePlan(
+    RuntimePlan runtimePlan,
+    UpdateParams updateParams,
+  ) =>
+      RuntimePlan(
+        config: _applyUpdateParamsToConfig(runtimePlan.config, updateParams),
+        selectedMap: runtimePlan.selectedMap,
+        testUrl: runtimePlan.testUrl,
+        runtime: runtimePlan.runtime,
+        files: runtimePlan.files,
+        builtInProxyNodes: runtimePlan.builtInProxyNodes,
+        metadata:
+            _applyUpdateParamsToMetadata(runtimePlan.metadata, updateParams),
+        profileAccessControl: runtimePlan.profileAccessControl,
+      );
+
+  Map<String, dynamic> _applyUpdateParamsToConfig(
+    Map<String, dynamic> config,
+    UpdateParams updateParams,
+  ) {
+    final updatedConfig = Map<String, dynamic>.from(config);
+    final updatedTun = Map<String, dynamic>.from(
+      switch (updatedConfig['tun']) {
+        final Map<dynamic, dynamic> tun => tun.map(
+            (key, value) => MapEntry(key.toString(), value),
+          ),
+        _ => const <String, dynamic>{},
+      },
+    );
+
+    updatedTun['enable'] = updateParams.tun.enable;
+    updatedTun['device'] = updateParams.tun.device;
+    updatedTun['dns-hijack'] = updateParams.tun.dnsHijack;
+    updatedTun['stack'] = updateParams.tun.stack.name;
+    updatedTun['route-address'] = updateParams.tun.routeAddress;
+    updatedTun['auto-route'] = updateParams.tun.autoRoute;
+
+    updatedConfig['tun'] = updatedTun;
+    updatedConfig['allow-lan'] = updateParams.allowLan;
+    updatedConfig['find-process-mode'] = updateParams.findProcessMode.name;
+    updatedConfig['mode'] = updateParams.mode.name;
+    updatedConfig['log-level'] = updateParams.logLevel.name;
+    updatedConfig['ipv6'] = updateParams.ipv6;
+    updatedConfig['tcp-concurrent'] = updateParams.tcpConcurrent;
+    updatedConfig['external-controller'] =
+        updateParams.externalController.value;
+    updatedConfig['unified-delay'] = updateParams.unifiedDelay;
+    updatedConfig['mixed-port'] = updateParams.mixedPort;
+    return updatedConfig;
+  }
+
+  CompiledProfileMetadata? _applyUpdateParamsToMetadata(
+    CompiledProfileMetadata? metadata,
+    UpdateParams updateParams,
+  ) =>
+      metadata == null
+          ? null
+          : CompiledProfileMetadata(
+              externalController: updateParams.externalController.value,
+              tcpConcurrent: updateParams.tcpConcurrent,
+              unifiedDelay: updateParams.unifiedDelay,
+              logLevel: updateParams.logLevel.name,
+              keepAliveInterval: metadata.keepAliveInterval,
+              groupDescriptions: metadata.groupDescriptions,
+            );
 
   ResolvedRuntimeSelection _resolveRuntimeSelection(
       RuntimeSelection selection) {
