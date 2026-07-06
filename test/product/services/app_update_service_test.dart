@@ -142,6 +142,120 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
 }
 
 void main() {
+  group('selectAndroidReleaseAsset', () {
+    AppRelease createRelease(List<ReleaseAsset> assets) => AppRelease(
+          tagName: 'v1.2.3',
+          body: '',
+          htmlUrl: 'https://example.com/releases/v1.2.3',
+          assets: assets,
+          prerelease: false,
+          draft: false,
+        );
+
+    test('prefers exact ABI APK over universal fallback', () {
+      final release = createRelease([
+        ReleaseAsset(
+          name: 'FlClashM-android-arm64-v8a.apk',
+          browserDownloadUrl: 'https://example.com/arm64.apk',
+          size: 1,
+        ),
+        ReleaseAsset(
+          name: 'FlClashM-android-arm64-v8a.apk.sha256',
+          browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
+          size: 1,
+        ),
+        ReleaseAsset(
+          name: 'FlClashM-android-universal.apk',
+          browserDownloadUrl: 'https://example.com/universal.apk',
+          size: 1,
+        ),
+        ReleaseAsset(
+          name: 'FlClashM-android-universal.apk.sha256',
+          browserDownloadUrl: 'https://example.com/universal.apk.sha256',
+          size: 1,
+        ),
+      ]);
+
+      final asset = selectAndroidReleaseAsset(
+        release,
+        supportedAbis: const ['arm64-v8a', 'armeabi-v7a'],
+      );
+
+      expect(asset, isNotNull);
+      expect(asset?.apkAsset.name, 'FlClashM-android-arm64-v8a.apk');
+      expect(asset?.abi, 'arm64-v8a');
+      expect(
+          asset?.checksumAsset?.name, 'FlClashM-android-arm64-v8a.apk.sha256');
+    });
+
+    test('uses universal APK and its sha256 when no ABI-specific APK exists',
+        () {
+      final release = createRelease([
+        ReleaseAsset(
+          name: 'FlClashM-android-armeabi-v7a.apk',
+          browserDownloadUrl: 'https://example.com/armeabi-v7a.apk',
+          size: 1,
+        ),
+        ReleaseAsset(
+          name: 'FlClashM-android-universal.apk',
+          browserDownloadUrl: 'https://example.com/universal.apk',
+          size: 1,
+        ),
+        ReleaseAsset(
+          name: 'FlClashM-android-universal.apk.sha256',
+          browserDownloadUrl: 'https://example.com/universal.apk.sha256',
+          size: 1,
+        ),
+      ]);
+
+      final asset = selectAndroidReleaseAsset(
+        release,
+        supportedAbis: const ['x86_64'],
+      );
+
+      expect(asset, isNotNull);
+      expect(asset?.apkAsset.name, 'FlClashM-android-universal.apk');
+      expect(asset?.abi, 'universal');
+      expect(
+          asset?.checksumAsset?.name, 'FlClashM-android-universal.apk.sha256');
+    });
+
+    test('returns null when release has neither matching ABI APK nor universal',
+        () {
+      final release = createRelease([
+        ReleaseAsset(
+          name: 'FlClashM-android-armeabi-v7a.apk',
+          browserDownloadUrl: 'https://example.com/armeabi-v7a.apk',
+          size: 1,
+        ),
+      ]);
+
+      final asset = selectAndroidReleaseAsset(
+        release,
+        supportedAbis: const ['x86_64'],
+      );
+
+      expect(asset, isNull);
+    });
+
+    test('never selects Android AAB as installable asset', () {
+      final release = createRelease([
+        ReleaseAsset(
+          name: 'FlClashM-android-release.aab',
+          browserDownloadUrl: 'https://example.com/release.aab',
+          size: 1,
+        ),
+      ]);
+
+      final asset = selectAndroidReleaseAsset(
+        release,
+        supportedAbis: const ['arm64-v8a'],
+      );
+
+      expect(asset, isNull);
+    });
+  });
+
   group('AppUpdateService', () {
     late Directory tempDir;
 

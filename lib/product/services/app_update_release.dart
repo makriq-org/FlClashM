@@ -29,12 +29,22 @@ class ReleaseAsset {
 
   bool get isAndroidApk => _androidAssetPattern.hasMatch(name);
 
-  String? get androidAbi {
+  String? get _androidApkSuffix {
     final match = _androidAssetPattern.firstMatch(name);
     if (match == null) {
       return null;
     }
     return match.group(1);
+  }
+
+  bool get isUniversalAndroidApk => _androidApkSuffix == 'universal';
+
+  String? get androidAbi {
+    final suffix = _androidApkSuffix;
+    if (suffix == null || suffix.isEmpty || suffix == 'universal') {
+      return null;
+    }
+    return suffix;
   }
 
   String? get sha256Digest {
@@ -121,6 +131,10 @@ AndroidReleaseAsset? selectAndroidReleaseAsset(
 
   for (final asset in release.assets) {
     if (!asset.isAndroidApk) {
+      continue;
+    }
+    if (asset.isUniversalAndroidApk) {
+      universalAsset ??= asset;
       continue;
     }
     final abi = asset.androidAbi;
