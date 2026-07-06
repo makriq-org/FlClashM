@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -1151,40 +1152,253 @@ class ByedpiNodeController {
     required Duration timeout,
   }) async {
     Socket? socket;
+    _SocketByteReader? reader;
     try {
       socket = await Socket.connect(host, port, timeout: timeout);
       final targetHost = url.host;
       final targetPort =
           url.hasPort ? url.port : (url.scheme == 'http' ? 80 : 443);
-      final hostBytes = utf8.encode(targetHost);
-      socket.add([
-        0x05,
-        0x01,
-        0x00,
-        0x05,
-        0x01,
-        0x00,
-        0x03,
-        hostBytes.length,
-        ...hostBytes,
-        (targetPort >> 8) & 0xff,
-        targetPort & 0xff,
-      ]);
-      await socket.flush();
-      final response = await socket
-          .timeout(timeout)
-          .expand((chunk) => chunk)
-          .take(4)
-          .toList();
-      return response.length == 4 &&
-          response[0] == 0x05 &&
-          response[1] == 0x00 &&
-          response[2] == 0x05 &&
-          response[3] == 0x00;
+      reader = _SocketByteReader(socket);
+      await _performSocksGreeting(
+        socket: socket,
+        reader: reader,
+        timeout: timeout,
+      );
+      await _performSocksConnect(
+        socket: socket,
+        reader: reader,
+        targetHost: targetHost,
+        targetPort: targetPort,
+        timeout: timeout,
+      );
+      if (_usesTls(url, targetPort)) {
+        socket = await SecureSocket.secure(
+          socket,
+          host: targetHost,
+        ).timeout(timeout);
+        reader = _SocketByteReader(socket);
+      }
+      socket.add(
+        utf8.encode(
+          _buildHttpProbeRequest(
+            url: url,
+            targetHost: targetHost,
+            targetPort: targetPort,
+          ),
+        ),
+      );
+      await socket.flush().timeout(timeout);
+      final readPhaseStopwatch = Stopwatch()..start();
+      final statusLine = await reader.readLine(
+        timeout: timeout,
+        maxLength: 4096,
+        elapsed: () => readPhaseStopwatch.elapsed,
+      );
+      return _isValidHttpStatusLine(statusLine);
     } on Object {
       return false;
     } finally {
       socket?.destroy();
     }
+  }
+
+  static Future<void> _performSocksGreeting({
+    required Socket socket,
+    required _SocketByteReader reader,
+    required Duration timeout,
+  }) async {
+    socket.add(const [0x05, 0x01, 0x00]);
+    await socket.flush().timeout(timeout);
+    final response = await reader.readBytes(2, timeout);
+    if (response[0] != 0x05 || response[1] != 0x00) {
+      throw const SocketException('SOCKS5 greeting failed');
+    }
+  }
+
+  static Future<void> _performSocksConnect({
+    required Socket socket,
+    required _SocketByteReader reader,
+    required String targetHost,
+    required int targetPort,
+    required Duration timeout,
+  }) async {
+    socket.add(_buildSocksConnectRequest(targetHost, targetPort));
+    await socket.flush().timeout(timeout);
+    final header = await reader.readBytes(4, timeout);
+    if (header[0] != 0x05 || header[1] != 0x00 || header[2] != 0x00) {
+      throw const SocketException('SOCKS5 connect failed');
+    }
+    await _discardSocksAddress(reader, header[3], timeout);
+    await reader.readBytes(2, timeout);
+  }
+
+  static List<int> _buildSocksConnectRequest(String host, int port) {
+    final address = InternetAddress.tryParse(host);
+    if (address?.type == InternetAddressType.IPv4) {
+      return [
+        0x05,
+        0x01,
+        0x00,
+        0x01,
+        ...address!.rawAddress,
+        (port >> 8) & 0xff,
+        port & 0xff,
+      ];
+    }
+    if (address?.type == InternetAddressType.IPv6) {
+      return [
+        0x05,
+        0x01,
+        0x00,
+        0x04,
+        ...address!.rawAddress,
+        (port >> 8) & 0xff,
+        port & 0xff,
+      ];
+    }
+    final hostBytes = utf8.encode(host);
+    if (hostBytes.length > 255) {
+      throw const SocketException('SOCKS5 host name is too long');
+    }
+    return [
+      0x05,
+      0x01,
+      0x00,
+      0x03,
+      hostBytes.length,
+      ...hostBytes,
+      (port >> 8) & 0xff,
+      port & 0xff,
+    ];
+  }
+
+  static Future<void> _discardSocksAddress(
+    _SocketByteReader reader,
+    int addressType,
+    Duration timeout,
+  ) async {
+    switch (addressType) {
+      case 0x01:
+        await reader.readBytes(4, timeout);
+        return;
+      case 0x03:
+        final length = (await reader.readBytes(1, timeout)).single;
+        await reader.readBytes(length, timeout);
+        return;
+      case 0x04:
+        await reader.readBytes(16, timeout);
+        return;
+      default:
+        throw const SocketException('SOCKS5 returned unknown address type');
+    }
+  }
+
+  static bool _usesTls(Uri url, int targetPort) =>
+      url.scheme == 'https' || targetPort == 443;
+
+  static String _buildHttpProbeRequest({
+    required Uri url,
+    required String targetHost,
+    required int targetPort,
+  }) {
+    final requestTarget = url.path.isEmpty
+        ? '/${url.hasQuery ? '?${url.query}' : ''}'
+        : '${url.path}${url.hasQuery ? '?${url.query}' : ''}';
+    final defaultPort = url.scheme == 'http' ? 80 : 443;
+    final hostHeader = targetHost.contains(':') ? '[$targetHost]' : targetHost;
+    final authority = url.hasPort && targetPort != defaultPort
+        ? '$hostHeader:$targetPort'
+        : hostHeader;
+    return 'HEAD $requestTarget HTTP/1.1\r\n'
+        'Host: $authority\r\n'
+        'Connection: close\r\n'
+        '\r\n';
+  }
+
+  static bool _isValidHttpStatusLine(String statusLine) {
+    final match = RegExp(r'^HTTP/\d\.\d\s+([1-5]\d{2})\b').firstMatch(
+      statusLine.trim(),
+    );
+    if (match == null) {
+      return false;
+    }
+    final statusCode = int.tryParse(match.group(1) ?? '');
+    return statusCode != null && statusCode >= 100 && statusCode <= 599;
+  }
+}
+
+class _SocketByteReader {
+  _SocketByteReader(Stream<List<int>> stream)
+      : _iterator = StreamIterator<List<int>>(stream);
+
+  final StreamIterator<List<int>> _iterator;
+  List<int> _buffer = <int>[];
+
+  Future<List<int>> readBytes(int length, Duration timeout) async {
+    while (_buffer.length < length) {
+      final hasNext = await _iterator.moveNext().timeout(timeout);
+      if (!hasNext) {
+        throw const SocketException('Unexpected socket close');
+      }
+      _buffer.addAll(_iterator.current);
+    }
+    return _take(length);
+  }
+
+  Future<String> readLine({
+    required Duration timeout,
+    required int maxLength,
+    Duration Function()? elapsed,
+  }) async {
+    while (true) {
+      final newlineIndex = _buffer.indexOf(0x0a);
+      if (newlineIndex != -1) {
+        return _decodeLine(_take(newlineIndex + 1));
+      }
+      if (_buffer.length >= maxLength) {
+        return _decodeLine(_take(maxLength));
+      }
+      final hasNext = await _iterator.moveNext().timeout(
+            _remainingTimeout(timeout, elapsed),
+          );
+      if (!hasNext) {
+        if (_buffer.isEmpty) {
+          throw const SocketException('Unexpected socket close');
+        }
+        return _decodeLine(_take(_buffer.length));
+      }
+      _buffer.addAll(_iterator.current);
+    }
+  }
+
+  Duration _remainingTimeout(
+    Duration timeout,
+    Duration Function()? elapsed,
+  ) {
+    if (elapsed == null) {
+      return timeout;
+    }
+    final remaining = timeout - elapsed();
+    if (remaining <= Duration.zero) {
+      throw TimeoutException('Socket read timed out');
+    }
+    return remaining;
+  }
+
+  List<int> _take(int length) {
+    final result = _buffer.sublist(0, length);
+    _buffer = length == _buffer.length ? <int>[] : _buffer.sublist(length);
+    return result;
+  }
+
+  String _decodeLine(List<int> bytes) {
+    var end = bytes.length;
+    if (end > 0 && bytes[end - 1] == 0x0a) {
+      end--;
+    }
+    if (end > 0 && bytes[end - 1] == 0x0d) {
+      end--;
+    }
+    return latin1.decode(bytes.sublist(0, end));
   }
 }
