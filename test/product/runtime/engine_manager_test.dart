@@ -17,6 +17,7 @@ void main() {
 
     EngineManager buildManager({
       LoadCurrentRawProfileCallback? loadCurrentRawProfile,
+      EnforceSecurityPolicyCallback? enforceSecurityPolicy,
       BuildRuntimePlanCallback? buildRuntimePlan,
     }) =>
         EngineManager(
@@ -61,10 +62,11 @@ void main() {
           enforceSecurityPolicy: ({
             required compiledProfile,
           }) =>
+              enforceSecurityPolicy?.call(compiledProfile: compiledProfile) ??
               SecuredProfilePatch(
-            patchConfig: compiledProfile.patchConfig,
-            metadata: compiledProfile.metadata,
-          ),
+                patchConfig: compiledProfile.patchConfig,
+                metadata: compiledProfile.metadata,
+              ),
           secureRuntimeUpdate: ({
             required updateParams,
           }) =>
@@ -182,6 +184,67 @@ void main() {
     });
 
     test(
+        'persists cold-start plan with tun disabled when hot plan enforces tun',
+        () async {
+      manager = buildManager(
+        enforceSecurityPolicy: ({
+          required compiledProfile,
+        }) =>
+            SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig.copyWith.tun(
+            enable: true,
+          ),
+          metadata: compiledProfile.metadata,
+          runtimeConstraints: const RuntimeSecurityConstraints(
+            enforceTun: true,
+          ),
+        ),
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async {
+          final tunEnabled = securedProfile.runtimeConstraints.enforceTun
+              ? true
+              : runtimePatchConfig.tun.enable;
+          return RuntimePlan(
+            config: {
+              'tun': {
+                'enable': tunEnabled,
+              },
+            },
+            selectedMap: const {},
+            testUrl: 'https://example.com',
+            runtime: runtimeSelection,
+            metadata: null,
+          );
+        },
+      );
+
+      final applied = await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(
+            tun: Tun(enable: true),
+          ),
+        ),
+        coldStartPatchConfig: const ClashConfig(
+          tun: Tun(enable: false),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(applied, isNotNull);
+      expect(
+        mihomoAdapter.lastPersistedRuntimePlan?.config['tun'],
+        isA<Map<String, dynamic>>().having(
+          (tun) => tun['enable'],
+          'enable',
+          isFalse,
+        ),
+      );
+    });
+
+    test(
         'loads raw profile once when setupRuntimePlan also persists cold-start',
         () async {
       var loadCurrentRawProfileCalls = 0;
@@ -235,6 +298,77 @@ void main() {
 
       persistCompleted.complete();
       await Future<void>.delayed(Duration.zero);
+    });
+
+    test('serializes cold-start persistence and keeps the latest snapshot',
+        () async {
+      final firstPersistStarted = Completer<void>();
+      final secondPersistStarted = Completer<void>();
+      final firstPersistCompleted = Completer<void>();
+      manager = buildManager(
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async =>
+            RuntimePlan(
+          config: {
+            'mixed-port': runtimePatchConfig.mixedPort,
+            'tun': {
+              'enable': runtimePatchConfig.tun.enable,
+            },
+          },
+          selectedMap: const {},
+          testUrl: 'https://example.com',
+          runtime: runtimeSelection,
+          metadata: null,
+        ),
+      );
+      mihomoAdapter.onPersistColdStartCall = (callIndex, _) {
+        if (callIndex == 1 && !firstPersistStarted.isCompleted) {
+          firstPersistStarted.complete();
+        }
+        if (callIndex == 2 && !secondPersistStarted.isCompleted) {
+          secondPersistStarted.complete();
+        }
+      };
+      mihomoAdapter.persistColdStartCompleters = [firstPersistCompleted];
+
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(
+            mixedPort: 10001,
+          ),
+        ),
+        coldStartPatchConfig: const ClashConfig(
+          tun: Tun(enable: false),
+        ),
+      );
+      await firstPersistStarted.future.timeout(const Duration(seconds: 1));
+
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(
+            mixedPort: 10002,
+          ),
+        ),
+        coldStartPatchConfig: const ClashConfig(
+          tun: Tun(enable: false),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(secondPersistStarted.isCompleted, isFalse);
+
+      firstPersistCompleted.complete();
+      await secondPersistStarted.future.timeout(const Duration(seconds: 1));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(mihomoAdapter.persistColdStartCalls, 2);
+      expect(
+        mihomoAdapter.lastPersistedRuntimePlan?.config['mixed-port'],
+        10002,
+      );
     });
 
     test('secures live runtime updates before adapter update', () async {
@@ -435,9 +569,12 @@ class _FakeEngineAdapter implements EngineAdapter {
   int updateConfigCalls = 0;
   int persistColdStartCalls = 0;
   RuntimePlan? lastPersistedRuntimePlan;
+  RuntimePlan? lastRequestedPersistedRuntimePlan;
   UpdateParams? lastUpdateParams;
   void Function()? onPersistColdStart;
+  void Function(int callIndex, RuntimePlan runtimePlan)? onPersistColdStartCall;
   Completer<void>? persistColdStartCompleter;
+  List<Completer<void>> persistColdStartCompleters = const [];
 
   @override
   Future<void> applyPendingUpdate() async {
@@ -501,10 +638,16 @@ class _FakeEngineAdapter implements EngineAdapter {
     required CoreState state,
   }) async {
     persistColdStartCalls++;
-    lastPersistedRuntimePlan = runtimePlan;
+    final callIndex = persistColdStartCalls;
+    lastRequestedPersistedRuntimePlan = runtimePlan;
     onPersistColdStart?.call();
+    onPersistColdStartCall?.call(callIndex, runtimePlan);
+    if (callIndex <= persistColdStartCompleters.length) {
+      await persistColdStartCompleters[callIndex - 1].future;
+    }
     if (persistColdStartCompleter != null) {
       await persistColdStartCompleter!.future;
     }
+    lastPersistedRuntimePlan = runtimePlan;
   }
 }

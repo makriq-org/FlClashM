@@ -132,6 +132,7 @@ class EngineManager {
   RuntimeUpdateTasks _updateTasks = const [];
   DateTime? _startTime;
   _CompiledRuntimePlan? _lastCompiledRuntimePlan;
+  Future<void> _coldStartPersistChain = Future<void>.value();
 
   EngineAdapter get _adapter => _activeRuntime.engine.adapter;
 
@@ -331,18 +332,21 @@ class EngineManager {
   }
 
   Future<void> persistColdStart({required ClashConfig pathConfig}) async {
+    final compiledRuntimePlan = _lastCompiledRuntimePlan;
     try {
-      final compiledRuntimePlan = _lastCompiledRuntimePlan;
-      if (compiledRuntimePlan == null) {
-        await _persistColdStartWithoutCompiledRuntimePlan(
-          coldStartPatchConfig: pathConfig,
-        );
-      } else {
+      await _enqueueColdStartPersistence(() async {
+        if (compiledRuntimePlan == null) {
+          await _persistColdStartWithoutCompiledRuntimePlan(
+            coldStartPatchConfig: pathConfig,
+          );
+          return;
+        }
+
         await _persistColdStartFromCompiledRuntimePlan(
           compiledRuntimePlan,
           coldStartPatchConfig: pathConfig,
         );
-      }
+      });
     } catch (e) {
       commonPrint.log("persistColdStartParams: $e");
     }
@@ -496,17 +500,31 @@ class EngineManager {
     required ClashConfig coldStartPatchConfig,
   }) {
     final compiledRuntimePlan = _lastCompiledRuntimePlan;
-    final task = compiledRuntimePlan == null
-        ? _persistColdStartWithoutCompiledRuntimePlan(
-            coldStartPatchConfig: coldStartPatchConfig,
-          )
-        : _persistColdStartFromCompiledRuntimePlan(
-            compiledRuntimePlan,
+    unawaited(
+      _enqueueColdStartPersistence(() async {
+        if (compiledRuntimePlan == null) {
+          await _persistColdStartWithoutCompiledRuntimePlan(
             coldStartPatchConfig: coldStartPatchConfig,
           );
-    unawaited(task.catchError((Object error) {
-      commonPrint.log("persistColdStartParams: $error");
-    }));
+          return;
+        }
+
+        await _persistColdStartFromCompiledRuntimePlan(
+          compiledRuntimePlan,
+          coldStartPatchConfig: coldStartPatchConfig,
+        );
+      }).catchError((Object error) {
+        commonPrint.log("persistColdStartParams: $error");
+      }),
+    );
+  }
+
+  Future<void> _enqueueColdStartPersistence(
+    Future<void> Function() persistTask,
+  ) {
+    final queuedTask = _coldStartPersistChain.then((_) => persistTask());
+    _coldStartPersistChain = queuedTask.catchError((_) {});
+    return queuedTask;
   }
 
   Future<void> _persistColdStartFromCompiledRuntimePlan(
@@ -520,7 +538,11 @@ class EngineManager {
     final coldStartSecuredProfile = SecuredProfilePatch(
       patchConfig: resolvedColdStartPatchConfig,
       metadata: compiledRuntimePlan.securedProfile.metadata,
-      runtimeConstraints: compiledRuntimePlan.securedProfile.runtimeConstraints,
+      runtimeConstraints: _resolveColdStartRuntimeConstraints(
+        runtimeConstraints:
+            compiledRuntimePlan.securedProfile.runtimeConstraints,
+        coldStartPatchConfig: resolvedColdStartPatchConfig,
+      ),
     );
     final coldStartRuntimePlan = await _buildRuntimePlan(
       rawProfile: compiledRuntimePlan.rawProfile,
@@ -565,6 +587,14 @@ class EngineManager {
     required ClashConfig coldStartPatchConfig,
   }) =>
       runtimePatchConfig.copyWith.tun(enable: coldStartPatchConfig.tun.enable);
+
+  RuntimeSecurityConstraints _resolveColdStartRuntimeConstraints({
+    required RuntimeSecurityConstraints runtimeConstraints,
+    required ClashConfig coldStartPatchConfig,
+  }) =>
+      coldStartPatchConfig.tun.enable
+          ? runtimeConstraints
+          : const RuntimeSecurityConstraints();
 
   void _syncCachedRuntimePlanWithUpdate(UpdateParams updateParams) {
     final compiledRuntimePlan = _lastCompiledRuntimePlan;
