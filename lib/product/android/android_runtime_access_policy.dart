@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../plugins/app.dart';
 import '../../plugins/vpn.dart';
 import '../runtime/engine_manager.dart';
+import '../runtime/vpn_access_control.dart';
 
 abstract interface class RuntimeAccessPlatformBridge {
   Future<List<Package>> readPackages();
@@ -56,7 +57,10 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     if (optionsJson.isEmpty) {
       return optionsJson;
     }
-    final hardenedAccessControl = _withSelfBypass(accessControl);
+    final hardenedAccessControl = enforceSelfPackageBypass(
+      accessControl,
+      selfPackageNames: selfPackageNames,
+    );
 
     try {
       return json.encode(
@@ -87,38 +91,6 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
       accessControl: accessControl,
     );
     return await vpn?.start(optionsJson: mergedOptions) ?? false;
-  }
-
-  AccessControl _withSelfBypass(AccessControl accessControl) {
-    final selfPackages = selfPackageNames
-        .map((name) => name.trim())
-        .where((name) => name.isNotEmpty)
-        .toSet();
-    if (selfPackages.isEmpty) {
-      return accessControl;
-    }
-
-    if (!accessControl.enable) {
-      return accessControl.copyWith(
-        enable: true,
-        mode: AccessControlMode.rejectSelected,
-        rejectList: selfPackages.toList(growable: false),
-      );
-    }
-
-    return switch (accessControl.mode) {
-      AccessControlMode.acceptSelected => accessControl.copyWith(
-          acceptList: accessControl.acceptList
-              .where((name) => !selfPackages.contains(name))
-              .toList(growable: false),
-        ),
-      AccessControlMode.rejectSelected => accessControl.copyWith(
-          rejectList: {
-            ...accessControl.rejectList,
-            ...selfPackages,
-          }.toList(growable: false),
-        ),
-    };
   }
 
   @override

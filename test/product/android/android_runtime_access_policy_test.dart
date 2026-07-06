@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flclashm/product/android/android_runtime_access_policy.dart';
+import 'package:flclashm/product/runtime/product_runtime.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -88,6 +90,93 @@ void main() {
         'acceptList': <String>[],
         'rejectList': ['com.example.blocked', 'com.makriq.flclash.dev'],
       });
+    });
+
+    test('hardens cold-start core state access control for every mode', () {
+      final globalState = GlobalState()
+        ..config = const Config(themeProps: defaultThemeProps)
+        ..activeProfileAccessControlNotifier.value = null;
+
+      final disabledState = globalState.getCoreState(
+        profileAccessControl: const AccessControl(),
+      );
+      expect(
+        disabledState.vpnProps.accessControl,
+        const AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.makriq.flclash', 'com.makriq.flclash.dev'],
+        ),
+      );
+
+      final acceptState = globalState.getCoreState(
+        profileAccessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.example.app', 'com.makriq.flclash'],
+        ),
+      );
+      expect(
+        acceptState.vpnProps.accessControl,
+        const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.example.app'],
+        ),
+      );
+
+      final rejectState = globalState.getCoreState(
+        profileAccessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.example.blocked'],
+        ),
+      );
+      expect(
+        rejectState.vpnProps.accessControl,
+        const AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: [
+            'com.example.blocked',
+            'com.makriq.flclash',
+            'com.makriq.flclash.dev',
+          ],
+        ),
+      );
+    });
+
+    test('applies self bypass idempotently', () {
+      const selfPackageNames = [
+        'com.makriq.flclash',
+        'com.makriq.flclash.dev',
+      ];
+      const scenarios = [
+        AccessControl(),
+        AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.example.app', 'com.makriq.flclash'],
+        ),
+        AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.example.blocked', 'com.makriq.flclash'],
+        ),
+      ];
+
+      for (final scenario in scenarios) {
+        final once = enforceSelfPackageBypass(
+          scenario,
+          selfPackageNames: selfPackageNames,
+        );
+        final twice = enforceSelfPackageBypass(
+          once,
+          selfPackageNames: selfPackageNames,
+        );
+
+        expect(twice, once);
+      }
     });
 
     test('aborts and requests restart after successful authorization',

@@ -278,11 +278,12 @@ class GlobalState {
     AccessControl? profileAccessControl,
   }) {
     final currentProfile = config.currentProfile;
+    final resolvedAccessControl = profileAccessControl ??
+        activeProfileAccessControl ??
+        config.vpnProps.accessControl;
     return CoreState(
       vpnProps: config.vpnProps.copyWith(
-        accessControl: profileAccessControl ??
-            activeProfileAccessControl ??
-            config.vpnProps.accessControl,
+        accessControl: enforceSelfPackageBypass(resolvedAccessControl),
       ),
       onlyStatisticsProxy: false,
       currentProfileName: currentProfile?.label ?? currentProfile?.id ?? "",
