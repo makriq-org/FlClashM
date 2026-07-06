@@ -1188,9 +1188,11 @@ class ByedpiNodeController {
         ),
       );
       await socket.flush().timeout(timeout);
+      final readPhaseStopwatch = Stopwatch()..start();
       final statusLine = await reader.readLine(
         timeout: timeout,
         maxLength: 4096,
+        elapsed: () => readPhaseStopwatch.elapsed,
       );
       return _isValidHttpStatusLine(statusLine);
     } on Object {
@@ -1321,7 +1323,7 @@ class ByedpiNodeController {
       return false;
     }
     final statusCode = int.tryParse(match.group(1) ?? '');
-    return statusCode != null && statusCode >= 200 && statusCode <= 499;
+    return statusCode != null && statusCode >= 100 && statusCode <= 599;
   }
 }
 
@@ -1346,6 +1348,7 @@ class _SocketByteReader {
   Future<String> readLine({
     required Duration timeout,
     required int maxLength,
+    Duration Function()? elapsed,
   }) async {
     while (true) {
       final newlineIndex = _buffer.indexOf(0x0a);
@@ -1355,7 +1358,9 @@ class _SocketByteReader {
       if (_buffer.length >= maxLength) {
         return _decodeLine(_take(maxLength));
       }
-      final hasNext = await _iterator.moveNext().timeout(timeout);
+      final hasNext = await _iterator.moveNext().timeout(
+            _remainingTimeout(timeout, elapsed),
+          );
       if (!hasNext) {
         if (_buffer.isEmpty) {
           throw const SocketException('Unexpected socket close');
@@ -1364,6 +1369,20 @@ class _SocketByteReader {
       }
       _buffer.addAll(_iterator.current);
     }
+  }
+
+  Duration _remainingTimeout(
+    Duration timeout,
+    Duration Function()? elapsed,
+  ) {
+    if (elapsed == null) {
+      return timeout;
+    }
+    final remaining = timeout - elapsed();
+    if (remaining <= Duration.zero) {
+      throw TimeoutException('Socket read timed out');
+    }
+    return remaining;
   }
 
   List<int> _take(int length) {

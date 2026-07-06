@@ -272,6 +272,40 @@ void main() {
 
       expect(passed, isTrue);
     });
+
+    test('treats 5xx http response through socks as working strategy',
+        () async {
+      final controller = buildControllerWithDefaultSiteCheck();
+      final server = await _FakeSocksServer.bind(
+        afterConnect: (client, reader) async {
+          final request = await reader.readHeaders(
+            timeout: const Duration(seconds: 1),
+            maxLength: 4096,
+          );
+          expect(request, contains('HEAD / HTTP/1.1'));
+          expect(request, contains('Host: example.com'));
+          client.add(
+            utf8.encode(
+              'HTTP/1.1 503 Service Unavailable\r\n'
+              'Content-Length: 0\r\n'
+              'Connection: close\r\n'
+              '\r\n',
+            ),
+          );
+          await client.flush();
+        },
+      );
+      addTearDown(server.close);
+
+      final passed = await controller.siteCheck(
+        host: InternetAddress.loopbackIPv4.address,
+        port: server.port,
+        url: Uri.parse('http://example.com/'),
+        timeout: const Duration(seconds: 1),
+      );
+
+      expect(passed, isTrue);
+    });
   });
 }
 
