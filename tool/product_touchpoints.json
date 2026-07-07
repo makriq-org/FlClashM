@@ -111,11 +111,59 @@
       ]
     },
     {
+      "path": "lib/views/dashboard/dashboard.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "DashboardView stays a thin base mount point for the product dashboard page.",
+      "targets": [
+        "lib/product/ui/dashboard/dashboard_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/widgets/announce_widget.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "AnnounceWidget stays a thin base re-export for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/announce_widget_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/widgets/change_server_button.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "ChangeServerButton stays a thin base re-export for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/change_server_button_view.dart"
+      ]
+    },
+    {
       "path": "lib/views/dashboard/widgets/hero_connect.dart",
       "boundary": "ui-thin-consumers",
       "reason": "HeroConnect stays a thin base re-export for the product dashboard widget.",
       "targets": [
         "lib/product/ui/dashboard/hero_connect_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "MetainfoWidget stays a thin base mount point for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/metainfo_widget_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/widgets/service_info_widget.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "ServiceInfoWidget stays a thin base re-export for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/service_info_widget_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/widgets/stats_grid.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "StatsGrid stays a thin base re-export for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/stats_grid_view.dart"
       ]
     },
     {
