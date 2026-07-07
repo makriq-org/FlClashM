@@ -3,7 +3,19 @@ import 'byedpi_node_controller.dart';
 import 'naiveproxy_node_controller.dart';
 import 'olcrtc_node_controller.dart';
 
+class BuiltInProxyRuntimePlanStartResult {
+  const BuiltInProxyRuntimePlanStartResult({
+    required this.isSuccess,
+    this.startedPlans = const [],
+  });
+
+  final bool isSuccess;
+  final List<BuiltInProxyNodePlan> startedPlans;
+}
+
 abstract interface class BuiltInProxySupervisor {
+  bool get hasCommittedRuntimePlan;
+
   Future<void> applyPendingUpdate();
 
   Future<void> prepareForRestart();
@@ -14,10 +26,12 @@ abstract interface class BuiltInProxySupervisor {
 
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans);
 
-  Future<bool> startRuntimePlan(
+  Future<BuiltInProxyRuntimePlanStartResult> startRuntimePlan(
     List<BuiltInProxyNodePlan> plans, {
     bool stopAllOnFailure = true,
   });
+
+  Future<void> stopRuntimePlan(List<BuiltInProxyNodePlan> plans);
 
   Future<bool> start({bool stopAllOnFailure = true});
 
@@ -40,6 +54,9 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   final OlcRtcNodeController olcRtc;
 
   List<BuiltInProxyNodePlan> _currentPlans = const [];
+
+  @override
+  bool get hasCommittedRuntimePlan => _currentPlans.isNotEmpty;
 
   List<BuiltInProxyNodePlan> get _currentNaiveProxyPlans => _currentPlans
       .where((plan) => plan.type == BuiltInProxyType.naiveproxy)
@@ -148,37 +165,80 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
-  Future<bool> startRuntimePlan(
+  Future<BuiltInProxyRuntimePlanStartResult> startRuntimePlan(
     List<BuiltInProxyNodePlan> plans, {
     bool stopAllOnFailure = true,
   }) async {
+    final startedPlans = <BuiltInProxyNodePlan>[];
+    final naiveProxyPlans = _filterNaiveProxyPlans(plans);
+    final byedpiPlans = _filterByedpiPlans(plans);
+    final olcRtcPlans = _filterOlcRtcPlans(plans);
     try {
-      final started = await Future.wait([
-        naiveProxy.startNodes(_filterNaiveProxyPlans(plans)),
-        byedpi.startNodes(_filterByedpiPlans(plans)),
-        olcRtc.startNodes(_filterOlcRtcPlans(plans)),
-      ]);
-      if (started.every((value) => value)) {
-        return true;
+      final naiveProxyResult = await _startControllerPlans(
+        plans: naiveProxyPlans,
+        startNodes: naiveProxy.startNodes,
+        readNodeStartTime: naiveProxy.runtime.readNodeStartTime,
+      );
+      if (!naiveProxyResult.isSuccess) {
+        return naiveProxyResult;
       }
+      startedPlans.addAll(naiveProxyResult.startedPlans);
+
+      final byedpiResult = await _startControllerPlans(
+        plans: byedpiPlans,
+        startNodes: byedpi.startNodes,
+        readNodeStartTime: byedpi.runtime.readNodeStartTime,
+      );
+      if (!byedpiResult.isSuccess) {
+        if (stopAllOnFailure) {
+          await _stopRuntimePlan(startedPlans);
+        }
+        return BuiltInProxyRuntimePlanStartResult(
+          isSuccess: false,
+          startedPlans: List<BuiltInProxyNodePlan>.unmodifiable(startedPlans),
+        );
+      }
+      startedPlans.addAll(byedpiResult.startedPlans);
+
+      final olcRtcResult = await _startControllerPlans(
+        plans: olcRtcPlans,
+        startNodes: olcRtc.startNodes,
+        readNodeStartTime: olcRtc.runtime.readNodeStartTime,
+      );
+      if (!olcRtcResult.isSuccess) {
+        if (stopAllOnFailure) {
+          await _stopRuntimePlan(startedPlans);
+        }
+        return BuiltInProxyRuntimePlanStartResult(
+          isSuccess: false,
+          startedPlans: List<BuiltInProxyNodePlan>.unmodifiable(startedPlans),
+        );
+      }
+      startedPlans.addAll(olcRtcResult.startedPlans);
+      return BuiltInProxyRuntimePlanStartResult(
+        isSuccess: true,
+        startedPlans: List<BuiltInProxyNodePlan>.unmodifiable(startedPlans),
+      );
     } catch (e, stackTrace) {
       if (stopAllOnFailure) {
-        await _stopRuntimePlan(plans);
+        await _stopRuntimePlan(startedPlans);
       }
       Error.throwWithStackTrace(e, stackTrace);
     }
-
-    if (stopAllOnFailure) {
-      await _stopRuntimePlan(plans);
-    }
-    return false;
   }
 
   @override
-  Future<bool> start({bool stopAllOnFailure = true}) => startRuntimePlan(
-        _currentPlans,
-        stopAllOnFailure: stopAllOnFailure,
-      );
+  Future<void> stopRuntimePlan(List<BuiltInProxyNodePlan> plans) =>
+      _stopRuntimePlan(plans);
+
+  @override
+  Future<bool> start({bool stopAllOnFailure = true}) async {
+    final result = await startRuntimePlan(
+      _currentPlans,
+      stopAllOnFailure: stopAllOnFailure,
+    );
+    return result.isSuccess;
+  }
 
   @override
   Future<void> stop() => _stopRuntimePlan(_currentPlans);
@@ -207,6 +267,38 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     if (error != null) {
       Error.throwWithStackTrace(error, stackTrace!);
     }
+  }
+
+  Future<BuiltInProxyRuntimePlanStartResult> _startControllerPlans({
+    required List<BuiltInProxyNodePlan> plans,
+    required Future<bool> Function(List<BuiltInProxyNodePlan> plans) startNodes,
+    required Future<DateTime?> Function({required String nodeId})
+        readNodeStartTime,
+  }) async {
+    if (plans.isEmpty) {
+      return const BuiltInProxyRuntimePlanStartResult(isSuccess: true);
+    }
+
+    final runningNodeIds = <String>{};
+    for (final plan in plans) {
+      if (await readNodeStartTime(nodeId: plan.nodeId) != null) {
+        runningNodeIds.add(plan.nodeId);
+      }
+    }
+
+    final started = await startNodes(plans);
+    if (!started) {
+      return const BuiltInProxyRuntimePlanStartResult(isSuccess: false);
+    }
+
+    return BuiltInProxyRuntimePlanStartResult(
+      isSuccess: true,
+      startedPlans: List<BuiltInProxyNodePlan>.unmodifiable(
+        plans
+            .where((plan) => !runningNodeIds.contains(plan.nodeId))
+            .toList(growable: false),
+      ),
+    );
   }
 
   @override

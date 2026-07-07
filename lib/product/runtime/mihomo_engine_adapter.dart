@@ -293,6 +293,11 @@ class MihomoEngineAdapter implements EngineAdapter {
       _setupRuntimePlan(runtimePlan);
 
   Future<String> _setupRuntimePlan(RuntimePlan runtimePlan) async {
+    if (runtimePlan.builtInProxyNodes.isEmpty &&
+        !builtInProxySupervisor.hasCommittedRuntimePlan) {
+      return core.setupRuntimePlan(runtimePlan);
+    }
+
     final stageMessage = await builtInProxySupervisor.stageRuntimePlan(
       runtimePlan.builtInProxyNodes,
     );
@@ -300,21 +305,38 @@ class MihomoEngineAdapter implements EngineAdapter {
       return stageMessage;
     }
 
+    BuiltInProxyRuntimePlanStartResult? startedRuntimePlan;
+    if (runtimePlan.builtInProxyNodes.isNotEmpty) {
+      try {
+        startedRuntimePlan = await builtInProxySupervisor.startRuntimePlan(
+          runtimePlan.builtInProxyNodes,
+          stopAllOnFailure: true,
+        );
+      } catch (e) {
+        return _rollbackRuntimePlanSetup(
+          message: 'Built-in proxy nodes failed to start: $e',
+        );
+      }
+
+      if (!startedRuntimePlan.isSuccess) {
+        return _rollbackRuntimePlanSetup(
+          message: 'Built-in proxy nodes did not start.',
+        );
+      }
+    }
+
     final message = await core.setupRuntimePlan(runtimePlan);
     if (message.isEmpty) {
       await builtInProxySupervisor.commitStagedRuntimePlan(
         runtimePlan.builtInProxyNodes,
       );
-      _startBuiltInProxyNodesInBackground(runtimePlan.builtInProxyNodes);
       return '';
     }
 
-    final rollbackMessage =
-        await builtInProxySupervisor.rollbackStagedRuntimePlan();
-    if (rollbackMessage.isEmpty) {
-      return message;
-    }
-    return '$message Local-node rollback failed: $rollbackMessage';
+    return _rollbackRuntimePlanSetup(
+      message: message,
+      startedPlans: startedRuntimePlan?.startedPlans ?? const [],
+    );
   }
 
   @override
@@ -410,10 +432,11 @@ class MihomoEngineAdapter implements EngineAdapter {
     try {
       final started = runtimePlan == null
           ? await builtInProxySupervisor.start(stopAllOnFailure: false)
-          : await builtInProxySupervisor.startRuntimePlan(
+          : (await builtInProxySupervisor.startRuntimePlan(
               runtimePlan,
               stopAllOnFailure: false,
-            );
+            ))
+              .isSuccess;
       if (started) {
         return '';
       }
@@ -421,6 +444,32 @@ class MihomoEngineAdapter implements EngineAdapter {
     } catch (e) {
       return 'Failed to start built-in proxy nodes: $e';
     }
+  }
+
+  Future<String> _rollbackRuntimePlanSetup({
+    required String message,
+    List<BuiltInProxyNodePlan> startedPlans = const [],
+  }) async {
+    final cleanupMessages = <String>[];
+
+    if (startedPlans.isNotEmpty) {
+      try {
+        await builtInProxySupervisor.stopRuntimePlan(startedPlans);
+      } catch (e) {
+        cleanupMessages.add('Failed to stop started local nodes: $e');
+      }
+    }
+
+    final rollbackMessage =
+        await builtInProxySupervisor.rollbackStagedRuntimePlan();
+    if (rollbackMessage.isNotEmpty) {
+      cleanupMessages.add(rollbackMessage);
+    }
+
+    if (cleanupMessages.isEmpty) {
+      return message;
+    }
+    return '$message Local-node rollback failed: ${cleanupMessages.join(' ')}';
   }
 
   @override

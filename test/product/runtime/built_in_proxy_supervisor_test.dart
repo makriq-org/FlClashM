@@ -128,15 +128,36 @@ void main() {
       final olcPlan = _buildOlcPlan();
       runtime.startResults.addAll([true, false]);
 
-      final started = await supervisor.startRuntimePlan(
+      final result = await supervisor.startRuntimePlan(
         [naivePlan, olcPlan],
         stopAllOnFailure: false,
       );
 
-      expect(started, isFalse);
+      expect(result.isSuccess, isFalse);
       expect(runtime.startCalls, ['naive-a', 'olc-a']);
       expect(runtime.stopCalls, isEmpty);
       expect(runtime.runningNodes.keys, contains('naive-a'));
+    });
+
+    test('stops only newly started nodes when a later start fails', () async {
+      final supervisor = buildSupervisor();
+      final naivePlan = _buildNaivePlan();
+      final byedpiPlan = _buildByedpiPlan();
+      final olcPlan = _buildOlcPlan();
+      runtime.runningNodes['naive-a'] = DateTime(2026, 1, 1);
+      runtime.startResults.addAll([true, false]);
+
+      final result = await supervisor.startRuntimePlan(
+        [naivePlan, byedpiPlan, olcPlan],
+        stopAllOnFailure: true,
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(runtime.startCalls, ['byedpi-a', 'olc-a']);
+      expect(runtime.stopCalls, ['byedpi-a']);
+      expect(runtime.runningNodes.keys, contains('naive-a'));
+      expect(runtime.runningNodes.keys, isNot(contains('byedpi-a')));
+      expect(runtime.runningNodes.keys, isNot(contains('olc-a')));
     });
 
     test('rolls naiveproxy stage back when olcrtc stage fails', () async {
@@ -212,6 +233,27 @@ BuiltInProxyNodePlan _buildOlcPlan({
             'socks:\n'
             '  host: "127.0.0.1"\n'
             '  port: 35910',
+      },
+    );
+
+BuiltInProxyNodePlan _buildByedpiPlan({
+  String args = '--fake -1',
+}) =>
+    BuiltInProxyNodePlan(
+      nodeId: 'byedpi-a',
+      name: 'ByeDPI',
+      type: BuiltInProxyType.byedpi,
+      listenHost: '127.0.0.1',
+      listenPort: 35110,
+      protocol: BuiltInProxyProtocol.socks5,
+      udp: false,
+      files: {
+        'built-in-proxies/byedpi/byedpi-a/config.json': json.encode({
+          'listenHost': '127.0.0.1',
+          'listenPort': 35110,
+          'args': args,
+          'mode': 'manual',
+        }),
       },
     );
 
