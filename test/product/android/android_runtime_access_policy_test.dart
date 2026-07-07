@@ -70,6 +70,28 @@ void main() {
       });
     });
 
+    test('falls back to reject mode when include mode only contains self', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"dns-hijack":["any:53"]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.makriq.flclash.dev'],
+        ),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['accessControl'], {
+        'mode': 'rejectSelected',
+        'acceptList': <String>[],
+        'rejectList': ['com.makriq.flclash.dev'],
+      });
+    });
+
     test('adds self package to reject mode', () {
       const policy = AndroidRuntimeAccessPolicy(
         selfPackageNames: ['com.makriq.flclash.dev'],
@@ -122,6 +144,22 @@ void main() {
           enable: true,
           mode: AccessControlMode.acceptSelected,
           acceptList: ['com.example.app'],
+        ),
+      );
+
+      final acceptSelfOnlyState = globalState.getCoreState(
+        profileAccessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.makriq.flclash'],
+        ),
+      );
+      expect(
+        acceptSelfOnlyState.vpnProps.accessControl,
+        const AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.makriq.flclash', 'com.makriq.flclash.dev'],
         ),
       );
 

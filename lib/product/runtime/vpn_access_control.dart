@@ -23,11 +23,19 @@ AccessControl enforceSelfPackageBypass(
   }
 
   return switch (accessControl.mode) {
-    AccessControlMode.acceptSelected => accessControl.copyWith(
-        acceptList: accessControl.acceptList
+    AccessControlMode.acceptSelected => () {
+        final acceptList = accessControl.acceptList
             .where((name) => !selfPackages.contains(name))
-            .toList(growable: false),
-      ),
+            .toList(growable: false);
+        if (acceptList.isNotEmpty) {
+          return accessControl.copyWith(acceptList: acceptList);
+        }
+        return accessControl.copyWith(
+          mode: AccessControlMode.rejectSelected,
+          acceptList: const [],
+          rejectList: selfPackages.toList(growable: false),
+        );
+      }(),
     AccessControlMode.rejectSelected => accessControl.copyWith(
         rejectList: {
           ...accessControl.rejectList,
