@@ -53,19 +53,11 @@ GroupsState currentGroupsState(Ref ref) {
   );
   final groups = ref.watch(groupsProvider);
   return GroupsState(
-    value: switch (mode) {
-      Mode.direct => [],
-      // With `flclashx-override` on GLOBAL, global mode has a single selector —
-      // show only GLOBAL (service groups belong to rule mode). Otherwise keep
-      // the original behaviour: every group.
-      Mode.global => globalState.globalOverrideEnabled.value
-          ? groups.where((item) => item.name == GroupName.GLOBAL.name).toList()
-          : groups.toList(),
-      Mode.rule => groups
-          .where((item) => item.hidden == false)
-          .where((element) => element.name != GroupName.GLOBAL.name)
-          .toList(),
-    },
+    value: productSubscriptionDisplayPolicy.selectVisibleGroups(
+      mode: mode,
+      groups: groups,
+      globalOverrideEnabled: globalState.globalOverrideEnabled.value,
+    ),
   );
 }
 
@@ -446,27 +438,37 @@ Profile? currentProfile(Ref ref) {
 }
 
 final currentProductAdvisoryProvider =
-    Provider.autoDispose<ProductProviderAdvisory>((ref) =>
-        ProductProviderAdvisory.fromProfile(ref.watch(currentProfileProvider)));
+    Provider.autoDispose<ProductProviderAdvisory>(
+        (ref) => productSubscriptionDisplayPolicy.advisoryForProfile(
+              ref.watch(currentProfileProvider),
+            ));
 
 final currentProductDisplayHintsProvider =
-    Provider.autoDispose<ProductDisplayHints>(
-        (ref) => ref.watch(currentProductAdvisoryProvider).display);
+    Provider.autoDispose<ProductDisplayHints>((ref) {
+  final profile = ref.watch(currentProfileProvider);
+  return productSubscriptionDisplayPolicy.displayHintsForProfile(profile);
+});
 
 final effectiveNewDashboardProvider = Provider.autoDispose<bool>((ref) {
   final settingValue = ref.watch(
     appSettingProvider.select((state) => state.newDashboard),
   );
-  final productValue = ref.watch(
-    currentProductDisplayHintsProvider.select((state) => state.newDashboard),
+  final displayHints = ref.watch(
+    currentProductDisplayHintsProvider,
   );
-  return settingValue ?? productValue;
+  return productSubscriptionDisplayPolicy.resolveEffectiveNewDashboard(
+    settingValue: settingValue,
+    displayHints: displayHints,
+  );
 });
 
 final dashboardEditingLockedProvider = Provider.autoDispose<bool>((ref) {
   final effectiveNewDashboard = ref.watch(effectiveNewDashboardProvider);
-  final productHints = ref.watch(currentProductDisplayHintsProvider);
-  return productHints.denyDashboardEditing || effectiveNewDashboard;
+  final displayHints = ref.watch(currentProductDisplayHintsProvider);
+  return productSubscriptionDisplayPolicy.isDashboardEditingLocked(
+    effectiveNewDashboard: effectiveNewDashboard,
+    displayHints: displayHints,
+  );
 });
 
 /// Single source of truth for whether the "new look" (hero) dashboard is shown.
@@ -476,10 +478,9 @@ final dashboardEditingLockedProvider = Provider.autoDispose<bool>((ref) {
 /// `add` only when the subscription is first added), so the provider can switch the
 /// board on/off through the normal header pipeline rather than overriding here.
 @riverpod
-bool newDashboardEnabled(Ref ref) {
-  return ref.watch(appSettingProvider.select((state) => state.newDashboard)) ??
-      false;
-}
+bool newDashboardEnabled(Ref ref) =>
+    ref.watch(appSettingProvider.select((state) => state.newDashboard)) ??
+    false;
 
 @riverpod
 bool globalModeEnabled(Ref ref) => ref.watch(

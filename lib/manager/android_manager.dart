@@ -21,7 +21,7 @@ class _AndroidContainerState extends ConsumerState<AndroidManager> {
   @override
   void initState() {
     super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     ref.listenManual(
       appSettingProvider.select((state) => state.hidden),
       (prev, next) {

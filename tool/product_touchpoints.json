@@ -3,7 +3,7 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "App bootstrap may initialize Android shell shortcuts.",
+      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -19,7 +19,7 @@
     {
       "path": "lib/common/system.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "System helpers may delegate Android task-back behavior into AndroidShellService.",
+      "reason": "System helpers stay a thin base delegate for Android task-back behavior.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -46,7 +46,7 @@
     {
       "path": "lib/manager/android_manager.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "AndroidManager stays a thin consumer for exclude-from-recents shell sync.",
+      "reason": "AndroidManager stays a thin base consumer for exclude-from-recents shell sync.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -62,7 +62,7 @@
     {
       "path": "lib/providers/config.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "Config providers may refresh Android tile state after persisted profile changes.",
+      "reason": "Config providers stay a thin base trigger for Android tile refresh after persisted profile changes.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -70,7 +70,7 @@
     {
       "path": "lib/providers/state.dart",
       "boundary": "subscription-and-platform-selectors",
-      "reason": "State selectors may consume platform profile and subscription advisory display hints.",
+      "reason": "State selectors stay thin in base and delegate product advisory and display policy into lib/product/subscription.",
       "targets": [
         "lib/product/platform/platform_profile.dart",
         "lib/product/subscription/product_subscription.dart"
@@ -79,7 +79,7 @@
     {
       "path": "lib/services/subscription_notification_service.dart",
       "boundary": "subscription-and-platform-selectors",
-      "reason": "Subscription notifications may read advisory display hints, but not provider policy.",
+      "reason": "Subscription notifications stay a thin base consumer of product display policy and do not parse provider headers locally.",
       "targets": [
         "lib/product/subscription/product_subscription.dart"
       ]
