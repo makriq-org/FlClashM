@@ -146,7 +146,7 @@ void main() {
       expect(lifecycle.restartCalls, 1);
     });
 
-    test('stages and commits built-in proxy nodes on runtime plan setup',
+    test('starts built-in proxy nodes before core runtime plan setup',
         () async {
       final adapter = buildAdapter();
       const runtimePlan = RuntimePlan(
@@ -168,7 +168,6 @@ void main() {
       );
 
       final message = await adapter.setupRuntimePlan(runtimePlan);
-      await Future<void>.delayed(Duration.zero);
 
       expect(message, isEmpty);
       expect(core.setupRuntimePlanCalls, 1);
@@ -178,13 +177,13 @@ void main() {
       expect(builtInProxySupervisor.rollbackCalls, 0);
       expect(callOrder, [
         'stageLocalNodes',
+        'startLocalNodes',
         'setupCore',
         'commitLocalNodes',
-        'startLocalNodes',
       ]);
     });
 
-    test('continues runtime plan setup when built-in proxy start fails',
+    test('rolls staged built-in nodes back when built-in proxy start fails',
         () async {
       builtInProxySupervisor.startResult = false;
       final adapter = buildAdapter();
@@ -207,19 +206,17 @@ void main() {
       );
 
       final message = await adapter.setupRuntimePlan(runtimePlan);
-      await Future<void>.delayed(Duration.zero);
 
-      expect(message, isEmpty);
-      expect(core.setupRuntimePlanCalls, 1);
+      expect(message, contains('Built-in proxy nodes did not start.'));
+      expect(core.setupRuntimePlanCalls, 0);
       expect(builtInProxySupervisor.stageCalls, 1);
-      expect(builtInProxySupervisor.commitCalls, 1);
+      expect(builtInProxySupervisor.commitCalls, 0);
       expect(builtInProxySupervisor.startCalls, 1);
-      expect(builtInProxySupervisor.rollbackCalls, 0);
+      expect(builtInProxySupervisor.rollbackCalls, 1);
       expect(callOrder, [
         'stageLocalNodes',
-        'setupCore',
-        'commitLocalNodes',
         'startLocalNodes',
+        'rollbackLocalNodes',
       ]);
     });
 
@@ -248,8 +245,59 @@ void main() {
 
       expect(message, contains('core setup failed'));
       expect(builtInProxySupervisor.stageCalls, 1);
+      expect(builtInProxySupervisor.startCalls, 1);
+      expect(builtInProxySupervisor.stopRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 0);
       expect(builtInProxySupervisor.rollbackCalls, 1);
+      expect(callOrder, [
+        'stageLocalNodes',
+        'startLocalNodes',
+        'setupCore',
+        'stopStartedLocalNodes',
+        'rollbackLocalNodes',
+      ]);
+    });
+
+    test('skips built-in proxy supervisor for empty runtime plans', () async {
+      final adapter = buildAdapter();
+
+      final message = await adapter.setupRuntimePlan(
+        const RuntimePlan.empty(
+          selectedMap: {},
+          testUrl: 'https://example.com',
+        ),
+      );
+
+      expect(message, isEmpty);
+      expect(core.setupRuntimePlanCalls, 1);
+      expect(builtInProxySupervisor.stageCalls, 0);
+      expect(builtInProxySupervisor.startCalls, 0);
+      expect(builtInProxySupervisor.commitCalls, 0);
+      expect(builtInProxySupervisor.rollbackCalls, 0);
+    });
+
+    test('keeps supervisor path for empty runtime plans after prior nodes',
+        () async {
+      builtInProxySupervisor.hasCommittedRuntimePlanValue = true;
+      final adapter = buildAdapter();
+
+      final message = await adapter.setupRuntimePlan(
+        const RuntimePlan.empty(
+          selectedMap: {},
+          testUrl: 'https://example.com',
+        ),
+      );
+
+      expect(message, isEmpty);
+      expect(core.setupRuntimePlanCalls, 1);
+      expect(builtInProxySupervisor.stageCalls, 1);
+      expect(builtInProxySupervisor.startCalls, 0);
+      expect(builtInProxySupervisor.commitCalls, 1);
+      expect(callOrder, [
+        'stageLocalNodes',
+        'setupCore',
+        'commitLocalNodes',
+      ]);
     });
 
     test('atomically swaps in a pending core update', () async {
@@ -319,9 +367,16 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   int commitCalls = 0;
   int rollbackCalls = 0;
   int startCalls = 0;
+  int stopRuntimePlanCalls = 0;
   int persistColdStartCalls = 0;
   bool startResult = true;
+  bool hasCommittedRuntimePlanValue = false;
+  List<BuiltInProxyNodePlan> startRuntimePlanStartedPlans = const [];
+  List<BuiltInProxyNodePlan> lastStoppedRuntimePlan = const [];
   List<String>? callOrder;
+
+  @override
+  bool get hasCommittedRuntimePlan => hasCommittedRuntimePlanValue;
 
   @override
   Future<void> applyPendingUpdate() async {
@@ -348,22 +403,39 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     commitCalls++;
+    hasCommittedRuntimePlanValue = plans.isNotEmpty;
     callOrder?.add('commitLocalNodes');
   }
 
   @override
-  Future<bool> startRuntimePlan(
+  Future<BuiltInProxyRuntimePlanStartResult> startRuntimePlan(
     List<BuiltInProxyNodePlan> plans, {
     bool stopAllOnFailure = true,
   }) async {
     startCalls++;
     callOrder?.add('startLocalNodes');
-    return startResult;
+    return BuiltInProxyRuntimePlanStartResult(
+      isSuccess: startResult,
+      startedPlans: startRuntimePlanStartedPlans.isEmpty
+          ? List<BuiltInProxyNodePlan>.unmodifiable(plans)
+          : startRuntimePlanStartedPlans,
+    );
   }
 
   @override
   Future<bool> start({bool stopAllOnFailure = true}) async =>
-      startRuntimePlan(const [], stopAllOnFailure: stopAllOnFailure);
+      (await startRuntimePlan(
+        const [],
+        stopAllOnFailure: stopAllOnFailure,
+      ))
+          .isSuccess;
+
+  @override
+  Future<void> stopRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
+    stopRuntimePlanCalls++;
+    lastStoppedRuntimePlan = List<BuiltInProxyNodePlan>.unmodifiable(plans);
+    callOrder?.add('stopStartedLocalNodes');
+  }
 
   @override
   Future<void> stop() async {}
