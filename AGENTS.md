@@ -67,7 +67,8 @@ touchpoints из `tool/product_touchpoints.json`.
 
 После мёрджа сразу проверить новый base-дрейф командой
 `dart tool/check_base_drift.dart`. Чекер сравнивает дерево с merge-base относительно
-`upstream/dev`, сверяет все изменённые пути из `lib`, `android` и `core` с
+`upstream/dev`, сверяет все изменённые пути из `lib`, `android` и `core` из HEAD,
+индекса и рабочего дерева с
 `tool/base_drift_allowlist.json` и падает, если появился новый base-файл вне
 бюджета. Если в окружении нет `upstream`, передать merge-base через
 `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`.

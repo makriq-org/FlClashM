@@ -10,6 +10,14 @@ const allowedBuckets = <String>{
   'incapsulate-pending',
   'revert-pending',
 };
+const trackedBasePathspecs = <String>[
+  '--',
+  'lib',
+  'android',
+  'core',
+  ':(exclude)lib/product',
+  ':(exclude)lib/l10n',
+];
 
 void main(List<String> args) {
   final failures = <String>[];
@@ -145,28 +153,46 @@ MergeBaseLookupResult resolveMergeBase(BaseDriftCliConfig config) {
 List<String> listChangedBaseFiles({
   required String mergeBase,
 }) {
-  final result = Process.runSync('git', [
-    'diff',
-    '--name-only',
-    '$mergeBase..HEAD',
-    '--',
-    'lib',
-    'android',
-    'core',
-    ':(exclude)lib/product',
-    ':(exclude)lib/l10n',
-  ]);
-  if (result.exitCode != 0) {
-    throw StateError(
-      'Failed to list changed base files: ${_readProcessMessage(result)}',
-    );
-  }
+  final changedPaths = <String>{};
 
-  return _trimProcessOutput(result.stdout)
-      .split('\n')
-      .map(normalizePath)
-      .where((path) => path.isNotEmpty)
-      .toList(growable: false);
+  changedPaths.addAll(_listGitPaths(
+    [
+      'diff',
+      '--name-only',
+      '$mergeBase..HEAD',
+      ...trackedBasePathspecs,
+    ],
+    errorPrefix: 'Failed to list committed base files',
+  ));
+  changedPaths.addAll(_listGitPaths(
+    [
+      'diff',
+      '--name-only',
+      '--cached',
+      ...trackedBasePathspecs,
+    ],
+    errorPrefix: 'Failed to list staged base files',
+  ));
+  changedPaths.addAll(_listGitPaths(
+    [
+      'diff',
+      '--name-only',
+      ...trackedBasePathspecs,
+    ],
+    errorPrefix: 'Failed to list unstaged base files',
+  ));
+  changedPaths.addAll(_listGitPaths(
+    [
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      ...trackedBasePathspecs,
+    ],
+    errorPrefix: 'Failed to list untracked base files',
+  ));
+
+  final sortedPaths = changedPaths.toList()..sort();
+  return List.unmodifiable(sortedPaths);
 }
 
 BaseDriftScanResult scanBaseDrift(
@@ -242,6 +268,27 @@ bool _isTrackedBasePath(String path) {
 String normalizePath(String path) => path.replaceAll(r'\', '/');
 
 String _trimProcessOutput(Object? value) => '$value'.trim();
+
+List<String> _listGitPaths(
+  List<String> arguments, {
+  required String errorPrefix,
+}) {
+  final result = Process.runSync('git', arguments);
+  if (result.exitCode != 0) {
+    throw StateError('$errorPrefix: ${_readProcessMessage(result)}');
+  }
+
+  final output = _trimProcessOutput(result.stdout);
+  if (output.isEmpty) {
+    return const [];
+  }
+
+  return output
+      .split('\n')
+      .map(normalizePath)
+      .where((path) => path.isNotEmpty)
+      .toList(growable: false);
+}
 
 String _readProcessMessage(ProcessResult result) {
   final stderrText = _trimProcessOutput(result.stderr);

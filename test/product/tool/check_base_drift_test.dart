@@ -50,5 +50,34 @@ void main() {
         contains('lib/views/theme.dart'),
       );
     });
+
+    test('reports uncommitted changed files outside allowlist', () {
+      final failures = <String>[];
+      final result = scanBaseDrift(
+        BaseDriftAllowlist.fromJson({
+          'allowedBaseDrift': [
+            {
+              'path': 'lib/controller.dart',
+              'reason': 'Intentional runtime drift.',
+              'bucket': 'budget',
+            },
+          ],
+        }),
+        changedPaths: const [
+          'lib/controller.dart',
+          'lib/controller.dart',
+          'core/runtime_patch.dart',
+        ],
+        failures: failures,
+      );
+
+      expect(result.allowlistedCount, 1);
+      expect(result.outsideAllowlistCount, 1);
+      expect(failures, hasLength(1));
+      expect(
+        failures.single,
+        contains('core/runtime_patch.dart'),
+      );
+    });
   });
 }
