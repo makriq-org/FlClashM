@@ -667,8 +667,8 @@
     },
     {
       "path": "lib/views/application_setting.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Продуктовая политика обновлений и дополнительные переключатели ещё сидят в base-настройках."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/backup_and_recovery.dart",
@@ -687,8 +687,8 @@
     },
     {
       "path": "lib/views/config/general.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Крупная продуктовая секция общих настроек ещё не вынесена из base."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/config/network.dart",
