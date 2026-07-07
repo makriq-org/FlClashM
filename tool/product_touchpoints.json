@@ -111,11 +111,27 @@
       ]
     },
     {
+      "path": "lib/views/application_setting.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "ApplicationSettingView stays a thin base re-export for the product settings view.",
+      "targets": [
+        "lib/product/ui/application_setting_view.dart"
+      ]
+    },
+    {
       "path": "lib/views/dashboard/widgets/hero_connect.dart",
       "boundary": "ui-thin-consumers",
       "reason": "HeroConnect stays a thin base re-export for the product dashboard widget.",
       "targets": [
         "lib/product/ui/dashboard/hero_connect_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/config/general.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "General config stays a thin base re-export for the product config view.",
+      "targets": [
+        "lib/product/ui/config/general_view.dart"
       ]
     },
     {
