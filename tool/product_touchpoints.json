@@ -111,6 +111,14 @@
       ]
     },
     {
+      "path": "lib/views/dashboard/widgets/hero_connect.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "HeroConnect stays a thin base re-export for the product dashboard widget.",
+      "targets": [
+        "lib/product/ui/dashboard/hero_connect_view.dart"
+      ]
+    },
+    {
       "path": "lib/views/profiles/profiles.dart",
       "boundary": "subscription-and-platform-selectors",
       "reason": "ProfilesView may consume advisory display hints and selector state only.",

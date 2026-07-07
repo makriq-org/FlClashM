@@ -727,8 +727,8 @@
     },
     {
       "path": "lib/views/dashboard/widgets/hero_connect.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Тяжёлый продуктовый виджет главного экрана ещё живёт в base и должен быть вынесен."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/hero_nav_bar.dart",
