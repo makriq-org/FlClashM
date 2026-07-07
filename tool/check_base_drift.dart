@@ -7,6 +7,7 @@ const mergeBaseEnvKey = 'BASE_DRIFT_MERGE_BASE';
 const upstreamRefEnvKey = 'BASE_DRIFT_UPSTREAM_REF';
 const allowedBuckets = <String>{
   'budget',
+  'rename',
   'incapsulate-pending',
   'revert-pending',
 };
@@ -382,9 +383,10 @@ class BaseDriftScanResult {
   String get summaryLine =>
       'Changed base files: ${allowlistedCount + outsideAllowlistCount}. '
       'Allowlisted: $allowlistedCount. '
-      'New outside budget: $outsideAllowlistCount.';
+      'New outside allowlist: $outsideAllowlistCount.';
 
   String get bucketSummaryLine => 'Buckets: budget=${bucketCounts['budget']}, '
+      'rename=${bucketCounts['rename']}, '
       'incapsulate-pending=${bucketCounts['incapsulate-pending']}, '
       'revert-pending=${bucketCounts['revert-pending']}.';
 }

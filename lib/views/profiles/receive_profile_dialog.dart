@@ -96,6 +96,8 @@ class _ReceiveProfileDialogState extends State<ReceiveProfileDialog> {
       );
 
       if (!mounted) return;
+      // Plain URL so the native phone camera offers to open it. The app's
+      // scanner also understands this form (extracts host:port).
       setState(() {
         _qrData = 'http://$ip:$_syncPort/';
         _isLoading = false;
@@ -174,6 +176,7 @@ class _ReceiveProfileDialogState extends State<ReceiveProfileDialog> {
       ],
     );
   }
+
   Widget _buildBody(BuildContext context) {
     switch (_status) {
       case _SyncStatus.waiting:
