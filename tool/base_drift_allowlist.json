@@ -1,0 +1,1009 @@
+{
+  "allowedBaseDrift": [
+    {
+      "path": "android/app/build.gradle.kts",
+      "bucket": "budget",
+      "reason": "applicationId, keystore-логика и dev-suffix принадлежат форковому Android-слою."
+    },
+    {
+      "path": "android/app/src/debug/AndroidManifest.xml",
+      "bucket": "budget",
+      "reason": "Android manifest форка должен оставаться согласованным с ярлыками и special-use FGS."
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "bucket": "budget",
+      "reason": "Права, deep-link схема форка и имена Android-компонентов нельзя вынести из base."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/FlClashApplication.kt",
+      "bucket": "budget",
+      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/GlobalState.kt",
+      "bucket": "budget",
+      "reason": "Исправления фактического VPN и каналов уведомлений относятся к жизненному циклу Android."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/MainActivity.kt",
+      "bucket": "budget",
+      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/Service.kt",
+      "bucket": "budget",
+      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/TempActivity.kt",
+      "bucket": "budget",
+      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/AppPlugin.kt",
+      "bucket": "budget",
+      "reason": "Нативный мост пакетов, файлов и установки apk относится к Android bridge-слою."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
+      "bucket": "budget",
+      "reason": "Сервисный мост quick-start, runtime-node и notification action принят в бюджет."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/services/FlClashMTileService.kt",
+      "bucket": "budget",
+      "reason": "Имена widget/tile-компонентов привязаны к Android-оболочке форка и остаются в бюджете."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/widgets/ModeWidgetProvider.kt",
+      "bucket": "budget",
+      "reason": "Имена widget/tile-компонентов привязаны к Android-оболочке форка и остаются в бюджете."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/widgets/OnOffWidgetProvider.kt",
+      "bucket": "budget",
+      "reason": "Имена widget/tile-компонентов привязаны к Android-оболочке форка и остаются в бюджете."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-hdpi/ic_launcher_monochrome.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-mdpi/ic_launcher_monochrome.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xhdpi/ic_launcher_foreground.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xhdpi/ic_launcher_monochrome.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xxhdpi/ic_launcher_monochrome.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_monochrome.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic.xml",
+      "bucket": "revert-pending",
+      "reason": "Удаление alias-ресурса создаёт вечный delete-conflict и не даёт пользы."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_launcher_foreground.xml",
+      "bucket": "revert-pending",
+      "reason": "Удаление foreground XML создаёт вечный delete-conflict без функциональной выгоды."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_logo_color.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_logo_mono.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/values-ru/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/app/src/main/res/values/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Components.kt",
+      "bucket": "budget",
+      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
+      "bucket": "budget",
+      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt",
+      "bucket": "budget",
+      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/SavedParams.kt",
+      "bucket": "budget",
+      "reason": "Миграция состояния always-on и runtime-узлов относится к Android platform-слою."
+    },
+    {
+      "path": "android/common/src/main/res/values-ja/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/common/src/main/res/values-ru/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/common/src/main/res/values-zh-rCN/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/common/src/main/res/values/strings.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "android/service/src/main/AndroidManifest.xml",
+      "bucket": "budget",
+      "reason": "Android manifest форка должен оставаться согласованным с ярлыками и special-use FGS."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IRemoteInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/CommonService.kt",
+      "bucket": "budget",
+      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/FilesProvider.kt",
+      "bucket": "budget",
+      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/FlVpnService.kt",
+      "bucket": "budget",
+      "reason": "Жизненный цикл VPN, always-on и runtime-узлы остаются платформенным бюджетным дрейфом."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt",
+      "bucket": "budget",
+      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
+      "bucket": "budget",
+      "reason": "Супервизор встроенных runtime-узлов относится к Android runtime-слою и остаётся в бюджете."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/models/NotificationParams.kt",
+      "bucket": "budget",
+      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
+      "bucket": "budget",
+      "reason": "Исправления DNS и системной сети относятся к platform/runtime слою Android."
+    },
+    {
+      "path": "android/service/src/main/res/drawable/ic_notification.xml",
+      "bucket": "budget",
+      "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
+    },
+    {
+      "path": "core/lib_android.go",
+      "bucket": "budget",
+      "reason": "Нормализация системных DNS-серверов относится к Android-склейке с mihomo."
+    },
+    {
+      "path": "core/utls/internal/cpu/cpu_s390x.s",
+      "bucket": "revert-pending",
+      "reason": "Случайный шум без продуктовой ценности держим только до отката к апстриму."
+    },
+    {
+      "path": "lib/application.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Оболочка приложения ещё не сведена к минимальным разрешённым точкам подключения."
+    },
+    {
+      "path": "lib/clash/core.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только механический шум импортов и оформления; держим до отдельного отката."
+    },
+    {
+      "path": "lib/clash/interface.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только механический шум импортов и оформления; держим до отдельного отката."
+    },
+    {
+      "path": "lib/clash/lib.dart",
+      "bucket": "budget",
+      "reason": "Канал связи с Android service и quick-start остаётся базовым runtime-мостом."
+    },
+    {
+      "path": "lib/clash/message.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только механический шум импортов и оформления; держим до отдельного отката."
+    },
+    {
+      "path": "lib/clash/service.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только механический шум импортов и оформления; держим до отдельного отката."
+    },
+    {
+      "path": "lib/common/android.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/app_localizations.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/constant.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/context.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/datetime.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/dav_client.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/file_logger.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/function.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/future.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/http.dart",
+      "bucket": "budget",
+      "reason": "Базовая логика поиска прокси и отказ от небезопасного сертификатного обхода приняты в бюджет."
+    },
+    {
+      "path": "lib/common/link.dart",
+      "bucket": "budget",
+      "reason": "Исправление initial link и дедупликации deep-link событий принято в бюджет."
+    },
+    {
+      "path": "lib/common/lock.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/measure.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/mixin.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/navigation.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/navigator.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/num.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/path.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/picker.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/preferences.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/print.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/proxy.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/render.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/request.dart",
+      "bucket": "budget",
+      "reason": "Общий сетевой багфикс загрузки и mixed-port принят в бюджет base-слоя."
+    },
+    {
+      "path": "lib/common/scroll.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/system.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Поведение task-back на Android ещё идёт через base-точку подключения к службе оболочки продукта."
+    },
+    {
+      "path": "lib/common/text.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/theme.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/tray.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/utils.dart",
+      "bucket": "budget",
+      "reason": "Общий багфикс сравнения версий полезен всему base-слою и принят в бюджет."
+    },
+    {
+      "path": "lib/common/window.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/common/windows.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический base-шум без продуктовой пользы; должен уйти отдельным откатом к апстриму."
+    },
+    {
+      "path": "lib/controller.dart",
+      "bucket": "budget",
+      "reason": "Базовый оркестратор runtime и состояния; это осознанный якорь форка."
+    },
+    {
+      "path": "lib/enum/enum.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Реестр плиток дашборда в base всё ещё напрямую перечисляет продуктово-зависимые виджеты."
+    },
+    {
+      "path": "lib/main.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Точка входа уже почти сведена к bootstrap, но дельта к апстриму ещё не схлопнута."
+    },
+    {
+      "path": "lib/manager/android_manager.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Исключение из недавних задач ещё синхронизируется через base-точку подключения вместо полного сведения к тонкой оболочке."
+    },
+    {
+      "path": "lib/manager/app_state_manager.dart",
+      "bucket": "budget",
+      "reason": "Пауза и возобновление runtime-задач вместе с синхронизацией tile относятся к базовой оркестрации жизненного цикла."
+    },
+    {
+      "path": "lib/manager/clash_manager.dart",
+      "bucket": "budget",
+      "reason": "Координация слушателя runtime-конфига и подавление лишних обновлений относятся к базовой runtime-оркестрации."
+    },
+    {
+      "path": "lib/manager/hotkey_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/message_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/proxy_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/theme_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/tile_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Удаление файла создаёт постоянный delete-conflict; пока фиксируем как дрейф к откату."
+    },
+    {
+      "path": "lib/manager/tray_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/vpn_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/manager/window_manager.dart",
+      "bucket": "revert-pending",
+      "reason": "Механический шум менеджера без осознанной продуктовой функции; держим до отката."
+    },
+    {
+      "path": "lib/models/app.dart",
+      "bucket": "revert-pending",
+      "reason": "Модель расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/models/clash_config.dart",
+      "bucket": "revert-pending",
+      "reason": "Модель расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/models/common.dart",
+      "bucket": "revert-pending",
+      "reason": "Модель расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/models/config.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Поля продуктовой политики обновлений ещё живут в базовой модели настроек."
+    },
+    {
+      "path": "lib/models/core.dart",
+      "bucket": "revert-pending",
+      "reason": "Модель расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/models/generated/config.freezed.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Сгенерированная модель повторяет продуктовые поля обновлений, пока они не вынесены из base."
+    },
+    {
+      "path": "lib/models/generated/config.g.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Сгенерированная сериализация повторяет продуктовые поля обновлений, пока они не вынесены из base."
+    },
+    {
+      "path": "lib/models/profile.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Продуктовые валидаторы и подсказки провайдера ещё живут в базовой модели профиля."
+    },
+    {
+      "path": "lib/models/selector.dart",
+      "bucket": "revert-pending",
+      "reason": "Модель расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/pages/editor.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/pages/home.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Навигационный выбор между base и продуктовым сценарием ещё живёт в base-странице."
+    },
+    {
+      "path": "lib/pages/scan.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/pages/send_to_tv_page.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Совместимость TV sync ещё проверяется через продуктовый контракт прямо из base-страницы."
+    },
+    {
+      "path": "lib/plugins/app.dart",
+      "bucket": "budget",
+      "reason": "Нативный канал вызовов для списка установленных пакетов относится к нативному bridge-слою форка."
+    },
+    {
+      "path": "lib/plugins/service.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/plugins/tile.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/plugins/vpn.dart",
+      "bucket": "budget",
+      "reason": "Тонкий мост к нативной VPN-службе является осознанной base-обвязкой."
+    },
+    {
+      "path": "lib/providers/app.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/providers/config.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Синхронизация tile после смены профиля ещё идёт через base-точку подключения к службе оболочки продукта."
+    },
+    {
+      "path": "lib/providers/state.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Селекторы продуктовых подсказок и платформенного профиля ещё протекают в base."
+    },
+    {
+      "path": "lib/services/subscription_notification_service.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Подсказки провайдера и продуктовые названия ещё не вынесены из base-сервиса уведомлений."
+    },
+    {
+      "path": "lib/state.dart",
+      "bucket": "budget",
+      "reason": "Глобальная связка compile, security и runtime остаётся базовым инфраструктурным якорем."
+    },
+    {
+      "path": "lib/utils/device_info_service.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь нет осознанной продуктовой логики; остался только шум, который надо откатить."
+    },
+    {
+      "path": "lib/views/about.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Проверка обновлений и продуктовые секции about-экрана ещё живут в base."
+    },
+    {
+      "path": "lib/views/access.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Редактор контроля доступа ещё не сведен к тонкому продуктовому вызову."
+    },
+    {
+      "path": "lib/views/application_setting.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Продуктовая политика обновлений и дополнительные переключатели ещё сидят в base-настройках."
+    },
+    {
+      "path": "lib/views/backup_and_recovery.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/config/config.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/config/dns.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/config/general.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Крупная продуктовая секция общих настроек ещё не вынесена из base."
+    },
+    {
+      "path": "lib/views/config/network.dart",
+      "bucket": "revert-pending",
+      "reason": "Почти весь дрейф здесь косметический и должен уйти отдельным откатом."
+    },
+    {
+      "path": "lib/views/connection/connections.dart",
+      "bucket": "revert-pending",
+      "reason": "Base-страница расходится с апстримом только механическим шумом и должна быть откатана."
+    },
+    {
+      "path": "lib/views/connection/item.dart",
+      "bucket": "revert-pending",
+      "reason": "Base-страница расходится с апстримом только механическим шумом и должна быть откатана."
+    },
+    {
+      "path": "lib/views/connection/requests.dart",
+      "bucket": "revert-pending",
+      "reason": "Base-страница расходится с апстримом только механическим шумом и должна быть откатана."
+    },
+    {
+      "path": "lib/views/dashboard/dashboard.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Композиция продуктового дашборда ещё собрана прямо в base-странице."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/announce_widget.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Base-виджет ещё знает о продуктовой строке-подсказке провайдера."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/change_server_button.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Виджет переключения сервера всё ещё читает продуктовые подсказки отображения из base-дашборда."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/hero_connect.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Тяжёлый продуктовый виджет главного экрана ещё живёт в base и должен быть вынесен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/hero_nav_bar.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/intranet_ip.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/memory_info.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Виджет метаданных всё ещё знает о продуктовой support-url подсказке."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/network_detection.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/network_speed.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/outbound_mode.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/quick_options.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/service_info_widget.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Извлечение продуктовых подсказок провайдера ещё не вынесено из base-виджета."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/start_button.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/stats_grid.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Продуктовая раскладка статистики ещё остаётся в base-виджете."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/traffic_usage.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/developer.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/hotkey.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/logs.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/profiles/add_profile.dart",
+      "bucket": "revert-pending",
+      "reason": "В профилях здесь нет полезной продуктовой дельты; остался только шум к откату."
+    },
+    {
+      "path": "lib/views/profiles/edit_profile.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Продуктовый валидатор конфигурации ещё подключён прямо в base-редактор профиля."
+    },
+    {
+      "path": "lib/views/profiles/override_profile.dart",
+      "bucket": "revert-pending",
+      "reason": "В профилях здесь нет полезной продуктовой дельты; остался только шум к откату."
+    },
+    {
+      "path": "lib/views/profiles/profiles.dart",
+      "bucket": "incapsulate-pending",
+      "reason": "Продуктовые действия и подсказки провайдера ещё вплетены в базовую страницу профилей."
+    },
+    {
+      "path": "lib/views/profiles/receive_profile_dialog.dart",
+      "bucket": "revert-pending",
+      "reason": "В профилях здесь нет полезной продуктовой дельты; остался только шум к откату."
+    },
+    {
+      "path": "lib/views/profiles/scripts.dart",
+      "bucket": "revert-pending",
+      "reason": "В профилях здесь нет полезной продуктовой дельты; остался только шум к откату."
+    },
+    {
+      "path": "lib/views/proxies/card.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/common.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/list.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/providers.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/proxies.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/setting.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/proxies/tab.dart",
+      "bucket": "revert-pending",
+      "reason": "Прокси-экраны расходятся с апстримом только механическим шумом."
+    },
+    {
+      "path": "lib/views/resources.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/views/theme.dart",
+      "bucket": "revert-pending",
+      "reason": "Косметический base-шум без продуктовой ценности держим только до отдельного отката."
+    },
+    {
+      "path": "lib/views/tools.dart",
+      "bucket": "revert-pending",
+      "reason": "Здесь остался только визуальный или импортный шум без осознанной продуктовой дельты."
+    },
+    {
+      "path": "lib/widgets/bar_chart.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/card.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/chip.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/color_scheme_box.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/dialog.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/donut_chart.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/fade_box.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/flag.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/grid.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/icon.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/input.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/line_chart.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/list.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/notification.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/pop_scope.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/popup.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/scaffold.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/scroll.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/setting.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/sheet.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/side_sheet.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/subscription_info_view.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/super_grid.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    },
+    {
+      "path": "lib/widgets/text.dart",
+      "bucket": "revert-pending",
+      "reason": "Общий набор виджетов расходится с апстримом только шумом импортов и форматирования."
+    }
+  ]
+}
