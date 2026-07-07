@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 class ThemeModeItem {
+
   const ThemeModeItem({
     required this.themeMode,
     required this.iconData,
@@ -26,6 +27,7 @@ class ThemeModeItem {
 }
 
 class FontFamilyItem {
+
   const FontFamilyItem({
     required this.fontFamily,
     required this.label,
@@ -39,23 +41,24 @@ class ThemeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const SingleChildScrollView(
-        child: Column(
-          spacing: 24,
-          children: [
-            _ThemeModeItem(),
-            _PrimaryColorItem(),
-            _PrueBlackItem(),
-            _NewDashboardItem(),
-            _TextScaleFactorItem(),
-            SizedBox(
-              height: 64,
-            ),
-          ],
-        ),
-      );
+      child: Column(
+        spacing: 24,
+        children: [
+          _ThemeModeItem(),
+          _PrimaryColorItem(),
+          _PrueBlackItem(),
+          _NewDashboardItem(),
+          _TextScaleFactorItem(),
+          SizedBox(
+            height: 64,
+          ),
+        ],
+      ),
+    );
 }
 
 class ItemCard extends StatelessWidget {
+
   const ItemCard({
     super.key,
     required this.info,
@@ -68,15 +71,15 @@ class ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        runSpacing: 16,
-        children: [
-          InfoHeader(
-            info: info,
-            actions: actions,
-          ),
-          child,
-        ],
-      );
+      runSpacing: 16,
+      children: [
+        InfoHeader(
+          info: info,
+          actions: actions,
+        ),
+        child,
+      ],
+    );
 }
 
 class _ThemeModeItem extends ConsumerWidget {
@@ -126,8 +129,7 @@ class _ThemeModeItem extends ConsumerWidget {
                     );
               },
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.start,
@@ -153,8 +155,8 @@ class _ThemeModeItem extends ConsumerWidget {
             );
           },
           separatorBuilder: (_, __) => const SizedBox(
-            width: 12,
-          ),
+              width: 12,
+            ),
         ),
       ),
     );
@@ -183,12 +185,12 @@ class _PrimaryColorItemState extends ConsumerState<_PrimaryColorItem> {
       return;
     }
     ref.read(themeSettingProvider.notifier).updateState(
-          (state) => state.copyWith(
-            primaryColors: defaultPrimaryColors,
-            primaryColor: defaultPrimaryColor,
-            schemeVariant: DynamicSchemeVariant.tonalSpot,
-          ),
-        );
+      (state) => state.copyWith(
+          primaryColors: defaultPrimaryColors,
+          primaryColor: defaultPrimaryColor,
+          schemeVariant: DynamicSchemeVariant.tonalSpot,
+        ),
+    );
   }
 
   Future<void> _handleDel() async {
@@ -247,12 +249,12 @@ class _PrimaryColorItemState extends ConsumerState<_PrimaryColorItem> {
       return;
     }
     ref.read(themeSettingProvider.notifier).updateState(
-          (state) => state.copyWith(
-            primaryColors: List.from(
-              state.primaryColors,
-            )..add(res),
-          ),
-        );
+      (state) => state.copyWith(
+          primaryColors: List.from(
+            state.primaryColors,
+          )..add(res),
+        ),
+    );
   }
 
   Future<void> _handleChangeSchemeVariant() async {
@@ -273,10 +275,10 @@ class _PrimaryColorItemState extends ConsumerState<_PrimaryColorItem> {
       return;
     }
     ref.read(themeSettingProvider.notifier).updateState(
-          (state) => state.copyWith(
-            schemeVariant: value,
-          ),
-        );
+      (state) => state.copyWith(
+          schemeVariant: value,
+        ),
+    );
   }
 
   @override
@@ -596,39 +598,39 @@ class _PaletteDialogState extends State<_PaletteDialog> {
 
   @override
   Widget build(BuildContext context) => CommonDialog(
-        title: appLocalizations.palette,
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: Text(appLocalizations.cancel),
+      title: appLocalizations.palette,
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(appLocalizations.cancel),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(_controller.value.toARGB32());
+          },
+          child: Text(appLocalizations.confirm),
+        ),
+      ],
+      child: Column(
+        children: [
+          const SizedBox(
+            height: 8,
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(_controller.value.toARGB32());
-            },
-            child: Text(appLocalizations.confirm),
+          SizedBox(
+            width: 250,
+            height: 250,
+            child: Palette(
+              controller: _controller,
+            ),
           ),
-        ],
-        child: Column(
-          children: [
-            const SizedBox(
-              height: 8,
-            ),
-            SizedBox(
-              width: 250,
-              height: 250,
-              child: Palette(
-                controller: _controller,
-              ),
-            ),
-            const SizedBox(
-              height: 24,
-            ),
-            ValueListenableBuilder(
-              valueListenable: _controller,
-              builder: (_, color, __) => PrimaryColorBox(
+          const SizedBox(
+            height: 24,
+          ),
+          ValueListenableBuilder(
+            valueListenable: _controller,
+            builder: (_, color, __) => PrimaryColorBox(
                 primaryColor: color,
                 child: FilledButton(
                   onPressed: () {},
@@ -637,10 +639,10 @@ class _PaletteDialogState extends State<_PaletteDialog> {
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
 }
 
 class _SliderDefaultsM3 extends SliderThemeData {
@@ -688,7 +690,8 @@ class _SliderDefaultsM3 extends SliderThemeData {
   Color? get disabledThumbColor => _colors.onSurface.withOpacity(0.38);
 
   @override
-  Color? get overlayColor => WidgetStateColor.resolveWith((states) {
+  Color? get overlayColor =>
+      WidgetStateColor.resolveWith((states) {
         if (states.contains(WidgetState.dragged)) {
           return _colors.primary.withOpacity(0.1);
         }
@@ -729,22 +732,21 @@ class _SliderDefaultsM3 extends SliderThemeData {
       const RoundSliderTickMarkShape(tickMarkRadius: 4.0 / 2);
 
   @override
-  WidgetStateProperty<Size?>? get thumbSize =>
-      WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) {
-          return const Size(4.0, 44.0);
-        }
-        if (states.contains(WidgetState.hovered)) {
-          return const Size(4.0, 44.0);
-        }
-        if (states.contains(WidgetState.focused)) {
-          return const Size(2.0, 44.0);
-        }
-        if (states.contains(WidgetState.pressed)) {
-          return const Size(2.0, 44.0);
-        }
+  WidgetStateProperty<Size?>? get thumbSize => WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) {
         return const Size(4.0, 44.0);
-      });
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return const Size(4.0, 44.0);
+      }
+      if (states.contains(WidgetState.focused)) {
+        return const Size(2.0, 44.0);
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return const Size(2.0, 44.0);
+      }
+      return const Size(4.0, 44.0);
+    });
 
   @override
   double? get trackGap => 6.0;

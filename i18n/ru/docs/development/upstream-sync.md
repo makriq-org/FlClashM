@@ -10,12 +10,20 @@ FlClashM построен на базе FlClashX. Продуктовая лог�
 ## Процесс обновления
 
 1. Подтянуть FlClashX в отдельной ветке
-2. Разобрать конфликты в `lib/product/**`
-3. Вне `lib/product/**` трогать только файлы из `tool/product_touchpoints.json`
-4. После слияния прогнать проверки:
+2. Перед ручным разбором конфликтов прогнать по конфликтующим Dart-файлам
+
+```bash
+git diff --name-only --diff-filter=U -- '*.dart' |
+  xargs -r sed -i 's/package:flclashx\//package:flclashm\//g'
+```
+
+3. Разобрать конфликты в `lib/product/**`
+4. Вне `lib/product/**` трогать только файлы из `tool/product_touchpoints.json`
+5. После слияния прогнать проверки:
 
 ```bash
 dart tool/check_product_boundaries.dart
 dart tool/check_release_continuity.dart
 flutter test test/product
+dart tool/check_base_drift.dart
 ```

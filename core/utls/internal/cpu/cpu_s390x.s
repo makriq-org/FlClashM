@@ -60,3 +60,4 @@ TEXT ·kdsaQuery(SB), NOSPLIT|NOFRAME, $0-16
 	MOVD $ret+0(FP), R1 // address of 16-byte return value
 	WORD $0xB93A0008    // compute digital signature authentication
 	RET
+

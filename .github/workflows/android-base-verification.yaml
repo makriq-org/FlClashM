@@ -42,6 +42,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream base
+        run: |
+          git remote add upstream https://github.com/pluralplay/FlClashX.git 2>/dev/null || \
+            git remote set-url upstream https://github.com/pluralplay/FlClashX.git
+          git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -57,6 +65,9 @@ jobs:
 
       - name: Check release continuity
         run: dart tool/check_release_continuity.dart
+
+      - name: Check base drift
+        run: dart tool/check_base_drift.dart
 
       - name: Run product tests
         run: flutter test test/product
