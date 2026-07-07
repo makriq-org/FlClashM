@@ -97,17 +97,25 @@
     {
       "path": "lib/views/about.dart",
       "boundary": "ui-thin-consumers",
-      "reason": "AboutView may trigger AppUpdateService, but not AndroidUpdateBridge directly.",
+      "reason": "AboutView stays a thin base re-export for the product about view.",
       "targets": [
-        "lib/product/services/product_services.dart"
+        "lib/product/ui/about_view.dart"
       ]
     },
     {
       "path": "lib/views/access.dart",
       "boundary": "ui-thin-consumers",
-      "reason": "AccessView may consume AccessControlService editor state without embedding Android policy.",
+      "reason": "AccessView stays a thin base re-export for the product access view.",
       "targets": [
-        "lib/product/services/product_services.dart"
+        "lib/product/ui/access_view.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/edit_profile.dart",
+      "boundary": "ui-thin-consumers",
+      "reason": "EditProfileView stays a thin base re-export for the product profile editor.",
+      "targets": [
+        "lib/product/ui/profiles/edit_profile_view.dart"
       ]
     },
     {
@@ -136,18 +144,18 @@
     },
     {
       "path": "lib/views/profiles/profiles.dart",
-      "boundary": "subscription-and-platform-selectors",
-      "reason": "ProfilesView may consume advisory display hints and selector state only.",
+      "boundary": "ui-thin-consumers",
+      "reason": "ProfilesView stays a thin base mount point for the product profiles page.",
       "targets": [
-        "lib/product/subscription/product_subscription.dart"
+        "lib/product/ui/profiles/profiles_view.dart"
       ]
     },
     {
       "path": "lib/pages/send_to_tv_page.dart",
-      "boundary": "platform-compatibility-contract",
-      "reason": "SendToTvPage may validate TV sync payload compatibility through a narrow product contract instead of embedding legacy product identifiers.",
+      "boundary": "ui-thin-consumers",
+      "reason": "SendToTvPage stays a thin base re-export for the product TV sync page.",
       "targets": [
-        "lib/product/platform/tv_sync_contract.dart"
+        "lib/product/ui/send_to_tv_page_view.dart"
       ]
     },
     {
