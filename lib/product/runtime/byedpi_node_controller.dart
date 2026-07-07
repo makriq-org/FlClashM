@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashm/common/common.dart';
@@ -12,6 +11,7 @@ import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
 import 'byedpi_release.dart';
+import 'local_node_controller.dart';
 
 typedef ByedpiWaitForRuntimeNodeListenerCallback = Future<void> Function(
   String host,
@@ -32,54 +32,35 @@ const _byedpiAutoMaxProbeCount = 4;
 const _byedpiAutoProbeTimeout = Duration(seconds: 1);
 
 @immutable
-class ByedpiSharedInstallLayout {
+class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
   const ByedpiSharedInstallLayout({
-    required this.abi,
-    required this.runtimeRootPath,
-    required this.nodesDirectoryPath,
-    required this.executablePath,
-    required this.pendingPath,
-    required this.rollbackPath,
-    required this.versionPath,
-    required this.pendingVersionPath,
-    required this.bundledAssetPath,
-    this.managedBinaryUpdateEnabled = true,
+    required super.abi,
+    required super.runtimeRootPath,
+    required super.nodesDirectoryPath,
+    required super.executablePath,
+    required super.pendingPath,
+    required super.rollbackPath,
+    required super.versionPath,
+    required super.pendingVersionPath,
+    required super.bundledAssetPath,
+    super.managedBinaryUpdateEnabled = true,
   });
-
-  final String abi;
-  final String runtimeRootPath;
-  final String nodesDirectoryPath;
-  final String executablePath;
-  final String pendingPath;
-  final String rollbackPath;
-  final String versionPath;
-  final String pendingVersionPath;
-  final String bundledAssetPath;
-  final bool managedBinaryUpdateEnabled;
 }
 
 @immutable
-class ByedpiNodeLayout {
+class ByedpiNodeLayout extends LocalNodeLayout {
   const ByedpiNodeLayout({
-    required this.nodeId,
-    required this.workingDirectoryPath,
-    required this.configPath,
+    required super.nodeId,
+    required super.workingDirectoryPath,
+    required super.configPath,
     required this.cachePath,
   });
 
-  final String nodeId;
-  final String workingDirectoryPath;
-  final String configPath;
   final String cachePath;
 }
 
-abstract interface class ByedpiBinaryBridge {
-  String get bundledReleaseTag;
-
-  Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout();
-
-  Future<Uint8List> loadBundledBinary(String assetPath);
-
+abstract interface class ByedpiBinaryBridge
+    extends LocalNodeBinaryBridge<ByedpiSharedInstallLayout> {
   Future<String> loadBundledStrategyList(String assetPath);
 }
 
@@ -161,34 +142,6 @@ class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
   @override
   Future<String> loadBundledStrategyList(String assetPath) async =>
       rootBundle.loadString(assetPath);
-}
-
-@immutable
-class _ByedpiNodeMutation {
-  const _ByedpiNodeMutation({
-    required this.plan,
-    required this.previousPlan,
-    required this.layout,
-    required this.previousConfig,
-    required this.wasRunning,
-  });
-
-  final BuiltInProxyNodePlan plan;
-  final BuiltInProxyNodePlan? previousPlan;
-  final ByedpiNodeLayout layout;
-  final String? previousConfig;
-  final bool wasRunning;
-}
-
-@immutable
-class _ByedpiStageState {
-  const _ByedpiStageState({
-    required this.mutations,
-    required this.removedPlans,
-  });
-
-  final List<_ByedpiNodeMutation> mutations;
-  final List<BuiltInProxyNodePlan> removedPlans;
 }
 
 @immutable
@@ -293,296 +246,63 @@ class _ByedpiStrategyCache {
   }
 }
 
-class ByedpiNodeController {
+class ByedpiNodeController
+    extends LocalNodeController<ByedpiSharedInstallLayout, ByedpiNodeLayout> {
   ByedpiNodeController({
-    this.binary = const DefaultByedpiBinaryBridge(),
-    this.runtime = const AndroidRuntimeNodeBridge(),
-    this.waitForListener = _waitForRuntimeNodeListener,
+    ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
+    super.runtime = const AndroidRuntimeNodeBridge(),
+    super.waitForListener = _waitForRuntimeNodeListener,
     this.siteCheck = _checkUrlViaSocks,
     this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
-  }) : now = now ?? DateTime.now;
+  })  : now = now ?? DateTime.now,
+        super(
+          typeLabel: 'byedpi',
+          configArtifactName: 'config.json',
+          binary: binary,
+          startMode: LocalNodeStartMode.parallel,
+        );
 
-  final ByedpiBinaryBridge binary;
-  final RuntimeNodePlatformBridge runtime;
-  final ByedpiWaitForRuntimeNodeListenerCallback waitForListener;
   final ByedpiSiteCheckCallback siteCheck;
   final ByedpiProbePortAllocator allocateProbePort;
   final DateTime Function() now;
 
-  _ByedpiStageState? _stagedState;
+  @override
+  ByedpiBinaryBridge get binary => super.binary as ByedpiBinaryBridge;
 
-  Future<void> applyPendingUpdate() async {
-    final layout = await binary.resolveSharedInstallLayout();
-    await Directory(layout.runtimeRootPath).create(recursive: true);
-    await Directory(layout.nodesDirectoryPath).create(recursive: true);
-    if (!layout.managedBinaryUpdateEnabled) {
-      return;
-    }
-
-    final active = File(layout.executablePath);
-    final pending = File(layout.pendingPath);
-    final rollback = File(layout.rollbackPath);
-    final versionFile = File(layout.versionPath);
-    final pendingVersionFile = File(layout.pendingVersionPath);
-
-    if (pendingVersionFile.existsSync() && !pending.existsSync()) {
-      await _deleteWithRetry(pendingVersionFile);
-    }
-
-    if (!active.existsSync() && !pending.existsSync()) {
-      await _writeBundledBinary(layout, active);
-      await _writeVersionFile(versionFile, binary.bundledReleaseTag);
-      return;
-    }
-
-    final installedBundledTag = await _readVersionFile(versionFile);
-    if (installedBundledTag != binary.bundledReleaseTag &&
-        !pending.existsSync()) {
-      await _writeBundledBinary(layout, pending);
-      await _writeVersionFile(pendingVersionFile, binary.bundledReleaseTag);
-    }
-
-    if (!pending.existsSync()) {
-      return;
-    }
-
-    final pendingBundledTag = await _readVersionFile(pendingVersionFile);
-    try {
-      await _deleteWithRetry(rollback);
-      if (active.existsSync()) {
-        await _renameWithRetry(active, rollback.path);
-      }
-      await _renameWithRetry(pending, active.path);
-      if (pendingBundledTag != null) {
-        await _writeVersionFile(versionFile, pendingBundledTag);
-        await _deleteWithRetry(pendingVersionFile);
-      }
-      await _deleteWithRetry(rollback);
-    } catch (_) {
-      if (rollback.existsSync()) {
-        await _deleteWithRetry(active);
-        await _renameWithRetry(rollback, active.path);
-      }
-      rethrow;
-    }
-  }
-
-  Future<String> stageRuntimePlan({
-    required List<BuiltInProxyNodePlan> currentPlans,
-    required List<BuiltInProxyNodePlan> nextPlans,
-  }) async {
-    if (_stagedState != null) {
-      return 'byedpi runtime plan stage is already active.';
-    }
-
-    final sharedLayout = await binary.resolveSharedInstallLayout();
-    await Directory(sharedLayout.runtimeRootPath).create(recursive: true);
-    await Directory(sharedLayout.nodesDirectoryPath).create(recursive: true);
-
-    final currentById = {for (final plan in currentPlans) plan.nodeId: plan};
-    final nextById = {for (final plan in nextPlans) plan.nodeId: plan};
-    final mutations = <_ByedpiNodeMutation>[];
-
-    try {
-      for (final plan in nextPlans) {
-        final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
-        final configJson = _readConfigArtifact(plan);
-        final configFile = File(layout.configPath);
-        final previousConfig =
-            configFile.existsSync() ? await configFile.readAsString() : null;
-        final wasRunning =
-            await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
-        final previousPlan = currentById[plan.nodeId];
-
-        final configChanged = previousConfig != configJson;
-        final isNewPlan = previousPlan == null;
-        if (!isNewPlan && !configChanged) {
-          continue;
-        }
-
-        mutations.add(
-          _ByedpiNodeMutation(
-            plan: plan,
-            previousPlan: previousPlan,
-            layout: layout,
-            previousConfig: previousConfig,
-            wasRunning: wasRunning,
-          ),
-        );
-
-        await Directory(layout.workingDirectoryPath).create(recursive: true);
-        await configFile.writeAsString(configJson, flush: true);
-
-        if (wasRunning) {
-          await runtime.stopNode(nodeId: plan.nodeId);
-          final started = await _startPlan(sharedLayout, plan);
-          if (!started) {
-            return _rollbackStageFailure(
-              mutations: mutations,
-              failureMessage:
-                  'byedpi node `${plan.name}` failed to restart after config update.',
-            );
-          }
-        }
-      }
-    } catch (e) {
-      return _rollbackStageFailure(
-        mutations: mutations,
-        failureMessage: 'byedpi runtime plan staging failed: $e',
+  @override
+  String readConfigArtifact(BuiltInProxyNodePlan plan) {
+    final configJson =
+        plan.files['built-in-proxies/byedpi/${plan.nodeId}/config.json'];
+    if (configJson == null || configJson.isEmpty) {
+      throw StateError(
+        'byedpi node `${plan.name}` is missing config.json artifact.',
       );
     }
+    return configJson;
+  }
 
-    _stagedState = _ByedpiStageState(
-      mutations: mutations,
-      removedPlans: [
-        for (final plan in currentPlans)
-          if (!nextById.containsKey(plan.nodeId)) plan,
-      ],
+  @override
+  ByedpiNodeLayout resolveNodeLayout(
+    ByedpiSharedInstallLayout sharedLayout,
+    String nodeId,
+  ) {
+    final workingDirectoryPath =
+        path.join(sharedLayout.nodesDirectoryPath, nodeId);
+    return ByedpiNodeLayout(
+      nodeId: nodeId,
+      workingDirectoryPath: workingDirectoryPath,
+      configPath: path.join(workingDirectoryPath, byedpiConfigFileName),
+      cachePath: path.join(workingDirectoryPath, 'strategy-cache.json'),
     );
-    return '';
   }
 
-  Future<String> rollbackStagedRuntimePlan() async {
-    final stagedState = _stagedState;
-    if (stagedState == null) {
-      return '';
-    }
-    final message = await _rollbackStageFailure(
-      mutations: stagedState.mutations,
-      failureMessage: 'byedpi runtime plan rollback failed.',
-    );
-    _stagedState = null;
-    return message == 'byedpi runtime plan rollback failed.' ? '' : message;
-  }
-
-  Future<void> commitStagedRuntimePlan() async {
-    final stagedState = _stagedState;
-    if (stagedState == null) {
-      return;
-    }
-    _stagedState = null;
-
-    for (final removedPlan in stagedState.removedPlans) {
-      await runtime.stopNode(nodeId: removedPlan.nodeId);
-      final sharedLayout = await binary.resolveSharedInstallLayout();
-      final layout = _resolveNodeLayout(sharedLayout, removedPlan.nodeId);
-      await _deleteDirectoryIfExists(Directory(layout.workingDirectoryPath));
-    }
-  }
-
-  Future<bool> startNodes(List<BuiltInProxyNodePlan> plans) async {
-    if (plans.isEmpty) {
-      return true;
-    }
-    final sharedLayout = await binary.resolveSharedInstallLayout();
-    final startedNodes = <BuiltInProxyNodePlan>[];
-    try {
-      final started = await Future.wait([
-        for (final plan in plans)
-          _startNodePlan(
-            sharedLayout: sharedLayout,
-            plan: plan,
-            startedNodes: startedNodes,
-          ),
-      ]);
-      if (started.every((value) => value)) {
-        return true;
-      }
-      await _stopStartedNodes(startedNodes);
-      return false;
-    } catch (e, stackTrace) {
-      await _stopStartedNodes(startedNodes);
-      Error.throwWithStackTrace(e, stackTrace);
-    }
-  }
-
-  Future<bool> _startNodePlan({
-    required ByedpiSharedInstallLayout sharedLayout,
-    required BuiltInProxyNodePlan plan,
-    required List<BuiltInProxyNodePlan> startedNodes,
-  }) async {
-    final alreadyRunning =
-        await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
-    if (!alreadyRunning) {
-      final started = await _startPlan(sharedLayout, plan);
-      if (!started) {
-        return false;
-      }
-      startedNodes.add(plan);
-    }
-    await waitForListener(plan.listenHost, plan.listenPort);
-    return true;
-  }
-
-  Future<void> stopNodes(List<BuiltInProxyNodePlan> plans) async {
-    Object? error;
-    StackTrace? stackTrace;
-    for (final plan in plans) {
-      try {
-        await runtime.stopNode(nodeId: plan.nodeId);
-      } catch (e, s) {
-        error ??= e;
-        stackTrace ??= s;
-      }
-    }
-    if (error != null) {
-      Error.throwWithStackTrace(error, stackTrace!);
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> buildColdStartNodes(
-    List<BuiltInProxyNodePlan> plans,
-  ) async {
-    if (plans.isEmpty) {
-      return const [];
-    }
-    final sharedLayout = await binary.resolveSharedInstallLayout();
-    final nodes = <Map<String, dynamic>>[];
-    for (final plan in plans) {
-      final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
-      final arguments = await _resolveColdStartArguments(plan, layout);
-      if (arguments == null) {
-        continue;
-      }
-      nodes.add(
-        <String, dynamic>{
-          'nodeId': plan.nodeId,
-          'type': plan.type.label,
-          'name': plan.name,
-          'host': plan.listenHost,
-          'port': plan.listenPort,
-          'executablePath': sharedLayout.executablePath,
-          'workingDirectory': layout.workingDirectoryPath,
-          'arguments': arguments,
-        },
-      );
-    }
-    return nodes;
-  }
-
-  Future<void> persistColdStart(List<BuiltInProxyNodePlan> plans) async {
-    final nodes = await buildColdStartNodes(plans);
-    if (nodes.isEmpty) {
-      await runtime.clearColdStartNodes();
-      return;
-    }
-    await saveColdStartNodes(nodes);
-  }
-
-  Future<void> saveColdStartNodes(List<Map<String, dynamic>> nodes) async {
-    if (nodes.isEmpty) {
-      await runtime.clearColdStartNodes();
-      return;
-    }
-    await runtime.saveColdStartNodes(json.encode({'nodes': nodes}));
-  }
-
-  Future<bool> _startPlan(
+  @override
+  Future<bool> startPlan(
     ByedpiSharedInstallLayout sharedLayout,
     BuiltInProxyNodePlan plan,
+    ByedpiNodeLayout layout,
   ) async {
-    final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
     final config = await _readNodeConfig(plan, layout);
     if (config.isAuto) {
       return _startAutoPlan(sharedLayout, plan, layout, config);
@@ -601,6 +321,66 @@ class ByedpiNodeController {
     return true;
   }
 
+  @override
+  Future<void> confirmStageRestart(BuiltInProxyNodePlan plan) async {}
+
+  @override
+  Future<LocalNodeColdStartExtras> buildColdStartExtras(
+    BuiltInProxyNodePlan plan,
+    ByedpiSharedInstallLayout sharedLayout,
+    ByedpiNodeLayout layout,
+  ) async {
+    final config = await _readNodeConfig(plan, layout);
+    if (!config.isAuto) {
+      return LocalNodeColdStartExtras(
+        extraFields: {
+          'arguments': _buildArguments(config.args, config),
+        },
+      );
+    }
+    final cached = await _readCache(layout);
+    if (cached == null) {
+      return const LocalNodeColdStartExtras.skip();
+    }
+    return LocalNodeColdStartExtras(
+      extraFields: {
+        'arguments': _buildArguments(cached.strategy, config),
+      },
+    );
+  }
+
+  @override
+  Future<String> rollbackStageFailure({
+    required List<LocalNodeMutation<ByedpiNodeLayout>> mutations,
+    required String failureMessage,
+  }) async {
+    for (final mutation in mutations.reversed) {
+      await runtime.stopNode(nodeId: mutation.plan.nodeId);
+      final configFile = File(mutation.layout.configPath);
+      if (mutation.previousConfig == null) {
+        await deleteFileWithRetry(configFile);
+        await deleteDirectoryIfExists(
+          Directory(mutation.layout.workingDirectoryPath),
+        );
+      } else {
+        await configFile.writeAsString(mutation.previousConfig!, flush: true);
+      }
+      if (mutation.wasRunning) {
+        final sharedLayout = await binary.resolveSharedInstallLayout();
+        final rollbackPlan = mutation.previousPlan ?? mutation.plan;
+        final restarted = await startPlan(
+          sharedLayout,
+          rollbackPlan,
+          mutation.layout,
+        );
+        if (!restarted) {
+          return '$failureMessage Rollback failed: previous byedpi node did not restart.';
+        }
+      }
+    }
+    return failureMessage;
+  }
+
   Future<bool> _startAutoPlan(
     ByedpiSharedInstallLayout sharedLayout,
     BuiltInProxyNodePlan plan,
@@ -616,11 +396,13 @@ class ByedpiNodeController {
     final cached = await _readCache(layout);
     if (_canUseCache(cached, fingerprint, config)) {
       if (!_needsRecheck(cached!, config)) {
-        return _startWithStrategy(sharedLayout, plan, config, cached.strategy);
+        return _startWithStrategy(
+            sharedLayout, plan, layout, config, cached.strategy);
       }
       final started = await _startWithStrategy(
         sharedLayout,
         plan,
+        layout,
         config,
         cached.strategy,
       );
@@ -652,13 +434,20 @@ class ByedpiNodeController {
             failures: failures,
           ),
         );
-        return _startWithStrategy(sharedLayout, plan, config, cached.strategy);
+        return _startWithStrategy(
+          sharedLayout,
+          plan,
+          layout,
+          config,
+          cached.strategy,
+        );
       }
     }
 
     final selected = await _selectStrategy(
       sharedLayout,
       plan,
+      layout,
       config,
       strategies,
     );
@@ -672,14 +461,20 @@ class ByedpiNodeController {
           failures: 0,
         ),
       );
-      return _startWithStrategy(sharedLayout, plan, config, selected);
+      return _startWithStrategy(sharedLayout, plan, layout, config, selected);
     }
 
     if (cached != null && cached.fingerprint == fingerprint) {
       commonPrint.log(
         'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
       );
-      return _startWithStrategy(sharedLayout, plan, config, cached.strategy);
+      return _startWithStrategy(
+        sharedLayout,
+        plan,
+        layout,
+        config,
+        cached.strategy,
+      );
     }
 
     commonPrint.log(
@@ -698,29 +493,16 @@ class ByedpiNodeController {
     return _startWithStrategy(
       sharedLayout,
       plan,
+      layout,
       config,
       _byedpiAutoFallbackStrategy,
     );
   }
 
-  Future<List<String>?> _resolveColdStartArguments(
-    BuiltInProxyNodePlan plan,
-    ByedpiNodeLayout layout,
-  ) async {
-    final config = await _readNodeConfig(plan, layout);
-    if (!config.isAuto) {
-      return _buildArguments(config.args, config);
-    }
-    final cached = await _readCache(layout);
-    if (cached == null) {
-      return null;
-    }
-    return _buildArguments(cached.strategy, config);
-  }
-
   Future<String?> _selectStrategy(
     ByedpiSharedInstallLayout sharedLayout,
     BuiltInProxyNodePlan plan,
+    ByedpiNodeLayout layout,
     _ByedpiConfig config,
     List<String> strategies,
   ) async {
@@ -734,6 +516,7 @@ class ByedpiNodeController {
       final started = await _startWithStrategy(
         sharedLayout,
         plan,
+        layout,
         probeConfig,
         strategy,
         nodeId: probeNodeId,
@@ -756,11 +539,11 @@ class ByedpiNodeController {
   Future<bool> _startWithStrategy(
     ByedpiSharedInstallLayout sharedLayout,
     BuiltInProxyNodePlan plan,
+    ByedpiNodeLayout layout,
     _ByedpiConfig config,
     String strategy, {
     String? nodeId,
   }) async {
-    final layout = _resolveNodeLayout(sharedLayout, plan.nodeId);
     final started = await runtime.startNode(
       nodeId: nodeId ?? plan.nodeId,
       executablePath: sharedLayout.executablePath,
@@ -864,7 +647,7 @@ class ByedpiNodeController {
     final file = File(layout.configPath);
     final content = file.existsSync()
         ? await file.readAsString()
-        : _readConfigArtifact(plan);
+        : readConfigArtifact(plan);
     final value = json.decode(content);
     if (value is! Map) {
       throw StateError('byedpi node `${plan.name}` config is not an object.');
@@ -899,70 +682,6 @@ class ByedpiNodeController {
       ),
       failureThreshold: (cache['failure-threshold'] as num?)?.toInt() ?? 2,
     );
-  }
-
-  String _readConfigArtifact(BuiltInProxyNodePlan plan) {
-    final configJson =
-        plan.files['built-in-proxies/byedpi/${plan.nodeId}/config.json'];
-    if (configJson == null || configJson.isEmpty) {
-      throw StateError(
-        'byedpi node `${plan.name}` is missing config.json artifact.',
-      );
-    }
-    return configJson;
-  }
-
-  ByedpiNodeLayout _resolveNodeLayout(
-    ByedpiSharedInstallLayout sharedLayout,
-    String nodeId,
-  ) {
-    final workingDirectoryPath =
-        path.join(sharedLayout.nodesDirectoryPath, nodeId);
-    return ByedpiNodeLayout(
-      nodeId: nodeId,
-      workingDirectoryPath: workingDirectoryPath,
-      configPath: path.join(workingDirectoryPath, byedpiConfigFileName),
-      cachePath: path.join(workingDirectoryPath, 'strategy-cache.json'),
-    );
-  }
-
-  Future<String> _rollbackStageFailure({
-    required List<_ByedpiNodeMutation> mutations,
-    required String failureMessage,
-  }) async {
-    for (final mutation in mutations.reversed) {
-      await runtime.stopNode(nodeId: mutation.plan.nodeId);
-      final configFile = File(mutation.layout.configPath);
-      if (mutation.previousConfig == null) {
-        await _deleteWithRetry(configFile);
-        await _deleteDirectoryIfExists(
-          Directory(mutation.layout.workingDirectoryPath),
-        );
-      } else {
-        await configFile.writeAsString(mutation.previousConfig!, flush: true);
-      }
-      if (mutation.wasRunning) {
-        final sharedLayout = await binary.resolveSharedInstallLayout();
-        final rollbackPlan = mutation.previousPlan ?? mutation.plan;
-        final restarted = await _startPlan(sharedLayout, rollbackPlan);
-        if (!restarted) {
-          return '$failureMessage Rollback failed: previous byedpi node did not restart.';
-        }
-      }
-    }
-    return failureMessage;
-  }
-
-  Future<void> _stopStartedNodes(List<BuiltInProxyNodePlan> plans) async {
-    for (final plan in plans.reversed) {
-      try {
-        await runtime.stopNode(nodeId: plan.nodeId);
-      } catch (e) {
-        commonPrint.log(
-          'Failed to stop byedpi node `${plan.name}` during start rollback: $e',
-        );
-      }
-    }
   }
 
   Future<_ByedpiStrategyCache?> _readCache(ByedpiNodeLayout layout) async {
@@ -1053,65 +772,6 @@ class ByedpiNodeController {
       args.add(buffer.toString());
     }
     return args;
-  }
-
-  Future<void> _writeBundledBinary(
-    ByedpiSharedInstallLayout layout,
-    File target,
-  ) async {
-    try {
-      final bytes = await binary.loadBundledBinary(layout.bundledAssetPath);
-      await target.writeAsBytes(bytes, flush: true);
-    } catch (e) {
-      throw StateError(
-        'Bundled byedpi asset ${layout.bundledAssetPath} is missing. '
-        'Run `dart setup.dart android --out runtime-assets` first. $e',
-      );
-    }
-  }
-
-  Future<String?> _readVersionFile(File file) async {
-    if (!file.existsSync()) {
-      return null;
-    }
-    final content = (await file.readAsString()).trim();
-    return content.isEmpty ? null : content;
-  }
-
-  Future<void> _writeVersionFile(File file, String version) =>
-      file.writeAsString(version, flush: true);
-
-  Future<void> _deleteWithRetry(File file) async {
-    if (!file.existsSync()) {
-      return;
-    }
-    for (var i = 0; i < 10; i++) {
-      try {
-        await file.delete();
-        return;
-      } catch (_) {
-        if (i == 9) rethrow;
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
-  }
-
-  Future<void> _deleteDirectoryIfExists(Directory directory) async {
-    if (directory.existsSync()) {
-      await directory.delete(recursive: true);
-    }
-  }
-
-  Future<void> _renameWithRetry(File source, String targetPath) async {
-    for (var i = 0; i < 10; i++) {
-      try {
-        await source.rename(targetPath);
-        return;
-      } catch (_) {
-        if (i == 9) rethrow;
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
   }
 
   static Future<void> _waitForRuntimeNodeListener(

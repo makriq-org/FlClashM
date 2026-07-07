@@ -235,26 +235,14 @@ void main() {
       expect(runtime.stopCalls, ['node-a', 'node-b']);
     });
 
-    test(
-        'installs and swaps shared bundled binaries through pending activation',
-        () async {
+    test('creates runtime directories during pending update check', () async {
       final controller = buildController();
-      final active = File(sharedLayout.executablePath);
-      final pending = File(sharedLayout.pendingPath);
-
-      await controller.applyPendingUpdate();
-      expect(await active.readAsString(), 'bundled-binary');
-
-      await active.writeAsString('old-binary');
-      await pending.writeAsString('new-binary');
-      await File(sharedLayout.pendingVersionPath).writeAsString('external-tag');
 
       await controller.applyPendingUpdate();
 
-      expect(await active.readAsString(), 'new-binary');
-      expect(pending.existsSync(), isFalse);
-      expect(
-          await File(sharedLayout.versionPath).readAsString(), 'external-tag');
+      expect(Directory(sharedLayout.runtimeRootPath).existsSync(), isTrue);
+      expect(Directory(sharedLayout.nodesDirectoryPath).existsSync(), isTrue);
+      expect(File(sharedLayout.executablePath).existsSync(), isFalse);
     });
 
     test('persists cold-start manifest and clears it for empty plans',

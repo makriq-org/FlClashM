@@ -13,9 +13,9 @@ class BuiltInProxyRegistry {
             listenPortRangeSize: 512,
             availability: BuiltInProxyAvailability.supported(
               updatePath:
-                  'setup.dart extracts the pinned stable naiveproxy plugin APK into bundled Android assets, then runtime activation swaps the shared binary through .pending in app data.',
+                  'setup.dart extracts the pinned stable naiveproxy plugin APK into bundled Android assets, and Android runs the immutable native library from nativeLibraryDir.',
               rollbackPath:
-                  'Failed pending activation restores the previous shared binary, keeps .pending for retry, and rolls node configs/processes back to the last committed runtime plan.',
+                  'Profile apply failures roll node configs and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
             ),
           ),
           BuiltInProxyType.byedpi: BuiltInProxyDescriptor(
@@ -26,9 +26,9 @@ class BuiltInProxyRegistry {
             listenPortRangeSize: 256,
             availability: BuiltInProxyAvailability.supported(
               updatePath:
-                  'setup.dart builds the pinned byedpi Android executable from source and bundles the pinned ByeByeDPI strategy list; runtime activation swaps the shared binary through .pending in app data.',
+                  'setup.dart builds the pinned byedpi Android executable from source, bundles the pinned ByeByeDPI strategy list, and Android runs the immutable native library from nativeLibraryDir.',
               rollbackPath:
-                  'Failed pending activation restores the previous executable, keeps .pending for retry, and failed profile apply rolls node configs/processes back to the last committed runtime plan.',
+                  'Failed profile apply rolls node configs and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
             ),
           ),
           BuiltInProxyType.olcrtc: BuiltInProxyDescriptor(
@@ -39,9 +39,9 @@ class BuiltInProxyRegistry {
             listenPortRangeSize: 256,
             availability: BuiltInProxyAvailability.supported(
               updatePath:
-                  'setup.dart builds the pinned olcrtc Android executable from source into bundled Android assets, then runtime activation swaps the shared binary through .pending in app data.',
+                  'setup.dart builds the pinned olcrtc Android executable from source into bundled Android assets, and Android runs the immutable native library from nativeLibraryDir.',
               rollbackPath:
-                  'Failed pending activation restores the previous shared binary, keeps .pending for retry, and rolls node configs/processes back to the last committed runtime plan.',
+                  'Failed profile apply rolls node configs and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
             ),
           ),
         };
