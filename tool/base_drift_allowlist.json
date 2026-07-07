@@ -472,13 +472,13 @@
     },
     {
       "path": "lib/enum/enum.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Реестр плиток дашборда в base всё ещё напрямую перечисляет продуктово-зависимые виджеты."
+      "bucket": "budget",
+      "reason": "Дельта — только переименование пакета flclashx→flclashm в импортах; неустранимо и не инкапсулируется."
     },
     {
       "path": "lib/main.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Точка входа уже почти сведена к bootstrap, но дельта к апстриму ещё не схлопнута."
+      "bucket": "budget",
+      "reason": "Уже сведён к 5-строчной передаче управления в AppBootstrap; остаточная дельта — удалённый legacy base, не выносится."
     },
     {
       "path": "lib/manager/android_manager.dart",
@@ -557,8 +557,8 @@
     },
     {
       "path": "lib/models/config.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Поля продуктовой политики обновлений ещё живут в базовой модели настроек."
+      "bucket": "budget",
+      "reason": "Продуктовые поля на base-модели (обновления и пр.) + переименование пакета; в product-слой поля не вынести без слома base-потребителей."
     },
     {
       "path": "lib/models/core.dart",
@@ -567,18 +567,18 @@
     },
     {
       "path": "lib/models/generated/config.freezed.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Сгенерированная модель повторяет продуктовые поля обновлений, пока они не вынесены из base."
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели, руками не правится."
     },
     {
       "path": "lib/models/generated/config.g.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Сгенерированная сериализация повторяет продуктовые поля обновлений, пока они не вынесены из base."
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели."
     },
     {
       "path": "lib/models/profile.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Продуктовые валидаторы и подсказки провайдера ещё живут в базовой модели профиля."
+      "bucket": "budget",
+      "reason": "Продуктовые поля на base-модели Profile + переименование пакета; вынос невозможен без слома base."
     },
     {
       "path": "lib/models/selector.dart",
