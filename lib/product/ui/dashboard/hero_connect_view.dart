@@ -7,7 +7,6 @@ import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flclashm/providers/providers.dart';
 import 'package:flclashm/state.dart';
-import 'package:flclashm/views/profiles/add_profile.dart';
 import 'package:flclashm/widgets/text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +14,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 class HeroConnect extends ConsumerStatefulWidget {
-  const HeroConnect({super.key});
+  const HeroConnect({
+    super.key,
+    required this.urlFormDialogBuilder,
+  });
+
+  final WidgetBuilder urlFormDialogBuilder;
 
   @override
   ConsumerState<HeroConnect> createState() => _HeroConnectState();
@@ -274,7 +278,7 @@ class _HeroConnectState extends ConsumerState<HeroConnect>
           GestureDetector(
             onTap: () async {
               final url = await globalState.showCommonDialog<String>(
-                child: const URLFormDialog(),
+                child: widget.urlFormDialogBuilder(context),
               );
               if (url != null) {
                 globalState.appController.addProfileFormURL(url);
