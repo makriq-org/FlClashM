@@ -712,18 +712,18 @@
     },
     {
       "path": "lib/views/dashboard/dashboard.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Композиция продуктового дашборда ещё собрана прямо в base-странице."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/announce_widget.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Base-виджет ещё знает о продуктовой строке-подсказке провайдера."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/change_server_button.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Виджет переключения сервера всё ещё читает продуктовые подсказки отображения из base-дашборда."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/hero_connect.dart",
@@ -747,8 +747,8 @@
     },
     {
       "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Виджет метаданных всё ещё знает о продуктовой support-url подсказке."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/network_detection.dart",
@@ -772,8 +772,8 @@
     },
     {
       "path": "lib/views/dashboard/widgets/service_info_widget.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Извлечение продуктовых подсказок провайдера ещё не вынесено из base-виджета."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/start_button.dart",
@@ -782,8 +782,8 @@
     },
     {
       "path": "lib/views/dashboard/widgets/stats_grid.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Продуктовая раскладка статистики ещё остаётся в base-виджете."
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/traffic_usage.dart",
