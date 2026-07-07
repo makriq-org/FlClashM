@@ -3,6 +3,7 @@ package com.follow.clashx.common
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 
 object SavedParams {
     private const val PARAMS_FILE = "flclashm_always_on.json"
@@ -168,6 +169,7 @@ object SavedParams {
         }
         if (!tmp.renameTo(target)) {
             tmp.delete()
+            throw IOException("Failed to atomically replace ${target.name}")
         }
     }
 }
