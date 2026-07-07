@@ -277,8 +277,8 @@
     },
     {
       "path": "lib/application.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Оболочка приложения ещё не сведена к минимальным разрешённым точкам подключения."
+      "bucket": "budget",
+      "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
     },
     {
       "path": "lib/clash/core.dart",
@@ -432,8 +432,8 @@
     },
     {
       "path": "lib/common/system.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Поведение task-back на Android ещё идёт через base-точку подключения к службе оболочки продукта."
+      "bucket": "budget",
+      "reason": "System держит только тонкий platform-call для Android task-back; остальная дельта не продуктовая и дальше не дробится."
     },
     {
       "path": "lib/common/text.dart",
@@ -482,8 +482,8 @@
     },
     {
       "path": "lib/manager/android_manager.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Исключение из недавних задач ещё синхронизируется через base-точку подключения вместо полного сведения к тонкой оболочке."
+      "bucket": "budget",
+      "reason": "AndroidManager уже сведён к тонкому слушателю состояния и вызову AndroidShellService для exclude-from-recents."
     },
     {
       "path": "lib/manager/app_state_manager.dart",
@@ -632,18 +632,18 @@
     },
     {
       "path": "lib/providers/config.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Синхронизация tile после смены профиля ещё идёт через base-точку подключения к службе оболочки продукта."
+      "bucket": "budget",
+      "reason": "Config-provider оставляет только тонкий вызов синхронизации Android tile после сохранения конфига; это допустимый platform-shell touchpoint."
     },
     {
       "path": "lib/providers/state.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Селекторы продуктовых подсказок и платформенного профиля ещё протекают в base."
+      "bucket": "budget",
+      "reason": "Продуктовые правила селекторов вынесены в lib/product/subscription и lib/product/platform; в base остались только тонкие провайдеры-обёртки."
     },
     {
       "path": "lib/services/subscription_notification_service.dart",
-      "bucket": "incapsulate-pending",
-      "reason": "Подсказки провайдера и продуктовые названия ещё не вынесены из base-сервиса уведомлений."
+      "bucket": "budget",
+      "reason": "Сервис уведомлений больше не разбирает provider headers и берёт название и ссылку только через product display policy."
     },
     {
       "path": "lib/state.dart",

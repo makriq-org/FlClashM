@@ -99,13 +99,13 @@ class System {
     if (Platform.isWindows) {
       // First, try to start existing service without UAC
       final startedWithoutUac = await windows?.tryStartExistingService();
-      if (startedWithoutUac == true) {
+      if (startedWithoutUac ?? false) {
         return AuthorizeCode.success;
       }
 
       // Service not installed or couldn't start - need to install with UAC
       final result = await windows?.installService();
-      if (result == true) {
+      if (result ?? false) {
         return AuthorizeCode.success;
       }
       return AuthorizeCode.error;
@@ -121,7 +121,7 @@ class System {
         '-S',
         'sh',
         '-c',
-        'chown root:root "\$1" && chmod +sx "\$1"',
+        r'chown root:root "$1" && chmod +sx "$1"',
         'sh',
         corePath,
       ]);

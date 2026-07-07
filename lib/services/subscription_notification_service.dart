@@ -97,13 +97,12 @@ class SubscriptionNotificationService {
       return;
     }
 
-    final displayHints = ProductProviderAdvisory.fromProfile(profile).display;
-    final supportUrl = displayHints.supportUrl;
+    final supportUrl =
+        productSubscriptionDisplayPolicy.resolveNotificationSupportUrl(profile);
     commonPrint.log('[SubscriptionNotification] supportUrl: $supportUrl');
 
-    final title = displayHints.serviceName.isNotEmpty
-        ? displayHints.serviceName
-        : (profile.label ?? profile.id);
+    final title =
+        productSubscriptionDisplayPolicy.resolveNotificationTitle(profile);
 
     final String message;
     if (notificationThreshold < 0) {
