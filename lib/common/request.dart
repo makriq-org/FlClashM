@@ -36,7 +36,13 @@ class Request {
       };
       return client;
     });
-    _ipDio = Dio();
+    _ipDio = Dio(
+      BaseOptions(
+        // Same rationale as _clashDio: the sequential checkIp loop counts on a
+        // bounded connect so a dead exit node falls through to the next source.
+        connectTimeout: const Duration(seconds: 5),
+      ),
+    );
     _ipDio.httpClientAdapter = IOHttpClientAdapter(createHttpClient: () {
       final client = HttpClient();
       client.findProxy = (uri) {
@@ -202,7 +208,11 @@ class Request {
         return Result.error("cancelled");
       }
       try {
-        final res = await _clashDio.get<Map<String, dynamic>>(
+        // _ipDio, not _clashDio: it forces the request through the mixed port.
+        // On Android _clashDio resolves to DIRECT ("TUN captures app traffic"),
+        // but this app's own uid is excluded from the VPN, so DIRECT here
+        // reports the real IP instead of the exit IP.
+        final res = await _ipDio.get<Map<String, dynamic>>(
           source.key,
           cancelToken: cancelToken,
           options: Options(

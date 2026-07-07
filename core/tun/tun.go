@@ -58,6 +58,15 @@ func Start(fd int, cfg LC.Tun) (listener *sing_tun.Listener, err error) {
 		DisableICMPForwarding:  cfg.DisableICMPForwarding,
 	}
 
+	// The system/mixed-stack NAT forwarder must be bound to the tun interface.
+	// FlVpnService excludes our own uid from VPN routing (built-in nodes can't
+	// protect their sockets), so without SO_BINDTODEVICE the kernel routes the
+	// forwarder's SYN-ACKs by uid rules — out the physical network instead of
+	// back into tun — and every TCP flow through the system stack blackholes.
+	// mihomo ≤1.19.23 bound the forwarder automatically for fd-based tun;
+	// e38aa82a23 removed that, leaving this exported knob (used on Windows).
+	sing_tun.EnforceBindInterface = true
+
 	listener, err = sing_tun.New(options, tunnel.Tunnel)
 	if err != nil {
 		log.Errorln("startTUN error:", err)

@@ -271,6 +271,11 @@
       "reason": "Нормализация системных DNS-серверов относится к Android-склейке с mihomo."
     },
     {
+      "path": "core/tun/tun.go",
+      "bucket": "budget",
+      "reason": "EnforceBindInterface для system/mixed-стека: свой uid исключён из VPN, без SO_BINDTODEVICE ответы NAT-форвардера уходят мимо tun (регрессия mihomo e38aa82a23 в 1.19.24+)."
+    },
+    {
       "path": "lib/application.dart",
       "bucket": "budget",
       "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
@@ -569,6 +574,11 @@
       "path": "lib/models/generated/config.g.dart",
       "bucket": "budget",
       "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели."
+    },
+    {
+      "path": "lib/models/generated/core.g.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner сломан в окружении); запись setUiActive в _$ActionMethodEnumMap добавлена вручную по конвенции репо (7fb3020d, d67088dd) — без неё JsonUnsupportedObjectError."
     },
     {
       "path": "lib/models/profile.dart",
