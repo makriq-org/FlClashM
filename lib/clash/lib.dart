@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/models/models.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flutter/services.dart';
 
 import 'interface.dart';

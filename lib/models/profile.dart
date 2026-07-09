@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flclashm/clash/core.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/utils/device_info_service.dart';
+import 'package:flclashx/clash/core.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/utils/device_info_service.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'clash_config.dart';

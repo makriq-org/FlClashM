@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flclashm/providers/app.dart';
+import 'package:flclashx/providers/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

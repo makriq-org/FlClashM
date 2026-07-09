@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/android/android_runtime_access_policy.dart';
-import 'package:flclashm/product/runtime/product_runtime.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/android/android_runtime_access_policy.dart';
+import 'package:flclashx/product/runtime/product_runtime.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

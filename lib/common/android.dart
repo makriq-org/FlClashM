@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flclashm/product/services/product_services.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/state.dart';
 
 class Android {
   Future<void> init() async {

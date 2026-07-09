@@ -1,9 +1,9 @@
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/providers/providers.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/text.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -54,12 +54,12 @@ class StatsGrid extends ConsumerWidget {
               Row(
                 children: [
                   if (hasExpire)
-                    Expanded(child: _ExpiryPill(timestamp: sub!.expire))
+                    Expanded(child: _ExpiryPill(timestamp: sub.expire))
                   else
                     const Expanded(child: SizedBox.shrink()),
                   const SizedBox(width: 8),
                   if (hasTraffic)
-                    Expanded(child: _TrafficPill(sub: sub!))
+                    Expanded(child: _TrafficPill(sub: sub))
                   else
                     const Expanded(child: SizedBox.shrink()),
                 ],

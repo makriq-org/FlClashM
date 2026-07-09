@@ -1,9 +1,9 @@
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/common.dart';
-import 'package:flclashm/providers/app.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/common.dart';
+import 'package:flclashx/providers/app.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

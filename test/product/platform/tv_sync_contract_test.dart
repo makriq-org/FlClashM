@@ -1,4 +1,4 @@
-import 'package:flclashm/product/platform/tv_sync_contract.dart';
+import 'package:flclashx/product/platform/tv_sync_contract.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

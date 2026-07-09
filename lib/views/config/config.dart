@@ -1,11 +1,11 @@
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/models/clash_config.dart';
-import 'package:flclashm/providers/config.dart' show patchClashConfigProvider;
-import 'package:flclashm/state.dart';
-import 'package:flclashm/views/config/dns.dart';
-import 'package:flclashm/views/config/general.dart';
-import 'package:flclashm/views/config/network.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/models/clash_config.dart';
+import 'package:flclashx/providers/config.dart' show patchClashConfigProvider;
+import 'package:flclashx/state.dart';
+import 'package:flclashx/views/config/dns.dart';
+import 'package:flclashx/views/config/general.dart';
+import 'package:flclashx/views/config/network.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

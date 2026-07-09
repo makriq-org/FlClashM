@@ -1,7 +1,7 @@
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/pages/scan.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/pages/scan.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'receive_profile_dialog.dart';

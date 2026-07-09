@@ -1,7 +1,7 @@
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/services/product_services.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/state.dart';
 
 import '../../common/common.dart';
 

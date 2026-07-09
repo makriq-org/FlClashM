@@ -1,1 +1,1 @@
-export 'package:flclashm/product/pages/send_to_tv.dart';
+export 'package:flclashx/product/pages/send_to_tv.dart';

@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/l10n/l10n.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/services/product_services.dart';
-import 'package:flclashm/providers/providers.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/l10n/l10n.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

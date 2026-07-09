@@ -1,4 +1,4 @@
-import 'package:flclashm/product/compile/product_compile.dart';
+import 'package:flclashx/product/compile/product_compile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

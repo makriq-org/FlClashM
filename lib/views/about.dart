@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashm/clash/core.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/product/services/product_services.dart';
-import 'package:flclashm/providers/config.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/clash/core.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/providers/config.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

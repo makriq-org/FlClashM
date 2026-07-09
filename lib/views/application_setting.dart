@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/plugins/app.dart';
-import 'package:flclashm/providers/config.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/providers/config.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';

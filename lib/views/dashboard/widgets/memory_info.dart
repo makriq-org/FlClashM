@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/models/common.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/widgets.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/models/common.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
 final _memoryInfoStateNotifier = ValueNotifier<TrafficValue>(

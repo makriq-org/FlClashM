@@ -1,4 +1,4 @@
-import 'package:flclashm/common/common.dart';
+import 'package:flclashx/common/common.dart';
 import 'package:flutter/material.dart';
 
 class CommonTheme {
