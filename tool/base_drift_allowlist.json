@@ -296,11 +296,6 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
-      "path": "lib/common/core_update.dart",
-      "bucket": "budget",
-      "reason": "Desktop core-update логика остаётся в base; дрейф относится к общей инфраструктуре обновления core."
-    },
-    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Имена логов синхронизированы с идентичностью FlClashM."
@@ -386,11 +381,6 @@
       "reason": "Продуктовые поля на base-модели (обновления и пр.) + переименование пакета; в product-слой поля не вынести без слома base-потребителей."
     },
     {
-      "path": "lib/models/generated/app.freezed.dart",
-      "bucket": "budget",
-      "reason": "Генерируемый файл (build_runner); дрейф отражает текущую схему моделей и не редактируется вручную."
-    },
-    {
       "path": "lib/models/generated/config.freezed.dart",
       "bucket": "budget",
       "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели, руками не правится."
@@ -399,16 +389,6 @@
       "path": "lib/models/generated/config.g.dart",
       "bucket": "budget",
       "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели."
-    },
-    {
-      "path": "lib/models/generated/core.g.dart",
-      "bucket": "budget",
-      "reason": "Генерируемый файл (build_runner сломан в окружении); запись setUiActive в _$ActionMethodEnumMap добавлена вручную по конвенции репо (7fb3020d, d67088dd) — без неё JsonUnsupportedObjectError."
-    },
-    {
-      "path": "lib/models/generated/selector.freezed.dart",
-      "bucket": "budget",
-      "reason": "Генерируемый файл (build_runner); дрейф отражает текущее состояние моделей и не редактируется вручную."
     },
     {
       "path": "lib/models/profile.dart",
@@ -451,16 +431,6 @@
       "reason": "Config-provider оставляет только тонкий вызов синхронизации Android tile после сохранения конфига; это допустимый platform-shell touchpoint."
     },
     {
-      "path": "lib/providers/generated/config.g.dart",
-      "bucket": "budget",
-      "reason": "Генерируемый файл (build_runner); дрейф отражает текущую сигнатуру provider-ов и не редактируется вручную."
-    },
-    {
-      "path": "lib/providers/generated/state.g.dart",
-      "bucket": "budget",
-      "reason": "Генерируемый файл Riverpod; в офлайн-окружении build_runner недоступен, поэтому сигнатура genColorScheme синхронизирована вручную с исходником."
-    },
-    {
       "path": "lib/providers/state.dart",
       "bucket": "budget",
       "reason": "Продуктовые правила селекторов вынесены в lib/product/subscription и lib/product/platform; в base остались только тонкие провайдеры-обёртки."
@@ -496,11 +466,6 @@
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
     },
     {
-      "path": "lib/views/config/general.dart",
-      "bucket": "budget",
-      "reason": "Файл возвращен к апстриму; скрытие порта по provider headers удалено как небезопасное."
-    },
-    {
       "path": "lib/views/config/network.dart",
       "bucket": "budget",
       "reason": "Убран шумный отладочный лог TunStackItem; форматный дрейф откатан к апстриму."
@@ -519,11 +484,6 @@
       "path": "lib/views/dashboard/widgets/change_server_button.dart",
       "bucket": "budget",
       "reason": "Живой change-server виджет берет имя server-info группы из product display hints, без разбора headers в UI."
-    },
-    {
-      "path": "lib/views/dashboard/widgets/hero_connect.dart",
-      "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
