@@ -1024,13 +1024,33 @@ class AppController {
   }
 
   Future<void> handleExit() async {
-    Future.delayed(commonDuration, system.exit);
+    // Bound the cleanup instead of pre-arming a 300ms hard-exit timer. On macOS the
+    // DNS/proxy teardown is several slow networksetup/route subprocesses that easily
+    // overrun 300ms, so the old timer fired mid-cleanup and exit(0) skipped the DNS
+    // restore / proxy stop / core shutdown — leaking 1.1.1.1, leaving a dead system
+    // proxy, and orphaning the root core. Mirror handleRestart: run cleanup under a
+    // generous deadline, each step isolated, then always exit.
     try {
-      await savePreferences();
-      await system.setMacOSDns(true);
-      await proxy?.stopProxy();
-      await clashCore.shutdown();
-      await clashService?.destroy();
+      await Future.any([
+        Future(() async {
+          try {
+            await savePreferences();
+          } catch (_) {}
+          try {
+            await system.setMacOSDns(true);
+          } catch (_) {}
+          try {
+            await proxy?.stopProxy();
+          } catch (_) {}
+          try {
+            await clashCore.shutdown();
+          } catch (_) {}
+          try {
+            await clashService?.destroy();
+          } catch (_) {}
+        }),
+        Future.delayed(const Duration(seconds: 8)),
+      ]);
     } finally {
       system.exit();
     }
@@ -1038,6 +1058,25 @@ class AppController {
 
   Future<void> handleRestart() async {
     commonPrint.log("Starting application restart...");
+
+    // Stop the current core BEFORE relaunching so the new instance can connect
+    // cleanly: a core that survives the restart (notably the Windows helper-started
+    // process) keeps the socket/binary busy and blocks the fresh core from binding
+    // or replacing the updated .exe. Guarded by a timeout so the restart can't hang.
+    await Future.any([
+      Future(() async {
+        try {
+          await proxy?.stopProxy();
+        } catch (_) {}
+        try {
+          await clashCore.shutdown();
+        } catch (_) {}
+        try {
+          await clashService?.destroy();
+        } catch (_) {}
+      }),
+      Future.delayed(const Duration(seconds: 3)),
+    ]);
 
     if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
       final executablePath = Platform.resolvedExecutable;
