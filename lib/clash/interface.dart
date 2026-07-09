@@ -117,6 +117,13 @@ abstract class ClashHandlerInterface with ClashInterface {
       }
     } catch (e) {
       commonPrint.log("${result.id} error $e");
+      // Type mismatch (e.g. the remote sent a bool for a Completer<String>):
+      // completing with the wrong type threw above and left the completer
+      // pending until the 30s safeFuture timeout — a "random" 30s freeze of
+      // whatever call this was. Complete with the typed default now.
+      if (completer != null && !completer.isCompleted) {
+        completer.complete(callbackDefaultMap[result.id]);
+      }
     }
   }
 
@@ -193,7 +200,6 @@ abstract class ClashHandlerInterface with ClashInterface {
     );
 
   @override
-  @override
   Future<bool> shutdown() => invoke<bool>(
       method: ActionMethod.shutdown,
       timeout: const Duration(seconds: 1),
@@ -220,6 +226,10 @@ abstract class ClashHandlerInterface with ClashInterface {
         method: ActionMethod.updateConfig,
         data: json.encode(updateParams),
         timeout: const Duration(minutes: 2),
+        // Empty string means success to callers; the default-on-timeout is "",
+        // which would mask a 2-minute hang as a successful apply. Return a
+        // non-empty error string so the caller actually treats it as failed.
+        onTimeout: () => 'updateConfig timed out',
       );
 
   @override
@@ -227,7 +237,10 @@ abstract class ClashHandlerInterface with ClashInterface {
         method: ActionMethod.getConfig,
         data: path,
         timeout: const Duration(minutes: 2),
-        defaultValue: Result.success({}),
+        // A timed-out/failed read used to default to Result.success({}), making
+        // the caller treat an empty config as a successful load. Yield an error
+        // Result so getConfig()'s error path fires instead.
+        defaultValue: Result.error('getConfig timed out'),
       );
 
   @override
@@ -237,6 +250,10 @@ abstract class ClashHandlerInterface with ClashInterface {
       method: ActionMethod.setupConfig,
       data: data,
       timeout: const Duration(minutes: 2),
+      // Non-empty = error to callers; the default "" would mask a 2-minute hang
+      // as a successful setup (and falsely advance lastProfileModified), so the
+      // recovery re-apply would silently no-op against a still-broken executor.
+      onTimeout: () => 'setupConfig timed out',
     );
   }
 

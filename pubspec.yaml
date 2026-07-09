@@ -63,6 +63,8 @@ dependencies:
   cached_network_image: ^3.4.1
   crypto: ^3.0.7
   yaml: ^3.1.3
+  re_editor: ^0.10.0
+  re_highlight: ^0.0.3
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +77,15 @@ dev_dependencies:
   riverpod_lint: ^2.3.13
   custom_lint: ^0.7.3
   flutter_launcher_icons: ^0.14.4
+
+# analyzer_plugin 0.12.0 (pulled transitively by the lint tooling into the
+# build_runner entrypoint) calls analyzer's publiclyExporting2, which was removed
+# in analyzer 7.6.0 (renamed to publiclyExporting). That broke `build_runner build`
+# ("Failed to compile build script"). 0.13.4 targets analyzer ^7.5.1 (covers 7.6.0)
+# and uses the new name. Override until the lint stack (custom_lint/riverpod_lint)
+# is bumped to versions that depend on a 7.6.0-compatible analyzer_plugin.
+dependency_overrides:
+  analyzer_plugin: 0.13.4
 
 flutter:
   uses-material-design: true

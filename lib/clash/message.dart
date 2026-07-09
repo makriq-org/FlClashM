@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart';
 import 'package:flutter/foundation.dart';
@@ -15,22 +16,37 @@ class ClashMessage {
         if (message.isEmpty) {
           return;
         }
-        final m = AppMessage.fromJson(message);
-        for (final listener in _listeners) {
+        try {
+          final m = AppMessage.fromJson(message);
+          // Parse m.data once (not once per listener) before fanning out.
           switch (m.type) {
             case AppMessageType.log:
-              listener.onLog(Log.fromJson(m.data));
+              final log = Log.fromJson(m.data);
+              for (final listener in _listeners) {
+                listener.onLog(log);
+              }
               break;
             case AppMessageType.delay:
-              listener.onDelay(Delay.fromJson(m.data));
+              final delay = Delay.fromJson(m.data);
+              for (final listener in _listeners) {
+                listener.onDelay(delay);
+              }
               break;
             case AppMessageType.request:
-              listener.onRequest(Connection.fromJson(m.data));
+              final connection = Connection.fromJson(m.data);
+              for (final listener in _listeners) {
+                listener.onRequest(connection);
+              }
               break;
             case AppMessageType.loaded:
-              listener.onLoaded(m.data);
+              for (final listener in _listeners) {
+                listener.onLoaded(m.data);
+              }
               break;
           }
+        } catch (e) {
+          // A single malformed event must not throw an uncaught zone error.
+          commonPrint.log('clashMessage event parse error: $e');
         }
       },
     );

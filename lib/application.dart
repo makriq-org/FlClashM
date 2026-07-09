@@ -57,6 +57,9 @@ class ApplicationState extends ConsumerState<Application> {
   void _autoUpdateProfilesTask() {
     _autoUpdateProfilesTaskTimer = Timer(const Duration(minutes: 20), () async {
       await globalState.appController.autoUpdateProfiles();
+      // dispose() may have landed during the await; don't arm a fresh
+      // post-dispose timer that would keep firing.
+      if (!mounted) return;
       _autoUpdateProfilesTask();
     });
   }
@@ -141,13 +144,29 @@ class ApplicationState extends ConsumerState<Application> {
       );
 
   @override
-  Future<void> dispose() async {
+  void dispose() {
     linkManager.destroy();
     globalState.stopGroupsUpdateTask();
     _autoUpdateProfilesTaskTimer?.cancel();
+    if (Platform.isAndroid) {
+      // Activity teardown (recreation, "don't keep activities", OEM kill) must
+      // not shut the core down: the FGS/tunnel outlives the UI by design, and
+      // handleExit()/destroy() here killed the executor under a live VPN.
+      // savePreferences() is debounced/saved-on-pause, so fire-and-forget it to
+      // honor the synchronous State.dispose() contract.
+      unawaited(globalState.appController.savePreferences());
+      super.dispose();
+      return;
+    }
+    // Desktop teardown ends in system.exit(); run it detached so dispose() stays
+    // synchronous (no await before super.dispose()).
+    unawaited(_desktopTeardown());
+    super.dispose();
+  }
+
+  Future<void> _desktopTeardown() async {
     await clashCore.destroy();
     await globalState.appController.savePreferences();
     await globalState.appController.handleExit();
-    super.dispose();
   }
 }

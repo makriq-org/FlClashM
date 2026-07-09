@@ -34,6 +34,29 @@ fn sha256_file(path: &str) -> Result<String, Error> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+fn allowed_hash_path() -> Option<std::path::PathBuf> {
+    Some(
+        std::env::current_exe()
+            .ok()?
+            .parent()?
+            .join("allowed_core.sha256"),
+    )
+}
+
+/// Core updates delivered by the app rewrite this file (admin-writable only in
+/// per-machine installs); the compiled-in TOKEN covers fresh installs.
+fn allowed_hash() -> String {
+    if let Some(path) = allowed_hash_path() {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let hash = content.trim().to_lowercase();
+            if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                return hash;
+            }
+        }
+    }
+    env!("TOKEN").to_string()
+}
+
 static LOGS: Lazy<Arc<Mutex<VecDeque<String>>>> =
     Lazy::new(|| Arc::new(Mutex::new(VecDeque::with_capacity(100))));
 static PROCESS: Lazy<Arc<Mutex<Option<std::process::Child>>>> =
@@ -41,8 +64,9 @@ static PROCESS: Lazy<Arc<Mutex<Option<std::process::Child>>>> =
 
 fn start(start_params: StartParams) -> impl Reply {
     let sha256 = sha256_file(start_params.path.as_str()).unwrap_or("".to_string());
-    if sha256 != env!("TOKEN") {
-        return format!("The SHA256 hash of the program requesting execution is: {}. The helper program only allows execution of applications with the SHA256 hash: {}.", sha256,  env!("TOKEN"),);
+    let allowed = allowed_hash();
+    if sha256 != allowed {
+        return format!("The SHA256 hash of the program requesting execution is: {}. The helper program only allows execution of applications with the SHA256 hash: {}.", sha256, allowed,);
     }
     stop();
     let mut process = PROCESS.lock().unwrap();
@@ -112,7 +136,7 @@ fn get_logs() -> impl Reply {
 }
 
 pub async fn run_service() -> anyhow::Result<()> {
-    let api_ping = warp::get().and(warp::path("ping")).map(|| env!("TOKEN"));
+    let api_ping = warp::get().and(warp::path("ping")).map(allowed_hash);
 
     let api_start = warp::post()
         .and(warp::path("start"))

@@ -52,6 +52,9 @@ func invokeAction(paramsChar *C.char, callback unsafe.Pointer) {
 }
 
 func sendMessage(message Message) {
+	if !hasEventListener() {
+		return
+	}
 	result := ActionResult{
 		Method: messageMethod,
 		Data:   message,

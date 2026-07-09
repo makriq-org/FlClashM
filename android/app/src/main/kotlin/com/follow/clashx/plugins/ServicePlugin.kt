@@ -67,6 +67,12 @@ class ServicePlugin :
         attached = false
         channel.setMethodCallHandler(null)
         job.cancel()
+        // The engine is gone, so nothing consumes events anymore — drop OUR remote
+        // listener so a dead engine doesn't keep the cross-process pipe pumping into
+        // an unconsumed channel. Owner-guarded: if a recreated activity's new engine
+        // already registered its own listener, this is a no-op. Runs on the global
+        // scope — the plugin's own job was cancelled above.
+        CommonGlobalState.launch { Service.clearEventListener(this@ServicePlugin) }
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -146,11 +152,21 @@ class ServicePlugin :
         }
         Service.onServiceDisconnected = ::onServiceDisconnected
         launch {
-            Service.setEventListener { value -> dispatchEvent(value) }
+            Service.setEventListener({ value -> dispatchEvent(value) }, owner = this@ServicePlugin)
                 .onSuccess { result.successOnMain("") }
                 .onFailure {
                     Log.w("ServicePlugin", "setEventListener failed: ${it.message}")
-                    result.successOnMain("")
+                    // Report the failure to Dart instead of swallowing it. A false
+                    // "init succeeded" leaves Dart's _initSucceeded=true with NO live
+                    // event pipe (empty Logs/Connections/Traffic), and reconnectIfNeeded()
+                    // then no-ops forever — fixable only by a full app kill. Surfacing the
+                    // error makes _initSucceeded=false so the resume-time reconnectIfNeeded()
+                    // re-binds and re-registers the listener.
+                    result.errorOnMain(
+                        "init_event_listener_failed",
+                        it.message ?: "setEventListener failed",
+                        null,
+                    )
                 }
         }
     }
@@ -170,11 +186,11 @@ class ServicePlugin :
         // VPN on some phones when the app was reopened from background: the disconnect
         // queued while :main was frozen fired on resume and sabotaged the sticky recovery
         // (coldStart then saw isVpnActive == false and stopped itself). Instead, re-derive
-        // the real state from the flag + an AIDL probe — handleSyncState keeps START while
-        // the tunnel is genuinely up and only reports STOP when the flag is actually clear.
-        // Genuine teardowns are still covered by the SERVICE_DESTROYED broadcast + the
-        // explicit stop path. The "crash" signal makes Dart re-bind and re-register its
-        // event listener against the reconnected service.
+        // the real state from the StateHub snapshot — handleSyncState keeps START while
+        // the tunnel is genuinely up (recovery bias included) and genuine teardowns arrive
+        // as pushed STOPPED transitions once the connection re-establishes. The "crash"
+        // signal makes Dart re-bind and re-register its event listener against the
+        // reconnected service.
         CommonGlobalState.launch { GlobalState.handleSyncState() }
         invokeOnMain("crash", message)
     }
@@ -182,11 +198,10 @@ class ServicePlugin :
     private fun handleInvokeAction(call: MethodCall, result: MethodChannel.Result) {
         val data = call.arguments<String>() ?: run { result.successOnMain(""); return }
         launch {
+            // Service.invokeAction completes the callback exactly once (real result /
+            // registration failure / watchdog), so don't also complete here.
             Service.invokeAction(data) { payload -> result.successOnMain(payload) }
-                .onFailure {
-                    Log.w("ServicePlugin", "invokeAction failed: ${it.message}")
-                    result.successOnMain("")
-                }
+                .onFailure { Log.w("ServicePlugin", "invokeAction failed: ${it.message}") }
         }
     }
 
@@ -196,16 +211,15 @@ class ServicePlugin :
         val params = args?.get("params") as? String ?: ""
         val state = args?.get("state") as? String ?: ""
         launch {
+            // Service.quickStart completes onResult exactly once (real result /
+            // registration failure / watchdog), so don't also complete here.
             Service.quickStart(
                 initParams,
                 params,
                 state,
                 onStarted = { invokeOnMain("onStarted", null) },
                 onResult = { payload -> result.successOnMain(payload) },
-            ).onFailure {
-                Log.w("ServicePlugin", "quickStart failed: ${it.message}")
-                result.successOnMain("")
-            }
+            ).onFailure { Log.w("ServicePlugin", "quickStart failed: ${it.message}") }
         }
     }
 
@@ -256,20 +270,10 @@ class ServicePlugin :
 
     private fun doStartService(options: VpnOptions, result: MethodChannel.Result) {
         launch {
-            if (options.enable) {
-                // Arm the late-SERVICE_DESTROYED guard at the real start moment so a
-                // stale DESTROYED broadcast (e.g. delivered after :app unfreezes)
-                // can't tear down this fresh tunnel. Covers in-app and tile-with-engine
-                // starts, which bypass GlobalState.triggerStart's own arming.
-                GlobalState.startRequestedAt = android.os.SystemClock.elapsedRealtime()
-            }
             val rt = Service.startService(options, GlobalState.runTime)
             GlobalState.runTime = rt
             if (rt == 0L) {
                 com.follow.clashx.common.SavedParams.setVpnActive(false)
-            } else {
-                GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
-                GlobalState.requestBatteryOptimizationExemption()
             }
             GlobalState.runStateFlow.tryEmit(if (rt == 0L) RunState.STOP else RunState.START)
             result.successOnMain(rt)
@@ -328,45 +332,47 @@ class ServicePlugin :
         val actionLabel = args["actionLabel"] as? String ?: ""
         val actionUrl = args["actionUrl"] as? String ?: ""
 
-        val ctx = CommonGlobalState.application
-        val manager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // Channel creation / Builder.build() / notify can throw (bad icon res, OEM
+        // notification quirks); wrap so a throw never strands the Flutter result.
+        runCatching {
+            val ctx = CommonGlobalState.application
+            val manager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (manager.getNotificationChannel(GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL) == null) {
-                val ch = NotificationChannel(
-                    GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL,
-                    ctx.getString(com.follow.clashx.common.R.string.subscription_notification_channel_name),
-                    NotificationManager.IMPORTANCE_HIGH,
-                )
-                manager.createNotificationChannel(ch)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (manager.getNotificationChannel(GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL) == null) {
+                    val ch = NotificationChannel(
+                        GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL,
+                        "Subscription Updates",
+                        NotificationManager.IMPORTANCE_HIGH,
+                    )
+                    manager.createNotificationChannel(ch)
+                }
             }
+
+            val builder = NotificationCompat.Builder(ctx, GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL)
+                .setSmallIcon(com.follow.clashx.service.R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+
+            if (actionUrl.isNotBlank()) {
+                val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(actionUrl))
+                val pi = PendingIntent.getActivity(
+                    ctx, 0, openIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                builder.addAction(0, actionLabel.ifBlank { "Open" }, pi)
+                builder.setContentIntent(pi)
+            }
+
+            manager.notify(GlobalState.SUBSCRIPTION_NOTIFICATION_ID, builder.build())
+        }.onSuccess {
+            result.successOnMain(true)
+        }.onFailure {
+            Log.w("ServicePlugin", "showSubscriptionNotification failed: ${it.message}")
+            result.errorOnMain("subscription_notification_failed", it.message, null)
         }
-
-        val builder = NotificationCompat.Builder(ctx, GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL)
-            .setSmallIcon(com.follow.clashx.service.R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-
-        if (actionUrl.isNotBlank()) {
-            val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(actionUrl))
-            val pi = PendingIntent.getActivity(
-                ctx, 0, openIntent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            builder.addAction(
-                0,
-                actionLabel.ifBlank {
-                    ctx.getString(com.follow.clashx.common.R.string.notification_open)
-                },
-                pi,
-            )
-            builder.setContentIntent(pi)
-        }
-
-        manager.notify(GlobalState.SUBSCRIPTION_NOTIFICATION_ID, builder.build())
-        result.successOnMain(true)
     }
 
     private fun dispatchEvent(value: String?) {
@@ -386,6 +392,14 @@ class ServicePlugin :
             runCatching { success(value) }
         } else {
             Handler(Looper.getMainLooper()).post { runCatching { success(value) } }
+        }
+    }
+
+    private fun MethodChannel.Result.errorOnMain(code: String, message: String?, details: Any?) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            runCatching { error(code, message, details) }
+        } else {
+            Handler(Looper.getMainLooper()).post { runCatching { error(code, message, details) } }
         }
     }
 }

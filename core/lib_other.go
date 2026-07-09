@@ -14,3 +14,5 @@ func nextHandle(action *Action, result ActionResult) bool {
 func invokeCallback(callback unsafe.Pointer, data string) {}
 
 func emitEvent(data string) {}
+
+func hasEventListener() bool { return false }

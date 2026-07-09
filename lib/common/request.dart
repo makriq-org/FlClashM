@@ -17,6 +17,11 @@ class Request {
         headers: {
           "User-Agent": browserUa,
         },
+        // Without these a profile/subscription fetch over a half-dead uplink
+        // (mobile network, doze-restricted background) hangs forever: the card
+        // spins indefinitely and the auto-update chain stalls until app restart.
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 60),
       ),
     );
     _clashDio = Dio(
@@ -253,7 +258,11 @@ class Request {
       if (response.statusCode != HttpStatus.ok) {
         return false;
       }
-      return (response.data as String) == globalState.coreSHA256;
+      // Compare against the binary actually on disk, not the build-time
+      // constant — a separately updated core is otherwise reported as a
+      // helper mismatch forever.
+      final diskHash = await coreUpdater.calcCoreSha256();
+      return diskHash != null && (response.data as String) == diskHash;
     } catch (_) {
       return false;
     }

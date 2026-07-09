@@ -23,7 +23,7 @@ final configStateProvider = AutoDisposeProvider<Config>.internal(
 // ignore: unused_element
 typedef ConfigStateRef = AutoDisposeProviderRef<Config>;
 String _$currentGroupsStateHash() =>
-    r'6222c006e1970e7435268d32903b9019cf1a4351';
+    r'fdf29a054f191f7a6333ca5d08f7380ffe54eeb2';
 
 /// See also [currentGroupsState].
 @ProviderFor(currentGroupsState)
@@ -78,7 +78,7 @@ final currentNavigationsStateProvider =
 // ignore: unused_element
 typedef CurrentNavigationsStateRef
     = AutoDisposeProviderRef<NavigationItemsState>;
-String _$coreStateHash() => r'33f01ee9173525862c89522bf73b3174beb63daa';
+String _$coreStateHash() => r'f9ded8de0c0c935a0324853ce13c35d806a70126';
 
 /// See also [coreState].
 @ProviderFor(coreState)
@@ -110,7 +110,7 @@ final updateParamsProvider = AutoDisposeProvider<UpdateParams>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UpdateParamsRef = AutoDisposeProviderRef<UpdateParams>;
-String _$proxyStateHash() => r'22478fb593aaca11dfe2cf64472013190475a5bc';
+String _$proxyStateHash() => r'1a6d27cc45d0ce29b0e969f5563d6302a1364ed0';
 
 /// See also [proxyState].
 @ProviderFor(proxyState)
@@ -1124,9 +1124,16 @@ final globalModeEnabledProvider = AutoDisposeProvider<bool>.internal(
 // ignore: unused_element
 typedef GlobalModeEnabledRef = AutoDisposeProviderRef<bool>;
 String _$newDashboardEnabledHash() =>
-    r'1b3c5d7f9a0e2c4d6f8b0a1c3e5d7f9b1a3c5e7d';
+    r'092ed1731d3ca9eb4640f09e2e749c72e651347e';
 
-/// See also [newDashboardEnabled].
+/// Single source of truth for whether the "new look" (hero) dashboard is shown.
+/// Just the `newDashboard` setting — the toggle is never locked. The
+/// `flclashx-newboard` header writes this setting via _applyCustomViewSettings under
+/// the standard `flclashx-custom` policy (`update` re-applies on every profile apply,
+/// `add` only when the subscription is first added), so the provider can switch the
+/// board on/off through the normal header pipeline rather than overriding here.
+///
+/// Copied from [newDashboardEnabled].
 @ProviderFor(newDashboardEnabled)
 final newDashboardEnabledProvider = AutoDisposeProvider<bool>.internal(
   newDashboardEnabled,
@@ -1193,7 +1200,7 @@ final hasServerInfoDataProvider = AutoDisposeProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef HasServerInfoDataRef = AutoDisposeProviderRef<bool>;
-String _$backgroundUrlHash() => r'13f97b984026adac4ccddacb35f9f9c06b420afc';
+String _$backgroundUrlHash() => r'48c3c7a5104d07b3f8f37b770003fdc1b53b0a59';
 
 /// See also [backgroundUrl].
 @ProviderFor(backgroundUrl)
@@ -1210,6 +1217,26 @@ final backgroundUrlProvider = AutoDisposeProvider<String?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef BackgroundUrlRef = AutoDisposeProviderRef<String?>;
+String _$backgroundOpacityHash() => r'dcd60cea0aa92bc270c96b7cb2b364cbbd7edc68';
+
+/// Background image opacity (1-100, higher = more visible) parsed from the optional
+/// `,<opacity>` suffix of `flclashx-background`. Null = not specified (default look).
+///
+/// Copied from [backgroundOpacity].
+@ProviderFor(backgroundOpacity)
+final backgroundOpacityProvider = AutoDisposeProvider<int?>.internal(
+  backgroundOpacity,
+  name: r'backgroundOpacityProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$backgroundOpacityHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef BackgroundOpacityRef = AutoDisposeProviderRef<int?>;
 String _$getProxiesColumnsHash() => r'725066b5fc21f590a4c2656a1fd5e14ab7079079';
 
 /// See also [getProxiesColumns].
@@ -1620,7 +1647,7 @@ class _GetSelectedProxyNameProviderElement
   String get groupName => (origin as GetSelectedProxyNameProvider).groupName;
 }
 
-String _$getProxyDescHash() => r'dd1aa9efd5ba1f9f15105bba010a3677fc4bec7c';
+String _$getProxyDescHash() => r'0856c238988f8b1f98573bf4d0e2e38fb2950678';
 
 /// See also [getProxyDesc].
 @ProviderFor(getProxyDesc)
@@ -1900,7 +1927,7 @@ final layoutChangeProvider = AutoDisposeProvider<VM2?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LayoutChangeRef = AutoDisposeProviderRef<VM2?>;
-String _$checkIpHash() => r'07ebf8d032349e2b3adda483e68b1936ffbed68d';
+String _$checkIpHash() => r'04cc9442d1916904f241066536fef6c9b822fe19';
 
 /// See also [checkIp].
 @ProviderFor(checkIp)

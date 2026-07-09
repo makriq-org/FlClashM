@@ -112,6 +112,23 @@ class App {
   Future<bool?> updateExcludeFromRecents(bool value) async => methodChannel.invokeMethod<bool>("updateExcludeFromRecents", {
       "value": value,
     });
+
+  /// Whether the app is exempt from battery optimization (the key OEM survival
+  /// lever). Returns true on pre-M / non-Android.
+  Future<bool> isIgnoringBatteryOptimizations() async =>
+      await methodChannel.invokeMethod<bool>("isIgnoringBatteryOptimizations") ??
+      false;
+
+  /// Re-promptable battery-optimization exemption request.
+  Future<bool> requestIgnoreBatteryOptimizations() async =>
+      await methodChannel
+          .invokeMethod<bool>("requestIgnoreBatteryOptimizations") ??
+      false;
+
+  /// Opens the OEM autostart/background-start allowlist (or app details as a
+  /// fallback) so BootReceiver and sticky restarts aren't blocked at OEM level.
+  Future<bool> openAutoStartSettings() async =>
+      await methodChannel.invokeMethod<bool>("openAutoStartSettings") ?? false;
 }
 
 final app = Platform.isAndroid ? App() : null;

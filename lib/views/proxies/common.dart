@@ -30,20 +30,29 @@ Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
   if (state.proxyName.isEmpty) {
     return;
   }
-  appController
-    ..setDelay(
-      Delay(
-        url: url,
-        name: state.proxyName,
-        value: 0,
-      ),
-    )
-    ..setDelay(
+  appController.setDelay(
+    Delay(
+      url: url,
+      name: state.proxyName,
+      value: 0,
+    ),
+  );
+  try {
+    appController.setDelay(
       await clashCore.getDelay(
         url,
         state.proxyName,
       ),
     );
+  } catch (_) {
+    appController.setDelay(
+      Delay(
+        url: url,
+        name: state.proxyName,
+        value: -1,
+      ),
+    );
+  }
 }
 
 Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {

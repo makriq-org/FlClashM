@@ -291,7 +291,9 @@ class GlobalState {
     );
   }
 
-  Future<void> syncRuntimeStartTime() => engineManager.syncStartTime();
+  /// True = start time is now known (possibly "stopped"); false = probe
+  /// failed, runtime state UNKNOWN — do not treat as stopped.
+  Future<bool> syncRuntimeStartTime() => engineManager.syncStartTime();
 
   Future<RawProfile?> loadCurrentRawProfile() async {
     final profile = config.currentProfile;

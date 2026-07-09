@@ -144,7 +144,7 @@ class Utils {
     if (matches.isNotEmpty) {
       final match = matches.last;
       final number = int.parse(match[1] ?? '0') + 1;
-      return label.replaceFirst(reg, '($number)', label.length - 3 - 1);
+      return label.replaceFirst(reg, '($number)');
     } else {
       return "$label(1)";
     }

@@ -55,6 +55,11 @@ class AppPath {
 
   String get corePendingPath => '$corePath.pending';
 
+  /// Allow-list consumed by the Windows helper service; lives next to the
+  /// helper exe so per-machine installs keep it admin-writable only.
+  String get allowedCoreHashPath =>
+      join(executableDirPath, "allowed_core.sha256");
+
   String get helperPath => join(executableDirPath, "$appHelperService$executableExtension");
 
   Future<String> get downloadDirPath async {

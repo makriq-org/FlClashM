@@ -1,8 +1,5 @@
 package com.follow.clashx.service
 
-import com.follow.clashx.common.BroadcastAction
-import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.sendInternalBroadcast
 import com.follow.clashx.service.models.VpnOptions
 
 interface IBaseService {
@@ -13,12 +10,16 @@ interface IBaseService {
 
     fun handleCreate() {
         destroyed = false
-        GlobalState.application.sendInternalBroadcast(BroadcastAction.SERVICE_CREATED.action)
     }
 
     fun handleDestroy() {
         if (destroyed) return
         destroyed = true
-        GlobalState.application.sendInternalBroadcast(BroadcastAction.SERVICE_DESTROYED.action)
+        // Report STOPPED only when nothing is running anymore: a delayed destroy
+        // of a superseded instance (fast off→on) sees the new tunnel's runTime
+        // and must not clobber the state it just published. Replaces the old
+        // SERVICE_DESTROYED broadcast (whose late delivery needed exactly this
+        // discriminator on the receiving side).
+        if (State.runTime == 0L) StateHub.publish(StateHub.STOPPED)
     }
 }

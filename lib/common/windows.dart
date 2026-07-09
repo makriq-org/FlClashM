@@ -239,6 +239,7 @@ class Windows {
 
     await _killProcess(helperPort);
 
+    final coreHash = await coreUpdater.calcCoreSha256();
     final command = [
       "/c",
       if (status == WindowsHelperServiceStatus.presence) ...[
@@ -256,6 +257,14 @@ class Windows {
       "sc",
       "start",
       appHelperService,
+      // Sync the helper's core allow-list while elevation is already granted,
+      // so a previously updated core isn't refused by a stale hash.
+      if (coreHash != null) ...[
+        "&&",
+        "echo",
+        '$coreHash>',
+        '"${appPath.allowedCoreHashPath}"',
+      ],
     ].join(" ");
 
     final res = runas("cmd.exe", command);

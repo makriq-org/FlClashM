@@ -148,17 +148,42 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         // pinging every proxy every few seconds for a UI nobody is looking at.
         clashCore.setUiActive(false);
       }
+    } else if (state == AppLifecycleState.hidden) {
+      // Desktop window hidden (tray/minimize). Falling through to the generic
+      // resume branch cancelled the throttled render pause armed by
+      // window.hide(), so the engine kept rasterizing dashboard animations in
+      // an invisible window.
+      render?.pause();
     } else {
       render?.resume();
       if (state == AppLifecycleState.resumed && Platform.isAndroid) {
+        // Re-assert the per-session core wiring against the (possibly recycled)
+        // :remote core. A warm app-open after a headless tile start keeps this
+        // engine's one-time event-pipe registration + log/request producers, but the
+        // :remote core has been replaced — so logs/journal/delays silently stop
+        // arriving (only the polled traffic survives). All idempotent and mirror what
+        // the cold-start path already does.
         clashLib?.reconnectIfNeeded();
         clashCore.setUiActive(true);
+        // Re-subscribe the log stream: the log subscriber lives in :remote and is gone
+        // after a recycle, and nothing else re-issues it on resume. Gated on openLogs.
+        if (globalState.config.appSetting.openLogs) {
+          clashCore.startLog();
+        } else {
+          clashCore.stopLog();
+        }
         globalState.startGroupsUpdateTask();
         globalState.appController.updateGroupsDebounce();
+        // Optimistically restart timers from the cached state so the runtime
+        // display doesn't stall while the probe below is in flight...
         if (globalState.isStart) {
           await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();
         }
+        // ...then align with the native truth: STOP/START events are lost
+        // while the process is frozen/killed, and the cached state never
+        // self-heals without this.
+        unawaited(globalState.appController.syncVpnStateOnResume());
       }
     }
   }

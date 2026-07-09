@@ -166,9 +166,9 @@ class _ZashboardButton extends StatelessWidget {
         .trim()
         .replaceAll(RegExp(r'^/+|/+$'), '');
     if (ui.isEmpty) {
-      return '$_publicZashboardBase/#/$query';
+      return '$_publicZashboardBase/#/setup?$query';
     }
-    return 'http://$host:$port/$ui/#/$query';
+    return 'http://$host:$port/$ui/#/setup?$query';
   }
 
   Future<void> _open(BuildContext context) async {

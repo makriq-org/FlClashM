@@ -122,7 +122,7 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
       groupIndex = currentIndex;
     }
     final currentGroups = appController.getCurrentGroups();
-    if (groupIndex == null || groupIndex > currentGroups.length) {
+    if (groupIndex == null || groupIndex >= currentGroups.length) {
       return;
     }
     final currentGroup = currentGroups[groupIndex];

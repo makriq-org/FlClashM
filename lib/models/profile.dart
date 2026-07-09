@@ -37,6 +37,7 @@ class SubscriptionInfo with _$SubscriptionInfo {
     final map = <String, int?>{};
     for (final i in list) {
       final keyValue = i.trim().split("=");
+      if (keyValue.length < 2) continue;
       map[keyValue[0]] = int.tryParse(keyValue[1]);
     }
     return SubscriptionInfo(

@@ -429,20 +429,36 @@ class CommonScaffoldState extends ConsumerState<CommonScaffold> {
     );
   }
 
-  Widget _buildOverlay(BuildContext context) => Positioned.fill(
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                context.colorScheme.surface.withValues(alpha: 0.92),
-                context.colorScheme.surface.withValues(alpha: 0.88),
-              ],
-            ),
+  Widget _buildOverlay(BuildContext context, int? opacity) {
+    // Dimming overlay over the background image. `opacity` (1-100, from the optional
+    // `,<opacity>` suffix of flclashx-background) = how visible the image should be:
+    // higher opacity → lower overlay alpha → more visible image. Unset → keep the
+    // original hardcoded look (image ~10% visible).
+    final double topAlpha;
+    final double bottomAlpha;
+    if (opacity == null) {
+      topAlpha = 0.92;
+      bottomAlpha = 0.88;
+    } else {
+      final base = (1 - opacity / 100).clamp(0.0, 1.0);
+      topAlpha = base;
+      bottomAlpha = (base - 0.04).clamp(0.0, 1.0);
+    }
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              context.colorScheme.surface.withValues(alpha: topAlpha),
+              context.colorScheme.surface.withValues(alpha: bottomAlpha),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -516,7 +532,12 @@ class CommonScaffoldState extends ConsumerState<CommonScaffold> {
         ? Stack(
             children: [
               _buildBackground(backgroundUrl),
-              _buildOverlay(context),
+              _buildOverlay(
+                context,
+                widget.disableBackground
+                    ? null
+                    : ref.watch(backgroundOpacityProvider),
+              ),
               scaffold,
             ],
           )

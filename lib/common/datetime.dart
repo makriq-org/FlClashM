@@ -7,7 +7,7 @@ extension DateTimeExtension on DateTime {
     if (dateTime == null) {
       return false;
     }
-    return true;
+    return isBefore(dateTime);
   }
 
   String get lastUpdateTimeDesc {
