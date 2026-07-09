@@ -18,7 +18,7 @@ git diff --name-only --diff-filter=U -- '*.dart' |
 ```
 
 3. Разобрать конфликты в `lib/product/**`
-4. Вне `lib/product/**` трогать только файлы из `tool/product_touchpoints.json`
+4. Вне `lib/product/**` держать mounted-экраны в апстримных `lib/views/**`; product-логику вживлять только минимальными хуками. Если base-файл реально импортирует `lib/product/**`, запись должна быть в `tool/product_touchpoints.json`; любой прочий base-дрейф должен быть объяснен в `tool/base_drift_allowlist.json`
 5. После слияния прогнать проверки:
 
 ```bash

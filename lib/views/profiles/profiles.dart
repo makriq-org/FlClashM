@@ -4,6 +4,7 @@ import 'package:flclashm/common/common.dart';
 import 'package:flclashm/enum/enum.dart';
 import 'package:flclashm/models/models.dart' hide Action;
 import 'package:flclashm/pages/pages.dart';
+import 'package:flclashm/product/subscription/provider_advisory.dart';
 import 'package:flclashm/providers/providers.dart';
 import 'package:flclashm/state.dart';
 import 'package:flclashm/views/profiles/edit_profile.dart';
@@ -387,7 +388,9 @@ class _ProfileItemState extends State<ProfileItem> {
   }
 
   @override
-  Widget build(BuildContext context) => CommonCard(
+  Widget build(BuildContext context) {
+    final displayHints = ProductProviderAdvisory.fromProfile(widget.profile).display;
+    return CommonCard(
       isSelected: widget.profile.id == widget.groupValue,
       onPressed: _isTV
           ? null
@@ -450,14 +453,27 @@ class _ProfileItemState extends State<ProfileItem> {
                                 onPressed: updateProfile,
                               ),
                             ],
-                            if (widget.profile.providerHeaders['support-url'] != null && widget.profile.providerHeaders['support-url']!.isNotEmpty && !_isTV )
-                            PopupMenuItemData(
-                              icon: Icons.contact_support,
-                              label: appLocalizations.support,
-                              onPressed: () {
-                                globalState.openUrl(widget.profile.providerHeaders['support-url']!);
-                              },
-                            ),
+                            if (system.isMobile && !_isTV)
+                              PopupMenuItemData(
+                                icon: Icons.tv_outlined,
+                                label: appLocalizations.sendToTv,
+                                onPressed: () {
+                                  BaseNavigator.push(
+                                    context,
+                                    SendToTvPage(
+                                      profileUrl: widget.profile.url,
+                                    ),
+                                  );
+                                },
+                              ),
+                            if (displayHints.hasSupportUrl && !_isTV)
+                              PopupMenuItemData(
+                                icon: Icons.contact_support,
+                                label: appLocalizations.support,
+                                onPressed: () {
+                                  globalState.openUrl(displayHints.supportUrl);
+                                },
+                              ),
                             PopupMenuItemData(
                               icon: Icons.extension_outlined,
                               label: appLocalizations.override,
@@ -503,6 +519,7 @@ class _ProfileItemState extends State<ProfileItem> {
         ),
       ),
     );
+  }
 }
 
 class ReorderableProfilesSheet extends StatefulWidget {

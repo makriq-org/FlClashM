@@ -321,6 +321,11 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/core_update.dart",
+      "bucket": "budget",
+      "reason": "Desktop core-update логика остаётся в base; дрейф относится к общей инфраструктуре обновления core."
+    },
+    {
       "path": "lib/common/context.dart",
       "bucket": "rename",
       "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
@@ -566,6 +571,11 @@
       "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
+      "path": "lib/models/generated/app.freezed.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner); дрейф отражает текущую схему моделей и не редактируется вручную."
+    },
+    {
       "path": "lib/models/generated/config.freezed.dart",
       "bucket": "budget",
       "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели, руками не правится."
@@ -579,6 +589,11 @@
       "path": "lib/models/generated/core.g.dart",
       "bucket": "budget",
       "reason": "Генерируемый файл (build_runner сломан в окружении); запись setUiActive в _$ActionMethodEnumMap добавлена вручную по конвенции репо (7fb3020d, d67088dd) — без неё JsonUnsupportedObjectError."
+    },
+    {
+      "path": "lib/models/generated/selector.freezed.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner); дрейф отражает текущее состояние моделей и не редактируется вручную."
     },
     {
       "path": "lib/models/profile.dart",
@@ -601,6 +616,11 @@
       "reason": "Дифф сведен к выбору мобильного навбара через селектор режима; страница уже остается тонким потребителем."
     },
     {
+      "path": "lib/pages/pages.dart",
+      "bucket": "budget",
+      "reason": "Barrel экспортирует тонкий mount send-to-TV страницы и не тянет в себя продуктовую реализацию."
+    },
+    {
       "path": "lib/pages/scan.dart",
       "bucket": "rename",
       "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
@@ -608,7 +628,7 @@
     {
       "path": "lib/pages/send_to_tv_page.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования продуктовой страницы TV sync после инкапсуляции."
+      "reason": "Тонкий base-mount держит доступной форковую страницу TV sync из lib/product/pages."
     },
     {
       "path": "lib/plugins/app.dart",
@@ -641,6 +661,16 @@
       "reason": "Config-provider оставляет только тонкий вызов синхронизации Android tile после сохранения конфига; это допустимый platform-shell touchpoint."
     },
     {
+      "path": "lib/providers/generated/config.g.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner); дрейф отражает текущую сигнатуру provider-ов и не редактируется вручную."
+    },
+    {
+      "path": "lib/providers/generated/state.g.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл Riverpod; в офлайн-окружении build_runner недоступен, поэтому сигнатура genColorScheme синхронизирована вручную с исходником."
+    },
+    {
       "path": "lib/providers/state.dart",
       "bucket": "budget",
       "reason": "Продуктовые правила селекторов вынесены в lib/product/subscription и lib/product/platform; в base остались только тонкие провайдеры-обёртки."
@@ -663,17 +693,17 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования продуктового about-экрана после инкапсуляции."
+      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
     },
     {
       "path": "lib/views/access.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования продуктового редактора доступа после инкапсуляции."
+      "reason": "Живой редактор доступа использует product AccessControlService только как источник состояния, пакетов и profile-managed lock."
     },
     {
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
     },
     {
       "path": "lib/views/backup_and_recovery.dart",
@@ -693,7 +723,7 @@
     {
       "path": "lib/views/config/general.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Файл возвращен к апстриму; скрытие порта по provider headers удалено как небезопасное."
     },
     {
       "path": "lib/views/config/network.dart",
@@ -718,17 +748,17 @@
     {
       "path": "lib/views/dashboard/dashboard.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой dashboard оставлен в base и держит только hero-layout и lock-гейты через продуктовые селекторы."
     },
     {
       "path": "lib/views/dashboard/widgets/announce_widget.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой announce-виджет читает текст только через currentProductDisplayHintsProvider."
     },
     {
       "path": "lib/views/dashboard/widgets/change_server_button.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой change-server виджет берет имя server-info группы из product display hints, без разбора headers в UI."
     },
     {
       "path": "lib/views/dashboard/widgets/hero_connect.dart",
@@ -753,7 +783,7 @@
     {
       "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой metainfo-виджет читает support URL через product display hints и снова использует обычный URLFormDialog."
     },
     {
       "path": "lib/views/dashboard/widgets/network_detection.dart",
@@ -778,7 +808,7 @@
     {
       "path": "lib/views/dashboard/widgets/service_info_widget.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой service-info виджет берет брендовые поля и ссылку поддержки через product display hints."
     },
     {
       "path": "lib/views/dashboard/widgets/start_button.dart",
@@ -788,7 +818,7 @@
     {
       "path": "lib/views/dashboard/widgets/stats_grid.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+      "reason": "Живой StatsGrid хранит runtime-pill для hero-dashboard без отдельной product-копии."
     },
     {
       "path": "lib/views/dashboard/widgets/traffic_usage.dart",
@@ -818,7 +848,7 @@
     {
       "path": "lib/views/profiles/edit_profile.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования продуктового редактора профиля после инкапсуляции."
+      "reason": "Живой редактор профиля валидирует конфиг через globalState.validateProfileConfigText при редактировании и сохранении."
     },
     {
       "path": "lib/views/profiles/override_profile.dart",
@@ -828,7 +858,7 @@
     {
       "path": "lib/views/profiles/profiles.dart",
       "bucket": "budget",
-      "reason": "Тонкая точка монтирования продуктовой страницы профилей после инкапсуляции."
+      "reason": "Живой список профилей сохраняет send-to-TV и advisory support link без отдельной product-копии."
     },
     {
       "path": "lib/views/profiles/receive_profile_dialog.dart",

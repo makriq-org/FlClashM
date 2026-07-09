@@ -96,114 +96,34 @@
     },
     {
       "path": "lib/views/about.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "AboutView stays a thin base re-export for the product about view.",
+      "boundary": "ui-product-services",
+      "reason": "AboutView stays upstream-owned and delegates only the manual app-update check into ProductServices.",
       "targets": [
-        "lib/product/ui/about_view.dart"
+        "lib/product/services/product_services.dart"
       ]
     },
     {
       "path": "lib/views/access.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "AccessView stays a thin base re-export for the product access view.",
+      "boundary": "ui-product-services",
+      "reason": "AccessView stays in base UI and uses ProductServices only for access-control editor state, package loading and profile-managed locks.",
       "targets": [
-        "lib/product/ui/access_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/profiles/edit_profile.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "EditProfileView stays a thin base re-export for the product profile editor.",
-      "targets": [
-        "lib/product/ui/profiles/edit_profile_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/application_setting.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "ApplicationSettingView stays a thin base re-export for the product settings view.",
-      "targets": [
-        "lib/product/ui/application_setting_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/hero_connect.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "HeroConnect stays a thin base re-export for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/hero_connect_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/config/general.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "General config stays a thin base re-export for the product config view.",
-      "targets": [
-        "lib/product/ui/config/general_view.dart"
+        "lib/product/services/product_services.dart"
       ]
     },
     {
       "path": "lib/views/profiles/profiles.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "ProfilesView stays a thin base mount point for the product profiles page.",
+      "boundary": "ui-product-advisory",
+      "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",
       "targets": [
-        "lib/product/ui/profiles/profiles_view.dart"
+        "lib/product/subscription/provider_advisory.dart"
       ]
     },
     {
       "path": "lib/pages/send_to_tv_page.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "SendToTvPage stays a thin base re-export for the product TV sync page.",
+      "boundary": "fork-page-mount",
+      "reason": "The base page stays a thin mount for the fork-only TV sync screen that lives under lib/product/pages.",
       "targets": [
-        "lib/product/ui/send_to_tv_page_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/dashboard.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "DashboardView stays a thin base mount point for the product dashboard page.",
-      "targets": [
-        "lib/product/ui/dashboard/dashboard_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/announce_widget.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "AnnounceWidget stays a thin base re-export for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/announce_widget_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/change_server_button.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "ChangeServerButton stays a thin base re-export for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/change_server_button_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "MetainfoWidget stays a thin base mount point for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/metainfo_widget_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/service_info_widget.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "ServiceInfoWidget stays a thin base re-export for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/service_info_widget_view.dart"
-      ]
-    },
-    {
-      "path": "lib/views/dashboard/widgets/stats_grid.dart",
-      "boundary": "ui-thin-consumers",
-      "reason": "StatsGrid stays a thin base re-export for the product dashboard widget.",
-      "targets": [
-        "lib/product/ui/dashboard/stats_grid_view.dart"
+        "lib/product/pages/send_to_tv.dart"
       ]
     }
   ]

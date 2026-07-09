@@ -33,6 +33,7 @@ class StatsGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final runTime = ref.watch(runTimeProvider);
     final profile = ref.watch(currentProfileProvider);
     final sub = profile?.subscriptionInfo;
     final hasTraffic = sub != null && sub.total > 0;
@@ -65,7 +66,20 @@ class StatsGrid extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
             ],
-            _IpPill(ip: ipText, flag: flag, isLoading: isLoading),
+            Row(
+              children: [
+                Expanded(
+                  child: _IpPill(ip: ipText, flag: flag, isLoading: isLoading),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatPill(
+                    icon: Icons.timer_outlined,
+                    label: runTime != null ? utils.getTimeText(runTime) : '—',
+                  ),
+                ),
+              ],
+            ),
           ],
         );
       },
@@ -246,3 +260,40 @@ class _ExpiryPill extends StatelessWidget {
   }
 }
 
+class _StatPill extends StatelessWidget {
+  const _StatPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: context.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontFamily: FontFamily.jetBrainsMono.value,
+              ),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

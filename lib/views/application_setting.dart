@@ -507,6 +507,41 @@ class AutoCheckUpdateItem extends ConsumerWidget {
   }
 }
 
+class IncludePrereleaseUpdatesItem extends ConsumerWidget {
+  const IncludePrereleaseUpdatesItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final includePrereleaseUpdates = ref.watch(
+      appSettingProvider.select((state) => state.includePrereleaseUpdates),
+    );
+    final overrideProviderSettings = ref.watch(
+      appSettingProvider.select((state) => state.overrideProviderSettings),
+    );
+    final isEnabled = overrideProviderSettings;
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.5,
+      child: ListItem.switchItem(
+        title: Text(appLocalizations.includePrereleaseUpdates),
+        subtitle: Text(appLocalizations.includePrereleaseUpdatesDesc),
+        delegate: SwitchDelegate(
+          value: includePrereleaseUpdates,
+          onChanged: isEnabled
+              ? (value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          includePrereleaseUpdates: value,
+                          skippedAppUpdateTagName: "",
+                        ),
+                      );
+                }
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
 class ApplicationSettingView extends StatelessWidget {
   const ApplicationSettingView({super.key});
 
@@ -534,6 +569,7 @@ class ApplicationSettingView extends StatelessWidget {
       OpenLogsItem(),
       CloseConnectionsItem(),
       AutoCheckUpdateItem(),
+      IncludePrereleaseUpdatesItem(),
       if (system.isDesktop) ...[
         Padding(
           padding: const EdgeInsets.only(top: 16),

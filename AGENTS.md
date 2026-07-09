@@ -29,12 +29,15 @@
 Слои:
 
 1. `FlClashX Base` — UI, навигация, базовый runtime path.
-2. `Product Layer` (`lib/product/**`) — компиляция профиля, security policy, обновления.
+2. `Product Layer` (`lib/product/**`) — форковая логика, security policy, обновления и fork-only страницы.
 3. `Runtime Layer` — `mihomo` (baseline), built-in nodes: `naiveproxy`, `olcrtc`, `byedpi`.
 4. `Platform Layer` — Android VPN, foreground service, installer bridge.
 
 Base-код вне `lib/product/**` знает о product layer только через разрешенные
-touchpoints из `tool/product_touchpoints.json`.
+touchpoints из `tool/product_touchpoints.json`. Живые `lib/views/**` не
+копируются в product-слой: они остаются апстримными файлами с минимальными
+зарегистрированными хуками. Fork-only страницы держать в `lib/product/pages/**`
+с тонким mount-файлом в base только когда без этого страница недостижима.
 
 ## Документация
 
