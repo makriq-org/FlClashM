@@ -48,7 +48,8 @@ void main() {
     ..writeln(
       'Allowed touchpoints: ${inventory!.allowedImports.length}, '
       'product-layer files: ${result!.productFileCount}, '
-      'base touchpoints: ${result.baseTouchpointCount}.',
+      'base touchpoints: ${result.baseTouchpointCount}, '
+      'product UI files: ${result.productUiFileCount}.',
     );
 }
 
@@ -107,7 +108,28 @@ BoundaryScanResult scanProductBoundaries(
     expectedByPath[normalizedPath] = touchpoint;
   }
 
+  final expectedUiByPath = <String, ProductUiAllowance>{};
+  for (final allowance in inventory.allowedProductUi) {
+    final normalizedPath = normalizePath(allowance.path);
+    if (!normalizedPath.startsWith(productRootPath)) {
+      failures.add(
+        'Product UI allowance `$normalizedPath` must stay under '
+        '`lib/product/**`.',
+      );
+      continue;
+    }
+    if (expectedUiByPath.containsKey(normalizedPath)) {
+      failures.add(
+        'Duplicate product UI allowance `$normalizedPath` in '
+        '`$inventoryPath`.',
+      );
+      continue;
+    }
+    expectedUiByPath[normalizedPath] = allowance;
+  }
+
   final actualByPath = <String, Set<String>>{};
+  final actualProductUiByPath = <String, Set<String>>{};
   var productFileCount = 0;
 
   final entities = Directory(libRootPath).listSync(recursive: true);
@@ -119,6 +141,12 @@ BoundaryScanResult scanProductBoundaries(
     final path = normalizePath(entity.path);
     if (path.startsWith(productRootPath)) {
       productFileCount++;
+      final declarations = collectProductUiDeclarations(
+        entity.readAsStringSync(),
+      );
+      if (declarations.isNotEmpty) {
+        actualProductUiByPath[path] = declarations;
+      }
       continue;
     }
 
@@ -167,10 +195,64 @@ BoundaryScanResult scanProductBoundaries(
     }
   }
 
+  validateProductUiAllowances(
+    expectedUiByPath: expectedUiByPath,
+    actualProductUiByPath: actualProductUiByPath,
+    failures: failures,
+  );
+
   return BoundaryScanResult(
     productFileCount: productFileCount,
     baseTouchpointCount: actualByPath.length,
+    productUiFileCount: actualProductUiByPath.length,
   );
+}
+
+Set<String> collectProductUiDeclarations(String content) {
+  final declarations = <String>{};
+  final widgetClasses = RegExp(
+    r'\bclass\s+([A-Za-z_]\w*)[^\{;]*\bextends\s+'
+    r'([A-Za-z_]\w*Widget)\b',
+    multiLine: true,
+  );
+  for (final match in widgetClasses.allMatches(content)) {
+    declarations.add('${match.group(1)} extends ${match.group(2)}');
+  }
+
+  final widgetFactories = RegExp(
+    r'^\s*Widget\??\s+([A-Za-z_]\w*)\s*\(',
+    multiLine: true,
+  );
+  for (final match in widgetFactories.allMatches(content)) {
+    declarations.add('Widget ${match.group(1)}(...)');
+  }
+  return declarations;
+}
+
+void validateProductUiAllowances({
+  required Map<String, ProductUiAllowance> expectedUiByPath,
+  required Map<String, Set<String>> actualProductUiByPath,
+  required List<String> failures,
+}) {
+  for (final entry in actualProductUiByPath.entries) {
+    if (!expectedUiByPath.containsKey(entry.key)) {
+      failures.add(
+        'Unexpected product UI in `${entry.key}`: '
+        '${formatSet(entry.value)}. Keep the live upstream screen in base or '
+        'add an intentional `allowedProductUi` entry in `$inventoryPath` '
+        'with rationale.',
+      );
+    }
+  }
+
+  for (final allowance in expectedUiByPath.values) {
+    if (!actualProductUiByPath.containsKey(allowance.path)) {
+      failures.add(
+        'Product UI allowance `${allowance.path}` from `$inventoryPath` is '
+        'stale or contains no detected widget declaration.',
+      );
+    }
+  }
 }
 
 Set<String> collectProductImports(
@@ -256,15 +338,18 @@ class BoundaryScanResult {
   const BoundaryScanResult({
     required this.productFileCount,
     required this.baseTouchpointCount,
+    required this.productUiFileCount,
   });
 
   final int productFileCount;
   final int baseTouchpointCount;
+  final int productUiFileCount;
 }
 
 class ProductTouchpointInventory {
   const ProductTouchpointInventory({
     required this.allowedImports,
+    required this.allowedProductUi,
   });
 
   factory ProductTouchpointInventory.fromJson(
@@ -278,6 +363,13 @@ class ProductTouchpointInventory {
       );
     }
 
+    final allowedProductUiValue = json['allowedProductUi'];
+    if (allowedProductUiValue is! List) {
+      throw StateError(
+        '`allowedProductUi` must be a list in `$inventoryPath`.',
+      );
+    }
+
     return ProductTouchpointInventory(
       allowedImports: value.map((item) {
         if (item is! Map<String, dynamic>) {
@@ -287,10 +379,35 @@ class ProductTouchpointInventory {
         }
         return ProductTouchpoint.fromJson(item, packageName: packageName);
       }).toList(growable: false),
+      allowedProductUi: allowedProductUiValue.map((item) {
+        if (item is! Map<String, dynamic>) {
+          throw StateError(
+            'Each product UI allowance in `$inventoryPath` must be an object.',
+          );
+        }
+        return ProductUiAllowance.fromJson(item);
+      }).toList(growable: false),
     );
   }
 
   final List<ProductTouchpoint> allowedImports;
+  final List<ProductUiAllowance> allowedProductUi;
+}
+
+class ProductUiAllowance {
+  const ProductUiAllowance({
+    required this.path,
+    required this.reason,
+  });
+
+  factory ProductUiAllowance.fromJson(Map<String, dynamic> json) =>
+      ProductUiAllowance(
+        path: normalizePath(_readString(json, key: 'path')),
+        reason: _readString(json, key: 'reason'),
+      );
+
+  final String path;
+  final String reason;
 }
 
 class ProductTouchpoint {

@@ -401,16 +401,6 @@
       "reason": "Дифф сведен к выбору мобильного навбара через селектор режима; страница уже остается тонким потребителем."
     },
     {
-      "path": "lib/pages/pages.dart",
-      "bucket": "budget",
-      "reason": "Barrel экспортирует тонкий mount send-to-TV страницы и не тянет в себя продуктовую реализацию."
-    },
-    {
-      "path": "lib/pages/send_to_tv_page.dart",
-      "bucket": "budget",
-      "reason": "Тонкий base-mount держит доступной форковую страницу TV sync из lib/product/pages."
-    },
-    {
       "path": "lib/plugins/app.dart",
       "bucket": "budget",
       "reason": "Нативный канал вызовов для списка установленных пакетов относится к нативному bridge-слою форка."
@@ -473,7 +463,7 @@
     {
       "path": "lib/views/dashboard/dashboard.dart",
       "bucket": "budget",
-      "reason": "Живой dashboard оставлен в base и держит только hero-layout и lock-гейты через продуктовые селекторы."
+      "reason": "Живой dashboard оставлен в base и держит только lock-гейты и выбор вида через продуктовые селекторы."
     },
     {
       "path": "lib/views/dashboard/widgets/announce_widget.dart",
@@ -496,11 +486,6 @@
       "reason": "Живой service-info виджет берет брендовые поля и ссылку поддержки через product display hints."
     },
     {
-      "path": "lib/views/dashboard/widgets/stats_grid.dart",
-      "bucket": "budget",
-      "reason": "Живой StatsGrid хранит runtime-pill для hero-dashboard без отдельной product-копии."
-    },
-    {
       "path": "lib/views/profiles/edit_profile.dart",
       "bucket": "budget",
       "reason": "Живой редактор профиля валидирует конфиг через globalState.validateProfileConfigText при редактировании и сохранении."
@@ -508,7 +493,7 @@
     {
       "path": "lib/views/profiles/profiles.dart",
       "bucket": "budget",
-      "reason": "Живой список профилей сохраняет send-to-TV и advisory support link без отдельной product-копии."
+      "reason": "Живой список профилей читает ссылку поддержки через product advisory без прямого разбора provider headers."
     },
     {
       "path": "lib/views/profiles/receive_profile_dialog.dart",

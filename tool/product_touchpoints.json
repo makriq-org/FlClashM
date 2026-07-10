@@ -117,14 +117,12 @@
       "targets": [
         "lib/product/subscription/provider_advisory.dart"
       ]
-    },
+    }
+  ],
+  "allowedProductUi": [
     {
-      "path": "lib/pages/send_to_tv_page.dart",
-      "boundary": "fork-page-mount",
-      "reason": "The base page stays a thin mount for the fork-only TV sync screen that lives under lib/product/pages.",
-      "targets": [
-        "lib/product/pages/send_to_tv.dart"
-      ]
+      "path": "lib/product/android/android_update_bridge.dart",
+      "reason": "The FlClashM Android updater owns its release prompt and in-app APK download progress dialog."
     }
   ]
 }
