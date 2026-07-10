@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -12,7 +13,21 @@ import '../../plugins/vpn.dart';
 import '../runtime/engine_manager.dart';
 import '../runtime/vpn_access_control.dart';
 
+@immutable
+class ProfileAccessSnapshot {
+  const ProfileAccessSnapshot.available(this.accessControl) : available = true;
+
+  const ProfileAccessSnapshot.unavailable()
+      : available = false,
+        accessControl = null;
+
+  final bool available;
+  final AccessControl? accessControl;
+}
+
 abstract interface class RuntimeAccessPlatformBridge {
+  bool get isAndroid;
+
   Future<List<Package>> readPackages();
 
   Future<ImageProvider?> readPackageIcon(String packageName);
@@ -26,11 +41,11 @@ abstract interface class RuntimeAccessPlatformBridge {
 
   Future<void> stopVpn();
 
-  /// Reads the VPN options the running core currently reports, so the UI can
-  /// show the *actually applied* split tunneling instead of only what the
-  /// config declares. Returns null when the core is not reachable or the
-  /// payload cannot be parsed.
-  Future<AndroidVpnOptions?> readAppliedVpnOptions();
+  /// Reads the immutable options snapshot used to establish the live Android
+  /// VPN. An available snapshot with null access control means that the VPN
+  /// explicitly has no profile package rule; unavailable means the remote
+  /// service could not provide a trustworthy snapshot.
+  Future<ProfileAccessSnapshot> readAppliedProfileAccess();
 
   Future<ResolvedTunAccess> resolveTunAccess({
     required bool requestedTunEnable,
@@ -44,9 +59,14 @@ abstract interface class RuntimeAccessPlatformBridge {
 class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   const AndroidRuntimeAccessPolicy({
     this.selfPackageNames = const [packageName, '$packageName.dev'],
+    this.appliedOptionsReader,
   });
 
   final List<String> selfPackageNames;
+  final Future<String> Function()? appliedOptionsReader;
+
+  @override
+  bool get isAndroid => Platform.isAndroid;
 
   @override
   Future<List<Package>> readPackages() async => await app?.getPackages() ?? [];
@@ -105,18 +125,56 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   }
 
   @override
-  Future<AndroidVpnOptions?> readAppliedVpnOptions() async {
-    final optionsJson = await clashLib?.getAndroidVpnOptions() ?? '';
+  Future<ProfileAccessSnapshot> readAppliedProfileAccess() async {
+    final optionsJson = await (appliedOptionsReader?.call() ??
+        clashLib?.getAppliedAndroidVpnOptions() ??
+        Future.value(''));
     if (optionsJson.isEmpty) {
-      return null;
+      return const ProfileAccessSnapshot.unavailable();
     }
     try {
-      return AndroidVpnOptions.fromJson(
-        json.decode(optionsJson) as Map<String, dynamic>,
-      );
+      final options = json.decode(optionsJson) as Map<String, dynamic>;
+      final include = _readNullableStringList(options, 'includePackage');
+      final exclude = _readNullableStringList(options, 'excludePackage');
+      if (include != null && exclude != null) {
+        return const ProfileAccessSnapshot.unavailable();
+      }
+      if (include != null) {
+        return ProfileAccessSnapshot.available(
+          AccessControl(
+            enable: true,
+            mode: AccessControlMode.acceptSelected,
+            acceptList: include,
+          ),
+        );
+      }
+      if (exclude != null) {
+        return ProfileAccessSnapshot.available(
+          AccessControl(
+            enable: true,
+            mode: AccessControlMode.rejectSelected,
+            rejectList: exclude,
+          ),
+        );
+      }
+      return const ProfileAccessSnapshot.available(null);
     } catch (_) {
+      return const ProfileAccessSnapshot.unavailable();
+    }
+  }
+
+  List<String>? _readNullableStringList(
+    Map<String, dynamic> options,
+    String key,
+  ) {
+    final value = options[key];
+    if (value == null) {
       return null;
     }
+    if (value is! List || value.any((item) => item is! String)) {
+      throw FormatException('Invalid `$key` in applied VPN options.');
+    }
+    return List<String>.unmodifiable(value.cast<String>());
   }
 
   @override

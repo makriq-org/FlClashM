@@ -16,6 +16,7 @@ import com.follow.clashx.core.Core
 import com.follow.clashx.core.InvokeInterface
 import com.follow.clashx.service.models.NotificationParams
 import com.follow.clashx.service.models.VpnOptions
+import com.google.gson.Gson
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
@@ -23,6 +24,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 class RemoteService : Service() {
+
+    private val gson = Gson()
 
     private val eventListener = AtomicReference<com.follow.clashx.service.IEventInterface?>(null)
     private val eventDeathRecipient = AtomicReference<IBinder.DeathRecipient?>(null)
@@ -137,7 +140,6 @@ class RemoteService : Service() {
                     runCatching { State.delegate?.unbind() }
                     State.delegate = null
 
-                    State.options = options
                     val serviceClass: Class<out Service> =
                         if (options.enable) FlVpnService::class.java else CommonService::class.java
                     val serviceIntent = Intent(this@RemoteService, serviceClass)
@@ -169,6 +171,7 @@ class RemoteService : Service() {
                         GlobalState.log("startService: startForegroundService failed: ${fgsResult.exceptionOrNull()?.message}")
                         runCatching { delegate.unbind() }
                         State.delegate = null
+                        State.clearAppliedVpnOptions()
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
                         StateHub.publish(StateHub.STOPPED, message = "fgs start rejected")
                         runCatching { result.onResult(0L) }
@@ -204,6 +207,7 @@ class RemoteService : Service() {
                         runCatching { Core.stopTun() }
                         runCatching { delegate.unbind() }
                         State.delegate = null
+                        State.clearAppliedVpnOptions()
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
                         StateHub.publish(StateHub.STOPPED, message = "handleStart failed")
                         runCatching { result.onResult(0L) }
@@ -211,6 +215,9 @@ class RemoteService : Service() {
                     }
 
                     val baseRunTime = if (runTime > 0) runTime else SystemClock.uptimeMillis()
+                    if (!options.enable) {
+                        State.clearAppliedVpnOptions()
+                    }
                     State.runTime = baseRunTime
                     if (options.enable) com.follow.clashx.common.SavedParams.setVpnActive(true)
                     StateHub.publishRunning()
@@ -240,6 +247,7 @@ class RemoteService : Service() {
                             }
                         }
                         State.runTime = 0L
+                        State.clearAppliedVpnOptions()
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
                         StateHub.publish(StateHub.STOPPED)
                         runCatching { result.onResult(0L) }
@@ -255,6 +263,7 @@ class RemoteService : Service() {
                     delegate.unbind()
                     State.delegate = null
                     State.runTime = 0L
+                    State.clearAppliedVpnOptions()
                     com.follow.clashx.common.SavedParams.setVpnActive(false)
                     StateHub.publish(StateHub.STOPPED)
                     runCatching { result.onResult(0L) }
@@ -318,6 +327,11 @@ class RemoteService : Service() {
         }
 
         override fun getAndroidVpnOptions(): String = Core.getAndroidVpnOptions()
+        override fun getAppliedAndroidVpnOptions(): String {
+            val options = State.readAppliedVpnOptions() ?: return ""
+            if (State.runTime == 0L || !options.enable) return ""
+            return runCatching { gson.toJson(options) }.getOrDefault("")
+        }
         override fun getCurrentProfileName(): String = Core.getCurrentProfileName()
         override fun getRunTime(): String = Core.getRunTime()
         override fun getTraffic(): String = Core.getTraffic()

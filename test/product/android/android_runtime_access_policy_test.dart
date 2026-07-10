@@ -11,6 +11,55 @@ void main() {
   const policy = AndroidRuntimeAccessPolicy();
 
   group('AndroidRuntimeAccessPolicy', () {
+    test('reads an applied include snapshot without losing an empty mode',
+        () async {
+      final policy = AndroidRuntimeAccessPolicy(
+        appliedOptionsReader: () async => '{"includePackage":[]}',
+      );
+
+      final snapshot = await policy.readAppliedProfileAccess();
+
+      expect(snapshot.available, isTrue);
+      expect(snapshot.accessControl?.mode, AccessControlMode.acceptSelected);
+      expect(snapshot.accessControl?.acceptList, isEmpty);
+    });
+
+    test('distinguishes an applied no-rule snapshot from unavailability',
+        () async {
+      final availablePolicy = AndroidRuntimeAccessPolicy(
+        appliedOptionsReader: () async => '{}',
+      );
+      final unavailablePolicy = AndroidRuntimeAccessPolicy(
+        appliedOptionsReader: () async => '',
+      );
+
+      final available = await availablePolicy.readAppliedProfileAccess();
+      final unavailable = await unavailablePolicy.readAppliedProfileAccess();
+
+      expect(available.available, isTrue);
+      expect(available.accessControl, isNull);
+      expect(unavailable.available, isFalse);
+    });
+
+    test('rejects malformed or ambiguous applied package snapshots', () async {
+      final malformedPolicy = AndroidRuntimeAccessPolicy(
+        appliedOptionsReader: () async => '{"includePackage":[1]}',
+      );
+      final ambiguousPolicy = AndroidRuntimeAccessPolicy(
+        appliedOptionsReader: () async =>
+            '{"includePackage":[],"excludePackage":[]}',
+      );
+
+      expect(
+        (await malformedPolicy.readAppliedProfileAccess()).available,
+        isFalse,
+      );
+      expect(
+        (await ambiguousPolicy.readAppliedProfileAccess()).available,
+        isFalse,
+      );
+    });
+
     test('merges access control into vpn options on the client side', () {
       final merged = policy.mergeVpnOptions(
         '{"dns-hijack":["any:53"]}',

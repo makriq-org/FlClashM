@@ -291,7 +291,6 @@ class FlVpnService : VpnService(), IBaseService {
             .getOrDefault(VpnOptions())
             .gsonSanitized()
 
-        State.options = options
         State.notificationParamsFlow.value = State.notificationParamsFlow.value.copy(
             title = SavedParams.loadNotificationTitle(),
         )
@@ -365,6 +364,7 @@ class FlVpnService : VpnService(), IBaseService {
             // runTime so handleDestroy() below reports an honest STOPPED.
             runCatching { runBlocking { withTimeoutOrNull(3000L) { RuntimeNodeProcessManager.stopAll() } } }
             State.runTime = 0L
+            State.clearAppliedVpnOptions()
         }
         runCatching { runBlocking { withTimeoutOrNull(3000L) { loader.stop() } } }
         handleDestroy()
@@ -442,7 +442,6 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override suspend fun handleStart(options: VpnOptions) {
-        State.options = options
         val builder = Builder()
             .setSession("FlClashM")
         // Tunnel DNS comes from the core (it derives the in-tunnel resolver address from
@@ -556,7 +555,9 @@ class FlVpnService : VpnService(), IBaseService {
             // tun. onDestroy releases it via CAS so a delayed teardown of THIS
             // instance can't close a tunnel a newer instance has since brought up.
             State.tunOwner.set(this)
+            State.publishAppliedVpnOptions(options)
         } catch (e: Exception) {
+            State.clearAppliedVpnOptions()
             tunActive = false
             // tunActive=false before releaseWakeLock (mirrors handleStop) so an
             // in-flight setAwake(true) can't re-acquire the lock past this release.
@@ -577,6 +578,7 @@ class FlVpnService : VpnService(), IBaseService {
     override suspend fun handleStop() {
         if (State.runTime == 0L && !tunActive) return
         State.runTime = 0L
+        State.clearAppliedVpnOptions()
         tunActive = false
         releaseWakeLock()
         SavedParams.setVpnActive(false)

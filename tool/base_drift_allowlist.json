@@ -251,6 +251,11 @@
       "reason": "Супервизор встроенных runtime-узлов относится к Android runtime-слою и остаётся в бюджете."
     },
     {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",
+      "bucket": "budget",
+      "reason": "Снимок параметров, реально переданных Android VPN-службе, принадлежит платформенному жизненному циклу и нужен для достоверного отображения пакетных правил."
+    },
+    {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/models/NotificationParams.kt",
       "bucket": "budget",
       "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
@@ -279,6 +284,11 @@
       "path": "lib/application.dart",
       "bucket": "budget",
       "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
+    },
+    {
+      "path": "lib/clash/interface.dart",
+      "bucket": "budget",
+      "reason": "Базовый интерфейс канала содержит отдельный контракт чтения снимка применённых параметров Android VPN без продуктовой политики."
     },
     {
       "path": "lib/clash/lib.dart",

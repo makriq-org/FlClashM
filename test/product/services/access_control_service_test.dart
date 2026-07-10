@@ -1,10 +1,12 @@
 // ignore_for_file: avoid_positional_boolean_parameters
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/android/android_runtime_access_policy.dart';
+import 'package:flclashx/product/compile/raw_profile.dart';
 import 'package:flclashx/product/runtime/engine_manager.dart';
 import 'package:flclashx/product/services/access_control_service.dart';
 import 'package:flutter/painting.dart';
@@ -14,12 +16,17 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
   _FakeRuntimeAccessPlatform({
     this.packages = const [],
     this.icon,
-    this.appliedVpnOptions,
+    this.appliedSnapshot = const ProfileAccessSnapshot.unavailable(),
+    this.appliedSnapshotReader,
   });
 
   final List<Package> packages;
   final ImageProvider? icon;
-  final AndroidVpnOptions? appliedVpnOptions;
+  final ProfileAccessSnapshot appliedSnapshot;
+  final Future<ProfileAccessSnapshot> Function()? appliedSnapshotReader;
+
+  @override
+  bool get isAndroid => true;
 
   AccessControl? lastStartAccessControl;
   String? lastIconPackageName;
@@ -59,9 +66,9 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
   }
 
   @override
-  Future<AndroidVpnOptions?> readAppliedVpnOptions() async {
+  Future<ProfileAccessSnapshot> readAppliedProfileAccess() async {
     appliedOptionsReadCalls++;
-    return appliedVpnOptions;
+    return appliedSnapshotReader?.call() ?? appliedSnapshot;
   }
 
   @override
@@ -288,35 +295,50 @@ void main() {
       expect(platform.stopCalls, 1);
     });
 
-    test('reads applied vpn options through the platform bridge', () async {
+    test('reads applied profile access through the platform bridge', () async {
+      const applied = AccessControl(
+        enable: true,
+        mode: AccessControlMode.acceptSelected,
+        acceptList: ['a'],
+      );
       final platform = _FakeRuntimeAccessPlatform(
-        appliedVpnOptions: _vpnOptions(includePackage: const ['a']),
+        appliedSnapshot: const ProfileAccessSnapshot.available(applied),
       );
       final service = AccessControlService(platform: platform);
 
-      final options = await service.readAppliedVpnOptions();
+      final snapshot = await service.readAppliedProfileAccess();
 
-      expect(options?.includePackage, ['a']);
+      expect(snapshot.available, isTrue);
+      expect(snapshot.accessControl, applied);
       expect(platform.appliedOptionsReadCalls, 1);
     });
 
-    test('maps applied include/exclude packages to access control', () {
-      const service = AccessControlService();
-
-      final include = service.appliedAccessControlFromOptions(
-        _vpnOptions(includePackage: const ['com.a', 'com.b']),
+    test('resolves declared profile access inside the product service',
+        () async {
+      final service = AccessControlService(
+        platform: _FakeRuntimeAccessPlatform(),
       );
-      expect(include?.mode, AccessControlMode.acceptSelected);
-      expect(include?.acceptList, ['com.a', 'com.b']);
-
-      final exclude = service.appliedAccessControlFromOptions(
-        _vpnOptions(excludePackage: const ['com.c']),
+      final rawProfile = RawProfile.fromConfig(
+        profile: const Profile(
+          id: 'profile-id',
+          autoUpdateDuration: Duration.zero,
+        ),
+        config: const {
+          'tun': {
+            'include-package': ['com.example.app'],
+          },
+        },
       );
-      expect(exclude?.mode, AccessControlMode.rejectSelected);
-      expect(exclude?.rejectList, ['com.c']);
 
-      expect(service.appliedAccessControlFromOptions(_vpnOptions()), isNull);
-      expect(service.appliedAccessControlFromOptions(null), isNull);
+      final snapshot = await service.readProfileConfigAccess(
+        loadCurrentRawProfile: () async => rawProfile,
+        readProfilesPath: () async => '/profiles',
+        readInstalledPackageNames: () async => const ['com.example.app'],
+      );
+
+      expect(snapshot.available, isTrue);
+      expect(snapshot.accessControl?.mode, AccessControlMode.acceptSelected);
+      expect(snapshot.accessControl?.acceptList, ['com.example.app']);
     });
 
     group('resolveProfileManagedAccess', () {
@@ -329,8 +351,8 @@ void main() {
 
       test('is unmanaged with no profile config and nothing applied', () {
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: null,
-          appliedAccessControl: null,
+          profileConfig: const ProfileAccessSnapshot.available(null),
+          applied: const ProfileAccessSnapshot.unavailable(),
           isRunning: false,
         );
 
@@ -338,12 +360,13 @@ void main() {
         expect(resolved.effectiveAccessControl, isNull);
         expect(resolved.source, ProfileManagedAccessSource.none);
         expect(resolved.hasDrift, isFalse);
+        expect(resolved.notice, ProfileManagedAccessNotice.none);
       });
 
       test('uses profile config when VPN is off', () {
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: profileAccess,
-          appliedAccessControl: null,
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.unavailable(),
           isRunning: false,
         );
 
@@ -355,11 +378,13 @@ void main() {
 
       test('ignores applied options while VPN is off', () {
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: profileAccess,
-          appliedAccessControl: const AccessControl(
-            enable: true,
-            mode: AccessControlMode.rejectSelected,
-            rejectList: ['com.applied'],
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.available(
+            AccessControl(
+              enable: true,
+              mode: AccessControlMode.rejectSelected,
+              rejectList: ['com.applied'],
+            ),
           ),
           isRunning: false,
         );
@@ -369,87 +394,159 @@ void main() {
         expect(resolved.hasDrift, isFalse);
       });
 
-      test('prefers applied core options while VPN is on', () {
+      test('prefers applied VPN snapshot while VPN is on', () {
         const applied = AccessControl(
           enable: true,
           mode: AccessControlMode.acceptSelected,
           acceptList: ['com.profile'],
         );
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: profileAccess,
-          appliedAccessControl: applied,
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.available(applied),
           isRunning: true,
         );
 
         expect(resolved.managed, isTrue);
         expect(resolved.effectiveAccessControl, applied);
-        expect(resolved.source, ProfileManagedAccessSource.appliedCore);
+        expect(resolved.source, ProfileManagedAccessSource.appliedVpn);
         expect(resolved.hasDrift, isFalse);
       });
 
-      test('flags drift when running core diverges from profile config', () {
+      test('flags drift when applied VPN diverges from profile config', () {
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: profileAccess,
-          appliedAccessControl: const AccessControl(
-            enable: true,
-            mode: AccessControlMode.acceptSelected,
-            acceptList: ['com.profile', 'com.extra'],
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.available(
+            AccessControl(
+              enable: true,
+              mode: AccessControlMode.acceptSelected,
+              acceptList: ['com.profile', 'com.extra'],
+            ),
           ),
           isRunning: true,
         );
 
         expect(resolved.managed, isTrue);
-        expect(resolved.source, ProfileManagedAccessSource.appliedCore);
+        expect(resolved.source, ProfileManagedAccessSource.appliedVpn);
         expect(resolved.hasDrift, isTrue);
       });
 
-      test('falls back to profile config when running core reports nothing', () {
+      test('treats explicit applied no-rule as drift, not a read failure', () {
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: profileAccess,
-          appliedAccessControl: null,
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.available(null),
           isRunning: true,
         );
 
-        expect(resolved.source, ProfileManagedAccessSource.profile);
-        expect(resolved.effectiveAccessControl, profileAccess);
-        expect(resolved.hasDrift, isFalse);
+        expect(resolved.source, ProfileManagedAccessSource.appliedVpn);
+        expect(resolved.effectiveAccessControl, isNull);
+        expect(resolved.managed, isFalse);
+        expect(resolved.hasDrift, isTrue);
       });
 
-      test('is managed by applied core even without profile config', () {
+      test('flags drift when applied VPN has a rule absent from config', () {
         const applied = AccessControl(
           enable: true,
           mode: AccessControlMode.rejectSelected,
           rejectList: ['com.applied'],
         );
         final resolved = service.resolveProfileManagedAccess(
-          profileConfigAccessControl: null,
-          appliedAccessControl: applied,
+          profileConfig: const ProfileAccessSnapshot.available(null),
+          applied: const ProfileAccessSnapshot.available(applied),
           isRunning: true,
         );
 
         expect(resolved.managed, isTrue);
         expect(resolved.effectiveAccessControl, applied);
-        expect(resolved.source, ProfileManagedAccessSource.appliedCore);
-        expect(resolved.hasDrift, isFalse);
+        expect(resolved.source, ProfileManagedAccessSource.appliedVpn);
+        expect(resolved.hasDrift, isTrue);
+      });
+
+      test('falls back honestly when applied VPN snapshot is unavailable', () {
+        final resolved = service.resolveProfileManagedAccess(
+          profileConfig: const ProfileAccessSnapshot.available(profileAccess),
+          applied: const ProfileAccessSnapshot.unavailable(),
+          isRunning: true,
+        );
+
+        expect(resolved.source, ProfileManagedAccessSource.profile);
+        expect(resolved.effectiveAccessControl, profileAccess);
+        expect(
+          resolved.notice,
+          ProfileManagedAccessNotice.verificationUnavailable,
+        );
+      });
+
+      test('preserves dirty manual editor state across unmanaged refresh', () {
+        final previous = service
+            .createEditorState(
+          const AccessControl(
+            enable: true,
+            mode: AccessControlMode.rejectSelected,
+            rejectList: ['com.before'],
+          ),
+        )
+            .copyWith(
+          selectedPackages: {'com.edited'},
+          dirty: true,
+        );
+
+        final reconciled = service.reconcileManagedEditorState(
+          manualAccessControl: const AccessControl(
+            enable: true,
+            mode: AccessControlMode.rejectSelected,
+            rejectList: ['com.before'],
+          ),
+          previousState: previous,
+          wasManaged: false,
+          managedAccess: ProfileManagedAccess.none,
+        );
+
+        expect(reconciled, same(previous));
+      });
+
+      test('managed controller discards a stale asynchronous refresh',
+          () async {
+        final first = Completer<ProfileAccessSnapshot>();
+        final second = Completer<ProfileAccessSnapshot>();
+        var call = 0;
+        final platform = _FakeRuntimeAccessPlatform(
+          appliedSnapshotReader: () =>
+              call++ == 0 ? first.future : second.future,
+        );
+        final service = AccessControlService(platform: platform);
+        final controller = service.createProfileManagedController(
+          loadCurrentRawProfile: () async => null,
+          readProfilesPath: () async => '',
+          readInstalledPackageNames: () async => const [],
+        );
+        const declared = AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: ['com.profile'],
+        );
+        const newer = AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.newer'],
+        );
+
+        final staleFuture = controller.refresh(
+          isRunning: true,
+          activeProfileAccessControl: declared,
+        );
+        final currentFuture = controller.refresh(
+          isRunning: true,
+          activeProfileAccessControl: declared,
+        );
+        second.complete(const ProfileAccessSnapshot.available(newer));
+        final current = await currentFuture;
+        first.complete(const ProfileAccessSnapshot.available(declared));
+        final stale = await staleFuture;
+
+        expect(current?.effectiveAccessControl, newer);
+        expect(stale, isNull);
+        controller.dispose();
       });
     });
   });
 }
-
-AndroidVpnOptions _vpnOptions({
-  List<String> includePackage = const [],
-  List<String> excludePackage = const [],
-}) =>
-    AndroidVpnOptions(
-      enable: true,
-      port: 7890,
-      accessControl: null,
-      allowBypass: true,
-      systemProxy: true,
-      bypassDomain: const [],
-      ipv4Address: '',
-      ipv6Address: '',
-      dnsServerAddress: '',
-      includePackage: includePackage,
-      excludePackage: excludePackage,
-    );

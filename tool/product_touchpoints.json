@@ -121,6 +121,10 @@
   ],
   "allowedProductUi": [
     {
+      "path": "lib/product/widgets/access_control_notice.dart",
+      "reason": "The fork-specific access-control trust warning is explicitly owned by the product UI layer while the upstream AccessView keeps only a thin mount."
+    },
+    {
       "path": "lib/product/android/android_update_bridge.dart",
       "reason": "The FlClashM Android updater owns its release prompt and in-app APK download progress dialog."
     }

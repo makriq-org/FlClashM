@@ -49,7 +49,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage("配置应用访问代理"),
     "accessControlDriftNote":
-        MessageLookupByLibrary.simpleMessage("内核实际应用的规则与您的配置文件不一致。"),
+        MessageLookupByLibrary.simpleMessage("Android VPN应用的规则与您的配置文件不一致。"),
+    "accessControlVerificationUnavailableNote":
+        MessageLookupByLibrary.simpleMessage("无法验证已应用的VPN规则，当前显示配置文件中声明的规则。"),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "选中应用将会被排除在VPN之外",
     ),
