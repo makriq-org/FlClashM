@@ -54,6 +54,206 @@ class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
+  /// `Include in VPN`
+  String get includeInVpn {
+    return Intl.message(
+      'Include in VPN',
+      name: 'includeInVpn',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Exclude from VPN`
+  String get excludeFromVpn {
+    return Intl.message(
+      'Exclude from VPN',
+      name: 'excludeFromVpn',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Only the selected apps are routed through the VPN; all others connect directly.`
+  String get whitelistModeDesc {
+    return Intl.message(
+      'Only the selected apps are routed through the VPN; all others connect directly.',
+      name: 'whitelistModeDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The selected apps connect directly; all others are routed through the VPN.`
+  String get blacklistModeDesc {
+    return Intl.message(
+      'The selected apps connect directly; all others are routed through the VPN.',
+      name: 'blacklistModeDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Go to selected`
+  String get goToSelected {
+    return Intl.message(
+      'Go to selected',
+      name: 'goToSelected',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Test latency`
+  String get testAllDelay {
+    return Intl.message(
+      'Test latency',
+      name: 'testAllDelay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Collapse all`
+  String get collapseAll {
+    return Intl.message(
+      'Collapse all',
+      name: 'collapseAll',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Expand all`
+  String get expandAll {
+    return Intl.message('Expand all', name: 'expandAll', desc: '', args: []);
+  }
+
+  /// `HWID binding is not supported on this platform.`
+  String get hwidNotSupported {
+    return Intl.message(
+      'HWID binding is not supported on this platform.',
+      name: 'hwidNotSupported',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Runtime config`
+  String get runtimeConfig {
+    return Intl.message(
+      'Runtime config',
+      name: 'runtimeConfig',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Runtime config not available`
+  String get runtimeConfigNotAvailable {
+    return Intl.message(
+      'Runtime config not available',
+      name: 'runtimeConfigNotAvailable',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Core update`
+  String get coreUpdate {
+    return Intl.message('Core update', name: 'coreUpdate', desc: '', args: []);
+  }
+
+  /// `Checking for updates...`
+  String get coreUpdateChecking {
+    return Intl.message(
+      'Checking for updates...',
+      name: 'coreUpdateChecking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Downloading...`
+  String get coreUpdateDownloading {
+    return Intl.message(
+      'Downloading...',
+      name: 'coreUpdateDownloading',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Core update available`
+  String get coreUpdateAvailable {
+    return Intl.message(
+      'Core update available',
+      name: 'coreUpdateAvailable',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Core updated successfully`
+  String get coreUpdateSuccess {
+    return Intl.message(
+      'Core updated successfully',
+      name: 'coreUpdateSuccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Update failed`
+  String get coreUpdateFailed {
+    return Intl.message(
+      'Update failed',
+      name: 'coreUpdateFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Running`
+  String get coreStatusRunning {
+    return Intl.message(
+      'Running',
+      name: 'coreStatusRunning',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Restarting`
+  String get coreStatusRestarting {
+    return Intl.message(
+      'Restarting',
+      name: 'coreStatusRestarting',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Stopped`
+  String get coreStatusStopped {
+    return Intl.message(
+      'Stopped',
+      name: 'coreStatusStopped',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Restart core`
+  String get restartCore {
+    return Intl.message(
+      'Restart core',
+      name: 'restartCore',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `By rule`
   String get rule {
     return Intl.message('By rule', name: 'rule', desc: '', args: []);
@@ -1361,7 +1561,12 @@ class AppLocalizations {
 
   /// `Determining IP...`
   String get determiningIp {
-    return Intl.message('Determining IP...', name: 'determiningIp', desc: '', args: []);
+    return Intl.message(
+      'Determining IP...',
+      name: 'determiningIp',
+      desc: '',
+      args: [],
+    );
   }
 
   /// `Locations`
@@ -1414,10 +1619,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Once enabled, the Clash kernel can be controlled via API`
+  /// `Once enabled, the Clash kernel can be controlled on port 9090`
   String get externalControllerDesc {
     return Intl.message(
-      'Once enabled, the Clash kernel can be controlled via API',
+      'Once enabled, the Clash kernel can be controlled on port 9090',
       name: 'externalControllerDesc',
       desc: '',
       args: [],
@@ -1591,7 +1796,12 @@ class AppLocalizations {
 
   /// `Active`
   String get connectionsActive {
-    return Intl.message('Active', name: 'connectionsActive', desc: '', args: []);
+    return Intl.message(
+      'Active',
+      name: 'connectionsActive',
+      desc: '',
+      args: [],
+    );
   }
 
   /// `Log`
@@ -2744,46 +2954,6 @@ class AppLocalizations {
     return Intl.message('Export file', name: 'exportFile', desc: '', args: []);
   }
 
-  /// `Restart core`
-  String get restartCore {
-    return Intl.message('Restart core', name: 'restartCore', desc: '', args: []);
-  }
-
-  /// `Restart the proxy core`
-  String get restartCoreDesc {
-    return Intl.message('Restart the proxy core', name: 'restartCoreDesc', desc: '', args: []);
-  }
-
-  /// `Running`
-  String get coreStatusRunning {
-    return Intl.message('Running', name: 'coreStatusRunning', desc: '', args: []);
-  }
-
-  /// `Restarting...`
-  String get coreStatusRestarting {
-    return Intl.message('Restarting...', name: 'coreStatusRestarting', desc: '', args: []);
-  }
-
-  /// `Stopped`
-  String get coreStatusStopped {
-    return Intl.message('Stopped', name: 'coreStatusStopped', desc: '', args: []);
-  }
-
-  /// `Runtime config`
-  String get runtimeConfig {
-    return Intl.message('Runtime config', name: 'runtimeConfig', desc: '', args: []);
-  }
-
-  /// `Runtime config is not available yet. Start VPN first.`
-  String get runtimeConfigNotAvailable {
-    return Intl.message(
-      'Runtime config is not available yet. Start VPN first.',
-      name: 'runtimeConfigNotAvailable',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `The cache is corrupt. Do you want to clear it?`
   String get cacheCorrupt {
     return Intl.message(
@@ -3152,56 +3322,6 @@ class AppLocalizations {
       desc: '',
       args: [],
     );
-  }
-
-  /// `Include in VPN`
-  String get includeInVpn {
-    return Intl.message('Include in VPN', name: 'includeInVpn', desc: '', args: []);
-  }
-
-  /// `Exclude from VPN`
-  String get excludeFromVpn {
-    return Intl.message('Exclude from VPN', name: 'excludeFromVpn', desc: '', args: []);
-  }
-
-  String get coreUpdate {
-    return Intl.message('Update core', name: 'coreUpdate', desc: '', args: []);
-  }
-
-  String get coreUpdateAvailable {
-    return Intl.message('Update available', name: 'coreUpdateAvailable', desc: '', args: []);
-  }
-
-  String get coreUpdateCurrent {
-    return Intl.message('Up to date', name: 'coreUpdateCurrent', desc: '', args: []);
-  }
-
-  String get coreUpdateDownloading {
-    return Intl.message('Downloading...', name: 'coreUpdateDownloading', desc: '', args: []);
-  }
-
-  String get coreUpdateSuccess {
-    return Intl.message('Core updated, restarting...', name: 'coreUpdateSuccess', desc: '', args: []);
-  }
-
-  String get coreUpdateFailed {
-    return Intl.message('Update failed', name: 'coreUpdateFailed', desc: '', args: []);
-  }
-
-  String get coreUpdateChecking {
-    return Intl.message('Checking...', name: 'coreUpdateChecking', desc: '', args: []);
-  }
-
-  String get hwidNotSupported {
-    return Intl.message('HWID is not enabled on this device. Please enable it in the application settings.', name: 'hwidNotSupported', desc: '', args: []);
-  }
-
-  String get whitelistModeDesc {
-    return Intl.message('Only selected apps will use VPN. All other apps will bypass it.', name: 'whitelistModeDesc', desc: '', args: []);
-  }
-
-  String get blacklistModeDesc {
-    return Intl.message('Selected apps will bypass VPN. All other apps will use it.', name: 'blacklistModeDesc', desc: '', args: []);
   }
 
   /// `Contact me`
@@ -3720,7 +3840,7 @@ class AppLocalizations {
   }
 
   /// `Your subscription expires in {days} day(s)`
-  String subscriptionExpiresInDays(String days) {
+  String subscriptionExpiresInDays(Object days) {
     return Intl.message(
       'Your subscription expires in $days day(s)',
       name: 'subscriptionExpiresInDays',
@@ -3751,14 +3871,10 @@ class AppLocalizations {
 
   /// `Renew`
   String get renew {
-    return Intl.message(
-      'Renew',
-      name: 'renew',
-      desc: '',
-      args: [],
-    );
+    return Intl.message('Renew', name: 'renew', desc: '', args: []);
   }
 
+  /// `Announcement`
   String get announcement {
     return Intl.message(
       'Announcement',
@@ -3768,24 +3884,39 @@ class AppLocalizations {
     );
   }
 
-  /// `Test all delays`
-  String get testAllDelay {
-    return Intl.message('Test all delays', name: 'testAllDelay', desc: '', args: []);
+  /// `Battery optimization`
+  String get batteryOptimization {
+    return Intl.message(
+      'Battery optimization',
+      name: 'batteryOptimization',
+      desc: '',
+      args: [],
+    );
   }
 
-  /// `Go to selected`
-  String get goToSelected {
-    return Intl.message('Go to selected', name: 'goToSelected', desc: '', args: []);
+  /// `Exempt the app so the system doesn't kill the VPN in the background`
+  String get batteryOptimizationDesc {
+    return Intl.message(
+      'Exempt the app so the system doesn\'t kill the VPN in the background',
+      name: 'batteryOptimizationDesc',
+      desc: '',
+      args: [],
+    );
   }
 
-  /// `Expand all`
-  String get expandAll {
-    return Intl.message('Expand all', name: 'expandAll', desc: '', args: []);
+  /// `Autostart`
+  String get autoStart {
+    return Intl.message('Autostart', name: 'autoStart', desc: '', args: []);
   }
 
-  /// `Collapse all`
-  String get collapseAll {
-    return Intl.message('Collapse all', name: 'collapseAll', desc: '', args: []);
+  /// `Allow background autostart so the VPN survives reboots and updates (MIUI/EMUI etc.)`
+  String get autoStartDesc {
+    return Intl.message(
+      'Allow background autostart so the VPN survives reboots and updates (MIUI/EMUI etc.)',
+      name: 'autoStartDesc',
+      desc: '',
+      args: [],
+    );
   }
 }
 

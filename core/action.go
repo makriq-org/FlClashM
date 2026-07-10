@@ -262,6 +262,11 @@ func handleAction(action *Action, result ActionResult) {
 		handleSetUiActive(active)
 		result.success(true)
 		return
+	case setScreenActiveMethod:
+		active, _ := action.Data.(bool)
+		handleSetScreenActive(active)
+		result.success(true)
+		return
 	case crashMethod:
 		result.success(true)
 		handleCrash()

@@ -29,12 +29,17 @@
 Слои:
 
 1. `FlClashX Base` — UI, навигация, базовый runtime path.
-2. `Product Layer` (`lib/product/**`) — компиляция профиля, security policy, обновления.
+2. `Product Layer` (`lib/product/**`) — форковая логика, security policy, обновления и fork-only страницы.
 3. `Runtime Layer` — `mihomo` (baseline), built-in nodes: `naiveproxy`, `olcrtc`, `byedpi`.
 4. `Platform Layer` — Android VPN, foreground service, installer bridge.
 
 Base-код вне `lib/product/**` знает о product layer только через разрешенные
-touchpoints из `tool/product_touchpoints.json`.
+touchpoints из `tool/product_touchpoints.json`. Живые `lib/views/**` не
+копируются в product-слой: они остаются апстримными файлами с минимальными
+зарегистрированными хуками. Fork-only страницы держать в `lib/product/pages/**`
+с тонким mount-файлом в base только когда без этого страница недостижима. Любой файл в `lib/product/**`,
+объявляющий виджет или фабрику `Widget`, должен иметь запись с причиной в
+`allowedProductUi` из `tool/product_touchpoints.json`; это проверяет CI.
 
 ## Документация
 
@@ -63,9 +68,8 @@ touchpoints из `tool/product_touchpoints.json`.
 Перед синком подтянуть ссылки и обновить локальную ветку апстрима: `git fetch upstream`
 и затем `git fetch origin`. Дальше обновление вести от `upstream/dev`: создать
 рабочую ветку от целевой ветки форка, выполнить `git merge upstream/dev` и
-перед ручным разбором конфликтов прогнать по конфликтующим Dart-файлам
-нормализацию импортов `sed -i 's/package:flclashx\\//package:flclashm\\//g'`,
-после чего разрешить оставшиеся конфликты. Для типовых повторяющихся конфликтов
+разрешить конфликты (Dart-пакет форка называется `flclashx`, как в апстриме,
+поэтому нормализация импортов не нужна). Для типовых повторяющихся конфликтов
 включён `rerere`, поэтому
 после первого ручного разрешения следующих синках Git сам подставит уже сохранённый
 вариант; если нужно прогреть базу, сделать это на временной ветке, один раз

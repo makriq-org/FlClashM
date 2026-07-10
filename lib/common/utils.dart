@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -144,7 +144,7 @@ class Utils {
     if (matches.isNotEmpty) {
       final match = matches.last;
       final number = int.parse(match[1] ?? '0') + 1;
-      return label.replaceFirst(reg, '($number)', label.length - 3 - 1);
+      return label.replaceFirst(reg, '($number)');
     } else {
       return "$label(1)";
     }

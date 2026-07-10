@@ -16,7 +16,17 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        when (intent.action) {
+            // BOOT_COMPLETED: normal reboot. MY_PACKAGE_REPLACED: app auto-update
+            // (Play overnight) kills the running VPN — without this the user wakes
+            // up unprotected. QUICKBOOT_POWERON: Xiaomi/HTC "fast boot" reboots that
+            // don't always emit BOOT_COMPLETED.
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "com.htc.intent.action.QUICKBOOT_POWERON" -> {}
+            else -> return
+        }
 
         val vpnActive = SavedParams.isVpnActive()
         val hasProfile = GlobalState.hasActiveProfile()
@@ -36,7 +46,6 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        GlobalState.startRequestedAt = android.os.SystemClock.elapsedRealtime()
         GlobalState.runStateFlow.tryEmit(RunState.START)
 
         try {

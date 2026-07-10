@@ -2,8 +2,8 @@
 
 import 'dart:math';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -146,7 +146,6 @@ class ConnectionsState with _$ConnectionsState {
 extension ConnectionsStateExt on ConnectionsState {
   List<Connection> get list {
     final lowerQuery = query.toLowerCase().trim();
-    final lowQuery = query.toLowerCase();
     return connections.where((connection) {
       final chains = connection.chains;
       final process = connection.metadata.process;
@@ -158,7 +157,7 @@ extension ConnectionsStateExt on ConnectionsState {
       return {...chains, process}.containsAll(keywords) &&
           (networkText.contains(lowerQuery) ||
               hostText.contains(lowerQuery) ||
-              destinationIPText.contains(lowQuery) ||
+              destinationIPText.contains(lowerQuery) ||
               processText.contains(lowerQuery) ||
               chainsText.contains(lowerQuery));
     }).toList();

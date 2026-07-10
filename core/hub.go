@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	isInit              = false
+	isInit              atomic.Bool
 	externalProviders   = map[string]cp.Provider{}
 	logSubscriber       observable.Subscription[log.Event]
 	healthCheckStopCh   chan struct{}
@@ -49,6 +49,24 @@ var (
 	// forwarder slows to backgroundHealthCheckInterval, so the core stops pinging
 	// every proxy and waking Flutter for a UI nobody is looking at.
 	uiActive atomic.Bool
+	// tunUp is true while the VpnService TUN is up (set in handleStartTun, cleared in
+	// handleStopTun/handleShutdown). A headless tile/boot start brings the TUN up via
+	// Core.startTun WITHOUT calling startListener, so isRunning stays false — yet the
+	// connections "Journal" (request forwarder) must still run when the UI is
+	// foregrounded. Gating the forwarder on (isRunning || tunUp) covers that path too,
+	// while it stays uiActive-gated so it never polls during standby.
+	tunUp atomic.Bool
+	// screenActive mirrors the device screen state (pushed by the Android
+	// SuspendModule; defaults to true so desktop and pre-signal starts keep the
+	// previous behaviour). Unlike uiActive it stays true while the app is merely
+	// backgrounded — it gates provider touching, not UI emits: lazy provider/group
+	// health checks must keep running at their config interval while the user is
+	// on the device (fallback groups go stale otherwise), and stop only when the
+	// screen is dark.
+	screenActive atomic.Bool
+	// lastProviderTouchNs is the unix-nano time of the last touchProviders() run,
+	// used by the screen-on catch-up to decide whether checks went dormant.
+	lastProviderTouchNs atomic.Int64
 )
 
 // While the UI is backgrounded, keep proxy providers warm at this slow cadence
@@ -63,17 +81,21 @@ func handleInitClash(paramsString string) bool {
 		return false
 	}
 	debug.SetGCPercent(50)
-	debug.SetMemoryLimit(60 * 1024 * 1024)
-	version = params.Version
+	// 128 MB soft limit (was 60): a tighter limit forced near-continuous GC — up to the
+	// runtime's 50%-CPU GC cap — when a GEOIP/GEOSITE-heavy config's live heap sat close
+	// to it, burning CPU/battery under load. Keep it as a backstop above the real working
+	// set, not a continuous throttle.
+	debug.SetMemoryLimit(128 * 1024 * 1024)
+	version.Store(int32(params.Version))
 	constant.SetHomeDir(params.HomeDir)
 	// Default to "foreground": the main process drives setUiActive(false) when it
 	// backgrounds. A headless cold-start has no UI but keeping the foreground
 	// cadence here preserves the previous behaviour (no regression).
 	uiActive.Store(true)
-	if !isInit {
-		isInit = true
-	}
-	return isInit
+	// Screen assumed on until the SuspendModule pushes the real state.
+	screenActive.Store(true)
+	isInit.Store(true)
+	return true
 }
 
 func handleStartListener() bool {
@@ -103,9 +125,21 @@ func handleStartListener() bool {
 
 	go func() {
 		resolver.ResetConnection()
+		// handleShutdown/handleStopListener can win runLock in the window between
+		// releasing it above and this goroutine running. Re-check under runLock
+		// before (re)starting the forwarders so a lagging start can't revive them
+		// after teardown (a leaked goroutine outliving shutdown). runLock is held
+		// across startHealthCheckForwarder because that snapshots minHealthCheckInterval.
+		runLock.Lock()
+		if !isRunning || currentConfig == nil {
+			runLock.Unlock()
+			return
+		}
 		startHealthCheckForwarder()
+		runLock.Unlock()
 		// The request forwarder only feeds the connections UI; skip it while the
 		// app is backgrounded (setUiActive(true) starts it when the UI returns).
+		// startRequestForwarder re-checks isRunning under runLock itself.
 		if uiActive.Load() {
 			startRequestForwarder()
 		}
@@ -125,7 +159,7 @@ func handleStopListener() bool {
 }
 
 func handleGetIsInit() bool {
-	return isInit
+	return isInit.Load()
 }
 
 func handleForceGc() {
@@ -140,11 +174,16 @@ func handleShutdown() bool {
 	defer runLock.Unlock()
 	stopHealthCheckForwarder()
 	stopRequestForwarder()
+	// Tear down the log subscription too: handleStartLog's subscription and pump
+	// goroutine would otherwise leak across shutdown. handleStopLog is idempotent
+	// and guarded by its own logMu (never takes runLock), so calling it here is safe.
+	handleStopLog()
 	stopListeners()
 	executor.Shutdown()
 	runtime.GC()
-	isInit = false
+	isInit.Store(false)
 	isRunning = false
+	tunUp.Store(false)
 	currentConfig = nil
 	return true
 }
@@ -155,6 +194,9 @@ func startHealthCheckForwarder() {
 	// desktop stop->start where the executor lives on) is deduped and the UI shows
 	// nothing until a value next changes.
 	resetHealthCheckForwarderState()
+	// setupConfig just ran runInitialProviderHealthChecks; stamp "fresh" so a
+	// screen-on edge right after start doesn't fire a redundant catch-up sweep.
+	lastProviderTouchNs.Store(time.Now().UnixNano())
 	// Stop+recreate atomically under one lock hold. Two starts can overlap
 	// (setupConfig and handleStartListener's goroutine, neither serialised by
 	// runLock here); a separate stop()-then-create would let the second overwrite
@@ -167,8 +209,14 @@ func startHealthCheckForwarder() {
 	healthCheckStopCh = make(chan struct{})
 	stopCh := healthCheckStopCh
 	healthCheckChMu.Unlock()
-	go func(stopCh chan struct{}) {
-		log.Infoln("[HealthCheck] forwarder fg interval: %s, bg interval: %s", minHealthCheckInterval, backgroundHealthCheckInterval)
+	// Snapshot minHealthCheckInterval here, where both callers (setupConfig and
+	// handleStartListener's start goroutine) hold runLock, and pass it into the
+	// goroutine. The global is written under runLock by computeMinHealthCheckInterval,
+	// and a config change recomputes it then restarts this forwarder, so the snapshot
+	// stays current — and the goroutine never reads the global without the lock.
+	minInterval := minHealthCheckInterval
+	go func(stopCh chan struct{}, minInterval time.Duration) {
+		log.Infoln("[HealthCheck] forwarder fg interval: %s, bg interval: %s", minInterval, backgroundHealthCheckInterval)
 		// Warm-up: surface pings the moment the tunnel comes up instead of after a
 		// full interval. Emit immediately (re-sends surviving histories), then a few
 		// quick follow-ups to catch the fresh url-tests setupConfig kicks off as they
@@ -185,29 +233,36 @@ func startHealthCheckForwarder() {
 			}
 		}
 		for {
-			// Recompute each cycle so foreground/background transitions take effect
-			// on the next tick without restarting the goroutine. Steady-state cadence
-			// is the min group/provider interval from the config (minHealthCheckInterval).
-			interval := minHealthCheckInterval
-			if !uiActive.Load() && backgroundHealthCheckInterval > interval {
+			// Recompute each cycle so foreground/background/screen transitions take
+			// effect on the next tick without restarting the goroutine. Steady-state
+			// cadence is the min group/provider interval from the config (minInterval);
+			// only a dark screen (or an idle app with no tunnel) drops to the slow tick.
+			interval := minInterval
+			if !uiActive.Load() && !touchGateOpen() &&
+				backgroundHealthCheckInterval > interval {
 				interval = backgroundHealthCheckInterval
 			}
 			select {
 			case <-time.After(interval):
 				if uiActive.Load() {
 					forwardHealthCheckDelays()
+				} else if touchGateOpen() {
+					// App backgrounded/killed but the screen is on and the tunnel is
+					// up: keep touching so lazy provider/group health checks run at
+					// their config interval — fallback/url-test groups must not go
+					// stale (they keep routing into dead nodes otherwise). UI emits
+					// stay foreground-only.
+					touchProvidersSafely()
 				}
-				// Backgrounded: do nothing. Previously this force-touched every
-				// provider every 5 min to keep lazy url-tests warm, which defeated
-				// mihomo's background dormancy and woke the radio/CPU under the
-				// wakelock for a UI nobody is watching. Real traffic re-warms
-				// providers on demand (URLTest dial -> Touch); foreground return
-				// emits immediately via handleSetUiActive.
+				// Dark screen / no tunnel: do nothing. Real traffic re-warms
+				// providers on demand (URLTest dial -> Touch); the screen-on edge
+				// resweeps via handleSetScreenActive, and foreground return emits
+				// immediately via handleSetUiActive.
 			case <-stopCh:
 				return
 			}
 		}
-	}(stopCh)
+	}(stopCh, minInterval)
 }
 
 func stopHealthCheckForwarder() {
@@ -265,14 +320,24 @@ func runInitialProviderHealthChecks() {
 // (blocking until every URL test finishes), Touch() returns immediately and
 // lets the provider's own background goroutine perform the checks without
 // holding runLock for seconds.
+//
+// Deliberately unfiltered: tunnel.Providers() also contains the per-group
+// CompatibleProviders that host url-test/fallback groups' own health checks
+// (their url/interval from the config) — the old *ProxySetProvider filter left
+// those untouched, so lazy group checks only ran when real traffic dialed
+// through the group and fallback aliveness went stale on an idle tunnel.
 func touchProviders() {
 	for _, p := range tunnel.Providers() {
-		pp, ok := p.(*provider.ProxySetProvider)
-		if !ok {
-			continue
-		}
-		pp.Touch()
+		p.Touch()
 	}
+	lastProviderTouchNs.Store(time.Now().UnixNano())
+}
+
+// touchGateOpen reports whether providers should be kept warm even though the
+// UI is not foregrounded: the user is on the device (screen on) and the tunnel
+// is up, so fallback/url-test aliveness must stay current for real traffic.
+func touchGateOpen() bool {
+	return screenActive.Load() && tunUp.Load()
 }
 
 // touchProvidersSafely is forwardHealthCheckDelays' touch step under runLock,
@@ -289,19 +354,60 @@ func touchProvidersSafely() {
 // pauses the request forwarder; on inactive->active it restarts it (when a
 // listener is running) and flushes current delays so the UI repopulates at once.
 func handleSetUiActive(active bool) {
-	if uiActive.Swap(active) == active {
-		return
-	}
+	// Don't early-return on an unchanged value: a headless-started tunnel can reach the
+	// foreground with uiActive already true (no setUiActive(false) edge happened), and
+	// we must still idempotently (re)arm the request forwarder and flush current delays.
+	// startRequestForwarder/stopRequestForwarder are both no-ops when already in the
+	// target state, so re-running on a redundant call is cheap.
+	uiActive.Store(active)
 	if active {
 		runLock.Lock()
 		running := isRunning
 		runLock.Unlock()
-		if running {
+		if running || tunUp.Load() {
 			startRequestForwarder()
 		}
+		// Clear the health-check de-dup before flushing. While the tunnel ran headless
+		// (tile/boot start, no UI listener attached) the forwarder's delay emits were
+		// dropped by emitEvent (listener==nil) yet their signatures were still recorded
+		// in healthCheckSeen — so a plain flush here would be fully de-duped and deliver
+		// NOTHING to the just-attached UI (the "no pings after a tile start" bug). Reset
+		// so the current delay histories re-emit on foreground.
+		resetHealthCheckForwarderState()
 		go forwardHealthCheckDelays()
 	} else {
 		stopRequestForwarder()
+	}
+}
+
+// handleSetScreenActive tracks the device screen state (pushed by the Android
+// SuspendModule). While the screen is on and the tunnel is up the forwarder
+// keeps touching providers so lazy health checks run at their config interval
+// even with the UI backgrounded or killed. On the off->on edge, if checks went
+// dormant for at least one interval, force an immediate full sweep so
+// fallback/url-test groups realign before the user starts browsing.
+func handleSetScreenActive(active bool) {
+	wasActive := screenActive.Swap(active)
+	if !active || wasActive {
+		return
+	}
+	if !tunUp.Load() && !uiActive.Load() {
+		return
+	}
+	runLock.Lock()
+	hasConfig := currentConfig != nil
+	minInterval := minHealthCheckInterval
+	runLock.Unlock()
+	if !hasConfig {
+		return
+	}
+	if time.Since(time.Unix(0, lastProviderTouchNs.Load())) < minInterval {
+		return
+	}
+	log.Infoln("[HealthCheck] screen-on catch-up: forcing provider health checks")
+	touchProvidersSafely()
+	for _, p := range tunnel.Providers() {
+		go p.HealthCheck()
 	}
 }
 
@@ -310,6 +416,19 @@ func handleSetUiActive(active bool) {
 // not expose the statistic.DefaultRequestNotify hook our old Clash.Meta fork
 // relied on, so we emulate it with a short-interval poll.
 func startRequestForwarder() {
+	// Hold runLock across the start decision so a concurrent handleStopListener
+	// (which clears isRunning and stops the forwarder under the same lock) can't
+	// race us: either we start before the stop, or we observe the cleared flag and
+	// don't revive a forwarder for a listener that's no longer running. Callers
+	// (handleStartListener's goroutine, handleSetUiActive) never hold runLock here.
+	runLock.Lock()
+	defer runLock.Unlock()
+	// isRunning covers an app-driven start (startListener); tunUp covers a headless
+	// tile/boot start (Core.startTun without startListener). Either means the tunnel is
+	// up and the connections it carries should feed the Journal.
+	if !isRunning && !tunUp.Load() {
+		return
+	}
 	requestChMu.Lock()
 	if requestStopCh != nil {
 		requestChMu.Unlock()
@@ -419,9 +538,7 @@ func handleGetProxies() interface{} {
 }
 
 func handleChangeProxy(data string, fn func(string string)) {
-	runLock.Lock()
 	go func() {
-		defer runLock.Unlock()
 		var params = &ChangeProxyParams{}
 		err := json.Unmarshal([]byte(data), params)
 		if err != nil {
@@ -434,19 +551,29 @@ func handleChangeProxy(data string, fn func(string string)) {
 		}
 		groupName := *params.GroupName
 		proxyName := *params.ProxyName
+
+		// Hold runLock only across the proxy lookup + selector mutation, then
+		// release it BEFORE invoking fn (a JNI upcall): calling into the JVM while
+		// holding runLock risks a re-entrant deadlock. Acquire and release on this
+		// same goroutine — the old code locked on the caller and unlocked here, a
+		// cross-goroutine handoff.
+		runLock.Lock()
 		proxies := proxiesWithProviders()
 		group, ok := proxies[groupName]
 		if !ok {
+			runLock.Unlock()
 			fn("Not found group")
 			return
 		}
 		adapterProxy, ok := group.(*adapter.Proxy)
 		if !ok {
+			runLock.Unlock()
 			fn("Group is not a proxy adapter")
 			return
 		}
 		selector, ok := adapterProxy.ProxyAdapter.(outboundgroup.SelectAble)
 		if !ok {
+			runLock.Unlock()
 			fn("Group is not selectable")
 			return
 		}
@@ -455,13 +582,13 @@ func handleChangeProxy(data string, fn func(string string)) {
 		} else {
 			err = selector.Set(proxyName)
 		}
+		runLock.Unlock()
 		if err != nil {
 			fn(err.Error())
 			return
 		}
 
 		fn("")
-		return
 	}()
 }
 
@@ -686,9 +813,12 @@ func handleUpdateExternalProvider(providerName string, fn func(value string)) {
 
 func handleSideLoadExternalProvider(providerName string, data []byte, fn func(value string)) {
 	go func() {
+		// Snapshot the provider under runLock, then release it before the update and
+		// the fn (JNI) callback — mirrors handleUpdateExternalProvider and keeps the
+		// upcall off the lock. (externalProviders is only mutated under runLock.)
 		runLock.Lock()
-		defer runLock.Unlock()
 		externalProvider, exist := externalProviders[providerName]
+		runLock.Unlock()
 		if !exist {
 			fn("external provider is not exist")
 			return
@@ -721,6 +851,13 @@ func handleStartLog() {
 			if strings.Contains(logData.Payload, "http: Server closed") {
 				continue
 			}
+			// Don't marshal + cross-process IPC every log line to a UI nobody is
+			// watching: while the app is backgrounded the log view isn't visible, so
+			// forwarding under the standby wakelock is wasted CPU/IPC. (The channel is
+			// still drained, so there's no backpressure on the core's logger.)
+			if !uiActive.Load() {
+				continue
+			}
 			message := &Message{
 				Type: LogMessage,
 				Data: logData,
@@ -741,9 +878,11 @@ func handleStopLog() {
 
 func handleGetCountryCode(ip string, fn func(value string)) {
 	go func() {
+		// Look up under runLock, release, then call fn (a JNI upcall) outside the
+		// lock to avoid a re-entrant deadlock through the JVM callback.
 		runLock.Lock()
-		defer runLock.Unlock()
 		codes := mmdb.IPInstance().LookupCode(net.ParseIP(ip))
+		runLock.Unlock()
 		if len(codes) == 0 {
 			fn("")
 			return

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flclashm/enum/enum.dart';
+import 'package:flclashx/enum/enum.dart';
 
 enum ProductPlatformKind { android, unsupported }
 

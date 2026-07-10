@@ -45,7 +45,7 @@ class ModeWidgetProvider : AppWidgetProvider() {
         }
 
         private fun refreshAll() {
-            val ctx = com.follow.clashx.FlClashApplication.getAppContext() ?: return
+            val ctx = com.follow.clashx.FlClashApplication.getAppContext()
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
             val component = ComponentName(ctx, ModeWidgetProvider::class.java)
             val ids = mgr.getAppWidgetIds(component)

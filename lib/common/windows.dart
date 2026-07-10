@@ -2,8 +2,8 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:path/path.dart';
 import 'package:win32/win32.dart';
 
@@ -239,6 +239,7 @@ class Windows {
 
     await _killProcess(helperPort);
 
+    final coreHash = await coreUpdater.calcCoreSha256();
     final command = [
       "/c",
       if (status == WindowsHelperServiceStatus.presence) ...[
@@ -256,6 +257,14 @@ class Windows {
       "sc",
       "start",
       appHelperService,
+      // Sync the helper's core allow-list while elevation is already granted,
+      // so a previously updated core isn't refused by a stale hash.
+      if (coreHash != null) ...[
+        "&&",
+        "echo",
+        '$coreHash>',
+        '"${appPath.allowedCoreHashPath}"',
+      ],
     ].join(" ");
 
     final res = runas("cmd.exe", command);

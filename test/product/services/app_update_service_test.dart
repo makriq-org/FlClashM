@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/product/android/android_update_bridge.dart';
-import 'package:flclashm/product/services/app_update_release.dart';
-import 'package:flclashm/product/services/app_update_service.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/android/android_update_bridge.dart';
+import 'package:flclashx/product/services/app_update_release.dart';
+import 'package:flclashx/product/services/app_update_service.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeUpdateBridge implements AppUpdatePlatformBridge {

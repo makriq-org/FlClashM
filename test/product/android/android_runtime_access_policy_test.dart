@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/android/android_runtime_access_policy.dart';
-import 'package:flclashm/product/runtime/product_runtime.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/android/android_runtime_access_policy.dart';
+import 'package:flclashx/product/runtime/product_runtime.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -85,6 +85,29 @@ void main() {
       );
       final decoded = json.decode(merged) as Map<String, dynamic>;
 
+      expect(decoded['accessControl'], {
+        'mode': 'rejectSelected',
+        'acceptList': <String>[],
+        'rejectList': ['com.makriq.flclash.dev'],
+      });
+    });
+
+    test('keeps self bypass when core reports an empty include list', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"includePackage":[]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: <String>[],
+        ),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['includePackage'], isEmpty);
       expect(decoded['accessControl'], {
         'mode': 'rejectSelected',
         'acceptList': <String>[],

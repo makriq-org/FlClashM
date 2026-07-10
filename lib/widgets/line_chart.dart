@@ -1,5 +1,5 @@
 import 'dart:ui';
-import 'package:flclashm/common/color.dart';
+import 'package:flclashx/common/color.dart';
 import 'package:flutter/material.dart';
 
 class Point {

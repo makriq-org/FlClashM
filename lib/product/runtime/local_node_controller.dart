@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/product/android/android_runtime_node_bridge.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flutter/foundation.dart';
 
 import 'built_in_proxy_types.dart';

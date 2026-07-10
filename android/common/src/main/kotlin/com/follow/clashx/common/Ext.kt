@@ -8,11 +8,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import androidx.core.app.ServiceCompat
-import androidx.core.content.ContextCompat
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flow
 import kotlin.reflect.KClass
 
 
@@ -32,25 +27,6 @@ fun Context.registerReceiverCompat(
         registerReceiver(receiver, filter, permission, null)
     }
 }
-
-fun Context.receiveBroadcastFlow(vararg actions: String): Flow<Intent> = callbackFlow {
-    val filter = IntentFilter().apply { actions.forEach { addAction(it) } }
-    val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent != null) trySend(intent)
-        }
-    }
-    registerReceiverCompat(receiver, filter, Components.receiveBroadcastPermission)
-    awaitClose { runCatching { unregisterReceiver(receiver) } }
-}
-
-fun Context.sendInternalBroadcast(action: String) {
-    sendBroadcast(
-        Intent(action).setPackage(Components.runtimePackageName),
-        Components.receiveBroadcastPermission,
-    )
-}
-
 
 fun Service.ensureNotificationChannel() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -99,20 +75,28 @@ fun Service.buildServiceNotification(
         .build()
 }
 
-fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM") {
+fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM"): Boolean {
     ensureNotificationChannel()
     val notification = buildServiceNotification(iconRes, title)
     val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
     } else 0
-    startForeground(GlobalState.NOTIFICATION_ID, notification, fgType)
+    return startForegroundSafely(GlobalState.NOTIFICATION_ID, notification, fgType)
 }
 
-fun Service.startForeground(id: Int, notification: Notification, foregroundServiceType: Int = 0) {
+fun Service.startForegroundSafely(
+    id: Int,
+    notification: Notification,
+    foregroundServiceType: Int = 0,
+): Boolean {
     // On API 31+ starting a FGS from a restricted context (e.g. BOOT_COMPLETED with
-    // a specialUse type) can throw ForegroundServiceStartNotAllowedException. Guard
-    // it so auto-start-on-boot degrades gracefully instead of crashing the service.
-    runCatching {
+    // a specialUse type, or a STICKY restart while the app is backgrounded) can throw
+    // ForegroundServiceStartNotAllowedException. Guard it so those paths degrade
+    // gracefully instead of crashing the service.
+    // Must NOT be named `startForeground`: the platform member
+    // Service.startForeground(int, Notification, int) shadows a same-signature
+    // extension, which would silently bypass this guard at every call site.
+    return runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && foregroundServiceType != 0) {
             ServiceCompat.startForeground(this, id, notification, foregroundServiceType)
         } else {
@@ -120,7 +104,7 @@ fun Service.startForeground(id: Int, notification: Notification, foregroundServi
         }
     }.onFailure {
         GlobalState.log("startForeground failed: ${it.message}")
-    }
+    }.isSuccess
 }
 
 
@@ -159,25 +143,4 @@ fun List<ByteArray>.formatString(charset: java.nio.charset.Charset = Charsets.UT
         offset += part.size
     }
     return String(buf, charset)
-}
-
-fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val units = arrayOf("KB", "MB", "GB", "TB")
-    var value = bytes.toDouble() / 1024.0
-    var i = 0
-    while (value >= 1024 && i < units.size - 1) {
-        value /= 1024.0
-        i++
-    }
-    return String.format("%.2f %s", value, units[i])
-}
-
-
-fun tickerFlow(intervalMillis: Long, initialDelay: Long = 0L): Flow<Unit> = flow {
-    if (initialDelay > 0) kotlinx.coroutines.delay(initialDelay)
-    while (true) {
-        emit(Unit)
-        kotlinx.coroutines.delay(intervalMillis)
-    }
 }

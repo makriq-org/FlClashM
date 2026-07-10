@@ -1,4 +1,4 @@
-import 'package:flclashm/models/models.dart';
+import 'package:flclashx/models/models.dart';
 
 import 'built_in_proxy_compiler.dart';
 import 'profile_yaml.dart';

@@ -1,4 +1,4 @@
-import 'package:flclashm/models/models.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 import 'engine_adapter.dart';

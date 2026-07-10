@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/common/common.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/common/common.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 

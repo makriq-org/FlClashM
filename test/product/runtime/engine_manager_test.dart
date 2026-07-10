@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/compile/product_compile.dart';
-import 'package:flclashm/product/runtime/product_runtime.dart';
-import 'package:flclashm/product/security/product_security.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/runtime/product_runtime.dart';
+import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -274,12 +274,13 @@ void main() {
         () async {
       final persistStarted = Completer<void>();
       final persistCompleted = Completer<void>();
-      mihomoAdapter.onPersistColdStart = () {
-        if (!persistStarted.isCompleted) {
-          persistStarted.complete();
+      mihomoAdapter
+        ..onPersistColdStart = () {
+          if (!persistStarted.isCompleted) {
+            persistStarted.complete();
+          }
         }
-      };
-      mihomoAdapter.persistColdStartCompleter = persistCompleted;
+        ..persistColdStartCompleter = persistCompleted;
 
       final applied = await manager.setupRuntimePlan(
         const EngineRuntimePlanRequest(
@@ -324,15 +325,16 @@ void main() {
           metadata: null,
         ),
       );
-      mihomoAdapter.onPersistColdStartCall = (callIndex, _) {
-        if (callIndex == 1 && !firstPersistStarted.isCompleted) {
-          firstPersistStarted.complete();
+      mihomoAdapter
+        ..onPersistColdStartCall = (callIndex, _) {
+          if (callIndex == 1 && !firstPersistStarted.isCompleted) {
+            firstPersistStarted.complete();
+          }
+          if (callIndex == 2 && !secondPersistStarted.isCompleted) {
+            secondPersistStarted.complete();
+          }
         }
-        if (callIndex == 2 && !secondPersistStarted.isCompleted) {
-          secondPersistStarted.complete();
-        }
-      };
-      mihomoAdapter.persistColdStartCompleters = [firstPersistCompleted];
+        ..persistColdStartCompleters = [firstPersistCompleted];
 
       await manager.setupRuntimePlan(
         const EngineRuntimePlanRequest(

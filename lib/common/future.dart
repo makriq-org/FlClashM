@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:flclashm/common/common.dart';
+import 'package:flclashx/common/common.dart';
 
 extension CompleterExt<T> on Completer<T> {
   Future<Object?> safeFuture({

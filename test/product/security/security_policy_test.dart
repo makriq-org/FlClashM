@@ -1,7 +1,7 @@
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/compile/product_compile.dart';
-import 'package:flclashm/product/security/product_security.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

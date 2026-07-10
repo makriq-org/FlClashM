@@ -1,4 +1,4 @@
-import 'package:flclashm/models/models.dart';
+import 'package:flclashx/models/models.dart';
 
 import '../compile/product_compile.dart';
 

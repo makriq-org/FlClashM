@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/clash/interface.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/common/process_icon.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/clash/interface.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/common/process_icon.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 
@@ -141,7 +141,10 @@ class ClashCore {
     final res = await clashInterface.getConnections();
     final connectionsData = json.decode(res) as Map;
     final connectionsRaw = connectionsData['connections'] as List? ?? [];
-    return connectionsRaw.map((e) {
+    // Rebuild the id->processPath map from scratch each poll so it only holds
+    // live connection ids; it used to grow unbounded as ids were only appended.
+    final livePaths = <String, String>{};
+    final connections = connectionsRaw.map((e) {
       final map = Map<String, dynamic>.from(e as Map);
       // Capture processPath (dropped by the Connection model) so desktop can show the
       // originating app's exe icon.
@@ -149,10 +152,14 @@ class ClashCore {
       final id = map['id']?.toString();
       if (meta is Map && id != null) {
         final pp = meta['processPath']?.toString() ?? '';
-        if (pp.isNotEmpty) connectionProcessPaths[id] = pp;
+        if (pp.isNotEmpty) livePaths[id] = pp;
       }
       return Connection.fromJson(map);
     }).toList();
+    connectionProcessPaths
+      ..clear()
+      ..addAll(livePaths);
+    return connections;
   }
 
   void closeConnection(String id) {
@@ -190,9 +197,6 @@ class ClashCore {
       String externalProviderName) async {
     final externalProvidersRawString =
         await clashInterface.getExternalProvider(externalProviderName);
-    if (externalProvidersRawString.isEmpty) {
-      return null;
-    }
     if (externalProvidersRawString.isEmpty) {
       return null;
     }
@@ -268,7 +272,7 @@ class ClashCore {
     if (value.isEmpty) {
       return 0;
     }
-    return int.parse(value);
+    return int.tryParse(value) ?? 0;
   }
 
   Future<String> getCoreVersion() async {

@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/widgets/text.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/widgets/text.dart';
 import 'package:flutter/material.dart';
 
 /// 'NL' -> 🇳🇱 ; anything that isn't a 2-letter code -> 🌐 globe.

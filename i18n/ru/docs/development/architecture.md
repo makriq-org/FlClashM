@@ -26,7 +26,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 ## Граница между базой и продуктом
 
-Базовый код вне `lib/product/**` обращается к продуктовому слою только через точки интеграции из `tool/product_touchpoints.json`.
+Базовый код вне `lib/product/**` обращается к продуктовому слою только через точки интеграции из `tool/product_touchpoints.json`. Живые `lib/views/**` не дублируются в `lib/product/**`: в base остаются апстримные экраны с минимальными точками подключения. Классы виджетов и фабрики `Widget` в `lib/product/**` запрещены по умолчанию; собственные элементы FlClashM должны быть явно внесены в `allowedProductUi` из `tool/product_touchpoints.json` с причиной.
 
 ```bash
 dart tool/check_product_boundaries.dart
