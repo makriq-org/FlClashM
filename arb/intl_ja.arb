@@ -60,6 +60,8 @@
   "autoCheckUpdateDesc": "起動時に更新を自動チェック",
   "accessControl": "アクセス制御",
   "accessControlDesc": "アプリケーションのプロキシアクセスを設定",
+  "accessControlDriftNote": "Android VPNが適用したルールが、プロファイル設定と異なっています。",
+  "accessControlVerificationUnavailableNote": "適用されたVPNルールを確認できませんでした。代わりにプロファイルの宣言を表示しています。",
   "application": "アプリケーション設定",
   "applicationDesc": "標準アプリ設定",
   "edit": "編集",

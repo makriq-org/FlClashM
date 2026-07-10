@@ -81,6 +81,8 @@
   "autoCheckUpdateDesc": "Проверять обновления при запуске",
   "accessControl": "Контроль доступа",
   "accessControlDesc": "Управление доступом приложений к прокси",
+  "accessControlDriftNote": "Правила, применённые Android VPN, отличаются от настроек профиля.",
+  "accessControlVerificationUnavailableNote": "Не удалось проверить применённые правила VPN. Показаны правила из профиля.",
   "application": "Настройки приложения",
   "applicationDesc": "Стандартные настройки приложения",
   "edit": "Редактировать",

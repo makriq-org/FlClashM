@@ -143,6 +143,9 @@ class ProfileManagedAccessController {
     required AccessControl? activeProfileAccessControl,
   }) async {
     final generation = ++_generation;
+    final appliedSnapshotFuture = isRunning
+        ? service.readAppliedProfileAccess()
+        : Future.value(const ProfileAccessSnapshot.unavailable());
     final profileSnapshot = isRunning && activeProfileAccessControl != null
         ? ProfileAccessSnapshot.available(activeProfileAccessControl)
         : await service.readProfileConfigAccess(
@@ -150,9 +153,7 @@ class ProfileManagedAccessController {
             readProfilesPath: readProfilesPath,
             readInstalledPackageNames: readInstalledPackageNames,
           );
-    final appliedSnapshot = isRunning
-        ? await service.readAppliedProfileAccess()
-        : const ProfileAccessSnapshot.unavailable();
+    final appliedSnapshot = await appliedSnapshotFuture;
     final resolved = service.resolveProfileManagedAccess(
       profileConfig: profileSnapshot,
       applied: appliedSnapshot,

@@ -136,17 +136,19 @@ class _AccessViewState extends ConsumerState<AccessView> {
     final desc = _editorState.mode == AccessControlMode.acceptSelected
         ? appLocale.whitelistModeDesc
         : appLocale.blacklistModeDesc;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(desc),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    unawaited(
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(desc),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -154,16 +156,16 @@ class _AccessViewState extends ConsumerState<AccessView> {
   @override
   Widget build(BuildContext context) {
     ref
-      ..listen(runTimeProvider, (previous, next) {
-        if ((previous != null) != (next != null)) {
-          unawaited(_refreshManagedAccess());
-        }
-      })
-      ..listen(currentProfileIdProvider, (previous, next) {
-        if (previous != next) {
-          unawaited(_refreshManagedAccess());
-        }
-      });
+      ..listen(
+        runTimeProvider.select((runTime) => runTime != null),
+        (_, __) => unawaited(_refreshManagedAccess()),
+      )
+      ..listen(
+        currentProfileProvider.select(
+          (profile) => (profile?.id, profile?.lastUpdateDate),
+        ),
+        (_, __) => unawaited(_refreshManagedAccess()),
+      );
     final packages = ref.watch(packagesProvider);
     final filtered = productServices.accessControl.filterPackages(
       packages: packages,
@@ -187,7 +189,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
           ListItem.switchItem(
             title: Row(
               children: [
-                Text(appLocale.appAccessControl),
+                Flexible(child: Text(appLocale.appAccessControl)),
                 if (_profileManaged) ...[
                   const SizedBox(width: 8),
                   const Icon(Icons.lock_outline, size: 16),
