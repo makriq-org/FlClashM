@@ -453,19 +453,6 @@ class _ProfileItemState extends State<ProfileItem> {
                                 onPressed: updateProfile,
                               ),
                             ],
-                            if (system.isMobile && !_isTV)
-                              PopupMenuItemData(
-                                icon: Icons.tv_outlined,
-                                label: appLocalizations.sendToTv,
-                                onPressed: () {
-                                  BaseNavigator.push(
-                                    context,
-                                    SendToTvPage(
-                                      profileUrl: widget.profile.url,
-                                    ),
-                                  );
-                                },
-                              ),
                             if (displayHints.hasSupportUrl && !_isTV)
                               PopupMenuItemData(
                                 icon: Icons.contact_support,

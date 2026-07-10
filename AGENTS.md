@@ -37,7 +37,9 @@ Base-код вне `lib/product/**` знает о product layer только ч�
 touchpoints из `tool/product_touchpoints.json`. Живые `lib/views/**` не
 копируются в product-слой: они остаются апстримными файлами с минимальными
 зарегистрированными хуками. Fork-only страницы держать в `lib/product/pages/**`
-с тонким mount-файлом в base только когда без этого страница недостижима.
+с тонким mount-файлом в base только когда без этого страница недостижима. Любой файл в `lib/product/**`,
+объявляющий виджет или фабрику `Widget`, должен иметь запись с причиной в
+`allowedProductUi` из `tool/product_touchpoints.json`; это проверяет CI.
 
 ## Документация
 
