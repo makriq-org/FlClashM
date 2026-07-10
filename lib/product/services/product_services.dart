@@ -6,6 +6,7 @@ export '../widgets/access_control_notice.dart';
 export 'access_control_service.dart';
 export 'android_shell_service.dart';
 export 'app_update_service.dart';
+export 'product_contributors.dart';
 
 class ProductServices {
   const ProductServices({

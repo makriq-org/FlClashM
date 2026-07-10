@@ -175,7 +175,7 @@ class AboutView extends ConsumerWidget {
       );
 
   List<Widget> _buildContributorsSection() {
-    const contributors = [
+    final contributors = [
       Contributor(
         avatar: "assets/images/avatars/pluralplay.jpg",
         name: "pluralplay",
@@ -186,6 +186,12 @@ class AboutView extends ConsumerWidget {
         name: "kastov",
         link: "https://github.com/kastov",
       ),
+      for (final contributor in productContributors)
+        Contributor(
+          avatar: contributor.avatar,
+          name: contributor.name,
+          link: contributor.link,
+        ),
     ];
     return generateSection(
       separated: false,
