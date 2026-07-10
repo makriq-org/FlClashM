@@ -734,6 +734,106 @@ class AppLocalizations {
     );
   }
 
+  /// `Applied to tunnel`
+  String get effectiveTunnelAccess {
+    return Intl.message(
+      'Applied to tunnel',
+      name: 'effectiveTunnelAccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `What is actually included in or excluded from the VPN tunnel right now`
+  String get effectiveTunnelAccessDesc {
+    return Intl.message(
+      'What is actually included in or excluded from the VPN tunnel right now',
+      name: 'effectiveTunnelAccessDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `All apps go through the tunnel`
+  String get tunnelAccessAllApps {
+    return Intl.message(
+      'All apps go through the tunnel',
+      name: 'tunnelAccessAllApps',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Only these apps are in the tunnel`
+  String get tunnelAccessIncludeMode {
+    return Intl.message(
+      'Only these apps are in the tunnel',
+      name: 'tunnelAccessIncludeMode',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `These apps bypass the tunnel`
+  String get tunnelAccessExcludeMode {
+    return Intl.message(
+      'These apps bypass the tunnel',
+      name: 'tunnelAccessExcludeMode',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `From profile config`
+  String get tunnelAccessSourceProfile {
+    return Intl.message(
+      'From profile config',
+      name: 'tunnelAccessSourceProfile',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Manual settings`
+  String get tunnelAccessSourceManual {
+    return Intl.message(
+      'Manual settings',
+      name: 'tunnelAccessSourceManual',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This app itself always bypasses the tunnel`
+  String get tunnelAccessSelfBypass {
+    return Intl.message(
+      'This app itself always bypasses the tunnel',
+      name: 'tunnelAccessSelfBypass',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Matches the running tunnel`
+  String get tunnelAccessObservedMatch {
+    return Intl.message(
+      'Matches the running tunnel',
+      name: 'tunnelAccessObservedMatch',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Differs from the running tunnel`
+  String get tunnelAccessObservedMismatch {
+    return Intl.message(
+      'Differs from the running tunnel',
+      name: 'tunnelAccessObservedMismatch',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Application Settings`
   String get application {
     return Intl.message(

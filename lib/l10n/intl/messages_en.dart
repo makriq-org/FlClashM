@@ -52,6 +52,36 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "Configure application access proxy",
     ),
+    "effectiveTunnelAccess": MessageLookupByLibrary.simpleMessage(
+      "Applied to tunnel",
+    ),
+    "effectiveTunnelAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "What is actually included in or excluded from the VPN tunnel right now",
+    ),
+    "tunnelAccessAllApps": MessageLookupByLibrary.simpleMessage(
+      "All apps go through the tunnel",
+    ),
+    "tunnelAccessIncludeMode": MessageLookupByLibrary.simpleMessage(
+      "Only these apps are in the tunnel",
+    ),
+    "tunnelAccessExcludeMode": MessageLookupByLibrary.simpleMessage(
+      "These apps bypass the tunnel",
+    ),
+    "tunnelAccessSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "From profile config",
+    ),
+    "tunnelAccessSourceManual": MessageLookupByLibrary.simpleMessage(
+      "Manual settings",
+    ),
+    "tunnelAccessSelfBypass": MessageLookupByLibrary.simpleMessage(
+      "This app itself always bypasses the tunnel",
+    ),
+    "tunnelAccessObservedMatch": MessageLookupByLibrary.simpleMessage(
+      "Matches the running tunnel",
+    ),
+    "tunnelAccessObservedMismatch": MessageLookupByLibrary.simpleMessage(
+      "Differs from the running tunnel",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "The selected application will be excluded from VPN",
     ),

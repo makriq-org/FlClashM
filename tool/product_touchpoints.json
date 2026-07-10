@@ -105,7 +105,7 @@
     {
       "path": "lib/views/access.dart",
       "boundary": "ui-product-services",
-      "reason": "AccessView stays in base UI and uses ProductServices only for access-control editor state, package loading and profile-managed locks.",
+      "reason": "AccessView stays in base UI and uses ProductServices only for access-control editor state, package loading, profile-managed locks and the read-only tunnel access diagnostics panel.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]

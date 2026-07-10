@@ -23,6 +23,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
   final _loadCompleter = Completer<List<Package>>();
   late AccessControlEditorState _editorState;
   bool _profileManaged = false;
+  AndroidVpnOptions? _observedOptions;
 
   @override
   void initState() {
@@ -31,6 +32,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
     globalState.activeProfileAccessControlNotifier
         .addListener(_handleProfileAccessControlChanged);
     _loadCompleter.complete(_loadPackages());
+    _refreshObservedTunnelAccess();
   }
 
   @override
@@ -48,6 +50,15 @@ class _AccessViewState extends ConsumerState<AccessView> {
       return;
     }
     setState(_syncResolvedAccessControl);
+    _refreshObservedTunnelAccess();
+  }
+
+  Future<void> _refreshObservedTunnelAccess() async {
+    final options = await productServices.accessControl.readAppliedVpnOptions();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _observedOptions = options);
   }
 
   void _syncResolvedAccessControl() {
@@ -128,13 +139,28 @@ class _AccessViewState extends ConsumerState<AccessView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(
+      runTimeProvider.select((state) => state != null),
+      (previous, next) {
+        if (previous != next) {
+          _refreshObservedTunnelAccess();
+        }
+      },
+    );
     final packages = ref.watch(packagesProvider);
+    final manualAccessControl =
+        ref.watch(vpnSettingProvider.select((state) => state.accessControl));
     final filtered = productServices.accessControl.filterPackages(
       packages: packages,
       editorState: _editorState,
     );
     final appLocale = AppLocalizations.of(context);
     final isWhitelist = _editorState.isWhitelist;
+    final tunnelAccessReport = productServices.tunnelAccess.inspect(
+      manualAccessControl: manualAccessControl,
+      profileAccessControl: globalState.activeProfileAccessControl,
+      observedOptions: _observedOptions,
+    );
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -142,6 +168,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
       },
       child: Column(
         children: [
+          _TunnelAccessDiagnostics(
+            report: tunnelAccessReport,
+            packages: packages,
+          ),
+          const Divider(height: 1),
           ListItem.switchItem(
             title: Row(
               children: [
@@ -392,6 +423,238 @@ class _AppTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Read-only panel that shows what is actually included in / excluded from the
+/// tunnel — driven by the profile config or the manual settings — so the page
+/// can be trusted for diagnostics.
+class _TunnelAccessDiagnostics extends StatelessWidget {
+  const _TunnelAccessDiagnostics({
+    required this.report,
+    required this.packages,
+  });
+
+  final TunnelAccessReport report;
+  final List<Package> packages;
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocale = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final selfBypass = report.selfBypassPackages.toSet();
+    final realPackages = report.effectivePackages
+        .where((pkg) => !selfBypass.contains(pkg))
+        .toList(growable: false);
+    final isWhitelist = report.isWhitelist;
+    final allAppsThroughTunnel = !isWhitelist && realPackages.isEmpty;
+    final count =
+        isWhitelist ? report.effectivePackages.length : realPackages.length;
+
+    final String summary;
+    if (allAppsThroughTunnel) {
+      summary = appLocale.tunnelAccessAllApps;
+    } else if (isWhitelist) {
+      summary = '${appLocale.tunnelAccessIncludeMode} · $count';
+    } else {
+      summary = '${appLocale.tunnelAccessExcludeMode} · $count';
+    }
+
+    final labels = <String, String>{
+      for (final package in packages) package.packageName: package.label,
+    };
+
+    return Theme(
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        leading: Icon(
+          isWhitelist ? Icons.vpn_lock : Icons.alt_route,
+          color: theme.colorScheme.primary,
+        ),
+        title: Text(appLocale.effectiveTunnelAccess),
+        subtitle: Row(
+          children: [
+            Expanded(
+              child: Text(
+                summary,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            if (report.hasObservedDrift) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.sync_problem,
+                size: 16,
+                color: theme.colorScheme.error,
+              ),
+            ],
+          ],
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(
+                    report.source == TunnelAccessSource.profile
+                        ? Icons.description_outlined
+                        : Icons.tune,
+                    size: 16,
+                  ),
+                  label: Text(
+                    report.source == TunnelAccessSource.profile
+                        ? appLocale.tunnelAccessSourceProfile
+                        : appLocale.tunnelAccessSourceManual,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    appLocale.effectiveTunnelAccessDesc,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                if (report.selfBypassPackages.isNotEmpty)
+                  _TunnelAccessNote(
+                    icon: Icons.shield_outlined,
+                    text: appLocale.tunnelAccessSelfBypass,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                if (report.observation != null)
+                  _TunnelAccessNote(
+                    icon: report.hasObservedDrift
+                        ? Icons.sync_problem
+                        : Icons.verified_outlined,
+                    text: report.hasObservedDrift
+                        ? appLocale.tunnelAccessObservedMismatch
+                        : appLocale.tunnelAccessObservedMatch,
+                    color: report.hasObservedDrift
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                  ),
+              ],
+            ),
+          ),
+          if (report.effectivePackages.isNotEmpty)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: report.effectivePackages.length,
+                itemBuilder: (_, index) {
+                  final pkg = report.effectivePackages[index];
+                  return _TunnelAccessAppTile(
+                    packageName: pkg,
+                    label: labels[pkg],
+                    isSelf: selfBypass.contains(pkg),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TunnelAccessNote extends StatelessWidget {
+  const _TunnelAccessNote({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _TunnelAccessAppTile extends StatelessWidget {
+  const _TunnelAccessAppTile({
+    required this.packageName,
+    required this.label,
+    required this.isSelf,
+  });
+
+  final String packageName;
+  final String? label;
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: SizedBox(
+        width: 32,
+        height: 32,
+        child: FutureBuilder<ImageProvider?>(
+          future: productServices.accessControl.readPackageIcon(packageName),
+          builder: (_, snap) {
+            if (snap.data == null) {
+              return const Icon(Icons.android, size: 28);
+            }
+            return Image(
+              image: snap.data!,
+              gaplessPlayback: true,
+              width: 32,
+              height: 32,
+            );
+          },
+        ),
+      ),
+      title: Text(
+        label ?? packageName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        packageName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall,
+      ),
+      trailing: isSelf
+          ? Icon(
+              Icons.shield_outlined,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            )
+          : null,
     );
   }
 }

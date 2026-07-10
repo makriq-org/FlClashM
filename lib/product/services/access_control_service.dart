@@ -254,6 +254,11 @@ class AccessControlService {
     );
   }
 
+  /// Reads the options the running core currently advertises, used by the
+  /// Access Control page to show what is actually applied to the tunnel.
+  Future<AndroidVpnOptions?> readAppliedVpnOptions() =>
+      platform.readAppliedVpnOptions();
+
   Future<bool> startVpn({required AccessControl accessControl}) =>
       platform.startVpn(accessControl: accessControl);
 

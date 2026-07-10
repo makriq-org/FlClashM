@@ -50,6 +50,36 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "アプリケーションのプロキシアクセスを設定",
     ),
+    "effectiveTunnelAccess": MessageLookupByLibrary.simpleMessage(
+      "トンネルへの適用",
+    ),
+    "effectiveTunnelAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "現在 VPN トンネルに実際に含まれる、または除外されるアプリ",
+    ),
+    "tunnelAccessAllApps": MessageLookupByLibrary.simpleMessage(
+      "すべてのアプリがトンネルを通過します",
+    ),
+    "tunnelAccessIncludeMode": MessageLookupByLibrary.simpleMessage(
+      "これらのアプリのみトンネルを通過します",
+    ),
+    "tunnelAccessExcludeMode": MessageLookupByLibrary.simpleMessage(
+      "これらのアプリはトンネルを迂回します",
+    ),
+    "tunnelAccessSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "プロファイル設定から",
+    ),
+    "tunnelAccessSourceManual": MessageLookupByLibrary.simpleMessage(
+      "手動設定",
+    ),
+    "tunnelAccessSelfBypass": MessageLookupByLibrary.simpleMessage(
+      "このアプリ自体は常にトンネルを迂回します",
+    ),
+    "tunnelAccessObservedMatch": MessageLookupByLibrary.simpleMessage(
+      "実行中のトンネルと一致",
+    ),
+    "tunnelAccessObservedMismatch": MessageLookupByLibrary.simpleMessage(
+      "実行中のトンネルと相違",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選択したアプリをVPNから除外",
     ),

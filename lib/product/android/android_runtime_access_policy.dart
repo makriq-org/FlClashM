@@ -22,6 +22,10 @@ abstract interface class RuntimeAccessPlatformBridge {
     required AccessControl accessControl,
   });
 
+  /// Reads the options the running core currently advertises, or `null` when
+  /// the tunnel is stopped or the options cannot be parsed.
+  Future<AndroidVpnOptions?> readAppliedVpnOptions();
+
   Future<bool> startVpn({required AccessControl accessControl});
 
   Future<void> stopVpn();
@@ -80,6 +84,24 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
       );
     } catch (_) {
       return optionsJson;
+    }
+  }
+
+  @override
+  Future<AndroidVpnOptions?> readAppliedVpnOptions() async {
+    final optionsJson = await clashLib?.getAndroidVpnOptions() ?? '';
+    if (optionsJson.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = json.decode(optionsJson);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return AndroidVpnOptions.fromJson(decoded);
+    } catch (error) {
+      commonPrint.log('readAppliedVpnOptions parse error: $error');
+      return null;
     }
   }
 

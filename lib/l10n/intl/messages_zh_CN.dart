@@ -48,6 +48,22 @@ class MessageLookup extends MessageLookupByLibrary {
       "只允许选中应用进入VPN",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage("配置应用访问代理"),
+    "effectiveTunnelAccess": MessageLookupByLibrary.simpleMessage("应用于隧道"),
+    "effectiveTunnelAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "当前实际进入或绕过 VPN 隧道的应用",
+    ),
+    "tunnelAccessAllApps": MessageLookupByLibrary.simpleMessage("所有应用都走隧道"),
+    "tunnelAccessIncludeMode": MessageLookupByLibrary.simpleMessage("仅这些应用进入隧道"),
+    "tunnelAccessExcludeMode": MessageLookupByLibrary.simpleMessage("这些应用绕过隧道"),
+    "tunnelAccessSourceProfile": MessageLookupByLibrary.simpleMessage("来自配置文件"),
+    "tunnelAccessSourceManual": MessageLookupByLibrary.simpleMessage("手动设置"),
+    "tunnelAccessSelfBypass": MessageLookupByLibrary.simpleMessage("本应用始终绕过隧道"),
+    "tunnelAccessObservedMatch": MessageLookupByLibrary.simpleMessage(
+      "与运行中的隧道一致",
+    ),
+    "tunnelAccessObservedMismatch": MessageLookupByLibrary.simpleMessage(
+      "与运行中的隧道不一致",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "选中应用将会被排除在VPN之外",
     ),

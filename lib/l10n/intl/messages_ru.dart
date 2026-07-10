@@ -51,6 +51,36 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "Управление доступом приложений к прокси",
     ),
+    "effectiveTunnelAccess": MessageLookupByLibrary.simpleMessage(
+      "Что применяется к туннелю",
+    ),
+    "effectiveTunnelAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "Что сейчас реально включено в VPN-туннель или исключено из него",
+    ),
+    "tunnelAccessAllApps": MessageLookupByLibrary.simpleMessage(
+      "Все приложения идут через туннель",
+    ),
+    "tunnelAccessIncludeMode": MessageLookupByLibrary.simpleMessage(
+      "В туннеле только выбранные приложения",
+    ),
+    "tunnelAccessExcludeMode": MessageLookupByLibrary.simpleMessage(
+      "Выбранные приложения идут мимо туннеля",
+    ),
+    "tunnelAccessSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "Из профиля (конфиг)",
+    ),
+    "tunnelAccessSourceManual": MessageLookupByLibrary.simpleMessage(
+      "Ручные настройки",
+    ),
+    "tunnelAccessSelfBypass": MessageLookupByLibrary.simpleMessage(
+      "Само приложение всегда идёт мимо туннеля",
+    ),
+    "tunnelAccessObservedMatch": MessageLookupByLibrary.simpleMessage(
+      "Совпадает с активным туннелем",
+    ),
+    "tunnelAccessObservedMismatch": MessageLookupByLibrary.simpleMessage(
+      "Отличается от активного туннеля",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Выбранные приложения не будут использовать VPN",
     ),

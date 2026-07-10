@@ -14,16 +14,19 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
   _FakeRuntimeAccessPlatform({
     this.packages = const [],
     this.icon,
+    this.appliedVpnOptions,
   });
 
   final List<Package> packages;
   final ImageProvider? icon;
+  final AndroidVpnOptions? appliedVpnOptions;
 
   AccessControl? lastStartAccessControl;
   String? lastIconPackageName;
   int packageReadCalls = 0;
   int stopCalls = 0;
   int resolveCalls = 0;
+  int appliedVpnOptionsCalls = 0;
 
   @override
   Future<List<Package>> readPackages() async {
@@ -43,6 +46,12 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
     required AccessControl accessControl,
   }) =>
       optionsJson;
+
+  @override
+  Future<AndroidVpnOptions?> readAppliedVpnOptions() async {
+    appliedVpnOptionsCalls++;
+    return appliedVpnOptions;
+  }
 
   @override
   Future<bool> startVpn({required AccessControl accessControl}) async {
@@ -251,6 +260,32 @@ void main() {
         expect(resolved.sort, AccessSortType.time);
       },
     );
+
+    test('forwards applied vpn options from the platform bridge', () async {
+      const options = AndroidVpnOptions(
+        enable: true,
+        port: 7890,
+        accessControl: AccessControl(
+          enable: true,
+          mode: AccessControlMode.rejectSelected,
+          rejectList: ['com.example.blocked'],
+        ),
+        allowBypass: true,
+        systemProxy: false,
+        bypassDomain: [],
+        ipv4Address: '172.19.0.1/30',
+        ipv6Address: '',
+        dnsServerAddress: '172.19.0.2',
+        excludePackage: ['com.example.blocked'],
+      );
+      final platform = _FakeRuntimeAccessPlatform(appliedVpnOptions: options);
+      final service = AccessControlService(platform: platform);
+
+      final resolved = await service.readAppliedVpnOptions();
+
+      expect(resolved, same(options));
+      expect(platform.appliedVpnOptionsCalls, 1);
+    });
 
     test('delegates runtime access orchestration to the platform bridge',
         () async {
