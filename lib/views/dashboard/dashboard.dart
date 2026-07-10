@@ -145,14 +145,14 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
     if (!item.platforms.contains(SupportPlatform.currentPlatform)) {
       return false;
     }
-    
+
     if (!globalModeEnabled) {
-      if (item == DashboardWidget.outboundMode || 
+      if (item == DashboardWidget.outboundMode ||
           item == DashboardWidget.outboundModeV2) {
         return false;
       }
     }
-    
+
     if (item == DashboardWidget.announce && !hasAnnounceData) {
       return false;
     }
@@ -162,7 +162,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
     if (item == DashboardWidget.changeServerButton && !hasServerInfoData) {
       return false;
     }
-    
+
     return true;
   }
 

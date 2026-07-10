@@ -274,12 +274,13 @@ void main() {
         () async {
       final persistStarted = Completer<void>();
       final persistCompleted = Completer<void>();
-      mihomoAdapter.onPersistColdStart = () {
-        if (!persistStarted.isCompleted) {
-          persistStarted.complete();
+      mihomoAdapter
+        ..onPersistColdStart = () {
+          if (!persistStarted.isCompleted) {
+            persistStarted.complete();
+          }
         }
-      };
-      mihomoAdapter.persistColdStartCompleter = persistCompleted;
+        ..persistColdStartCompleter = persistCompleted;
 
       final applied = await manager.setupRuntimePlan(
         const EngineRuntimePlanRequest(
@@ -324,15 +325,16 @@ void main() {
           metadata: null,
         ),
       );
-      mihomoAdapter.onPersistColdStartCall = (callIndex, _) {
-        if (callIndex == 1 && !firstPersistStarted.isCompleted) {
-          firstPersistStarted.complete();
+      mihomoAdapter
+        ..onPersistColdStartCall = (callIndex, _) {
+          if (callIndex == 1 && !firstPersistStarted.isCompleted) {
+            firstPersistStarted.complete();
+          }
+          if (callIndex == 2 && !secondPersistStarted.isCompleted) {
+            secondPersistStarted.complete();
+          }
         }
-        if (callIndex == 2 && !secondPersistStarted.isCompleted) {
-          secondPersistStarted.complete();
-        }
-      };
-      mihomoAdapter.persistColdStartCompleters = [firstPersistCompleted];
+        ..persistColdStartCompleters = [firstPersistCompleted];
 
       await manager.setupRuntimePlan(
         const EngineRuntimePlanRequest(

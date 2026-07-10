@@ -92,6 +92,29 @@ void main() {
       });
     });
 
+    test('keeps self bypass when core reports an empty include list', () {
+      const policy = AndroidRuntimeAccessPolicy(
+        selfPackageNames: ['com.makriq.flclash.dev'],
+      );
+
+      final merged = policy.mergeVpnOptions(
+        '{"includePackage":[]}',
+        accessControl: const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: <String>[],
+        ),
+      );
+      final decoded = json.decode(merged) as Map<String, dynamic>;
+
+      expect(decoded['includePackage'], isEmpty);
+      expect(decoded['accessControl'], {
+        'mode': 'rejectSelected',
+        'acceptList': <String>[],
+        'rejectList': ['com.makriq.flclash.dev'],
+      });
+    });
+
     test('adds self package to reject mode', () {
       const policy = AndroidRuntimeAccessPolicy(
         selfPackageNames: ['com.makriq.flclash.dev'],

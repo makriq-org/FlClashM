@@ -417,7 +417,7 @@ class Ipv6Item extends ConsumerWidget {
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
-    
+
     return AbsorbPointer(
       absorbing: !isEnabled,
       child: Opacity(
@@ -454,7 +454,7 @@ class AllowLanItem extends ConsumerWidget {
       appSettingProvider.select((state) => state.overrideNetworkSettings),
     );
     final isEnabled = overrideNetworkSettings;
-    
+
     return AbsorbPointer(
       absorbing: !isEnabled,
       child: Opacity(

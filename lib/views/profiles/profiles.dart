@@ -641,4 +641,3 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
       title: appLocalizations.profilesSort,
     );
 }
-

@@ -490,13 +490,19 @@ class FlVpnService : VpnService(), IBaseService {
             allInclude.addAll(include)
             allExclude.addAll(exclude)
 
-            if (includeModeRequested) {
+            // VpnService.Builder interprets zero addAllowedApplication calls as
+            // "all applications". Remove our own package before deciding the mode,
+            // so an empty resolved include list cannot override the hardened
+            // rejectSelected self-bypass.
+            allInclude.remove(packageName)
+            if (allInclude.isNotEmpty()) {
                 if (allExclude.isNotEmpty()) {
                     GlobalState.log("Access control: include-package active, exclude-package ignored (Android limitation)")
                 }
-                allInclude.remove(packageName)
                 allInclude.forEach { runCatching { builder.addAllowedApplication(it) } }
-            } else if (excludeModeRequested) {
+            } else if (
+                allExclude.isNotEmpty() || includeModeRequested || excludeModeRequested
+            ) {
                 allExclude.add(packageName)
                 allExclude.forEach { runCatching { builder.addDisallowedApplication(it) } }
             }
