@@ -171,7 +171,16 @@ jobs:
           path: .
 
       - name: Build Android ${{ matrix.out }} artifact
-        run: dart setup.dart android --out ${{ matrix.out }} ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          version_name="${GITHUB_REF_NAME#v}"
+          dart setup.dart android \
+            --out ${{ matrix.out }} \
+            --env "$release_channel" \
+            --version-name "$version_name"
 
       - name: Upload Android ${{ matrix.out }} artifact
         uses: actions/upload-artifact@v6

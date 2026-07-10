@@ -304,6 +304,20 @@ void _checkBuildWorkflow({
   );
   _expectPatternExists(
     content: content,
+    pattern: RegExp(r'version_name="\$\{GITHUB_REF_NAME#v\}"'),
+    label:
+        'package version derivation from the release tag in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'--version-name\s+"\$version_name"'),
+    label:
+        'release tag version forwarding to Android builds in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
     pattern: RegExp(
       r'dart\s+tool/check_android_release_signing\.dart\s+dist/FlClashM-android-arm64-v8a\.apk',
     ),
@@ -354,6 +368,12 @@ void _checkSetupContract({
     pattern: RegExp(r"const _appName = '([^']+)';"),
     expected: contract.appName,
     label: 'release app name in `$setupPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r"'--build-name=\$versionName'"),
+    label: 'Android package version override in `$setupPath`',
     failures: failures,
   );
 
