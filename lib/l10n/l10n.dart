@@ -734,6 +734,16 @@ class AppLocalizations {
     );
   }
 
+  /// `The rules the core is actually applying differ from your profile config.`
+  String get accessControlDriftNote {
+    return Intl.message(
+      'The rules the core is actually applying differ from your profile config.',
+      name: 'accessControlDriftNote',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Application Settings`
   String get application {
     return Intl.message(

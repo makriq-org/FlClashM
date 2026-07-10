@@ -26,6 +26,12 @@ abstract interface class RuntimeAccessPlatformBridge {
 
   Future<void> stopVpn();
 
+  /// Reads the VPN options the running core currently reports, so the UI can
+  /// show the *actually applied* split tunneling instead of only what the
+  /// config declares. Returns null when the core is not reachable or the
+  /// payload cannot be parsed.
+  Future<AndroidVpnOptions?> readAppliedVpnOptions();
+
   Future<ResolvedTunAccess> resolveTunAccess({
     required bool requestedTunEnable,
     required bool realTunEnable,
@@ -96,6 +102,21 @@ class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   @override
   Future<void> stopVpn() async {
     await vpn?.stop();
+  }
+
+  @override
+  Future<AndroidVpnOptions?> readAppliedVpnOptions() async {
+    final optionsJson = await clashLib?.getAndroidVpnOptions() ?? '';
+    if (optionsJson.isEmpty) {
+      return null;
+    }
+    try {
+      return AndroidVpnOptions.fromJson(
+        json.decode(optionsJson) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

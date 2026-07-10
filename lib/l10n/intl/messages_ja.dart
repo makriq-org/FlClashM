@@ -50,6 +50,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "アプリケーションのプロキシアクセスを設定",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "コアが実際に適用しているルールが、プロファイル設定と異なっています。",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選択したアプリをVPNから除外",
     ),

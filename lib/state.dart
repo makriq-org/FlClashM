@@ -310,6 +310,44 @@ class GlobalState {
     );
   }
 
+  /// Resolves the access control that the *current profile's* split
+  /// tunneling declaration (`tun.include-package` / `tun.exclude-package`
+  /// and their file/url variants) would enforce.
+  ///
+  /// This is derived straight from the profile config and therefore works
+  /// regardless of whether the VPN is currently running or whether this UI
+  /// process is the one that started it — unlike [activeProfileAccessControl],
+  /// which is only populated when the plan is applied in-process.
+  Future<AccessControl?> resolveCurrentProfileSplitTunnelingAccessControl() async {
+    if (!Platform.isAndroid) {
+      return null;
+    }
+    try {
+      final rawProfile = await loadCurrentRawProfile();
+      if (rawProfile == null) {
+        return null;
+      }
+      final rawConfig = rawProfile.config;
+      final installedPackageNames =
+          requiresInstalledPackageInventoryForProfileSplitTunneling(
+        rawConfig,
+        isAndroid: true,
+      )
+              ? await _readInstalledPackageNames()
+              : const <String>[];
+      final resolved = await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: await appPath.profilesPath,
+        profileId: rawProfile.profile.id,
+        installedPackageNames: installedPackageNames,
+      );
+      return resolved.accessControl;
+    } catch (_) {
+      return null;
+    }
+  }
+
   CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
     required ClashConfig patchConfig,

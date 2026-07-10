@@ -51,6 +51,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "Управление доступом приложений к прокси",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "Правила, которые реально применяет ядро, отличаются от конфигурации профиля.",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Выбранные приложения не будут использовать VPN",
     ),

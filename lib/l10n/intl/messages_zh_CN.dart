@@ -48,6 +48,8 @@ class MessageLookup extends MessageLookupByLibrary {
       "只允许选中应用进入VPN",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage("配置应用访问代理"),
+    "accessControlDriftNote":
+        MessageLookupByLibrary.simpleMessage("内核实际应用的规则与您的配置文件不一致。"),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "选中应用将会被排除在VPN之外",
     ),

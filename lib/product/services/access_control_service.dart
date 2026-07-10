@@ -63,6 +63,53 @@ class AccessControlEditorState {
       );
 }
 
+/// Where the profile-managed access control shown in the Access Control view
+/// is sourced from.
+enum ProfileManagedAccessSource {
+  /// Not profile-managed — the user's manual selection is editable.
+  none,
+
+  /// Derived from the current profile config (VPN not running, or the running
+  /// core did not report an applied package list).
+  profile,
+
+  /// Read from the running core's applied VPN options (ground truth).
+  appliedCore,
+}
+
+/// Immutable description of whether the Access Control view should present a
+/// profile-managed (locked) state, which access control to display and whether
+/// the running core diverges from what the profile config declares.
+@immutable
+class ProfileManagedAccess {
+  const ProfileManagedAccess({
+    required this.managed,
+    required this.effectiveAccessControl,
+    required this.source,
+    required this.hasDrift,
+  });
+
+  /// True when split tunneling is dictated by the profile/core and the manual
+  /// editor should be locked.
+  final bool managed;
+
+  /// The access control to display, or null when [managed] is false.
+  final AccessControl? effectiveAccessControl;
+
+  final ProfileManagedAccessSource source;
+
+  /// True when the core is running and what it actually applies diverges from
+  /// what the profile config declares — a trust/diagnostics signal.
+  final bool hasDrift;
+
+  static const none = ProfileManagedAccess(
+    managed: false,
+    effectiveAccessControl: null,
+    source: ProfileManagedAccessSource.none,
+    hasDrift: false,
+  );
+}
+
 class AccessControlService {
   const AccessControlService({
     this.platform = const AndroidRuntimeAccessPolicy(),
@@ -252,6 +299,72 @@ class AccessControlService {
       showSystemApps: previousState.showSystemApps,
       showNoInternetApps: previousState.showNoInternetApps,
     );
+  }
+
+  Future<AndroidVpnOptions?> readAppliedVpnOptions() =>
+      platform.readAppliedVpnOptions();
+
+  /// Interprets the running core's applied VPN options as an [AccessControl].
+  ///
+  /// Uses the core-reported include/exclude package lists (the packages the
+  /// core is actually routing) rather than the app-merged `accessControl`
+  /// field, so it reflects what the tunnel really enforces.
+  AccessControl? appliedAccessControlFromOptions(AndroidVpnOptions? options) {
+    if (options == null) {
+      return null;
+    }
+    if (options.includePackage.isNotEmpty) {
+      return AccessControl(
+        enable: true,
+        mode: AccessControlMode.acceptSelected,
+        acceptList: List.of(options.includePackage),
+      );
+    }
+    if (options.excludePackage.isNotEmpty) {
+      return AccessControl(
+        enable: true,
+        mode: AccessControlMode.rejectSelected,
+        rejectList: List.of(options.excludePackage),
+      );
+    }
+    return null;
+  }
+
+  /// Hybrid resolver for the Access Control view.
+  ///
+  /// VPN off: the effective managed state comes from [profileConfigAccessControl]
+  /// (resolved from the current profile). VPN on: it comes from
+  /// [appliedAccessControl] (the running core's ground truth), and a drift flag
+  /// is raised when that diverges from what the profile config declares.
+  ProfileManagedAccess resolveProfileManagedAccess({
+    required AccessControl? profileConfigAccessControl,
+    required AccessControl? appliedAccessControl,
+    required bool isRunning,
+  }) {
+    final applied = isRunning ? appliedAccessControl : null;
+    final effective = applied ?? profileConfigAccessControl;
+    if (effective == null) {
+      return ProfileManagedAccess.none;
+    }
+    return ProfileManagedAccess(
+      managed: true,
+      effectiveAccessControl: effective,
+      source: applied != null
+          ? ProfileManagedAccessSource.appliedCore
+          : ProfileManagedAccessSource.profile,
+      hasDrift: applied != null &&
+          profileConfigAccessControl != null &&
+          !_sameEffectiveAccess(profileConfigAccessControl, applied),
+    );
+  }
+
+  bool _sameEffectiveAccess(AccessControl a, AccessControl b) {
+    if (a.enable != b.enable || a.mode != b.mode) {
+      return false;
+    }
+    final setA = a.currentList.toSet();
+    final setB = b.currentList.toSet();
+    return setA.length == setB.length && setA.containsAll(setB);
   }
 
   Future<bool> startVpn({required AccessControl accessControl}) =>

@@ -52,6 +52,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "Configure application access proxy",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "The rules the core is actually applying differ from your profile config.",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "The selected application will be excluded from VPN",
     ),

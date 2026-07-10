@@ -23,14 +23,21 @@ class _AccessViewState extends ConsumerState<AccessView> {
   final _loadCompleter = Completer<List<Package>>();
   late AccessControlEditorState _editorState;
   bool _profileManaged = false;
+  bool _hasDrift = false;
 
   @override
   void initState() {
     super.initState();
-    _syncResolvedAccessControl();
+    _editorState = productServices.accessControl.resolveEditorState(
+      accessControl: ref.read(vpnSettingProvider).accessControl,
+      profileAccessControl: globalState.activeProfileAccessControl,
+      previousState: null,
+    );
+    _profileManaged = globalState.activeProfileAccessControl != null;
     globalState.activeProfileAccessControlNotifier
         .addListener(_handleProfileAccessControlChanged);
     _loadCompleter.complete(_loadPackages());
+    unawaited(_refreshManagedAccess());
   }
 
   @override
@@ -47,17 +54,39 @@ class _AccessViewState extends ConsumerState<AccessView> {
     if (!mounted) {
       return;
     }
-    setState(_syncResolvedAccessControl);
+    unawaited(_refreshManagedAccess());
   }
 
-  void _syncResolvedAccessControl() {
-    final profileAccessControl = globalState.activeProfileAccessControl;
-    _editorState = productServices.accessControl.resolveEditorState(
-      accessControl: ref.read(vpnSettingProvider).accessControl,
-      profileAccessControl: profileAccessControl,
-      previousState: _editorStateOrNull,
+  /// Hybrid resolution of the profile-managed state:
+  /// VPN off -> from the current profile config; VPN on -> from the running
+  /// core's applied VPN options, flagging any divergence from the config.
+  Future<void> _refreshManagedAccess() async {
+    final manual = ref.read(vpnSettingProvider).accessControl;
+    final isRunning = ref.read(runTimeProvider) != null;
+    final profileConfigAccess = globalState.activeProfileAccessControl ??
+        await globalState.resolveCurrentProfileSplitTunnelingAccessControl();
+    final appliedOptions = isRunning
+        ? await productServices.accessControl.readAppliedVpnOptions()
+        : null;
+    final appliedAccess = productServices.accessControl
+        .appliedAccessControlFromOptions(appliedOptions);
+    final managed = productServices.accessControl.resolveProfileManagedAccess(
+      profileConfigAccessControl: profileConfigAccess,
+      appliedAccessControl: appliedAccess,
+      isRunning: isRunning,
     );
-    _profileManaged = profileAccessControl != null;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _editorState = productServices.accessControl.resolveEditorState(
+        accessControl: manual,
+        profileAccessControl: managed.effectiveAccessControl,
+        previousState: _editorStateOrNull,
+      );
+      _profileManaged = managed.managed;
+      _hasDrift = managed.hasDrift;
+    });
   }
 
   AccessControlEditorState? get _editorStateOrNull {
@@ -128,6 +157,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(runTimeProvider, (previous, next) {
+      if ((previous != null) != (next != null)) {
+        unawaited(_refreshManagedAccess());
+      }
+    });
     final packages = ref.watch(packagesProvider);
     final filtered = productServices.accessControl.filterPackages(
       packages: packages,
@@ -165,6 +199,36 @@ class _AccessViewState extends ConsumerState<AccessView> {
                     }),
             ),
           ),
+          if (_profileManaged && _hasDrift)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      appLocale.accessControlDriftNote,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           Expanded(
             child: DisabledMask(
