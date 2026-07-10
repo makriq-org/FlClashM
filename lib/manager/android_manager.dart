@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flclashx/product/services/product_services.dart';
-import 'package:flclashx/providers/config.dart';
+import 'package:flclashm/product/services/product_services.dart';
+import 'package:flclashm/providers/config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

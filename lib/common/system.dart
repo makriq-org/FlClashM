@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/product/services/product_services.dart';
-import 'package:flclashx/state.dart';
-import 'package:flclashx/widgets/input.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/product/services/product_services.dart';
+import 'package:flclashm/state.dart';
+import 'package:flclashm/widgets/input.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

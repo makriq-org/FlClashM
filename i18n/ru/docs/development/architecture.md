@@ -26,7 +26,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 ## Граница между базой и продуктом
 
-Базовый код вне `lib/product/**` обращается к продуктовому слою только через точки интеграции из `tool/product_touchpoints.json`. Живые `lib/views/**` не дублируются в `lib/product/**`: в base остаются апстримные экраны с минимальными хуками, а fork-only страницы живут в `lib/product/pages/**`.
+Базовый код вне `lib/product/**` обращается к продуктовому слою только через точки интеграции из `tool/product_touchpoints.json`.
 
 ```bash
 dart tool/check_product_boundaries.dart

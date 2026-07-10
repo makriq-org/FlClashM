@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flclashx/clash/clash.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/l10n/l10n.dart';
-import 'package:flclashx/manager/manager.dart';
-import 'package:flclashx/product/services/product_services.dart';
-import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/clash/clash.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/l10n/l10n.dart';
+import 'package:flclashm/manager/manager.dart';
+import 'package:flclashm/product/services/product_services.dart';
+import 'package:flclashm/providers/providers.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,9 +57,6 @@ class ApplicationState extends ConsumerState<Application> {
   void _autoUpdateProfilesTask() {
     _autoUpdateProfilesTaskTimer = Timer(const Duration(minutes: 20), () async {
       await globalState.appController.autoUpdateProfiles();
-      // dispose() may have landed during the await; don't arm a fresh
-      // post-dispose timer that would keep firing.
-      if (!mounted) return;
       _autoUpdateProfilesTask();
     });
   }
@@ -145,29 +141,13 @@ class ApplicationState extends ConsumerState<Application> {
       );
 
   @override
-  void dispose() {
+  Future<void> dispose() async {
     linkManager.destroy();
     globalState.stopGroupsUpdateTask();
     _autoUpdateProfilesTaskTimer?.cancel();
-    if (Platform.isAndroid) {
-      // Activity teardown (recreation, "don't keep activities", OEM kill) must
-      // not shut the core down: the FGS/tunnel outlives the UI by design, and
-      // handleExit()/destroy() here killed the executor under a live VPN.
-      // savePreferences() is debounced/saved-on-pause, so fire-and-forget it to
-      // honor the synchronous State.dispose() contract.
-      unawaited(globalState.appController.savePreferences());
-      super.dispose();
-      return;
-    }
-    // Desktop teardown ends in system.exit(); run it detached so dispose() stays
-    // synchronous (no await before super.dispose()).
-    unawaited(_desktopTeardown());
-    super.dispose();
-  }
-
-  Future<void> _desktopTeardown() async {
     await clashCore.destroy();
     await globalState.appController.savePreferences();
     await globalState.appController.handleExit();
+    super.dispose();
   }
 }

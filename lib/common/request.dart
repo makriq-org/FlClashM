@@ -5,9 +5,9 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/cupertino.dart';
 
 class Request {
@@ -17,11 +17,6 @@ class Request {
         headers: {
           "User-Agent": browserUa,
         },
-        // Without these a profile/subscription fetch over a half-dead uplink
-        // (mobile network, doze-restricted background) hangs forever: the card
-        // spins indefinitely and the auto-update chain stalls until app restart.
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 60),
       ),
     );
     _clashDio = Dio(
@@ -258,11 +253,7 @@ class Request {
       if (response.statusCode != HttpStatus.ok) {
         return false;
       }
-      // Compare against the binary actually on disk, not the build-time
-      // constant — a separately updated core is otherwise reported as a
-      // helper mismatch forever.
-      final diskHash = await coreUpdater.calcCoreSha256();
-      return diskHash != null && (response.data as String) == diskHash;
+      return (response.data as String) == globalState.coreSHA256;
     } catch (_) {
       return false;
     }

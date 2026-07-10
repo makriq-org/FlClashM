@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:flclashx/common/common.dart';
+import 'package:flclashm/common/common.dart';
 
 class ReleaseAsset {
   ReleaseAsset({

@@ -1,4 +1,4 @@
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/models/models.dart';
 
 import '../security/product_security.dart';
 import 'profile_compiler.dart';

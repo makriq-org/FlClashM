@@ -58,6 +58,8 @@
   "logcatDesc": "無効化するとログエントリを非表示",
   "autoCheckUpdate": "自動更新チェック",
   "autoCheckUpdateDesc": "起動時に更新を自動チェック",
+  "includePrereleaseUpdates": "プレリリース更新",
+  "includePrereleaseUpdatesDesc": "ベータ版とプレリリース版を表示",
   "accessControl": "アクセス制御",
   "accessControlDesc": "アプリケーションのプロキシアクセスを設定",
   "application": "アプリケーション設定",
@@ -129,7 +131,7 @@
   "project": "プロジェクト",
   "core": "コア",
   "tabAnimation": "タブアニメーション",
-  "desc": "ClashMetaベースのマルチプラットフォームプロキシクライアント。シンプルで使いやすく、オープンソースで広告なし。",
+  "desc": "FlClashX をベースに mihomo コアを使用する Android 向けプロキシクライアント。オープンソースで広告なし。",
   "startVpn": "VPNを開始中...",
   "stopVpn": "VPNを停止中...",
   "discovery": "新しいバージョンを発見",
@@ -159,6 +161,9 @@
   "discoverNewVersion": "新バージョンを発見",
   "checkUpdateError": "アプリは最新版です",
   "goDownload": "ダウンロードへ",
+  "later": "後で",
+  "skipVersion": "このバージョンをスキップ",
+  "downloadUpdate": "更新をダウンロード中",
   "unknown": "不明",
   "geoData": "地域データ",
   "externalResources": "外部リソース",
@@ -436,9 +441,5 @@
   "subscriptionExpiresToday": "サブスクリプションは本日期限切れになります",
   "subscriptionExpired": "サブスクリプションが期限切れになりました",
   "renew": "更新",
-  "announcement": "お知らせ",
-  "batteryOptimization": "バッテリー最適化",
-  "batteryOptimizationDesc": "バックグラウンドでVPNが終了されないようアプリを除外します",
-  "autoStart": "自動起動",
-  "autoStartDesc": "再起動や更新後もVPNが復帰するよう自動起動を許可します（MIUI/EMUIなど）"
+  "announcement": "お知らせ"
 }

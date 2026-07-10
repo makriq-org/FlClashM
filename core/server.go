@@ -41,34 +41,23 @@ func send(data []byte) {
 
 func startServer(arg string) {
 
-	_, numErr := strconv.Atoi(arg)
+	_, err := strconv.Atoi(arg)
 
-	var c net.Conn
-	var err error
-	if numErr != nil {
-		c, err = net.Dial("unix", arg)
+	if err != nil {
+		conn, err = net.Dial("unix", arg)
 	} else {
-		c, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%s", arg))
+		conn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%s", arg))
 	}
 	if err != nil {
 		fmt.Printf("startServer: connection failed: %v\n", err)
 		return
 	}
 
-	connMu.Lock()
-	conn = c
-	connMu.Unlock()
+	defer func(conn net.Conn) {
+		_ = conn.Close()
+	}(conn)
 
-	defer func() {
-		connMu.Lock()
-		if conn != nil {
-			_ = conn.Close()
-			conn = nil
-		}
-		connMu.Unlock()
-	}()
-
-	reader := bufio.NewReader(c)
+	reader := bufio.NewReader(conn)
 
 	for {
 		data, err := reader.ReadString('\n')
@@ -80,8 +69,7 @@ func startServer(arg string) {
 		err = json.Unmarshal([]byte(data), action)
 
 		if err != nil {
-			fmt.Printf("startServer: invalid action json: %v\n", err)
-			continue
+			return
 		}
 
 		result := ActionResult{

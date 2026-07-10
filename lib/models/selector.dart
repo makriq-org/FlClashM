@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -185,20 +185,22 @@ extension PackageListSelectorStateExt on PackageListSelectorState {
   List<Package> getSortList(List<String> selectedList) {
     final sort = accessControl.sort;
     return list.sorted(
-      (a, b) {
-        final isSelectA = selectedList.contains(a.packageName);
-        final isSelectB = selectedList.contains(b.packageName);
-        if (isSelectA != isSelectB) {
-          return isSelectA ? -1 : 1;
-        }
-        return switch (sort) {
+      (a, b) => switch (sort) {
           AccessSortType.none => 0,
           AccessSortType.name => utils.sortByChar(
               utils.getPinyin(a.label),
               utils.getPinyin(b.label),
             ),
           AccessSortType.time => b.lastUpdateTime.compareTo(a.lastUpdateTime),
-        };
+        },
+    ).sorted(
+      (a, b) {
+        final isSelectA = selectedList.contains(a.packageName);
+        final isSelectB = selectedList.contains(b.packageName);
+        if (isSelectA && isSelectB) return 0;
+        if (isSelectA) return -1;
+        if (isSelectB) return 1;
+        return 0;
       },
     );
   }

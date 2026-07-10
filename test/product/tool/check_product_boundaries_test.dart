@@ -9,11 +9,11 @@ void main() {
       final imports = collectProductImports(
         '''
 import '../product/platform/platform_profile.dart';
-export 'package:flclashx/product/services/product_services.dart';
+export 'package:flclashm/product/services/product_services.dart';
 import 'package:external_pkg/product/runtime.dart';
         ''',
         sourcePath: 'lib/providers/state.dart',
-        packageName: 'flclashx',
+        packageName: 'flclashm',
       );
 
       expect(imports, <String>{
@@ -32,7 +32,7 @@ import 'package:external_pkg/product/runtime.dart';
           'reason': 'Main may bootstrap into product layer.',
           'targets': ['lib/product/bootstrap/app_bootstrap.dart'],
         },
-        packageName: 'flclashx',
+        packageName: 'flclashm',
       );
 
       expect(touchpoint.targets, ['lib/product/bootstrap/app_bootstrap.dart']);

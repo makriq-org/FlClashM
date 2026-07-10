@@ -7,9 +7,12 @@ import android.graphics.drawable.Drawable
 import android.util.Base64
 import androidx.core.graphics.drawable.toBitmap
 import com.follow.clashx.TempActivity
+import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 suspend fun Drawable.getBase64(): String {
     val drawable = this
@@ -28,3 +31,17 @@ fun Context.getActionIntent(action: String): Intent =
     Intent(this, TempActivity::class.java)
         .setAction(wrapAction(action))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+
+suspend fun <T> MethodChannel.awaitResult(
+    method: String,
+    arguments: Any? = null,
+): T? = withContext(Dispatchers.Main) {
+    suspendCancellableCoroutine { continuation ->
+        invokeMethod(method, arguments, object : MethodChannel.Result {
+            @Suppress("UNCHECKED_CAST")
+            override fun success(result: Any?) = continuation.resume(result as T)
+            override fun error(code: String, message: String?, details: Any?) = continuation.resume(null)
+            override fun notImplemented() = continuation.resume(null)
+        })
+    }
+}

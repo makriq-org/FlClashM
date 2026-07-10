@@ -2,9 +2,17 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import com.follow.clashx.common.BroadcastAction
 import com.follow.clashx.common.GlobalState as CommonGlobalState
+import com.follow.clashx.common.receiveBroadcastFlow
 import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.TilePlugin
@@ -13,6 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -38,13 +49,10 @@ object GlobalState {
     val runLock = Mutex()
     @Volatile var runTime: Long = 0L
     @Volatile var flutterEngine: FlutterEngine? = null
+    @Volatile var startRequestedAt: Long = 0L
 
-    @Volatile private var pendingTimeoutJob: Job? = null
-
-    // seq of the last applied StateHub snapshot (guarded by runLock): an older
-    // snapshot — e.g. a pull that was fetched before a transition but applied
-    // after its push — is dropped instead of regressing the state.
-    private var lastAppliedSeq: Long = 0L
+    private var broadcastJob: Job? = null
+    private var pendingTimeoutJob: Job? = null
 
 
     fun install() {
@@ -54,6 +62,8 @@ object GlobalState {
                     runState.value = state
                     if (state != RunState.PENDING) {
                         pendingTimeoutJob?.cancel()
+                    }
+                    if (state != RunState.PENDING) {
                         runCatching {
                             com.follow.clashx.services.FlClashMTileService.requestUpdate(
                                 CommonGlobalState.application,
@@ -79,39 +89,41 @@ object GlobalState {
                 }
             }
         }
-        // Run-state arrives as StateHub pushes from :remote (registration delivers
-        // a snapshot, then every transition). Replaces the SERVICE_CREATED/
-        // DESTROYED broadcasts together with their late-delivery discriminators —
-        // ordering is now guaranteed by the hub's seq instead of guessed from
-        // timing windows.
-        CommonGlobalState.launch {
-            Service.remoteStateFlow.collect { snap ->
-                if (snap == null) return@collect
-                runLock.withLock { applyRemoteState(snap, notifyDart = true) }
+        broadcastJob?.cancel()
+        broadcastJob = CommonGlobalState.application
+            .receiveBroadcastFlow(
+                BroadcastAction.SERVICE_CREATED.action,
+                BroadcastAction.SERVICE_DESTROYED.action,
+            )
+            .onEach { intent ->
+                when (intent.action) {
+                    BroadcastAction.SERVICE_CREATED.action -> {
+                        Log.d(TAG, "SERVICE_CREATED received")
+                        CommonGlobalState.launch { handleSyncState() }
+                    }
+                    BroadcastAction.SERVICE_DESTROYED.action -> {
+                        Log.d(TAG, "SERVICE_DESTROYED received")
+                        CommonGlobalState.launch {
+                            runLock.withLock {
+                                // A late DESTROYED from a previous service instance can arrive
+                                // after a fresh start. If a start was just requested and the VPN
+                                // flag is active, the new instance is coming up — don't clobber it.
+                                val recentStart =
+                                    android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
+                                if (com.follow.clashx.common.SavedParams.isVpnActive() && recentStart) {
+                                    Log.d(TAG, "SERVICE_DESTROYED ignored: fresh start in progress")
+                                    return@withLock
+                                }
+                                startRequestedAt = 0L
+                                runTime = 0L
+                                runStateFlow.tryEmit(RunState.STOP)
+                                getCurrentTilePlugin()?.handleStop()
+                            }
+                        }
+                    }
+                }
             }
-        }
-    }
-
-    /** Caller must hold [runLock]. Maps a StateHub snapshot onto the UI state. */
-    private fun applyRemoteState(snap: Service.RemoteState, notifyDart: Boolean) {
-        if (snap.seq < lastAppliedSeq) return
-        lastAppliedSeq = snap.seq
-        val state = when {
-            snap.isStarting -> RunState.PENDING
-            snap.isRunning -> RunState.START
-            else -> RunState.STOP
-        }
-        runTime = if (state == RunState.START) snap.startedAt else 0L
-        if (runStateFlow.value != state) {
-            runStateFlow.tryEmit(state)
-            // Externally-driven teardown (notification Stop, revoke, OS kill)
-            // while the Flutter engine is up: tell Dart so its timers/UI stop too
-            // — the contract the old SERVICE_DESTROYED handler provided. Push-path
-            // only: pull-syncs must not re-trigger Dart's stop flow.
-            if (notifyDart && state == RunState.STOP) {
-                getCurrentTilePlugin()?.handleStop()
-            }
-        }
+            .launchIn(CommonGlobalState.scope)
     }
 
 
@@ -121,35 +133,96 @@ object GlobalState {
     fun getCurrentTilePlugin(): TilePlugin? =
         flutterEngine?.plugins?.get(TilePlugin::class.java) as? TilePlugin
 
+    suspend fun getText(text: String): String =
+        getCurrentAppPlugin()?.getText(text) ?: ""
+
+    fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val ctx = CommonGlobalState.application
+        val pm = ctx.getSystemService(PowerManager::class.java) ?: return
+        if (pm.isIgnoringBatteryOptimizations(ctx.packageName)) return
+        val prefs = ctx.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("flutter.battery_opt_prompted", false)) return
+        prefs.edit().putBoolean("flutter.battery_opt_prompted", true).apply()
+        runCatching {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${ctx.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        }
+    }
+
+
     fun syncStatus() {
         CommonGlobalState.launch { handleSyncState() }
     }
 
     suspend fun handleSyncState() {
         runLock.withLock {
-            Service.bind()
-            val snap = Service.fetchServiceState()
-            if (snap != null) {
-                // StateHub owns the truth (including the recovery bias for a fresh
-                // :remote whose sticky cold-start hasn't run yet); just apply it.
-                applyRemoteState(snap, notifyDart = false)
+            val vpnActive = com.follow.clashx.common.SavedParams.isVpnActive()
+            val recentStart = android.os.SystemClock.elapsedRealtime() - startRequestedAt < 15_000L
+            if (!vpnActive) {
+                runTime = 0L
+                runStateFlow.tryEmit(RunState.STOP)
                 return@withLock
             }
-            // :remote unreachable (bind warming up / wedged): fall back to the
-            // persisted intent flag. A failed probe must not flip a live tunnel's
-            // UI to off — the flag-holder recovers via sticky/boot cold-start.
-            Log.w(TAG, "syncState: remote unreachable, deriving from intent flag")
-            if (com.follow.clashx.common.SavedParams.isVpnActive()) {
+            if (!isSystemVpnActive(CommonGlobalState.application) && !recentStart) {
+                com.follow.clashx.common.SavedParams.setVpnActive(false)
+                runTime = 0L
+                runStateFlow.tryEmit(RunState.STOP)
+                return@withLock
+            }
+            runCatching {
+                Service.bind()
+                val rtStr = Service.getRunTimeString() // null => AIDL probe failed/timed out
+                val rt = rtStr?.toLongOrNull() ?: 0L
+                // isVpnActive() (the cross-process file) already established the tunnel
+                // SHOULD be running. Only an authoritative successful probe (rtStr != null)
+                // returning rt == 0 (and no recent start) may downgrade to STOP; a failed
+                // probe must not flip the UI off while the tunnel is genuinely up.
+                val state = when {
+                    rtStr == null -> RunState.START
+                    rt != 0L -> RunState.START
+                    recentStart -> RunState.START
+                    else -> RunState.STOP
+                }
+                if (rtStr != null) runTime = rt
+                if (state == RunState.START) {
+                    if (runTime != 0L) {
+                        // Cache the authoritative start time so a fresh UI process can
+                        // recover it when its own AIDL probe isn't ready yet.
+                        com.follow.clashx.common.SavedParams.setStartTime(runTime)
+                    } else {
+                        // Tunnel is up but we have no runtime (fresh process, probe not
+                        // ready). Report the cached start time (or now) so the UI re-attaches
+                        // instead of reading 0, deciding "stopped", and killing the VPN.
+                        runTime = com.follow.clashx.common.SavedParams.getStartTime()
+                            ?: System.currentTimeMillis().also {
+                                com.follow.clashx.common.SavedParams.setStartTime(it)
+                            }
+                    }
+                }
+                if (runStateFlow.value != state) runStateFlow.tryEmit(state)
+            }.onFailure {
+                Log.w(TAG, "syncState failed: ${it.message}")
                 if (runTime == 0L) {
                     runTime = com.follow.clashx.common.SavedParams.getStartTime()
-                        ?: System.currentTimeMillis()
+                        ?: System.currentTimeMillis().also {
+                            com.follow.clashx.common.SavedParams.setStartTime(it)
+                        }
                 }
                 if (runStateFlow.value != RunState.START) runStateFlow.tryEmit(RunState.START)
-            } else {
-                runTime = 0L
-                if (runStateFlow.value != RunState.STOP) runStateFlow.tryEmit(RunState.STOP)
             }
         }
+    }
+
+    fun isSystemVpnActive(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val activeNetwork = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     /**
@@ -212,14 +285,6 @@ object GlobalState {
     fun handleChangeMode(mode: String) {
         Log.d(TAG, "handleChangeMode: $mode")
         currentMode.postValue(mode)
-        // Headless limitation: the clash mode lives in ClashConfig and only reaches the
-        // core through setupConfig/updateConfig (a full Dart-built config patch), NOT
-        // through the AIDL state path (Service.setState -> RemoteService.setState ->
-        // Core.setState) — the CoreState payload carries vpn-props/profile-name/bypass
-        // only, no mode field. So with no Flutter engine there is no clean way to apply
-        // the mode headlessly; we stash it as pendingMode and apply it when the app next
-        // opens (widgets may visually revert until then). Reusing setState for the mode
-        // would require extending the CoreState contract on both Dart and Go sides.
         getCurrentTilePlugin()?.handleChangeMode(mode)
             ?: run { TilePlugin.setPendingMode(mode) }
     }
@@ -228,46 +293,10 @@ object GlobalState {
         pendingTimeoutJob?.cancel()
         pendingTimeoutJob = CommonGlobalState.launch {
             delay(15_000L)
-            if (runStateFlow.value != RunState.PENDING) return@launch
-            Log.w(TAG, "PENDING timeout: Dart-delegated start unconfirmed")
-            // The Dart side never confirmed the start (engine busy/mid-teardown/
-            // lost channel). Instead of only re-syncing (which leaves the tile stuck
-            // then reverting to OFF), fall back to a headless start from saved params
-            // so the tunnel still comes up. If consent is needed or no params exist,
-            // headless gracefully degrades to launching the activity / syncing.
-            val hasSaved = com.follow.clashx.common.SavedParams.loadQuickStartParams() != null
-            if (hasSaved && !com.follow.clashx.common.SavedParams.isVpnActive()) {
-                runLock.withLock {
-                    if (runStateFlow.value == RunState.PENDING) startHeadlessFromSaved()
-                }
-            } else {
+            if (runStateFlow.value == RunState.PENDING) {
+                Log.w(TAG, "PENDING timeout, forcing sync")
                 handleSyncState()
             }
-        }
-    }
-
-    /** Caller MUST hold [runLock]. Brings the tunnel up headlessly from the
-     *  persisted cold-start params, degrading to consent/activity launch when
-     *  VPN permission isn't yet granted. */
-    private suspend fun startHeadlessFromSaved() {
-        val ctx = CommonGlobalState.application
-        val vpnPrepare = android.net.VpnService.prepare(ctx)
-        if (vpnPrepare != null) {
-            Log.d(TAG, "startHeadlessFromSaved: VPN permission needed")
-            runStateFlow.tryEmit(RunState.STOP)
-            TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
-            launchMainActivity()
-            return
-        }
-        com.follow.clashx.common.SavedParams.setVpnActive(true)
-        runCatching {
-            val intent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
-            androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
-            runStateFlow.tryEmit(RunState.START)
-        }.onFailure {
-            Log.w(TAG, "startHeadlessFromSaved: start failed: ${it.message}")
-            com.follow.clashx.common.SavedParams.setVpnActive(false)
-            runStateFlow.tryEmit(RunState.STOP)
         }
     }
 
@@ -302,12 +331,15 @@ object GlobalState {
         }
 
         com.follow.clashx.common.SavedParams.setVpnActive(true)
+        startRequestedAt = android.os.SystemClock.elapsedRealtime()
         runCatching {
             val intent = android.content.Intent(ctx, com.follow.clashx.service.FlVpnService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
             runStateFlow.tryEmit(RunState.START)
-        }.onFailure {
-            Log.w(TAG, "Direct VPN start failed: ${it.message}")
+            getCurrentAppPlugin()?.requestNotificationsPermission()
+            requestBatteryOptimizationExemption()
+        }.onFailure { error: Throwable ->
+            Log.w(TAG, "Direct VPN start failed: ${error.message}")
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             runStateFlow.tryEmit(RunState.STOP)
             TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
@@ -321,6 +353,7 @@ object GlobalState {
         if (runStateFlow.value == RunState.STOP &&
             !com.follow.clashx.common.SavedParams.isVpnActive()) return
 
+        startRequestedAt = 0L
         com.follow.clashx.common.SavedParams.setVpnActive(false)
         runTime = 0L
         runStateFlow.tryEmit(RunState.STOP)

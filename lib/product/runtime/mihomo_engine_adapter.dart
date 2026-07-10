@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashx/clash/clash.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/models/models.dart';
+import 'package:flclashm/clash/clash.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/models/models.dart';
 
 import '../compile/product_compile.dart';
 import '../services/product_services.dart';

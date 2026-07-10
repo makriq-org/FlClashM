@@ -18,18 +18,12 @@ import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
 
-    private var boundEngine: FlutterEngine? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme()
         super.onCreate(savedInstanceState)
 
         if (Build.VERSION.SDK_INT in Build.VERSION_CODES.R until 36) {
-            // Re-assign via the setter: mutating the getter's LayoutParams in place is
-            // not applied to the window until window.attributes is set again.
-            window.attributes = window.attributes.apply {
-                preferredDisplayModeId = getHighestRefreshRateDisplayMode()
-            }
+            window.attributes.preferredDisplayModeId = getHighestRefreshRateDisplayMode()
         }
     }
 
@@ -71,7 +65,6 @@ class MainActivity : FlutterActivity() {
         flutterEngine.plugins.add(AppPlugin())
         flutterEngine.plugins.add(ServicePlugin())
         flutterEngine.plugins.add(TilePlugin())
-        boundEngine = flutterEngine
         GlobalState.flutterEngine = flutterEngine
 
         GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
@@ -101,15 +94,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        // Clear the global pointer only if it still references THIS activity's
-        // engine. During recreation (theme change, OEM relaunch) the new
-        // activity's configureFlutterEngine can run before this onDestroy; an
-        // unconditional null would wipe the live new engine, forcing tile/widget
-        // actions onto the headless path while a UI is actually on screen.
-        if (GlobalState.flutterEngine === boundEngine) {
-            GlobalState.flutterEngine = null
-        }
-        boundEngine = null
+        GlobalState.flutterEngine = null
         super.onDestroy()
     }
 

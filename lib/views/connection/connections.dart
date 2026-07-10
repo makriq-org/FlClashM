@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flclashx/clash/clash.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
-import 'package:flclashx/widgets/widgets.dart';
+import 'package:flclashm/clash/clash.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/providers/providers.dart';
+import 'package:flclashm/state.dart';
+import 'package:flclashm/widgets/widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,9 +166,9 @@ class _ZashboardButton extends StatelessWidget {
         .trim()
         .replaceAll(RegExp(r'^/+|/+$'), '');
     if (ui.isEmpty) {
-      return '$_publicZashboardBase/#/setup?$query';
+      return '$_publicZashboardBase/#/$query';
     }
-    return 'http://$host:$port/$ui/#/setup?$query';
+    return 'http://$host:$port/$ui/#/$query';
   }
 
   Future<void> _open(BuildContext context) async {

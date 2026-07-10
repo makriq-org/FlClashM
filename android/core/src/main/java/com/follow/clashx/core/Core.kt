@@ -64,6 +64,7 @@ data object Core {
     external fun getRunTime(): String
     external fun getCurrentProfileName(): String
     external fun getAndroidVpnOptions(): String
+    external fun getConfig(s: String): String
 
     // --- External listener (mixed-port etc.) ---------------------------------
 
@@ -81,11 +82,8 @@ data object Core {
         if (address.startsWith("[")) {
             // IPv6: [::1]:port
             val closeBracket = address.indexOf(']')
-            // Malformed ("[::1" / "[::1]" with no port) would make the substrings
-            // throw inside a JNI upcall; degrade to unresolved instead.
-            if (closeBracket < 0) return InetSocketAddress.createUnresolved(address, 0)
             host = address.substring(1, closeBracket)
-            port = address.drop(closeBracket + 2).toIntOrNull() ?: 0
+            port = address.substring(closeBracket + 2).toIntOrNull() ?: 0
         } else {
             host = address.substring(0, lastColon)
             port = address.substring(lastColon + 1).toIntOrNull() ?: 0

@@ -129,7 +129,6 @@ class EngineManager {
   final BuildInitParamsCallback _buildInitParams;
 
   Timer? _updateTimer;
-  int _tasksEpoch = 0;
   RuntimeUpdateTasks _updateTasks = const [];
   DateTime? _startTime;
   _CompiledRuntimePlan? _lastCompiledRuntimePlan;
@@ -161,22 +160,8 @@ class EngineManager {
     return false;
   }
 
-  /// Returns true when the probe succeeded and the start time is now KNOWN
-  /// (possibly null, meaning "confirmed stopped"). Returns false when the
-  /// runtime state is UNKNOWN (probe failed/timed out, e.g. a slow service
-  /// bind on cold start) — callers must not treat "unknown" as "stopped",
-  /// otherwise they'd tear down a possibly-live tunnel.
-  Future<bool> syncStartTime() async {
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      try {
-        _startTime = await _adapter.readStartTime();
-        return true;
-      } catch (e) {
-        commonPrint.log("syncStartTime probe failed (#$attempt): $e");
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
-    return false;
+  Future<void> syncStartTime() async {
+    _startTime = await _adapter.readStartTime();
   }
 
   Future<bool> start({
@@ -387,15 +372,7 @@ class EngineManager {
       return;
     }
 
-    final epoch = ++_tasksEpoch;
     await _executeUpdateTasks();
-    // _stopUpdateTasks() (or a restart) bumped the epoch while the executor
-    // was in flight: don't reschedule, otherwise the poll loop resurrects
-    // itself and keeps hammering a (possibly dead) remote forever after a
-    // stop.
-    if (epoch != _tasksEpoch) {
-      return;
-    }
     _updateTimer = Timer(const Duration(seconds: 3), () {
       unawaited(_startUpdateTasks());
     });
@@ -403,23 +380,15 @@ class EngineManager {
 
   Future<void> _executeUpdateTasks() async {
     for (final task in _updateTasks) {
-      // Isolate failures: one throwing task must not kill the whole loop
-      // (which would silently freeze traffic/runtime counters while the
-      // tunnel is live).
-      try {
-        await task();
-      } catch (e) {
-        commonPrint.log("executeUpdateTasks error: $e");
-      }
+      await task();
     }
     _updateTimer = null;
   }
 
   void _stopUpdateTasks() {
-    // Always invalidate the in-flight cycle (the executor nulls `_updateTimer`
-    // mid-run, so an isActive early-return would let a stop slip through and
-    // the loop would reschedule anyway).
-    _tasksEpoch++;
+    if (!(_updateTimer?.isActive ?? false)) {
+      return;
+    }
     _updateTimer?.cancel();
     _updateTimer = null;
   }

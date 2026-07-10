@@ -11,16 +11,13 @@ data class AccessControlProps(
     val rejectList: List<String> = emptyList(),
 ) : Parcelable
 
-private const val DEFAULT_IPV4_ADDRESS = "172.19.0.1/30"
-private const val DEFAULT_IPV6_ADDRESS = "fdfe:dcba:9876::1/126"
-
 @Parcelize
 data class VpnOptions(
     val enable: Boolean = true,
     val port: Int = 7890,
     val socksPort: Int = 7891,
-    val ipv4Address: String = DEFAULT_IPV4_ADDRESS,
-    val ipv6Address: String = DEFAULT_IPV6_ADDRESS,
+    val ipv4Address: String = "172.19.0.1/30",
+    val ipv6Address: String = "fdfe:dcba:9876::1/126",
     // In-tunnel DNS resolver address supplied by the core (json key "dnsServerAddress").
     // The core hijacks :53 to it and resolves via the active config's dns settings.
     val dnsServerAddress: String = "",
@@ -35,13 +32,8 @@ data class VpnOptions(
     val excludePackage: List<String>? = null,
 ) : Parcelable
 
-// Gson instantiates via Unsafe (no default-arg constructor call), so any field the
-// JSON omits lands as null even in a non-null Kotlin type; every non-null field
-// consumed downstream must be repaired here.
 @Suppress("SENSELESS_COMPARISON")
 fun VpnOptions.gsonSanitized(): VpnOptions = copy(
-    ipv4Address = if (ipv4Address == null) DEFAULT_IPV4_ADDRESS else ipv4Address,
-    ipv6Address = if (ipv6Address == null) DEFAULT_IPV6_ADDRESS else ipv6Address,
     dnsServerAddress = if (dnsServerAddress == null) "" else dnsServerAddress,
     routeAddress = if (routeAddress == null) emptyList() else routeAddress,
     bypassDomain = if (bypassDomain == null) emptyList() else bypassDomain,

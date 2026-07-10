@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/subscription/product_subscription.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/subscription/product_subscription.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

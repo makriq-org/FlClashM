@@ -10,7 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.buildServiceNotification
-import com.follow.clashx.common.startForegroundSafely
+import com.follow.clashx.common.startForeground
 import com.follow.clashx.service.Module
 import com.follow.clashx.service.State
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +34,7 @@ class NotificationModule(service: Service) : Module(service) {
         } else {
             0
         }
-        service.startForegroundSafely(GlobalState.NOTIFICATION_ID, notification, fgType)
+        service.startForeground(GlobalState.NOTIFICATION_ID, notification, fgType)
 
         paramsJob = scope.launch {
             State.notificationParamsFlow.collectLatest { params ->

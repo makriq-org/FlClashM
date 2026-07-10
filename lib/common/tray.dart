@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:flclashx/common/system.dart';
-import 'package:flclashx/common/utils.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/common/system.dart';
+import 'package:flclashm/common/utils.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';

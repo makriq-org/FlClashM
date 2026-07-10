@@ -51,26 +51,20 @@ func (t *TunHandler) close() {
 		log.Warnln("TunHandler.close: drain timed out, leaking callback global ref to avoid use-after-free")
 	}
 	removeTunHook()
-	// Capture and clear the listener BEFORE closing it. On the drain-timeout path
-	// the handler is otherwise left intact, so without clearing here the next
-	// handleStopTun would call Close() a second time on the same (already closed)
-	// listener. In-flight Protect/ResolveProcess don't read t.listener after their
-	// nil-guard, so clearing it now is safe for them.
-	l := t.listener
-	t.listener = nil
-	if l != nil {
-		_ = l.Close()
+	if t.listener != nil {
+		_ = t.listener.Close()
 	}
 	if drained {
 		if t.callback != nil {
 			releaseObject(t.callback)
 		}
 		t.callback = nil
+		t.listener = nil
 	}
-	// Timeout path: t.callback is intentionally left intact (and its global ref
-	// leaked, not released). An in-flight Protect/ResolveProcess still holding a
-	// permit is already past its t.listener nil-guard and may read t.callback;
-	// writing nil here would race and could hand a null jobject to the JVM.
+	// Timeout path: intentionally leave t.callback/t.listener intact. An in-flight
+	// Protect/ResolveProcess (still holding a permit, already past its nil-guard) may
+	// read t.callback; writing nil here would race and could hand a null jobject to
+	// the JVM. The global ref is deliberately leaked (not released) so it stays valid.
 }
 
 func (t *TunHandler) handleProtect(fd int) {
@@ -99,7 +93,7 @@ func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	case "tcp", "tcp4", "tcp6":
 		protocol = syscall.IPPROTO_TCP
 	}
-	if version.Load() < 29 {
+	if version < 29 {
 		uid = platform.QuerySocketUidFromProcFs(source, target)
 	}
 	return ResolveProcess(t.callback, protocol, source.String(), target.String(), uid)
@@ -116,7 +110,6 @@ func handleStopTun() {
 	tunLock.Lock()
 	defer tunLock.Unlock()
 	runTime = nil
-	tunUp.Store(false)
 	if tunHandler != nil {
 		tunHandler.close()
 	}
@@ -182,10 +175,6 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	} else if callback != nil {
 		releaseObject(callback)
 	}
-	// The TUN is up. A headless tile/boot start reaches here without ever calling
-	// startListener (so isRunning stays false); tunUp lets the connections "Journal"
-	// forwarder run for this tunnel once the UI is foregrounded (see hub.go).
-	tunUp.Store(true)
 	return true
 }
 
@@ -199,19 +188,12 @@ func handleGetRunTime() string {
 }
 
 func initTunHook() {
-	// Capture the handler locally so the hooks bind to THIS generation's handler.
-	// The global tunHandler is set to nil on failure paths (after removeTunHook);
-	// a dial goroutine that read the hook before removeTunHook would otherwise
-	// deref a nil global and panic the whole :remote process. handleProtect/
-	// handleResolveProcess nil-guard their own listener, so a stale-but-non-nil
-	// handler is safe. This also prevents cross-generation callback bleed.
-	h := tunHandler
 	dialer.DefaultSocketHook = func(network, address string, conn syscall.RawConn) error {
 		if platform.ShouldBlockConnection() {
 			return errBlocked
 		}
 		return conn.Control(func(fd uintptr) {
-			h.handleProtect(int(fd))
+			tunHandler.handleProtect(int(fd))
 		})
 	}
 	process.DefaultPackageNameResolver = func(metadata *constant.Metadata) (string, error) {
@@ -219,7 +201,7 @@ func initTunHook() {
 		if src == nil || dst == nil {
 			return "", process.ErrInvalidNetwork
 		}
-		return h.handleResolveProcess(src, dst), nil
+		return tunHandler.handleResolveProcess(src, dst), nil
 	}
 }
 

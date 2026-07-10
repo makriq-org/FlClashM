@@ -7,11 +7,11 @@ require (
 	golang.org/x/sync v0.11.0
 )
 
-// Newer browser fingerprints (Firefox 148, Safari 26.3) live on the upstream
-// `v1.9.0-mod-meta` branch, which is a branch (not a tag) -> pseudo-version
-// v0.0.0-..., lower than mihomo's pinned v1.8.4. Force it via replace so
-// `client-fingerprint: firefox` / `safari` resolve to the new specs.
-replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260312170409-baeb46d2f908
+// Local utls fork adding newer browser fingerprints (Firefox 148, Safari 26.3)
+// back-ported from refraction-networking/utls main. Bumped HelloFirefox_Auto /
+// HelloSafari_Auto make `client-fingerprint: firefox` / `safari` resolve to the
+// new specs without forking mihomo.
+replace github.com/metacubex/utls => ./utls
 
 require (
 	github.com/RyuaNerin/go-krypto v1.3.0 // indirect
@@ -54,6 +54,7 @@ require (
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/reedsolomon v1.12.3 // indirect
+	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78 // indirect
@@ -131,6 +132,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	gitlab.com/go-extension/aes-ccm v0.0.0-20230221065045-e58665ef23c7 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
+	go.uber.org/automaxprocs v1.6.0 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto v0.33.0 // indirect
@@ -144,5 +146,6 @@ require (
 	golang.org/x/time v0.10.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

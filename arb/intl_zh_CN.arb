@@ -441,9 +441,5 @@
   "subscriptionExpiresToday": "您的订阅今天到期",
   "subscriptionExpired": "您的订阅已过期",
   "renew": "续订",
-  "announcement": "公告",
-  "batteryOptimization": "电池优化",
-  "batteryOptimizationDesc": "将应用加入白名单，避免系统在后台杀死 VPN",
-  "autoStart": "自启动",
-  "autoStartDesc": "允许后台自启动，使 VPN 在重启和更新后仍能恢复（MIUI/EMUI 等）"
+  "announcement": "公告"
 }

@@ -1,14 +1,11 @@
 package com.follow.clashx.service.modules
 
 import android.app.Service
-import android.content.Context
-import android.os.PowerManager
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.core.Core
 import com.follow.clashx.core.InvokeInterface
 import com.follow.clashx.service.Module
 import com.follow.clashx.service.State
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,11 +24,7 @@ class HealthCheckModule(service: Service) : Module(service) {
     // cancelled the instant the module is uninstalled (service stop), releasing
     // checkLock / the InvokeInterface callback instead of lingering on the
     // process-wide scope for up to CHECK_TIMEOUT_MS.
-    // @Volatile: reassigned on install()'s coroutine thread but read from the
-    // ConnectivityManager callback thread in scheduleCheck() — needs safe publication.
-    @Volatile
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    @Volatile
     private var periodicJob: Job? = null
     private val checkLock = Mutex()
 
@@ -43,30 +36,14 @@ class HealthCheckModule(service: Service) : Module(service) {
     @Volatile
     private var lastNetworkCheckAt = 0L
 
-    // Set when a periodic cycle was suppressed because the screen was off; consumed
-    // by the screen-on catch-up (SuspendModule -> scheduleCatchUpCheck) so short
-    // screen-off windows don't add a probe on every unlock.
-    @Volatile
-    private var missedPeriodicWhileDark = false
-
     override suspend fun install() {
         runCatching { scope.cancel() }
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         consecutiveFailures = 0
         lastNetworkCheckAt = 0L
-        missedPeriodicWhileDark = false
         periodicJob = scope.launch {
             while (true) {
                 delay(INTERVAL_MS)
-                // Screen off / doze: skip the probe instead of waking the radio out
-                // of idle (an RRC promotion per cycle — classic standby drain) for a
-                // tunnel nobody is using. Recovery while dark still happens via the
-                // network-change triggers; a wedge with NO network event is repaired
-                // by the screen-on catch-up probe before the user starts browsing.
-                if (!isInteractive()) {
-                    missedPeriodicWhileDark = true
-                    continue
-                }
                 runCheck("periodic")
             }
         }
@@ -76,25 +53,6 @@ class HealthCheckModule(service: Service) : Module(service) {
         runCatching { scope.cancel() }
         periodicJob = null
         consecutiveFailures = 0
-        missedPeriodicWhileDark = false
-    }
-
-    private fun isInteractive(): Boolean {
-        val pm = service.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
-        return pm.isInteractive
-    }
-
-    /**
-     * Screen-on catch-up: probe only when a periodic cycle was actually suppressed
-     * while the screen was off — preserves the backstop's at-most-one-probe-per-
-     * interval budget instead of probing on every unlock. Runs through
-     * [scheduleCheck], so it shares the network debounce (a probe that just ran for
-     * a network event makes the catch-up redundant anyway).
-     */
-    fun scheduleCatchUpCheck() {
-        if (!missedPeriodicWhileDark) return
-        missedPeriodicWhileDark = false
-        scheduleCheck("screen-on")
     }
 
     /**
@@ -114,11 +72,7 @@ class HealthCheckModule(service: Service) : Module(service) {
     suspend fun runCheck(reason: String) {
         if (State.runTime == 0L) return
         checkLock.withLock {
-            // Cancellation (service stop -> scope.cancel()) must propagate, not count
-            // as a failed probe: swallowing it ran recover() -> resetConnections()
-            // during teardown — and on a fast off->on that reset could land AFTER the
-            // next start and cut the fresh tunnel's connections.
-            val ok: Boolean? = try {
+            val ok = runCatching {
                 withTimeoutOrNull(CHECK_TIMEOUT_MS) {
                     suspendCancellableCoroutine { cont ->
                         // Lightweight liveness probe: ONE generate_204 through the
@@ -134,11 +88,7 @@ class HealthCheckModule(service: Service) : Module(service) {
                         })
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                null
-            }
+            }.getOrNull()
 
             if (ok == true) {
                 if (consecutiveFailures > 0) {
@@ -161,8 +111,7 @@ class HealthCheckModule(service: Service) : Module(service) {
 
     companion object {
         // Backstop cadence only: network change/restore/validated events trigger
-        // their own (debounced) checks, so the periodic loop can be infrequent —
-        // and it fires only while the device is interactive (see install()).
+        // their own (debounced) checks, so the periodic loop can be infrequent.
         // Combined with the single-probe healthProbe this slashes screen-off radio/CPU.
         private const val INTERVAL_MS = 15 * 60 * 1000L
         private const val CHECK_TIMEOUT_MS = 30_000L

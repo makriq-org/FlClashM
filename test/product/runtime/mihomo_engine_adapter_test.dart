@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/compile/product_compile.dart';
-import 'package:flclashx/product/runtime/built_in_proxy_supervisor.dart';
-import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
-import 'package:flclashx/product/runtime/mihomo_engine_adapter.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/product/compile/product_compile.dart';
+import 'package:flclashm/product/runtime/built_in_proxy_supervisor.dart';
+import 'package:flclashm/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashm/product/runtime/mihomo_engine_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

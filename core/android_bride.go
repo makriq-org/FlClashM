@@ -155,33 +155,15 @@ func registerCallbacks(
 	callbacksMu.Unlock()
 }
 
-// hasEventListener lets sendMessage skip the JSON marshal entirely when nobody
-// is attached (emitEvent would drop the payload after the fact anyway).
-func hasEventListener() bool {
-	eventListenerMu.Lock()
-	defer eventListenerMu.Unlock()
-	return eventListener != nil
-}
-
 //export setEventListener
 func setEventListener(listener unsafe.Pointer) {
 	// Release the previous global ref while still holding the mutex so it cannot
 	// race a concurrent emitEvent dispatching on prev.
 	eventListenerMu.Lock()
+	defer eventListenerMu.Unlock()
 	prev := eventListener
 	eventListener = listener
 	if prev != nil {
 		releaseObject(prev)
-	}
-	eventListenerMu.Unlock()
-	// nil means no UI is attached anymore — either a deliberate shutdown or the
-	// binder DeathRecipient firing after the :app process died. Drop to background
-	// cadence as well: if the UI died before Dart's lifecycle handler could send
-	// setUiActive(false), the flag would stay true forever — the request forwarder
-	// kept polling every 4s and touchProviders kept every url-test provider warm,
-	// pinging the whole node list over the radio with no UI to look at it. Any new
-	// UI re-asserts true on attach (AppStateManager initState + resumed).
-	if listener == nil {
-		handleSetUiActive(false)
 	}
 }

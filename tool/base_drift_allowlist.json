@@ -281,9 +281,29 @@
       "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
     },
     {
+      "path": "lib/clash/core.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/clash/interface.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/clash/lib.dart",
       "bucket": "budget",
       "reason": "Канал связи с Android service и quick-start остаётся базовым runtime-мостом."
+    },
+    {
+      "path": "lib/clash/message.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/clash/service.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/common/android.dart",
@@ -291,14 +311,44 @@
       "reason": "Выходной хук перенесён в product service, чтобы base не зависел от desktop app-plugin."
     },
     {
+      "path": "lib/common/app_localizations.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/common/constant.dart",
       "bucket": "budget",
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/context.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/datetime.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/dav_client.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Имена логов синхронизированы с идентичностью FlClashM."
+    },
+    {
+      "path": "lib/common/function.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/future.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/common/http.dart",
@@ -311,9 +361,49 @@
       "reason": "Исправление initial link и дедупликации deep-link событий принято в бюджет."
     },
     {
+      "path": "lib/common/lock.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/measure.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/mixin.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/navigation.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/navigator.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/num.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/common/path.dart",
       "bucket": "budget",
       "reason": "Имя lock-файла синхронизировано с идентичностью FlClashM."
+    },
+    {
+      "path": "lib/common/picker.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/preferences.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/common/print.dart",
@@ -321,14 +411,44 @@
       "reason": "Префикс логов синхронизирован с идентичностью FlClashM."
     },
     {
+      "path": "lib/common/proxy.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/render.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/common/request.dart",
       "bucket": "budget",
       "reason": "Общий сетевой багфикс загрузки и mixed-port принят в бюджет base-слоя."
     },
     {
+      "path": "lib/common/scroll.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/common/system.dart",
       "bucket": "budget",
       "reason": "System держит только тонкий platform-call для Android task-back; остальная дельта не продуктовая и дальше не дробится."
+    },
+    {
+      "path": "lib/common/text.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/theme.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/common/tray.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/common/utils.dart",
@@ -341,9 +461,19 @@
       "reason": "Windows protocol registration сведён к актуальным схемам форка: clash и flclashm."
     },
     {
+      "path": "lib/common/windows.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/controller.dart",
       "bucket": "budget",
       "reason": "Базовый оркестратор runtime и состояния; это осознанный якорь форка."
+    },
+    {
+      "path": "lib/enum/enum.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/main.dart",
@@ -366,9 +496,29 @@
       "reason": "Координация слушателя runtime-конфига и подавление лишних обновлений относятся к базовой runtime-оркестрации."
     },
     {
+      "path": "lib/manager/hotkey_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/manager/manager.dart",
       "bucket": "budget",
       "reason": "Экспорт legacy TileManager убран после переноса обработки плитки в product Android shell bridge."
+    },
+    {
+      "path": "lib/manager/message_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/manager/proxy_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/manager/theme_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/manager/tile_manager.dart",
@@ -376,9 +526,44 @@
       "reason": "Удалена legacy-обвязка плитки; cold-start события теперь держит product Android shell bridge."
     },
     {
+      "path": "lib/manager/tray_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/manager/vpn_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/manager/window_manager.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/models/app.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/models/clash_config.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/models/common.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/models/config.dart",
       "bucket": "budget",
       "reason": "Продуктовые поля на base-модели (обновления и пр.) + переименование пакета; в product-слой поля не вынести без слома base-потребителей."
+    },
+    {
+      "path": "lib/models/core.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/models/generated/config.freezed.dart",
@@ -391,9 +576,24 @@
       "reason": "Генерируемый файл (build_runner); дрейф — следствие продуктовых полей модели."
     },
     {
+      "path": "lib/models/generated/core.g.dart",
+      "bucket": "budget",
+      "reason": "Генерируемый файл (build_runner сломан в окружении); запись setUiActive в _$ActionMethodEnumMap добавлена вручную по конвенции репо (7fb3020d, d67088dd) — без неё JsonUnsupportedObjectError."
+    },
+    {
       "path": "lib/models/profile.dart",
       "bucket": "budget",
       "reason": "Продуктовые поля на base-модели Profile + переименование пакета; вынос невозможен без слома base."
+    },
+    {
+      "path": "lib/models/selector.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/pages/editor.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/pages/home.dart",
@@ -401,19 +601,24 @@
       "reason": "Дифф сведен к выбору мобильного навбара через селектор режима; страница уже остается тонким потребителем."
     },
     {
-      "path": "lib/pages/pages.dart",
-      "bucket": "budget",
-      "reason": "Barrel экспортирует тонкий mount send-to-TV страницы и не тянет в себя продуктовую реализацию."
+      "path": "lib/pages/scan.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/pages/send_to_tv_page.dart",
       "bucket": "budget",
-      "reason": "Тонкий base-mount держит доступной форковую страницу TV sync из lib/product/pages."
+      "reason": "Тонкая точка монтирования продуктовой страницы TV sync после инкапсуляции."
     },
     {
       "path": "lib/plugins/app.dart",
       "bucket": "budget",
       "reason": "Нативный канал вызовов для списка установленных пакетов относится к нативному bridge-слою форка."
+    },
+    {
+      "path": "lib/plugins/service.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/plugins/tile.dart",
@@ -424,6 +629,11 @@
       "path": "lib/plugins/vpn.dart",
       "bucket": "budget",
       "reason": "Тонкий мост к нативной VPN-службе является осознанной base-обвязкой."
+    },
+    {
+      "path": "lib/providers/app.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/providers/config.dart",
@@ -453,17 +663,37 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
+      "reason": "Тонкая точка монтирования продуктового about-экрана после инкапсуляции."
     },
     {
       "path": "lib/views/access.dart",
       "bucket": "budget",
-      "reason": "Живой редактор доступа использует product AccessControlService только как источник состояния, пакетов и profile-managed lock."
+      "reason": "Тонкая точка монтирования продуктового редактора доступа после инкапсуляции."
     },
     {
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
-      "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/backup_and_recovery.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/config/config.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/config/dns.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/config/general.dart",
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/config/network.dart",
@@ -471,49 +701,314 @@
       "reason": "Убран шумный отладочный лог TunStackItem; форматный дрейф откатан к апстриму."
     },
     {
+      "path": "lib/views/connection/connections.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/connection/item.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/connection/requests.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
       "path": "lib/views/dashboard/dashboard.dart",
       "bucket": "budget",
-      "reason": "Живой dashboard оставлен в base и держит только hero-layout и lock-гейты через продуктовые селекторы."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/announce_widget.dart",
       "bucket": "budget",
-      "reason": "Живой announce-виджет читает текст только через currentProductDisplayHintsProvider."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
     },
     {
       "path": "lib/views/dashboard/widgets/change_server_button.dart",
       "bucket": "budget",
-      "reason": "Живой change-server виджет берет имя server-info группы из product display hints, без разбора headers в UI."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/hero_connect.dart",
+      "bucket": "budget",
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/hero_nav_bar.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/intranet_ip.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/memory_info.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/views/dashboard/widgets/metainfo_widget.dart",
       "bucket": "budget",
-      "reason": "Живой metainfo-виджет читает support URL через product display hints и снова использует обычный URLFormDialog."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/network_detection.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/network_speed.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/outbound_mode.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/quick_options.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/views/dashboard/widgets/service_info_widget.dart",
       "bucket": "budget",
-      "reason": "Живой service-info виджет берет брендовые поля и ссылку поддержки через product display hints."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/start_button.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/views/dashboard/widgets/stats_grid.dart",
       "bucket": "budget",
-      "reason": "Живой StatsGrid хранит runtime-pill для hero-dashboard без отдельной product-копии."
+      "reason": "Тонкая точка монтирования product-виджета после инкапсуляции."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/traffic_usage.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/developer.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/hotkey.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/logs.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/profiles/add_profile.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/views/profiles/edit_profile.dart",
       "bucket": "budget",
-      "reason": "Живой редактор профиля валидирует конфиг через globalState.validateProfileConfigText при редактировании и сохранении."
+      "reason": "Тонкая точка монтирования продуктового редактора профиля после инкапсуляции."
+    },
+    {
+      "path": "lib/views/profiles/override_profile.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     },
     {
       "path": "lib/views/profiles/profiles.dart",
       "bucket": "budget",
-      "reason": "Живой список профилей сохраняет send-to-TV и advisory support link без отдельной product-копии."
+      "reason": "Тонкая точка монтирования продуктовой страницы профилей после инкапсуляции."
     },
     {
       "path": "lib/views/profiles/receive_profile_dialog.dart",
       "bucket": "budget",
       "reason": "Запуск фонового сервера в initState помечен через unawaited, чтобы не терять Future."
+    },
+    {
+      "path": "lib/views/profiles/scripts.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/card.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/common.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/list.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/providers.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/proxies.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/setting.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/proxies/tab.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/resources.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/theme.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/views/tools.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/bar_chart.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/card.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/chip.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/color_scheme_box.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/dialog.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/donut_chart.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/fade_box.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/flag.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/grid.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/icon.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/input.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/line_chart.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/list.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/notification.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/pop_scope.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/popup.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/scaffold.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/scroll.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/setting.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/sheet.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/side_sheet.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/subscription_info_view.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/super_grid.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
+    },
+    {
+      "path": "lib/widgets/text.dart",
+      "bucket": "rename",
+      "reason": "Нормализация package-импортов flclashx→flclashm для имени форка; откат не нужен."
     }
   ]
 }

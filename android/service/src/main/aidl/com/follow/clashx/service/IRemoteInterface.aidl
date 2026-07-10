@@ -3,7 +3,6 @@ package com.follow.clashx.service;
 import com.follow.clashx.service.ICallbackInterface;
 import com.follow.clashx.service.IEventInterface;
 import com.follow.clashx.service.IResultInterface;
-import com.follow.clashx.service.IStateCallback;
 import com.follow.clashx.service.IVoidInterface;
 import com.follow.clashx.service.models.NotificationParams;
 import com.follow.clashx.service.models.VpnOptions;
@@ -24,15 +23,6 @@ interface IRemoteInterface {
     void stopService(in IResultInterface result);
 
     void setEventListener(in IEventInterface event);
-
-    // Run-state ownership (StateHub): register delivers the current snapshot
-    // immediately, then every transition. getServiceState is the pull fallback
-    // for consumers that only need a one-shot answer.
-    void registerStateCallback(in IStateCallback callback);
-
-    void unregisterStateCallback(in IStateCallback callback);
-
-    String getServiceState();
 
     void setState(in String state);
 

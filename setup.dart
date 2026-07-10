@@ -5,9 +5,9 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
-import 'package:flclashx/product/runtime/byedpi_release.dart';
-import 'package:flclashx/product/runtime/naiveproxy_release.dart';
-import 'package:flclashx/product/runtime/olcrtc_release.dart';
+import 'package:flclashm/product/runtime/byedpi_release.dart';
+import 'package:flclashm/product/runtime/naiveproxy_release.dart';
+import 'package:flclashm/product/runtime/olcrtc_release.dart';
 
 const _appName = 'FlClashM';
 const _coreDir = 'core';

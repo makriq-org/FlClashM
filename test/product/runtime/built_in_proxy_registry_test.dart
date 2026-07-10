@@ -1,4 +1,4 @@
-import 'package:flclashx/product/runtime/product_runtime.dart';
+import 'package:flclashm/product/runtime/product_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

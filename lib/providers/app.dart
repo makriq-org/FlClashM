@@ -1,7 +1,7 @@
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -315,9 +315,9 @@ class DelayDataSource extends _$DelayDataSource with AutoDisposeNotifierMixin {
   void setDelay(Delay delay) {
     if (state[delay.url]?[delay.name] != delay.value) {
       final newDelayMap = Map<String, Map<String, int?>>.from(state);
-      newDelayMap[delay.url] = Map<String, int?>.from(
-        newDelayMap[delay.url] ?? <String, int?>{},
-      );
+      if (newDelayMap[delay.url] == null) {
+        newDelayMap[delay.url] = <String, int?>{};
+      }
       newDelayMap[delay.url]![delay.name] = delay.value;
       state = newDelayMap;
     }

@@ -1,8 +1,8 @@
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/models/models.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashm/common/common.dart';
+import 'package:flclashm/enum/enum.dart';
+import 'package:flclashm/models/models.dart';
+import 'package:flclashm/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -503,23 +503,6 @@ bool hasServiceInfoData(Ref ref) => ref.watch(
       ),
     );
 
-// `flclashx-background` is "<url>" or "<url>,<opacity 1-100>" (opacity = how visible
-// the background image is; higher = more visible; absent = the default dimmed look).
-String? backgroundUrlFromHeader(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final i = raw.indexOf(',');
-  final url = (i >= 0 ? raw.substring(0, i) : raw).trim();
-  return url.isEmpty ? null : url;
-}
-
-int? backgroundOpacityFromHeader(String? raw) {
-  if (raw == null) return null;
-  final i = raw.indexOf(',');
-  if (i < 0) return null;
-  final v = int.tryParse(raw.substring(i + 1).trim());
-  return v == null ? null : v.clamp(1, 100);
-}
-
 @riverpod
 bool hasServerInfoData(Ref ref) => ref.watch(
       currentProductDisplayHintsProvider.select(
@@ -527,26 +510,12 @@ bool hasServerInfoData(Ref ref) => ref.watch(
       ),
     );
 
-// The background hint arrives via the product display hints (flclashm-background
-// header, parsed by the product layer) instead of raw provider headers, but uses
-// upstream's "<url>[,<opacity>]" format helpers above.
 @riverpod
-String? backgroundUrl(Ref ref) {
-  final raw = ref.watch(
-    currentProductDisplayHintsProvider.select((state) => state.backgroundUrl),
-  );
-  return backgroundUrlFromHeader(raw);
-}
-
-/// Background image opacity (1-100, higher = more visible) parsed from the optional
-/// `,<opacity>` suffix of the background hint. Null = not specified (default look).
-@riverpod
-int? backgroundOpacity(Ref ref) {
-  final raw = ref.watch(
-    currentProductDisplayHintsProvider.select((state) => state.backgroundUrl),
-  );
-  return backgroundOpacityFromHeader(raw);
-}
+String? backgroundUrl(Ref ref) => ref.watch(
+      currentProductDisplayHintsProvider.select(
+        (state) => state.backgroundUrlOrNull,
+      ),
+    );
 
 @riverpod
 int getProxiesColumns(Ref ref) {
@@ -560,20 +529,18 @@ int getProxiesColumns(Ref ref) {
 ProxyCardState _getProxyCardState(
   List<Group> groups,
   SelectedMap selectedMap,
-  ProxyCardState proxyDelayState, [
-  int depth = 0,
-]) {
-  if (depth > 16) return proxyDelayState;
+  ProxyCardState proxyDelayState,
+) {
   if (proxyDelayState.proxyName.isEmpty) return proxyDelayState;
   final index = groups.indexWhere(
     (element) => element.name == proxyDelayState.proxyName,
   );
   if (index == -1) return proxyDelayState;
   final group = groups[index];
-  final currentSelectedName = group
-      .getCurrentSelectedName(selectedMap[proxyDelayState.proxyName] ?? '');
-  if (currentSelectedName.isEmpty ||
-      currentSelectedName == proxyDelayState.proxyName) {
+  final currentSelectedName = group.getCurrentSelectedName(
+    selectedMap[proxyDelayState.proxyName] ?? '',
+  );
+  if (currentSelectedName.isEmpty) {
     return proxyDelayState;
   }
   return _getProxyCardState(
@@ -583,7 +550,6 @@ ProxyCardState _getProxyCardState(
       proxyName: currentSelectedName,
       testUrl: group.testUrl,
     ),
-    depth + 1,
   );
 }
 

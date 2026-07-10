@@ -19,14 +19,13 @@ import com.follow.clashx.service.models.toCIDR
 import com.follow.clashx.service.modules.HealthCheckModule
 import com.follow.clashx.service.modules.NetworkObserveModule
 import com.follow.clashx.service.modules.NotificationModule
-import com.follow.clashx.service.modules.SuspendModule
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.Socket
@@ -41,61 +40,27 @@ class FlVpnService : VpnService(), IBaseService {
     private val binder = LocalBinder()
     private val gson = Gson()
     @Volatile private var tunActive = false
-    @Volatile private var revoked = false
     @Volatile override var destroyed = false
 
-    private fun stopForegroundCompat() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
-    }
-
-    // The foreground notification keeps the process alive but does NOT stop Doze from
-    // throttling the core's threads, so the tunnel needs a PARTIAL_WAKE_LOCK — but we
-    // hold it only while the device is active. SuspendModule lowers it (setAwake(false))
-    // once the system enters Doze so the CPU can deep-sleep, matching upstream's
-    // no-permanent-wakelock battery profile, and raises it again on screen-on.
-    private val wakeLockLock = Any()
+    // Held for the tunnel's lifetime so Doze/App-Standby can't throttle the core's
+    // threads to sleep while the VPN is up (the foreground notification keeps the
+    // process alive but does NOT prevent CPU/network throttling under Doze).
     private var wakeLock: PowerManager.WakeLock? = null
 
     private fun acquireWakeLock() {
-        synchronized(wakeLockLock) {
-            if (wakeLock?.isHeld == true) return
-            runCatching {
-                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FlClashX:vpn-tunnel").apply {
-                    setReferenceCounted(false)
-                    acquire()
-                }
-            }.onFailure { GlobalState.log("acquireWakeLock failed: ${it.message}") }
-        }
+        if (wakeLock?.isHeld == true) return
+        runCatching {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FlClashX:vpn-tunnel").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.onFailure { GlobalState.log("acquireWakeLock failed: ${it.message}") }
     }
 
     private fun releaseWakeLock() {
-        synchronized(wakeLockLock) {
-            runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
-            wakeLock = null
-        }
-    }
-
-    // Driven by SuspendModule from screen/Doze broadcasts. The tunActive re-check and
-    // the acquire run under wakeLockLock — the same monitor releaseWakeLock() takes —
-    // and handleStop() sets tunActive=false *before* releaseWakeLock(), so a late
-    // in-flight broadcast cannot slip a stale re-acquire past teardown (the earlier
-    // unsynchronized check left a TOCTOU window where acquire could land after the
-    // teardown release). The nested acquire/release re-enter wakeLockLock, which is fine.
-    fun setAwake(awake: Boolean) {
-        synchronized(wakeLockLock) {
-            if (!awake) {
-                releaseWakeLock()
-                return
-            }
-            if (!tunActive) return
-            acquireWakeLock()
-        }
+        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        wakeLock = null
     }
 
     private val healthCheckModule = HealthCheckModule(this)
@@ -104,7 +69,6 @@ class FlVpnService : VpnService(), IBaseService {
         install { healthCheckModule }
         install { NetworkObserveModule(it, healthCheckModule) }
         install(::NotificationModule)
-        install { SuspendModule(it, healthCheckModule) }
     }
 
     override fun onCreate() {
@@ -114,19 +78,10 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     private fun startForegroundCompat() {
-        val promoted = promoteToForeground(
+        promoteToForeground(
             R.drawable.ic_notification,
             SavedParams.loadNotificationTitle(),
         )
-        if (!promoted) {
-            // FGS promotion denied (A12+ background restriction, e.g. a STICKY
-            // restart). A started-but-not-foregrounded service crashes with
-            // ForegroundServiceDidNotStartInTimeException ~10s later, and
-            // START_STICKY would turn that into a crash-loop. Stop the started
-            // state instead; an in-flight AIDL bind keeps the service alive.
-            GlobalState.log("FlVpnService: foreground promotion denied, stopping")
-            stopSelf()
-        }
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -141,22 +96,15 @@ class FlVpnService : VpnService(), IBaseService {
                 // then-stopped process that still left the foreground notification up,
                 // guarantee teardown so no empty foreground service lingers.
                 if (!destroyed) {
-                    stopForegroundCompat()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
                     stopSelf()
                 }
             }
-            return START_NOT_STICKY
-        }
-        // A null intent here is a START_STICKY auto-restart by the OS (every explicit
-        // start — app-driven, tile, boot — passes a non-null Intent). onCreate has
-        // already promoted the foreground notification; if there is no VPN to recover,
-        // don't let that notification linger over a non-running core (the "висит до
-        // последнего" orphan after an OEM force-stop). A genuinely-active tunnel
-        // (isVpnActive) still falls through to coldStart and is restored.
-        if (intent == null && !SavedParams.isVpnActive()) {
-            GlobalState.log("FlVpnService: sticky restart with no active VPN, stopping")
-            stopForegroundCompat()
-            stopSelf()
             return START_NOT_STICKY
         }
         if (State.runTime == 0L) {
@@ -181,194 +129,153 @@ class FlVpnService : VpnService(), IBaseService {
     private suspend fun coldStart() {
         State.runLock.withLock {
             if (State.runTime != 0L) return@withLock
-            StateHub.publish(StateHub.STARTING)
-            try {
-                coldStartLocked()
-            } finally {
-                // Every abort path in coldStartLocked stops the service; only a
-                // completed start leaves runTime set. Publish the outcome exactly
-                // once either way (the finally covers early returns and throws).
-                if (State.runTime != 0L) {
-                    StateHub.publishRunning()
+
+            if (!SavedParams.isVpnActive()) {
+                GlobalState.log("Always-on: vpn not active, staying idle")
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
                 } else {
-                    StateHub.publish(StateHub.STOPPED, message = "cold-start aborted")
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
+                return@withLock
+            }
+
+            val params = SavedParams.loadQuickStartParams() ?: run {
+                GlobalState.log("Always-on: no saved params, cannot cold-start")
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
+                return@withLock
+            }
+
+            val runtimeNodes = try {
+                loadColdStartRuntimeNodes()
+            } catch (e: Exception) {
+                GlobalState.log("Always-on: runtime-node state is invalid: ${e.message}")
+                SavedParams.setVpnActive(false)
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
+
+            try {
+                startColdStartRuntimeNodes(runtimeNodes)
+            } catch (e: Exception) {
+                GlobalState.log("Always-on: failed to start runtime nodes: ${e.message}")
+                SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
+
+            val coreResult = withTimeoutOrNull(15_000L) {
+                suspendCancellableCoroutine { cont ->
+                    Core.quickStart(params.init, params.setup, params.state, object : InvokeInterface {
+                        override fun onResult(result: String) {
+                            if (cont.isActive) cont.resume(result)
+                        }
+                    })
                 }
             }
-        }
-    }
 
-    /** Caller must hold [State.runLock]. */
-    private suspend fun coldStartLocked() {
-        // The OS revoked the tunnel while this cold-start was queued; abort
-        // so we don't bring up a tunnel the system is about to tear down.
-        if (revoked) {
-            GlobalState.log("Always-on: revoked before cold-start, aborting")
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
+            if (coreResult == null) {
+                GlobalState.log("Always-on: quickStart timed out")
+                SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
+                runCatching { com.follow.clashx.core.Core.stopTun() }
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
 
-        if (!SavedParams.isVpnActive()) {
-            GlobalState.log("Always-on: vpn not active, staying idle")
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
+            if (coreResult.isNotEmpty()) {
+                GlobalState.log("Always-on: quickStart returned error, aborting: $coreResult")
+                SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
+                runCatching { com.follow.clashx.core.Core.stopTun() }
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
 
-        val params = SavedParams.loadQuickStartParams() ?: run {
-            GlobalState.log("Always-on: no saved params, cannot cold-start")
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
+            val optionsJson = Core.getAndroidVpnOptions()
+            val options = (if (optionsJson.isNotBlank()) {
+                runCatching { gson.fromJson(optionsJson, VpnOptions::class.java) }
+                    .getOrDefault(VpnOptions())
+            } else VpnOptions()).gsonSanitized()
 
-        val runtimeNodes = try {
-            loadColdStartRuntimeNodes()
-        } catch (e: Exception) {
-            GlobalState.log("Always-on: runtime-node state is invalid: ${e.message}")
-            SavedParams.setVpnActive(false)
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
+            State.options = options
+            State.notificationParamsFlow.value = State.notificationParamsFlow.value.copy(
+                title = SavedParams.loadNotificationTitle(),
+            )
 
-        try {
-            startColdStartRuntimeNodes(runtimeNodes)
-        } catch (e: Exception) {
-            GlobalState.log("Always-on: failed to start runtime nodes: ${e.message}")
-            SavedParams.setVpnActive(false)
-            runCatching { RuntimeNodeProcessManager.stopAll() }
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
+            runCatching {
+                handleStart(options)
+            }.onFailure {
+                GlobalState.log("Always-on: handleStart failed: ${it.message}")
+                SavedParams.setVpnActive(false)
+                runCatching { RuntimeNodeProcessManager.stopAll() }
+                runCatching { com.follow.clashx.core.Core.stopTun() }
+                stopForegroundCompat()
+                stopSelf()
+                return@withLock
+            }
 
-        val coreResult = withTimeoutOrNull(15_000L) {
-            suspendCancellableCoroutine { cont ->
-                Core.quickStart(params.init, params.setup, params.state, object : InvokeInterface {
-                    override fun onResult(result: String) {
-                        if (cont.isActive) cont.resume(result)
-                    }
+            State.runTime = SystemClock.uptimeMillis()
+            SavedParams.setVpnActive(true)
+            GlobalState.log("Always-on cold-start completed, runTime=${State.runTime}")
+            // Headless: no Flutter UI exists to drive setUiActive, and the core
+            // defaults uiActive=true. Left true, the health-check forwarder keeps
+            // every proxy provider's url-test warm — pinging the whole node list over
+            // the radio every interval, forever, screen-off. Drop to background
+            // cadence now; when a UI later attaches it raises uiActive (true) again.
+            runCatching {
+                val action =
+                    """{"id":"uia_${System.currentTimeMillis()}","method":"setUiActive","data":false}"""
+                Core.invokeAction(action, object : InvokeInterface {
+                    override fun onResult(result: String) {}
                 })
             }
-        }
-
-        if (coreResult == null) {
-            GlobalState.log("Always-on: quickStart timed out")
-            SavedParams.setVpnActive(false)
-            runCatching { RuntimeNodeProcessManager.stopAll() }
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
-
-        if (coreResult.isNotEmpty()) {
-            GlobalState.log("Always-on: quickStart returned error, aborting: $coreResult")
-            SavedParams.setVpnActive(false)
-            runCatching { RuntimeNodeProcessManager.stopAll() }
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
-
-        val optionsJson = Core.getAndroidVpnOptions()
-        if (optionsJson.isBlank()) {
-            // Empty options (core config not ready / marshal error) would fall
-            // back to a default VpnOptions(): tunnel everything, no access
-            // control — silently losing the user's split-tunneling. Abort
-            // instead of bringing up the wrong tunnel headlessly.
-            GlobalState.log("Always-on: empty vpn options, aborting cold-start")
-            SavedParams.setVpnActive(false)
-            runCatching { RuntimeNodeProcessManager.stopAll() }
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
-        val options = runCatching { gson.fromJson(optionsJson, VpnOptions::class.java) }
-            .getOrDefault(VpnOptions())
-            .gsonSanitized()
-
-        State.options = options
-        State.notificationParamsFlow.value = State.notificationParamsFlow.value.copy(
-            title = SavedParams.loadNotificationTitle(),
-        )
-
-        runCatching {
-            handleStart(options)
-        }.onFailure {
-            GlobalState.log("Always-on: handleStart failed: ${it.message}")
-            SavedParams.setVpnActive(false)
-            runCatching { RuntimeNodeProcessManager.stopAll() }
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            stopForegroundCompat()
-            stopSelf()
-            return
-        }
-
-        State.runTime = SystemClock.uptimeMillis()
-        SavedParams.setVpnActive(true)
-        GlobalState.log("Always-on cold-start completed, runTime=${State.runTime}")
-        // Headless: no Flutter UI exists to drive setUiActive, and the core
-        // defaults uiActive=true. Left true, the health-check forwarder keeps
-        // every proxy provider's url-test warm — pinging the whole node list over
-        // the radio every interval, forever, screen-off. Drop to background
-        // cadence now; when a UI later attaches it raises uiActive (true) again.
-        runCatching {
-            val action =
-                """{"id":"uia_${System.currentTimeMillis()}","method":"setUiActive","data":false}"""
-            Core.invokeAction(action, object : InvokeInterface {
-                override fun onResult(result: String) {}
-            })
         }
     }
 
     override fun onRevoke() {
         // onRevoke runs on the main thread; runBlocking here parks it on the
-        // contended State.runLock (held by in-flight start/stop for up to ~15s),
+        // contended State.runLock (held by in-flight start/stop for up to ~10s),
         // which is well past the ANR threshold. Tear down asynchronously instead —
         // the OS removes the tunnel after onRevoke returns regardless.
-        revoked = true
         GlobalState.launch {
-            // No timeout: the lock may be held up to ~15s by an in-flight
-            // start/cold-start. A bounded wait here would skip handleStop()
-            // entirely and leave a zombie (core alive, wakeLock held,
-            // isVpnActive=1, notification up) over a tunnel the OS already pulled.
-            // The `revoked` flag makes a queued cold-start abort instead of racing.
-            State.runLock.withLock { handleStop() }
-            if (!destroyed) {
-                stopForegroundCompat()
-                stopSelf()
+            withTimeoutOrNull(5000L) {
+                State.runLock.withLock { handleStop() }
             }
         }
         super.onRevoke()
     }
 
     override fun onDestroy() {
-        // tunActive=false BEFORE releaseWakeLock (mirrors handleStop): SuspendModule's
-        // receiver is unregistered only inside loader.stop() below, so until then a
-        // SCREEN_ON/DEVICE_IDLE broadcast → setAwake(true) would otherwise see
-        // tunActive==true and re-acquire the wakelock past this release, leaking it
-        // until the :remote process dies.
-        tunActive = false
         releaseWakeLock()
-        // Only stop the core TUN if this instance is STILL the owner. A fast
-        // off→on may have handed ownership to a newer instance; closing the
-        // global tun here (onDestroy is async, not under runLock) would kill the
-        // new tunnel and leave a "connected" UI over a dead listener.
-        if (State.tunOwner.compareAndSet(this, null)) {
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            // OS-driven destroy of a live tunnel (no handleStop ran): this
-            // instance still owned the tun, so nothing newer is running — zero
-            // runTime so handleDestroy() below reports an honest STOPPED.
-            runCatching { runBlocking { withTimeoutOrNull(3000L) { RuntimeNodeProcessManager.stopAll() } } }
-            State.runTime = 0L
-        }
+        runCatching { runBlocking { withTimeoutOrNull(3000L) { RuntimeNodeProcessManager.stopAll() } } }
+        runCatching { com.follow.clashx.core.Core.stopTun() }
         runCatching { runBlocking { withTimeoutOrNull(3000L) { loader.stop() } } }
+        tunActive = false
         handleDestroy()
         super.onDestroy()
+    }
+
+    private fun stopForegroundCompat() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
     }
 
     private fun loadColdStartRuntimeNodes(): List<ColdStartRuntimeNode> {
@@ -443,11 +350,10 @@ class FlVpnService : VpnService(), IBaseService {
 
     override suspend fun handleStart(options: VpnOptions) {
         State.options = options
-        val builder = Builder()
-            .setSession("FlClashM")
-        // Tunnel DNS comes from the core (it derives the in-tunnel resolver address from
-        // the active config and hijacks :53 to it, resolving via the config's dns section)
-        // — never a hardcoded public DNS. Fall back only to the standard in-tun resolver.
+        acquireWakeLock()
+        val builder = Builder().setSession("FlClashM")
+        // Tunnel DNS comes from the core's current config. Fall back only to the
+        // in-tun resolver address when the option is absent.
         builder.addDnsServer(options.dnsServerAddress.ifBlank { "172.19.0.2" })
 
         if (options.ipv4) options.ipv4Address.toCIDR()?.let { (addr, p) -> builder.addAddress(addr, p) }
@@ -490,19 +396,13 @@ class FlVpnService : VpnService(), IBaseService {
             allInclude.addAll(include)
             allExclude.addAll(exclude)
 
-            // VpnService.Builder interprets zero addAllowedApplication calls as
-            // "all applications". Remove our own package before deciding the mode,
-            // so an empty resolved include list cannot override the hardened
-            // rejectSelected self-bypass.
-            allInclude.remove(packageName)
-            if (allInclude.isNotEmpty()) {
+            if (includeModeRequested) {
                 if (allExclude.isNotEmpty()) {
                     GlobalState.log("Access control: include-package active, exclude-package ignored (Android limitation)")
                 }
+                allInclude.remove(packageName)
                 allInclude.forEach { runCatching { builder.addAllowedApplication(it) } }
-            } else if (
-                allExclude.isNotEmpty() || includeModeRequested || excludeModeRequested
-            ) {
+            } else if (excludeModeRequested) {
                 allExclude.add(packageName)
                 allExclude.forEach { runCatching { builder.addDisallowedApplication(it) } }
             }
@@ -522,11 +422,6 @@ class FlVpnService : VpnService(), IBaseService {
         // here if the core was never reached (loader.start threw before handoff).
         var fdHandedToCore = false
         try {
-            // Acquire the tunnel wakelock only now, after establish() has succeeded.
-            // Acquiring it before this try leaked the lock if Builder setup / establish()
-            // threw: the unwind's ACTION_STOP → handleStop early-returns
-            // (runTime==0 && !tunActive) without ever reaching releaseWakeLock().
-            acquireWakeLock()
             loader.start()
             fdHandedToCore = true
 
@@ -552,15 +447,8 @@ class FlVpnService : VpnService(), IBaseService {
                 },
             )
             if (!started) error("Core.startTun failed")
-            // Claim TUN ownership: from here this instance owns the native core's
-            // tun. onDestroy releases it via CAS so a delayed teardown of THIS
-            // instance can't close a tunnel a newer instance has since brought up.
-            State.tunOwner.set(this)
         } catch (e: Exception) {
             tunActive = false
-            // tunActive=false before releaseWakeLock (mirrors handleStop) so an
-            // in-flight setAwake(true) can't re-acquire the lock past this release.
-            releaseWakeLock()
             // Roll back a partially-completed start: stop modules and native core
             // before reclaiming the fd, so no orphaned Go core / module survives.
             runCatching { loader.stop() }
@@ -585,10 +473,6 @@ class FlVpnService : VpnService(), IBaseService {
         // Stale-profile safety comes from the isVpnActive() gate (cleared above) plus
         // re-persisting params on profile change (controller._persistColdStartParams).
         runCatching { com.follow.clashx.core.Core.stopTun() }
-        runCatching { RuntimeNodeProcessManager.stopAll() }
-        // Release ownership so the trailing onDestroy doesn't redundantly stop the
-        // core (CAS will no-op once cleared).
-        State.tunOwner.compareAndSet(this, null)
         loader.stop()
         handleDestroy()
         stopSelf()
