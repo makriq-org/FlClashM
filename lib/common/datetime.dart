@@ -1,4 +1,4 @@
-import 'package:flclashm/common/app_localizations.dart';
+import 'package:flclashx/common/app_localizations.dart';
 
 extension DateTimeExtension on DateTime {
   bool get isBeforeNow => isBefore(DateTime.now());
@@ -7,7 +7,7 @@ extension DateTimeExtension on DateTime {
     if (dateTime == null) {
       return false;
     }
-    return true;
+    return isBefore(dateTime);
   }
 
   String get lastUpdateTimeDesc {

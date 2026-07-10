@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/android/android_shell_bridge.dart';
-import 'package:flclashm/product/services/android_shell_service.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/android/android_shell_bridge.dart';
+import 'package:flclashx/product/services/android_shell_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

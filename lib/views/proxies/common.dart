@@ -1,8 +1,8 @@
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/state.dart';
 
 double get listHeaderHeight {
   final measure = globalState.measure;
@@ -30,20 +30,29 @@ Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
   if (state.proxyName.isEmpty) {
     return;
   }
-  appController
-    ..setDelay(
-      Delay(
-        url: url,
-        name: state.proxyName,
-        value: 0,
-      ),
-    )
-    ..setDelay(
+  appController.setDelay(
+    Delay(
+      url: url,
+      name: state.proxyName,
+      value: 0,
+    ),
+  );
+  try {
+    appController.setDelay(
       await clashCore.getDelay(
         url,
         state.proxyName,
       ),
     );
+  } catch (_) {
+    appController.setDelay(
+      Delay(
+        url: url,
+        name: state.proxyName,
+        value: -1,
+      ),
+    );
+  }
 }
 
 Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {

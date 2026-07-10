@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/models/models.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flutter/services.dart';
 
 import 'interface.dart';
@@ -24,12 +24,16 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   final MethodChannel _channel =
       const MethodChannel('com.makriq.flclash/service');
   Completer<bool> _initCompleter = Completer<bool>();
+  // Guards against launching a second concurrent native `init` while a prior
+  // _init() is still awaiting (its completer not yet settled).
+  bool _initInFlight = false;
 
   static const int _maxCrashRetries = 5;
   int _crashCount = 0;
   DateTime? _lastCrashTime;
 
   Future<void> _init() async {
+    _initInFlight = true;
     try {
       await _channel
           .invokeMethod<String>('init')
@@ -39,6 +43,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     } catch (e) {
       commonPrint.log('ClashLib init failed: $e');
       if (!_initCompleter.isCompleted) _initCompleter.complete(false);
+    } finally {
+      _initInFlight = false;
     }
   }
 
@@ -66,6 +72,12 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
       'retrying in ${delayMs}ms',
     );
     await Future.delayed(Duration(milliseconds: delayMs));
+    // A prior _init() may already be running (e.g. another crash arrived mid-
+    // init); don't spawn a second concurrent native init.
+    if (_initInFlight) {
+      commonPrint.log('service crash restart skipped: init already in flight');
+      return;
+    }
     if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
   }
@@ -116,7 +128,22 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   void reconnectIfNeeded() {
-    if (_crashCount <= _maxCrashRetries && _initCompleter.isCompleted) return;
+    // An init is already running (completer not yet settled); let it finish
+    // rather than spawning a second concurrent native init.
+    if (_initInFlight) {
+      return;
+    }
+    // Re-register on EVERY resume (no _initSucceeded short-circuit): the event pipe is
+    // registered once per Flutter engine, but a warm app-open after a headless tile
+    // start keeps this engine alive while the :remote core it registered against has
+    // been recycled (eventListener==nil) — so logs/journal/delays silently stop
+    // arriving even though the polled traffic keeps working. Re-invoking init re-binds
+    // and re-registers the listener idempotently (Service.bind no-ops if bound;
+    // setEventListener swaps the listener under a lock). Still respect the crash budget
+    // so a genuine crash-loop doesn't spin.
+    if (_crashCount > _maxCrashRetries) {
+      return;
+    }
     _crashCount = 0;
     if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
@@ -197,19 +224,18 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
   }
 
+  /// null means the tunnel is confirmed stopped. A failed probe (channel
+  /// error / timeout) THROWS instead of returning null — callers must be able
+  /// to tell "stopped" from "unknown", otherwise a slow bind on cold start
+  /// gets treated as "stopped" and actively kills a live VPN.
   @override
   Future<DateTime?> getRunTime() async {
-    try {
-      final rt = await _channel
-          .invokeMethod('getRunTime')
-          .timeout(const Duration(seconds: 10));
-      final ms = (rt is int) ? rt : int.tryParse('$rt');
-      if (ms == null || ms == 0) return null;
-      return DateTime.fromMillisecondsSinceEpoch(ms);
-    } catch (e) {
-      commonPrint.log('getRunTime error: $e');
-      return null;
-    }
+    final rt = await _channel
+        .invokeMethod('getRunTime')
+        .timeout(const Duration(seconds: 10));
+    final ms = (rt is int) ? rt : int.tryParse('$rt');
+    if (ms == null || ms == 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
   }
 
   @override
@@ -231,6 +257,17 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   /// Go-provided `AndroidVpnOptions`, merged with UI access control settings.
   Future<int> startVpn({String? optionsJson}) async {
     final payload = optionsJson ?? await getAndroidVpnOptions();
+    if (payload.isEmpty) {
+      // Probe failed/timed out (e.g. core busy in setupConfig). Starting anyway
+      // would bring the tunnel up with default VpnOptions — no routes, no
+      // access control (split tunneling silently lost). Fail the start instead.
+      // (Access control itself is resolved by the product layer before this
+      // call — see resolveVpnAccessControl — so no extra merge happens here.)
+      commonPrint.log('startVpn aborted: empty AndroidVpnOptions');
+      return 0;
+    }
+    // Defensive backstop: the native side always replies (even on permission
+    // denial -> 0), but never block the start flow indefinitely if it doesn't.
     final res = await _channel
         .invokeMethod('start', {'data': payload})
         .timeout(const Duration(seconds: 60), onTimeout: () => 0);
@@ -238,7 +275,17 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   Future<bool> stopVpn() async {
-    await _channel.invokeMethod('stop');
+    // The native side resolves the result inside a coroutine that can be
+    // cancelled (engine detach) or starved (frozen main dispatcher) — without
+    // a timeout this await can hang forever, leaving the UI stuck in
+    // "connected" with a frozen runtime. UI-side cleanup must always proceed.
+    try {
+      await _channel
+          .invokeMethod('stop')
+          .timeout(const Duration(seconds: 20), onTimeout: () => null);
+    } catch (e) {
+      commonPrint.log('stopVpn error: $e');
+    }
     return true;
   }
 
@@ -250,12 +297,14 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     required SetupParams setupParams,
     required CoreState state,
   }) async {
-    final res =
-        await _channel.invokeMethod<String>('quickStart', <String, String>{
-      'init': json.encode(initParams),
-      'params': json.encode(setupParams),
-      'state': json.encode(state),
-    });
+    final res = await _channel
+        .invokeMethod<String>('quickStart', <String, String>{
+          'init': json.encode(initParams),
+          'params': json.encode(setupParams),
+          'state': json.encode(state),
+        })
+        .timeout(const Duration(seconds: 60),
+            onTimeout: () => 'quickStart timed out');
     return res ?? '';
   }
 
@@ -267,13 +316,17 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     String server = '',
     bool onlyStatisticsProxy = false,
   }) async {
-    await _channel.invokeMethod(
-        'updateNotificationParams',
-        json.encode({
-          'title': title,
-          'stopText': server,
-          'onlyStatisticsProxy': onlyStatisticsProxy,
-        }));
+    try {
+      await _channel
+          .invokeMethod('updateNotificationParams', json.encode({
+            'title': title,
+            'stopText': server,
+            'onlyStatisticsProxy': onlyStatisticsProxy,
+          }))
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      commonPrint.log('updateNotificationParams error: $e');
+    }
   }
 
   /// Persist quickStart-equivalent params so tile/widget/Always-on can
@@ -283,11 +336,17 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     required SetupParams setupParams,
     required CoreState state,
   }) async {
-    await _channel.invokeMethod('saveParams', <String, String>{
-      'init': json.encode(initParams),
-      'params': json.encode(setupParams),
-      'state': json.encode(state),
-    });
+    try {
+      await _channel
+          .invokeMethod('saveParams', <String, String>{
+            'init': json.encode(initParams),
+            'params': json.encode(setupParams),
+            'state': json.encode(state),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      commonPrint.log('saveParamsForColdStart error: $e');
+    }
   }
 }
 

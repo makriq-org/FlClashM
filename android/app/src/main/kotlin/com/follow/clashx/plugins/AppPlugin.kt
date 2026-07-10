@@ -22,9 +22,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile
 import com.follow.clashx.FlClashApplication
-import com.follow.clashx.GlobalState
 import com.follow.clashx.R
-import com.follow.clashx.extensions.awaitResult
 import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.extensions.getBase64
 import com.follow.clashx.models.Package
@@ -49,6 +47,10 @@ import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.zip.ZipFile
 
+// How long the installed-packages snapshot stays fresh. TTL, not load-once: a
+// process-lifetime cache never showed apps (un)installed while FlClashX ran.
+private const val PACKAGES_CACHE_TTL_MS = 30_000L
+
 class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
 
     private var activityRef: WeakReference<Activity>? = null
@@ -70,6 +72,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     )
 
     private val packages = mutableListOf<Package>()
+    private var packagesLoadedAt = 0L
 
     private val skipPrefixList = listOf(
         "com.google",
@@ -248,10 +251,99 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 result.success(openFile(path))
             }
 
+            "isIgnoringBatteryOptimizations" -> {
+                result.success(isIgnoringBatteryOptimizations())
+            }
+
+            "requestIgnoreBatteryOptimizations" -> {
+                result.success(requestIgnoreBatteryOptimizations())
+            }
+
+            "openAutoStartSettings" -> {
+                result.success(openAutoStartSettings())
+            }
+
             else -> {
                 result.notImplemented()
             }
         }
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val ctx = FlClashApplication.getAppContext()
+        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE)
+            as? android.os.PowerManager ?: return false
+        return pm.isIgnoringBatteryOptimizations(ctx.packageName)
+    }
+
+    // Battery-optimization exemption is the single most effective survival lever on
+    // MIUI/OneUI (the OEM force-stops the :remote process and START_STICKY doesn't
+    // bring it back). Re-promptable from the UI so a one-time decline isn't permanent.
+    private fun requestIgnoreBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
+        val ctx = FlClashApplication.getAppContext()
+        if (isIgnoringBatteryOptimizations()) return true
+        val activity = activityRef?.get()
+        return runCatching {
+            @Suppress("BatteryLife")
+            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(android.net.Uri.parse("package:${ctx.packageName}"))
+            if (activity != null) {
+                activity.startActivity(intent)
+            } else {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(intent)
+            }
+            true
+        }.getOrElse {
+            // Some OEMs reject the direct request intent; fall back to the list.
+            runCatching {
+                val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                (activity ?: ctx).startActivity(intent)
+                true
+            }.getOrDefault(false)
+        }
+    }
+
+    // Opens the OEM "autostart"/"background start" allowlist. Without it BootReceiver
+    // and sticky restarts are blocked at the OEM level on MIUI/EMUI/ColorOS/Funtouch.
+    // Tries known per-OEM activities, falling back to the app's detail settings.
+    private fun openAutoStartSettings(): Boolean {
+        val ctx = FlClashApplication.getAppContext()
+        val activity = activityRef?.get()
+        val candidates = listOf(
+            // Xiaomi MIUI
+            android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+            // Huawei EMUI
+            android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+            android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"),
+            // Oppo ColorOS
+            android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"),
+            android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"),
+            android.content.ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"),
+            // Vivo Funtouch
+            android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
+            android.content.ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"),
+            // Letv
+            android.content.ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity"),
+        )
+        for (cn in candidates) {
+            val intent = Intent().setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (ctx.packageManager.resolveActivity(intent, 0) != null) {
+                val ok = runCatching { (activity ?: ctx).startActivity(intent) }.isSuccess
+                if (ok) return true
+            }
+        }
+        // Fallback: the app's detail settings page (always present).
+        return runCatching {
+            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:${ctx.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            (activity ?: ctx).startActivity(intent)
+            true
+        }.getOrDefault(false)
     }
 
     private fun openFile(path: String): Boolean {
@@ -351,7 +443,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     @Synchronized
     private fun getPackages(): List<Package> {
         val packageManager = FlClashApplication.getAppContext().packageManager
-        if (packages.isNotEmpty()) return packages
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (packages.isNotEmpty() && now - packagesLoadedAt < PACKAGES_CACHE_TTL_MS) {
+            return packages.toList()
+        }
+        packages.clear()
         packageManager?.getInstalledPackages(PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS)
             ?.filter {
                 it.packageName != FlClashApplication.getAppContext().packageName || it.packageName == "android"
@@ -365,7 +461,10 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     internet = it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
                 )
             }?.let { packages.addAll(it) }
-        return packages
+        packagesLoadedAt = now
+        // Snapshot: callers serialize/filter outside this lock while a later refresh
+        // may clear() the backing list mid-iteration.
+        return packages.toList()
     }
 
     private suspend fun getPackagesToJson(): String {
@@ -408,8 +507,19 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
                 return
             }
+            // Consent is genuinely required but there's no activity to host the system
+            // dialog (headless engine). Reporting granted here would let the start
+            // proceed without permission and silently degrade to rt=0/STOP. Instead
+            // route through the headless consent path (TempActivity "START" runs
+            // prepare + start) and tell the in-place caller it could not start now.
+            runCatching {
+                val ctx = FlClashApplication.getAppContext()
+                ctx.startActivity(ctx.getActionIntent("START"))
+            }
+            callBack(false)
+            return
         }
-        // Already granted, or no activity to host the consent dialog: proceed.
+        // Already granted: proceed.
         callBack(true)
     }
 
@@ -431,12 +541,6 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     return
                 }
             }
-        }
-    }
-
-    suspend fun getText(text: String): String? {
-        return withContext(Dispatchers.Default) {
-            channel.awaitResult<String>("getText", text)
         }
     }
 

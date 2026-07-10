@@ -1,9 +1,9 @@
 import 'dart:math';
-import 'package:flclashm/common/constant.dart';
-import 'package:flclashm/common/measure.dart';
-import 'package:flclashm/common/theme.dart';
-import 'package:flclashm/providers/config.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/common/constant.dart';
+import 'package:flclashx/common/measure.dart';
+import 'package:flclashx/common/theme.dart';
+import 'package:flclashx/providers/config.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +17,7 @@ class ThemeManager extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final textScale = ref.read(
+    final textScale = ref.watch(
       themeSettingProvider.select((state) => state.textScale),
     );
     final double textScaleFactor = max(

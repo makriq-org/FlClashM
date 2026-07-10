@@ -112,5 +112,3 @@ const _$OverrideRuleTypeEnumMap = {
   OverrideRuleType.override: 'override',
   OverrideRuleType.added: 'added',
 };
-
-

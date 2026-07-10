@@ -92,10 +92,12 @@
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="true" />
 
+        <!-- Public automation entry point (MacroDroid/Tasker send START/STOP/CHANGE
+             intents): must stay callable by third-party apps, so no signature
+             permission here. -->
         <activity
             android:name=".TempActivity"
             android:exported="true"
-            android:permission="${applicationId}.permission.RECEIVE_BROADCASTS"
             android:theme="@style/TransparentTheme">
             <intent-filter>
                 <category android:name="android.intent.category.DEFAULT" />
@@ -116,6 +118,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

@@ -109,6 +109,7 @@ const (
 	healthCheckMethod              Method = "healthCheck"
 	healthProbeMethod              Method = "healthProbe"
 	setUiActiveMethod              Method = "setUiActive"
+	setScreenActiveMethod          Method = "setScreenActive"
 )
 
 type Method string

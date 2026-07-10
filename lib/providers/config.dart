@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flclashm/common/common.dart';
-import 'package:flclashm/models/models.dart';
-import 'package:flclashm/product/services/product_services.dart';
-import 'package:flclashm/state.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'generated/config.g.dart';

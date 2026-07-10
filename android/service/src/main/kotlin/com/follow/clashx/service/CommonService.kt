@@ -33,7 +33,10 @@ class CommonService : Service(), IBaseService {
     }
 
     private fun startForegroundCompat() {
-        promoteToForeground(R.drawable.ic_notification, SavedParams.loadNotificationTitle())
+        if (!promoteToForeground(R.drawable.ic_notification, SavedParams.loadNotificationTitle())) {
+            GlobalState.log("CommonService: foreground promotion denied, stopping")
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder = binder

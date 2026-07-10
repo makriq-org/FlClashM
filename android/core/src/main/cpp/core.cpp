@@ -108,7 +108,7 @@ Java_com_follow_clashx_core_Core_nativeStartTun(JNIEnv *env, jobject, const jint
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_stopTun(JNIEnv *) {
+Java_com_follow_clashx_core_Core_stopTun(JNIEnv *, jobject) {
     stopTun();
 }
 
@@ -157,12 +157,15 @@ Java_com_follow_clashx_core_Core_updateDns(JNIEnv *env, jobject, jstring s) {
     updateDns(c_s);
 }
 
-// Helper macro for getters returning a Go-allocated char* that must be freed via freeCString.
+// Helper macro for getters returning a Go-allocated char* that must be freed via
+// freeCString. Uses new_string (String(byte[]) round-trip), NOT NewStringUTF: Go
+// emits standard UTF-8, and 4-byte sequences (emoji in a profile name) are invalid
+// Modified UTF-8 — CheckJNI aborts on them in debuggable builds.
 #define RETURN_GO_STRING(expr)                                           \
     do {                                                                 \
         char *raw = (expr);                                              \
-        if (raw == nullptr) return env->NewStringUTF("");                \
-        jstring result = env->NewStringUTF(raw);                         \
+        if (raw == nullptr) return new_string("");                       \
+        jstring result = new_string(raw);                                \
         freeCString(raw);                                                \
         return result;                                                   \
     } while (0)
@@ -195,13 +198,6 @@ extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_follow_clashx_core_Core_getAndroidVpnOptions(JNIEnv *env, jobject) {
     RETURN_GO_STRING(getAndroidVpnOptions());
-}
-
-extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_follow_clashx_core_Core_getConfig(JNIEnv *env, jobject, jstring s) {
-    scoped_string c_s = get_string(s);
-    RETURN_GO_STRING(getConfig(c_s));
 }
 
 extern "C"

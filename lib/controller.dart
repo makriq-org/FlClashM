@@ -4,13 +4,13 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
-import 'package:flclashm/clash/clash.dart';
-import 'package:flclashm/common/archive.dart';
-import 'package:flclashm/enum/enum.dart';
-import 'package:flclashm/providers/providers.dart';
-import 'package:flclashm/services/subscription_notification_service.dart';
-import 'package:flclashm/state.dart';
-import 'package:flclashm/widgets/dialog.dart';
+import 'package:flclashx/clash/clash.dart';
+import 'package:flclashx/common/archive.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/services/subscription_notification_service.dart';
+import 'package:flclashx/state.dart';
+import 'package:flclashx/widgets/dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -397,7 +397,14 @@ class AppController {
         isUpdating: false,
       );
 
-      _applyProductCustomization(mergedProfile, isNewProfile: false);
+      // Apply the header-driven customization ONLY when the updated profile is
+      // the ACTIVE one. Otherwise auto-updating a background profile would push
+      // its headers into the global settings and clobber the active profile's
+      // ("last updated wins"). Mirrors the active-profile gate on
+      // applyProfileDebounce below.
+      if (profile.id == _ref.read(currentProfileIdProvider)) {
+        _applyProductCustomization(mergedProfile, isNewProfile: false);
+      }
       _showProductNotices(mergedProfile);
 
       _ref.read(profilesProvider.notifier).setProfile(mergedProfile);
@@ -731,10 +738,15 @@ class AppController {
     );
   }
 
-  Future _applyProfile() async {
+  Future _applyProfile({bool silence = false}) async {
     clashCore.requestGc();
     await _primeProfileGroupPreview();
-    final isConfigured = await setupClashConfig();
+    // Silent/headless/early-start recovery: bypass the PUBLIC setupClashConfig()
+    // scaffold gate + loadingRun (which no-ops when the home scaffold isn't
+    // mounted — exactly when recovery is needed — and shows a loading overlay
+    // when it is) by re-applying through the private path directly.
+    final isConfigured =
+        silence ? await _setupClashConfig() : await setupClashConfig();
     if (!isConfigured) {
       return;
     }
@@ -770,10 +782,10 @@ class AppController {
     }
   }
 
-  Future<void> _applyProfileLoop() async {
+  Future<void> _applyProfileLoop({bool silence = false}) async {
     do {
       _applyProfileAgain = false;
-      await _applyProfile();
+      await _applyProfile(silence: silence);
     } while (_applyProfileAgain);
   }
 
@@ -787,7 +799,7 @@ class AppController {
 
     Future<void> task;
     if (silence) {
-      task = _applyProfileLoop();
+      task = _applyProfileLoop(silence: true);
     } else {
       final commonScaffoldState = globalState.homeScaffoldKey.currentState;
       if (commonScaffoldState?.mounted != true) return;
@@ -822,8 +834,8 @@ class AppController {
     }
 
     applyProfile();
-    _ref.read(logsProvider.notifier).value = FixedList(500);
-    _ref.read(requestsProvider.notifier).value = FixedList(500);
+    _ref.read(logsProvider.notifier).value = FixedList(maxLength);
+    _ref.read(requestsProvider.notifier).value = FixedList(maxLength);
     globalState.cacheHeightMap = {};
     globalState.cacheScrollPosition = {};
   }
@@ -888,6 +900,21 @@ class AppController {
         "Updating subscription info for current profile '${currentProfile.label}' on startup...",
       );
       if (currentProfile.autoUpdate) {
+        // autoUpdateProfiles() (fired immediately on startup) already refreshes
+        // any auto-update profile whose update window has elapsed (or that never
+        // updated). Skip those here so we don't fetch+apply the same current
+        // profile a second time 1s later; only handle the not-yet-due case it
+        // leaves untouched.
+        final isDue = currentProfile.lastUpdateDate
+                ?.add(currentProfile.autoUpdateDuration)
+                .isBeforeNow ??
+            true;
+        if (isDue) {
+          commonPrint.log(
+            "_updateCurrentProfileSubscription: already covered by autoUpdateProfiles, skipping",
+          );
+          return;
+        }
         await updateProfile(currentProfile);
         commonPrint.log("Subscription info updated successfully");
       } else {
@@ -950,10 +977,32 @@ class AppController {
       clashCore.closeConnections();
     }
     addCheckIpNumDebounce();
+    // Android: re-persist cold-start params so a later headless restart (tile/
+    // Always-on/sticky) brings the tunnel up with the NEWLY selected node, not
+    // the one captured at app init. Without this, "picked a server, phone sat
+    // idle, VPN auto-reconnected to the old one". changeProxy is debounced, so
+    // this runs at most once per debounce window.
+    if (Platform.isAndroid && globalState.isStart) {
+      unawaited(
+        globalState.engineManager.persistColdStart(
+          pathConfig: _buildColdStartPatchConfig(
+            _ref.read(patchClashConfigProvider),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> handleBackOrExit() async {
     if (_ref.read(backBlockProvider)) {
+      return;
+    }
+    // Android: the back gesture must never shut the core down while the tunnel
+    // is up — the FGS + TUN are designed to outlive the UI, and handleExit()
+    // would kill the executor under a live VPN icon (blackholed traffic).
+    // Background the activity instead, regardless of minimizeOnExit.
+    if (Platform.isAndroid && globalState.isStart) {
+      await system.back();
       return;
     }
     if (_ref.read(appSettingProvider).minimizeOnExit) {
@@ -975,13 +1024,33 @@ class AppController {
   }
 
   Future<void> handleExit() async {
-    Future.delayed(commonDuration, system.exit);
+    // Bound the cleanup instead of pre-arming a 300ms hard-exit timer. On macOS the
+    // DNS/proxy teardown is several slow networksetup/route subprocesses that easily
+    // overrun 300ms, so the old timer fired mid-cleanup and exit(0) skipped the DNS
+    // restore / proxy stop / core shutdown — leaking 1.1.1.1, leaving a dead system
+    // proxy, and orphaning the root core. Mirror handleRestart: run cleanup under a
+    // generous deadline, each step isolated, then always exit.
     try {
-      await savePreferences();
-      await system.setMacOSDns(true);
-      await proxy?.stopProxy();
-      await clashCore.shutdown();
-      await clashService?.destroy();
+      await Future.any([
+        Future(() async {
+          try {
+            await savePreferences();
+          } catch (_) {}
+          try {
+            await system.setMacOSDns(true);
+          } catch (_) {}
+          try {
+            await proxy?.stopProxy();
+          } catch (_) {}
+          try {
+            await clashCore.shutdown();
+          } catch (_) {}
+          try {
+            await clashService?.destroy();
+          } catch (_) {}
+        }),
+        Future.delayed(const Duration(seconds: 8)),
+      ]);
     } finally {
       system.exit();
     }
@@ -989,6 +1058,25 @@ class AppController {
 
   Future<void> handleRestart() async {
     commonPrint.log("Starting application restart...");
+
+    // Stop the current core BEFORE relaunching so the new instance can connect
+    // cleanly: a core that survives the restart (notably the Windows helper-started
+    // process) keeps the socket/binary busy and blocks the fresh core from binding
+    // or replacing the updated .exe. Guarded by a timeout so the restart can't hang.
+    await Future.any([
+      Future(() async {
+        try {
+          await proxy?.stopProxy();
+        } catch (_) {}
+        try {
+          await clashCore.shutdown();
+        } catch (_) {}
+        try {
+          await clashService?.destroy();
+        } catch (_) {}
+      }),
+      Future.delayed(const Duration(seconds: 3)),
+    ]);
 
     if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
       final executablePath = Platform.resolvedExecutable;
@@ -1134,10 +1222,25 @@ class AppController {
       commonPrint.log(details.stack.toString());
     };
     updateTray(true);
+    // Desktop only (clashService is null on Android): on an unexpected core-
+    // process death, respawn it AND re-init/re-apply (and re-start the tunnel
+    // if it was up).
+    clashService?.onCoreCrash = (_) => restartCore();
     try {
       await _initCore();
     } catch (e) {
       commonPrint.log("initCore failed (will retry on profile change): $e");
+    }
+    // Re-assert the log subscription on every attach. startLog() lives inside
+    // core init, which is skipped when the core is already initialised — e.g.
+    // after a headless tile/always-on cold-start the core is up with no log
+    // subscriber, so Logs would stay empty until a full process kill.
+    // startLog/stopLog are idempotent (resubscribe), so re-issuing on every
+    // launch/attach is safe.
+    if (globalState.config.appSetting.openLogs) {
+      clashCore.startLog();
+    } else {
+      clashCore.stopLog();
     }
     _ref.read(initProvider.notifier).value = true;
     await _initStatus();
@@ -1165,7 +1268,15 @@ class AppController {
 
   Future<void> _initStatus() async {
     if (Platform.isAndroid) {
-      await globalState.syncRuntimeStartTime();
+      final known = await globalState.syncRuntimeStartTime();
+      if (!known) {
+        // Probe failed → tunnel state unknown. Don't drive updateStatus(false):
+        // it sends a stop intent that kills a possibly-live VPN service (the
+        // classic "opened the app and VPN dropped" on slow-binding OEMs).
+        // Leave native state untouched; the resumed-resync picks up the truth.
+        addCheckIpNumDebounce();
+        return;
+      }
     }
     final status = globalState.isStart == true
         ? true
@@ -1178,6 +1289,34 @@ class AppController {
     }
 
     await updateStatus(true);
+  }
+
+  /// Aligns UI run-state with the native truth after a resume. STOP/START can
+  /// be missed while the process is frozen or killed (fire-and-forget tile
+  /// channel, lost broadcasts), leaving a ticking "connected" UI over a dead
+  /// tunnel — or a "disconnected" UI over a live one. Never sends start/stop
+  /// IPC; only local state is touched.
+  Future<void> syncVpnStateOnResume() async {
+    // A start/stop toggle is mid-flight (e.g. a ~70s startVpn still awaiting
+    // VPN consent): its optimistic startTime isn't reflected by the probe yet,
+    // so re-probing now would null it and tear down a live tunnel's UI. The
+    // in-flight op sets the correct run-state on completion, so just skip.
+    if (_updateStatusFuture != null) return;
+    final known = await globalState.syncRuntimeStartTime();
+    if (!known) return;
+    final running = globalState.isStart;
+    await StatusBarManager.updateIcon(isConnected: running);
+    if (running) {
+      await globalState.engineManager.resumeUpdateTasks();
+      startRunTimeTimer();
+    } else {
+      stopRunTimeTimer();
+      globalState.engineManager.pauseUpdateTasks();
+      _ref.read(runTimeProvider.notifier).value = null;
+      _ref.read(trafficsProvider.notifier).clear();
+      _ref.read(totalTrafficProvider.notifier).value = Traffic();
+      addCheckIpNumDebounce();
+    }
   }
 
   void setDelay(Delay delay) {
@@ -1353,11 +1492,12 @@ class AppController {
           final bDelay = _ref.read(
             getDelayProvider(proxyName: b.name, testUrl: testUrl),
           );
-          if (aDelay == null && bDelay == null) {
-            return 0;
-          }
+          // null (untested) and -1 (failed) are equivalent "no delay"
+          // sentinels: map both to the same rank so the comparator stays
+          // antisymmetric (compare(a,b) == -compare(b,a)) and they sort to
+          // the end together.
           if (aDelay == null || aDelay == -1) {
-            return 1;
+            return (bDelay == null || bDelay == -1) ? 0 : 1;
           }
           if (bDelay == null || bDelay == -1) {
             return -1;

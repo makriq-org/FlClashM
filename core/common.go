@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -30,7 +31,7 @@ import (
 
 var (
 	currentConfig     *config.Config
-	version           = 0
+	version           atomic.Int32
 	isRunning         = false
 	runLock           sync.Mutex
 	testDelaySem      = semaphore.NewWeighted(50)
@@ -80,8 +81,11 @@ func computeMinHealthCheckInterval(rawConfig *config.RawConfig) {
 		}
 	}
 	d := time.Duration(min) * time.Second
-	if d < 5*time.Second {
-		d = 5 * time.Second
+	// Floor at 30s (was 5s): a tiny/misconfigured group interval would otherwise url-test
+	// every proxy as often as every 5s while foreground — bursts of TLS handshakes
+	// (CPU + radio + data) for marginally fresher latency numbers.
+	if d < 30*time.Second {
+		d = 30 * time.Second
 	}
 	log.Infoln("[HealthCheck] computed min interval from %d groups: %s", len(rawConfig.ProxyGroup), d)
 	minHealthCheckInterval = d

@@ -658,6 +658,8 @@ abstract class _AppSettingProps implements AppSettingProps {
   bool get overrideNetworkSettings;
   @override
   RecoveryStrategy get recoveryStrategy;
+  @override
+  bool? get newDashboard;
 
   /// Create a copy of AppSettingProps
   /// with the given fields replaced by the non-null parameter values.

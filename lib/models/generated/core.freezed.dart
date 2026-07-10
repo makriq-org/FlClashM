@@ -1199,6 +1199,7 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
   @JsonKey()
   List<String> get includePackage {
     if (_includePackage is EqualUnmodifiableListView) return _includePackage;
+    // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_includePackage);
   }
 
@@ -1207,6 +1208,7 @@ class _$AndroidVpnOptionsImpl implements _AndroidVpnOptions {
   @JsonKey()
   List<String> get excludePackage {
     if (_excludePackage is EqualUnmodifiableListView) return _excludePackage;
+    // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_excludePackage);
   }
 
