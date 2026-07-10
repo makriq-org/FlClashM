@@ -81,6 +81,8 @@
   "autoCheckUpdateDesc": "Auto check for updates when the app starts",
   "accessControl": "AccessControl",
   "accessControlDesc": "Configure application access proxy",
+  "accessControlDriftNote": "The rules applied by the Android VPN differ from your profile config.",
+  "accessControlVerificationUnavailableNote": "The applied VPN rules could not be verified. The profile declaration is shown as a fallback.",
   "application": "Application Settings",
   "applicationDesc": "Standard application settings",
   "edit": "Edit",

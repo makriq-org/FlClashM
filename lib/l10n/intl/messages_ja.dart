@@ -50,6 +50,13 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "アプリケーションのプロキシアクセスを設定",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "Android VPNが適用したルールが、プロファイル設定と異なっています。",
+    ),
+    "accessControlVerificationUnavailableNote":
+        MessageLookupByLibrary.simpleMessage(
+          "適用されたVPNルールを確認できませんでした。代わりにプロファイルの宣言を表示しています。",
+        ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選択したアプリをVPNから除外",
     ),

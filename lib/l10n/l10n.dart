@@ -734,6 +734,26 @@ class AppLocalizations {
     );
   }
 
+  /// `The rules applied by the Android VPN differ from your profile config.`
+  String get accessControlDriftNote {
+    return Intl.message(
+      'The rules applied by the Android VPN differ from your profile config.',
+      name: 'accessControlDriftNote',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The applied VPN rules could not be verified. The profile declaration is shown as a fallback.`
+  String get accessControlVerificationUnavailableNote {
+    return Intl.message(
+      'The applied VPN rules could not be verified. The profile declaration is shown as a fallback.',
+      name: 'accessControlVerificationUnavailableNote',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Application Settings`
   String get application {
     return Intl.message(
@@ -3919,7 +3939,6 @@ class AppLocalizations {
     );
   }
 }
-
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {
   const AppLocalizationDelegate();
 

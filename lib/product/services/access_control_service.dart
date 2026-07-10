@@ -5,6 +5,8 @@ import '../../common/common.dart';
 import '../../enum/enum.dart';
 import '../../models/models.dart';
 import '../android/android_runtime_access_policy.dart';
+import '../compile/profile_split_tunneling.dart';
+import '../compile/raw_profile.dart';
 import '../runtime/engine_manager.dart';
 
 @immutable
@@ -61,6 +63,112 @@ class AccessControlEditorState {
         sort: sort ?? this.sort,
         dirty: dirty ?? this.dirty,
       );
+}
+
+/// Where the profile-managed access control shown in the Access Control view
+/// is sourced from.
+enum ProfileManagedAccessSource {
+  /// Not profile-managed — the user's manual selection is editable.
+  none,
+
+  /// Derived from the current profile config while VPN is stopped, or used as
+  /// a declared fallback when the applied snapshot is unavailable.
+  profile,
+
+  /// Read from the immutable options snapshot of the live Android VPN.
+  appliedVpn,
+}
+
+enum ProfileManagedAccessNotice {
+  none,
+  drift,
+  verificationUnavailable,
+}
+
+/// Immutable description of whether the Access Control view should present a
+/// profile-managed (locked) state, which access control to display and whether
+/// the running core diverges from what the profile config declares.
+@immutable
+class ProfileManagedAccess {
+  const ProfileManagedAccess({
+    required this.managed,
+    required this.effectiveAccessControl,
+    required this.source,
+    required this.notice,
+  });
+
+  /// True when split tunneling is dictated by the profile/core and the manual
+  /// editor should be locked.
+  final bool managed;
+
+  /// The access control to display, or null when [managed] is false.
+  final AccessControl? effectiveAccessControl;
+
+  final ProfileManagedAccessSource source;
+
+  final ProfileManagedAccessNotice notice;
+
+  bool get hasDrift => notice == ProfileManagedAccessNotice.drift;
+
+  static const none = ProfileManagedAccess(
+    managed: false,
+    effectiveAccessControl: null,
+    source: ProfileManagedAccessSource.none,
+    notice: ProfileManagedAccessNotice.none,
+  );
+}
+
+typedef LoadCurrentRawProfile = Future<RawProfile?> Function();
+typedef ReadProfilesPath = Future<String> Function();
+typedef ReadInstalledPackageNames = Future<List<String>> Function();
+
+class ProfileManagedAccessController {
+  ProfileManagedAccessController({
+    required this.service,
+    required this.loadCurrentRawProfile,
+    required this.readProfilesPath,
+    required this.readInstalledPackageNames,
+  });
+
+  final AccessControlService service;
+  final LoadCurrentRawProfile loadCurrentRawProfile;
+  final ReadProfilesPath readProfilesPath;
+  final ReadInstalledPackageNames readInstalledPackageNames;
+
+  int _generation = 0;
+  bool _disposed = false;
+
+  Future<ProfileManagedAccess?> refresh({
+    required bool isRunning,
+    required AccessControl? activeProfileAccessControl,
+  }) async {
+    final generation = ++_generation;
+    final appliedSnapshotFuture = isRunning
+        ? service.readAppliedProfileAccess()
+        : Future.value(const ProfileAccessSnapshot.unavailable());
+    final profileSnapshot = isRunning && activeProfileAccessControl != null
+        ? ProfileAccessSnapshot.available(activeProfileAccessControl)
+        : await service.readProfileConfigAccess(
+            loadCurrentRawProfile: loadCurrentRawProfile,
+            readProfilesPath: readProfilesPath,
+            readInstalledPackageNames: readInstalledPackageNames,
+          );
+    final appliedSnapshot = await appliedSnapshotFuture;
+    final resolved = service.resolveProfileManagedAccess(
+      profileConfig: profileSnapshot,
+      applied: appliedSnapshot,
+      isRunning: isRunning,
+    );
+    if (_disposed || generation != _generation) {
+      return null;
+    }
+    return resolved;
+  }
+
+  void dispose() {
+    _disposed = true;
+    _generation++;
+  }
 }
 
 class AccessControlService {
@@ -252,6 +360,151 @@ class AccessControlService {
       showSystemApps: previousState.showSystemApps,
       showNoInternetApps: previousState.showNoInternetApps,
     );
+  }
+
+  ProfileManagedAccessController createProfileManagedController({
+    required LoadCurrentRawProfile loadCurrentRawProfile,
+    required ReadProfilesPath readProfilesPath,
+    required ReadInstalledPackageNames readInstalledPackageNames,
+  }) =>
+      ProfileManagedAccessController(
+        service: this,
+        loadCurrentRawProfile: loadCurrentRawProfile,
+        readProfilesPath: readProfilesPath,
+        readInstalledPackageNames: readInstalledPackageNames,
+      );
+
+  Future<ProfileAccessSnapshot> readProfileConfigAccess({
+    required LoadCurrentRawProfile loadCurrentRawProfile,
+    required ReadProfilesPath readProfilesPath,
+    required ReadInstalledPackageNames readInstalledPackageNames,
+  }) async {
+    if (!platform.isAndroid) {
+      return const ProfileAccessSnapshot.available(null);
+    }
+    try {
+      final rawProfile = await loadCurrentRawProfile();
+      if (rawProfile == null) {
+        return const ProfileAccessSnapshot.available(null);
+      }
+      final rawConfig = rawProfile.config;
+      final installedPackageNames =
+          requiresInstalledPackageInventoryForProfileSplitTunneling(
+        rawConfig,
+        isAndroid: true,
+      )
+              ? await readInstalledPackageNames()
+              : const <String>[];
+      final resolved = await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: await readProfilesPath(),
+        profileId: rawProfile.profile.id,
+        installedPackageNames: installedPackageNames,
+      );
+      return ProfileAccessSnapshot.available(resolved.accessControl);
+    } catch (_) {
+      return const ProfileAccessSnapshot.unavailable();
+    }
+  }
+
+  Future<ProfileAccessSnapshot> readAppliedProfileAccess() async {
+    try {
+      return await platform.readAppliedProfileAccess();
+    } catch (_) {
+      return const ProfileAccessSnapshot.unavailable();
+    }
+  }
+
+  /// Hybrid resolver for the Access Control view.
+  ///
+  /// VPN off: the effective managed state comes from [profileConfig]. VPN on:
+  /// it comes from the immutable Android VPN [applied] snapshot. Read failures
+  /// remain distinct from an explicit snapshot with no profile package rule.
+  ProfileManagedAccess resolveProfileManagedAccess({
+    required ProfileAccessSnapshot profileConfig,
+    required ProfileAccessSnapshot applied,
+    required bool isRunning,
+  }) {
+    if (!isRunning) {
+      if (!profileConfig.available) {
+        return const ProfileManagedAccess(
+          managed: false,
+          effectiveAccessControl: null,
+          source: ProfileManagedAccessSource.none,
+          notice: ProfileManagedAccessNotice.verificationUnavailable,
+        );
+      }
+      final configured = profileConfig.accessControl;
+      return ProfileManagedAccess(
+        managed: configured != null,
+        effectiveAccessControl: configured,
+        source: configured == null
+            ? ProfileManagedAccessSource.none
+            : ProfileManagedAccessSource.profile,
+        notice: ProfileManagedAccessNotice.none,
+      );
+    }
+
+    if (!applied.available) {
+      final configured =
+          profileConfig.available ? profileConfig.accessControl : null;
+      return ProfileManagedAccess(
+        managed: configured != null,
+        effectiveAccessControl: configured,
+        source: configured == null
+            ? ProfileManagedAccessSource.none
+            : ProfileManagedAccessSource.profile,
+        notice: ProfileManagedAccessNotice.verificationUnavailable,
+      );
+    }
+
+    final effective = applied.accessControl;
+    final hasDrift = profileConfig.available &&
+        !_sameNullableEffectiveAccess(
+          profileConfig.accessControl,
+          effective,
+        );
+    return ProfileManagedAccess(
+      managed: effective != null,
+      effectiveAccessControl: effective,
+      source: ProfileManagedAccessSource.appliedVpn,
+      notice: hasDrift
+          ? ProfileManagedAccessNotice.drift
+          : ProfileManagedAccessNotice.none,
+    );
+  }
+
+  AccessControlEditorState reconcileManagedEditorState({
+    required AccessControl manualAccessControl,
+    required AccessControlEditorState previousState,
+    required bool wasManaged,
+    required ProfileManagedAccess managedAccess,
+  }) {
+    if (!wasManaged && !managedAccess.managed) {
+      return previousState;
+    }
+    return resolveEditorState(
+      accessControl: manualAccessControl,
+      profileAccessControl: managedAccess.effectiveAccessControl,
+      previousState: previousState,
+    );
+  }
+
+  bool _sameNullableEffectiveAccess(AccessControl? a, AccessControl? b) {
+    if (a == null || b == null) {
+      return a == null && b == null;
+    }
+    return _sameEffectiveAccess(a, b);
+  }
+
+  bool _sameEffectiveAccess(AccessControl a, AccessControl b) {
+    if (a.enable != b.enable || a.mode != b.mode) {
+      return false;
+    }
+    final setA = a.currentList.toSet();
+    final setB = b.currentList.toSet();
+    return setA.length == setB.length && setA.containsAll(setB);
   }
 
   Future<bool> startVpn({required AccessControl accessControl}) =>

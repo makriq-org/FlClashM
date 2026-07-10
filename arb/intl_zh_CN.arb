@@ -62,6 +62,8 @@
   "includePrereleaseUpdatesDesc": "显示测试版和预发布应用版本",
   "accessControl": "访问控制",
   "accessControlDesc": "配置应用访问代理",
+  "accessControlDriftNote": "Android VPN应用的规则与您的配置文件不一致。",
+  "accessControlVerificationUnavailableNote": "无法验证已应用的VPN规则，当前显示配置文件中声明的规则。",
   "application": "应用程序设置",
   "applicationDesc": "标准应用程序设置",
   "edit": "编辑",

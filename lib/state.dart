@@ -421,10 +421,12 @@ class GlobalState {
         hasCurrentScript: config.scriptProps.currentScript != null,
         profilesPath: profilesPath,
         profilePath: profilePath,
-        readInstalledPackageNames: _readInstalledPackageNames,
+        readInstalledPackageNames: readInstalledPackageNames,
       );
 
-  Future<List<String>> _readInstalledPackageNames() async {
+  Future<String> readProfilesPath() => appPath.profilesPath;
+
+  Future<List<String>> readInstalledPackageNames() async {
     final packageNames =
         await app?.getInstalledPackageNames() ?? const <String>[];
     return {
