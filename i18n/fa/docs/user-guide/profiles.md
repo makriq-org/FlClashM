@@ -75,16 +75,18 @@ proxies:
       key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     net:
       transport: datachannel
+      dns: "1.1.1.1:53"
 ```
 
 **پارامترها:**
 
 | پارامتر | توضیحات |
 |---------|---------|
-| `auth.provider` | ارائه‌دهنده احراز هویت (`jitsi`, `telemost`) |
+| `auth.provider` | ارائه‌دهنده احراز هویت (`jitsi`, `telemost`, `wbstream`, `none`) |
 | `room.id` | شناسه اتاق تماس ویدیویی |
 | `crypto.key` | کلید رمزنگاری ۲۵۶ بیتی (hex) |
-| `net.transport` | انتقال (`datachannel`, `vp8channel`) |
+| `net.transport` | انتقال (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
+| `net.dns` | سرور DNS الزامی با قالب `host:port` |
 
 ## NaiveProxy
 

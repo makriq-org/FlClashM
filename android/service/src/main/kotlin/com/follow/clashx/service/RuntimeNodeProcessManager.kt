@@ -13,11 +13,30 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 object RuntimeNodeProcessManager {
+    private class OutputBuffer {
+        private val lines = ArrayDeque<String>()
+        private var length = 0
+
+        @Synchronized
+        fun add(line: String) {
+            val boundedLine = line.takeLast(MAX_OUTPUT_LENGTH)
+            lines.addLast(boundedLine)
+            length += boundedLine.length
+            while (lines.size > MAX_OUTPUT_LINES || length > MAX_OUTPUT_LENGTH) {
+                length -= lines.removeFirst().length
+            }
+        }
+
+        @Synchronized
+        fun snapshot(): String = lines.joinToString("\n")
+    }
+
     private data class RunningNode(
         val process: Process,
         val startTimeMillis: Long,
         val executablePath: String,
         val arguments: List<String>,
+        val output: OutputBuffer,
         val logJob: Job?,
     )
 
@@ -66,11 +85,13 @@ object RuntimeNodeProcessManager {
             }
 
             val startTimeMillis = System.currentTimeMillis()
+            val output = OutputBuffer()
             val logJob = GlobalState.scope.launch(Dispatchers.IO) {
                 runCatching {
                     started.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
                             if (line.isNotBlank()) {
+                                output.add(line)
                                 GlobalState.log("[runtime-node:$nodeId] $line")
                             }
                         }
@@ -87,6 +108,7 @@ object RuntimeNodeProcessManager {
                 startTimeMillis = startTimeMillis,
                 executablePath = executablePath,
                 arguments = arguments,
+                output = output,
                 logJob = logJob,
             )
             startTimeMillis
@@ -114,6 +136,15 @@ object RuntimeNodeProcessManager {
         } else {
             0L
         }
+    }
+
+    fun readLastError(nodeId: String): String {
+        val running = runningNodes[nodeId] ?: return ""
+        if (running.process.isAlive) return ""
+        val exitCode = runCatching { running.process.exitValue() }.getOrNull()
+        val output = running.output.snapshot().trim()
+        val prefix = if (exitCode == null) "runtime node exited" else "runtime node exited with code $exitCode"
+        return if (output.isEmpty()) prefix else "$prefix: $output"
     }
 
     private suspend fun stopInternal(nodeId: String): Long {
@@ -190,4 +221,7 @@ object RuntimeNodeProcessManager {
             Thread.sleep(50L)
         }
     }
+
+    private const val MAX_OUTPUT_LINES = 20
+    private const val MAX_OUTPUT_LENGTH = 4096
 }

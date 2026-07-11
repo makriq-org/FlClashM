@@ -6,6 +6,8 @@ import 'package:flclashx/product/runtime/built_in_proxy_registry.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flutter/foundation.dart';
 
+import 'olcrtc_config_validator.dart';
+
 @immutable
 class CompiledBuiltInProxyNodes {
   const CompiledBuiltInProxyNodes({
@@ -20,9 +22,11 @@ class CompiledBuiltInProxyNodes {
 class BuiltInProxyCompiler {
   const BuiltInProxyCompiler({
     this.registry = builtInProxyRegistry,
+    this.olcRtcConfigValidator = const OlcRtcConfigValidator(),
   });
 
   final BuiltInProxyRegistry registry;
+  final OlcRtcConfigValidator olcRtcConfigValidator;
 
   CompiledBuiltInProxyNodes compile({
     required Map<String, dynamic> rawConfig,
@@ -233,6 +237,7 @@ class BuiltInProxyCompiler {
     }
 
     _rejectUnsafeOlcRtcProfileOverrides(rawConfig['profiles']);
+    olcRtcConfigValidator.validate(rawConfig);
 
     return BuiltInProxyNodePlan(
       nodeId: nodeId,

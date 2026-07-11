@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +29,7 @@ void main() {
       final bytes = File(asset.bundledAssetPath).readAsBytesSync();
       expect(bytes.length, greaterThan(4), reason: asset.abi);
       expect(bytes.take(4), [0x7f, 0x45, 0x4c, 0x46], reason: asset.abi);
+      expect(sha256.convert(bytes).toString(), asset.sha256, reason: asset.abi);
     }
   });
 }

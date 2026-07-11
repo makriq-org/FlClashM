@@ -798,11 +798,9 @@ String _buildByedpiStamp() {
 Future<void> _syncOlcRtcAssets() async {
   final stamp = File(_projectPath(_olcRtcStampFile));
   final expectedStamp = _buildOlcRtcStamp();
-  final assetFilesExist = olcRtcReleaseAssets.values.every(
-    (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
-  );
+  final assetFilesMatch = await _olcRtcAssetsMatchDigests();
 
-  if (assetFilesExist &&
+  if (assetFilesMatch &&
       stamp.existsSync() &&
       (await stamp.readAsString()).trim() == expectedStamp) {
     return;
@@ -852,10 +850,32 @@ Future<void> _syncOlcRtcAssets() async {
       workingDirectory: sourceDir.path,
       name: 'build olcrtc Android ${asset.abi}',
     );
+
+    final digest = sha256.convert(await target.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      throw StateError(
+        'olcrtc ${asset.abi} digest mismatch: '
+        'expected ${asset.sha256}, got $digest',
+      );
+    }
   }
 
   stamp.parent.createSync(recursive: true);
   await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<bool> _olcRtcAssetsMatchDigests() async {
+  for (final asset in olcRtcReleaseAssets.values) {
+    final file = File(_projectPath(asset.bundledAssetPath));
+    if (!file.existsSync()) {
+      return false;
+    }
+    final digest = sha256.convert(await file.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      return false;
+    }
+  }
+  return true;
 }
 
 Future<Directory> _prepareOlcRtcSource() async {

@@ -52,6 +52,31 @@ proxies:
       expect(normalized['proxies'][0]['port'], inInclusiveRange(35900, 36155));
     });
 
+    test('reports missing olcrtc DNS during profile validation', () {
+      expect(
+        () => validator.normalizeForValidation('''
+proxies:
+  - name: OLC Local
+    type: olcrtc
+    auth:
+      provider: wbstream
+    room:
+      id: room-id
+    crypto:
+      key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    net:
+      transport: vp8channel
+'''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('requires `net.dns`'),
+          ),
+        ),
+      );
+    });
+
     test('materializes YAML merge keys before validation', () {
       final normalized = validator.normalizeForValidation('''
 proxy-common: &proxy-common

@@ -329,6 +329,9 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
       runningNodes[nodeId];
 
   @override
+  Future<String?> readNodeLastError({required String nodeId}) async => null;
+
+  @override
   Future<void> saveColdStartNodes(String manifestJson) async {
     savedManifest = manifestJson;
   }

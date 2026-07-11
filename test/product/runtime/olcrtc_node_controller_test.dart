@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -241,6 +242,44 @@ void main() {
       );
     });
 
+    test('reports OlcRTC output immediately when the process exits', () async {
+      final controller = OlcRtcNodeController(
+        binary: binary,
+        runtime: runtime,
+        waitForListener: (_, __) => Completer<void>().future,
+      );
+      final plan = buildPlan(
+        'Broken node',
+        nodeId: 'node-broken',
+        listenPort: 35012,
+        roomId: 'room-broken',
+      );
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+      await controller.commitStagedRuntimePlan();
+      unawaited(Future<void>.delayed(const Duration(milliseconds: 20), () {
+        runtime.runningNodes.remove(plan.nodeId);
+        runtime.lastErrors[plan.nodeId] =
+            'runtime node exited with code 1: validate config: dns server required (set net.dns)';
+      }));
+
+      await expectLater(
+        controller.startNodes([plan]),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('Broken node'),
+              contains('dns server required'),
+            ),
+          ),
+        ),
+      );
+    });
+
     test('keeps each node config in its own working directory', () {
       final controller = buildController();
 
@@ -325,6 +364,7 @@ class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   final Map<String, DateTime> runningNodes = {};
+  final Map<String, String> lastErrors = {};
   final List<String> startCalls = [];
   final List<List<String>> startArguments = [];
   final List<String> stopCalls = [];
@@ -343,6 +383,10 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
     required String nodeId,
   }) async =>
       runningNodes[nodeId];
+
+  @override
+  Future<String?> readNodeLastError({required String nodeId}) async =>
+      lastErrors[nodeId];
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {
