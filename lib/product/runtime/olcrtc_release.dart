@@ -1,4 +1,4 @@
-const olcRtcPinnedCommit = '5dd6822d807e3352fe4452a3b071e043d958a020';
+const olcRtcPinnedCommit = 'ad5758513335cda54362a64621c29e9d9fe759b4';
 const olcRtcPinnedReleaseTag = 'git-$olcRtcPinnedCommit';
 const olcRtcSourceRepository =
     'https://github.com/openlibrecommunity/olcrtc.git';

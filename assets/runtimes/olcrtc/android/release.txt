@@ -1,4 +1,4 @@
-git-5dd6822d807e3352fe4452a3b071e043d958a020
+git-ad5758513335cda54362a64621c29e9d9fe759b4
 https://github.com/openlibrecommunity/olcrtc.git
 armeabi-v7a:arm:7
 arm64-v8a:arm64:

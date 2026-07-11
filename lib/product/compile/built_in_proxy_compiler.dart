@@ -232,6 +232,8 @@ class BuiltInProxyCompiler {
       );
     }
 
+    _rejectUnsafeOlcRtcProfileOverrides(rawConfig['profiles']);
+
     return BuiltInProxyNodePlan(
       nodeId: nodeId,
       name: definition.name,
@@ -244,6 +246,48 @@ class BuiltInProxyCompiler {
         'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
       },
     );
+  }
+
+  void _rejectUnsafeOlcRtcProfileOverrides(dynamic profiles) {
+    if (profiles == null) {
+      return;
+    }
+    if (profiles is! List) {
+      throw const FormatException(
+        'olcrtc `profiles` must be a list.',
+      );
+    }
+
+    void visit(dynamic value) {
+      if (value is List) {
+        value.forEach(visit);
+        return;
+      }
+      if (value is! Map) {
+        return;
+      }
+
+      final map = _asStringKeyedMap(value);
+      final socks = map['socks'];
+      if (socks is Map) {
+        final socksMap = _asStringKeyedMap(socks);
+        if (socksMap.containsKey('host') || socksMap.containsKey('port')) {
+          throw const FormatException(
+            'olcrtc profiles must not override `socks.host` or `socks.port`; local bind is owned by the client.',
+          );
+        }
+      }
+      final crypto = map['crypto'];
+      if (crypto is Map && _asStringKeyedMap(crypto).containsKey('key_file')) {
+        throw const FormatException(
+          'olcrtc profiles must not use `crypto.key_file`.',
+        );
+      }
+
+      map.values.forEach(visit);
+    }
+
+    visit(profiles);
   }
 
   BuiltInProxyNodePlan _buildByedpiPlan({

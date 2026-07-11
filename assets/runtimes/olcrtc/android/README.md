@@ -5,3 +5,7 @@ dart setup.dart android --out runtime-assets
 ```
 
 The source commit is pinned in `lib/product/runtime/olcrtc_release.dart`.
+
+OlcRTC embeds its default name dictionaries. The generated config keeps the
+required `data: data` value; missing external dictionary overrides are accepted,
+so no separate runtime data directory is packaged.

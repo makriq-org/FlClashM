@@ -233,6 +233,32 @@ void main() {
         [path.join(sharedLayout.nodesDirectoryPath, 'node-b', 'config.yaml')],
       ]);
       expect(runtime.stopCalls, ['node-a', 'node-b']);
+      expect(
+        Directory(path.join(path.dirname(sharedLayout.executablePath), 'data'))
+            .existsSync(),
+        isFalse,
+        reason: 'OlcRTC uses embedded dictionaries when overrides are absent',
+      );
+    });
+
+    test('keeps each node config in its own working directory', () {
+      final controller = buildController();
+
+      final nodeA = controller.resolveNodeLayout(sharedLayout, 'node-a');
+      final nodeB = controller.resolveNodeLayout(sharedLayout, 'node-b');
+
+      expect(
+        nodeA.workingDirectoryPath,
+        path.join(sharedLayout.nodesDirectoryPath, 'node-a'),
+      );
+      expect(nodeA.configPath,
+          path.join(nodeA.workingDirectoryPath, 'config.yaml'));
+      expect(
+        nodeB.workingDirectoryPath,
+        path.join(sharedLayout.nodesDirectoryPath, 'node-b'),
+      );
+      expect(nodeB.configPath,
+          path.join(nodeB.workingDirectoryPath, 'config.yaml'));
     });
 
     test('creates runtime directories during pending update check', () async {
