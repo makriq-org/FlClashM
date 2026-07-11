@@ -117,6 +117,10 @@ class ServicePlugin :
                 val nodeId = call.argument<String>("nodeId") ?: ""
                 result.successOnMain(Service.getRuntimeNodeRunTime(nodeId))
             }
+            "getRuntimeNodeLastError" -> launch {
+                val nodeId = call.argument<String>("nodeId") ?: ""
+                result.successOnMain(Service.getRuntimeNodeLastError(nodeId))
+            }
             "resolveNativeRuntimeLibrary" -> {
                 val name = call.argument<String>("name") ?: ""
                 val file = File(context.applicationInfo.nativeLibraryDir, name)

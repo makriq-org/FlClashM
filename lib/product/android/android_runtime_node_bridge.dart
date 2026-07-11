@@ -16,6 +16,10 @@ abstract interface class RuntimeNodePlatformBridge {
     required String nodeId,
   });
 
+  Future<String?> readNodeLastError({
+    required String nodeId,
+  });
+
   Future<void> saveColdStartNodes(String manifestJson);
 
   Future<void> clearColdStartNodes();
@@ -72,6 +76,20 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
       return null;
     }
     return DateTime.fromMillisecondsSinceEpoch(runTime);
+  }
+
+  @override
+  Future<String?> readNodeLastError({
+    required String nodeId,
+  }) async {
+    final message = await _channel.invokeMethod<String>(
+      'getRuntimeNodeLastError',
+      <String, String>{'nodeId': nodeId},
+    );
+    if (message == null || message.trim().isEmpty) {
+      return null;
+    }
+    return message.trim();
   }
 
   @override

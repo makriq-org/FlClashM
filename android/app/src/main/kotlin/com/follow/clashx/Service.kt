@@ -322,6 +322,9 @@ object Service {
     suspend fun getRuntimeNodeRunTime(nodeId: String): Long =
         delegate.useService { it.getRuntimeNodeRunTime(nodeId) }.getOrNull() ?: 0L
 
+    suspend fun getRuntimeNodeLastError(nodeId: String): String =
+        delegate.useService { it.getRuntimeNodeLastError(nodeId) }.getOrNull() ?: ""
+
     suspend fun startListener(): Result<Unit> =
         delegate.useService { it.startListener() }
 

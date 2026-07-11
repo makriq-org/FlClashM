@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -378,8 +379,50 @@ abstract class LocalNodeController<
   );
 
   @protected
-  Future<void> confirmStartedNode(BuiltInProxyNodePlan plan) =>
-      waitForListener(plan.listenHost, plan.listenPort);
+  Future<void> confirmStartedNode(BuiltInProxyNodePlan plan) async {
+    Object? listenerError;
+    StackTrace? listenerStackTrace;
+    var listenerReady = false;
+    var listenerCompleted = false;
+    unawaited(
+      waitForListener(plan.listenHost, plan.listenPort).then((_) {
+        listenerReady = true;
+        listenerCompleted = true;
+      }).catchError((Object error, StackTrace stackTrace) {
+        listenerError = error;
+        listenerStackTrace = stackTrace;
+        listenerCompleted = true;
+      }),
+    );
+
+    var missingProcessChecks = 0;
+    while (!listenerCompleted) {
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (await runtime.readNodeStartTime(nodeId: plan.nodeId) != null) {
+        missingProcessChecks = 0;
+        continue;
+      }
+      final processError = await runtime.readNodeLastError(nodeId: plan.nodeId);
+      if (processError == null && ++missingProcessChecks < 3) {
+        continue;
+      }
+      throw StateError(
+        '$typeLabel node `${plan.name}` exited before its local listener was ready'
+        '${processError == null ? '.' : ': $processError'}',
+      );
+    }
+
+    if (listenerReady) {
+      return;
+    }
+    if (listenerError != null) {
+      Error.throwWithStackTrace(
+        listenerError!,
+        listenerStackTrace ?? StackTrace.current,
+      );
+    }
+    throw StateError('$typeLabel node `${plan.name}` listener check failed.');
+  }
 
   @protected
   Future<void> confirmStageRestart(BuiltInProxyNodePlan plan) =>

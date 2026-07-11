@@ -365,6 +365,9 @@ class RemoteService : Service() {
         override fun getRuntimeNodeRunTime(nodeId: String): Long =
             RuntimeNodeProcessManager.readStartTime(nodeId)
 
+        override fun getRuntimeNodeLastError(nodeId: String): String =
+            RuntimeNodeProcessManager.readLastError(nodeId)
+
         override fun startListener() {
             Core.startListener()
         }

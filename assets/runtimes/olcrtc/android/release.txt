@@ -1,5 +1,7 @@
-git-5dd6822d807e3352fe4452a3b071e043d958a020
+git-ad5758513335cda54362a64621c29e9d9fe759b4
 https://github.com/openlibrecommunity/olcrtc.git
+go1.26.4
+ndk-28.0.13004108
 armeabi-v7a:arm:7
 arm64-v8a:arm64:
 x86_64:amd64:

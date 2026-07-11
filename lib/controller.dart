@@ -144,6 +144,15 @@ class AppController {
     _updateStatusFuture = task;
     try {
       await task;
+    } catch (e, stackTrace) {
+      commonPrint.log("updateStatus failed: $e\n$stackTrace");
+      await StatusBarManager.updateIcon(isConnected: false);
+      if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
+        await globalState.showMessage(
+          title: appLocalizations.tip,
+          message: TextSpan(text: e.toString()),
+        );
+      }
     } finally {
       if (identical(_updateStatusFuture, task)) {
         _updateStatusFuture = null;
@@ -731,8 +740,14 @@ class AppController {
       return;
     }
     unawaited(
-      _setupClashConfig(refreshProfile: false).catchError((Object e) {
+      _setupClashConfig(refreshProfile: false).catchError((Object e) async {
         commonPrint.log("preloadClashConfig failed: $e");
+        if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
+          await globalState.showMessage(
+            title: appLocalizations.tip,
+            message: TextSpan(text: e.toString()),
+          );
+        }
         return false;
       }),
     );
