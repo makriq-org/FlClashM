@@ -977,6 +977,13 @@ void main() {
                 'dns': '8.8.8.8:53',
               },
               'debug': true,
+              'profiles': [
+                {
+                  'name': 'fallback',
+                  'auth': {'provider': 'telemost'},
+                  'future_safe_option': {'enabled': true},
+                },
+              ],
             },
           ],
         },
@@ -1032,6 +1039,9 @@ void main() {
       expect(runtimeConfig['socks']['host'], '127.0.0.1');
       expect(runtimeConfig['socks']['port'], builtInNode.listenPort);
       expect(runtimeConfig['debug'], isTrue);
+      expect(runtimeConfig['profiles'][0]['name'], 'fallback');
+      expect(runtimeConfig['profiles'][0]['future_safe_option']['enabled'],
+          isTrue);
     });
 
     test('rejects unsafe olcrtc local bind overrides', () async {
@@ -1144,6 +1154,47 @@ void main() {
         'name': 'OLC Key File',
         'type': 'olcrtc',
         'crypto': {'key_file': './olcrtc.key'},
+      });
+      await expectRejected({
+        'name': 'OLC Nested Bind Host',
+        'type': 'olcrtc',
+        'profiles': [
+          {
+            'name': 'fallback',
+            'socks': {'host': '0.0.0.0'},
+          },
+        ],
+      });
+      await expectRejected({
+        'name': 'OLC Deep Nested Bind Port',
+        'type': 'olcrtc',
+        'profiles': [
+          {
+            'name': 'fallback',
+            'future': {
+              'profiles': [
+                {
+                  'socks': {'port': 1080},
+                },
+              ],
+            },
+          },
+        ],
+      });
+      await expectRejected({
+        'name': 'OLC Nested Key File',
+        'type': 'olcrtc',
+        'profiles': [
+          {
+            'name': 'fallback',
+            'crypto': {'key_file': './olcrtc.key'},
+          },
+        ],
+      });
+      await expectRejected({
+        'name': 'OLC Invalid Profiles',
+        'type': 'olcrtc',
+        'profiles': {'name': 'not-a-list'},
       });
     });
   });

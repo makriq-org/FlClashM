@@ -1,4 +1,5 @@
 export 'built_in_proxy_compiler.dart';
+export 'olcrtc_config_validator.dart';
 export 'product_profile_pipeline.dart';
 export 'product_profile_validator.dart';
 export 'profile_compiler.dart';

@@ -420,11 +420,11 @@ class FlVpnService : VpnService(), IBaseService {
             if (startedAt <= 0L) {
                 throw IllegalStateException("Runtime node `${node.nodeId}` did not start")
             }
-            waitForRuntimeNodeListener(node.host, node.port)
+            waitForRuntimeNodeListener(node.nodeId, node.host, node.port)
         }
     }
 
-    private suspend fun waitForRuntimeNodeListener(host: String, port: Int) {
+    private suspend fun waitForRuntimeNodeListener(nodeId: String, host: String, port: Int) {
         withContext(Dispatchers.IO) {
             repeat(50) { attempt ->
                 runCatching {
@@ -432,6 +432,10 @@ class FlVpnService : VpnService(), IBaseService {
                         socket.soTimeout = 200
                     }
                     return@withContext
+                }
+                val lastError = RuntimeNodeProcessManager.readLastError(nodeId)
+                if (lastError.isNotEmpty()) {
+                    throw IllegalStateException("Runtime node `$nodeId` failed: $lastError")
                 }
                 if (attempt == 49) {
                     throw IllegalStateException("Timed out waiting for runtime node listener on $host:$port")

@@ -57,7 +57,10 @@ proxies:
     room:
       id: "https://meet.example.org/room"
     crypto:
-      key: "0123456789abcdef..."
+      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    net:
+      transport: datachannel
+      dns: "1.1.1.1:53"
 ```
 
 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — 通过 Chromium 网络栈进行流量模仿。对 TLS 指纹识别和主动探测具有抵抗力。

@@ -60,6 +60,8 @@ interface IRemoteInterface {
 
     long getRuntimeNodeRunTime(in String nodeId);
 
+    String getRuntimeNodeLastError(in String nodeId);
+
     void startListener();
 
     void stopListener();

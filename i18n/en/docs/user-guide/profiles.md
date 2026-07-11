@@ -75,16 +75,18 @@ proxies:
       key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     net:
       transport: datachannel
+      dns: "1.1.1.1:53"
 ```
 
 **Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `auth.provider` | Auth provider (`jitsi`, `telemost`) |
+| `auth.provider` | Auth provider (`jitsi`, `telemost`, `wbstream`, `none`) |
 | `room.id` | Video call room identifier |
-| `crypto.key` | 256-bit encryption key (hex) |
-| `net.transport` | Transport (`datachannel`, `vp8channel`) |
+| `crypto.key` | 256-bit encryption key: exactly 64 hexadecimal characters |
+| `net.transport` | Transport (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
+| `net.dns` | Required DNS resolver in `host:port` format |
 
 ## NaiveProxy
 

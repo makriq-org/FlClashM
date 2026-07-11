@@ -75,16 +75,18 @@ proxies:
       key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     net:
       transport: datachannel
+      dns: "1.1.1.1:53"
 ```
 
 **参数：**
 
 | 参数 | 描述 |
 |------|------|
-| `auth.provider` | 认证提供商 (`jitsi`, `telemost`) |
+| `auth.provider` | 认证提供商 (`jitsi`, `telemost`, `wbstream`, `none`) |
 | `room.id` | 视频通话房间标识符 |
 | `crypto.key` | 256 位加密密钥（十六进制） |
-| `net.transport` | 传输方式 (`datachannel`, `vp8channel`) |
+| `net.transport` | 传输方式 (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
+| `net.dns` | 必填 DNS 服务器，格式为 `host:port` |
 
 ## NaiveProxy
 
