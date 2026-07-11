@@ -1,5 +1,7 @@
 const olcRtcPinnedCommit = 'ad5758513335cda54362a64621c29e9d9fe759b4';
 const olcRtcPinnedReleaseTag = 'git-$olcRtcPinnedCommit';
+const olcRtcPinnedGoVersion = 'go1.26.4';
+const olcRtcPinnedNdkVersion = '28.0.13004108';
 const olcRtcSourceRepository =
     'https://github.com/openlibrecommunity/olcrtc.git';
 const olcRtcBundledAssetRoot = 'assets/runtimes/olcrtc/android';

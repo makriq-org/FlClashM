@@ -5,6 +5,7 @@ dart setup.dart android --out runtime-assets
 ```
 
 The source commit is pinned in `lib/product/runtime/olcrtc_release.dart`.
+That contract also pins Go and Android NDK versions used for reproducible builds.
 The same file pins the SHA-256 digest of every ABI binary. Setup and tests
 reject stale or modified binaries even when `release.txt` still matches.
 

@@ -14,7 +14,7 @@ const _coreDir = 'core';
 const _distDir = 'dist';
 const _libclashDir = 'libclash/android';
 const _coreVersionFile = 'lib/core_version.dart';
-const _ndkVersion = '28.0.13004108';
+const _ndkVersion = olcRtcPinnedNdkVersion;
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
 const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
@@ -494,6 +494,21 @@ Directory _resolveNdkBinDir() {
 }
 
 Directory _findNdkBinDir(String ndkRoot) {
+  final properties = File(_join(ndkRoot, 'source.properties'));
+  if (!properties.existsSync()) {
+    throw StateError('Android NDK metadata not found in $ndkRoot.');
+  }
+  final revision = RegExp(
+    r'^Pkg\.Revision\s*=\s*(\S+)\s*$',
+    multiLine: true,
+  ).firstMatch(properties.readAsStringSync())?.group(1);
+  if (revision != _ndkVersion) {
+    throw StateError(
+      'Android NDK $_ndkVersion is required; found ${revision ?? 'unknown'} '
+      'in $ndkRoot.',
+    );
+  }
+
   final prebuiltRoot = Directory(
     _join(ndkRoot, 'toolchains', 'llvm', 'prebuilt'),
   );
@@ -807,6 +822,7 @@ Future<void> _syncOlcRtcAssets() async {
   }
 
   final sourceDir = await _prepareOlcRtcSource();
+  await _requireGoVersion(olcRtcPinnedGoVersion);
   final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
   if (!targetRoot.existsSync()) {
     targetRoot.createSync(recursive: true);
@@ -922,11 +938,35 @@ String _buildOlcRtcStamp() {
   final lines = <String>[
     olcRtcPinnedReleaseTag,
     olcRtcSourceRepository,
+    olcRtcPinnedGoVersion,
+    'ndk-$olcRtcPinnedNdkVersion',
     ...olcRtcReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
     ),
   ];
   return lines.join('\n');
+}
+
+Future<void> _requireGoVersion(String expectedVersion) async {
+  final result = await Process.run(
+    'go',
+    const ['env', 'GOVERSION'],
+    runInShell: true,
+  );
+  if (result.exitCode != 0) {
+    throw ProcessException(
+      'go',
+      const ['env', 'GOVERSION'],
+      'unable to read Go version: ${result.stderr}',
+      result.exitCode,
+    );
+  }
+  final actualVersion = result.stdout.toString().trim();
+  if (actualVersion != expectedVersion) {
+    throw StateError(
+      'olcrtc must be built with $expectedVersion; found $actualVersion.',
+    );
+  }
 }
 
 Future<Uint8List> _downloadBytes(Uri uri) async {

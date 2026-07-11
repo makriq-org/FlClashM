@@ -9,6 +9,8 @@ void main() {
     final expectedStamp = <String>[
       olcRtcPinnedReleaseTag,
       olcRtcSourceRepository,
+      olcRtcPinnedGoVersion,
+      'ndk-$olcRtcPinnedNdkVersion',
       ...olcRtcReleaseAssets.values.map(
         (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
       ),
