@@ -94,19 +94,7 @@ flutter:
     - assets/fonts/
     - assets/images/
     - assets/images/avatars/
-    - assets/runtimes/
-    - assets/runtimes/naiveproxy/android/
-    - assets/runtimes/naiveproxy/android/armeabi-v7a/
-    - assets/runtimes/naiveproxy/android/arm64-v8a/
-    - assets/runtimes/naiveproxy/android/x86_64/
-    - assets/runtimes/olcrtc/android/
-    - assets/runtimes/olcrtc/android/armeabi-v7a/
-    - assets/runtimes/olcrtc/android/arm64-v8a/
-    - assets/runtimes/olcrtc/android/x86_64/
-    - assets/runtimes/byedpi/android/
-    - assets/runtimes/byedpi/android/armeabi-v7a/
-    - assets/runtimes/byedpi/android/arm64-v8a/
-    - assets/runtimes/byedpi/android/x86_64/
+    - assets/runtimes/byedpi/android/byebyeedpi-strategies.list
     - assets/images/icons/
   fonts:
     - family: JetBrainsMono
