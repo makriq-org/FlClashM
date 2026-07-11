@@ -168,8 +168,7 @@ nix develop -c make clean
 ```
 
 Отдельно доступны цели `test`, `analyze`, `boundaries`, `release-contract` и
-`drift`. Цель `fetch-upstream` обновляет ссылки `upstream` и `origin`, а `check`
-ничего не загружает из сети.
+`drift`.
 
 Отдельные команды для сборки без Nix:
 
