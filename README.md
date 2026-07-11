@@ -146,6 +146,30 @@ tun:
 
 Нужны Flutter 3.41.x, JDK 17, Android SDK/NDK и Go 1.26.x.
 
+На NixOS все зависимости и их версии задаёт `flake.nix`. Отладочный пакет для
+arm64 собирается одной командой:
+
+```bash
+nix develop -c make dev
+```
+
+Результат: `build/app/outputs/flutter-apk/app-debug.apk`.
+
+Другие локальные задачи запускаются так же:
+
+```bash
+nix develop -c make fetch-upstream check
+nix develop -c make install-dev
+nix develop -c make release
+nix develop -c make clean
+```
+
+Отдельно доступны цели `test`, `analyze`, `boundaries`, `release-contract` и
+`drift`. Цель `fetch-upstream` обновляет ссылки `upstream` и `origin`, а `check`
+ничего не загружает из сети.
+
+Отдельные команды для сборки без Nix:
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core
