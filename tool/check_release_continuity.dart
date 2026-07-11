@@ -319,9 +319,9 @@ void _checkBuildWorkflow({
   _expectPatternExists(
     content: content,
     pattern: RegExp(
-      r'dart\s+tool/check_android_release_signing\.dart\s+dist/FlClashM-android-arm64-v8a\.apk',
+      r'dart\s+tool/check_android_release_signing\.dart\s+dist/\*\.apk\s+dist/\*\.aab',
     ),
-    label: 'release signing continuity check in `$buildWorkflowPath`',
+    label: 'all-artifact release signing check in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(

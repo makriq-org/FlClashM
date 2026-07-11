@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
   HAS_RELEASE_SIGNING: ${{ secrets.KEYSTORE != '' && secrets.KEY_ALIAS != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
@@ -13,13 +17,58 @@ env:
   NDK_VERSION: "28.0.13004108"
 
 jobs:
-  build:
+  release-guards:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream base
+        run: |
+          git remote add upstream https://github.com/pluralplay/FlClashX.git 2>/dev/null || \
+            git remote set-url upstream https://github.com/pluralplay/FlClashX.git
+          git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Check product boundaries
+        run: dart tool/check_product_boundaries.dart
+
+      - name: Check release continuity
+        run: |
+          dart tool/check_release_continuity.dart \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --github-ref-name "${{ github.ref_name }}"
+
+      - name: Check base drift
+        run: dart tool/check_base_drift.dart
+
+      - name: Run product and tool tests
+        run: flutter test test/product test/tool
+
+      - name: Run targeted analyze
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [release-guards]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Free disk space
         run: |
@@ -33,13 +82,13 @@ jobs:
           df -h
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.41.7"
           cache: true
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
       - name: Install Android NDK
         run: |
@@ -49,14 +98,8 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Check release continuity
-        run: |
-          dart tool/check_release_continuity.dart \
-            --github-repository "${GITHUB_REPOSITORY}" \
-            --github-ref-name "${{ github.ref_name }}"
-
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: "1.26.3"
           cache-dependency-path: core/go.sum
@@ -86,7 +129,7 @@ jobs:
         run: dart setup.dart android --out core
 
       - name: Upload Android runtime assets
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: artifact-runtime-assets-android
           path: |
@@ -96,7 +139,7 @@ jobs:
           overwrite: true
 
       - name: Upload Android core artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: artifact-core-android
           path: |
@@ -121,7 +164,7 @@ jobs:
             artifact: artifact-android-appbundle
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Free disk space
         run: |
@@ -135,7 +178,7 @@ jobs:
           df -h
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -159,13 +202,13 @@ jobs:
         run: flutter pub get
 
       - name: Download Android core artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           name: artifact-core-android
           path: .
 
       - name: Download Android runtime assets
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           name: artifact-runtime-assets-android
           path: .
@@ -183,7 +226,7 @@ jobs:
             --version-name "$version_name"
 
       - name: Upload Android ${{ matrix.out }} artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: ${{ matrix.artifact }}
           path: ./dist
@@ -196,13 +239,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -211,14 +254,14 @@ jobs:
         run: flutter pub get
 
       - name: Download Android release artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           path: ./dist/
           pattern: artifact-android-*
           merge-multiple: true
 
       - name: Assert Android release signing continuity
-        run: dart tool/check_android_release_signing.dart dist/FlClashM-android-arm64-v8a.apk
+        run: dart tool/check_android_release_signing.dart dist/*.apk dist/*.aab
 
       - name: Generate release metadata
         run: |
@@ -253,7 +296,7 @@ jobs:
             --github-repository "${GITHUB_REPOSITORY}"
 
       - name: Upload Android artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: artifact-android
           path: ./dist
@@ -267,12 +310,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
 
       - name: Download Android artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           path: ./dist/
           pattern: artifact-android
@@ -312,7 +355,7 @@ jobs:
 
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: ./dist/*
           body_path: "./release.md"
@@ -320,7 +363,7 @@ jobs:
 
       - name: Release (Pre-release)
         if: ${{ env.IS_STABLE != 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: ./dist/*
           body_path: "./release.md"

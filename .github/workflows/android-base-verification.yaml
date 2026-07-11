@@ -2,46 +2,84 @@ name: android-base-verification
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
-      - "analysis_options.yaml"
-      - "android/**"
-      - "core/**"
-      - "lib/**"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "setup.dart"
-      - "test/product/**"
-      - "tool/**"
   push:
     branches:
-      - "**"
-    paths:
-      - ".github/workflows/**"
-      - "analysis_options.yaml"
-      - "android/**"
-      - "core/**"
-      - "lib/**"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - "setup.dart"
-      - "test/product/**"
-      - "tool/**"
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NDK_VERSION: "28.0.13004108"
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      verification: ${{ steps.changes.outputs.verification }}
+      android: ${{ steps.changes.outputs.android }}
+      full-matrix: ${{ steps.changes.outputs.full-matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+
+      - name: Detect verification scope
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          verification=false
+          android=false
+          full_matrix=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+             [ -z "$BASE_SHA" ] || \
+             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            verification=true
+            android=true
+            full_matrix=true
+          else
+            changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+            if grep -Eq '^(.github/workflows/|analysis_options\.yaml$|android/|assets/runtimes/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/|CHANGELOG\.md$|\.github/(pre_)?release_template\.md$)' <<< "$changed_files"; then
+              verification=true
+            fi
+
+            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|analysis_options\.yaml$|android/|assets/runtimes/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/)' <<< "$changed_files"; then
+              android=true
+            fi
+
+            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|android/|core/|assets/runtimes/|setup\.dart$|lib/product/runtime/)' <<< "$changed_files"; then
+              full_matrix=true
+            fi
+          fi
+
+          {
+            echo "verification=$verification"
+            echo "android=$android"
+            echo "full-matrix=$full_matrix"
+          } >> "$GITHUB_OUTPUT"
+
   base-guards:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.verification == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
 
@@ -52,7 +90,7 @@ jobs:
           git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -69,25 +107,27 @@ jobs:
       - name: Check base drift
         run: dart tool/check_base_drift.dart
 
-      - name: Run product tests
-        run: flutter test test/product
+      - name: Run product and tool tests
+        run: flutter test test/product test/tool
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   android-smoke:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           submodules: recursive
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
       - name: Install Android NDK
         run: |
@@ -95,13 +135,13 @@ jobs:
           echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: "1.26.3"
           cache-dependency-path: core/go.sum
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -120,6 +160,67 @@ jobs:
           flutter build apk \
             --release \
             --target-platform android-arm64 \
+            --dart-define=APP_ENV=pre \
+            --dart-define=CORE_VERSION="$core_version"
+
+      - name: Assert smoke artifact exists
+        run: test -f build/app/outputs/flutter-apk/app-release.apk
+
+  android-extra-abi-smoke:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.full-matrix == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm
+            target-platform: android-arm
+          - arch: amd64
+            target-platform: android-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          submodules: recursive
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.3"
+          cache-dependency-path: core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Android core smoke artifact
+        run: dart setup.dart android --arch ${{ matrix.arch }} --out core
+
+      - name: Build Android release smoke APK
+        shell: bash
+        run: |
+          core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\(.*\)';$/\1/p" lib/core_version.dart)
+          test -n "$core_version"
+          flutter build apk \
+            --release \
+            --target-platform ${{ matrix.target-platform }} \
             --dart-define=APP_ENV=pre \
             --dart-define=CORE_VERSION="$core_version"
 
