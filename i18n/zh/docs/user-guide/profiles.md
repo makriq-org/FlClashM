@@ -6,6 +6,8 @@
 
 **类型：** `byedpi`
 
+UDP 默认启用。可在节点中设置 `udp: false` 将其关闭。
+
 支持两种模式：
 
 ### 自动策略选择
@@ -63,6 +65,8 @@ proxies:
 
 **类型：** `olcrtc`
 
+不支持 UDP；只允许设置 `udp: false`。
+
 ```yaml
 proxies:
   - name: "rtc"
@@ -92,6 +96,8 @@ proxies:
 
 **类型：** `naiveproxy`
 
+不支持 UDP；只允许设置 `udp: false`。
+
 ```yaml
 proxies:
   - name: "naive"
@@ -104,4 +110,5 @@ proxies:
 - 内置节点只能在 `proxies` 部分定义。
 - 客户端自动管理本地地址和端口。
 - 配置文件不能设置 `listen`、`server`、`port`、`ip`。
-- 所有内置节点仅支持 TCP（始终 `udp: false`）。
+- ByeDPI 默认使用 UDP，可通过 `udp: false` 关闭。NaiveProxy 和 OlcRTC
+  不支持 UDP。

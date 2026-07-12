@@ -1,17 +1,13 @@
 import 'package:flutter/foundation.dart';
 
-enum BuiltInProxyType {
-  naiveproxy,
-  byedpi,
-  olcrtc,
-}
+enum BuiltInProxyType { naiveproxy, byedpi, olcrtc }
 
 extension BuiltInProxyTypeLabel on BuiltInProxyType {
   String get label => switch (this) {
-        BuiltInProxyType.naiveproxy => 'naiveproxy',
-        BuiltInProxyType.byedpi => 'byedpi',
-        BuiltInProxyType.olcrtc => 'olcrtc',
-      };
+    BuiltInProxyType.naiveproxy => 'naiveproxy',
+    BuiltInProxyType.byedpi => 'byedpi',
+    BuiltInProxyType.olcrtc => 'olcrtc',
+  };
 
   static BuiltInProxyType? tryParse(String? value) {
     final normalizedValue = value?.trim().toLowerCase();
@@ -27,22 +23,16 @@ extension BuiltInProxyTypeLabel on BuiltInProxyType {
   }
 }
 
-enum BuiltInProxyProtocol {
-  socks5,
-  http,
-}
+enum BuiltInProxyProtocol { socks5, http }
 
 extension BuiltInProxyProtocolLabel on BuiltInProxyProtocol {
   String get label => switch (this) {
-        BuiltInProxyProtocol.socks5 => 'socks5',
-        BuiltInProxyProtocol.http => 'http',
-      };
+    BuiltInProxyProtocol.socks5 => 'socks5',
+    BuiltInProxyProtocol.http => 'http',
+  };
 }
 
-enum BuiltInProxyAvailabilityStatus {
-  supported,
-  unsupported,
-}
+enum BuiltInProxyAvailabilityStatus { supported, unsupported }
 
 @immutable
 class BuiltInProxyAvailability {
@@ -72,6 +62,7 @@ class BuiltInProxyDescriptor {
     required this.type,
     required this.protocol,
     required this.supportsUdp,
+    required this.defaultUdp,
     required this.listenPortRangeStart,
     required this.listenPortRangeSize,
     required this.availability,
@@ -80,6 +71,7 @@ class BuiltInProxyDescriptor {
   final BuiltInProxyType type;
   final BuiltInProxyProtocol protocol;
   final bool supportsUdp;
+  final bool defaultUdp;
   final int listenPortRangeStart;
   final int listenPortRangeSize;
   final BuiltInProxyAvailability availability;
@@ -121,12 +113,12 @@ class BuiltInProxyNodePlan {
   final Map<String, String> files;
 
   Map<String, dynamic> toProxyConfig() => <String, dynamic>{
-        'name': name,
-        'type': protocol.label,
-        'server': listenHost,
-        'port': listenPort,
-        'udp': udp,
-      };
+    'name': name,
+    'type': protocol.label,
+    'server': listenHost,
+    'port': listenPort,
+    'udp': udp,
+  };
 }
 
 class UnsupportedBuiltInProxyException implements Exception {

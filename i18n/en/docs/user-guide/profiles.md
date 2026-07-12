@@ -6,6 +6,8 @@ Built-in nodes are defined directly in the YAML profile and work like regular pr
 
 **Type:** `byedpi`
 
+UDP is enabled by default. Set `udp: false` on the node to disable it.
+
 Supports two modes:
 
 ### Automatic strategy selection
@@ -63,6 +65,8 @@ proxies:
 
 **Type:** `olcrtc`
 
+UDP is not supported; only `udp: false` is allowed.
+
 ```yaml
 proxies:
   - name: "rtc"
@@ -92,6 +96,8 @@ proxies:
 
 **Type:** `naiveproxy`
 
+UDP is not supported; only `udp: false` is allowed.
+
 ```yaml
 proxies:
   - name: "naive"
@@ -104,4 +110,5 @@ proxies:
 - Built-in nodes can only be defined in the `proxies` section.
 - The client manages local addresses and ports automatically.
 - The profile cannot set `listen`, `server`, `port`, `ip`.
-- All built-in nodes only work with TCP (`udp: false` always).
+- ByeDPI uses UDP by default and allows it to be disabled with `udp: false`.
+  NaiveProxy and OlcRTC do not support UDP.

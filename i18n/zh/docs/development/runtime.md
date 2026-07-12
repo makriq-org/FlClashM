@@ -16,6 +16,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 - **类型：** `naiveproxy`
 - **必填字段：** `name`, `proxy`
+- 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
 - 客户端自动选择本地 SOCKS5 地址
 - 使用自动生成的 `config.json` 启动
 
@@ -24,6 +25,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **类型：** `olcrtc`
 - **必填字段：** `name`, `auth.provider`, `room.id`, `crypto.key`
 - 仅在 CNC（客户端）模式下工作
+- 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
 
 ### byedpi
 
@@ -31,6 +33,8 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **`manual` 模式：** 接受 `args` 字符串
 - **`auto` 模式：** 循环尝试 ByeByeDPI 策略，缓存有效的策略
 - 支持 `{sni}` 替换
+- UDP 默认启用并传递给 Mihomo 本地节点；`udp: false` 可将其关闭，
+  ByeDPI 进程不会收到单独的 UDP 参数
 
 ## 限制
 

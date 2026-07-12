@@ -16,6 +16,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 - **نوع:** `naiveproxy`
 - **فیلدهای الزامی:** `name`, `proxy`
+- UDP پشتیبانی نمی‌شود؛ نود محلی Mihomo با `udp: false` ساخته می‌شود
 - کلاینت آدرس SOCKS5 محلی را خودکار انتخاب می‌کند
 - با `config.json` تولیدشده خودکار اجرا می‌شود
 
@@ -24,6 +25,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **نوع:** `olcrtc`
 - **فیلدهای الزامی:** `name`, `auth.provider`, `room.id`, `crypto.key`
 - فقط در حالت CNC (کلاینت) کار می‌کند
+- UDP پشتیبانی نمی‌شود؛ نود محلی Mihomo با `udp: false` ساخته می‌شود
 
 ### byedpi
 
@@ -31,6 +33,8 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **حالت `manual`:** رشته `args` را می‌پذیرد
 - **حالت `auto`:** استراتژی‌های ByeByeDPI را بررسی و نسخه کارآمد را کش می‌کند
 - جایگزینی `{sni}` پشتیبانی می‌شود
+- UDP به‌طور پیش‌فرض فعال و به نود محلی Mihomo داده می‌شود؛ `udp: false` آن را
+  غیرفعال می‌کند و هیچ پارامتر UDP به فرایند ByeDPI داده نمی‌شود
 
 ## محدودیت‌ها
 

@@ -16,6 +16,7 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 
 - **Type:** `naiveproxy`
 - **Required fields:** `name`, `proxy`
+- UDP is unsupported; the resulting local Mihomo node uses `udp: false`
 - The client chooses the local SOCKS5 address automatically
 - Launched with an auto-generated `config.json`
 
@@ -24,6 +25,7 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 - **Type:** `olcrtc`
 - **Required fields:** `name`, `auth.provider`, `room.id`, `crypto.key`
 - Only works in CNC (client) mode
+- UDP is unsupported; the resulting local Mihomo node uses `udp: false`
 
 ### byedpi
 
@@ -31,6 +33,8 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 - **`manual` mode:** accepts an `args` string
 - **`auto` mode:** cycles through ByeByeDPI strategies, caches the working one
 - Supports `{sni}` substitution
+- UDP is enabled by default and passed to the local Mihomo node; `udp: false`
+  disables it, and no UDP argument is passed to the ByeDPI process
 
 ## Limitations
 

@@ -33,7 +33,7 @@
 
 与普通客户端不同，FlClashM 可以**直接从 YAML 配置文件启动特殊节点**。它们看起来像普通代理，并参与路由规则：一个网站可以通过 ByeDPI 路由，另一个通过 OlcRTC，其他所有流量直连。
 
-**[ByeDPI](https://github.com/hufrea/byedpi)** — 通过 TCP 数据包操作绕过 DPI。FlClashM 自动从 ByeByeDPI 列表中循环尝试策略并缓存有效的策略。
+**[ByeDPI](https://github.com/hufrea/byedpi)** — 通过数据包操作绕过 DPI。FlClashM 自动从 ByeByeDPI 列表中循环尝试策略并缓存有效的策略。UDP 默认启用，可为单个节点设置 `udp: false` 将其关闭。
 
 ```yaml
 proxies:
