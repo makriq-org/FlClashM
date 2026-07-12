@@ -33,7 +33,7 @@ So I made **FlClashM**. Its goal is to become that **single button**: the provid
 
 Unlike regular clients, FlClashM can launch **special nodes directly from the YAML profile**. They look like regular proxies and participate in routing rules: one site can be routed through ByeDPI, another through OlcRTC, and everything else directly.
 
-**[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through TCP packet manipulation. FlClashM automatically cycles through strategies from the ByeByeDPI list and caches the working one.
+**[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through packet manipulation. FlClashM automatically cycles through strategies from the ByeByeDPI list and caches the working one. UDP is enabled by default and can be disabled per node with `udp: false`.
 
 ```yaml
 proxies:

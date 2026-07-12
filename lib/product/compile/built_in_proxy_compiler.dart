@@ -10,10 +10,7 @@ import 'olcrtc_config_validator.dart';
 
 @immutable
 class CompiledBuiltInProxyNodes {
-  const CompiledBuiltInProxyNodes({
-    required this.config,
-    required this.nodes,
-  });
+  const CompiledBuiltInProxyNodes({required this.config, required this.nodes});
 
   final Map<String, dynamic> config;
   final List<BuiltInProxyNodePlan> nodes;
@@ -114,43 +111,65 @@ class BuiltInProxyCompiler {
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
-  }) =>
-      switch (definition.type) {
-        BuiltInProxyType.naiveproxy => _buildNaiveProxyPlan(
-            definition: definition,
-            descriptor: descriptor,
-            nodeId: nodeId,
-            listenPort: listenPort,
-          ),
-        BuiltInProxyType.olcrtc => _buildOlcRtcPlan(
-            definition: definition,
-            descriptor: descriptor,
-            nodeId: nodeId,
-            listenPort: listenPort,
-          ),
-        BuiltInProxyType.byedpi => _buildByedpiPlan(
-            definition: definition,
-            descriptor: descriptor,
-            nodeId: nodeId,
-            listenPort: listenPort,
-          ),
-      };
+  }) {
+    final udp = _resolveUdp(definition: definition, descriptor: descriptor);
+    return switch (definition.type) {
+      BuiltInProxyType.naiveproxy => _buildNaiveProxyPlan(
+          definition: definition,
+          descriptor: descriptor,
+          nodeId: nodeId,
+          listenPort: listenPort,
+          udp: udp,
+        ),
+      BuiltInProxyType.olcrtc => _buildOlcRtcPlan(
+          definition: definition,
+          descriptor: descriptor,
+          nodeId: nodeId,
+          listenPort: listenPort,
+          udp: udp,
+        ),
+      BuiltInProxyType.byedpi => _buildByedpiPlan(
+          definition: definition,
+          descriptor: descriptor,
+          nodeId: nodeId,
+          listenPort: listenPort,
+          udp: udp,
+        ),
+    };
+  }
+
+  bool _resolveUdp({
+    required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
+  }) {
+    if (!definition.rawConfig.containsKey('udp')) {
+      return descriptor.defaultUdp;
+    }
+    final udp = definition.rawConfig['udp'];
+    if (udp is! bool) {
+      throw FormatException(
+        '${definition.type.label} built-in node `${definition.name}` requires `udp` to be a boolean.',
+      );
+    }
+    if (udp && !descriptor.supportsUdp) {
+      throw FormatException(
+        '${definition.type.label} built-in nodes do not support `udp: true`.',
+      );
+    }
+    return udp;
+  }
 
   BuiltInProxyNodePlan _buildNaiveProxyPlan({
     required BuiltInProxyNodeDefinition definition,
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
+    required bool udp,
   }) {
     final rawConfig = Map<String, dynamic>.from(definition.rawConfig)
       ..remove('name')
-      ..remove('type');
-    final udp = rawConfig.remove('udp');
-    if (udp == true) {
-      throw const FormatException(
-        'naiveproxy built-in nodes do not support `udp: true`.',
-      );
-    }
+      ..remove('type')
+      ..remove('udp');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port')) {
@@ -173,15 +192,14 @@ class BuiltInProxyCompiler {
       listenHost: localhost,
       listenPort: listenPort,
       protocol: descriptor.protocol,
-      udp: false,
+      udp: udp,
       files: {
-        'built-in-proxies/naiveproxy/$nodeId/config.json': json.encode(
-          <String, dynamic>{
-            'listen': 'socks://127.0.0.1:$listenPort',
-            'proxy': proxy,
-            ...rawConfig..remove('proxy'),
-          },
-        ),
+        'built-in-proxies/naiveproxy/$nodeId/config.json':
+            json.encode(<String, dynamic>{
+          'listen': 'socks://127.0.0.1:$listenPort',
+          'proxy': proxy,
+          ...rawConfig..remove('proxy'),
+        }),
       },
     );
   }
@@ -191,16 +209,12 @@ class BuiltInProxyCompiler {
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
+    required bool udp,
   }) {
     final rawConfig = _cloneConfig(definition.rawConfig)
       ..remove('name')
-      ..remove('type');
-    final udp = rawConfig.remove('udp');
-    if (udp == true) {
-      throw const FormatException(
-        'olcrtc built-in nodes do not support `udp: true`.',
-      );
-    }
+      ..remove('type')
+      ..remove('udp');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port') ||
@@ -246,7 +260,7 @@ class BuiltInProxyCompiler {
       listenHost: localhost,
       listenPort: listenPort,
       protocol: descriptor.protocol,
-      udp: false,
+      udp: udp,
       files: {
         'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
       },
@@ -258,9 +272,7 @@ class BuiltInProxyCompiler {
       return;
     }
     if (profiles is! List) {
-      throw const FormatException(
-        'olcrtc `profiles` must be a list.',
-      );
+      throw const FormatException('olcrtc `profiles` must be a list.');
     }
 
     void visit(dynamic value) {
@@ -300,16 +312,12 @@ class BuiltInProxyCompiler {
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
+    required bool udp,
   }) {
     final rawConfig = _cloneConfig(definition.rawConfig)
       ..remove('name')
-      ..remove('type');
-    final udp = rawConfig.remove('udp');
-    if (udp == true) {
-      throw const FormatException(
-        'byedpi built-in nodes do not support `udp: true`.',
-      );
-    }
+      ..remove('type')
+      ..remove('udp');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port') ||
@@ -344,8 +352,9 @@ class BuiltInProxyCompiler {
       config['args'] = args;
     } else {
       final strategies = _stringList(rawConfig.remove('strategies'));
-      final strategyList =
-          _trimmedString(rawConfig.remove('strategy-list'))?.toLowerCase();
+      final strategyList = _trimmedString(
+        rawConfig.remove('strategy-list'),
+      )?.toLowerCase();
       if (strategies.isEmpty &&
           (strategyList == null || strategyList != 'byebyeedpi')) {
         throw const FormatException(
@@ -375,7 +384,7 @@ class BuiltInProxyCompiler {
       listenHost: localhost,
       listenPort: listenPort,
       protocol: descriptor.protocol,
-      udp: false,
+      udp: udp,
       files: {
         'built-in-proxies/byedpi/$nodeId/config.json': json.encode(config),
       },
@@ -454,9 +463,7 @@ class BuiltInProxyCompiler {
     if (value is! Map) {
       return <String, dynamic>{};
     }
-    return value.map(
-      (key, mapValue) => MapEntry(key.toString(), mapValue),
-    );
+    return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
   }
 
   String? _trimmedString(Object? value) {
