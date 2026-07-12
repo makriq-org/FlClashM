@@ -1,7 +1,7 @@
 git-ba532298de7b28cfe854aea83d061369d13ca290
 https://github.com/hufrea/byedpi.git
 https://github.com/romanvht/ByeByeDPI.git
-47ae0226f13eff48f8c83a0b33300b81cce13214
+4a0dabe94297fc7040d015a12b4c217837714628
 armeabi-v7a:arm
 arm64-v8a:arm64
 x86_64:amd64
