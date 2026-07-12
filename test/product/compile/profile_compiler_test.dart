@@ -893,7 +893,7 @@ void main() {
               'type': 'byedpi',
               'mode': 'auto',
               'strategy-list': 'byebyeedpi',
-              'test': {
+              'strategy-test': {
                 'urls': ['https://example.com/'],
                 'sni': 'example.com',
               },
@@ -950,7 +950,7 @@ void main() {
       expect(runtimeConfig['mode'], 'auto');
       expect(runtimeConfig['strategyList'], 'byebyeedpi');
       expect(runtimeConfig['listenPort'], builtInNode.listenPort);
-      expect(runtimeConfig['test']['urls'], ['https://example.com/']);
+      expect(runtimeConfig['strategyTest']['urls'], ['https://example.com/']);
     });
 
     test('builds olcrtc runtime artifacts and local SOCKS bridge', () async {

@@ -251,6 +251,11 @@
       "reason": "Супервизор встроенных runtime-узлов относится к Android runtime-слою и остаётся в бюджете."
     },
     {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityChecker.kt",
+      "bucket": "budget",
+      "reason": "Проверка доступности встроенных узлов при холодном запуске относится к Android runtime-слою и зеркалит контракт product layer."
+    },
+    {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",
       "bucket": "budget",
       "reason": "Снимок параметров, реально переданных Android VPN-службе, принадлежит платформенному жизненному циклу и нужен для достоверного отображения пакетных правил."

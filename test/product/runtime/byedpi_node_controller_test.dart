@@ -232,7 +232,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('https://example.com/'),
+        url: Uri.parse('https://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -249,7 +249,7 @@ void main() {
             maxLength: 4096,
           );
           expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: example.com'));
+          expect(request, contains('Host: 93.184.216.34'));
           client.add(
             utf8.encode(
               'HTTP/1.1 204 No Content\r\n'
@@ -266,7 +266,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('http://example.com/'),
+        url: Uri.parse('http://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -283,7 +283,7 @@ void main() {
             maxLength: 4096,
           );
           expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: example.com'));
+          expect(request, contains('Host: 93.184.216.34'));
           client.add(
             utf8.encode(
               'HTTP/1.1 503 Service Unavailable\r\n'
@@ -300,7 +300,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('http://example.com/'),
+        url: Uri.parse('http://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -346,7 +346,7 @@ BuiltInProxyNodePlan _buildAutoPlan({
           'listenHost': '127.0.0.1',
           'listenPort': 35610,
           'strategies': ['--fake -1', '--disorder 1'],
-          'test': {
+          'strategyTest': {
             'urls': ['https://example.com/'],
             'timeout': 5,
             'requests': requests,

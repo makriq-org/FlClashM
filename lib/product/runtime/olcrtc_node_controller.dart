@@ -128,6 +128,7 @@ class OlcRtcNodeController
     OlcRtcBinaryBridge binary = const DefaultOlcRtcBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
     super.waitForListener = _waitForRuntimeNodeListener,
+    super.connectivityChecker,
   }) : super(
           typeLabel: 'olcrtc',
           configArtifactName: 'config.yaml',

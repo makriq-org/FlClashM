@@ -127,7 +127,7 @@ proxies:
       expect(normalized['proxies'][0]['port'], inInclusiveRange(35600, 35855));
     });
 
-    test('rejects byedpi auto nodes without test urls', () {
+    test('rejects byedpi auto nodes without strategy-test urls', () {
       expect(
         () => validator.normalizeForValidation('''
 proxies:
@@ -140,7 +140,7 @@ proxies:
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('test.urls'),
+            contains('strategy-test'),
           ),
         ),
       );

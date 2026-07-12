@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.InetSocketAddress
 import java.net.Socket
 import kotlin.coroutines.resume
 
@@ -176,6 +177,7 @@ class FlVpnService : VpnService(), IBaseService {
         val host: String,
         val port: Int,
         val arguments: List<String> = emptyList(),
+        val connectivityCheck: RuntimeNodeConnectivityCheck = RuntimeNodeConnectivityCheck(),
     )
 
     private suspend fun coldStart() {
@@ -384,6 +386,9 @@ class FlVpnService : VpnService(), IBaseService {
                 val host = rawNode.optString("host", "").trim()
                 val port = rawNode.optInt("port", 0)
                 val rawArguments = rawNode.optJSONArray("arguments") ?: JSONArray()
+                val connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
+                    rawNode.optJSONObject("connectivityCheck"),
+                )
                 val arguments = buildList {
                     for (argumentIndex in 0 until rawArguments.length()) {
                         val argument = rawArguments.optString(argumentIndex, "")
@@ -403,6 +408,7 @@ class FlVpnService : VpnService(), IBaseService {
                         host = host,
                         port = port,
                         arguments = arguments,
+                        connectivityCheck = connectivityCheck,
                     ),
                 )
             }
@@ -411,6 +417,8 @@ class FlVpnService : VpnService(), IBaseService {
 
     private suspend fun startColdStartRuntimeNodes(nodes: List<ColdStartRuntimeNode>) {
         for (node in nodes) {
+            val startupDeadline =
+                SystemClock.elapsedRealtime() + node.connectivityCheck.startupTimeoutMillis
             val startedAt = RuntimeNodeProcessManager.start(
                 nodeId = node.nodeId,
                 executablePath = node.executablePath,
@@ -420,15 +428,71 @@ class FlVpnService : VpnService(), IBaseService {
             if (startedAt <= 0L) {
                 throw IllegalStateException("Runtime node `${node.nodeId}` did not start")
             }
-            waitForRuntimeNodeListener(node.nodeId, node.host, node.port)
+            waitForRuntimeNodeListener(
+                node.nodeId,
+                node.host,
+                node.port,
+                startupDeadline,
+            )
+            if (RuntimeNodeProcessManager.readStartTime(node.nodeId) <= 0L) {
+                throw IllegalStateException(
+                    "Runtime node `${node.nodeId}` exited after opening its local listener",
+                )
+            }
+            val check = node.connectivityCheck
+            if (check.urls.isEmpty()) continue
+            if (check.required) {
+                val remaining = startupDeadline - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) {
+                    throw IllegalStateException(
+                        "Runtime node `${node.nodeId}` exhausted its startup timeout",
+                    )
+                }
+                val passed = RuntimeNodeConnectivityChecker.checkUntilDeadline(
+                    nodeId = node.nodeId,
+                    host = node.host,
+                    port = node.port,
+                    config = check.copy(
+                        startupTimeoutMillis = remaining,
+                    ),
+                )
+                if (!passed) {
+                    throw IllegalStateException(
+                        "Runtime node `${node.nodeId}` failed its required SOCKS connectivity check",
+                    )
+                }
+            } else {
+                GlobalState.launch {
+                    if (!RuntimeNodeConnectivityChecker.checkOnce(node.host, node.port, check)) {
+                        GlobalState.log(
+                            "Runtime node `${node.nodeId}` failed its optional SOCKS connectivity check",
+                        )
+                    }
+                }
+            }
         }
     }
 
-    private suspend fun waitForRuntimeNodeListener(nodeId: String, host: String, port: Int) {
+    private suspend fun waitForRuntimeNodeListener(
+        nodeId: String,
+        host: String,
+        port: Int,
+        deadline: Long,
+    ) {
         withContext(Dispatchers.IO) {
-            repeat(50) { attempt ->
+            while (true) {
+                val remaining = deadline - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) {
+                    throw IllegalStateException(
+                        "Timed out waiting for runtime node listener on $host:$port",
+                    )
+                }
                 runCatching {
-                    Socket(host, port).use { socket ->
+                    Socket().use { socket ->
+                        socket.connect(
+                            InetSocketAddress(host, port),
+                            minOf(200L, remaining).toInt(),
+                        )
                         socket.soTimeout = 200
                     }
                     return@withContext
@@ -437,10 +501,7 @@ class FlVpnService : VpnService(), IBaseService {
                 if (lastError.isNotEmpty()) {
                     throw IllegalStateException("Runtime node `$nodeId` failed: $lastError")
                 }
-                if (attempt == 49) {
-                    throw IllegalStateException("Timed out waiting for runtime node listener on $host:$port")
-                }
-                kotlinx.coroutines.delay(100L)
+                kotlinx.coroutines.delay(minOf(100L, remaining))
             }
         }
     }

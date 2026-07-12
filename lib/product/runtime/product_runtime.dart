@@ -3,6 +3,7 @@ export 'built_in_proxy_supervisor.dart';
 export 'built_in_proxy_types.dart';
 export 'byedpi_node_controller.dart';
 export 'byedpi_release.dart';
+export 'connectivity_check.dart';
 export 'engine_adapter.dart';
 export 'engine_manager.dart';
 export 'mihomo_engine_adapter.dart';

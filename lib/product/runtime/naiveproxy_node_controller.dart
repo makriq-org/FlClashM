@@ -128,6 +128,7 @@ class NaiveProxyNodeController extends LocalNodeController<
     NaiveProxyBinaryBridge binary = const DefaultNaiveProxyBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
     super.waitForListener = _waitForRuntimeNodeListener,
+    super.connectivityChecker,
   }) : super(
           typeLabel: 'naiveproxy',
           configArtifactName: 'config.json',

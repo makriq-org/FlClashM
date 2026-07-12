@@ -1,13 +1,15 @@
 import 'package:flutter/foundation.dart';
 
+import 'connectivity_check.dart';
+
 enum BuiltInProxyType { naiveproxy, byedpi, olcrtc }
 
 extension BuiltInProxyTypeLabel on BuiltInProxyType {
   String get label => switch (this) {
-    BuiltInProxyType.naiveproxy => 'naiveproxy',
-    BuiltInProxyType.byedpi => 'byedpi',
-    BuiltInProxyType.olcrtc => 'olcrtc',
-  };
+        BuiltInProxyType.naiveproxy => 'naiveproxy',
+        BuiltInProxyType.byedpi => 'byedpi',
+        BuiltInProxyType.olcrtc => 'olcrtc',
+      };
 
   static BuiltInProxyType? tryParse(String? value) {
     final normalizedValue = value?.trim().toLowerCase();
@@ -27,9 +29,9 @@ enum BuiltInProxyProtocol { socks5, http }
 
 extension BuiltInProxyProtocolLabel on BuiltInProxyProtocol {
   String get label => switch (this) {
-    BuiltInProxyProtocol.socks5 => 'socks5',
-    BuiltInProxyProtocol.http => 'http',
-  };
+        BuiltInProxyProtocol.socks5 => 'socks5',
+        BuiltInProxyProtocol.http => 'http',
+      };
 }
 
 enum BuiltInProxyAvailabilityStatus { supported, unsupported }
@@ -100,6 +102,7 @@ class BuiltInProxyNodePlan {
     required this.listenPort,
     required this.protocol,
     required this.udp,
+    this.connectivityCheck = const ConnectivityCheckConfig(),
     this.files = const {},
   });
 
@@ -110,15 +113,16 @@ class BuiltInProxyNodePlan {
   final int listenPort;
   final BuiltInProxyProtocol protocol;
   final bool udp;
+  final ConnectivityCheckConfig connectivityCheck;
   final Map<String, String> files;
 
   Map<String, dynamic> toProxyConfig() => <String, dynamic>{
-    'name': name,
-    'type': protocol.label,
-    'server': listenHost,
-    'port': listenPort,
-    'udp': udp,
-  };
+        'name': name,
+        'type': protocol.label,
+        'server': listenHost,
+        'port': listenPort,
+        'udp': udp,
+      };
 }
 
 class UnsupportedBuiltInProxyException implements Exception {
