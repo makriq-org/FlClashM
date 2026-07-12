@@ -103,14 +103,6 @@
       ]
     },
     {
-      "path": "lib/views/access.dart",
-      "boundary": "ui-product-services",
-      "reason": "AccessView stays in base UI and uses ProductServices only for access-control editor state, package loading and profile-managed locks.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
       "path": "lib/views/profiles/profiles.dart",
       "boundary": "ui-product-advisory",
       "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",
@@ -120,10 +112,6 @@
     }
   ],
   "allowedProductUi": [
-    {
-      "path": "lib/product/widgets/access_control_notice.dart",
-      "reason": "The fork-specific access-control trust warning is explicitly owned by the product UI layer while the upstream AccessView keeps only a thin mount."
-    },
     {
       "path": "lib/product/android/android_update_bridge.dart",
       "reason": "The FlClashM Android updater owns its release prompt and in-app APK download progress dialog."

@@ -23,7 +23,6 @@ import 'common/yaml_dump.dart';
 import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
-import 'plugins/app.dart';
 import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/security/product_security.dart';
@@ -37,7 +36,6 @@ class GlobalState {
   GlobalState._internal() {
     runtimeRegistry = RuntimeRegistry.flClashM(
       readAccessControl: () => config.vpnProps.accessControl,
-      readProfileAccessControl: () => activeProfileAccessControl,
     );
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,
@@ -67,8 +65,6 @@ class GlobalState {
   late Color accentColor;
   CorePalette? corePalette;
   Map<String, dynamic>? lastRuntimeConfig;
-  final activeProfileAccessControlNotifier =
-      ValueNotifier<AccessControl?>(null);
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -103,9 +99,6 @@ class GlobalState {
   DateTime? get startTime => engineManager.startTime;
 
   AppController get appController => _appController!;
-
-  AccessControl? get activeProfileAccessControl =>
-      activeProfileAccessControlNotifier.value;
 
   set appController(AppController appController) {
     _appController = appController;
@@ -274,16 +267,11 @@ class GlobalState {
     }
   }
 
-  CoreState getCoreState({
-    AccessControl? profileAccessControl,
-  }) {
+  CoreState getCoreState() {
     final currentProfile = config.currentProfile;
-    final resolvedAccessControl = profileAccessControl ??
-        activeProfileAccessControl ??
-        config.vpnProps.accessControl;
     return CoreState(
       vpnProps: config.vpnProps.copyWith(
-        accessControl: enforceSelfPackageBypass(resolvedAccessControl),
+        accessControl: enforceSelfPackageBypass(config.vpnProps.accessControl),
       ),
       onlyStatisticsProxy: false,
       currentProfileName: currentProfile?.label ?? currentProfile?.id ?? "",
@@ -348,14 +336,12 @@ class GlobalState {
     required SecuredProfilePatch securedProfile,
     required ClashConfig runtimePatchConfig,
   }) async {
-    final profilesPath = await appPath.profilesPath;
     final profilePath = rawProfile == null
         ? ''
         : await appPath.getProfilePath(rawProfile.profile.id);
     return _profilePipeline.buildRuntimePlan(
       rawProfile: rawProfile,
       context: _buildRuntimePlanContext(
-        profilesPath: profilesPath,
         profilePath: profilePath,
       ),
       securedProfile: securedProfile,
@@ -389,7 +375,6 @@ class GlobalState {
 
   void applyRuntimePlan(RuntimePlan runtimePlan) {
     lastRuntimeConfig = runtimePlan.config;
-    activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
     _applyRuntimeConfigState(runtimePlan.config);
   }
@@ -410,7 +395,6 @@ class GlobalState {
       );
 
   RuntimePlanBuildContext _buildRuntimePlanContext({
-    required String profilesPath,
     required String profilePath,
   }) =>
       RuntimePlanBuildContext(
@@ -419,21 +403,8 @@ class GlobalState {
         overrideDns: config.overrideDns,
         routeMode: config.networkProps.routeMode,
         hasCurrentScript: config.scriptProps.currentScript != null,
-        profilesPath: profilesPath,
         profilePath: profilePath,
-        readInstalledPackageNames: readInstalledPackageNames,
       );
-
-  Future<String> readProfilesPath() => appPath.profilesPath;
-
-  Future<List<String>> readInstalledPackageNames() async {
-    final packageNames =
-        await app?.getInstalledPackageNames() ?? const <String>[];
-    return {
-      for (final packageName in packageNames)
-        if (packageName.trim().isNotEmpty) packageName.trim(),
-    }.toList(growable: false);
-  }
 
   void _applyCompiledProfileMetadata(CompiledProfileMetadata? metadata) {
     if (metadata == null) {

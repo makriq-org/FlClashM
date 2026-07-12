@@ -29,9 +29,7 @@ typedef BuildRuntimePlanCallback = Future<RuntimePlan> Function({
   required ClashConfig runtimePatchConfig,
 });
 typedef ApplyRuntimePlanCallback = void Function(RuntimePlan runtimePlan);
-typedef BuildCoreStateCallback = CoreState Function({
-  AccessControl? profileAccessControl,
-});
+typedef BuildCoreStateCallback = CoreState Function();
 typedef BuildInitParamsCallback = Future<InitParams> Function();
 typedef ResolveTunAccessCallback = FutureOr<ResolvedTunAccess> Function({
   required bool requestedTunEnable,
@@ -295,10 +293,7 @@ class EngineManager {
     if (!await targetAdapter.isInitialized()) {
       await targetAdapter.initialize(
         initParams: await _buildInitParams(),
-        state: _buildCoreState(
-          profileAccessControl: compiledRuntimePlan
-              .appliedRuntimePlan.runtimePlan.profileAccessControl,
-        ),
+        state: _buildCoreState(),
       );
     }
 
@@ -585,9 +580,7 @@ class EngineManager {
     await resolvedRuntime.engine.adapter.persistColdStart(
       initParams: await _buildInitParams(),
       runtimePlan: coldStartRuntimePlan,
-      state: _buildCoreState(
-        profileAccessControl: coldStartRuntimePlan.profileAccessControl,
-      ),
+      state: _buildCoreState(),
     );
   }
 
@@ -607,9 +600,7 @@ class EngineManager {
     await resolvedRuntime.engine.adapter.persistColdStart(
       initParams: await _buildInitParams(),
       runtimePlan: coldStartRuntimePlan,
-      state: _buildCoreState(
-        profileAccessControl: coldStartRuntimePlan.profileAccessControl,
-      ),
+      state: _buildCoreState(),
     );
   }
 
@@ -691,7 +682,6 @@ class EngineManager {
         builtInProxyNodes: runtimePlan.builtInProxyNodes,
         metadata:
             _applyUpdateParamsToMetadata(runtimePlan.metadata, updateParams),
-        profileAccessControl: runtimePlan.profileAccessControl,
       );
 
   Map<String, dynamic> _applyUpdateParamsToConfig(

@@ -87,8 +87,6 @@ mixin AndroidClashInterface {
 
   Future<String> getAndroidVpnOptions();
 
-  Future<String> getAppliedAndroidVpnOptions();
-
   Future<String> getCurrentProfileName();
 
   Future<DateTime?> getRunTime();

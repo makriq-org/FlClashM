@@ -11,7 +11,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 | Stage | Description |
 |-------|-------------|
 | **RawProfile** | Raw profile |
-| **ProfileCompiler** | Reads the profile, normalizes split tunneling |
+| **ProfileCompiler** | Reads the profile and builds the runtime config |
 | **SecurityPolicy** | Applies Android security rules |
 | **RuntimePlan** | Builds the runtime launch plan |
 | **EngineManager** | Manages the engine lifecycle |
@@ -40,4 +40,4 @@ dart tool/check_product_boundaries.dart
 | `SecurityPolicy` | Mandatory security rules |
 | `EngineManager` | Engine lifecycle |
 | `AppUpdateService` | Checking and installing updates |
-| `AccessControlService` | Split tunneling |
+| `AccessControlService` | Android VPN startup and authorization |

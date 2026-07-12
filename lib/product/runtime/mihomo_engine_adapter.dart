@@ -12,7 +12,6 @@ import 'built_in_proxy_types.dart';
 import 'engine_adapter.dart';
 
 typedef ReadAccessControlCallback = AccessControl Function();
-typedef ReadProfileAccessControlCallback = AccessControl? Function();
 
 abstract interface class MihomoCoreBridge {
   Future<void> shutdown();
@@ -188,9 +187,7 @@ class MihomoEngineAdapter implements EngineAdapter {
     this.update = const DefaultMihomoUpdateBridge(),
     BuiltInProxySupervisor? builtInProxySupervisor,
     required ReadAccessControlCallback readAccessControl,
-    ReadProfileAccessControlCallback? readProfileAccessControl,
   })  : _readAccessControl = readAccessControl,
-        _readProfileAccessControl = readProfileAccessControl,
         builtInProxySupervisor =
             builtInProxySupervisor ?? DefaultBuiltInProxySupervisor();
 
@@ -200,11 +197,9 @@ class MihomoEngineAdapter implements EngineAdapter {
   final MihomoUpdateBridge update;
   final BuiltInProxySupervisor builtInProxySupervisor;
   final ReadAccessControlCallback _readAccessControl;
-  final ReadProfileAccessControlCallback? _readProfileAccessControl;
   Future<void> _builtInProxyStartChain = Future.value();
 
   AccessControl get _accessControl => _readAccessControl();
-  AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
 
   String get _coreRollbackPath => '${update.corePath}.rollback';
 
@@ -366,12 +361,7 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
 
       vpnStartAttempted = true;
-      final started = await platform.startVpn(
-        accessControl: productServices.accessControl.resolveVpnAccessControl(
-          accessControl: _accessControl,
-          profileAccessControl: _profileAccessControl,
-        ),
-      );
+      final started = await platform.startVpn(accessControl: _accessControl);
       if (started) {
         _startBuiltInProxyNodesInBackground();
         return true;

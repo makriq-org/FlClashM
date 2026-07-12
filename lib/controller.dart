@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/archive.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/services/subscription_notification_service.dart';
 import 'package:flclashx/state.dart';
@@ -941,6 +942,17 @@ class AppController {
       commonPrint.log("Failed to update subscription info on startup: $e");
       commonPrint.log("Stack trace: $stackTrace");
     }
+  }
+
+  Future<List<Package>> getPackages() async {
+    if (_ref.read(isMobileViewProvider)) {
+      await Future.delayed(commonDuration);
+    }
+    if (_ref.read(packagesProvider).isEmpty) {
+      _ref.read(packagesProvider.notifier).value =
+          await app?.getPackages() ?? [];
+    }
+    return _ref.read(packagesProvider);
   }
 
   Future<void> updateGroups({bool syncNotification = false}) async {

@@ -52,13 +52,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
       "Configure application access proxy",
     ),
-    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
-      "The rules applied by the Android VPN differ from your profile config.",
-    ),
-    "accessControlVerificationUnavailableNote":
-        MessageLookupByLibrary.simpleMessage(
-          "The applied VPN rules could not be verified. The profile declaration is shown as a fallback.",
-        ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "The selected application will be excluded from VPN",
     ),

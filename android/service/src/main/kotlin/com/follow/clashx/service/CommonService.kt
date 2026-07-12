@@ -64,7 +64,6 @@ class CommonService : Service(), IBaseService {
 
     override suspend fun handleStop() {
         State.runTime = 0L
-        State.clearAppliedVpnOptions()
         loader.stop()
         handleDestroy()
         stopSelf()

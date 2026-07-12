@@ -74,25 +74,6 @@ proxies:
 
 [جزئیات بیشتر درباره نودهای داخلی](docs/user-guide/profiles.md)
 
-## تونل‌زنی جداگانه از طریق پروفایل
-
-ارائه‌دهنده می‌تواند قوانین تونل‌زنی جداگانه را مستقیماً در پروفایل تنظیم کند — کدام برنامه‌ها باید از VPN عبور کنند و کدام نه. نام دقیق پکیج، الگوها و عبارات منظم پشتیبانی می‌شوند.
-
-```yaml
-tun:
-  enable: true
-  include-package:
-    - org.telegram.messenger
-    - com.termux
-  exclude-package:
-    - '*.yandex.*'
-    - '!ru.yandex.browser'
-```
-
-می‌توان لیست‌ها را از فایل‌ها یا URL بارگذاری کرد. پروفایل بر تنظیمات دستی اولویت دارد.
-
-[جزئیات بیشتر درباره تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)
-
 ---
 
 ## ویژگی‌های دیگر
@@ -128,7 +109,6 @@ tun:
 
 ### برای کاربران
 - **[نودهای داخلی](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)** — مدیریت از طریق پروفایل
 - **[Hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md)** — پوسته و رفتار
 
 ### برای توسعه‌دهندگان

@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
@@ -8,7 +6,6 @@ import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -197,9 +194,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -267,9 +262,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -289,90 +282,9 @@ void main() {
       expect(groups[3]['lazy'], isFalse);
     });
 
-    test('propagates profile split tunneling into runtime plan', () async {
-      final tempDir =
-          await Directory.systemTemp.createTemp('profile-compiler-split-');
-      final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
-        ..createSync(recursive: true);
-      File(path.join(profilesDir.path, 'lists', 'include.txt'))
-        ..createSync(recursive: true)
-        ..writeAsStringSync('com.termux\n*.mozilla.*\n');
-
+    test('keeps profile package fields opaque', () async {
       const profile = Profile(
-        id: 'profile-split',
-        autoUpdateDuration: Duration.zero,
-      );
-      final rawProfile = RawProfile.fromConfig(
-        profile: profile,
-        config: const <String, dynamic>{
-          'tun': {
-            'include-package-file': 'lists/include.txt',
-          },
-        },
-      );
-      final compiledProfile = compiler.compileProfilePatch(
-        rawProfile: rawProfile,
-        context: const ProfilePatchContext(
-          patchConfig: ClashConfig(
-            tun: Tun(
-              enable: true,
-              stack: TunStack.system,
-            ),
-          ),
-          overrideNetworkSettings: false,
-        ),
-      );
-
-      final runtimePlan = await compiler.buildRuntimePlan(
-        rawProfile: rawProfile,
-        context: RuntimePlanBuildContext(
-          isAndroid: true,
-          overrideNetworkSettings: false,
-          overrideDns: false,
-          routeMode: RouteMode.config,
-          hasCurrentScript: false,
-          profilesPath: profilesDir.path,
-          profilePath: path.join(profilesDir.path, 'profile-split.yaml'),
-          readInstalledPackageNames: () async => const [
-            'com.termux',
-            'org.mozilla.firefox',
-          ],
-        ),
-        securedProfile: SecuredProfilePatch(
-          patchConfig: compiledProfile.patchConfig,
-          metadata: compiledProfile.metadata,
-        ),
-        runtimePatchConfig: compiledProfile.patchConfig,
-        selectedMap: const {},
-        testUrl: 'https://cp.cloudflare.com/generate_204',
-        providerAssetPathResolver: (profileId, type, url) async =>
-            '/tmp/$profileId/$type/$url',
-      );
-
-      expect(
-        runtimePlan.config['tun']['include-package'],
-        ['com.termux', 'org.mozilla.firefox'],
-      );
-      expect(
-        runtimePlan.config['tun'].containsKey('include-package-file'),
-        isFalse,
-      );
-      expect(
-        runtimePlan.profileAccessControl,
-        const AccessControl(
-          enable: true,
-          mode: AccessControlMode.acceptSelected,
-          acceptList: ['com.termux', 'org.mozilla.firefox'],
-        ),
-      );
-
-      await tempDir.delete(recursive: true);
-    });
-
-    test('skips profile split tunneling when runtime tun is disabled',
-        () async {
-      const profile = Profile(
-        id: 'profile-split-disabled',
+        id: 'profile-package-fields',
         autoUpdateDuration: Duration.zero,
       );
       final rawProfile = RawProfile.fromConfig(
@@ -380,6 +292,8 @@ void main() {
         config: const <String, dynamic>{
           'tun': {
             'include-package': ['*.mozilla.*'],
+            'include-package-file': 'packages.txt',
+            'include-package-url': 'https://example.com/packages.txt',
           },
         },
       );
@@ -387,7 +301,7 @@ void main() {
         rawProfile: rawProfile,
         context: const ProfilePatchContext(
           patchConfig: ClashConfig(
-            tun: Tun(enable: false),
+            tun: Tun(enable: true),
           ),
           overrideNetworkSettings: false,
         ),
@@ -395,17 +309,13 @@ void main() {
 
       final runtimePlan = await compiler.buildRuntimePlan(
         rawProfile: rawProfile,
-        context: RuntimePlanBuildContext(
+        context: const RuntimePlanBuildContext(
           isAndroid: true,
           overrideNetworkSettings: false,
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: () async {
-            throw StateError('package inventory should not be read');
-          },
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -418,8 +328,15 @@ void main() {
             '/tmp/$profileId/$type/$url',
       );
 
-      expect(runtimePlan.profileAccessControl, isNull);
-      expect(runtimePlan.config['tun']['enable'], isFalse);
+      expect(runtimePlan.config['tun']['include-package'], ['*.mozilla.*']);
+      expect(
+        runtimePlan.config['tun']['include-package-file'],
+        'packages.txt',
+      );
+      expect(
+        runtimePlan.config['tun']['include-package-url'],
+        'https://example.com/packages.txt',
+      );
     });
 
     test('rewrites providers and merges dns, hosts and override rules',
@@ -503,9 +420,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -587,9 +502,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: true,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -664,9 +577,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -785,9 +696,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -858,9 +767,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -918,9 +825,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -1005,9 +910,7 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
           profilePath: '',
-          readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
           patchConfig: compiledProfile.patchConfig,
@@ -1079,9 +982,7 @@ void main() {
             overrideDns: false,
             routeMode: RouteMode.config,
             hasCurrentScript: false,
-            profilesPath: '',
             profilePath: '',
-            readInstalledPackageNames: _readNoInstalledPackages,
           ),
           securedProfile: SecuredProfilePatch(
             patchConfig: compiledProfile.patchConfig,
@@ -1127,9 +1028,7 @@ void main() {
               overrideDns: false,
               routeMode: RouteMode.config,
               hasCurrentScript: false,
-              profilesPath: '',
               profilePath: '',
-              readInstalledPackageNames: _readNoInstalledPackages,
             ),
             securedProfile: SecuredProfilePatch(
               patchConfig: compiledProfile.patchConfig,
@@ -1199,5 +1098,3 @@ void main() {
     });
   });
 }
-
-Future<List<String>> _readNoInstalledPackages() async => const [];

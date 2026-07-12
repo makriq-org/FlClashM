@@ -74,25 +74,6 @@ proxies:
 
 [了解更多关于内置节点的信息](docs/user-guide/profiles.md)
 
-### 通过配置文件实现分流
-
-提供商可以直接在配置文件中指定哪些应用应该使用 VPN，哪些不应该。支持精确的包名、通配符和正则表达式。
-
-```yaml
-tun:
-  enable: true
-  include-package:
-    - org.telegram.messenger
-    - com.termux
-  exclude-package:
-    - '*.yandex.*'
-    - '!ru.yandex.browser'
-```
-
-可以从文件或 URL 加载列表。配置文件设置优先于手动设置。
-
-[了解更多关于分流的信息](docs/user-guide/split-tunneling.md)
-
 ---
 
 ## 其他功能
@@ -128,7 +109,6 @@ tun:
 
 ### 用户
 - **[内置节点](docs/user-guide/profiles.md)** — ByeDPI、OlcRTC、NaiveProxy
-- **[分流](docs/user-guide/split-tunneling.md)** — 通过配置文件管理
 - **[提供商提示](docs/user-guide/provider-hints.md)** — 自定义和行为
 
 ### 开发者

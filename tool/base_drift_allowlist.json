@@ -456,11 +456,6 @@
       "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
     },
     {
-      "path": "lib/views/access.dart",
-      "bucket": "budget",
-      "reason": "Живой редактор доступа использует product AccessControlService только как источник состояния, пакетов и profile-managed lock."
-    },
-    {
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."

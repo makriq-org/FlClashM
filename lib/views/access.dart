@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -20,165 +20,126 @@ class AccessView extends ConsumerStatefulWidget {
 class _AccessViewState extends ConsumerState<AccessView> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  final _loadCompleter = Completer<List<Package>>();
-  late AccessControlEditorState _editorState;
-  late final ProfileManagedAccessController _managedAccessController;
-  bool _profileManaged = false;
-  ProfileManagedAccessNotice _notice = ProfileManagedAccessNotice.none;
+  final _loadCompleter = Completer();
+
+  String _query = '';
+  bool _showSystem = false;
+  bool _showNoInternet = false;
+  bool _enabled = false;
+  AccessControlMode _mode = AccessControlMode.rejectSelected;
+
+  late Set<String> _selectedSet;
+  bool _dirty = false;
 
   @override
   void initState() {
     super.initState();
-    final isRunning = ref.read(runTimeProvider) != null;
-    final initialProfileAccess =
-        isRunning ? globalState.activeProfileAccessControl : null;
-    _editorState = productServices.accessControl.resolveEditorState(
-      accessControl: ref.read(vpnSettingProvider).accessControl,
-      profileAccessControl: initialProfileAccess,
-      previousState: null,
-    );
-    _profileManaged = initialProfileAccess != null;
-    _managedAccessController =
-        productServices.accessControl.createProfileManagedController(
-      loadCurrentRawProfile: globalState.loadCurrentRawProfile,
-      readProfilesPath: globalState.readProfilesPath,
-      readInstalledPackageNames: globalState.readInstalledPackageNames,
-    );
-    globalState.activeProfileAccessControlNotifier
-        .addListener(_handleProfileAccessControlChanged);
-    _loadCompleter.complete(_loadPackages());
-    unawaited(_refreshManagedAccess());
+    final ac = ref.read(vpnSettingProvider).accessControl;
+    _mode = ac.mode;
+    _selectedSet = Set.from(ac.currentList);
+    _enabled = ac.enable;
+    _showSystem = !ac.isFilterSystemApp;
+    _showNoInternet = !ac.isFilterNonInternetApp;
+    _loadCompleter.complete(globalState.appController.getPackages());
   }
 
   @override
   void dispose() {
-    globalState.activeProfileAccessControlNotifier
-        .removeListener(_handleProfileAccessControlChanged);
-    _managedAccessController.dispose();
     _persist();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _handleProfileAccessControlChanged() {
-    if (!mounted) {
-      return;
-    }
-    unawaited(_refreshManagedAccess());
-  }
-
-  Future<void> _refreshManagedAccess() async {
-    final isRunning = ref.read(runTimeProvider) != null;
-    final managed = await _managedAccessController.refresh(
-      isRunning: isRunning,
-      activeProfileAccessControl: globalState.activeProfileAccessControl,
-    );
-    if (!mounted || managed == null) {
-      return;
-    }
-    if ((ref.read(runTimeProvider) != null) != isRunning) {
-      unawaited(_refreshManagedAccess());
-      return;
-    }
-    setState(() {
-      _editorState = productServices.accessControl.reconcileManagedEditorState(
-        manualAccessControl: ref.read(vpnSettingProvider).accessControl,
-        previousState: _editorState,
-        wasManaged: _profileManaged,
-        managedAccess: managed,
-      );
-      _profileManaged = managed.managed;
-      _notice = managed.notice;
-    });
-  }
-
   void _persist() {
-    if (_profileManaged || !_editorState.dirty) return;
-    ref.read(vpnSettingProvider.notifier).updateState(
-      (state) => productServices.accessControl.applyEditorState(
-        state,
-        _editorState,
+    if (!_dirty) return;
+    final notifier = ref.read(vpnSettingProvider.notifier);
+    notifier.updateState(
+      (state) => state.copyWith.accessControl(
+        enable: _enabled,
+        acceptList: _mode == AccessControlMode.acceptSelected
+            ? _selectedSet.toList()
+            : [],
+        rejectList: _mode == AccessControlMode.rejectSelected
+            ? _selectedSet.toList()
+            : [],
+        mode: _mode,
+        isFilterSystemApp: !_showSystem,
+        isFilterNonInternetApp: !_showNoInternet,
       ),
     );
-    _editorState = _editorState.copyWith(dirty: false);
   }
 
   void _toggleApp(String pkg) {
     setState(() {
-      _editorState = productServices.accessControl.togglePackage(
-        _editorState,
-        pkg,
-      );
+      _dirty = true;
+      if (_selectedSet.contains(pkg)) {
+        _selectedSet.remove(pkg);
+      } else {
+        _selectedSet.add(pkg);
+      }
     });
   }
 
   void _switchMode() {
     setState(() {
-      _editorState = productServices.accessControl.switchMode(_editorState);
+      _dirty = true;
+      _mode = _mode == AccessControlMode.acceptSelected
+          ? AccessControlMode.rejectSelected
+          : AccessControlMode.acceptSelected;
+      _selectedSet.clear();
     });
   }
 
-  Future<List<Package>> _loadPackages() =>
-      productServices.accessControl.ensurePackagesLoaded(
-        isMobileView: ref.read(isMobileViewProvider),
-        cachedPackages: ref.read(packagesProvider),
-        onPackagesLoaded: (packages) {
-          ref.read(packagesProvider.notifier).value = packages;
-        },
-      );
+  List<Package> _filter(List<Package> packages) {
+    final q = _query.toLowerCase();
+    return packages.where((p) {
+      if (!_showSystem && p.system) return false;
+      if (!_showNoInternet && !p.internet) return false;
+      if (q.isNotEmpty &&
+          !p.label.toLowerCase().contains(q) &&
+          !p.packageName.toLowerCase().contains(q)) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) {
+        final sa = _selectedSet.contains(a.packageName) ? 0 : 1;
+        final sb = _selectedSet.contains(b.packageName) ? 0 : 1;
+        final c = sa.compareTo(sb);
+        return c != 0 ? c : a.label.compareTo(b.label);
+      });
+  }
 
   void _showModeHelp() {
     final appLocale = AppLocalizations.of(context);
-    final title = _editorState.mode == AccessControlMode.acceptSelected
+    final title = _mode == AccessControlMode.acceptSelected
         ? appLocale.includeInVpn
         : appLocale.excludeFromVpn;
-    final desc = _editorState.mode == AccessControlMode.acceptSelected
+    final desc = _mode == AccessControlMode.acceptSelected
         ? appLocale.whitelistModeDesc
         : appLocale.blacklistModeDesc;
-    unawaited(
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(desc),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(desc),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    ref
-      ..listen(
-        runTimeProvider.select((runTime) => runTime != null),
-        (_, __) => unawaited(_refreshManagedAccess()),
-      )
-      ..listen(
-        currentProfileProvider.select(
-          (profile) => (profile?.id, profile?.lastUpdateDate),
-        ),
-        (_, __) => unawaited(_refreshManagedAccess()),
-      );
     final packages = ref.watch(packagesProvider);
-    final filtered = productServices.accessControl.filterPackages(
-      packages: packages,
-      editorState: _editorState,
-    );
+    final filtered = _filter(packages);
     final appLocale = AppLocalizations.of(context);
-    final isWhitelist = _editorState.isWhitelist;
-    final noticeMessage = switch (_notice) {
-      ProfileManagedAccessNotice.none => null,
-      ProfileManagedAccessNotice.drift => appLocale.accessControlDriftNote,
-      ProfileManagedAccessNotice.verificationUnavailable =>
-        appLocale.accessControlVerificationUnavailableNote,
-    };
+    final isWhitelist = _mode == AccessControlMode.acceptSelected;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -187,34 +148,19 @@ class _AccessViewState extends ConsumerState<AccessView> {
       child: Column(
         children: [
           ListItem.switchItem(
-            title: Row(
-              children: [
-                Flexible(child: Text(appLocale.appAccessControl)),
-                if (_profileManaged) ...[
-                  const SizedBox(width: 8),
-                  const Icon(Icons.lock_outline, size: 16),
-                ],
-              ],
-            ),
-            subtitle: Text(appLocale.accessControlDesc),
+            title: Text(appLocale.appAccessControl),
             delegate: SwitchDelegate(
-              value: _editorState.enabled,
-              onChanged: _profileManaged
-                  ? null
-                  : (v) => setState(() {
-                      _editorState = productServices.accessControl.setEnabled(
-                        _editorState,
-                        enabled: v,
-                      );
-                    }),
+              value: _enabled,
+              onChanged: (v) => setState(() {
+                _enabled = v;
+                _dirty = true;
+              }),
             ),
           ),
-          if (noticeMessage != null)
-            ProductAccessControlNotice(message: noticeMessage),
           const Divider(height: 1),
           Expanded(
             child: DisabledMask(
-              status: !_editorState.enabled,
+              status: !_enabled,
               child: Column(
                 children: [
                   Padding(
@@ -237,9 +183,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                                 size: 18),
                           ),
                         ],
-                        selected: {_editorState.mode},
-                        onSelectionChanged:
-                            _profileManaged ? null : (_) => _switchMode(),
+                        selected: {_mode},
+                        onSelectionChanged: (_) => _switchMode(),
                         showSelectedIcon: false,
                       ),
                     ),
@@ -257,28 +202,17 @@ class _AccessViewState extends ConsumerState<AccessView> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        suffixIcon: _editorState.query.isNotEmpty
+                        suffixIcon: _query.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
                                   _searchController.clear();
-                                  setState(() {
-                                    _editorState = productServices.accessControl
-                                        .setQuery(
-                                      _editorState,
-                                      '',
-                                    );
-                                  });
+                                  setState(() => _query = '');
                                 },
                               )
                             : null,
                       ),
-                      onChanged: (v) => setState(() {
-                        _editorState = productServices.accessControl.setQuery(
-                          _editorState,
-                          v,
-                        );
-                      }),
+                      onChanged: (v) => setState(() => _query = v),
                     ),
                   ),
                   Padding(
@@ -289,30 +223,29 @@ class _AccessViewState extends ConsumerState<AccessView> {
                         IconButton(
                           icon: const Icon(Icons.android),
                           tooltip: appLocale.systemApp,
-                          isSelected: _editorState.showSystemApps,
+                          isSelected: _showSystem,
                           onPressed: () => setState(() {
-                            _editorState = productServices.accessControl
-                                .toggleShowSystemApps(_editorState);
+                            _showSystem = !_showSystem;
+                            _dirty = true;
                           }),
                         ),
                         IconButton(
                           icon: const Icon(Icons.wifi_off),
                           tooltip: appLocale.noNetworkApp,
-                          isSelected: _editorState.showNoInternetApps,
+                          isSelected: _showNoInternet,
                           onPressed: () => setState(() {
-                            _editorState = productServices.accessControl
-                                .toggleShowNoInternetApps(_editorState);
+                            _showNoInternet = !_showNoInternet;
+                            _dirty = true;
                           }),
                         ),
                         const Spacer(),
-                        if (!_profileManaged &&
-                            _editorState.selectedPackages.isNotEmpty)
+                        if (_selectedSet.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all, size: 18),
-                            label: Text('${_editorState.selectedPackages.length}'),
+                            label: Text('${_selectedSet.length}'),
                             onPressed: () => setState(() {
-                              _editorState = productServices.accessControl
-                                  .clearSelection(_editorState);
+                              _selectedSet.clear();
+                              _dirty = true;
                             }),
                           ),
                       ],
@@ -340,15 +273,13 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           itemExtent: 72,
                           itemBuilder: (_, i) {
                             final pkg = filtered[i];
-                            final selected = _editorState.selectedPackages
-                                .contains(pkg.packageName);
+                            final selected =
+                                _selectedSet.contains(pkg.packageName);
                             return _AppTile(
                               package: pkg,
                               selected: selected,
                               isWhitelist: isWhitelist,
-                              onTap: _profileManaged
-                                  ? null
-                                  : () => _toggleApp(pkg.packageName),
+                              onTap: () => _toggleApp(pkg.packageName),
                             );
                           },
                         );
@@ -376,7 +307,7 @@ class _AppTile extends StatelessWidget {
   final Package package;
   final bool selected;
   final bool isWhitelist;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -400,9 +331,7 @@ class _AppTile extends StatelessWidget {
               width: 48,
               height: 48,
               child: FutureBuilder<ImageProvider?>(
-                future: productServices.accessControl.readPackageIcon(
-                  package.packageName,
-                ),
+                future: app?.getPackageIcon(package.packageName),
                 builder: (_, snap) {
                   if (snap.data == null) return const SizedBox();
                   return Image(

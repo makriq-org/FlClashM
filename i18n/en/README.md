@@ -74,25 +74,6 @@ proxies:
 
 [More about built-in nodes](docs/user-guide/profiles.md)
 
-### Split tunneling via profile
-
-The provider can specify which apps should use VPN directly in the profile. Supports exact package names, wildcards, and regular expressions.
-
-```yaml
-tun:
-  enable: true
-  include-package:
-    - org.telegram.messenger
-    - com.termux
-  exclude-package:
-    - '*.yandex.*'
-    - '!ru.yandex.browser'
-```
-
-Lists can be loaded from files or URLs. Profile settings take priority over manual settings.
-
-[More about split tunneling](docs/user-guide/split-tunneling.md)
-
 ---
 
 ## Other features
@@ -128,7 +109,6 @@ By default, the built-in updater shows only stable versions. Pre-releases can be
 
 ### For users
 - **[Built-in nodes](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Split tunneling](docs/user-guide/split-tunneling.md)** — management via profile
 - **[Provider hints](docs/user-guide/provider-hints.md)** — customization and behavior
 
 ### For developers

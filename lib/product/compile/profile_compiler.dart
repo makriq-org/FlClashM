@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
 import 'built_in_proxy_compiler.dart';
-import 'profile_split_tunneling.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
 
@@ -34,9 +33,7 @@ class RuntimePlanBuildContext {
     required this.overrideDns,
     required this.routeMode,
     required this.hasCurrentScript,
-    required this.profilesPath,
     required this.profilePath,
-    required this.readInstalledPackageNames,
   });
 
   final bool isAndroid;
@@ -44,9 +41,7 @@ class RuntimePlanBuildContext {
   final bool overrideDns;
   final RouteMode routeMode;
   final bool hasCurrentScript;
-  final String profilesPath;
   final String profilePath;
-  final Future<List<String>> Function() readInstalledPackageNames;
 }
 
 class ProfileCompiler {
@@ -116,18 +111,8 @@ class ProfileCompiler {
           patchConfig: runtimePatchConfig,
           overrideNetworkSettings: context.overrideNetworkSettings,
         );
-    final resolvedProfileSplitTunneling = patchConfig.tun.enable
-        ? await _resolveProfileSplitTunnelingOverride(
-            rawConfig: rawConfig,
-            rawProfile: rawProfile,
-            context: context,
-          )
-        : ResolvedProfileSplitTunneling(
-            config: rawConfig,
-            accessControl: null,
-          );
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
-      rawConfig: resolvedProfileSplitTunneling.config,
+      rawConfig: rawConfig,
       patchConfig: patchConfig,
     );
     rawConfig = compiledBuiltInProxyNodes.config;
@@ -174,35 +159,6 @@ class ProfileCompiler {
       },
       builtInProxyNodes: compiledBuiltInProxyNodes.nodes,
       metadata: metadata,
-      profileAccessControl: resolvedProfileSplitTunneling.accessControl,
-    );
-  }
-
-  Future<ResolvedProfileSplitTunneling> _resolveProfileSplitTunnelingOverride({
-    required Map<String, dynamic> rawConfig,
-    required RawProfile rawProfile,
-    required RuntimePlanBuildContext context,
-  }) async {
-    if (!context.isAndroid) {
-      return ResolvedProfileSplitTunneling(
-        config: rawConfig,
-        accessControl: null,
-      );
-    }
-
-    final installedPackageNames =
-        requiresInstalledPackageInventoryForProfileSplitTunneling(
-      rawConfig,
-      isAndroid: context.isAndroid,
-    )
-            ? await context.readInstalledPackageNames()
-            : const <String>[];
-    return resolveAndroidProfileSplitTunneling(
-      rawConfig: rawConfig,
-      isAndroid: context.isAndroid,
-      profilesPath: context.profilesPath,
-      profileId: rawProfile.profile.id,
-      installedPackageNames: installedPackageNames,
     );
   }
 

@@ -11,7 +11,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 | 阶段 | 描述 |
 |------|------|
 | **RawProfile** | 原始配置文件 |
-| **ProfileCompiler** | 读取配置文件，规范化分流 |
+| **ProfileCompiler** | 读取配置文件并构建运行配置 |
 | **SecurityPolicy** | 应用 Android 安全规则 |
 | **RuntimePlan** | 构建运行时启动计划 |
 | **EngineManager** | 管理引擎生命周期 |
@@ -40,4 +40,4 @@ dart tool/check_product_boundaries.dart
 | `SecurityPolicy` | 强制安全规则 |
 | `EngineManager` | 引擎生命周期 |
 | `AppUpdateService` | 检查和安装更新 |
-| `AccessControlService` | 分流 |
+| `AccessControlService` | Android VPN 启动和授权 |

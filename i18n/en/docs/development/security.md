@@ -16,7 +16,6 @@ The security policy is determined by the client, not the provider.
 ## Android security
 
 - TUN is forced on
-- Split tunneling from the profile takes priority
 - The update loader verifies SHA256 checksums
 - Built-in nodes cannot set local addresses and ports
 - `olcrtc` only works in CNC mode

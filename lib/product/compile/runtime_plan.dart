@@ -44,7 +44,6 @@ class RuntimePlan {
     this.files = const {},
     this.builtInProxyNodes = const [],
     required this.metadata,
-    this.profileAccessControl,
   });
 
   const RuntimePlan.empty({
@@ -53,7 +52,6 @@ class RuntimePlan {
     this.runtime = const RuntimeSelection.mihomo(),
     this.files = const {},
     this.builtInProxyNodes = const [],
-    this.profileAccessControl,
   })  : config = const <String, dynamic>{},
         metadata = null;
 
@@ -64,7 +62,6 @@ class RuntimePlan {
   final Map<String, String> files;
   final List<BuiltInProxyNodePlan> builtInProxyNodes;
   final CompiledProfileMetadata? metadata;
-  final AccessControl? profileAccessControl;
 
   SetupParams toSetupParams() => SetupParams(
         config: config,

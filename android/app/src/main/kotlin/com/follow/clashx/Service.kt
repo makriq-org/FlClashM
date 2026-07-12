@@ -284,9 +284,6 @@ object Service {
     suspend fun getAndroidVpnOptions(): String =
         delegate.useService { it.androidVpnOptions }.getOrNull() ?: ""
 
-    suspend fun getAppliedAndroidVpnOptions(): String =
-        delegate.useService { it.appliedAndroidVpnOptions }.getOrNull() ?: ""
-
     suspend fun getCurrentProfileName(): String =
         delegate.useService { it.currentProfileName }.getOrNull() ?: ""
 

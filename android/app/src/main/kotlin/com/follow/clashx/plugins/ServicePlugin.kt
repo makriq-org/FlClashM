@@ -101,9 +101,6 @@ class ServicePlugin :
                 result.successOnMain(true)
             }
             "getAndroidVpnOptions" -> launch { result.successOnMain(Service.getAndroidVpnOptions()) }
-            "getAppliedAndroidVpnOptions" -> launch {
-                result.successOnMain(Service.getAppliedAndroidVpnOptions())
-            }
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }

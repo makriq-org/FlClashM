@@ -11,7 +11,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 | مرحله | توضیحات |
 |-------|---------|
 | **RawProfile** | پروفایل خام |
-| **ProfileCompiler** | خواندن پروفایل، نرمال‌سازی تونل‌زنی جداگانه |
+| **ProfileCompiler** | خواندن پروفایل و ساخت پیکربندی اجرا |
 | **SecurityPolicy** | اعمال قوانین امنیتی Android |
 | **RuntimePlan** | ساخت برنامه اجرای محیط اجرا |
 | **EngineManager** | مدیریت چرخه حیات موتور |
@@ -40,4 +40,4 @@ dart tool/check_product_boundaries.dart
 | `SecurityPolicy` | قوانین امنیتی اجباری |
 | `EngineManager` | چرخه حیات موتور |
 | `AppUpdateService` | بررسی و نصب به‌روزرسانی‌ها |
-| `AccessControlService` | تونل‌زنی جداگانه |
+| `AccessControlService` | راه‌اندازی و مجوز Android VPN |

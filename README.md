@@ -78,25 +78,6 @@ proxies:
 
 [Подробнее о встроенных узлах тут](i18n/ru/docs/user-guide/profiles.md)
 
-## Раздельное туннелирование через профиль
-
-Провайдер может задать правила раздельного туннелирования прямо в профиле — какие приложения должны идти через VPN, а какие нет. Поддерживаются точные имена пакетов, маски и регулярные выражения.
-
-```yaml
-tun:
-  enable: true
-  include-package:
-    - org.telegram.messenger
-    - com.termux
-  exclude-package:
-    - '*.yandex.*'
-    - '!ru.yandex.browser'
-```
-
-Можно загружать списки из файлов или URL. Профиль имеет приоритет над ручными настройками.
-
-[Подробнее о раздельном туннелировании тут](i18n/ru/docs/user-guide/split-tunneling.md)
-
 ---
 
 ## Что еще умеет
@@ -132,7 +113,6 @@ tun:
 
 ### Для пользователей
 - **[Встроенные узлы](i18n/ru/docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Раздельное туннелирование](i18n/ru/docs/user-guide/split-tunneling.md)** — управление через профиль
 - **[Подсказки провайдера](i18n/ru/docs/user-guide/provider-hints.md)** — оформление и поведение
 
 ### Для разработчиков

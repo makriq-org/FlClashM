@@ -40,8 +40,6 @@ interface IRemoteInterface {
 
     String getAndroidVpnOptions();
 
-    String getAppliedAndroidVpnOptions();
-
     String getCurrentProfileName();
 
     String getRunTime();

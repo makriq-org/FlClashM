@@ -11,55 +11,6 @@ void main() {
   const policy = AndroidRuntimeAccessPolicy();
 
   group('AndroidRuntimeAccessPolicy', () {
-    test('reads an applied include snapshot without losing an empty mode',
-        () async {
-      final policy = AndroidRuntimeAccessPolicy(
-        appliedOptionsReader: () async => '{"includePackage":[]}',
-      );
-
-      final snapshot = await policy.readAppliedProfileAccess();
-
-      expect(snapshot.available, isTrue);
-      expect(snapshot.accessControl?.mode, AccessControlMode.acceptSelected);
-      expect(snapshot.accessControl?.acceptList, isEmpty);
-    });
-
-    test('distinguishes an applied no-rule snapshot from unavailability',
-        () async {
-      final availablePolicy = AndroidRuntimeAccessPolicy(
-        appliedOptionsReader: () async => '{}',
-      );
-      final unavailablePolicy = AndroidRuntimeAccessPolicy(
-        appliedOptionsReader: () async => '',
-      );
-
-      final available = await availablePolicy.readAppliedProfileAccess();
-      final unavailable = await unavailablePolicy.readAppliedProfileAccess();
-
-      expect(available.available, isTrue);
-      expect(available.accessControl, isNull);
-      expect(unavailable.available, isFalse);
-    });
-
-    test('rejects malformed or ambiguous applied package snapshots', () async {
-      final malformedPolicy = AndroidRuntimeAccessPolicy(
-        appliedOptionsReader: () async => '{"includePackage":[1]}',
-      );
-      final ambiguousPolicy = AndroidRuntimeAccessPolicy(
-        appliedOptionsReader: () async =>
-            '{"includePackage":[],"excludePackage":[]}',
-      );
-
-      expect(
-        (await malformedPolicy.readAppliedProfileAccess()).available,
-        isFalse,
-      );
-      expect(
-        (await ambiguousPolicy.readAppliedProfileAccess()).available,
-        isFalse,
-      );
-    });
-
     test('merges access control into vpn options on the client side', () {
       final merged = policy.mergeVpnOptions(
         '{"dns-hijack":["any:53"]}',
@@ -186,72 +137,27 @@ void main() {
       });
     });
 
-    test('hardens cold-start core state access control for every mode', () {
+    test('hardens manual access control in cold-start core state', () {
       final globalState = GlobalState()
-        ..config = const Config(themeProps: defaultThemeProps)
-        ..activeProfileAccessControlNotifier.value = null;
+        ..config = const Config(
+          themeProps: defaultThemeProps,
+          vpnProps: VpnProps(
+            accessControl: AccessControl(
+              enable: true,
+              mode: AccessControlMode.acceptSelected,
+              acceptList: ['com.example.app', 'com.makriq.flclash'],
+            ),
+          ),
+        );
 
-      final disabledState = globalState.getCoreState(
-        profileAccessControl: const AccessControl(),
-      );
-      expect(
-        disabledState.vpnProps.accessControl,
-        const AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: ['com.makriq.flclash', 'com.makriq.flclash.dev'],
-        ),
-      );
+      final state = globalState.getCoreState();
 
-      final acceptState = globalState.getCoreState(
-        profileAccessControl: const AccessControl(
-          enable: true,
-          mode: AccessControlMode.acceptSelected,
-          acceptList: ['com.example.app', 'com.makriq.flclash'],
-        ),
-      );
       expect(
-        acceptState.vpnProps.accessControl,
+        state.vpnProps.accessControl,
         const AccessControl(
           enable: true,
           mode: AccessControlMode.acceptSelected,
           acceptList: ['com.example.app'],
-        ),
-      );
-
-      final acceptSelfOnlyState = globalState.getCoreState(
-        profileAccessControl: const AccessControl(
-          enable: true,
-          mode: AccessControlMode.acceptSelected,
-          acceptList: ['com.makriq.flclash'],
-        ),
-      );
-      expect(
-        acceptSelfOnlyState.vpnProps.accessControl,
-        const AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: ['com.makriq.flclash', 'com.makriq.flclash.dev'],
-        ),
-      );
-
-      final rejectState = globalState.getCoreState(
-        profileAccessControl: const AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: ['com.example.blocked'],
-        ),
-      );
-      expect(
-        rejectState.vpnProps.accessControl,
-        const AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: [
-            'com.example.blocked',
-            'com.makriq.flclash',
-            'com.makriq.flclash.dev',
-          ],
         ),
       );
     });

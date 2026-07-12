@@ -11,7 +11,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 | Стадия | Описание |
 |--------|----------|
 | **RawProfile** | Исходный профиль |
-| **ProfileCompiler** | Читает профиль, нормализует раздельное туннелирование |
+| **ProfileCompiler** | Читает профиль и строит конфигурацию запуска |
 | **SecurityPolicy** | Применяет защиты Android |
 | **RuntimePlan** | Строит план запуска среды выполнения |
 | **EngineManager** | Управляет жизненным циклом движка |
@@ -40,4 +40,4 @@ dart tool/check_product_boundaries.dart
 | `SecurityPolicy` | Обязательные правила |
 | `EngineManager` | Жизненный цикл движка |
 | `AppUpdateService` | Проверка и установка обновлений |
-| `AccessControlService` | Раздельное туннелирование |
+| `AccessControlService` | Запуск Android VPN и получение разрешения |

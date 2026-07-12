@@ -85,10 +85,7 @@ void main() {
           applyRuntimePlan: (_) {
             applyRuntimePlanCalls++;
           },
-          buildCoreState: ({
-            profileAccessControl,
-          }) =>
-              const CoreState(
+          buildCoreState: () => const CoreState(
             vpnProps: VpnProps(),
             onlyStatisticsProxy: false,
             currentProfileName: '',
@@ -427,10 +424,7 @@ void main() {
         applyRuntimePlan: (_) {
           applyRuntimePlanCalls++;
         },
-        buildCoreState: ({
-          profileAccessControl,
-        }) =>
-            const CoreState(
+        buildCoreState: () => const CoreState(
           vpnProps: VpnProps(),
           onlyStatisticsProxy: false,
           currentProfileName: '',

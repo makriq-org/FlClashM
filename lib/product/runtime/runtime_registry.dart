@@ -1,4 +1,3 @@
-import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 import 'engine_adapter.dart';
@@ -9,11 +8,9 @@ typedef EngineAdapterFactory = EngineAdapter Function();
 
 EngineAdapter _buildMihomoEngineAdapter(
   ReadAccessControlCallback readAccessControl,
-  AccessControl? Function()? readProfileAccessControl,
 ) =>
     MihomoEngineAdapter(
       readAccessControl: readAccessControl,
-      readProfileAccessControl: readProfileAccessControl,
     );
 
 @immutable
@@ -59,7 +56,6 @@ class RuntimeRegistry {
 
   factory RuntimeRegistry.flClashM({
     required ReadAccessControlCallback readAccessControl,
-    AccessControl? Function()? readProfileAccessControl,
   }) =>
       RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
@@ -82,7 +78,6 @@ class RuntimeRegistry {
             ),
             adapterFactory: () => _buildMihomoEngineAdapter(
               readAccessControl,
-              readProfileAccessControl,
             ),
           ),
         ],

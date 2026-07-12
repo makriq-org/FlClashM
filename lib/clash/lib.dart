@@ -212,19 +212,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   @override
-  Future<String> getAppliedAndroidVpnOptions() async {
-    try {
-      return (await _channel
-              .invokeMethod<String>('getAppliedAndroidVpnOptions')
-              .timeout(const Duration(seconds: 10))) ??
-          '';
-    } catch (e) {
-      commonPrint.log('getAppliedAndroidVpnOptions error: $e');
-      return '';
-    }
-  }
-
-  @override
   Future<bool> updateDns(String value) async {
     try {
       await _channel

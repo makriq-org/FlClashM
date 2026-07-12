@@ -12,32 +12,7 @@ object State {
 
     @Volatile var runTime: Long = 0L
 
-    // Immutable snapshot handed to the Android service that established the
-    // currently running VPN. It is published only after handleStart succeeds
-    // and cleared when that VPN stops. Do not replace it on core config reload:
-    // VpnService.Builder package rules cannot change without re-establishing.
-    @Volatile private var appliedOptions: VpnOptions? = null
-
-    fun publishAppliedVpnOptions(options: VpnOptions) {
-        appliedOptions = options.copy(
-            routeAddress = options.routeAddress.toList(),
-            bypassDomain = options.bypassDomain.toList(),
-            includePackage = options.includePackage?.toList(),
-            excludePackage = options.excludePackage?.toList(),
-            accessControl = options.accessControl?.let {
-                it.copy(
-                    acceptList = it.acceptList.toList(),
-                    rejectList = it.rejectList.toList(),
-                )
-            },
-        )
-    }
-
-    fun clearAppliedVpnOptions() {
-        appliedOptions = null
-    }
-
-    fun readAppliedVpnOptions(): VpnOptions? = appliedOptions
+    @Volatile var options: VpnOptions? = null
 
     val notificationParamsFlow = MutableStateFlow(NotificationParams())
 
