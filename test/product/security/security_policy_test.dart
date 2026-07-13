@@ -7,7 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const policy = AndroidSecurityPolicy();
   const metadata = CompiledProfileMetadata(
-    externalController: '127.0.0.1:9090',
+    externalController: '0.0.0.0:9090',
+    secret: 'profile-secret',
     tcpConcurrent: true,
     unifiedDelay: true,
     logLevel: 'info',
@@ -71,8 +72,60 @@ void main() {
 
       expect(securedProfile.patchConfig.tun.enable, isTrue);
       expect(securedProfile.runtimeConstraints.enforceTun, isTrue);
-      expect(securedProfile.metadata?.externalController,
-          metadata.externalController);
+      expect(securedProfile.metadata?.externalController, isEmpty);
+      expect(securedProfile.patchConfig.allowLan, isFalse);
+      expect(
+        securedProfile.patchConfig.externalController,
+        ExternalControllerStatus.close,
+      );
+    });
+
+    test('allows controller only from explicit settings with a secret', () {
+      final securedProfile = policy.secureProfile(
+        compiledProfile: const CompiledProfilePatch(
+          patchConfig: ClashConfig(allowLan: false),
+          metadata: metadata,
+        ),
+        context: const SecurityPolicyContext(
+          isAndroid: true,
+          explicitAllowLan: true,
+          explicitExternalController: ExternalControllerStatus.open,
+        ),
+      );
+
+      expect(securedProfile.patchConfig.allowLan, isTrue);
+      expect(
+        securedProfile.patchConfig.externalController,
+        ExternalControllerStatus.open,
+      );
+      expect(
+        securedProfile.metadata?.externalController,
+        ExternalControllerStatus.open.value,
+      );
+      expect(securedProfile.metadata?.secret, 'profile-secret');
+    });
+
+    test('closes controller when the active config has no secret', () {
+      final securedUpdate = policy.secureRuntimeUpdate(
+        updateParams: const UpdateParams(
+          tun: Tun(enable: true),
+          mixedPort: defaultMixedPort,
+          allowLan: true,
+          findProcessMode: FindProcessMode.always,
+          mode: Mode.rule,
+          logLevel: LogLevel.error,
+          ipv6: true,
+          tcpConcurrent: true,
+          externalController: ExternalControllerStatus.open,
+          unifiedDelay: true,
+        ),
+        context: const SecurityPolicyContext(isAndroid: true),
+      );
+
+      expect(
+        securedUpdate.externalController,
+        ExternalControllerStatus.close,
+      );
     });
 
     test('keeps advisory compile result unchanged off Android', () {

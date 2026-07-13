@@ -7,6 +7,7 @@ import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/connectivity_check.dart';
 import 'package:flutter/foundation.dart';
 
+import 'config_tree.dart';
 import 'olcrtc_config_validator.dart';
 
 @immutable
@@ -31,7 +32,7 @@ class BuiltInProxyCompiler {
     required ClashConfig patchConfig,
     String globalTestUrl = '',
   }) {
-    final normalizedConfig = _cloneConfig(rawConfig);
+    final normalizedConfig = copyConfigTree(rawConfig);
     final proxyEntries = normalizedConfig['proxies'];
     if (proxyEntries is! List) {
       _rejectLegacyRuntimeSelection(normalizedConfig);
@@ -227,7 +228,7 @@ class BuiltInProxyCompiler {
     required bool udp,
     required ConnectivityCheckConfig connectivityCheck,
   }) {
-    final rawConfig = _cloneConfig(definition.rawConfig)
+    final rawConfig = copyConfigTree(definition.rawConfig)
       ..remove('name')
       ..remove('type')
       ..remove('udp')
@@ -333,7 +334,7 @@ class BuiltInProxyCompiler {
     required bool udp,
     required ConnectivityCheckConfig connectivityCheck,
   }) {
-    final rawConfig = _cloneConfig(definition.rawConfig)
+    final rawConfig = copyConfigTree(definition.rawConfig)
       ..remove('name')
       ..remove('type')
       ..remove('udp')
@@ -728,11 +729,6 @@ class BuiltInProxyCompiler {
     throw const FormatException(
       'Legacy `x-flclashm-runtime.engine=naiveproxy` is no longer supported. Define a proxy entry with `type: naiveproxy` and include it in normal proxy groups or rules instead.',
     );
-  }
-
-  Map<String, dynamic> _cloneConfig(Map<String, dynamic> rawConfig) {
-    final encoded = json.encode(rawConfig);
-    return Map<String, dynamic>.from(json.decode(encoded) as Map);
   }
 
   Map<String, dynamic> _asStringKeyedMap(dynamic value) {

@@ -735,6 +735,7 @@ class EngineManager {
           ? null
           : CompiledProfileMetadata(
               externalController: updateParams.externalController.value,
+              secret: metadata.secret,
               tcpConcurrent: updateParams.tcpConcurrent,
               unifiedDelay: updateParams.unifiedDelay,
               logLevel: updateParams.logLevel.name,

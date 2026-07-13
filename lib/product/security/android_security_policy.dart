@@ -1,3 +1,4 @@
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 
 import '../compile/runtime_plan.dart';
@@ -13,7 +14,17 @@ class AndroidSecurityPolicy implements SecurityPolicy {
     required ClashConfig patchConfig,
     required SecurityPolicyContext context,
   }) =>
-      context.isAndroid ? patchConfig.copyWith.tun(enable: true) : patchConfig;
+      context.isAndroid
+          ? patchConfig
+              .copyWith(
+                externalController: _secureControllerStatus(
+                  requested: patchConfig.externalController,
+                  secret: context.controllerSecret,
+                ),
+              )
+              .copyWith
+              .tun(enable: true)
+          : patchConfig;
 
   @override
   UpdateParams secureRuntimeUpdate({
@@ -23,6 +34,10 @@ class AndroidSecurityPolicy implements SecurityPolicy {
       context.isAndroid
           ? updateParams.copyWith(
               tun: updateParams.tun.copyWith(enable: true),
+              externalController: _secureControllerStatus(
+                requested: updateParams.externalController,
+                secret: context.controllerSecret,
+              ),
             )
           : updateParams;
 
@@ -38,17 +53,45 @@ class AndroidSecurityPolicy implements SecurityPolicy {
       );
     }
 
+    final metadata = compiledProfile.metadata;
+    final securedController = _secureControllerStatus(
+      requested: context.explicitExternalController,
+      secret: metadata?.secret ?? '',
+    );
     return SecuredProfilePatch(
-      patchConfig: securePatchConfig(
-        patchConfig: compiledProfile.patchConfig,
-        context: context,
-      ),
-      metadata: compiledProfile.metadata,
+      patchConfig: compiledProfile.patchConfig
+          .copyWith(
+            allowLan: context.explicitAllowLan,
+            externalController: securedController,
+          )
+          .copyWith
+          .tun(
+            enable: true,
+          ),
+      metadata: metadata == null
+          ? null
+          : CompiledProfileMetadata(
+              externalController: securedController.value,
+              secret: metadata.secret,
+              tcpConcurrent: metadata.tcpConcurrent,
+              unifiedDelay: metadata.unifiedDelay,
+              logLevel: metadata.logLevel,
+              keepAliveInterval: metadata.keepAliveInterval,
+              groupDescriptions: metadata.groupDescriptions,
+            ),
       runtimeConstraints: const RuntimeSecurityConstraints(
         enforceTun: true,
       ),
     );
   }
+
+  ExternalControllerStatus _secureControllerStatus({
+    required ExternalControllerStatus requested,
+    required String secret,
+  }) =>
+      requested == ExternalControllerStatus.open && secret.trim().isNotEmpty
+          ? ExternalControllerStatus.open
+          : ExternalControllerStatus.close;
 }
 
 const androidSecurityPolicy = AndroidSecurityPolicy();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -23,70 +24,6 @@ class ResolvedProfileSplitTunneling {
 
   final Map<String, dynamic> config;
   final AccessControl? accessControl;
-}
-
-Future<Map<String, dynamic>> restoreAndroidProfileSplitTunnelingFields(
-  Map<String, dynamic> parsedConfig, {
-  required bool isAndroid,
-  String? profilePath,
-}) async {
-  if (!isAndroid) {
-    return parsedConfig;
-  }
-
-  final resolvedProfilePath = profilePath?.trim();
-  if (resolvedProfilePath == null || resolvedProfilePath.isEmpty) {
-    return parsedConfig;
-  }
-
-  final profileFile = File(resolvedProfilePath);
-  if (!profileFile.existsSync()) {
-    return parsedConfig;
-  }
-
-  try {
-    final yamlContent = loadYaml(await profileFile.readAsString());
-    if (yamlContent is! Map && yamlContent is! YamlMap) {
-      return parsedConfig;
-    }
-
-    final rawTun = _asStringKeyedMap((yamlContent as dynamic)['tun']);
-    if (rawTun.isEmpty) {
-      return parsedConfig;
-    }
-
-    final mergedTun = Map<String, dynamic>.from(
-      _asStringKeyedMap(parsedConfig['tun']),
-    );
-    var changed = false;
-    for (final key in const [
-      'include-package',
-      'exclude-package',
-      'include-package-file',
-      'exclude-package-file',
-      'include-package-url',
-      'exclude-package-url',
-    ]) {
-      if (!rawTun.containsKey(key)) {
-        continue;
-      }
-      mergedTun[key] = _materializeYamlValue(rawTun[key]);
-      changed = true;
-    }
-    if (!changed) {
-      return parsedConfig;
-    }
-
-    final mergedConfig = Map<String, dynamic>.from(parsedConfig);
-    mergedConfig['tun'] = mergedTun;
-    return mergedConfig;
-  } catch (error) {
-    commonPrint.log(
-      'Failed to restore raw Android split tunneling fields from '
-      '`$resolvedProfilePath`: $error',
-    );
-    return parsedConfig;
-  }
 }
 
 bool requiresInstalledPackageInventoryForProfileSplitTunneling(
@@ -308,19 +245,6 @@ Map<String, dynamic> _asStringKeyedMap(dynamic value) {
     return <String, dynamic>{};
   }
   return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
-}
-
-dynamic _materializeYamlValue(dynamic value) {
-  if (value is Map || value is YamlMap) {
-    return value.map(
-      (key, mapValue) =>
-          MapEntry(key.toString(), _materializeYamlValue(mapValue)),
-    );
-  }
-  if (value is List || value is YamlList) {
-    return value.map(_materializeYamlValue).toList();
-  }
-  return value;
 }
 
 List<String> _asPackageSelectorList(
@@ -554,6 +478,19 @@ Future<_PackageListReadResult> _readPackageListFromRemoteSource(
   );
   final cacheFile = File(cachePath);
   await cacheFile.parent.create(recursive: true);
+  if (cacheFile.existsSync()) {
+    _scheduleRemotePackageListRefresh(
+      url: rawUrl,
+      cachePath: cachePath,
+      fieldName: fieldName,
+      readRemoteSource: readRemoteSource,
+    );
+    return _PackageListReadResult(
+      content: await cacheFile.readAsString(),
+      cachePath: cachePath,
+      fromCache: true,
+    );
+  }
   try {
     final content =
         await (readRemoteSource ?? _defaultReadRemoteSource)(rawUrl);
@@ -562,16 +499,55 @@ Future<_PackageListReadResult> _readPackageListFromRemoteSource(
       cachePath: cachePath,
     );
   } catch (_) {
-    if (cacheFile.existsSync()) {
-      return _PackageListReadResult(
-        content: await cacheFile.readAsString(),
-        cachePath: cachePath,
-        fromCache: true,
-      );
-    }
     throw FormatException(
       'Package list URL for `$fieldName` could not be fetched and no cache '
       'is available: $rawUrl',
+    );
+  }
+}
+
+final _remotePackageListRefreshes = <String, Future<void>>{};
+
+void _scheduleRemotePackageListRefresh({
+  required String url,
+  required String cachePath,
+  required String fieldName,
+  ReadProfileSplitTunnelingRemoteSource? readRemoteSource,
+}) {
+  if (_remotePackageListRefreshes.containsKey(cachePath)) return;
+  late final Future<void> task;
+  task = _refreshRemotePackageListCache(
+    url: url,
+    cachePath: cachePath,
+    fieldName: fieldName,
+    readRemoteSource: readRemoteSource,
+  ).whenComplete(() {
+    if (identical(_remotePackageListRefreshes[cachePath], task)) {
+      unawaited(_remotePackageListRefreshes.remove(cachePath));
+    }
+  });
+  _remotePackageListRefreshes[cachePath] = task;
+  unawaited(task);
+}
+
+Future<void> _refreshRemotePackageListCache({
+  required String url,
+  required String cachePath,
+  required String fieldName,
+  ReadProfileSplitTunnelingRemoteSource? readRemoteSource,
+}) async {
+  try {
+    final content = await (readRemoteSource ?? _defaultReadRemoteSource)(url);
+    final selectors = _parsePackageListFileContent(
+      content,
+      fieldName: fieldName,
+      path: url,
+    );
+    _validatePackageSelectors(selectors, fieldName: fieldName);
+    await _writePackageListCache(cachePath, content);
+  } catch (error) {
+    commonPrint.log(
+      'Android package list background refresh failed for `$url`: $error',
     );
   }
 }

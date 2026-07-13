@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -8,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
 import 'built_in_proxy_compiler.dart';
+import 'config_tree.dart';
 import 'profile_split_tunneling.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
@@ -35,8 +34,8 @@ class RuntimePlanBuildContext {
     required this.routeMode,
     required this.hasCurrentScript,
     required this.profilesPath,
-    required this.profilePath,
     required this.readInstalledPackageNames,
+    this.readSplitTunnelingRemoteSource,
   });
 
   final bool isAndroid;
@@ -45,8 +44,8 @@ class RuntimePlanBuildContext {
   final RouteMode routeMode;
   final bool hasCurrentScript;
   final String profilesPath;
-  final String profilePath;
   final Future<List<String>> Function() readInstalledPackageNames;
+  final ReadProfileSplitTunnelingRemoteSource? readSplitTunnelingRemoteSource;
 }
 
 class ProfileCompiler {
@@ -106,7 +105,7 @@ class ProfileCompiler {
       );
     }
 
-    var rawConfig = _cloneConfig(rawProfile.config);
+    var rawConfig = copyConfigTree(rawProfile.config);
     final patchConfig = runtimePatchConfig.copyWith(
       tun: runtimePatchConfig.tun.getRealTun(context.routeMode),
     );
@@ -116,16 +115,17 @@ class ProfileCompiler {
           patchConfig: runtimePatchConfig,
           overrideNetworkSettings: context.overrideNetworkSettings,
         );
-    final resolvedProfileSplitTunneling = patchConfig.tun.enable
-        ? await _resolveProfileSplitTunnelingOverride(
-            rawConfig: rawConfig,
-            rawProfile: rawProfile,
-            context: context,
-          )
-        : ResolvedProfileSplitTunneling(
-            config: rawConfig,
-            accessControl: null,
-          );
+    final resolvedProfileSplitTunneling =
+        (patchConfig.tun.enable || context.isAndroid)
+            ? await _resolveProfileSplitTunnelingOverride(
+                rawConfig: rawConfig,
+                rawProfile: rawProfile,
+                context: context,
+              )
+            : ResolvedProfileSplitTunneling(
+                config: rawConfig,
+                accessControl: null,
+              );
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
@@ -204,6 +204,7 @@ class ProfileCompiler {
       profilesPath: context.profilesPath,
       profileId: rawProfile.profile.id,
       installedPackageNames: installedPackageNames,
+      readRemoteSource: context.readSplitTunnelingRemoteSource,
     );
   }
 
@@ -244,6 +245,10 @@ class ProfileCompiler {
               providerHints.externalController.isNotEmpty
           ? providerHints.externalController
           : patchConfig.externalController.value,
+      secret: switch (rawProfile.config['secret']) {
+        final String value => value.trim(),
+        _ => '',
+      },
       tcpConcurrent: overrideNetworkSettings
           ? patchConfig.tcpConcurrent
           : (runtimeHints.tcpConcurrent ?? patchConfig.tcpConcurrent),
@@ -260,11 +265,6 @@ class ProfileCompiler {
     );
   }
 
-  Map<String, dynamic> _cloneConfig(Map<String, dynamic> rawConfig) {
-    final encoded = json.encode(rawConfig);
-    return Map<String, dynamic>.from(json.decode(encoded) as Map);
-  }
-
   void _applyCoreRuntimeSettings({
     required Map<String, dynamic> rawConfig,
     required ClashConfig patchConfig,
@@ -272,6 +272,7 @@ class ProfileCompiler {
     required bool overrideNetworkSettings,
   }) {
     rawConfig["external-controller"] = metadata.externalController;
+    rawConfig["secret"] = metadata.secret;
     if (rawConfig["external-ui"] == null || rawConfig["external-ui"] == "") {
       rawConfig["external-ui"] = "";
     }
