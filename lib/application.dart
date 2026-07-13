@@ -96,6 +96,7 @@ class ApplicationState extends ConsumerState<Application> {
                 appSettingProvider.select((state) => state.locale),
               );
               final themeProps = ref.watch(themeSettingProvider);
+              final runtimePreparing = !ref.watch(initProvider);
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
                 navigatorKey: globalState.navigatorKey,
@@ -136,7 +137,42 @@ class ApplicationState extends ConsumerState<Application> {
                   // Reduce animation duration for snappier feel
                   visualDensity: VisualDensity.adaptivePlatformDensity,
                 ),
-                home: child,
+                home: Stack(
+                  children: [
+                    child!,
+                    if (runtimePreparing)
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: Material(
+                          elevation: 3,
+                          borderRadius: BorderRadius.circular(16),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHigh,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text('Подготовка встроенных узлов…'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               );
             },
             child: const HomePage(),
