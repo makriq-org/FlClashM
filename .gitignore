@@ -38,6 +38,7 @@ migrate_working_dir/
 .pub/
 /build/
 /dist/
+/android/build/
 /android/core/.cxx/
 /service/
 

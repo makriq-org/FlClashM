@@ -176,6 +176,11 @@
       "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
     },
     {
+      "path": "android/build/reports/problems/problems-report.html",
+      "bucket": "budget",
+      "reason": "Сгенерированный отчёт Gradle удалён из репозитория и не является исходным файлом Android-приложения."
+    },
+    {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Components.kt",
       "bucket": "budget",
       "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
