@@ -21,7 +21,7 @@ void main() {
     ByedpiNodeController buildController() => ByedpiNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (_, __) async {},
+          waitForListener: (_, __, ___) async {},
           allocateProbePort: () async => nextProbePort++,
           siteCheck: ({
             required host,
@@ -37,7 +37,7 @@ void main() {
         ByedpiNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (_, __) async {},
+          waitForListener: (_, __, ___) async {},
           allocateProbePort: () async => nextProbePort++,
           now: () => DateTime(2026, 6, 1, 12),
         );
@@ -93,6 +93,45 @@ void main() {
       ]);
     });
 
+    test('reports a failed listener check while restoring a running node',
+        () async {
+      final oldPlan = _buildManualPlan(args: '--disorder 1');
+      final newPlan = _buildManualPlan(args: '--fake -1');
+      final initialController = buildController();
+      expect(
+        await initialController.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [oldPlan],
+        ),
+        isEmpty,
+      );
+      await initialController.commitStagedRuntimePlan();
+      expect(await initialController.startNodes([oldPlan]), isTrue);
+
+      var listenerChecks = 0;
+      final updatingController = ByedpiNodeController(
+        binary: binary,
+        runtime: runtime,
+        waitForListener: (_, __, ___) async {
+          listenerChecks++;
+          throw StateError('listener is unavailable');
+        },
+        allocateProbePort: () async => nextProbePort++,
+      );
+      final message = await updatingController.stageRuntimePlan(
+        currentPlans: [oldPlan],
+        nextPlans: [newPlan],
+      );
+
+      expect(message, contains('Rollback failed'));
+      expect(message, contains('Failed to restart previous byedpi node'));
+      expect(listenerChecks, 2);
+      final config = await File(
+        '${sharedLayout.nodesDirectoryPath}/byedpi-a/$byedpiConfigFileName',
+      ).readAsString();
+      expect(json.decode(config)['args'], '--disorder 1');
+    });
+
     test('selects and caches the first working auto strategy', () async {
       final controller = buildController();
       final plan = _buildAutoPlan();
@@ -132,7 +171,7 @@ void main() {
       final controller = ByedpiNodeController(
         binary: binary,
         runtime: runtime,
-        waitForListener: (_, __) async {},
+        waitForListener: (_, __, ___) async {},
         allocateProbePort: () async => nextProbePort++,
         siteCheck: ({
           required host,
@@ -309,7 +348,10 @@ void main() {
   });
 }
 
-BuiltInProxyNodePlan _buildManualPlan() => BuiltInProxyNodePlan(
+BuiltInProxyNodePlan _buildManualPlan({
+  String args = '--disorder 1 --auto=torst',
+}) =>
+    BuiltInProxyNodePlan(
       nodeId: 'byedpi-a',
       name: 'ByeDPI',
       type: BuiltInProxyType.byedpi,
@@ -322,7 +364,7 @@ BuiltInProxyNodePlan _buildManualPlan() => BuiltInProxyNodePlan(
           'mode': 'manual',
           'listenHost': '127.0.0.1',
           'listenPort': 35610,
-          'args': '--disorder 1 --auto=torst',
+          'args': args,
           'cache': {},
         }),
       },

@@ -17,9 +17,11 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URI
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
+import kotlin.math.ceil
 
 data class RuntimeNodeConnectivityCheck(
     val urls: List<URI> = emptyList(),
@@ -93,7 +95,7 @@ object RuntimeNodeConnectivityChecker {
             val passed = withTimeoutOrNull(checkBudget) {
                 checkOnce(host, port, config)
             } ?: false
-            if (passed) return true
+            if (passed) return RuntimeNodeProcessManager.readStartTime(nodeId) > 0L
             val remaining = deadline - SystemClock.elapsedRealtime()
             if (remaining <= 0L) return false
             delay(minOf(config.retryIntervalMillis, remaining))
@@ -111,25 +113,36 @@ object RuntimeNodeConnectivityChecker {
         if (checks.isEmpty()) return@coroutineScope false
         val next = AtomicInteger(0)
         val successes = AtomicInteger(0)
+        val completed = AtomicInteger(0)
+        val requiredSuccesses = config.minSuccessRatio
+            ?.let { ceil(it * checks.size).toInt() }
+            ?: 1
+        val decided = AtomicBoolean(false)
         List(minOf(config.concurrency, checks.size)) {
             async(Dispatchers.IO) {
-                while (true) {
+                while (!decided.get()) {
                     val index = next.getAndIncrement()
                     if (index >= checks.size) break
-                    if (probe(host, port, checks[index], config.timeoutMillis)) {
+                    val successCount = if (probe(host, port, checks[index], config.timeoutMillis)) {
                         successes.incrementAndGet()
+                    } else {
+                        successes.get()
+                    }
+                    val completedCount = completed.incrementAndGet()
+                    if (successCount >= requiredSuccesses ||
+                        successCount + checks.size - completedCount < requiredSuccesses
+                    ) {
+                        decided.set(true)
                     }
                 }
             }
         }.awaitAll()
-        val ratio = config.minSuccessRatio
-        ratio?.let { successes.get().toDouble() / checks.size >= it }
-            ?: (successes.get() > 0)
+        successes.get() >= requiredSuccesses
     }
 
     internal fun isSafeUri(uri: URI): Boolean {
         val scheme = uri.scheme?.lowercase()
-        val host = uri.host?.lowercase() ?: return false
+        val host = uri.host?.lowercase()?.removeSuffix(".") ?: return false
         if ((scheme != "http" && scheme != "https") ||
             uri.userInfo != null || uri.fragment != null ||
             uri.port == 0 || uri.port > 65535
@@ -157,9 +170,12 @@ object RuntimeNodeConnectivityChecker {
                     !(first == 100 && second in 64..127) &&
                     !(first == 169 && second == 254) &&
                     !(first == 172 && second in 16..31) &&
-                    !(first == 192 && second == 0) &&
+                    !(first == 192 && second == 0 && (bytes[2] == 0 || bytes[2] == 2)) &&
                     !(first == 192 && second == 168) &&
-                    !(first == 198 && second in 18..19)
+                    !(first == 192 && second == 88 && bytes[2] == 99) &&
+                    !(first == 198 && second in 18..19) &&
+                    !(first == 198 && second == 51 && bytes[2] == 100) &&
+                    !(first == 203 && second == 0 && bytes[2] == 113)
             }
             is Inet6Address -> {
                 (bytes[0] and 0xe0) == 0x20 &&

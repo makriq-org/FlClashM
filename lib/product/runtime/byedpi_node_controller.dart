@@ -14,11 +14,6 @@ import 'byedpi_release.dart';
 import 'connectivity_check.dart';
 import 'local_node_controller.dart';
 
-typedef ByedpiWaitForRuntimeNodeListenerCallback = Future<void> Function(
-  String host,
-  int port,
-);
-
 typedef ByedpiSiteCheckCallback = Future<bool> Function({
   required String host,
   required int port,
@@ -252,7 +247,7 @@ class ByedpiNodeController
   ByedpiNodeController({
     ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = _waitForRuntimeNodeListener,
+    super.waitForListener = waitForLocalNodeListener,
     super.connectivityChecker,
     this.siteCheck = _checkUrlViaSocks,
     this.allocateProbePort = _allocateLoopbackPort,
@@ -351,33 +346,11 @@ class ByedpiNodeController
   Future<String> rollbackStageFailure({
     required List<LocalNodeMutation<ByedpiNodeLayout>> mutations,
     required String failureMessage,
-  }) async {
-    for (final mutation in mutations.reversed) {
-      await runtime.stopNode(nodeId: mutation.plan.nodeId);
-      final configFile = File(mutation.layout.configPath);
-      if (mutation.previousConfig == null) {
-        await deleteFileWithRetry(configFile);
-        await deleteDirectoryIfExists(
-          Directory(mutation.layout.workingDirectoryPath),
-        );
-      } else {
-        await configFile.writeAsString(mutation.previousConfig!, flush: true);
-      }
-      if (mutation.wasRunning) {
-        final sharedLayout = await binary.resolveSharedInstallLayout();
-        final rollbackPlan = mutation.previousPlan ?? mutation.plan;
-        final restarted = await startPlan(
-          sharedLayout,
-          rollbackPlan,
-          mutation.layout,
-        );
-        if (!restarted) {
-          return '$failureMessage Rollback failed: previous byedpi node did not restart.';
-        }
-      }
-    }
-    return failureMessage;
-  }
+  }) =>
+      rollbackStageFailureWithRestart(
+        mutations: mutations,
+        failureMessage: failureMessage,
+      );
 
   Future<bool> _startAutoPlan(
     ByedpiSharedInstallLayout sharedLayout,
@@ -569,7 +542,11 @@ class ByedpiNodeController
       return false;
     }
     if (waitForReady) {
-      await waitForListener(config.listenHost, config.listenPort);
+      await waitForListener(
+        config.listenHost,
+        config.listenPort,
+        config.timeout,
+      );
     }
     return true;
   }
@@ -789,30 +766,6 @@ class ByedpiNodeController
       args.add(buffer.toString());
     }
     return args;
-  }
-
-  static Future<void> _waitForRuntimeNodeListener(
-    String host,
-    int port,
-  ) async {
-    for (var attempt = 0; attempt < 50; attempt++) {
-      try {
-        final socket = await Socket.connect(
-          host,
-          port,
-          timeout: const Duration(milliseconds: 200),
-        );
-        await socket.close();
-        return;
-      } catch (_) {
-        if (attempt == 49) {
-          throw StateError(
-            'Timed out waiting for local runtime node listener on $host:$port.',
-          );
-        }
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-    }
   }
 
   static Future<int> _allocateLoopbackPort() async {

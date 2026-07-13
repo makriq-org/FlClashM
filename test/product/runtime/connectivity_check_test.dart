@@ -67,6 +67,32 @@ void main() {
     expect(maximum, 2);
   });
 
+  test('returns as soon as the required success count is reached', () async {
+    final slowProbe = Completer<bool>();
+    var attempt = 0;
+    final checker = ConnectivityChecker(
+      probe: ({required host, required port, required url, required timeout}) {
+        attempt++;
+        return attempt == 1 ? Future.value(true) : slowProbe.future;
+      },
+    );
+
+    final result = await checker
+        .checkOnce(
+          host: '127.0.0.1',
+          port: 1080,
+          config: ConnectivityCheckConfig(
+            urls: [Uri(scheme: 'https', host: 'example.org')],
+            requests: 2,
+            concurrency: 2,
+          ),
+        )
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(result, isTrue);
+    slowProbe.complete(false);
+  });
+
   test('retries a required check and stops when the process exits', () async {
     var attempts = 0;
     final checker = ConnectivityChecker(

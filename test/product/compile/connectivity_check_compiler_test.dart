@@ -180,9 +180,12 @@ void main() {
       'ftp://example.org/',
       'https://user:secret@example.org/',
       'http://localhost/',
+      'http://localhost./',
       'http://127.0.0.1/',
       'http://10.0.0.1/',
       'http://[::1]/',
+      'http://198.51.100.1/',
+      'http://203.0.113.1/',
       'https://example.org:0/',
       'https://example.org:99999/',
     ]) {

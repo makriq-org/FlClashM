@@ -12,7 +12,44 @@ import 'connectivity_check.dart';
 typedef LocalNodeWaitForRuntimeNodeListenerCallback = Future<void> Function(
   String host,
   int port,
+  Duration timeout,
 );
+
+Future<void> waitForLocalNodeListener(
+  String host,
+  int port,
+  Duration timeout,
+) async {
+  final stopwatch = Stopwatch()..start();
+  while (true) {
+    final remaining = timeout - stopwatch.elapsed;
+    if (remaining <= Duration.zero) {
+      throw StateError(
+        'Timed out waiting for local runtime node listener on $host:$port.',
+      );
+    }
+    try {
+      final connectTimeout = remaining < const Duration(milliseconds: 200)
+          ? remaining
+          : const Duration(milliseconds: 200);
+      final socket = await Socket.connect(
+        host,
+        port,
+        timeout: connectTimeout,
+      );
+      await socket.close();
+      return;
+    } catch (_) {
+      final delayRemaining = timeout - stopwatch.elapsed;
+      if (delayRemaining <= Duration.zero) continue;
+      await Future<void>.delayed(
+        delayRemaining < const Duration(milliseconds: 100)
+            ? delayRemaining
+            : const Duration(milliseconds: 100),
+      );
+    }
+  }
+}
 
 @immutable
 class LocalNodeSharedInstallLayout {
@@ -390,9 +427,11 @@ abstract class LocalNodeController<
     var listenerReady = false;
     var listenerCompleted = false;
     unawaited(
-      waitForListener(plan.listenHost, plan.listenPort)
-          .timeout(plan.connectivityCheck.startupTimeout)
-          .then((_) {
+      waitForListener(
+        plan.listenHost,
+        plan.listenPort,
+        plan.connectivityCheck.startupTimeout,
+      ).timeout(plan.connectivityCheck.startupTimeout).then((_) {
         listenerReady = true;
         listenerCompleted = true;
       }).catchError((Object error, StackTrace stackTrace) {

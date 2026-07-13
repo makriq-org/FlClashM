@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
@@ -9,11 +8,6 @@ import 'package:path/path.dart' as path;
 import 'built_in_proxy_types.dart';
 import 'local_node_controller.dart';
 import 'naiveproxy_release.dart';
-
-typedef WaitForRuntimeNodeListenerCallback = Future<void> Function(
-  String host,
-  int port,
-);
 
 @immutable
 class NaiveProxySharedInstallLayout extends LocalNodeSharedInstallLayout {
@@ -127,7 +121,7 @@ class NaiveProxyNodeController extends LocalNodeController<
   NaiveProxyNodeController({
     NaiveProxyBinaryBridge binary = const DefaultNaiveProxyBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = _waitForRuntimeNodeListener,
+    super.waitForListener = waitForLocalNodeListener,
     super.connectivityChecker,
   }) : super(
           typeLabel: 'naiveproxy',
@@ -194,34 +188,4 @@ class NaiveProxyNodeController extends LocalNodeController<
         stackTrace: stackTrace,
         startedNodes: startedNodes,
       );
-
-  static Future<void> _waitForRuntimeNodeListener(
-    String host,
-    int port,
-  ) async {
-    final uri = Uri(
-      scheme: 'socks5',
-      host: host,
-      port: port,
-    );
-    for (var attempt = 0; attempt < 50; attempt++) {
-      try {
-        final socket = await Socket.connect(
-          uri.host,
-          uri.port,
-          timeout: const Duration(milliseconds: 200),
-        );
-        await socket.close();
-        return;
-      } catch (_) {
-        if (attempt == 49) {
-          throw StateError(
-            'Timed out waiting for local runtime node listener on '
-            '${uri.host}:${uri.port}.',
-          );
-        }
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-    }
-  }
 }

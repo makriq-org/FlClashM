@@ -21,7 +21,7 @@ void main() {
     OlcRtcNodeController buildController() => OlcRtcNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (host, port) async {
+          waitForListener: (host, port, _) async {
             waitedListeners.add('$host:$port');
           },
         );
@@ -246,7 +246,7 @@ void main() {
       final controller = OlcRtcNodeController(
         binary: binary,
         runtime: runtime,
-        waitForListener: (_, __) => Completer<void>().future,
+        waitForListener: (_, __, ___) => Completer<void>().future,
       );
       final plan = buildPlan(
         'Broken node',

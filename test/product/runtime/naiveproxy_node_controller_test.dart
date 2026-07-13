@@ -17,6 +17,7 @@ void main() {
     late Directory tempDir;
     late NaiveProxySharedInstallLayout sharedLayout;
     late List<String> waitedListeners;
+    late List<Duration> waitedTimeouts;
 
     NaiveProxyNodeController buildController({
       ConnectivityChecker connectivityChecker = const ConnectivityChecker(),
@@ -24,8 +25,9 @@ void main() {
         NaiveProxyNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (host, port) async {
+          waitForListener: (host, port, timeout) async {
             waitedListeners.add('$host:$port');
+            waitedTimeouts.add(timeout);
           },
           connectivityChecker: connectivityChecker,
         );
@@ -74,6 +76,7 @@ void main() {
       binary = _FakeNaiveProxyBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
       waitedListeners = <String>[];
+      waitedTimeouts = <Duration>[];
     });
 
     tearDown(() {
@@ -280,6 +283,22 @@ void main() {
       expect(runtime.clearColdStartCalls, 1);
     });
 
+    test('uses the configured startup timeout for the listener', () async {
+      final controller = buildController();
+      final plan = buildPlan(
+        'Node A',
+        nodeId: 'node-a',
+        listenPort: 35010,
+        upstreamProxy: 'https://a.example',
+        connectivityCheck: const ConnectivityCheckConfig(
+          startupTimeout: Duration(seconds: 47),
+        ),
+      );
+
+      expect(await controller.startNodes([plan]), isTrue);
+      expect(waitedTimeouts, [const Duration(seconds: 47)]);
+    });
+
     test('retries an optional connectivity check without delaying launch',
         () async {
       var attempts = 0;
@@ -361,7 +380,7 @@ void main() {
       final controller = NaiveProxyNodeController(
         binary: binary,
         runtime: runtime,
-        waitForListener: (_, __) async {
+        waitForListener: (_, __, ___) async {
           runtime.runningNodes.remove('node-a');
         },
       );

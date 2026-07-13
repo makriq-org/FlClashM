@@ -508,6 +508,16 @@ class FlVpnService : VpnService(), IBaseService {
                     }
                     return@withContext
                 }
+                if (RuntimeNodeProcessManager.readStartTime(nodeId) <= 0L) {
+                    val lastError = RuntimeNodeProcessManager.readLastError(nodeId)
+                    throw IllegalStateException(
+                        if (lastError.isEmpty()) {
+                            "Runtime node `$nodeId` exited before opening its local listener"
+                        } else {
+                            "Runtime node `$nodeId` failed: $lastError"
+                        },
+                    )
+                }
                 val lastError = RuntimeNodeProcessManager.readLastError(nodeId)
                 if (lastError.isNotEmpty()) {
                     throw IllegalStateException("Runtime node `$nodeId` failed: $lastError")

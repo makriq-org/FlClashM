@@ -76,7 +76,10 @@ bool isSafeConnectivityUri(Uri uri) {
       uri.fragment.isNotEmpty) {
     return false;
   }
-  final host = uri.host.toLowerCase();
+  final rawHost = uri.host.toLowerCase();
+  final host = rawHost.endsWith('.')
+      ? rawHost.substring(0, rawHost.length - 1)
+      : rawHost;
   if (host == 'localhost' ||
       host.endsWith('.localhost') ||
       host.endsWith('.local') ||
@@ -100,9 +103,12 @@ bool isPublicInternetAddress(InternetAddress address) {
         !(first == 100 && second >= 64 && second <= 127) &&
         !(first == 169 && second == 254) &&
         !(first == 172 && second >= 16 && second <= 31) &&
-        !(first == 192 && second == 0) &&
+        !(first == 192 && second == 0 && (bytes[2] == 0 || bytes[2] == 2)) &&
         !(first == 192 && second == 168) &&
-        !(first == 198 && (second == 18 || second == 19));
+        !(first == 192 && second == 88 && bytes[2] == 99) &&
+        !(first == 198 && (second == 18 || second == 19)) &&
+        !(first == 198 && second == 51 && bytes[2] == 100) &&
+        !(first == 203 && second == 0 && bytes[2] == 113);
   }
   if (bytes.every((value) => value == 0) ||
       bytes.sublist(0, 15).every((value) => value == 0) && bytes[15] == 1) {
@@ -149,27 +155,55 @@ class ConnectivityChecker {
     }
     var next = 0;
     var successes = 0;
+    var completed = 0;
+    final ratio = config.minSuccessRatio;
+    final requiredSuccesses =
+        ratio == null ? 1 : (ratio * checks.length).ceil();
+    final result = Completer<bool>();
     final workers =
         config.concurrency < checks.length ? config.concurrency : checks.length;
 
     Future<void> worker() async {
-      while (true) {
+      while (!result.isCompleted) {
         final index = next++;
         if (index >= checks.length) return;
-        if (await probe(
-          host: host,
-          port: port,
-          url: checks[index],
-          timeout: config.timeout,
-        )) {
+        var passed = false;
+        try {
+          passed = await probe(
+            host: host,
+            port: port,
+            url: checks[index],
+            timeout: config.timeout,
+          ).timeout(config.timeout, onTimeout: () => false);
+        } on Object {
+          passed = false;
+        }
+        completed++;
+        if (passed) {
           successes++;
+        }
+        if (successes >= requiredSuccesses) {
+          if (!result.isCompleted) result.complete(true);
+          return;
+        }
+        final possibleSuccesses = successes + checks.length - completed;
+        if (possibleSuccesses < requiredSuccesses) {
+          if (!result.isCompleted) result.complete(false);
+          return;
         }
       }
     }
 
-    await Future.wait([for (var index = 0; index < workers; index++) worker()]);
-    final ratio = config.minSuccessRatio;
-    return ratio == null ? successes > 0 : successes / checks.length >= ratio;
+    unawaited(
+      Future.wait([
+        for (var index = 0; index < workers; index++) worker(),
+      ]).then((_) {
+        if (!result.isCompleted) {
+          result.complete(successes >= requiredSuccesses);
+        }
+      }),
+    );
+    return result.future;
   }
 
   Future<bool> checkUntilDeadline({
@@ -185,7 +219,7 @@ class ConnectivityChecker {
       if (checkBudget <= Duration.zero) return false;
       final passed = await checkOnce(host: host, port: port, config: config)
           .timeout(checkBudget, onTimeout: () => false);
-      if (passed) return true;
+      if (passed) return isProcessRunning();
       final remaining = config.startupTimeout - stopwatch.elapsed;
       if (remaining <= Duration.zero) return false;
       await delay(
