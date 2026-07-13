@@ -18,42 +18,68 @@ void main() {
     ]);
   });
 
-  test('all pinned runtime ABIs are copied into Android native libraries', () {
+  test('all pinned runtime ABIs are packaged as Android native libraries', () {
     const expectedAbis = {'armeabi-v7a', 'arm64-v8a', 'x86_64'};
     expect(naiveProxyReleaseAssets.keys, expectedAbis);
     expect(byedpiReleaseAssets.keys, expectedAbis);
     expect(olcRtcReleaseAssets.keys, expectedAbis);
 
-    final assets = <({String abi, String source, String target})>[
+    final setupSource = File('setup.dart').readAsStringSync();
+    for (final releaseMapName in const [
+      'naiveProxyReleaseAssets',
+      'byedpiReleaseAssets',
+      'olcRtcReleaseAssets',
+    ]) {
+      expect(
+        setupSource,
+        contains('for (final asset in $releaseMapName.values)'),
+        reason: releaseMapName,
+      );
+    }
+    expect(setupSource, contains('_copyRuntimeNativeLibrary('));
+    expect(
+      setupSource,
+      contains("const _androidRuntimeJniRoot = 'android/app/src/main/jniLibs'"),
+    );
+
+    final assets = <({
+      String abi,
+      String source,
+      String target,
+      String targetReference,
+    })>[
       for (final asset in naiveProxyReleaseAssets.values)
         (
           abi: asset.abi,
           source: asset.bundledAssetPath,
           target: naiveProxyAndroidNativeLibraryFileName,
+          targetReference: 'naiveProxyAndroidNativeLibraryFileName',
         ),
       for (final asset in byedpiReleaseAssets.values)
         (
           abi: asset.abi,
           source: asset.bundledAssetPath,
           target: byedpiAndroidNativeLibraryFileName,
+          targetReference: 'byedpiAndroidNativeLibraryFileName',
         ),
       for (final asset in olcRtcReleaseAssets.values)
         (
           abi: asset.abi,
           source: asset.bundledAssetPath,
           target: olcRtcAndroidNativeLibraryFileName,
+          targetReference: 'olcRtcAndroidNativeLibraryFileName',
         ),
     ];
 
     for (final asset in assets) {
       final source = File(asset.source);
-      final target = File(
-        'android/app/src/main/jniLibs/${asset.abi}/${asset.target}',
-      );
       expect(source.existsSync(), isTrue, reason: asset.source);
-      expect(target.existsSync(), isTrue, reason: target.path);
-      expect(target.readAsBytesSync(), source.readAsBytesSync(),
-          reason: target.path);
+      expect(asset.target, startsWith('libflclashm_'));
+      expect(
+        setupSource,
+        contains('fileName: ${asset.targetReference}'),
+        reason: asset.target,
+      );
     }
   });
 
