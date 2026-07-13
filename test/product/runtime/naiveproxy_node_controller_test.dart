@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashx/product/runtime/connectivity_check.dart';
 import 'package:flclashx/product/runtime/naiveproxy_node_controller.dart';
 import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,13 +17,19 @@ void main() {
     late Directory tempDir;
     late NaiveProxySharedInstallLayout sharedLayout;
     late List<String> waitedListeners;
+    late List<Duration> waitedTimeouts;
 
-    NaiveProxyNodeController buildController() => NaiveProxyNodeController(
+    NaiveProxyNodeController buildController({
+      ConnectivityChecker connectivityChecker = const ConnectivityChecker(),
+    }) =>
+        NaiveProxyNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (host, port) async {
+          waitForListener: (host, port, timeout) async {
             waitedListeners.add('$host:$port');
+            waitedTimeouts.add(timeout);
           },
+          connectivityChecker: connectivityChecker,
         );
 
     BuiltInProxyNodePlan buildPlan(
@@ -29,6 +37,8 @@ void main() {
       required String nodeId,
       required int listenPort,
       required String upstreamProxy,
+      ConnectivityCheckConfig connectivityCheck =
+          const ConnectivityCheckConfig(),
     }) =>
         BuiltInProxyNodePlan(
           nodeId: nodeId,
@@ -38,6 +48,7 @@ void main() {
           listenPort: listenPort,
           protocol: BuiltInProxyProtocol.socks5,
           udp: false,
+          connectivityCheck: connectivityCheck,
           files: {
             'built-in-proxies/naiveproxy/$nodeId/config.json': json.encode(
               {
@@ -65,6 +76,7 @@ void main() {
       binary = _FakeNaiveProxyBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
       waitedListeners = <String>[];
+      waitedTimeouts = <Duration>[];
     });
 
     tearDown(() {
@@ -253,14 +265,141 @@ void main() {
         nodeId: 'node-a',
         listenPort: 35010,
         upstreamProxy: 'https://a.example',
+        connectivityCheck: ConnectivityCheckConfig(
+          urls: [Uri(scheme: 'https', host: 'example.org')],
+          required: true,
+        ),
       );
 
       await controller.persistColdStart([plan]);
       expect(runtime.savedManifest, isNotNull);
       expect(runtime.clearColdStartCalls, 0);
+      final manifest = json.decode(runtime.savedManifest!) as Map;
+      final savedNode = (manifest['nodes'] as List).single as Map;
+      expect(savedNode['connectivityCheck']['urls'], ['https://example.org']);
+      expect(savedNode['connectivityCheck']['required'], isTrue);
 
       await controller.persistColdStart(const []);
       expect(runtime.clearColdStartCalls, 1);
+    });
+
+    test('uses the configured startup timeout for the listener', () async {
+      final controller = buildController();
+      final plan = buildPlan(
+        'Node A',
+        nodeId: 'node-a',
+        listenPort: 35010,
+        upstreamProxy: 'https://a.example',
+        connectivityCheck: const ConnectivityCheckConfig(
+          startupTimeout: Duration(seconds: 47),
+        ),
+      );
+
+      expect(await controller.startNodes([plan]), isTrue);
+      expect(waitedTimeouts, [const Duration(seconds: 47)]);
+    });
+
+    test('retries an optional connectivity check without delaying launch',
+        () async {
+      var attempts = 0;
+      final firstAttempt = Completer<bool>();
+      final secondAttempt = Completer<void>();
+      final controller = buildController(
+        connectivityChecker: ConnectivityChecker(
+          probe: ({
+            required host,
+            required port,
+            required url,
+            required timeout,
+          }) {
+            attempts++;
+            if (attempts == 1) return firstAttempt.future;
+            secondAttempt.complete();
+            return Future.value(true);
+          },
+          delay: (_) async {},
+        ),
+      );
+      final plan = buildPlan(
+        'Node A',
+        nodeId: 'node-a',
+        listenPort: 35010,
+        upstreamProxy: 'https://a.example',
+        connectivityCheck: ConnectivityCheckConfig(
+          urls: [Uri(scheme: 'https', host: 'example.org')],
+        ),
+      );
+
+      expect(await controller.startNodes([plan]), isTrue);
+      expect(attempts, 1);
+      expect(firstAttempt.isCompleted, isFalse);
+
+      firstAttempt.complete(false);
+      await secondAttempt.future.timeout(const Duration(seconds: 1));
+      expect(attempts, 2);
+    });
+
+    test('rolls the node back after a required connectivity failure', () async {
+      final controller = buildController(
+        connectivityChecker: ConnectivityChecker(
+          probe: ({
+            required host,
+            required port,
+            required url,
+            required timeout,
+          }) async =>
+              false,
+        ),
+      );
+      final plan = buildPlan(
+        'Node A',
+        nodeId: 'node-a',
+        listenPort: 35010,
+        upstreamProxy: 'https://a.example',
+        connectivityCheck: ConnectivityCheckConfig(
+          urls: [Uri(scheme: 'https', host: 'example.org')],
+          required: true,
+          startupTimeout: const Duration(milliseconds: 1),
+          retryInterval: const Duration(milliseconds: 1),
+        ),
+      );
+
+      await expectLater(
+        controller.startNodes([plan]),
+        throwsA(isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('required SOCKS connectivity check'),
+        )),
+      );
+      expect(runtime.stopCalls, contains('node-a'));
+      expect(runtime.runningNodes, isEmpty);
+    });
+
+    test('rejects a process that exits after opening its listener', () async {
+      final controller = NaiveProxyNodeController(
+        binary: binary,
+        runtime: runtime,
+        waitForListener: (_, __, ___) async {
+          runtime.runningNodes.remove('node-a');
+        },
+      );
+      final plan = buildPlan(
+        'Node A',
+        nodeId: 'node-a',
+        listenPort: 35010,
+        upstreamProxy: 'https://a.example',
+      );
+
+      await expectLater(
+        controller.startNodes([plan]),
+        throwsA(isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('exited after opening its local listener'),
+        )),
+      );
+      expect(runtime.stopCalls, contains('node-a'));
     });
   });
 }

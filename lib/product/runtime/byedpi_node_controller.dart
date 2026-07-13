@@ -11,12 +11,8 @@ import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
 import 'byedpi_release.dart';
+import 'connectivity_check.dart';
 import 'local_node_controller.dart';
-
-typedef ByedpiWaitForRuntimeNodeListenerCallback = Future<void> Function(
-  String host,
-  int port,
-);
 
 typedef ByedpiSiteCheckCallback = Future<bool> Function({
   required String host,
@@ -251,7 +247,8 @@ class ByedpiNodeController
   ByedpiNodeController({
     ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = _waitForRuntimeNodeListener,
+    super.waitForListener = waitForLocalNodeListener,
+    super.connectivityChecker,
     this.siteCheck = _checkUrlViaSocks,
     this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
@@ -317,12 +314,8 @@ class ByedpiNodeController
     if (!started) {
       return false;
     }
-    await waitForListener(plan.listenHost, plan.listenPort);
     return true;
   }
-
-  @override
-  Future<void> confirmStageRestart(BuiltInProxyNodePlan plan) async {}
 
   @override
   Future<LocalNodeColdStartExtras> buildColdStartExtras(
@@ -353,33 +346,11 @@ class ByedpiNodeController
   Future<String> rollbackStageFailure({
     required List<LocalNodeMutation<ByedpiNodeLayout>> mutations,
     required String failureMessage,
-  }) async {
-    for (final mutation in mutations.reversed) {
-      await runtime.stopNode(nodeId: mutation.plan.nodeId);
-      final configFile = File(mutation.layout.configPath);
-      if (mutation.previousConfig == null) {
-        await deleteFileWithRetry(configFile);
-        await deleteDirectoryIfExists(
-          Directory(mutation.layout.workingDirectoryPath),
-        );
-      } else {
-        await configFile.writeAsString(mutation.previousConfig!, flush: true);
-      }
-      if (mutation.wasRunning) {
-        final sharedLayout = await binary.resolveSharedInstallLayout();
-        final rollbackPlan = mutation.previousPlan ?? mutation.plan;
-        final restarted = await startPlan(
-          sharedLayout,
-          rollbackPlan,
-          mutation.layout,
-        );
-        if (!restarted) {
-          return '$failureMessage Rollback failed: previous byedpi node did not restart.';
-        }
-      }
-    }
-    return failureMessage;
-  }
+  }) =>
+      rollbackStageFailureWithRestart(
+        mutations: mutations,
+        failureMessage: failureMessage,
+      );
 
   Future<bool> _startAutoPlan(
     ByedpiSharedInstallLayout sharedLayout,
@@ -397,7 +368,13 @@ class ByedpiNodeController
     if (_canUseCache(cached, fingerprint, config)) {
       if (!_needsRecheck(cached!, config)) {
         return _startWithStrategy(
-            sharedLayout, plan, layout, config, cached.strategy);
+          sharedLayout,
+          plan,
+          layout,
+          config,
+          cached.strategy,
+          waitForReady: false,
+        );
       }
       final started = await _startWithStrategy(
         sharedLayout,
@@ -440,6 +417,7 @@ class ByedpiNodeController
           layout,
           config,
           cached.strategy,
+          waitForReady: false,
         );
       }
     }
@@ -461,7 +439,14 @@ class ByedpiNodeController
           failures: 0,
         ),
       );
-      return _startWithStrategy(sharedLayout, plan, layout, config, selected);
+      return _startWithStrategy(
+        sharedLayout,
+        plan,
+        layout,
+        config,
+        selected,
+        waitForReady: false,
+      );
     }
 
     if (cached != null && cached.fingerprint == fingerprint) {
@@ -474,6 +459,7 @@ class ByedpiNodeController
         layout,
         config,
         cached.strategy,
+        waitForReady: false,
       );
     }
 
@@ -496,6 +482,7 @@ class ByedpiNodeController
       layout,
       config,
       _byedpiAutoFallbackStrategy,
+      waitForReady: false,
     );
   }
 
@@ -543,6 +530,7 @@ class ByedpiNodeController
     _ByedpiConfig config,
     String strategy, {
     String? nodeId,
+    bool waitForReady = true,
   }) async {
     final started = await runtime.startNode(
       nodeId: nodeId ?? plan.nodeId,
@@ -553,7 +541,13 @@ class ByedpiNodeController
     if (!started) {
       return false;
     }
-    await waitForListener(config.listenHost, config.listenPort);
+    if (waitForReady) {
+      await waitForListener(
+        config.listenHost,
+        config.listenPort,
+        config.timeout,
+      );
+    }
     return true;
   }
 
@@ -652,7 +646,7 @@ class ByedpiNodeController
     if (value is! Map) {
       throw StateError('byedpi node `${plan.name}` config is not an object.');
     }
-    final test = _asMap(value['test']);
+    final test = _asMap(value['strategyTest']);
     final cache = _asMap(value['cache']);
     final urls = [
       for (final item in (test['urls'] as List? ?? const []))
@@ -669,7 +663,7 @@ class ByedpiNodeController
       ],
       strategyList: '${value['strategyList'] ?? ''}',
       testUrls: urls,
-      testSni: '${test['sni'] ?? 'google.com'}',
+      testSni: '${test['sni'] ?? (urls.isEmpty ? '' : urls.first.host)}',
       timeout: Duration(seconds: (test['timeout'] as num?)?.toInt() ?? 5),
       requests: (test['requests'] as num?)?.toInt() ?? 1,
       concurrency: (test['concurrency'] as num?)?.toInt() ?? 4,
@@ -774,30 +768,6 @@ class ByedpiNodeController
     return args;
   }
 
-  static Future<void> _waitForRuntimeNodeListener(
-    String host,
-    int port,
-  ) async {
-    for (var attempt = 0; attempt < 50; attempt++) {
-      try {
-        final socket = await Socket.connect(
-          host,
-          port,
-          timeout: const Duration(milliseconds: 200),
-        );
-        await socket.close();
-        return;
-      } catch (_) {
-        if (attempt == 49) {
-          throw StateError(
-            'Timed out waiting for local runtime node listener on $host:$port.',
-          );
-        }
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-    }
-  }
-
   static Future<int> _allocateLoopbackPort() async {
     final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final port = socket.port;
@@ -814,6 +784,12 @@ class ByedpiNodeController
     Socket? socket;
     _SocketByteReader? reader;
     try {
+      if (!isSafeConnectivityUri(url)) return false;
+      final addresses = await InternetAddress.lookup(url.host).timeout(timeout);
+      if (addresses.isEmpty ||
+          addresses.any((item) => !isPublicInternetAddress(item))) {
+        return false;
+      }
       socket = await Socket.connect(host, port, timeout: timeout);
       final targetHost = url.host;
       final targetPort =
@@ -827,7 +803,7 @@ class ByedpiNodeController
       await _performSocksConnect(
         socket: socket,
         reader: reader,
-        targetHost: targetHost,
+        targetHost: addresses.first.address,
         targetPort: targetPort,
         timeout: timeout,
       );

@@ -129,6 +129,7 @@ class ProfileCompiler {
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
+      globalTestUrl: testUrl,
     );
     rawConfig = compiledBuiltInProxyNodes.config;
 

@@ -21,7 +21,7 @@ void main() {
     ByedpiNodeController buildController() => ByedpiNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (_, __) async {},
+          waitForListener: (_, __, ___) async {},
           allocateProbePort: () async => nextProbePort++,
           siteCheck: ({
             required host,
@@ -37,7 +37,7 @@ void main() {
         ByedpiNodeController(
           binary: binary,
           runtime: runtime,
-          waitForListener: (_, __) async {},
+          waitForListener: (_, __, ___) async {},
           allocateProbePort: () async => nextProbePort++,
           now: () => DateTime(2026, 6, 1, 12),
         );
@@ -93,6 +93,45 @@ void main() {
       ]);
     });
 
+    test('reports a failed listener check while restoring a running node',
+        () async {
+      final oldPlan = _buildManualPlan(args: '--disorder 1');
+      final newPlan = _buildManualPlan(args: '--fake -1');
+      final initialController = buildController();
+      expect(
+        await initialController.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [oldPlan],
+        ),
+        isEmpty,
+      );
+      await initialController.commitStagedRuntimePlan();
+      expect(await initialController.startNodes([oldPlan]), isTrue);
+
+      var listenerChecks = 0;
+      final updatingController = ByedpiNodeController(
+        binary: binary,
+        runtime: runtime,
+        waitForListener: (_, __, ___) async {
+          listenerChecks++;
+          throw StateError('listener is unavailable');
+        },
+        allocateProbePort: () async => nextProbePort++,
+      );
+      final message = await updatingController.stageRuntimePlan(
+        currentPlans: [oldPlan],
+        nextPlans: [newPlan],
+      );
+
+      expect(message, contains('Rollback failed'));
+      expect(message, contains('Failed to restart previous byedpi node'));
+      expect(listenerChecks, 2);
+      final config = await File(
+        '${sharedLayout.nodesDirectoryPath}/byedpi-a/$byedpiConfigFileName',
+      ).readAsString();
+      expect(json.decode(config)['args'], '--disorder 1');
+    });
+
     test('selects and caches the first working auto strategy', () async {
       final controller = buildController();
       final plan = _buildAutoPlan();
@@ -132,7 +171,7 @@ void main() {
       final controller = ByedpiNodeController(
         binary: binary,
         runtime: runtime,
-        waitForListener: (_, __) async {},
+        waitForListener: (_, __, ___) async {},
         allocateProbePort: () async => nextProbePort++,
         siteCheck: ({
           required host,
@@ -232,7 +271,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('https://example.com/'),
+        url: Uri.parse('https://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -249,7 +288,7 @@ void main() {
             maxLength: 4096,
           );
           expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: example.com'));
+          expect(request, contains('Host: 93.184.216.34'));
           client.add(
             utf8.encode(
               'HTTP/1.1 204 No Content\r\n'
@@ -266,7 +305,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('http://example.com/'),
+        url: Uri.parse('http://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -283,7 +322,7 @@ void main() {
             maxLength: 4096,
           );
           expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: example.com'));
+          expect(request, contains('Host: 93.184.216.34'));
           client.add(
             utf8.encode(
               'HTTP/1.1 503 Service Unavailable\r\n'
@@ -300,7 +339,7 @@ void main() {
       final passed = await controller.siteCheck(
         host: InternetAddress.loopbackIPv4.address,
         port: server.port,
-        url: Uri.parse('http://example.com/'),
+        url: Uri.parse('http://93.184.216.34/'),
         timeout: const Duration(seconds: 1),
       );
 
@@ -309,7 +348,10 @@ void main() {
   });
 }
 
-BuiltInProxyNodePlan _buildManualPlan() => BuiltInProxyNodePlan(
+BuiltInProxyNodePlan _buildManualPlan({
+  String args = '--disorder 1 --auto=torst',
+}) =>
+    BuiltInProxyNodePlan(
       nodeId: 'byedpi-a',
       name: 'ByeDPI',
       type: BuiltInProxyType.byedpi,
@@ -322,7 +364,7 @@ BuiltInProxyNodePlan _buildManualPlan() => BuiltInProxyNodePlan(
           'mode': 'manual',
           'listenHost': '127.0.0.1',
           'listenPort': 35610,
-          'args': '--disorder 1 --auto=torst',
+          'args': args,
           'cache': {},
         }),
       },
@@ -346,7 +388,7 @@ BuiltInProxyNodePlan _buildAutoPlan({
           'listenHost': '127.0.0.1',
           'listenPort': 35610,
           'strategies': ['--fake -1', '--disorder 1'],
-          'test': {
+          'strategyTest': {
             'urls': ['https://example.com/'],
             'timeout': 5,
             'requests': requests,

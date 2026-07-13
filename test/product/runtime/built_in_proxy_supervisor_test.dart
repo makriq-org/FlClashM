@@ -26,12 +26,12 @@ void main() {
           naiveProxy: NaiveProxyNodeController(
             binary: _FakeNaiveProxyBinaryBridge(layout: naiveLayout),
             runtime: runtime,
-            waitForListener: (_, __) async {},
+            waitForListener: (_, __, ___) async {},
           ),
           byedpi: ByedpiNodeController(
             binary: _FakeByedpiBinaryBridge(layout: byedpiLayout),
             runtime: runtime,
-            waitForListener: (_, __) async {},
+            waitForListener: (_, __, ___) async {},
             siteCheck: ({
               required host,
               required port,
@@ -43,7 +43,7 @@ void main() {
           olcRtc: OlcRtcNodeController(
             binary: _FakeOlcRtcBinaryBridge(layout: olcLayout),
             runtime: runtime,
-            waitForListener: (_, __) async {},
+            waitForListener: (_, __, ___) async {},
           ),
         );
 

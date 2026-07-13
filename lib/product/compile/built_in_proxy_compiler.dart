@@ -4,6 +4,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_registry.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashx/product/runtime/connectivity_check.dart';
 import 'package:flutter/foundation.dart';
 
 import 'olcrtc_config_validator.dart';
@@ -28,6 +29,7 @@ class BuiltInProxyCompiler {
   CompiledBuiltInProxyNodes compile({
     required Map<String, dynamic> rawConfig,
     required ClashConfig patchConfig,
+    String globalTestUrl = '',
   }) {
     final normalizedConfig = _cloneConfig(rawConfig);
     final proxyEntries = normalizedConfig['proxies'];
@@ -67,11 +69,17 @@ class BuiltInProxyCompiler {
       );
       reservedPorts.add(listenPort);
       final nodeId = '${definition.type.label}-${definition.name.toMd5()}';
+      final connectivityCheck = _parseConnectivityCheck(
+        definition: definition,
+        config: normalizedConfig,
+        globalTestUrl: globalTestUrl,
+      );
       final plan = _buildPlan(
         definition: definition,
         descriptor: descriptor,
         nodeId: nodeId,
         listenPort: listenPort,
+        connectivityCheck: connectivityCheck,
       );
       compiledNodes.add(plan);
       proxyEntries[i] = plan.toProxyConfig();
@@ -111,6 +119,7 @@ class BuiltInProxyCompiler {
     required BuiltInProxyDescriptor descriptor,
     required String nodeId,
     required int listenPort,
+    required ConnectivityCheckConfig connectivityCheck,
   }) {
     final udp = _resolveUdp(definition: definition, descriptor: descriptor);
     return switch (definition.type) {
@@ -120,6 +129,7 @@ class BuiltInProxyCompiler {
           nodeId: nodeId,
           listenPort: listenPort,
           udp: udp,
+          connectivityCheck: connectivityCheck,
         ),
       BuiltInProxyType.olcrtc => _buildOlcRtcPlan(
           definition: definition,
@@ -127,6 +137,7 @@ class BuiltInProxyCompiler {
           nodeId: nodeId,
           listenPort: listenPort,
           udp: udp,
+          connectivityCheck: connectivityCheck,
         ),
       BuiltInProxyType.byedpi => _buildByedpiPlan(
           definition: definition,
@@ -134,6 +145,7 @@ class BuiltInProxyCompiler {
           nodeId: nodeId,
           listenPort: listenPort,
           udp: udp,
+          connectivityCheck: connectivityCheck,
         ),
     };
   }
@@ -165,11 +177,13 @@ class BuiltInProxyCompiler {
     required String nodeId,
     required int listenPort,
     required bool udp,
+    required ConnectivityCheckConfig connectivityCheck,
   }) {
     final rawConfig = Map<String, dynamic>.from(definition.rawConfig)
       ..remove('name')
       ..remove('type')
-      ..remove('udp');
+      ..remove('udp')
+      ..remove('connectivity-check');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port')) {
@@ -193,6 +207,7 @@ class BuiltInProxyCompiler {
       listenPort: listenPort,
       protocol: descriptor.protocol,
       udp: udp,
+      connectivityCheck: connectivityCheck,
       files: {
         'built-in-proxies/naiveproxy/$nodeId/config.json':
             json.encode(<String, dynamic>{
@@ -210,11 +225,13 @@ class BuiltInProxyCompiler {
     required String nodeId,
     required int listenPort,
     required bool udp,
+    required ConnectivityCheckConfig connectivityCheck,
   }) {
     final rawConfig = _cloneConfig(definition.rawConfig)
       ..remove('name')
       ..remove('type')
-      ..remove('udp');
+      ..remove('udp')
+      ..remove('connectivity-check');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port') ||
@@ -261,6 +278,7 @@ class BuiltInProxyCompiler {
       listenPort: listenPort,
       protocol: descriptor.protocol,
       udp: udp,
+      connectivityCheck: connectivityCheck,
       files: {
         'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
       },
@@ -313,11 +331,18 @@ class BuiltInProxyCompiler {
     required String nodeId,
     required int listenPort,
     required bool udp,
+    required ConnectivityCheckConfig connectivityCheck,
   }) {
     final rawConfig = _cloneConfig(definition.rawConfig)
       ..remove('name')
       ..remove('type')
-      ..remove('udp');
+      ..remove('udp')
+      ..remove('connectivity-check');
+    if (rawConfig.containsKey('test')) {
+      throw const FormatException(
+        'byedpi `test` is no longer supported. Rename it to `strategy-test`; connectivity checks belong in `connectivity-check`.',
+      );
+    }
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port') ||
@@ -343,6 +368,11 @@ class BuiltInProxyCompiler {
     };
 
     if (mode == 'manual') {
+      if (rawConfig.containsKey('strategy-test')) {
+        throw const FormatException(
+          'byedpi `strategy-test` is allowed only for `mode: auto`.',
+        );
+      }
       final args = _trimmedString(rawConfig.remove('args'));
       if (args == null) {
         throw const FormatException(
@@ -361,16 +391,30 @@ class BuiltInProxyCompiler {
           'byedpi auto nodes require `strategies` or `strategy-list: byebyeedpi`.',
         );
       }
-      final test = _asStringKeyedMap(rawConfig.remove('test'));
-      final urls = _stringList(test['urls']);
-      if (urls.isEmpty) {
+      final strategyTestValue = rawConfig.remove('strategy-test');
+      if (strategyTestValue is! Map) {
         throw const FormatException(
-          'byedpi auto nodes require non-empty `test.urls`.',
+          'byedpi auto nodes require a `strategy-test` map.',
         );
       }
+      final strategyTest = _asStringKeyedMap(strategyTestValue);
+      final urls = _parseSafeUrls(
+        strategyTest['urls'],
+        label: 'byedpi `strategy-test.urls`',
+        required: true,
+      );
+      if (urls.isEmpty) {
+        throw const FormatException(
+          'byedpi auto nodes require non-empty `strategy-test.urls`; these addresses are not inherited.',
+        );
+      }
+      _validateStrategyTest(strategyTest);
       config['strategies'] = strategies;
       config['strategyList'] = strategies.isEmpty ? strategyList : null;
-      config['test'] = test;
+      config['strategyTest'] = <String, dynamic>{
+        ...strategyTest,
+        'urls': urls.map((url) => url.toString()).toList(growable: false),
+      };
     }
 
     if (rawConfig.isNotEmpty) {
@@ -385,10 +429,242 @@ class BuiltInProxyCompiler {
       listenPort: listenPort,
       protocol: descriptor.protocol,
       udp: udp,
+      connectivityCheck: connectivityCheck,
       files: {
         'built-in-proxies/byedpi/$nodeId/config.json': json.encode(config),
       },
     );
+  }
+
+  ConnectivityCheckConfig _parseConnectivityCheck({
+    required BuiltInProxyNodeDefinition definition,
+    required Map<String, dynamic> config,
+    required String globalTestUrl,
+  }) {
+    final rawValue = definition.rawConfig['connectivity-check'];
+    if (rawValue != null && rawValue is! Map) {
+      throw FormatException(
+        '${definition.type.label} node `${definition.name}` requires `connectivity-check` to be a map.',
+      );
+    }
+    final raw = _asStringKeyedMap(rawValue);
+    const fields = {
+      'urls',
+      'required',
+      'timeout',
+      'startup-timeout',
+      'retry-interval',
+      'requests',
+      'concurrency',
+      'min-success-ratio',
+    };
+    final unknown = raw.keys.where((key) => !fields.contains(key)).toList();
+    if (unknown.isNotEmpty) {
+      throw FormatException(
+        '${definition.type.label} node `${definition.name}` has unknown connectivity-check fields: ${unknown.join(', ')}.',
+      );
+    }
+    final requiredValue = raw['required'] ?? false;
+    if (requiredValue is! bool) {
+      throw const FormatException(
+          '`connectivity-check.required` must be a boolean.');
+    }
+    var urls = _parseSafeUrls(
+      raw['urls'],
+      label: '`connectivity-check.urls`',
+      required: false,
+    );
+    if (urls.isEmpty) {
+      urls = _resolveContainingGroupUrls(config, definition.name);
+    }
+    if (urls.isEmpty && globalTestUrl.trim().isNotEmpty) {
+      urls = _parseSafeUrls(
+        <String>[globalTestUrl],
+        label: 'application connectivity address',
+        required: false,
+      );
+    }
+    if (requiredValue && urls.isEmpty) {
+      throw FormatException(
+        '${definition.type.label} node `${definition.name}` requires a connectivity-check address, but none was found in the node, containing groups, or application settings.',
+      );
+    }
+    return ConnectivityCheckConfig(
+      urls: urls,
+      required: requiredValue,
+      timeout:
+          _seconds(raw['timeout'], 'timeout', 5, connectivityCheckMaxTimeout),
+      startupTimeout: _seconds(
+        raw['startup-timeout'],
+        'startup-timeout',
+        30,
+        connectivityCheckMaxStartupTimeout,
+      ),
+      retryInterval: _seconds(
+        raw['retry-interval'],
+        'retry-interval',
+        1,
+        connectivityCheckMaxStartupTimeout,
+      ),
+      requests: _boundedInt(
+          raw['requests'], 'requests', 1, connectivityCheckMaxRequests),
+      concurrency: _boundedInt(
+        raw['concurrency'],
+        'concurrency',
+        1,
+        connectivityCheckMaxConcurrency,
+      ),
+      minSuccessRatio: _ratio(raw['min-success-ratio'], 'min-success-ratio'),
+    );
+  }
+
+  List<Uri> _resolveContainingGroupUrls(
+    Map<String, dynamic> config,
+    String nodeName,
+  ) {
+    final values = config['proxy-groups'];
+    if (values is! List) return const [];
+    final groups = [
+      for (final value in values)
+        if (value is Map) _asStringKeyedMap(value),
+    ];
+    var members = <String>{nodeName};
+    final visited = <String>{};
+    while (members.isNotEmpty) {
+      final parents = <String>{};
+      for (final group in groups) {
+        final name = _trimmedString(group['name']);
+        if (name == null || visited.contains(name)) continue;
+        final proxies = _stringList(group['proxies']);
+        if (!proxies.any(members.contains)) continue;
+        visited.add(name);
+        final groupCheck = group['connectivity-check'];
+        if (groupCheck != null && groupCheck is! Map) {
+          throw FormatException(
+            'Proxy group `$name` requires `connectivity-check` to be a map.',
+          );
+        }
+        final checkUrls = _parseSafeUrls(
+          groupCheck is Map ? _asStringKeyedMap(groupCheck)['urls'] : null,
+          label: 'proxy group `$name` connectivity addresses',
+          required: false,
+        );
+        if (checkUrls.isNotEmpty) return checkUrls;
+        final url = _trimmedString(group['url']);
+        if (url != null) {
+          return _parseSafeUrls(
+            <String>[url],
+            label: 'proxy group `$name` url',
+            required: false,
+          );
+        }
+        parents.add(name);
+      }
+      members = parents;
+    }
+    return const [];
+  }
+
+  List<Uri> _parseSafeUrls(
+    Object? value, {
+    required String label,
+    required bool required,
+  }) {
+    if (value == null) {
+      if (required) throw FormatException('$label is required.');
+      return const [];
+    }
+    if (value is! List) throw FormatException('$label must be a list.');
+    if (value.length > connectivityCheckMaxUrls) {
+      throw FormatException(
+          '$label supports at most $connectivityCheckMaxUrls addresses.');
+    }
+    final result = <Uri>[];
+    for (final item in value) {
+      if (item is! String || item.trim().isEmpty) {
+        throw FormatException('$label must contain non-empty strings.');
+      }
+      final uri = Uri.tryParse(item.trim());
+      if (uri == null || !isSafeConnectivityUri(uri)) {
+        throw FormatException(
+          '$label contains unsafe address `$item`; only public HTTP(S) addresses without credentials or fragments are allowed.',
+        );
+      }
+      result.add(uri);
+    }
+    return List<Uri>.unmodifiable(result);
+  }
+
+  void _validateStrategyTest(Map<String, dynamic> value) {
+    const fields = {
+      'urls',
+      'sni',
+      'timeout',
+      'requests',
+      'concurrency',
+      'min-success-ratio',
+    };
+    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
+    if (unknown.isNotEmpty) {
+      throw FormatException(
+          'byedpi `strategy-test` has unknown fields: ${unknown.join(', ')}.');
+    }
+    final sni = value['sni'];
+    if (sni != null &&
+        (sni is! String ||
+            sni.trim().isEmpty ||
+            sni.contains('/') ||
+            sni.contains('@') ||
+            sni.contains(':'))) {
+      throw const FormatException(
+          'byedpi `strategy-test.sni` must be a host name.');
+    }
+    _seconds(value['timeout'], 'strategy-test.timeout', 5,
+        connectivityCheckMaxTimeout);
+    _boundedInt(value['requests'], 'strategy-test.requests', 1,
+        connectivityCheckMaxRequests);
+    _boundedInt(
+      value['concurrency'],
+      'strategy-test.concurrency',
+      4,
+      connectivityCheckMaxConcurrency,
+    );
+    _ratio(value['min-success-ratio'], 'strategy-test.min-success-ratio');
+  }
+
+  Duration _seconds(
+      Object? value, String field, int fallback, Duration maximum) {
+    final seconds = value ?? fallback;
+    if (seconds is! num || seconds.toInt() != seconds || seconds <= 0) {
+      throw FormatException(
+          '`connectivity-check.$field` must be a positive integer.');
+    }
+    final result = Duration(seconds: seconds.toInt());
+    if (result > maximum) {
+      throw FormatException(
+          '`connectivity-check.$field` exceeds the supported limit.');
+    }
+    return result;
+  }
+
+  int _boundedInt(Object? value, String field, int fallback, int maximum) {
+    final number = value ?? fallback;
+    if (number is! num ||
+        number.toInt() != number ||
+        number < 1 ||
+        number > maximum) {
+      throw FormatException('`$field` must be an integer from 1 to $maximum.');
+    }
+    return number.toInt();
+  }
+
+  double? _ratio(Object? value, String field) {
+    if (value == null) return null;
+    if (value is! num || value <= 0 || value > 1) {
+      throw FormatException(
+          '`$field` must be greater than 0 and no greater than 1.');
+    }
+    return value.toDouble();
   }
 
   int _allocateListenPort({

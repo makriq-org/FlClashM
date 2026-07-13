@@ -7,11 +7,49 @@ import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flutter/foundation.dart';
 
 import 'built_in_proxy_types.dart';
+import 'connectivity_check.dart';
 
 typedef LocalNodeWaitForRuntimeNodeListenerCallback = Future<void> Function(
   String host,
   int port,
+  Duration timeout,
 );
+
+Future<void> waitForLocalNodeListener(
+  String host,
+  int port,
+  Duration timeout,
+) async {
+  final stopwatch = Stopwatch()..start();
+  while (true) {
+    final remaining = timeout - stopwatch.elapsed;
+    if (remaining <= Duration.zero) {
+      throw StateError(
+        'Timed out waiting for local runtime node listener on $host:$port.',
+      );
+    }
+    try {
+      final connectTimeout = remaining < const Duration(milliseconds: 200)
+          ? remaining
+          : const Duration(milliseconds: 200);
+      final socket = await Socket.connect(
+        host,
+        port,
+        timeout: connectTimeout,
+      );
+      await socket.close();
+      return;
+    } catch (_) {
+      final delayRemaining = timeout - stopwatch.elapsed;
+      if (delayRemaining <= Duration.zero) continue;
+      await Future<void>.delayed(
+        delayRemaining < const Duration(milliseconds: 100)
+            ? delayRemaining
+            : const Duration(milliseconds: 100),
+      );
+    }
+  }
+}
 
 @immutable
 class LocalNodeSharedInstallLayout {
@@ -128,6 +166,7 @@ abstract class LocalNodeController<
     required this.binary,
     required this.runtime,
     required this.waitForListener,
+    this.connectivityChecker = const ConnectivityChecker(),
     this.startMode = LocalNodeStartMode.sequential,
   });
 
@@ -136,6 +175,7 @@ abstract class LocalNodeController<
   final LocalNodeBinaryBridge<TSharedLayout> binary;
   final RuntimeNodePlatformBridge runtime;
   final LocalNodeWaitForRuntimeNodeListenerCallback waitForListener;
+  final ConnectivityChecker connectivityChecker;
   final LocalNodeStartMode startMode;
 
   LocalNodeStageState<TNodeLayout>? _stagedState;
@@ -349,6 +389,7 @@ abstract class LocalNodeController<
           'port': plan.listenPort,
           'executablePath': sharedLayout.executablePath,
           'workingDirectory': layout.workingDirectoryPath,
+          'connectivityCheck': plan.connectivityCheck.toJson(),
           ...extras.extraFields,
         },
       );
@@ -380,12 +421,17 @@ abstract class LocalNodeController<
 
   @protected
   Future<void> confirmStartedNode(BuiltInProxyNodePlan plan) async {
+    final startupWatch = Stopwatch()..start();
     Object? listenerError;
     StackTrace? listenerStackTrace;
     var listenerReady = false;
     var listenerCompleted = false;
     unawaited(
-      waitForListener(plan.listenHost, plan.listenPort).then((_) {
+      waitForListener(
+        plan.listenHost,
+        plan.listenPort,
+        plan.connectivityCheck.startupTimeout,
+      ).timeout(plan.connectivityCheck.startupTimeout).then((_) {
         listenerReady = true;
         listenerCompleted = true;
       }).catchError((Object error, StackTrace stackTrace) {
@@ -413,6 +459,17 @@ abstract class LocalNodeController<
     }
 
     if (listenerReady) {
+      if (await runtime.readNodeStartTime(nodeId: plan.nodeId) == null) {
+        final processError =
+            await runtime.readNodeLastError(nodeId: plan.nodeId);
+        throw StateError(
+          '$typeLabel node `${plan.name}` exited after opening its local listener'
+          '${processError == null ? '.' : ': $processError'}',
+        );
+      }
+      final remaining =
+          plan.connectivityCheck.startupTimeout - startupWatch.elapsed;
+      await _checkConnectivity(plan, startupTimeout: remaining);
       return;
     }
     if (listenerError != null) {
@@ -422,6 +479,56 @@ abstract class LocalNodeController<
       );
     }
     throw StateError('$typeLabel node `${plan.name}` listener check failed.');
+  }
+
+  Future<void> _checkConnectivity(
+    BuiltInProxyNodePlan plan, {
+    required Duration startupTimeout,
+  }) async {
+    var config = plan.connectivityCheck;
+    if (config.urls.isEmpty) return;
+    Future<bool> processIsRunning() async =>
+        await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
+    if (startupTimeout <= Duration.zero) {
+      if (config.required) {
+        throw StateError(
+          '$typeLabel node `${plan.name}` exhausted its startup timeout before the required SOCKS connectivity check.',
+        );
+      }
+      commonPrint.log(
+        '$typeLabel node `${plan.name}` exhausted its startup timeout before the optional SOCKS connectivity check.',
+      );
+      return;
+    }
+    config = config.copyWith(startupTimeout: startupTimeout);
+    final check = connectivityChecker.checkUntilDeadline(
+      host: plan.listenHost,
+      port: plan.listenPort,
+      config: config,
+      isProcessRunning: processIsRunning,
+    );
+    if (config.required) {
+      final passed = await check;
+      if (!passed) {
+        throw StateError(
+          '$typeLabel node `${plan.name}` failed its required SOCKS connectivity check.',
+        );
+      }
+      return;
+    }
+    unawaited(
+      check.then((passed) {
+        if (!passed) {
+          commonPrint.log(
+            '$typeLabel node `${plan.name}` failed its optional SOCKS connectivity check.',
+          );
+        }
+      }).catchError((Object error) {
+        commonPrint.log(
+          '$typeLabel node `${plan.name}` connectivity check failed: $error',
+        );
+      }),
+    );
   }
 
   @protected

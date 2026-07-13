@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
@@ -9,11 +8,6 @@ import 'package:path/path.dart' as path;
 import 'built_in_proxy_types.dart';
 import 'local_node_controller.dart';
 import 'olcrtc_release.dart';
-
-typedef OlcRtcWaitForRuntimeNodeListenerCallback = Future<void> Function(
-  String host,
-  int port,
-);
 
 @immutable
 class OlcRtcSharedInstallLayout extends LocalNodeSharedInstallLayout {
@@ -127,7 +121,8 @@ class OlcRtcNodeController
   OlcRtcNodeController({
     OlcRtcBinaryBridge binary = const DefaultOlcRtcBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = _waitForRuntimeNodeListener,
+    super.waitForListener = waitForLocalNodeListener,
+    super.connectivityChecker,
   }) : super(
           typeLabel: 'olcrtc',
           configArtifactName: 'config.yaml',
@@ -208,36 +203,4 @@ class OlcRtcNodeController
         stackTrace: stackTrace,
         startedNodes: startedNodes,
       );
-
-  static Future<void> _waitForRuntimeNodeListener(
-    String host,
-    int port,
-  ) async {
-    final uri = Uri(
-      scheme: 'socks5',
-      host: host,
-      port: port,
-    );
-    // OlcRTC can finish ICE before the datachannel-backed SOCKS listener is
-    // ready, especially on a cold Android emulator.
-    for (var attempt = 0; attempt < 240; attempt++) {
-      try {
-        final socket = await Socket.connect(
-          uri.host,
-          uri.port,
-          timeout: const Duration(milliseconds: 250),
-        );
-        await socket.close();
-        return;
-      } catch (_) {
-        if (attempt == 239) {
-          throw StateError(
-            'Timed out waiting for local runtime node listener on '
-            '${uri.host}:${uri.port}.',
-          );
-        }
-        await Future.delayed(const Duration(milliseconds: 250));
-      }
-    }
-  }
 }
