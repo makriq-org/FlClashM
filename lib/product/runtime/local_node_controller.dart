@@ -450,19 +450,26 @@ abstract class LocalNodeController<
     if (config.urls.isEmpty) return;
     Future<bool> processIsRunning() async =>
         await runtime.readNodeStartTime(nodeId: plan.nodeId) != null;
-    if (config.required) {
-      if (startupTimeout <= Duration.zero) {
+    if (startupTimeout <= Duration.zero) {
+      if (config.required) {
         throw StateError(
           '$typeLabel node `${plan.name}` exhausted its startup timeout before the required SOCKS connectivity check.',
         );
       }
-      config = config.copyWith(startupTimeout: startupTimeout);
-      final passed = await connectivityChecker.checkUntilDeadline(
-        host: plan.listenHost,
-        port: plan.listenPort,
-        config: config,
-        isProcessRunning: processIsRunning,
+      commonPrint.log(
+        '$typeLabel node `${plan.name}` exhausted its startup timeout before the optional SOCKS connectivity check.',
       );
+      return;
+    }
+    config = config.copyWith(startupTimeout: startupTimeout);
+    final check = connectivityChecker.checkUntilDeadline(
+      host: plan.listenHost,
+      port: plan.listenPort,
+      config: config,
+      isProcessRunning: processIsRunning,
+    );
+    if (config.required) {
+      final passed = await check;
       if (!passed) {
         throw StateError(
           '$typeLabel node `${plan.name}` failed its required SOCKS connectivity check.',
@@ -471,13 +478,7 @@ abstract class LocalNodeController<
       return;
     }
     unawaited(
-      connectivityChecker
-          .checkOnce(
-        host: plan.listenHost,
-        port: plan.listenPort,
-        config: config,
-      )
-          .then((passed) {
+      check.then((passed) {
         if (!passed) {
           commonPrint.log(
             '$typeLabel node `${plan.name}` failed its optional SOCKS connectivity check.',

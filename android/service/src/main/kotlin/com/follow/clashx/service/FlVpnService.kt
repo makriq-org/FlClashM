@@ -441,20 +441,25 @@ class FlVpnService : VpnService(), IBaseService {
             }
             val check = node.connectivityCheck
             if (check.urls.isEmpty()) continue
-            if (check.required) {
-                val remaining = startupDeadline - SystemClock.elapsedRealtime()
-                if (remaining <= 0L) {
+            val remaining = startupDeadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) {
+                if (check.required) {
                     throw IllegalStateException(
                         "Runtime node `${node.nodeId}` exhausted its startup timeout",
                     )
                 }
+                GlobalState.log(
+                    "Runtime node `${node.nodeId}` exhausted its startup timeout before the optional SOCKS connectivity check",
+                )
+                continue
+            }
+            val deadlineCheck = check.copy(startupTimeoutMillis = remaining)
+            if (check.required) {
                 val passed = RuntimeNodeConnectivityChecker.checkUntilDeadline(
                     nodeId = node.nodeId,
                     host = node.host,
                     port = node.port,
-                    config = check.copy(
-                        startupTimeoutMillis = remaining,
-                    ),
+                    config = deadlineCheck,
                 )
                 if (!passed) {
                     throw IllegalStateException(
@@ -463,7 +468,13 @@ class FlVpnService : VpnService(), IBaseService {
                 }
             } else {
                 GlobalState.launch {
-                    if (!RuntimeNodeConnectivityChecker.checkOnce(node.host, node.port, check)) {
+                    if (!RuntimeNodeConnectivityChecker.checkUntilDeadline(
+                            nodeId = node.nodeId,
+                            host = node.host,
+                            port = node.port,
+                            config = deadlineCheck,
+                        )
+                    ) {
                         GlobalState.log(
                             "Runtime node `${node.nodeId}` failed its optional SOCKS connectivity check",
                         )

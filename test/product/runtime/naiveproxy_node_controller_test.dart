@@ -280,8 +280,11 @@ void main() {
       expect(runtime.clearColdStartCalls, 1);
     });
 
-    test('does not delay launch for an optional connectivity check', () async {
-      final pending = Completer<bool>();
+    test('retries an optional connectivity check without delaying launch',
+        () async {
+      var attempts = 0;
+      final firstAttempt = Completer<bool>();
+      final secondAttempt = Completer<void>();
       final controller = buildController(
         connectivityChecker: ConnectivityChecker(
           probe: ({
@@ -289,8 +292,13 @@ void main() {
             required port,
             required url,
             required timeout,
-          }) =>
-              pending.future,
+          }) {
+            attempts++;
+            if (attempts == 1) return firstAttempt.future;
+            secondAttempt.complete();
+            return Future.value(true);
+          },
+          delay: (_) async {},
         ),
       );
       final plan = buildPlan(
@@ -304,9 +312,12 @@ void main() {
       );
 
       expect(await controller.startNodes([plan]), isTrue);
-      expect(pending.isCompleted, isFalse);
-      pending.complete(false);
-      await Future<void>.delayed(Duration.zero);
+      expect(attempts, 1);
+      expect(firstAttempt.isCompleted, isFalse);
+
+      firstAttempt.complete(false);
+      await secondAttempt.future.timeout(const Duration(seconds: 1));
+      expect(attempts, 2);
     });
 
     test('rolls the node back after a required connectivity failure', () async {
