@@ -3,8 +3,6 @@ import 'package:flclashx/models/models.dart';
 import '../compile/product_compile.dart';
 
 abstract interface class EngineAdapter {
-  Future<void> applyPendingUpdate();
-
   Future<void> prepareForRestart();
 
   Future<bool> isInitialized();

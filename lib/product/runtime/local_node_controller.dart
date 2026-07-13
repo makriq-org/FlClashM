@@ -58,24 +58,12 @@ class LocalNodeSharedInstallLayout {
     required this.runtimeRootPath,
     required this.nodesDirectoryPath,
     required this.executablePath,
-    required this.pendingPath,
-    required this.rollbackPath,
-    required this.versionPath,
-    required this.pendingVersionPath,
-    required this.bundledAssetPath,
-    this.managedBinaryUpdateEnabled = true,
   });
 
   final String abi;
   final String runtimeRootPath;
   final String nodesDirectoryPath;
   final String executablePath;
-  final String pendingPath;
-  final String rollbackPath;
-  final String versionPath;
-  final String pendingVersionPath;
-  final String bundledAssetPath;
-  final bool managedBinaryUpdateEnabled;
 }
 
 @immutable
@@ -93,11 +81,7 @@ class LocalNodeLayout {
 
 abstract class LocalNodeBinaryBridge<
     TSharedLayout extends LocalNodeSharedInstallLayout> {
-  String get bundledReleaseTag;
-
   Future<TSharedLayout> resolveSharedInstallLayout();
-
-  Future<Uint8List> loadBundledBinary(String assetPath);
 }
 
 enum LocalNodeStartMode {
@@ -179,12 +163,6 @@ abstract class LocalNodeController<
   final LocalNodeStartMode startMode;
 
   LocalNodeStageState<TNodeLayout>? _stagedState;
-
-  Future<void> applyPendingUpdate() async {
-    final layout = await binary.resolveSharedInstallLayout();
-    await Directory(layout.runtimeRootPath).create(recursive: true);
-    await Directory(layout.nodesDirectoryPath).create(recursive: true);
-  }
 
   Future<String> stageRuntimePlan({
     required List<BuiltInProxyNodePlan> currentPlans,

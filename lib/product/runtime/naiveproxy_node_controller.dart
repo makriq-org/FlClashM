@@ -2,7 +2,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
@@ -16,12 +15,6 @@ class NaiveProxySharedInstallLayout extends LocalNodeSharedInstallLayout {
     required super.runtimeRootPath,
     required super.nodesDirectoryPath,
     required super.executablePath,
-    required super.pendingPath,
-    required super.rollbackPath,
-    required super.versionPath,
-    required super.pendingVersionPath,
-    required super.bundledAssetPath,
-    super.managedBinaryUpdateEnabled = true,
   });
 }
 
@@ -43,9 +36,6 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
   });
 
   final AndroidRuntimeNodeNativeLibraryBridge nativeLibrary;
-
-  @override
-  String get bundledReleaseTag => naiveProxyPinnedReleaseTag;
 
   @override
   Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
@@ -88,31 +78,7 @@ class DefaultNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
       executablePath: executablePath,
-      pendingPath: path.join(
-        runtimeRootPath,
-        '$naiveProxyExecutableFileName.pending',
-      ),
-      rollbackPath: path.join(
-        runtimeRootPath,
-        '$naiveProxyExecutableFileName.rollback',
-      ),
-      versionPath: path.join(
-        runtimeRootPath,
-        naiveProxyBundledVersionFileName,
-      ),
-      pendingVersionPath: path.join(
-        runtimeRootPath,
-        naiveProxyPendingVersionFileName,
-      ),
-      bundledAssetPath: asset.bundledAssetPath,
-      managedBinaryUpdateEnabled: false,
     );
-  }
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async {
-    final data = await rootBundle.load(assetPath);
-    return data.buffer.asUint8List();
   }
 }
 

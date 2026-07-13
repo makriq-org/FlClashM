@@ -169,9 +169,6 @@ void main() {
 
 class _FakeEngineAdapter implements EngineAdapter {
   @override
-  Future<void> applyPendingUpdate() async {}
-
-  @override
   Future<void> prepareForRestart() async {}
 
   @override

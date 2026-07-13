@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_supervisor.dart';
@@ -12,10 +10,8 @@ void main() {
     late _FakeMihomoCoreBridge core;
     late _FakeMihomoLifecycleBridge lifecycle;
     late _FakeMihomoPlatformBridge platform;
-    late _FakeMihomoUpdateBridge update;
     late _FakeBuiltInProxySupervisor builtInProxySupervisor;
     late List<String> callOrder;
-    late Directory tempDir;
 
     MihomoEngineAdapter buildAdapter({
       AccessControl? accessControl,
@@ -24,7 +20,6 @@ void main() {
           core: core,
           lifecycle: lifecycle,
           platform: platform,
-          update: update,
           builtInProxySupervisor: builtInProxySupervisor,
           readAccessControl: () => accessControl ?? const AccessControl(),
         );
@@ -36,16 +31,6 @@ void main() {
       platform = _FakeMihomoPlatformBridge();
       builtInProxySupervisor = _FakeBuiltInProxySupervisor()
         ..callOrder = callOrder;
-      tempDir = await Directory.systemTemp.createTemp('flclashm-mihomo-');
-      update = _FakeMihomoUpdateBridge(
-        corePath: '${tempDir.path}/FlClashCore',
-      );
-    });
-
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
     });
 
     test('starts even when notification title handoff fails', () async {
@@ -300,41 +285,6 @@ void main() {
       ]);
     });
 
-    test('atomically swaps in a pending core update', () async {
-      final adapter = buildAdapter();
-      final target = File(update.corePath);
-      final pending = File(update.corePendingPath);
-      await target.writeAsString('old-core');
-      await pending.writeAsString('new-core');
-
-      await adapter.applyPendingUpdate();
-
-      expect(await target.readAsString(), 'new-core');
-      expect(pending.existsSync(), isFalse);
-      expect(File('${update.corePath}.rollback').existsSync(), isFalse);
-      expect(update.setExecutableCalls, 1);
-      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
-    });
-
-    test('restores the previous core when pending activation fails', () async {
-      update.setExecutableError = StateError('chmod failed');
-      final adapter = buildAdapter();
-      final target = File(update.corePath);
-      final pending = File(update.corePendingPath);
-      await target.writeAsString('old-core');
-      await pending.writeAsString('new-core');
-
-      await expectLater(
-        adapter.applyPendingUpdate,
-        throwsA(isA<StateError>()),
-      );
-
-      expect(await target.readAsString(), 'old-core');
-      expect(await pending.readAsString(), 'new-core');
-      expect(File('${update.corePath}.rollback').existsSync(), isFalse);
-      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
-    });
-
     test('delegates runtime start time and cold-start persistence', () async {
       lifecycle.runtimeStartTime = DateTime(2026, 4, 5, 6, 7, 8);
       final adapter = buildAdapter();
@@ -362,7 +312,6 @@ void main() {
 }
 
 class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
-  int applyPendingUpdateCalls = 0;
   int stageCalls = 0;
   int commitCalls = 0;
   int rollbackCalls = 0;
@@ -377,11 +326,6 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
 
   @override
   bool get hasCommittedRuntimePlan => hasCommittedRuntimePlanValue;
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    applyPendingUpdateCalls++;
-  }
 
   @override
   Future<void> prepareForRestart() async {}
@@ -560,32 +504,6 @@ class _FakeMihomoPlatformBridge implements MihomoPlatformBridge {
     stopVpnCalls++;
     if (stopVpnError != null) {
       throw stopVpnError!;
-    }
-  }
-}
-
-class _FakeMihomoUpdateBridge implements MihomoUpdateBridge {
-  _FakeMihomoUpdateBridge({
-    required this.corePath,
-  });
-
-  @override
-  final String corePath;
-
-  Error? setExecutableError;
-  int setExecutableCalls = 0;
-
-  @override
-  String get corePendingPath => '$corePath.pending';
-
-  @override
-  bool get supportsExecutableBit => true;
-
-  @override
-  Future<void> setExecutable(String path) async {
-    setExecutableCalls++;
-    if (setExecutableError != null) {
-      throw setExecutableError!;
     }
   }
 }

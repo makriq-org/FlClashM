@@ -16,8 +16,6 @@ class BuiltInProxyRuntimePlanStartResult {
 abstract interface class BuiltInProxySupervisor {
   bool get hasCommittedRuntimePlan;
 
-  Future<void> applyPendingUpdate();
-
   Future<void> prepareForRestart();
 
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans);
@@ -90,13 +88,6 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       plans
           .where((plan) => plan.type == BuiltInProxyType.byedpi)
           .toList(growable: false);
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    await naiveProxy.applyPendingUpdate();
-    await byedpi.applyPendingUpdate();
-    await olcRtc.applyPendingUpdate();
-  }
 
   @override
   Future<void> prepareForRestart() => stop();

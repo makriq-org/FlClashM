@@ -34,12 +34,6 @@ class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
     required super.runtimeRootPath,
     required super.nodesDirectoryPath,
     required super.executablePath,
-    required super.pendingPath,
-    required super.rollbackPath,
-    required super.versionPath,
-    required super.pendingVersionPath,
-    required super.bundledAssetPath,
-    super.managedBinaryUpdateEnabled = true,
   });
 }
 
@@ -57,6 +51,8 @@ class ByedpiNodeLayout extends LocalNodeLayout {
 
 abstract interface class ByedpiBinaryBridge
     extends LocalNodeBinaryBridge<ByedpiSharedInstallLayout> {
+  String get bundledReleaseTag;
+
   Future<String> loadBundledStrategyList(String assetPath);
 }
 
@@ -111,28 +107,7 @@ class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
       executablePath: executablePath,
-      pendingPath: path.join(
-        runtimeRootPath,
-        '$byedpiExecutableFileName.pending',
-      ),
-      rollbackPath: path.join(
-        runtimeRootPath,
-        '$byedpiExecutableFileName.rollback',
-      ),
-      versionPath: path.join(runtimeRootPath, byedpiBundledVersionFileName),
-      pendingVersionPath: path.join(
-        runtimeRootPath,
-        byedpiPendingVersionFileName,
-      ),
-      bundledAssetPath: asset.bundledAssetPath,
-      managedBinaryUpdateEnabled: false,
     );
-  }
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async {
-    final data = await rootBundle.load(assetPath);
-    return data.buffer.asUint8List();
   }
 
   @override

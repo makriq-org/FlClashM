@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
@@ -66,12 +65,6 @@ void main() {
         runtimeRootPath: tempDir.path,
         nodesDirectoryPath: '${tempDir.path}/nodes',
         executablePath: '${tempDir.path}/naiveproxy',
-        pendingPath: '${tempDir.path}/naiveproxy.pending',
-        rollbackPath: '${tempDir.path}/naiveproxy.rollback',
-        versionPath: '${tempDir.path}/bundled.version',
-        pendingVersionPath: '${tempDir.path}/bundled.pending.version',
-        bundledAssetPath:
-            'assets/runtimes/naiveproxy/android/arm64-v8a/libnaive.so',
       );
       binary = _FakeNaiveProxyBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
@@ -247,16 +240,6 @@ void main() {
       expect(runtime.stopCalls, ['node-a', 'node-b']);
     });
 
-    test('creates runtime directories during pending update check', () async {
-      final controller = buildController();
-
-      await controller.applyPendingUpdate();
-
-      expect(Directory(sharedLayout.runtimeRootPath).existsSync(), isTrue);
-      expect(Directory(sharedLayout.nodesDirectoryPath).existsSync(), isTrue);
-      expect(File(sharedLayout.executablePath).existsSync(), isFalse);
-    });
-
     test('persists cold-start manifest and clears it for empty plans',
         () async {
       final controller = buildController();
@@ -412,15 +395,8 @@ class _FakeNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
   final NaiveProxySharedInstallLayout layout;
 
   @override
-  String get bundledReleaseTag => naiveProxyPinnedReleaseTag;
-
-  @override
   Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async =>
       layout;
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async =>
-      Uint8List.fromList('bundled-binary'.codeUnits);
 }
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {

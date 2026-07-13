@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
@@ -49,11 +48,6 @@ void main() {
         runtimeRootPath: tempDir.path,
         nodesDirectoryPath: '${tempDir.path}/nodes',
         executablePath: '${tempDir.path}/ciadpi',
-        pendingPath: '${tempDir.path}/ciadpi.pending',
-        rollbackPath: '${tempDir.path}/ciadpi.rollback',
-        versionPath: '${tempDir.path}/bundled.version',
-        pendingVersionPath: '${tempDir.path}/bundled.pending.version',
-        bundledAssetPath: 'assets/runtimes/byedpi/android/arm64-v8a/ciadpi',
       );
       binary = _FakeByedpiBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
@@ -406,10 +400,6 @@ class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
 
   @override
   String get bundledReleaseTag => byedpiPinnedReleaseTag;
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async =>
-      Uint8List.fromList('byedpi'.codeUnits);
 
   @override
   Future<String> loadBundledStrategyList(String assetPath) async =>

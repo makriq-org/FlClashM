@@ -290,8 +290,6 @@ class EngineManager {
 
     final targetAdapter = compiledRuntimePlan.resolvedRuntime.engine.adapter;
 
-    await targetAdapter.applyPendingUpdate();
-
     if (!await targetAdapter.isInitialized()) {
       await targetAdapter.initialize(
         initParams: await _buildInitParams(),

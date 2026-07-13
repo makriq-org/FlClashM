@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
@@ -130,46 +129,6 @@ class DefaultMihomoPlatformBridge implements MihomoPlatformBridge {
   Future<void> stopVpn() => productServices.accessControl.stopVpn();
 }
 
-abstract interface class MihomoUpdateBridge {
-  String get corePath;
-
-  String get corePendingPath;
-
-  bool get supportsExecutableBit;
-
-  Future<void> setExecutable(String path);
-}
-
-class DefaultMihomoUpdateBridge implements MihomoUpdateBridge {
-  const DefaultMihomoUpdateBridge();
-
-  @override
-  String get corePath => appPath.corePath;
-
-  @override
-  String get corePendingPath => appPath.corePendingPath;
-
-  @override
-  bool get supportsExecutableBit => !Platform.isWindows;
-
-  @override
-  Future<void> setExecutable(String path) async {
-    if (!supportsExecutableBit) {
-      return;
-    }
-
-    final result = await Process.run('chmod', ['+x', path]);
-    if (result.exitCode != 0) {
-      throw ProcessException(
-        'chmod',
-        ['+x', path],
-        '${result.stderr}'.trim(),
-        result.exitCode,
-      );
-    }
-  }
-}
-
 class _BoundaryCleanupFailure {
   const _BoundaryCleanupFailure({
     required this.message,
@@ -185,7 +144,6 @@ class MihomoEngineAdapter implements EngineAdapter {
     this.core = const DefaultMihomoCoreBridge(),
     this.lifecycle = const DefaultMihomoLifecycleBridge(),
     this.platform = const DefaultMihomoPlatformBridge(),
-    this.update = const DefaultMihomoUpdateBridge(),
     BuiltInProxySupervisor? builtInProxySupervisor,
     required ReadAccessControlCallback readAccessControl,
     ReadProfileAccessControlCallback? readProfileAccessControl,
@@ -197,7 +155,6 @@ class MihomoEngineAdapter implements EngineAdapter {
   final MihomoCoreBridge core;
   final MihomoLifecycleBridge lifecycle;
   final MihomoPlatformBridge platform;
-  final MihomoUpdateBridge update;
   final BuiltInProxySupervisor builtInProxySupervisor;
   final ReadAccessControlCallback _readAccessControl;
   final ReadProfileAccessControlCallback? _readProfileAccessControl;
@@ -205,56 +162,6 @@ class MihomoEngineAdapter implements EngineAdapter {
 
   AccessControl get _accessControl => _readAccessControl();
   AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
-
-  String get _coreRollbackPath => '${update.corePath}.rollback';
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    await builtInProxySupervisor.applyPendingUpdate();
-    final pending = File(update.corePendingPath);
-    if (!pending.existsSync()) {
-      return;
-    }
-
-    commonPrint.log("Applying pending core update...");
-    final target = File(update.corePath);
-    final rollback = File(_coreRollbackPath);
-    var targetMovedToRollback = false;
-    var pendingMovedToTarget = false;
-
-    try {
-      await _deleteWithRetry(rollback);
-      if (target.existsSync()) {
-        await _renameWithRetry(target, rollback.path);
-        targetMovedToRollback = true;
-      }
-
-      await _renameWithRetry(pending, target.path);
-      pendingMovedToTarget = true;
-      await update.setExecutable(target.path);
-      await _deleteWithRetry(rollback);
-      commonPrint.log("Pending core update applied successfully");
-    } catch (e, stackTrace) {
-      final rollbackFailure = await _rollbackPendingUpdate(
-        target: target,
-        pending: pending,
-        rollback: rollback,
-        targetMovedToRollback: targetMovedToRollback,
-        pendingMovedToTarget: pendingMovedToTarget,
-      );
-      commonPrint.log("Failed to apply pending core update: $e");
-      if (rollbackFailure != null) {
-        Error.throwWithStackTrace(
-          StateError(
-            'Failed to apply pending core update: $e. '
-            'Rollback also failed: ${rollbackFailure.message}',
-          ),
-          rollbackFailure.stackTrace,
-        );
-      }
-      Error.throwWithStackTrace(e, stackTrace);
-    }
-  }
 
   @override
   Future<void> prepareForRestart() async {
@@ -529,59 +436,6 @@ class MihomoEngineAdapter implements EngineAdapter {
     await builtInProxySupervisor.persistColdStart();
   }
 
-  Future<_BoundaryCleanupFailure?> _rollbackPendingUpdate({
-    required File target,
-    required File pending,
-    required File rollback,
-    required bool targetMovedToRollback,
-    required bool pendingMovedToTarget,
-  }) async {
-    _BoundaryCleanupFailure? failure;
-
-    void captureFailure(
-      String message,
-      Object error,
-      StackTrace stackTrace,
-    ) {
-      commonPrint.log("$message: $error");
-      failure ??= _BoundaryCleanupFailure(
-        message: '$message: $error',
-        stackTrace: stackTrace,
-      );
-    }
-
-    try {
-      if (pendingMovedToTarget &&
-          target.existsSync() &&
-          !pending.existsSync()) {
-        await _renameWithRetry(target, pending.path);
-      }
-    } catch (e, s) {
-      captureFailure('Failed to move new core back to pending', e, s);
-    }
-
-    if (targetMovedToRollback) {
-      try {
-        if (rollback.existsSync()) {
-          await _deleteWithRetry(target);
-          await _renameWithRetry(rollback, target.path);
-        }
-      } catch (e, s) {
-        captureFailure(
-            'Failed to restore previous core after update error', e, s);
-      } finally {
-        try {
-          await _deleteWithRetry(rollback);
-        } catch (e, s) {
-          captureFailure(
-              'Failed to clean rollback core after update error', e, s);
-        }
-      }
-    }
-
-    return failure;
-  }
-
   Future<_BoundaryCleanupFailure?> _rollbackFailedStart({
     required bool builtInNodesStarted,
     required bool listenerStarted,
@@ -630,37 +484,5 @@ class MihomoEngineAdapter implements EngineAdapter {
     }
 
     return failure;
-  }
-
-  Future<void> _deleteWithRetry(File file) async {
-    if (!file.existsSync()) {
-      return;
-    }
-
-    for (var i = 0; i < 10; i++) {
-      try {
-        await file.delete();
-        return;
-      } catch (_) {
-        if (i == 9) {
-          rethrow;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
-  }
-
-  Future<void> _renameWithRetry(File source, String targetPath) async {
-    for (var i = 0; i < 10; i++) {
-      try {
-        await source.rename(targetPath);
-        return;
-      } catch (_) {
-        if (i == 9) {
-          rethrow;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
   }
 }
