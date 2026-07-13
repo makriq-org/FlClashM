@@ -18,6 +18,8 @@ import com.follow.clashx.service.models.NotificationParams
 import com.follow.clashx.service.models.VpnOptions
 import com.google.gson.Gson
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -250,6 +252,7 @@ class RemoteService : Service() {
                         State.clearAppliedVpnOptions()
                         com.follow.clashx.common.SavedParams.setVpnActive(false)
                         StateHub.publish(StateHub.STOPPED)
+                        RuntimeNodeProcessManager.stopIfIdle(vpnActive = false)
                         runCatching { result.onResult(0L) }
                         return@withLock
                     }
@@ -259,13 +262,13 @@ class RemoteService : Service() {
                             proxy.handleStop()
                         }
                     }
-                    runCatching { RuntimeNodeProcessManager.stopAll() }
                     delegate.unbind()
                     State.delegate = null
                     State.runTime = 0L
                     State.clearAppliedVpnOptions()
                     com.follow.clashx.common.SavedParams.setVpnActive(false)
                     StateHub.publish(StateHub.STOPPED)
+                    RuntimeNodeProcessManager.stopIfIdle(vpnActive = false)
                     runCatching { result.onResult(0L) }
                 }
             }
@@ -290,6 +293,12 @@ class RemoteService : Service() {
                         if (eventListener.compareAndSet(event, null)) {
                             eventDeathRecipient.set(null)
                             runCatching { Core.setEventListener(null) }
+                            RuntimeNodeClientRegistry.clear()
+                            GlobalState.launch {
+                                RuntimeNodeProcessManager.stopIfIdle(
+                                    vpnActive = State.runTime != 0L,
+                                )
+                            }
                         }
                     }
                 }
@@ -337,36 +346,42 @@ class RemoteService : Service() {
         override fun getTraffic(): String = Core.getTraffic()
         override fun getTotalTraffic(): String = Core.getTotalTraffic()
 
-        override fun startRuntimeNode(
-            nodeId: String,
-            executablePath: String,
-            workingDirectory: String,
-            arguments: MutableList<String>,
-            result: IResultInterface,
-        ) {
+        override fun applyRuntimeNodePlan(plan: String, callback: ICallbackInterface) {
             GlobalState.launch {
-                val startTime = RuntimeNodeProcessManager.start(
-                    nodeId = nodeId,
-                    executablePath = executablePath,
-                    workingDirectory = workingDirectory,
-                    arguments = arguments,
-                )
-                result.onResult(startTime)
+                val state = runCatching { RuntimeNodeProcessManager.applyPlan(plan) }
+                    .getOrElse { error ->
+                        JSONObject()
+                            .put("generation", 0L)
+                            .put("status", "failed")
+                            .put("message", error.message ?: error.toString())
+                            .put("optionalCheckActive", false)
+                            .put("nodes", JSONArray())
+                            .toString()
+                    }
+                callback.onResult(state.toByteArray(Charsets.UTF_8), true, null)
             }
         }
 
-        override fun stopRuntimeNode(nodeId: String, result: IResultInterface) {
+        override fun getRuntimeNodePlanState(): String =
+            RuntimeNodeProcessManager.readPlanState()
+
+        override fun stopRuntimeNodePlan(result: IResultInterface) {
             GlobalState.launch {
-                val stoppedAt = RuntimeNodeProcessManager.stop(nodeId)
-                result.onResult(stoppedAt)
+                RuntimeNodeProcessManager.stopAll()
+                result.onResult(0L)
             }
         }
 
-        override fun getRuntimeNodeRunTime(nodeId: String): Long =
-            RuntimeNodeProcessManager.readStartTime(nodeId)
+        override fun attachRuntimeNodeClient() {
+            RuntimeNodeClientRegistry.attach()
+        }
 
-        override fun getRuntimeNodeLastError(nodeId: String): String =
-            RuntimeNodeProcessManager.readLastError(nodeId)
+        override fun detachRuntimeNodeClient() {
+            RuntimeNodeClientRegistry.detach()
+            GlobalState.launch {
+                RuntimeNodeProcessManager.stopIfIdle(vpnActive = State.runTime != 0L)
+            }
+        }
 
         override fun startListener() {
             Core.startListener()
@@ -395,7 +410,10 @@ class RemoteService : Service() {
             }
             runCatching { Core.setEventListener(null) }
         }
-        GlobalState.launch { RuntimeNodeProcessManager.stopAll() }
+        RuntimeNodeClientRegistry.clear()
+        GlobalState.launch {
+            RuntimeNodeProcessManager.stopIfIdle(vpnActive = State.runTime != 0L)
+        }
         super.onDestroy()
     }
 

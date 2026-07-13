@@ -1,24 +1,45 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 
+class RuntimeNodePlanState {
+  const RuntimeNodePlanState({
+    required this.generation,
+    required this.status,
+    required this.message,
+    required this.nodes,
+    required this.optionalCheckActive,
+  });
+
+  factory RuntimeNodePlanState.fromJson(String source) {
+    final value = json.decode(source) as Map<String, dynamic>;
+    return RuntimeNodePlanState(
+      generation: (value['generation'] as num?)?.toInt() ?? 0,
+      status: value['status'] as String? ?? 'failed',
+      message: value['message'] as String? ?? '',
+      nodes: List<Map<String, dynamic>>.unmodifiable(
+        (value['nodes'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map)),
+      ),
+      optionalCheckActive: value['optionalCheckActive'] as bool? ?? false,
+    );
+  }
+
+  final int generation;
+  final String status;
+  final String message;
+  final List<Map<String, dynamic>> nodes;
+  final bool optionalCheckActive;
+
+  bool get isReady => status == 'ready' || status == 'idle';
+}
+
 abstract interface class RuntimeNodePlatformBridge {
-  Future<bool> startNode({
-    required String nodeId,
-    required String executablePath,
-    required String workingDirectory,
-    List<String> arguments = const [],
-  });
+  Future<RuntimeNodePlanState> applyPlan(List<Map<String, dynamic>> nodes);
 
-  Future<void> stopNode({
-    required String nodeId,
-  });
+  Future<RuntimeNodePlanState> readPlanState();
 
-  Future<DateTime?> readNodeStartTime({
-    required String nodeId,
-  });
-
-  Future<String?> readNodeLastError({
-    required String nodeId,
-  });
+  Future<void> stopPlan();
 
   Future<void> saveColdStartNodes(String manifestJson);
 
@@ -32,65 +53,26 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
       MethodChannel('com.makriq.flclash/service');
 
   @override
-  Future<bool> startNode({
-    required String nodeId,
-    required String executablePath,
-    required String workingDirectory,
-    List<String> arguments = const [],
-  }) async {
-    final runTime = await _channel.invokeMethod<int>(
-      'startRuntimeNode',
-      <String, Object>{
-        'nodeId': nodeId,
-        'path': executablePath,
-        'workingDirectory': workingDirectory,
-        'arguments': arguments,
-      },
-    );
-    return (runTime ?? 0) > 0;
-  }
-
-  @override
-  Future<void> stopNode({
-    required String nodeId,
-  }) async {
-    await _channel.invokeMethod(
-      'stopRuntimeNode',
+  Future<RuntimeNodePlanState> applyPlan(
+    List<Map<String, dynamic>> nodes,
+  ) async {
+    final state = await _channel.invokeMethod<String>(
+      'applyRuntimeNodePlan',
       <String, String>{
-        'nodeId': nodeId,
+        'plan': json.encode(<String, dynamic>{'nodes': nodes}),
       },
     );
+    return RuntimeNodePlanState.fromJson(state ?? '{}');
   }
 
   @override
-  Future<DateTime?> readNodeStartTime({
-    required String nodeId,
-  }) async {
-    final runTime = await _channel.invokeMethod<int>(
-      'getRuntimeNodeRunTime',
-      <String, String>{
-        'nodeId': nodeId,
-      },
-    );
-    if (runTime == null || runTime <= 0) {
-      return null;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(runTime);
-  }
+  Future<RuntimeNodePlanState> readPlanState() async =>
+      RuntimeNodePlanState.fromJson(
+        await _channel.invokeMethod<String>('getRuntimeNodePlanState') ?? '{}',
+      );
 
   @override
-  Future<String?> readNodeLastError({
-    required String nodeId,
-  }) async {
-    final message = await _channel.invokeMethod<String>(
-      'getRuntimeNodeLastError',
-      <String, String>{'nodeId': nodeId},
-    );
-    if (message == null || message.trim().isEmpty) {
-      return null;
-    }
-    return message.trim();
-  }
+  Future<void> stopPlan() => _channel.invokeMethod<void>('stopRuntimeNodePlan');
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {

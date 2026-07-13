@@ -27,10 +27,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlin.coroutines.resume
 
 class FlVpnService : VpnService(), IBaseService {
@@ -170,16 +166,6 @@ class FlVpnService : VpnService(), IBaseService {
         const val ACTION_STOP = "com.makriq.flclash.service.STOP"
     }
 
-    data class ColdStartRuntimeNode(
-        val nodeId: String,
-        val executablePath: String,
-        val workingDirectory: String,
-        val host: String,
-        val port: Int,
-        val arguments: List<String> = emptyList(),
-        val connectivityCheck: RuntimeNodeConnectivityCheck = RuntimeNodeConnectivityCheck(),
-    )
-
     private suspend fun coldStart() {
         State.runLock.withLock {
             if (State.runTime != 0L) return@withLock
@@ -224,8 +210,9 @@ class FlVpnService : VpnService(), IBaseService {
             return
         }
 
-        val runtimeNodes = try {
-            loadColdStartRuntimeNodes()
+        val runtimeNodePlan = SavedParams.loadRuntimeNodesState() ?: "{\"nodes\":[]}"
+        val runtimeNodeState = try {
+            RuntimeNodeProcessManager.applyPlan(runtimeNodePlan)
         } catch (e: Exception) {
             GlobalState.log("Always-on: runtime-node state is invalid: ${e.message}")
             SavedParams.setVpnActive(false)
@@ -233,11 +220,10 @@ class FlVpnService : VpnService(), IBaseService {
             stopSelf()
             return
         }
-
-        try {
-            startColdStartRuntimeNodes(runtimeNodes)
-        } catch (e: Exception) {
-            GlobalState.log("Always-on: failed to start runtime nodes: ${e.message}")
+        if (!runtimeNodeState.contains("\"status\":\"ready\"") &&
+            !runtimeNodeState.contains("\"status\":\"idle\"")
+        ) {
+            GlobalState.log("Always-on: failed to prepare runtime nodes: $runtimeNodeState")
             SavedParams.setVpnActive(false)
             runCatching { RuntimeNodeProcessManager.stopAll() }
             stopForegroundCompat()
@@ -364,167 +350,19 @@ class FlVpnService : VpnService(), IBaseService {
             // OS-driven destroy of a live tunnel (no handleStop ran): this
             // instance still owned the tun, so nothing newer is running — zero
             // runTime so handleDestroy() below reports an honest STOPPED.
-            runCatching { runBlocking { withTimeoutOrNull(3000L) { RuntimeNodeProcessManager.stopAll() } } }
+            runCatching {
+                runBlocking {
+                    withTimeoutOrNull(3000L) {
+                        RuntimeNodeProcessManager.stopIfIdle(vpnActive = false)
+                    }
+                }
+            }
             State.runTime = 0L
             State.clearAppliedVpnOptions()
         }
         runCatching { runBlocking { withTimeoutOrNull(3000L) { loader.stop() } } }
         handleDestroy()
         super.onDestroy()
-    }
-
-    private fun loadColdStartRuntimeNodes(): List<ColdStartRuntimeNode> {
-        val state = SavedParams.loadRuntimeNodesState() ?: return emptyList()
-        val root = JSONObject(state)
-        val rawNodes = root.optJSONArray("nodes") ?: JSONArray()
-        return buildList {
-            for (index in 0 until rawNodes.length()) {
-                val rawNode = rawNodes.optJSONObject(index) ?: continue
-                val nodeId = rawNode.optString("nodeId", "").trim()
-                val executablePath = rawNode.optString("executablePath", "").trim()
-                val workingDirectory = rawNode.optString("workingDirectory", "").trim()
-                val host = rawNode.optString("host", "").trim()
-                val port = rawNode.optInt("port", 0)
-                val rawArguments = rawNode.optJSONArray("arguments") ?: JSONArray()
-                val connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
-                    rawNode.optJSONObject("connectivityCheck"),
-                )
-                val arguments = buildList {
-                    for (argumentIndex in 0 until rawArguments.length()) {
-                        val argument = rawArguments.optString(argumentIndex, "")
-                        if (argument.isNotEmpty()) add(argument)
-                    }
-                }
-                if (nodeId.isEmpty() || executablePath.isEmpty() || workingDirectory.isEmpty() ||
-                    host.isEmpty() || port <= 0
-                ) {
-                    throw IllegalStateException("Runtime node state is incomplete at index $index")
-                }
-                add(
-                    ColdStartRuntimeNode(
-                        nodeId = nodeId,
-                        executablePath = executablePath,
-                        workingDirectory = workingDirectory,
-                        host = host,
-                        port = port,
-                        arguments = arguments,
-                        connectivityCheck = connectivityCheck,
-                    ),
-                )
-            }
-        }
-    }
-
-    private suspend fun startColdStartRuntimeNodes(nodes: List<ColdStartRuntimeNode>) {
-        for (node in nodes) {
-            val startupDeadline =
-                SystemClock.elapsedRealtime() + node.connectivityCheck.startupTimeoutMillis
-            val startedAt = RuntimeNodeProcessManager.start(
-                nodeId = node.nodeId,
-                executablePath = node.executablePath,
-                workingDirectory = node.workingDirectory,
-                arguments = node.arguments,
-            )
-            if (startedAt <= 0L) {
-                throw IllegalStateException("Runtime node `${node.nodeId}` did not start")
-            }
-            waitForRuntimeNodeListener(
-                node.nodeId,
-                node.host,
-                node.port,
-                startupDeadline,
-            )
-            if (RuntimeNodeProcessManager.readStartTime(node.nodeId) <= 0L) {
-                throw IllegalStateException(
-                    "Runtime node `${node.nodeId}` exited after opening its local listener",
-                )
-            }
-            val check = node.connectivityCheck
-            if (check.urls.isEmpty()) continue
-            val remaining = startupDeadline - SystemClock.elapsedRealtime()
-            if (remaining <= 0L) {
-                if (check.required) {
-                    throw IllegalStateException(
-                        "Runtime node `${node.nodeId}` exhausted its startup timeout",
-                    )
-                }
-                GlobalState.log(
-                    "Runtime node `${node.nodeId}` exhausted its startup timeout before the optional SOCKS connectivity check",
-                )
-                continue
-            }
-            val deadlineCheck = check.copy(startupTimeoutMillis = remaining)
-            if (check.required) {
-                val passed = RuntimeNodeConnectivityChecker.checkUntilDeadline(
-                    nodeId = node.nodeId,
-                    host = node.host,
-                    port = node.port,
-                    config = deadlineCheck,
-                )
-                if (!passed) {
-                    throw IllegalStateException(
-                        "Runtime node `${node.nodeId}` failed its required SOCKS connectivity check",
-                    )
-                }
-            } else {
-                GlobalState.launch {
-                    if (!RuntimeNodeConnectivityChecker.checkUntilDeadline(
-                            nodeId = node.nodeId,
-                            host = node.host,
-                            port = node.port,
-                            config = deadlineCheck,
-                        )
-                    ) {
-                        GlobalState.log(
-                            "Runtime node `${node.nodeId}` failed its optional SOCKS connectivity check",
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private suspend fun waitForRuntimeNodeListener(
-        nodeId: String,
-        host: String,
-        port: Int,
-        deadline: Long,
-    ) {
-        withContext(Dispatchers.IO) {
-            while (true) {
-                val remaining = deadline - SystemClock.elapsedRealtime()
-                if (remaining <= 0L) {
-                    throw IllegalStateException(
-                        "Timed out waiting for runtime node listener on $host:$port",
-                    )
-                }
-                runCatching {
-                    Socket().use { socket ->
-                        socket.connect(
-                            InetSocketAddress(host, port),
-                            minOf(200L, remaining).toInt(),
-                        )
-                        socket.soTimeout = 200
-                    }
-                    return@withContext
-                }
-                if (RuntimeNodeProcessManager.readStartTime(nodeId) <= 0L) {
-                    val lastError = RuntimeNodeProcessManager.readLastError(nodeId)
-                    throw IllegalStateException(
-                        if (lastError.isEmpty()) {
-                            "Runtime node `$nodeId` exited before opening its local listener"
-                        } else {
-                            "Runtime node `$nodeId` failed: $lastError"
-                        },
-                    )
-                }
-                val lastError = RuntimeNodeProcessManager.readLastError(nodeId)
-                if (lastError.isNotEmpty()) {
-                    throw IllegalStateException("Runtime node `$nodeId` failed: $lastError")
-                }
-                kotlinx.coroutines.delay(minOf(100L, remaining))
-            }
-        }
     }
 
     override suspend fun handleStart(options: VpnOptions) {
@@ -673,7 +511,7 @@ class FlVpnService : VpnService(), IBaseService {
         // Stale-profile safety comes from the isVpnActive() gate (cleared above) plus
         // re-persisting params on profile change (controller._persistColdStartParams).
         runCatching { com.follow.clashx.core.Core.stopTun() }
-        runCatching { RuntimeNodeProcessManager.stopAll() }
+        runCatching { RuntimeNodeProcessManager.stopIfIdle(vpnActive = false) }
         // Release ownership so the trailing onDestroy doesn't redundantly stop the
         // core (CAS will no-op once cleared).
         State.tunOwner.compareAndSet(this, null)

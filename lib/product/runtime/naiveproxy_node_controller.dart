@@ -87,8 +87,6 @@ class NaiveProxyNodeController extends LocalNodeController<
   NaiveProxyNodeController({
     NaiveProxyBinaryBridge binary = const DefaultNaiveProxyBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = waitForLocalNodeListener,
-    super.connectivityChecker,
   }) : super(
           typeLabel: 'naiveproxy',
           configArtifactName: 'config.json',
@@ -120,38 +118,4 @@ class NaiveProxyNodeController extends LocalNodeController<
       configPath: path.join(workingDirectoryPath, naiveProxyConfigFileName),
     );
   }
-
-  @override
-  Future<bool> startPlan(
-    NaiveProxySharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    NaiveProxyNodeLayout layout,
-  ) =>
-      runtime.startNode(
-        nodeId: plan.nodeId,
-        executablePath: sharedLayout.executablePath,
-        workingDirectory: layout.workingDirectoryPath,
-      );
-
-  @override
-  Future<String> rollbackStageFailure({
-    required List<LocalNodeMutation<NaiveProxyNodeLayout>> mutations,
-    required String failureMessage,
-  }) =>
-      rollbackStageFailureWithRestart(
-        mutations: mutations,
-        failureMessage: failureMessage,
-      );
-
-  @override
-  Future<void> handleStartNodesException({
-    required Object error,
-    required StackTrace stackTrace,
-    required List<BuiltInProxyNodePlan> startedNodes,
-  }) =>
-      rethrowStartNodesExceptionWithCleanup(
-        error: error,
-        stackTrace: stackTrace,
-        startedNodes: startedNodes,
-      );
 }

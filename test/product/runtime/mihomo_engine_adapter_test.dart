@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_supervisor.dart';
@@ -160,6 +162,7 @@ void main() {
       expect(builtInProxySupervisor.commitCalls, 1);
       expect(builtInProxySupervisor.startCalls, 1);
       expect(builtInProxySupervisor.rollbackCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
       expect(callOrder, [
         'stageLocalNodes',
         'startLocalNodes',
@@ -231,14 +234,12 @@ void main() {
       expect(message, contains('core setup failed'));
       expect(builtInProxySupervisor.stageCalls, 1);
       expect(builtInProxySupervisor.startCalls, 1);
-      expect(builtInProxySupervisor.stopRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 0);
       expect(builtInProxySupervisor.rollbackCalls, 1);
       expect(callOrder, [
         'stageLocalNodes',
         'startLocalNodes',
         'setupCore',
-        'stopStartedLocalNodes',
         'rollbackLocalNodes',
       ]);
     });
@@ -276,13 +277,50 @@ void main() {
       expect(message, isEmpty);
       expect(core.setupRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.stageCalls, 1);
-      expect(builtInProxySupervisor.startCalls, 0);
+      expect(builtInProxySupervisor.startCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 1);
       expect(callOrder, [
         'stageLocalNodes',
+        'startLocalNodes',
         'setupCore',
         'commitLocalNodes',
       ]);
+    });
+
+    test('does not register VPN until all runtime nodes are ready', () async {
+      final ready = Completer<void>();
+      builtInProxySupervisor.startCompleter = ready;
+      final adapter = buildAdapter();
+
+      final starting = adapter.start();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.startListenerCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
+
+      ready.complete();
+      expect(await starting, isTrue);
+      expect(core.startListenerCalls, 1);
+      expect(platform.lastStartAccessControl, isNotNull);
+    });
+
+    test('required runtime-node failure prevents VPN registration', () async {
+      builtInProxySupervisor.startResult = false;
+      final adapter = buildAdapter();
+
+      expect(await adapter.start(), isFalse);
+      expect(core.startListenerCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
+    });
+
+    test('ordinary VPN stop leaves warmed runtime nodes running', () async {
+      final adapter = buildAdapter();
+
+      await adapter.stop();
+
+      expect(core.stopListenerCalls, 1);
+      expect(platform.stopVpnCalls, 1);
+      expect(builtInProxySupervisor.stopCalls, 0);
     });
 
     test('delegates runtime start time and cold-start persistence', () async {
@@ -316,12 +354,11 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   int commitCalls = 0;
   int rollbackCalls = 0;
   int startCalls = 0;
-  int stopRuntimePlanCalls = 0;
+  int stopCalls = 0;
   int persistColdStartCalls = 0;
   bool startResult = true;
   bool hasCommittedRuntimePlanValue = false;
-  List<BuiltInProxyNodePlan> startRuntimePlanStartedPlans = const [];
-  List<BuiltInProxyNodePlan> lastStoppedRuntimePlan = const [];
+  Completer<void>? startCompleter;
   List<String>? callOrder;
 
   @override
@@ -358,11 +395,9 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }) async {
     startCalls++;
     callOrder?.add('startLocalNodes');
+    await startCompleter?.future;
     return BuiltInProxyRuntimePlanStartResult(
       isSuccess: startResult,
-      startedPlans: startRuntimePlanStartedPlans.isEmpty
-          ? List<BuiltInProxyNodePlan>.unmodifiable(plans)
-          : startRuntimePlanStartedPlans,
     );
   }
 
@@ -375,14 +410,7 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
           .isSuccess;
 
   @override
-  Future<void> stopRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
-    stopRuntimePlanCalls++;
-    lastStoppedRuntimePlan = List<BuiltInProxyNodePlan>.unmodifiable(plans);
-    callOrder?.add('stopStartedLocalNodes');
-  }
-
-  @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopCalls++;
 
   @override
   Future<void> persistColdStart() async {

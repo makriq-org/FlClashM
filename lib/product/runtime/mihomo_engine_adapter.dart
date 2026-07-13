@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
@@ -7,7 +5,6 @@ import 'package:flclashx/models/models.dart';
 import '../compile/product_compile.dart';
 import '../services/product_services.dart';
 import 'built_in_proxy_supervisor.dart';
-import 'built_in_proxy_types.dart';
 import 'engine_adapter.dart';
 
 typedef ReadAccessControlCallback = AccessControl Function();
@@ -158,7 +155,6 @@ class MihomoEngineAdapter implements EngineAdapter {
   final BuiltInProxySupervisor builtInProxySupervisor;
   final ReadAccessControlCallback _readAccessControl;
   final ReadProfileAccessControlCallback? _readProfileAccessControl;
-  Future<void> _builtInProxyStartChain = Future.value();
 
   AccessControl get _accessControl => _readAccessControl();
   AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
@@ -212,24 +208,23 @@ class MihomoEngineAdapter implements EngineAdapter {
       return stageMessage;
     }
 
-    BuiltInProxyRuntimePlanStartResult? startedRuntimePlan;
-    if (runtimePlan.builtInProxyNodes.isNotEmpty) {
-      try {
-        startedRuntimePlan = await builtInProxySupervisor.startRuntimePlan(
-          runtimePlan.builtInProxyNodes,
-          stopAllOnFailure: true,
-        );
-      } catch (e) {
-        return _rollbackRuntimePlanSetup(
-          message: 'Built-in proxy nodes failed to start: $e',
-        );
-      }
-
+    try {
+      final startedRuntimePlan = await builtInProxySupervisor.startRuntimePlan(
+        runtimePlan.builtInProxyNodes,
+        stopAllOnFailure: true,
+      );
       if (!startedRuntimePlan.isSuccess) {
+        final stateMessage = startedRuntimePlan.state?.message;
         return _rollbackRuntimePlanSetup(
-          message: 'Built-in proxy nodes did not start.',
+          message: stateMessage?.isNotEmpty ?? false
+              ? stateMessage!
+              : 'Built-in proxy nodes did not start.',
         );
       }
+    } catch (e) {
+      return _rollbackRuntimePlanSetup(
+        message: 'Built-in proxy nodes failed to start: $e',
+      );
     }
 
     final message = await core.setupRuntimePlan(runtimePlan);
@@ -240,10 +235,7 @@ class MihomoEngineAdapter implements EngineAdapter {
       return '';
     }
 
-    return _rollbackRuntimePlanSetup(
-      message: message,
-      startedPlans: startedRuntimePlan?.startedPlans ?? const [],
-    );
+    return _rollbackRuntimePlanSetup(message: message);
   }
 
   @override
@@ -264,11 +256,15 @@ class MihomoEngineAdapter implements EngineAdapter {
     var vpnStartAttempted = false;
 
     try {
+      final nodesReady = await builtInProxySupervisor.start(
+        stopAllOnFailure: true,
+      );
+      if (!nodesReady) return false;
+
       await core.startListener();
       listenerStarted = true;
 
       if (await readStartTime() != null) {
-        _startBuiltInProxyNodesInBackground();
         return true;
       }
 
@@ -279,13 +275,9 @@ class MihomoEngineAdapter implements EngineAdapter {
           profileAccessControl: _profileAccessControl,
         ),
       );
-      if (started) {
-        _startBuiltInProxyNodesInBackground();
-        return true;
-      }
+      if (started) return true;
     } catch (e, stackTrace) {
       final rollbackFailure = await _rollbackFailedStart(
-        builtInNodesStarted: false,
         listenerStarted: listenerStarted,
         vpnStartAttempted: vpnStartAttempted,
       );
@@ -302,7 +294,6 @@ class MihomoEngineAdapter implements EngineAdapter {
     }
 
     final rollbackFailure = await _rollbackFailedStart(
-      builtInNodesStarted: false,
       listenerStarted: listenerStarted,
       vpnStartAttempted: vpnStartAttempted,
     );
@@ -318,54 +309,10 @@ class MihomoEngineAdapter implements EngineAdapter {
     return false;
   }
 
-  void _startBuiltInProxyNodesInBackground([
-    List<BuiltInProxyNodePlan>? runtimePlan,
-  ]) {
-    final task = _builtInProxyStartChain.then((_) async {
-      final message = await _startBuiltInProxyNodes(runtimePlan);
-      if (message.isNotEmpty) {
-        commonPrint.log(message);
-      }
-    });
-    _builtInProxyStartChain = task.catchError((Object e, StackTrace s) {
-      commonPrint.log('Failed to start built-in proxy nodes: $e');
-    });
-    unawaited(_builtInProxyStartChain);
-  }
-
-  Future<String> _startBuiltInProxyNodes([
-    List<BuiltInProxyNodePlan>? runtimePlan,
-  ]) async {
-    try {
-      final started = runtimePlan == null
-          ? await builtInProxySupervisor.start(stopAllOnFailure: false)
-          : (await builtInProxySupervisor.startRuntimePlan(
-              runtimePlan,
-              stopAllOnFailure: false,
-            ))
-              .isSuccess;
-      if (started) {
-        return '';
-      }
-      return 'Built-in proxy nodes did not start.';
-    } catch (e) {
-      return 'Failed to start built-in proxy nodes: $e';
-    }
-  }
-
   Future<String> _rollbackRuntimePlanSetup({
     required String message,
-    List<BuiltInProxyNodePlan> startedPlans = const [],
   }) async {
     final cleanupMessages = <String>[];
-
-    if (startedPlans.isNotEmpty) {
-      try {
-        await builtInProxySupervisor.stopRuntimePlan(startedPlans);
-      } catch (e) {
-        cleanupMessages.add('Failed to stop started local nodes: $e');
-      }
-    }
 
     final rollbackMessage =
         await builtInProxySupervisor.rollbackStagedRuntimePlan();
@@ -402,18 +349,6 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
     }
 
-    try {
-      await builtInProxySupervisor.stop();
-    } catch (e, s) {
-      if (error != null) {
-        commonPrint
-            .log("Failed to stop built-in proxy nodes after stop error: $e");
-      } else {
-        error = e;
-        stackTrace = s;
-      }
-    }
-
     if (error != null) {
       Error.throwWithStackTrace(error, stackTrace!);
     }
@@ -437,7 +372,6 @@ class MihomoEngineAdapter implements EngineAdapter {
   }
 
   Future<_BoundaryCleanupFailure?> _rollbackFailedStart({
-    required bool builtInNodesStarted,
     required bool listenerStarted,
     required bool vpnStartAttempted,
   }) async {
@@ -468,18 +402,6 @@ class MihomoEngineAdapter implements EngineAdapter {
         await core.stopListener();
       } catch (e, s) {
         captureFailure('Failed to stop listener during mihomo rollback', e, s);
-      }
-    }
-
-    if (builtInNodesStarted) {
-      try {
-        await builtInProxySupervisor.stop();
-      } catch (e, s) {
-        captureFailure(
-          'Failed to stop built-in proxy nodes during mihomo rollback',
-          e,
-          s,
-        );
       }
     }
 

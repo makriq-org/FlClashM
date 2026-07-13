@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,181 +8,120 @@ import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/byedpi_node_controller.dart';
 import 'package:flclashx/product/runtime/byedpi_release.dart';
 import 'package:flclashx/product/runtime/naiveproxy_node_controller.dart';
-import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flclashx/product/runtime/olcrtc_node_controller.dart';
-import 'package:flclashx/product/runtime/olcrtc_release.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('DefaultBuiltInProxySupervisor', () {
     late Directory tempDir;
     late _FakeRuntimeNodeBridge runtime;
-    late NaiveProxySharedInstallLayout naiveLayout;
-    late ByedpiSharedInstallLayout byedpiLayout;
-    late OlcRtcSharedInstallLayout olcLayout;
-
-    DefaultBuiltInProxySupervisor buildSupervisor() =>
-        DefaultBuiltInProxySupervisor(
-          naiveProxy: NaiveProxyNodeController(
-            binary: _FakeNaiveProxyBinaryBridge(layout: naiveLayout),
-            runtime: runtime,
-            waitForListener: (_, __, ___) async {},
-          ),
-          byedpi: ByedpiNodeController(
-            binary: _FakeByedpiBinaryBridge(layout: byedpiLayout),
-            runtime: runtime,
-            waitForListener: (_, __, ___) async {},
-            siteCheck: ({
-              required host,
-              required port,
-              required url,
-              required timeout,
-            }) async =>
-                true,
-          ),
-          olcRtc: OlcRtcNodeController(
-            binary: _FakeOlcRtcBinaryBridge(layout: olcLayout),
-            runtime: runtime,
-            waitForListener: (_, __, ___) async {},
-          ),
-        );
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('flclashm-supervisor-');
+      tempDir = await Directory.systemTemp.createTemp('runtime-supervisor-');
       runtime = _FakeRuntimeNodeBridge();
-      naiveLayout = NaiveProxySharedInstallLayout(
+    });
+
+    tearDown(() async {
+      if (tempDir.existsSync()) await tempDir.delete(recursive: true);
+    });
+
+    DefaultBuiltInProxySupervisor buildSupervisor({_ResolveGate? gate}) {
+      final naiveLayout = NaiveProxySharedInstallLayout(
         abi: 'arm64-v8a',
         runtimeRootPath: '${tempDir.path}/naiveproxy',
         nodesDirectoryPath: '${tempDir.path}/naiveproxy/nodes',
-        executablePath: '${tempDir.path}/naiveproxy/naiveproxy',
+        executablePath: '${tempDir.path}/libnaive.so',
       );
-      byedpiLayout = ByedpiSharedInstallLayout(
+      final byedpiLayout = ByedpiSharedInstallLayout(
         abi: 'arm64-v8a',
         runtimeRootPath: '${tempDir.path}/byedpi',
         nodesDirectoryPath: '${tempDir.path}/byedpi/nodes',
-        executablePath: '${tempDir.path}/byedpi/ciadpi',
+        executablePath: '${tempDir.path}/libbyedpi.so',
       );
-      olcLayout = OlcRtcSharedInstallLayout(
+      final olcLayout = OlcRtcSharedInstallLayout(
         abi: 'arm64-v8a',
         runtimeRootPath: '${tempDir.path}/olcrtc',
         nodesDirectoryPath: '${tempDir.path}/olcrtc/nodes',
-        executablePath: '${tempDir.path}/olcrtc/olcrtc',
+        executablePath: '${tempDir.path}/libolcrtc.so',
+      );
+      return DefaultBuiltInProxySupervisor(
+        runtime: runtime,
+        naiveProxy: NaiveProxyNodeController(
+          binary: _FakeNaiveProxyBinaryBridge(naiveLayout, gate),
+          runtime: runtime,
+        ),
+        byedpi: ByedpiNodeController(
+          binary: _FakeByedpiBinaryBridge(byedpiLayout, gate),
+          runtime: runtime,
+        ),
+        olcRtc: OlcRtcNodeController(
+          binary: _FakeOlcRtcBinaryBridge(olcLayout, gate),
+          runtime: runtime,
+        ),
+      );
+    }
+
+    test('passes every node type to Android in one plan', () async {
+      final supervisor = buildSupervisor();
+      final plans = [_naivePlan(), _byedpiPlan(), _olcPlan()];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
+
+      expect(await supervisor.start(), isTrue);
+
+      expect(runtime.appliedPlans, hasLength(1));
+      expect(
+        runtime.appliedPlans.single.map((node) => node['type']).toSet(),
+        {'naiveproxy', 'byedpi', 'olcrtc'},
       );
     });
 
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
+    test('prepares independent node types concurrently', () async {
+      final gate = _ResolveGate(3);
+      final supervisor = buildSupervisor(gate: gate);
+      final plans = [_naivePlan(), _byedpiPlan(), _olcPlan()];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
+      gate.enabled = true;
+
+      final starting = supervisor.start();
+      await gate.allEntered.future.timeout(const Duration(seconds: 1));
+      expect(runtime.appliedPlans, isEmpty);
+
+      gate.release.complete();
+      expect(await starting, isTrue);
+      expect(runtime.appliedPlans.single, hasLength(3));
     });
 
-    test('starts and stops naiveproxy and olcrtc nodes together', () async {
+    test('reconnect reapplies one identical plan for Android reuse', () async {
       final supervisor = buildSupervisor();
-      final naivePlan = _buildNaivePlan();
-      final olcPlan = _buildOlcPlan();
-
-      expect(await supervisor.stageRuntimePlan([naivePlan, olcPlan]), isEmpty);
-      await supervisor.commitStagedRuntimePlan([naivePlan, olcPlan]);
+      final plans = [_naivePlan(), _olcPlan()];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
 
       expect(await supervisor.start(), isTrue);
-      await supervisor.stop();
+      expect(await supervisor.start(), isTrue);
 
-      expect(runtime.startCalls, ['naive-a', 'olc-a']);
-      expect(runtime.stopCalls, ['olc-a', 'naive-a']);
+      expect(runtime.appliedPlans, hasLength(2));
+      expect(runtime.appliedPlans[1], runtime.appliedPlans[0]);
+      expect(runtime.generation, 1);
     });
 
-    test('persists a combined cold-start manifest', () async {
+    test('persists one combined cold-start manifest', () async {
       final supervisor = buildSupervisor();
-      final naivePlan = _buildNaivePlan();
-      final olcPlan = _buildOlcPlan();
+      final plans = [_naivePlan(), _byedpiPlan(), _olcPlan()];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
 
-      expect(await supervisor.stageRuntimePlan([naivePlan, olcPlan]), isEmpty);
-      await supervisor.commitStagedRuntimePlan([naivePlan, olcPlan]);
       await supervisor.persistColdStart();
 
       final manifest = json.decode(runtime.savedManifest!) as Map;
-      final nodes = manifest['nodes'] as List;
-      expect(nodes.map((node) => node['type']), ['naiveproxy', 'olcrtc']);
-    });
-
-    test('lets staged setup handle rollback after start failure', () async {
-      final supervisor = buildSupervisor();
-      final naivePlan = _buildNaivePlan();
-      final olcPlan = _buildOlcPlan();
-      runtime.startResults.addAll([true, false]);
-
-      final result = await supervisor.startRuntimePlan(
-        [naivePlan, olcPlan],
-        stopAllOnFailure: false,
-      );
-
-      expect(result.isSuccess, isFalse);
-      expect(runtime.startCalls, ['naive-a', 'olc-a']);
-      expect(runtime.stopCalls, isEmpty);
-      expect(runtime.runningNodes.keys, contains('naive-a'));
-    });
-
-    test('stops only newly started nodes when a later start fails', () async {
-      final supervisor = buildSupervisor();
-      final naivePlan = _buildNaivePlan();
-      final byedpiPlan = _buildByedpiPlan();
-      final olcPlan = _buildOlcPlan();
-      runtime.runningNodes['naive-a'] = DateTime(2026, 1, 1);
-      runtime.startResults.addAll([true, false]);
-
-      final result = await supervisor.startRuntimePlan(
-        [naivePlan, byedpiPlan, olcPlan],
-        stopAllOnFailure: true,
-      );
-
-      expect(result.isSuccess, isFalse);
-      expect(runtime.startCalls, ['byedpi-a', 'olc-a']);
-      expect(runtime.stopCalls, ['byedpi-a']);
-      expect(runtime.runningNodes.keys, contains('naive-a'));
-      expect(runtime.runningNodes.keys, isNot(contains('byedpi-a')));
-      expect(runtime.runningNodes.keys, isNot(contains('olc-a')));
-    });
-
-    test('rolls naiveproxy stage back when olcrtc stage fails', () async {
-      final supervisor = buildSupervisor();
-      final currentNaive = _buildNaivePlan(proxy: 'https://old.example');
-      final nextNaive = _buildNaivePlan(proxy: 'https://new.example');
-      final currentOlc = _buildOlcPlan(room: 'old-room');
-      final nextOlc = _buildOlcPlan(room: 'new-room');
-
-      final naiveConfigPath =
-          '${naiveLayout.nodesDirectoryPath}/naive-a/$naiveProxyConfigFileName';
-      final olcConfigPath =
-          '${olcLayout.nodesDirectoryPath}/olc-a/$olcRtcConfigFileName';
-      await Directory('${naiveLayout.nodesDirectoryPath}/naive-a')
-          .create(recursive: true);
-      await Directory('${olcLayout.nodesDirectoryPath}/olc-a')
-          .create(recursive: true);
-      await File(naiveConfigPath).writeAsString(
-        currentNaive.files.values.single,
-      );
-      await File(olcConfigPath).writeAsString(currentOlc.files.values.single);
-      runtime.runningNodes['naive-a'] = DateTime(2026, 1, 1);
-      runtime.runningNodes['olc-a'] = DateTime(2026, 1, 1);
-      runtime.startResults.addAll([true, false, true]);
-
-      final message = await supervisor.stageRuntimePlan(
-        [nextNaive, nextOlc],
-      );
-
-      expect(message, contains('olcrtc node `OLC` failed to restart'));
-      expect(await File(naiveConfigPath).readAsString(),
-          currentNaive.files.values.single);
-      expect(await File(olcConfigPath).readAsString(),
-          currentOlc.files.values.single);
+      expect((manifest['nodes'] as List), hasLength(3));
     });
   });
 }
 
-BuiltInProxyNodePlan _buildNaivePlan({
-  String proxy = 'https://example.com',
-}) =>
-    BuiltInProxyNodePlan(
+BuiltInProxyNodePlan _naivePlan() => BuiltInProxyNodePlan(
       nodeId: 'naive-a',
       name: 'Naive',
       type: BuiltInProxyType.naiveproxy,
@@ -192,36 +132,12 @@ BuiltInProxyNodePlan _buildNaivePlan({
       files: {
         'built-in-proxies/naiveproxy/naive-a/config.json': json.encode({
           'listen': 'socks://127.0.0.1:35010',
-          'proxy': proxy,
+          'proxy': 'https://example.com',
         }),
       },
     );
 
-BuiltInProxyNodePlan _buildOlcPlan({
-  String room = 'room-a',
-}) =>
-    BuiltInProxyNodePlan(
-      nodeId: 'olc-a',
-      name: 'OLC',
-      type: BuiltInProxyType.olcrtc,
-      listenHost: '127.0.0.1',
-      listenPort: 35910,
-      protocol: BuiltInProxyProtocol.socks5,
-      udp: false,
-      files: {
-        'built-in-proxies/olcrtc/olc-a/config.yaml': 'mode: "cnc"\n'
-            'room:\n'
-            '  id: "$room"\n'
-            'socks:\n'
-            '  host: "127.0.0.1"\n'
-            '  port: 35910',
-      },
-    );
-
-BuiltInProxyNodePlan _buildByedpiPlan({
-  String args = '--fake -1',
-}) =>
-    BuiltInProxyNodePlan(
+BuiltInProxyNodePlan _byedpiPlan() => BuiltInProxyNodePlan(
       nodeId: 'byedpi-a',
       name: 'ByeDPI',
       type: BuiltInProxyType.byedpi,
@@ -233,67 +149,126 @@ BuiltInProxyNodePlan _buildByedpiPlan({
         'built-in-proxies/byedpi/byedpi-a/config.json': json.encode({
           'listenHost': '127.0.0.1',
           'listenPort': 35110,
-          'args': args,
+          'args': '--fake -1',
           'mode': 'manual',
         }),
       },
     );
 
-class _FakeNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
-  const _FakeNaiveProxyBinaryBridge({required this.layout});
+BuiltInProxyNodePlan _olcPlan() => const BuiltInProxyNodePlan(
+      nodeId: 'olc-a',
+      name: 'OLC',
+      type: BuiltInProxyType.olcrtc,
+      listenHost: '127.0.0.1',
+      listenPort: 35910,
+      protocol: BuiltInProxyProtocol.socks5,
+      udp: false,
+      files: {
+        'built-in-proxies/olcrtc/olc-a/config.yaml': 'mode: "cnc"\n'
+            'room:\n'
+            '  id: "room-a"\n'
+            'socks:\n'
+            '  host: "127.0.0.1"\n'
+            '  port: 35910',
+      },
+    );
 
-  final NaiveProxySharedInstallLayout layout;
+class _ResolveGate {
+  _ResolveGate(this.expected);
 
-  @override
-  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async =>
-      layout;
+  final int expected;
+  final Completer<void> allEntered = Completer<void>();
+  final Completer<void> release = Completer<void>();
+  bool enabled = false;
+  int entered = 0;
+
+  Future<void> enter() async {
+    if (!enabled) return;
+    entered++;
+    if (entered == expected) allEntered.complete();
+    await release.future;
+  }
 }
 
-class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
-  const _FakeOlcRtcBinaryBridge({required this.layout});
-
-  final OlcRtcSharedInstallLayout layout;
+class _FakeNaiveProxyBinaryBridge implements NaiveProxyBinaryBridge {
+  const _FakeNaiveProxyBinaryBridge(this.layout, this.gate);
+  final NaiveProxySharedInstallLayout layout;
+  final _ResolveGate? gate;
 
   @override
-  Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout() async =>
-      layout;
+  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
+    await gate?.enter();
+    return layout;
+  }
 }
 
 class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
-  const _FakeByedpiBinaryBridge({required this.layout});
-
+  const _FakeByedpiBinaryBridge(this.layout, this.gate);
   final ByedpiSharedInstallLayout layout;
+  final _ResolveGate? gate;
 
   @override
   String get bundledReleaseTag => byedpiPinnedReleaseTag;
 
   @override
-  Future<String> loadBundledStrategyList(String assetPath) async =>
-      '--fake -1\n';
+  Future<String> loadBundledStrategyList(String assetPath) async => '--fake -1';
 
   @override
-  Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async =>
-      layout;
+  Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async {
+    await gate?.enter();
+    return layout;
+  }
+}
+
+class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
+  const _FakeOlcRtcBinaryBridge(this.layout, this.gate);
+  final OlcRtcSharedInstallLayout layout;
+  final _ResolveGate? gate;
+
+  @override
+  Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout() async {
+    await gate?.enter();
+    return layout;
+  }
 }
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
-  final Map<String, DateTime> runningNodes = {};
-  final List<String> startCalls = [];
-  final List<String> stopCalls = [];
-  final List<bool> startResults = [];
+  final List<List<Map<String, dynamic>>> appliedPlans = [];
+  int generation = 0;
   String? savedManifest;
 
   @override
-  Future<void> clearColdStartNodes() async {
-    savedManifest = null;
+  Future<RuntimeNodePlanState> applyPlan(
+    List<Map<String, dynamic>> nodes,
+  ) async {
+    final snapshot = [
+      for (final node in nodes) Map<String, dynamic>.from(node)
+    ];
+    if (appliedPlans.isEmpty ||
+        appliedPlans.last.toString() != snapshot.toString()) {
+      generation++;
+    }
+    appliedPlans.add(snapshot);
+    return RuntimeNodePlanState(
+      generation: generation,
+      status: nodes.isEmpty ? 'idle' : 'ready',
+      message: '',
+      nodes: snapshot,
+      optionalCheckActive: false,
+    );
   }
 
   @override
-  Future<DateTime?> readNodeStartTime({required String nodeId}) async =>
-      runningNodes[nodeId];
+  Future<void> clearColdStartNodes() async => savedManifest = null;
 
   @override
-  Future<String?> readNodeLastError({required String nodeId}) async => null;
+  Future<RuntimeNodePlanState> readPlanState() async => RuntimeNodePlanState(
+        generation: generation,
+        status: 'ready',
+        message: '',
+        nodes: appliedPlans.lastOrNull ?? const [],
+        optionalCheckActive: false,
+      );
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {
@@ -301,24 +276,5 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   }
 
   @override
-  Future<bool> startNode({
-    required String nodeId,
-    required String executablePath,
-    required String workingDirectory,
-    List<String> arguments = const [],
-  }) async {
-    startCalls.add(nodeId);
-    final result = startResults.isEmpty ? true : startResults.removeAt(0);
-    if (!result) {
-      return false;
-    }
-    runningNodes[nodeId] = DateTime(2026, 1, 1);
-    return true;
-  }
-
-  @override
-  Future<void> stopNode({required String nodeId}) async {
-    stopCalls.add(nodeId);
-    runningNodes.remove(nodeId);
-  }
+  Future<void> stopPlan() async {}
 }

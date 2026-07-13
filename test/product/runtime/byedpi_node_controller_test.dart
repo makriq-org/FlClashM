@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,391 +10,140 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ByedpiNodeController', () {
     late Directory tempDir;
-    late ByedpiSharedInstallLayout sharedLayout;
-    late _FakeByedpiBinaryBridge binary;
+    late ByedpiSharedInstallLayout layout;
     late _FakeRuntimeNodeBridge runtime;
-    late List<bool> checkResults;
-    late int nextProbePort;
-
-    ByedpiNodeController buildController() => ByedpiNodeController(
-          binary: binary,
-          runtime: runtime,
-          waitForListener: (_, __, ___) async {},
-          allocateProbePort: () async => nextProbePort++,
-          siteCheck: ({
-            required host,
-            required port,
-            required url,
-            required timeout,
-          }) async =>
-              checkResults.isEmpty ? true : checkResults.removeAt(0),
-          now: () => DateTime(2026, 6, 1, 12),
-        );
-
-    ByedpiNodeController buildControllerWithDefaultSiteCheck() =>
-        ByedpiNodeController(
-          binary: binary,
-          runtime: runtime,
-          waitForListener: (_, __, ___) async {},
-          allocateProbePort: () async => nextProbePort++,
-          now: () => DateTime(2026, 6, 1, 12),
-        );
+    late ByedpiNodeController controller;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('flclashm-byedpi-');
-      sharedLayout = ByedpiSharedInstallLayout(
+      tempDir = await Directory.systemTemp.createTemp('byedpi-controller-');
+      layout = ByedpiSharedInstallLayout(
         abi: 'arm64-v8a',
         runtimeRootPath: tempDir.path,
         nodesDirectoryPath: '${tempDir.path}/nodes',
-        executablePath: '${tempDir.path}/ciadpi',
+        executablePath: '${tempDir.path}/libbyedpi.so',
       );
-      binary = _FakeByedpiBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
-      checkResults = <bool>[];
-      nextProbePort = 45610;
-    });
-
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
-    });
-
-    test('starts manual nodes with client-owned ip and port arguments',
-        () async {
-      final controller = buildController();
-      final plan = _buildManualPlan();
-
-      expect(
-        await controller.stageRuntimePlan(
-          currentPlans: const [],
-          nextPlans: [plan],
-        ),
-        isEmpty,
-      );
-      await controller.commitStagedRuntimePlan();
-
-      expect(await controller.startNodes([plan]), isTrue);
-      expect(runtime.startArguments.single, [
-        '--ip',
-        '127.0.0.1',
-        '--port',
-        '35610',
-        '--disorder',
-        '1',
-        '--auto=torst',
-      ]);
-    });
-
-    test('reports a failed listener check while restoring a running node',
-        () async {
-      final oldPlan = _buildManualPlan(args: '--disorder 1');
-      final newPlan = _buildManualPlan(args: '--fake -1');
-      final initialController = buildController();
-      expect(
-        await initialController.stageRuntimePlan(
-          currentPlans: const [],
-          nextPlans: [oldPlan],
-        ),
-        isEmpty,
-      );
-      await initialController.commitStagedRuntimePlan();
-      expect(await initialController.startNodes([oldPlan]), isTrue);
-
-      var listenerChecks = 0;
-      final updatingController = ByedpiNodeController(
-        binary: binary,
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout),
         runtime: runtime,
-        waitForListener: (_, __, ___) async {
-          listenerChecks++;
-          throw StateError('listener is unavailable');
-        },
-        allocateProbePort: () async => nextProbePort++,
+        now: () => DateTime.utc(2026, 1, 1),
       );
-      final message = await updatingController.stageRuntimePlan(
-        currentPlans: [oldPlan],
-        nextPlans: [newPlan],
-      );
-
-      expect(message, contains('Rollback failed'));
-      expect(message, contains('Failed to restart previous byedpi node'));
-      expect(listenerChecks, 2);
-      final config = await File(
-        '${sharedLayout.nodesDirectoryPath}/byedpi-a/$byedpiConfigFileName',
-      ).readAsString();
-      expect(json.decode(config)['args'], '--disorder 1');
     });
 
-    test('selects and caches the first working auto strategy', () async {
-      final controller = buildController();
-      final plan = _buildAutoPlan();
-      checkResults.addAll([false, true]);
+    tearDown(() async {
+      if (tempDir.existsSync()) await tempDir.delete(recursive: true);
+    });
 
+    test('passes manual strategy and listener arguments to Android', () async {
+      final plan = _plan(mode: 'manual', args: '--fake 1 --ttl "3 4"');
       expect(
-        await controller.stageRuntimePlan(
-          currentPlans: const [],
-          nextPlans: [plan],
-        ),
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
         isEmpty,
       );
-      await controller.commitStagedRuntimePlan();
 
-      expect(await controller.startNodes([plan]), isTrue);
+      final node = (await controller.buildRuntimeNodes([plan])).single;
 
-      expect(runtime.startArguments, [
-        ['--ip', '127.0.0.1', '--port', '45610', '--fake', '-1'],
-        ['--ip', '127.0.0.1', '--port', '45611', '--disorder', '1'],
-        ['--ip', '127.0.0.1', '--port', '35610', '--disorder', '1'],
-      ]);
-      expect(runtime.runningNodes.keys, ['byedpi-a']);
-      expect(runtime.stoppedNodeIds, [
-        'byedpi-a-probe-66b26ed526a75edec7b122545e5aea12',
-        'byedpi-a-probe-50f8c09d8c922a6a5677208a7742918d',
-      ]);
-      final cache = File('${sharedLayout.nodesDirectoryPath}/byedpi-a/'
-          'strategy-cache.json');
-      expect(cache.existsSync(), isTrue);
-      expect(
-          json.decode(await cache.readAsString())['strategy'], '--disorder 1');
-    });
-
-    test('checks auto strategy URLs with configured concurrency', () async {
-      var activeChecks = 0;
-      var maxActiveChecks = 0;
-      final controller = ByedpiNodeController(
-        binary: binary,
-        runtime: runtime,
-        waitForListener: (_, __, ___) async {},
-        allocateProbePort: () async => nextProbePort++,
-        siteCheck: ({
-          required host,
-          required port,
-          required url,
-          required timeout,
-        }) async {
-          activeChecks++;
-          if (activeChecks > maxActiveChecks) {
-            maxActiveChecks = activeChecks;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          activeChecks--;
-          return true;
-        },
-        now: () => DateTime(2026, 6, 1, 12),
-      );
-      final plan = _buildAutoPlan(requests: 4, concurrency: 2);
-
-      await controller.stageRuntimePlan(
-        currentPlans: const [],
-        nextPlans: [plan],
-      );
-      await controller.commitStagedRuntimePlan();
-
-      expect(await controller.startNodes([plan]), isTrue);
-      expect(maxActiveChecks, 2);
-    });
-
-    test('persists cached auto strategy for cold start', () async {
-      final controller = buildController();
-      final plan = _buildAutoPlan();
-      checkResults.add(true);
-
-      await controller.stageRuntimePlan(
-        currentPlans: const [],
-        nextPlans: [plan],
-      );
-      await controller.commitStagedRuntimePlan();
-      expect(await controller.startNodes([plan]), isTrue);
-      await controller.persistColdStart([plan]);
-
-      final manifest = json.decode(runtime.savedManifest!) as Map;
-      final node = (manifest['nodes'] as List).single as Map;
+      expect(node['type'], 'byedpi');
       expect(node['arguments'], [
         '--ip',
         '127.0.0.1',
         '--port',
-        '35610',
+        '35110',
         '--fake',
-        '-1',
+        '1',
+        '--ttl',
+        '3 4',
       ]);
     });
 
-    test('starts bundled fallback when auto strategy check fails', () async {
-      final controller = buildController();
-      final plan = _buildAutoPlan();
-      checkResults.addAll([false, false]);
+    test('uses a persisted fallback for automatic mode', () async {
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
 
-      await controller.stageRuntimePlan(
-        currentPlans: const [],
-        nextPlans: [plan],
+      final first = (await controller.buildRuntimeNodes([plan])).single;
+      final second = (await controller.buildRuntimeNodes([plan])).single;
+      final cache =
+          File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
+
+      expect(first['arguments'], second['arguments']);
+      expect(first['arguments'], containsAllInOrder(['--disorder', '1']));
+      expect(cache.existsSync(), isTrue);
+      expect((json.decode(await cache.readAsString()) as Map)['strategy'],
+          isNotEmpty);
+    });
+
+    test('staging rollback restores the previous configuration', () async {
+      final oldPlan = _plan(mode: 'manual', args: '--fake 1');
+      final newPlan = _plan(mode: 'manual', args: '--fake 2');
+      final config =
+          File('${layout.nodesDirectoryPath}/node-a/$byedpiConfigFileName');
+      await config.parent.create(recursive: true);
+      await config.writeAsString(oldPlan.files.values.single);
+
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: [oldPlan],
+          nextPlans: [newPlan],
+        ),
+        isEmpty,
+      );
+      expect(await controller.rollbackStagedRuntimePlan(), isEmpty);
+      expect(await config.readAsString(), oldPlan.files.values.single);
+      expect(runtime.applyCalls, 0);
+    });
+
+    test('persists the resolved arguments for cold start', () async {
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [plan],
+        ),
+        isEmpty,
       );
       await controller.commitStagedRuntimePlan();
+      await controller.persistColdStart([plan]);
+      final nodes =
+          (json.decode(runtime.savedManifest!) as Map)['nodes'] as List;
 
-      expect(await controller.startNodes([plan]), isTrue);
-      expect(runtime.runningNodes.keys, ['byedpi-a']);
-      expect(runtime.startArguments.last, [
-        '--ip',
-        '127.0.0.1',
-        '--port',
-        '35610',
-        '--disorder',
-        '1',
-        '--auto=torst',
-        '--tlsrec',
-        '1+s',
-      ]);
-
-      final cache = File('${sharedLayout.nodesDirectoryPath}/byedpi-a/'
-          'strategy-cache.json');
-      expect(
-        json.decode(await cache.readAsString())['strategy'],
-        '--disorder 1 --auto=torst --tlsrec 1+s',
-      );
-    });
-
-    test('does not treat empty connect as working https strategy', () async {
-      final controller = buildControllerWithDefaultSiteCheck();
-      final server = await _FakeSocksServer.bind(
-        afterConnect: (client, reader) async {
-          client.destroy();
-        },
-      );
-      addTearDown(server.close);
-
-      final passed = await controller.siteCheck(
-        host: InternetAddress.loopbackIPv4.address,
-        port: server.port,
-        url: Uri.parse('https://93.184.216.34/'),
-        timeout: const Duration(seconds: 1),
-      );
-
-      expect(passed, isFalse);
-    });
-
-    test('treats valid http response through socks as working strategy',
-        () async {
-      final controller = buildControllerWithDefaultSiteCheck();
-      final server = await _FakeSocksServer.bind(
-        afterConnect: (client, reader) async {
-          final request = await reader.readHeaders(
-            timeout: const Duration(seconds: 1),
-            maxLength: 4096,
-          );
-          expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: 93.184.216.34'));
-          client.add(
-            utf8.encode(
-              'HTTP/1.1 204 No Content\r\n'
-              'Content-Length: 0\r\n'
-              'Connection: close\r\n'
-              '\r\n',
-            ),
-          );
-          await client.flush();
-        },
-      );
-      addTearDown(server.close);
-
-      final passed = await controller.siteCheck(
-        host: InternetAddress.loopbackIPv4.address,
-        port: server.port,
-        url: Uri.parse('http://93.184.216.34/'),
-        timeout: const Duration(seconds: 1),
-      );
-
-      expect(passed, isTrue);
-    });
-
-    test('treats 5xx http response through socks as working strategy',
-        () async {
-      final controller = buildControllerWithDefaultSiteCheck();
-      final server = await _FakeSocksServer.bind(
-        afterConnect: (client, reader) async {
-          final request = await reader.readHeaders(
-            timeout: const Duration(seconds: 1),
-            maxLength: 4096,
-          );
-          expect(request, contains('HEAD / HTTP/1.1'));
-          expect(request, contains('Host: 93.184.216.34'));
-          client.add(
-            utf8.encode(
-              'HTTP/1.1 503 Service Unavailable\r\n'
-              'Content-Length: 0\r\n'
-              'Connection: close\r\n'
-              '\r\n',
-            ),
-          );
-          await client.flush();
-        },
-      );
-      addTearDown(server.close);
-
-      final passed = await controller.siteCheck(
-        host: InternetAddress.loopbackIPv4.address,
-        port: server.port,
-        url: Uri.parse('http://93.184.216.34/'),
-        timeout: const Duration(seconds: 1),
-      );
-
-      expect(passed, isTrue);
+      expect(nodes, hasLength(1));
+      expect((nodes.single as Map)['arguments'], contains('--disorder'));
     });
   });
 }
 
-BuiltInProxyNodePlan _buildManualPlan({
-  String args = '--disorder 1 --auto=torst',
-}) =>
+BuiltInProxyNodePlan _plan({required String mode, required String args}) =>
     BuiltInProxyNodePlan(
-      nodeId: 'byedpi-a',
+      nodeId: 'node-a',
       name: 'ByeDPI',
       type: BuiltInProxyType.byedpi,
       listenHost: '127.0.0.1',
-      listenPort: 35610,
+      listenPort: 35110,
       protocol: BuiltInProxyProtocol.socks5,
       udp: false,
       files: {
-        'built-in-proxies/byedpi/byedpi-a/config.json': json.encode({
-          'mode': 'manual',
+        'built-in-proxies/byedpi/node-a/config.json': json.encode({
           'listenHost': '127.0.0.1',
-          'listenPort': 35610,
+          'listenPort': 35110,
           'args': args,
-          'cache': {},
-        }),
-      },
-    );
-
-BuiltInProxyNodePlan _buildAutoPlan({
-  int requests = 1,
-  int? concurrency,
-}) =>
-    BuiltInProxyNodePlan(
-      nodeId: 'byedpi-a',
-      name: 'ByeDPI',
-      type: BuiltInProxyType.byedpi,
-      listenHost: '127.0.0.1',
-      listenPort: 35610,
-      protocol: BuiltInProxyProtocol.socks5,
-      udp: false,
-      files: {
-        'built-in-proxies/byedpi/byedpi-a/config.json': json.encode({
-          'mode': 'auto',
-          'listenHost': '127.0.0.1',
-          'listenPort': 35610,
-          'strategies': ['--fake -1', '--disorder 1'],
+          'mode': mode,
+          'strategyList': 'byebyeedpi',
           'strategyTest': {
-            'urls': ['https://example.com/'],
-            'timeout': 5,
-            'requests': requests,
-            if (concurrency != null) 'concurrency': concurrency,
+            'urls': ['https://example.com'],
+            'timeout': 1,
           },
-          'cache': {},
+          'cache': {'ttl': 604800},
         }),
       },
     );
 
-class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
-  const _FakeByedpiBinaryBridge({required this.layout});
-
+class _FakeBinaryBridge implements ByedpiBinaryBridge {
+  const _FakeBinaryBridge(this.layout);
   final ByedpiSharedInstallLayout layout;
 
   @override
@@ -403,7 +151,7 @@ class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
 
   @override
   Future<String> loadBundledStrategyList(String assetPath) async =>
-      '--fake -1\n--disorder 1\n';
+      '--fake 1\n--disorder 1';
 
   @override
   Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async =>
@@ -411,23 +159,34 @@ class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
 }
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
-  final Map<String, DateTime> runningNodes = {};
-  final List<List<String>> startArguments = [];
-  final List<bool> startResults = [];
-  final List<String> stoppedNodeIds = [];
+  int applyCalls = 0;
   String? savedManifest;
 
   @override
-  Future<void> clearColdStartNodes() async {
-    savedManifest = null;
+  Future<RuntimeNodePlanState> applyPlan(
+      List<Map<String, dynamic>> nodes) async {
+    applyCalls++;
+    return RuntimeNodePlanState(
+      generation: applyCalls,
+      status: nodes.isEmpty ? 'idle' : 'ready',
+      message: '',
+      nodes: nodes,
+      optionalCheckActive: false,
+    );
   }
 
   @override
-  Future<DateTime?> readNodeStartTime({required String nodeId}) async =>
-      runningNodes[nodeId];
+  Future<void> clearColdStartNodes() async => savedManifest = null;
 
   @override
-  Future<String?> readNodeLastError({required String nodeId}) async => null;
+  Future<RuntimeNodePlanState> readPlanState() async =>
+      const RuntimeNodePlanState(
+        generation: 0,
+        status: 'idle',
+        message: '',
+        nodes: [],
+        optionalCheckActive: false,
+      );
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {
@@ -435,171 +194,5 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   }
 
   @override
-  Future<bool> startNode({
-    required String nodeId,
-    required String executablePath,
-    required String workingDirectory,
-    List<String> arguments = const [],
-  }) async {
-    startArguments.add(arguments);
-    final result = startResults.isEmpty ? true : startResults.removeAt(0);
-    if (!result) {
-      return false;
-    }
-    runningNodes[nodeId] = DateTime(2026, 6, 1, 12);
-    return true;
-  }
-
-  @override
-  Future<void> stopNode({required String nodeId}) async {
-    stoppedNodeIds.add(nodeId);
-    runningNodes.remove(nodeId);
-  }
-}
-
-class _FakeSocksServer {
-  _FakeSocksServer._({
-    required ServerSocket server,
-    required this.afterConnect,
-  }) : _server = server {
-    _subscription = _server.listen(_handleClient);
-  }
-
-  final ServerSocket _server;
-  final Future<void> Function(Socket client, _SocketByteReader reader)
-      afterConnect;
-  late final StreamSubscription<Socket> _subscription;
-  final Set<Socket> _clients = <Socket>{};
-
-  int get port => _server.port;
-
-  static Future<_FakeSocksServer> bind({
-    required Future<void> Function(Socket client, _SocketByteReader reader)
-        afterConnect,
-  }) async {
-    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    return _FakeSocksServer._(server: server, afterConnect: afterConnect);
-  }
-
-  Future<void> close() async {
-    await _subscription.cancel();
-    for (final client in _clients.toList()) {
-      client.destroy();
-    }
-    await _server.close();
-  }
-
-  Future<void> _handleClient(Socket client) async {
-    _clients.add(client);
-    final reader = _SocketByteReader(client);
-    try {
-      final greeting = await reader.readBytes(2, const Duration(seconds: 1));
-      expect(greeting[0], 0x05);
-      await reader.readBytes(greeting[1], const Duration(seconds: 1));
-      client.add(const [0x05, 0x00]);
-      await client.flush();
-
-      final request = await reader.readBytes(4, const Duration(seconds: 1));
-      expect(request[0], 0x05);
-      expect(request[1], 0x01);
-      expect(request[2], 0x00);
-      await _discardSocksAddress(
-        reader,
-        request[3],
-        const Duration(seconds: 1),
-      );
-      await reader.readBytes(2, const Duration(seconds: 1));
-
-      client.add(const [0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 80]);
-      await client.flush();
-      await afterConnect(client, reader);
-    } finally {
-      client.destroy();
-      _clients.remove(client);
-    }
-  }
-
-  Future<void> _discardSocksAddress(
-    _SocketByteReader reader,
-    int addressType,
-    Duration timeout,
-  ) async {
-    switch (addressType) {
-      case 0x01:
-        await reader.readBytes(4, timeout);
-        return;
-      case 0x03:
-        final length = (await reader.readBytes(1, timeout)).single;
-        await reader.readBytes(length, timeout);
-        return;
-      case 0x04:
-        await reader.readBytes(16, timeout);
-        return;
-      default:
-        throw StateError('Unknown SOCKS address type: $addressType');
-    }
-  }
-}
-
-class _SocketByteReader {
-  _SocketByteReader(Stream<List<int>> stream)
-      : _iterator = StreamIterator<List<int>>(stream);
-
-  final StreamIterator<List<int>> _iterator;
-  List<int> _buffer = <int>[];
-
-  Future<List<int>> readBytes(int length, Duration timeout) async {
-    while (_buffer.length < length) {
-      final hasNext = await _iterator.moveNext().timeout(timeout);
-      if (!hasNext) {
-        throw const SocketException('Unexpected socket close');
-      }
-      _buffer.addAll(_iterator.current);
-    }
-    return _take(length);
-  }
-
-  Future<String> readHeaders({
-    required Duration timeout,
-    required int maxLength,
-  }) async {
-    const delimiter = [0x0d, 0x0a, 0x0d, 0x0a];
-    while (true) {
-      final delimiterIndex = _indexOf(delimiter);
-      if (delimiterIndex != -1) {
-        return latin1.decode(_take(delimiterIndex + delimiter.length));
-      }
-      if (_buffer.length >= maxLength) {
-        throw StateError('HTTP request is too long');
-      }
-      final hasNext = await _iterator.moveNext().timeout(timeout);
-      if (!hasNext) {
-        throw const SocketException('Unexpected socket close');
-      }
-      _buffer.addAll(_iterator.current);
-    }
-  }
-
-  int _indexOf(List<int> pattern) {
-    final lastIndex = _buffer.length - pattern.length;
-    for (var start = 0; start <= lastIndex; start++) {
-      var matches = true;
-      for (var offset = 0; offset < pattern.length; offset++) {
-        if (_buffer[start + offset] != pattern[offset]) {
-          matches = false;
-          break;
-        }
-      }
-      if (matches) {
-        return start;
-      }
-    }
-    return -1;
-  }
-
-  List<int> _take(int length) {
-    final result = _buffer.sublist(0, length);
-    _buffer = length == _buffer.length ? <int>[] : _buffer.sublist(length);
-    return result;
-  }
+  Future<void> stopPlan() async {}
 }

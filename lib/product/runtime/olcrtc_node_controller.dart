@@ -87,8 +87,6 @@ class OlcRtcNodeController
   OlcRtcNodeController({
     OlcRtcBinaryBridge binary = const DefaultOlcRtcBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = waitForLocalNodeListener,
-    super.connectivityChecker,
   }) : super(
           typeLabel: 'olcrtc',
           configArtifactName: 'config.yaml',
@@ -124,49 +122,14 @@ class OlcRtcNodeController
   List<String> _buildArguments(OlcRtcNodeLayout layout) => [layout.configPath];
 
   @override
-  Future<bool> startPlan(
-    OlcRtcSharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    OlcRtcNodeLayout layout,
-  ) =>
-      runtime.startNode(
-        nodeId: plan.nodeId,
-        executablePath: sharedLayout.executablePath,
-        workingDirectory: layout.workingDirectoryPath,
-        arguments: _buildArguments(layout),
-      );
-
-  @override
-  Future<LocalNodeColdStartExtras> buildColdStartExtras(
+  Future<LocalNodeLaunchExtras> buildLaunchExtras(
     BuiltInProxyNodePlan plan,
     OlcRtcSharedInstallLayout sharedLayout,
     OlcRtcNodeLayout layout,
   ) async =>
-      LocalNodeColdStartExtras(
-        extraFields: {
+      LocalNodeLaunchExtras(
+        fields: {
           'arguments': _buildArguments(layout),
         },
-      );
-
-  @override
-  Future<String> rollbackStageFailure({
-    required List<LocalNodeMutation<OlcRtcNodeLayout>> mutations,
-    required String failureMessage,
-  }) =>
-      rollbackStageFailureWithRestart(
-        mutations: mutations,
-        failureMessage: failureMessage,
-      );
-
-  @override
-  Future<void> handleStartNodesException({
-    required Object error,
-    required StackTrace stackTrace,
-    required List<BuiltInProxyNodePlan> startedNodes,
-  }) =>
-      rethrowStartNodesExceptionWithCleanup(
-        error: error,
-        stackTrace: stackTrace,
-        startedNodes: startedNodes,
       );
 }

@@ -1,16 +1,89 @@
 package com.follow.clashx.service
 
+import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+
+data class RuntimeNodeSpec(
+    val nodeId: String,
+    val type: String,
+    val name: String,
+    val host: String,
+    val port: Int,
+    val executablePath: String,
+    val workingDirectory: String,
+    val arguments: List<String>,
+    val revision: String,
+    val connectivityCheck: RuntimeNodeConnectivityCheck,
+) {
+    companion object {
+        fun fromJson(value: JSONObject, index: Int): RuntimeNodeSpec {
+            fun requiredString(name: String): String =
+                value.optString(name, "").trim().also {
+                    require(it.isNotEmpty()) { "Runtime node $index is missing $name" }
+                }
+
+            val rawArguments = value.optJSONArray("arguments") ?: JSONArray()
+            val arguments = buildList {
+                for (argumentIndex in 0 until rawArguments.length()) {
+                    add(rawArguments.getString(argumentIndex))
+                }
+            }
+            val port = value.optInt("port", 0)
+            require(port in 1..65535) { "Runtime node $index has invalid port" }
+            return RuntimeNodeSpec(
+                nodeId = requiredString("nodeId"),
+                type = requiredString("type"),
+                name = requiredString("name"),
+                host = requiredString("host"),
+                port = port,
+                executablePath = requiredString("executablePath"),
+                workingDirectory = requiredString("workingDirectory"),
+                arguments = arguments,
+                revision = requiredString("revision"),
+                connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
+                    value.optJSONObject("connectivityCheck"),
+                ),
+            )
+        }
+    }
+}
+
+object RuntimeNodeClientRegistry {
+    private val clients = AtomicInteger(0)
+
+    val hasClients: Boolean get() = clients.get() > 0
+
+    fun attach() {
+        clients.incrementAndGet()
+    }
+
+    fun detach() {
+        clients.updateAndGet { current -> if (current > 0) current - 1 else 0 }
+    }
+
+    fun clear() {
+        clients.set(0)
+    }
+}
 
 object RuntimeNodeProcessManager {
     private class OutputBuffer {
@@ -34,98 +107,119 @@ object RuntimeNodeProcessManager {
     private data class RunningNode(
         val process: Process,
         val startTimeMillis: Long,
-        val executablePath: String,
-        val arguments: List<String>,
+        val spec: RuntimeNodeSpec,
         val output: OutputBuffer,
         val logJob: Job?,
     )
 
-    private val processLock = Mutex()
+    private data class NodeOutcome(
+        val spec: RuntimeNodeSpec,
+        val ready: Boolean,
+        val reused: Boolean,
+        val message: String = "",
+    )
+
+    private val planLock = Mutex()
+    private val nodeLocks = ConcurrentHashMap<String, Mutex>()
     private val runningNodes = ConcurrentHashMap<String, RunningNode>()
+    private val readyNodeIds = ConcurrentHashMap.newKeySet<String>()
+    private var activePlan = linkedMapOf<String, RuntimeNodeSpec>()
+    @Volatile private var generation = 0L
+    private var optionalCheckJob: Job? = null
+    @Volatile private var lastStateJson = stateJson(0L, "idle", emptyList())
 
-    suspend fun start(
-        nodeId: String,
-        executablePath: String,
-        workingDirectory: String,
-        arguments: List<String> = emptyList(),
-    ): Long = processLock.withLock {
-        withContext(Dispatchers.IO) {
-            val running = runningNodes[nodeId]
-            if (running?.process?.isAlive == true && running.startTimeMillis > 0L) {
-                return@withContext running.startTimeMillis
-            }
+    suspend fun applyPlan(planJson: String): String = planLock.withLock {
+        val target = parsePlan(planJson)
+        val previousPlan = activePlan
+        val previousReady = readyNodeIds.toSet()
+        val reusable = target.filter { (nodeId, spec) ->
+            previousPlan[nodeId] == spec &&
+                nodeId in previousReady &&
+                readStartTime(nodeId) > 0L
+        }.keys
 
-            stopInternal(nodeId)
+        if (target == previousPlan && reusable.size == target.size) {
+            lastStateJson = stateJson(
+                generation,
+                if (target.isEmpty()) "idle" else "ready",
+                target.values.map { NodeOutcome(it, ready = true, reused = true) },
+            )
+            return@withLock lastStateJson
+        }
 
-            val executable = File(executablePath)
-            if (!executable.exists()) {
-                GlobalState.log("runtime node binary is missing: $executablePath")
-                return@withContext 0L
-            }
-            if (executable.canWrite()) {
-                executable.setExecutable(true, true)
-            } else if (!executable.canExecute()) {
-                GlobalState.log("runtime node binary is not executable: $executablePath")
-                return@withContext 0L
-            }
+        generation += 1L
+        val currentGeneration = generation
+        optionalCheckJob?.cancelAndJoin()
+        optionalCheckJob = null
 
-            val runtimeDir = File(workingDirectory)
-            if (!runtimeDir.exists()) {
-                runtimeDir.mkdirs()
-            }
+        val replacedOrRemoved = previousPlan.values.filter { previous ->
+            target[previous.nodeId] != previous
+        }
+        stopSpecs(replacedOrRemoved)
+        replacedOrRemoved.forEach { readyNodeIds.remove(it.nodeId) }
 
-            val started = try {
-                ProcessBuilder(listOf(executablePath) + arguments)
-                    .directory(runtimeDir)
-                    .redirectErrorStream(true)
-                    .start()
-            } catch (e: Exception) {
-                GlobalState.log("Failed to start runtime node `$nodeId`: ${e.message}")
-                return@withContext 0L
-            }
-
-            val startTimeMillis = System.currentTimeMillis()
-            val output = OutputBuffer()
-            val logJob = GlobalState.scope.launch(Dispatchers.IO) {
-                runCatching {
-                    started.inputStream.bufferedReader().useLines { lines ->
-                        lines.forEach { line ->
-                            if (line.isNotBlank()) {
-                                output.add(line)
-                                GlobalState.log("[runtime-node:$nodeId] $line")
-                            }
-                        }
-                    }
-                }.onFailure {
-                    if (started.isAlive) {
-                        GlobalState.log("runtime node `$nodeId` log reader failed: ${it.message}")
+        val outcomes = coroutineScope {
+            target.values.map { spec ->
+                async {
+                    if (spec.nodeId in reusable) {
+                        NodeOutcome(spec, ready = true, reused = true)
+                    } else {
+                        prepareNode(spec)
                     }
                 }
-            }
+            }.awaitAll()
+        }
 
-            runningNodes[nodeId] = RunningNode(
-                process = started,
-                startTimeMillis = startTimeMillis,
-                executablePath = executablePath,
-                arguments = arguments,
-                output = output,
-                logJob = logJob,
+        val failure = outcomes.firstOrNull { !it.ready }
+        if (failure != null) {
+            stopAllProcesses()
+            activePlan = linkedMapOf()
+            readyNodeIds.clear()
+            lastStateJson = stateJson(
+                currentGeneration,
+                "failed",
+                outcomes,
+                failure.message.ifBlank { "Runtime node `${failure.spec.nodeId}` is not ready" },
             )
-            startTimeMillis
+            return@withLock lastStateJson
         }
+
+        activePlan = LinkedHashMap(target)
+        readyNodeIds.clear()
+        readyNodeIds.addAll(target.keys)
+        lastStateJson = stateJson(
+            currentGeneration,
+            if (target.isEmpty()) "idle" else "ready",
+            outcomes,
+        )
+        launchOptionalChecks(currentGeneration, target.values.toList())
+        lastStateJson = stateJson(
+            currentGeneration,
+            if (target.isEmpty()) "idle" else "ready",
+            outcomes,
+        )
+        lastStateJson
     }
 
-    suspend fun stop(nodeId: String): Long = processLock.withLock {
-        withContext(Dispatchers.IO) {
-            stopInternal(nodeId)
-        }
+    fun readPlanState(): String = runCatching {
+        JSONObject(lastStateJson)
+            .put("optionalCheckActive", optionalCheckJob?.isActive == true)
+            .toString()
+    }.getOrDefault(lastStateJson)
+
+    suspend fun stopAll() = planLock.withLock {
+        optionalCheckJob?.cancelAndJoin()
+        optionalCheckJob = null
+        stopAllProcesses()
+        activePlan = linkedMapOf()
+        readyNodeIds.clear()
+        generation += 1L
+        lastStateJson = stateJson(generation, "idle", emptyList())
     }
 
-    suspend fun stopAll(): Unit = processLock.withLock {
-        withContext(Dispatchers.IO) {
-            for (nodeId in runningNodes.keys.toList()) {
-                stopInternal(nodeId)
-            }
+    suspend fun stopIfIdle(vpnActive: Boolean) {
+        if (!vpnActive && !RuntimeNodeClientRegistry.hasClients) {
+            stopAll()
         }
     }
 
@@ -143,47 +237,235 @@ object RuntimeNodeProcessManager {
         if (running.process.isAlive) return ""
         val exitCode = runCatching { running.process.exitValue() }.getOrNull()
         val output = running.output.snapshot().trim()
-        val prefix = if (exitCode == null) "runtime node exited" else "runtime node exited with code $exitCode"
+        val prefix = if (exitCode == null) {
+            "runtime node exited"
+        } else {
+            "runtime node exited with code $exitCode"
+        }
         return if (output.isEmpty()) prefix else "$prefix: $output"
     }
 
-    private suspend fun stopInternal(nodeId: String): Long {
-        val previous = runningNodes.remove(nodeId)
-        if (previous == null) {
-            return 0L
+    private fun parsePlan(planJson: String): LinkedHashMap<String, RuntimeNodeSpec> {
+        val root = JSONObject(planJson)
+        val rawNodes = root.optJSONArray("nodes") ?: JSONArray()
+        val result = linkedMapOf<String, RuntimeNodeSpec>()
+        for (index in 0 until rawNodes.length()) {
+            val spec = RuntimeNodeSpec.fromJson(rawNodes.getJSONObject(index), index)
+            require(result.put(spec.nodeId, spec) == null) {
+                "Runtime node `${spec.nodeId}` is duplicated"
+            }
         }
+        return result
+    }
 
+    private suspend fun prepareNode(spec: RuntimeNodeSpec): NodeOutcome {
+        return runCatching {
+            val startedAt = start(spec)
+            check(startedAt > 0L) { "Runtime node `${spec.nodeId}` did not start" }
+            val deadline =
+                SystemClock.elapsedRealtime() + spec.connectivityCheck.startupTimeoutMillis
+            waitForListener(spec, deadline)
+            check(readStartTime(spec.nodeId) > 0L) {
+                "Runtime node `${spec.nodeId}` exited after opening its local listener"
+            }
+            val check = spec.connectivityCheck
+            if (check.required && check.urls.isNotEmpty()) {
+                val remaining = deadline - SystemClock.elapsedRealtime()
+                check(remaining > 0L) {
+                    "Runtime node `${spec.nodeId}` exhausted its startup timeout"
+                }
+                val passed = RuntimeNodeConnectivityChecker.checkUntilDeadline(
+                    nodeId = spec.nodeId,
+                    host = spec.host,
+                    port = spec.port,
+                    config = check.copy(startupTimeoutMillis = remaining),
+                )
+                check(passed) {
+                    "Runtime node `${spec.nodeId}` failed its required connectivity check"
+                }
+            }
+            NodeOutcome(spec, ready = true, reused = false)
+        }.getOrElse { error ->
+            NodeOutcome(
+                spec,
+                ready = false,
+                reused = false,
+                message = error.message ?: error.toString(),
+            )
+        }
+    }
+
+    private fun launchOptionalChecks(currentGeneration: Long, specs: List<RuntimeNodeSpec>) {
+        val optional = specs.filter {
+            !it.connectivityCheck.required && it.connectivityCheck.urls.isNotEmpty()
+        }
+        if (optional.isEmpty()) return
+        optionalCheckJob = GlobalState.scope.launch {
+            coroutineScope {
+                optional.map { spec ->
+                    async {
+                        val passed = RuntimeNodeConnectivityChecker.checkUntilDeadline(
+                            nodeId = spec.nodeId,
+                            host = spec.host,
+                            port = spec.port,
+                            config = spec.connectivityCheck,
+                        )
+                        if (!passed && generation == currentGeneration) {
+                            GlobalState.log(
+                                "Runtime node `${spec.nodeId}` failed its optional connectivity check",
+                            )
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+    }
+
+    private suspend fun waitForListener(spec: RuntimeNodeSpec, deadline: Long) {
+        withContext(Dispatchers.IO) {
+            while (true) {
+                val remaining = deadline - SystemClock.elapsedRealtime()
+                check(remaining > 0L) {
+                    "Timed out waiting for runtime node listener on ${spec.host}:${spec.port}"
+                }
+                val connected = runCatching {
+                    Socket().use { socket ->
+                        socket.connect(
+                            InetSocketAddress(spec.host, spec.port),
+                            minOf(LISTENER_CONNECT_TIMEOUT_MILLIS, remaining).toInt(),
+                        )
+                    }
+                }.isSuccess
+                if (connected) return@withContext
+                if (readStartTime(spec.nodeId) <= 0L) {
+                    val lastError = readLastError(spec.nodeId)
+                    error(
+                        if (lastError.isBlank()) {
+                            "Runtime node `${spec.nodeId}` exited before opening its local listener"
+                        } else {
+                            "Runtime node `${spec.nodeId}` failed: $lastError"
+                        },
+                    )
+                }
+                delay(minOf(LISTENER_RETRY_MILLIS, remaining))
+            }
+        }
+    }
+
+    private suspend fun start(spec: RuntimeNodeSpec): Long {
+        val lock = nodeLocks.getOrPut(spec.nodeId) { Mutex() }
+        return lock.withLock {
+            withContext(Dispatchers.IO) {
+                val running = runningNodes[spec.nodeId]
+                if (running?.process?.isAlive == true && running.spec == spec) {
+                    return@withContext running.startTimeMillis
+                }
+                if (running != null) stopInternal(spec.nodeId)
+
+                val executable = File(spec.executablePath)
+                if (!executable.exists()) {
+                    GlobalState.log("runtime node binary is missing: ${spec.executablePath}")
+                    return@withContext 0L
+                }
+                if (executable.canWrite()) {
+                    executable.setExecutable(true, true)
+                } else if (!executable.canExecute()) {
+                    GlobalState.log("runtime node binary is not executable: ${spec.executablePath}")
+                    return@withContext 0L
+                }
+
+                val runtimeDir = File(spec.workingDirectory)
+                if (!runtimeDir.exists()) runtimeDir.mkdirs()
+                val process = try {
+                    ProcessBuilder(listOf(spec.executablePath) + spec.arguments)
+                        .directory(runtimeDir)
+                        .redirectErrorStream(true)
+                        .start()
+                } catch (error: Exception) {
+                    GlobalState.log(
+                        "Failed to start runtime node `${spec.nodeId}`: ${error.message}",
+                    )
+                    return@withContext 0L
+                }
+
+                val startedAt = System.currentTimeMillis()
+                val output = OutputBuffer()
+                val logJob = GlobalState.scope.launch(Dispatchers.IO) {
+                    runCatching {
+                        process.inputStream.bufferedReader().useLines { lines ->
+                            lines.forEach { line ->
+                                if (line.isNotBlank()) {
+                                    output.add(line)
+                                    GlobalState.log("[runtime-node:${spec.nodeId}] $line")
+                                }
+                            }
+                        }
+                    }.onFailure {
+                        if (process.isAlive) {
+                            GlobalState.log(
+                                "runtime node `${spec.nodeId}` log reader failed: ${it.message}",
+                            )
+                        }
+                    }
+                }
+                runningNodes[spec.nodeId] = RunningNode(
+                    process = process,
+                    startTimeMillis = startedAt,
+                    spec = spec,
+                    output = output,
+                    logJob = logJob,
+                )
+                startedAt
+            }
+        }
+    }
+
+    private suspend fun stopSpecs(specs: Collection<RuntimeNodeSpec>) = coroutineScope {
+        specs.map { spec -> async { stop(spec.nodeId) } }.awaitAll()
+    }
+
+    private suspend fun stopAllProcesses() {
+        val specs = runningNodes.values.map { it.spec }
+        stopSpecs(specs)
+    }
+
+    private suspend fun stop(nodeId: String) {
+        val lock = nodeLocks.getOrPut(nodeId) { Mutex() }
+        lock.withLock {
+            withContext(Dispatchers.IO) { stopInternal(nodeId) }
+        }
+        nodeLocks.remove(nodeId, lock)
+    }
+
+    private suspend fun stopInternal(nodeId: String) {
+        val previous = runningNodes.remove(nodeId) ?: return
+        var needsEmergencySweep = false
         runCatching {
             previous.process.destroy()
-            if (!previous.process.waitFor(3, TimeUnit.SECONDS)) {
+            if (!previous.process.waitFor(SOFT_STOP_MILLIS, TimeUnit.MILLISECONDS)) {
                 previous.process.destroyForcibly()
-                previous.process.waitFor(3, TimeUnit.SECONDS)
+                previous.process.waitFor(FORCE_STOP_MILLIS, TimeUnit.MILLISECONDS)
             }
+            needsEmergencySweep = previous.process.isAlive
         }.onFailure {
+            needsEmergencySweep = true
             GlobalState.log("Failed to stop runtime node `$nodeId`: ${it.message}")
         }
-        killMatchingRuntimeProcesses(
-            nodeId = nodeId,
-            executablePath = previous.executablePath,
-            arguments = previous.arguments,
-        )
 
+        if (needsEmergencySweep) {
+            killMatchingRuntimeProcesses(previous.spec)
+        }
         runCatching { previous.process.outputStream.close() }
         runCatching { previous.process.inputStream.close() }
         runCatching { previous.process.errorStream.close() }
         previous.logJob?.cancelAndJoin()
-        return previous.startTimeMillis
+        readyNodeIds.remove(nodeId)
     }
 
-    private fun killMatchingRuntimeProcesses(
-        nodeId: String,
-        executablePath: String,
-        arguments: List<String>,
-    ) {
-        val expected = listOf(executablePath) + arguments
+    private fun killMatchingRuntimeProcesses(spec: RuntimeNodeSpec) {
+        val expected = listOf(spec.executablePath) + spec.arguments
         val selfPid = android.os.Process.myPid()
-        val procDir = File("/proc")
-        val entries = procDir.listFiles() ?: return
+        val entries = File("/proc").listFiles() ?: return
         for (entry in entries) {
             val pid = entry.name.toIntOrNull() ?: continue
             if (pid == selfPid) continue
@@ -192,36 +474,62 @@ object RuntimeNodeProcessManager {
             runCatching {
                 android.os.Process.killProcess(pid)
                 waitForProcessExit(pid)
-                if (File("/proc/$pid").exists()) {
-                    android.os.Process.killProcess(pid)
-                    waitForProcessExit(pid)
-                }
             }.onFailure {
                 GlobalState.log(
-                    "Failed to kill runtime node `$nodeId` child process $pid: ${it.message}"
+                    "Emergency cleanup failed for runtime node `${spec.nodeId}` process $pid: ${it.message}",
                 )
             }
         }
     }
 
-    private fun readProcessCmdline(pid: Int): List<String>? {
-        return runCatching {
-            File("/proc/$pid/cmdline")
-                .readBytes()
-                .toString(Charsets.UTF_8)
-                .split('\u0000')
-                .filter { it.isNotEmpty() }
-        }.getOrNull()
-    }
+    private fun readProcessCmdline(pid: Int): List<String>? = runCatching {
+        File("/proc/$pid/cmdline")
+            .readBytes()
+            .toString(Charsets.UTF_8)
+            .split('\u0000')
+            .filter { it.isNotEmpty() }
+    }.getOrNull()
 
     private fun waitForProcessExit(pid: Int) {
         val procPath = File("/proc/$pid")
-        val deadline = System.currentTimeMillis() + 1000L
+        val deadline = System.currentTimeMillis() + EMERGENCY_WAIT_MILLIS
         while (procPath.exists() && System.currentTimeMillis() < deadline) {
             Thread.sleep(50L)
         }
     }
 
+    private fun stateJson(
+        generation: Long,
+        status: String,
+        outcomes: List<NodeOutcome>,
+        message: String = "",
+    ): String = JSONObject()
+        .put("generation", generation)
+        .put("status", status)
+        .put("message", message)
+        .put("optionalCheckActive", optionalCheckJob?.isActive == true)
+        .put(
+            "nodes",
+            JSONArray().apply {
+                outcomes.forEach { outcome ->
+                    put(
+                        JSONObject()
+                            .put("nodeId", outcome.spec.nodeId)
+                            .put("type", outcome.spec.type)
+                            .put("ready", outcome.ready)
+                            .put("reused", outcome.reused)
+                            .put("message", outcome.message),
+                    )
+                }
+            },
+        )
+        .toString()
+
+    private const val LISTENER_CONNECT_TIMEOUT_MILLIS = 200L
+    private const val LISTENER_RETRY_MILLIS = 100L
+    private const val SOFT_STOP_MILLIS = 500L
+    private const val FORCE_STOP_MILLIS = 500L
+    private const val EMERGENCY_WAIT_MILLIS = 500L
     private const val MAX_OUTPUT_LINES = 20
     private const val MAX_OUTPUT_LENGTH = 4096
 }

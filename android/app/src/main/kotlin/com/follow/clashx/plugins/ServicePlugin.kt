@@ -47,6 +47,7 @@ class ServicePlugin :
     private val eventChannel = Channel<String?>(Channel.UNLIMITED)
     private val gson = Gson()
     @Volatile private var attached = false
+    @Volatile private var runtimeClientAttached = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
@@ -72,7 +73,10 @@ class ServicePlugin :
         // an unconsumed channel. Owner-guarded: if a recreated activity's new engine
         // already registered its own listener, this is a no-op. Runs on the global
         // scope — the plugin's own job was cancelled above.
-        CommonGlobalState.launch { Service.clearEventListener(this@ServicePlugin) }
+        CommonGlobalState.launch {
+            Service.clearEventListener(this@ServicePlugin)
+            detachRuntimeClient()
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -107,19 +111,16 @@ class ServicePlugin :
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
-            "startRuntimeNode" -> handleStartRuntimeNode(call, result)
-            "stopRuntimeNode" -> launch {
-                val nodeId = call.argument<String>("nodeId") ?: ""
-                Service.stopRuntimeNode(nodeId)
+            "applyRuntimeNodePlan" -> launch {
+                val plan = call.argument<String>("plan") ?: "{\"nodes\":[]}"
+                result.successOnMain(Service.applyRuntimeNodePlan(plan))
+            }
+            "getRuntimeNodePlanState" -> launch {
+                result.successOnMain(Service.getRuntimeNodePlanState())
+            }
+            "stopRuntimeNodePlan" -> launch {
+                Service.stopRuntimeNodePlan()
                 result.successOnMain(true)
-            }
-            "getRuntimeNodeRunTime" -> launch {
-                val nodeId = call.argument<String>("nodeId") ?: ""
-                result.successOnMain(Service.getRuntimeNodeRunTime(nodeId))
-            }
-            "getRuntimeNodeLastError" -> launch {
-                val nodeId = call.argument<String>("nodeId") ?: ""
-                result.successOnMain(Service.getRuntimeNodeLastError(nodeId))
             }
             "resolveNativeRuntimeLibrary" -> {
                 val name = call.argument<String>("name") ?: ""
@@ -159,6 +160,16 @@ class ServicePlugin :
         }
         Service.onServiceDisconnected = ::onServiceDisconnected
         launch {
+            if (!runtimeClientAttached) {
+                Service.attachRuntimeNodeClient()
+                    .onSuccess { runtimeClientAttached = true }
+                    .onFailure {
+                        Log.w(
+                            "ServicePlugin",
+                            "attachRuntimeNodeClient failed: ${it.message}",
+                        )
+                    }
+            }
             Service.setEventListener({ value -> dispatchEvent(value) }, owner = this@ServicePlugin)
                 .onSuccess { result.successOnMain("") }
                 .onFailure {
@@ -179,12 +190,22 @@ class ServicePlugin :
     }
 
     private fun handleShutdown(result: MethodChannel.Result) {
-        launch { Service.setEventListener(null) }
-        Service.unbind()
-        result.successOnMain(true)
+        launch {
+            Service.setEventListener(null)
+            detachRuntimeClient()
+            Service.unbind()
+            result.successOnMain(true)
+        }
+    }
+
+    private suspend fun detachRuntimeClient() {
+        if (!runtimeClientAttached) return
+        runtimeClientAttached = false
+        Service.detachRuntimeNodeClient()
     }
 
     private fun onServiceDisconnected(message: String) {
+        runtimeClientAttached = false
         Log.w("ServicePlugin", "remote service disconnected: $message")
         // A RemoteService binder drop means the IPC bridge (the :remote process) was
         // recycled — NOT that the tunnel died. FlVpnService is START_STICKY + foreground
@@ -257,21 +278,6 @@ class ServicePlugin :
             }
         } else {
             doStartService(options, result)
-        }
-    }
-
-    private fun handleStartRuntimeNode(call: MethodCall, result: MethodChannel.Result) {
-        val nodeId = call.argument<String>("nodeId") ?: ""
-        val path = call.argument<String>("path") ?: ""
-        val workingDirectory = call.argument<String>("workingDirectory") ?: ""
-        val arguments = call.argument<List<String>>("arguments") ?: emptyList()
-        if (nodeId.isBlank() || path.isBlank() || workingDirectory.isBlank()) {
-            result.successOnMain(0L)
-            return
-        }
-        launch {
-            val runTime = Service.startRuntimeNode(nodeId, path, workingDirectory, arguments)
-            result.successOnMain(runTime)
         }
     }
 

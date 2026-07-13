@@ -50,17 +50,15 @@ interface IRemoteInterface {
 
     String getTotalTraffic();
 
-    void startRuntimeNode(in String nodeId,
-                         in String executablePath,
-                         in String workingDirectory,
-                         in List<String> arguments,
-                         in IResultInterface result);
+    void applyRuntimeNodePlan(in String plan, in ICallbackInterface callback);
 
-    void stopRuntimeNode(in String nodeId, in IResultInterface result);
+    String getRuntimeNodePlanState();
 
-    long getRuntimeNodeRunTime(in String nodeId);
+    void stopRuntimeNodePlan(in IResultInterface result);
 
-    String getRuntimeNodeLastError(in String nodeId);
+    void attachRuntimeNodeClient();
+
+    void detachRuntimeNodeClient();
 
     void startListener();
 
