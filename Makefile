@@ -9,6 +9,7 @@ ANALYZE_PATHS := lib/product test/product test/tool \
 	tool/check_android_release_artifacts.dart \
 	tool/check_android_release_signing.dart \
 	tool/write_release_metadata.dart \
+	tool/write_app_update_manifest.dart \
 	tool/release_contract.dart \
 	setup.dart lib/common/constant.dart lib/core_version.dart
 

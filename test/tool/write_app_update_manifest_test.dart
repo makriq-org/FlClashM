@@ -32,12 +32,13 @@ void main() {
     final manifest = await buildAppUpdateManifest(options);
     final bytes = utf8.encode(jsonEncode(manifest.toJson()));
     final seed = List<int>.generate(32, (index) => index + 1);
+    final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+    final publicKey = await keyPair.extractPublicKey();
     final signature = await signAppUpdateManifest(
       bytes,
       signingKeyBase64: base64Encode(seed),
+      expectedPublicKeyBase64: base64Encode(publicKey.bytes),
     );
-    final keyPair = await Ed25519().newKeyPairFromSeed(seed);
-    final publicKey = await keyPair.extractPublicKey();
     final verified = await AppUpdateManifestVerifier(
       publicKeyBase64: base64Encode(publicKey.bytes),
     ).verifyAndDecode(
@@ -72,6 +73,24 @@ void main() {
         '--published-at=2026-07-14T10:00:00.000Z',
       ]),
       throwsArgumentError,
+    );
+  });
+
+  test('rejects a signing key that does not match the embedded public key',
+      () async {
+    final signingSeed = List<int>.generate(32, (index) => index);
+    final otherKeyPair = await Ed25519().newKeyPairFromSeed(
+      List<int>.generate(32, (index) => index + 1),
+    );
+    final otherPublicKey = await otherKeyPair.extractPublicKey();
+
+    await expectLater(
+      signAppUpdateManifest(
+        utf8.encode('{}'),
+        signingKeyBase64: base64Encode(signingSeed),
+        expectedPublicKeyBase64: base64Encode(otherPublicKey.bytes),
+      ),
+      throwsFormatException,
     );
   });
 }

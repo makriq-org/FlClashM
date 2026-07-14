@@ -22,6 +22,7 @@ Future<void> main(List<String> args) async {
   final signatureBytes = await signAppUpdateManifest(
     manifestBytes,
     signingKeyBase64: signingKey,
+    expectedPublicKeyBase64: appUpdateManifestPublicKeyBase64,
   );
 
   final output = File(options.outputPath);
@@ -107,6 +108,7 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
 Future<List<int>> signAppUpdateManifest(
   List<int> manifestBytes, {
   required String signingKeyBase64,
+  required String expectedPublicKeyBase64,
 }) async {
   final seed = base64Decode(signingKeyBase64.trim());
   if (seed.length != 32) {
@@ -114,11 +116,30 @@ Future<List<int>> signAppUpdateManifest(
   }
   final algorithm = Ed25519();
   final keyPair = await algorithm.newKeyPairFromSeed(seed);
+  final expectedPublicKey = base64Decode(expectedPublicKeyBase64);
+  final actualPublicKey = await keyPair.extractPublicKey();
+  if (!_bytesEqual(actualPublicKey.bytes, expectedPublicKey)) {
+    throw const FormatException(
+      'App update signing key does not match the embedded public key.',
+    );
+  }
   final signature = await algorithm.sign(
     manifestBytes,
     keyPair: keyPair,
   );
   return signature.bytes;
+}
+
+bool _bytesEqual(List<int> left, List<int> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class ManifestOptions {
@@ -165,10 +186,10 @@ class ManifestOptions {
       _ => throw ArgumentError('Expected --channel stable|pre.'),
     };
     final tagName = requiredValue('tag');
-    if (!RegExp(r'^v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$').hasMatch(tagName)) {
+    if (!appUpdateReleaseTagPattern.hasMatch(tagName)) {
       throw ArgumentError('Invalid release tag `$tagName`.');
     }
-    if ((channel == AppUpdateChannel.stable) != !tagName.contains('-')) {
+    if (!appUpdateReleaseTagMatchesChannel(tagName, channel)) {
       throw ArgumentError('Release tag does not match channel `$channelName`.');
     }
     final publishedAt = DateTime.tryParse(requiredValue('published-at'));

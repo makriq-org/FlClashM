@@ -13,6 +13,8 @@ const sourceForgeProjectUrl =
     'https://sourceforge.net/projects/$sourceForgeProjectName';
 const sourceForgeUpdateRootUrl =
     'https://$sourceForgeProjectName.sourceforge.io/update';
+final appUpdateReleaseTagPattern =
+    RegExp(r'^v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$');
 
 enum AppUpdateChannel {
   stable('stable'),
@@ -60,8 +62,12 @@ class AppUpdateManifest {
     final publishedAtRaw = _requiredString(releaseJson, 'publishedAt');
     final htmlUrl = _requiredHttpsUrl(releaseJson, 'htmlUrl');
     final body = releaseJson['body'];
-    if (!tagName.startsWith('v') || tagName.substring(1) != versionName) {
+    if (!appUpdateReleaseTagPattern.hasMatch(tagName) ||
+        tagName.substring(1) != versionName) {
       throw const FormatException('Release tag and version do not match.');
+    }
+    if (!appUpdateReleaseTagMatchesChannel(tagName, expectedChannel)) {
+      throw const FormatException('Release tag does not match update channel.');
     }
     if (versionCode is! int || versionCode <= 0) {
       throw const FormatException('Invalid app update version code.');
@@ -265,23 +271,54 @@ class SharedPreferencesAppUpdateManifestRollbackGuard
   Future<void> validateAndRecord(AppUpdateManifest manifest) async {
     final preferences = await SharedPreferences.getInstance();
     final channelKey = '$_keyPrefix.${manifest.channel.wireName}';
-    final versionKey = '$channelKey.versionCode';
-    final publicationKey = '$channelKey.publishedAtMillis';
-    final highestVersionCode = preferences.getInt(versionKey) ?? 0;
-    final highestPublishedAt = preferences.getInt(publicationKey) ?? 0;
+    final highest = _readHighestManifestState(
+      preferences.getString(channelKey),
+    );
     final publishedAt = manifest.publishedAt.millisecondsSinceEpoch;
 
-    if (manifest.versionCode < highestVersionCode ||
-        (manifest.versionCode == highestVersionCode &&
-            publishedAt < highestPublishedAt)) {
+    if (manifest.versionCode < highest.versionCode ||
+        (manifest.versionCode == highest.versionCode &&
+            publishedAt < highest.publishedAtMillis)) {
       throw const FormatException('App update manifest rollback rejected.');
     }
-    if (manifest.versionCode > highestVersionCode ||
-        publishedAt > highestPublishedAt) {
-      await preferences.setInt(versionKey, manifest.versionCode);
-      await preferences.setInt(publicationKey, publishedAt);
+    if (manifest.versionCode > highest.versionCode ||
+        publishedAt > highest.publishedAtMillis) {
+      final stored = await preferences.setString(
+        channelKey,
+        jsonEncode({
+          'versionCode': manifest.versionCode,
+          'publishedAtMillis': publishedAt,
+        }),
+      );
+      if (!stored) {
+        throw StateError('Unable to persist app update rollback state.');
+      }
     }
   }
+}
+
+({int versionCode, int publishedAtMillis}) _readHighestManifestState(
+  String? raw,
+) {
+  if (raw == null) {
+    return (versionCode: 0, publishedAtMillis: 0);
+  }
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException('Invalid app update rollback state.');
+  }
+  final versionCode = decoded['versionCode'];
+  final publishedAtMillis = decoded['publishedAtMillis'];
+  if (versionCode is! int ||
+      versionCode < 0 ||
+      publishedAtMillis is! int ||
+      publishedAtMillis < 0) {
+    throw const FormatException('Invalid app update rollback state.');
+  }
+  return (
+    versionCode: versionCode,
+    publishedAtMillis: publishedAtMillis,
+  );
 }
 
 String appUpdateManifestUrl(AppUpdateChannel channel) =>
@@ -289,6 +326,12 @@ String appUpdateManifestUrl(AppUpdateChannel channel) =>
 
 String appUpdateManifestSignatureUrl(AppUpdateChannel channel) =>
     '${appUpdateManifestUrl(channel)}.sig';
+
+bool appUpdateReleaseTagMatchesChannel(
+  String tagName,
+  AppUpdateChannel channel,
+) =>
+    (channel == AppUpdateChannel.prerelease) == tagName.contains('-');
 
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];

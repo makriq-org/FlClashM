@@ -119,6 +119,23 @@ void main() {
     );
   });
 
+  test('rejects a prerelease tag in the stable channel', () {
+    final decoded = jsonDecode(utf8.decode(manifestBytes));
+    final document = Map<String, dynamic>.from(decoded as Map);
+    final release = Map<String, dynamic>.from(document['release'] as Map)
+      ..['tagName'] = 'v1.2.3-pre1'
+      ..['versionName'] = '1.2.3-pre1';
+    document['release'] = release;
+
+    expect(
+      () => AppUpdateManifest.fromJson(
+        document,
+        expectedChannel: AppUpdateChannel.stable,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('rejects replay of an older signed manifest state', () async {
     const guard = SharedPreferencesAppUpdateManifestRollbackGuard();
     const asset = AppUpdateManifestAsset(
@@ -153,6 +170,34 @@ void main() {
 
     await expectLater(
       guard.validateAndRecord(replayed),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects an older publication with the same version code', () async {
+    const guard = SharedPreferencesAppUpdateManifestRollbackGuard();
+    const asset = AppUpdateManifestAsset(
+      name: 'FlClashM-android-arm64-v8a.apk',
+      size: 123,
+      sha256:
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      urls: ['https://example.com/app.apk'],
+    );
+    AppUpdateManifest manifest(DateTime publishedAt) => AppUpdateManifest(
+          channel: AppUpdateChannel.prerelease,
+          tagName: 'v1.2.3-pre1',
+          versionName: '1.2.3-pre1',
+          versionCode: 2026071401,
+          publishedAt: publishedAt,
+          body: '',
+          htmlUrl: 'https://example.com/v1.2.3-pre1',
+          assets: const [asset],
+        );
+
+    await guard.validateAndRecord(manifest(DateTime.utc(2026, 7, 14, 11)));
+
+    await expectLater(
+      guard.validateAndRecord(manifest(DateTime.utc(2026, 7, 14, 10))),
       throwsFormatException,
     );
   });
