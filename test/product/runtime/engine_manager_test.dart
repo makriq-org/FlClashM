@@ -471,10 +471,8 @@ void main() {
       );
 
       expect(initialized, isTrue);
-      expect(naiveproxyAdapter.applyPendingUpdateCalls, 1);
       expect(naiveproxyAdapter.initializeCalls, 1);
       expect(naiveproxyAdapter.setupRuntimePlanCalls, 1);
-      expect(mihomoAdapter.applyPendingUpdateCalls, 0);
       expect(mihomoAdapter.initializeCalls, 0);
       expect(manager.activeEngineId, RuntimeId.naiveproxy);
     });
@@ -491,7 +489,6 @@ void main() {
       );
 
       expect(initialized, isTrue);
-      expect(mihomoAdapter.applyPendingUpdateCalls, 1);
       expect(mihomoAdapter.initializeCalls, 1);
       expect(mihomoAdapter.setupRuntimePlanCalls, 0);
       expect(manager.activeEngineId, RuntimeId.mihomo);
@@ -563,7 +560,6 @@ class _FakeEngineAdapter implements EngineAdapter {
   bool startResult = true;
   Error? readStartTimeError;
   Error? stopError;
-  int applyPendingUpdateCalls = 0;
   int initializeCalls = 0;
   int setupRuntimePlanCalls = 0;
   int startCalls = 0;
@@ -577,11 +573,6 @@ class _FakeEngineAdapter implements EngineAdapter {
   void Function(int callIndex, RuntimePlan runtimePlan)? onPersistColdStartCall;
   Completer<void>? persistColdStartCompleter;
   List<Completer<void>> persistColdStartCompleters = const [];
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    applyPendingUpdateCalls++;
-  }
 
   @override
   Future<void> prepareForRestart() async {}

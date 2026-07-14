@@ -537,10 +537,6 @@ class AppController {
       _ref.read(hotKeyActionsProvider.notifier).value = List.from(hotKeyActions)
         ..[index] = hotKeyAction;
     }
-
-    _ref.read(hotKeyActionsProvider.notifier).value = index == -1
-        ? (List.from(hotKeyActions)..add(hotKeyAction))
-        : (List.from(hotKeyActions)..[index] = hotKeyAction);
   }
 
   List<Group> getCurrentGroups() =>
@@ -735,22 +731,22 @@ class AppController {
     return true;
   }
 
-  void _preloadClashConfig() {
+  Future<bool> _preloadClashConfig() async {
     if (_ref.read(currentProfileProvider) == null) {
-      return;
+      return true;
     }
-    unawaited(
-      _setupClashConfig(refreshProfile: false).catchError((Object e) async {
-        commonPrint.log("preloadClashConfig failed: $e");
-        if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
-          await globalState.showMessage(
-            title: appLocalizations.tip,
-            message: TextSpan(text: e.toString()),
-          );
-        }
-        return false;
-      }),
-    );
+    try {
+      return await _setupClashConfig(refreshProfile: false);
+    } catch (e) {
+      commonPrint.log("preloadClashConfig failed: $e");
+      if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
+        await globalState.showMessage(
+          title: appLocalizations.tip,
+          message: TextSpan(text: e.toString()),
+        );
+      }
+      return false;
+    }
   }
 
   Future _applyProfile({bool silence = false}) async {
@@ -872,74 +868,6 @@ class AppController {
       } catch (e) {
         commonPrint.log(e.toString());
       }
-    }
-  }
-
-  /// Updates subscription info for the current profile on app startup.
-  /// This ensures the subscription info is always up-to-date when the app launches.
-  Future<void> _updateCurrentProfileSubscription() async {
-    try {
-      final currentProfileId = _ref.read(currentProfileIdProvider);
-      commonPrint.log(
-        "_updateCurrentProfileSubscription: currentProfileId = $currentProfileId",
-      );
-      if (currentProfileId == null) {
-        commonPrint.log(
-          "_updateCurrentProfileSubscription: No current profile selected, skipping",
-        );
-        return;
-      }
-
-      final profiles = _ref.read(profilesProvider);
-      commonPrint.log(
-        "_updateCurrentProfileSubscription: profiles count = ${profiles.length}",
-      );
-
-      final currentProfile =
-          profiles.where((p) => p.id == currentProfileId).firstOrNull;
-      if (currentProfile == null) {
-        commonPrint.log(
-          "_updateCurrentProfileSubscription: Profile not found in list, skipping",
-        );
-        return;
-      }
-
-      if (currentProfile.type == ProfileType.file) {
-        commonPrint.log(
-          "_updateCurrentProfileSubscription: Profile is file type, skipping",
-        );
-        return;
-      }
-
-      commonPrint.log(
-        "Updating subscription info for current profile '${currentProfile.label}' on startup...",
-      );
-      if (currentProfile.autoUpdate) {
-        // autoUpdateProfiles() (fired immediately on startup) already refreshes
-        // any auto-update profile whose update window has elapsed (or that never
-        // updated). Skip those here so we don't fetch+apply the same current
-        // profile a second time 1s later; only handle the not-yet-due case it
-        // leaves untouched.
-        final isDue = currentProfile.lastUpdateDate
-                ?.add(currentProfile.autoUpdateDuration)
-                .isBeforeNow ??
-            true;
-        if (isDue) {
-          commonPrint.log(
-            "_updateCurrentProfileSubscription: already covered by autoUpdateProfiles, skipping",
-          );
-          return;
-        }
-        await updateProfile(currentProfile);
-        commonPrint.log("Subscription info updated successfully");
-      } else {
-        commonPrint.log(
-          "Auto-update disabled for current profile, skipping startup update",
-        );
-      }
-    } catch (e, stackTrace) {
-      commonPrint.log("Failed to update subscription info on startup: $e");
-      commonPrint.log("Stack trace: $stackTrace");
     }
   }
 
@@ -1257,19 +1185,13 @@ class AppController {
     } else {
       clashCore.stopLog();
     }
-    _ref.read(initProvider.notifier).value = true;
     await _initStatus();
     if (!_ref.read(runTimeProvider.notifier).isStart) {
-      _preloadClashConfig();
+      await _preloadClashConfig();
     }
+    _ref.read(initProvider.notifier).value = true;
     autoLaunch?.updateStatus(_ref.read(appSettingProvider).autoLaunch);
-    // Delay subscription update to ensure network is ready after app initialization
-    Future.delayed(
-      const Duration(seconds: 1),
-      _updateCurrentProfileSubscription,
-    );
-    autoUpdateProfiles();
-    autoCheckUpdate();
+    unawaited(_runStartupMaintenance());
     if (!Platform.isMacOS) {
       if (!_ref.read(appSettingProvider).silentLaunch) {
         window?.show();
@@ -1279,6 +1201,11 @@ class AppController {
     }
     await _handlePreference();
     await _handlerDisclaimer();
+  }
+
+  Future<void> _runStartupMaintenance() async {
+    await autoUpdateProfiles();
+    await autoCheckUpdate();
   }
 
   Future<void> _initStatus() async {

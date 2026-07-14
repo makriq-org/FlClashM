@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
@@ -11,21 +11,13 @@ import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
 import 'byedpi_release.dart';
-import 'connectivity_check.dart';
 import 'local_node_controller.dart';
-
-typedef ByedpiSiteCheckCallback = Future<bool> Function({
-  required String host,
-  required int port,
-  required Uri url,
-  required Duration timeout,
-});
-
-typedef ByedpiProbePortAllocator = Future<int> Function();
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
 const _byedpiAutoMaxProbeCount = 4;
 const _byedpiAutoProbeTimeout = Duration(seconds: 1);
+
+typedef ByedpiProbePortAllocator = Future<int> Function();
 
 @immutable
 class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
@@ -34,12 +26,6 @@ class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
     required super.runtimeRootPath,
     required super.nodesDirectoryPath,
     required super.executablePath,
-    required super.pendingPath,
-    required super.rollbackPath,
-    required super.versionPath,
-    required super.pendingVersionPath,
-    required super.bundledAssetPath,
-    super.managedBinaryUpdateEnabled = true,
   });
 }
 
@@ -57,6 +43,8 @@ class ByedpiNodeLayout extends LocalNodeLayout {
 
 abstract interface class ByedpiBinaryBridge
     extends LocalNodeBinaryBridge<ByedpiSharedInstallLayout> {
+  String get bundledReleaseTag;
+
   Future<String> loadBundledStrategyList(String assetPath);
 }
 
@@ -105,38 +93,16 @@ class DefaultByedpiBinaryBridge implements ByedpiBinaryBridge {
         'before building.',
       );
     }
-
     return ByedpiSharedInstallLayout(
       abi: asset.abi,
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
       executablePath: executablePath,
-      pendingPath: path.join(
-        runtimeRootPath,
-        '$byedpiExecutableFileName.pending',
-      ),
-      rollbackPath: path.join(
-        runtimeRootPath,
-        '$byedpiExecutableFileName.rollback',
-      ),
-      versionPath: path.join(runtimeRootPath, byedpiBundledVersionFileName),
-      pendingVersionPath: path.join(
-        runtimeRootPath,
-        byedpiPendingVersionFileName,
-      ),
-      bundledAssetPath: asset.bundledAssetPath,
-      managedBinaryUpdateEnabled: false,
     );
   }
 
   @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async {
-    final data = await rootBundle.load(assetPath);
-    return data.buffer.asUint8List();
-  }
-
-  @override
-  Future<String> loadBundledStrategyList(String assetPath) async =>
+  Future<String> loadBundledStrategyList(String assetPath) =>
       rootBundle.loadString(assetPath);
 }
 
@@ -224,9 +190,7 @@ class _ByedpiStrategyCache {
 
   static _ByedpiStrategyCache? fromJson(String content) {
     final value = json.decode(content);
-    if (value is! Map) {
-      return null;
-    }
+    if (value is! Map) return null;
     final strategy = value['strategy'];
     final fingerprint = value['fingerprint'];
     final checkedAt = DateTime.tryParse('${value['checkedAt']}');
@@ -247,9 +211,6 @@ class ByedpiNodeController
   ByedpiNodeController({
     ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = waitForLocalNodeListener,
-    super.connectivityChecker,
-    this.siteCheck = _checkUrlViaSocks,
     this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
   })  : now = now ?? DateTime.now,
@@ -257,12 +218,10 @@ class ByedpiNodeController
           typeLabel: 'byedpi',
           configArtifactName: 'config.json',
           binary: binary,
-          startMode: LocalNodeStartMode.parallel,
         );
 
-  final ByedpiSiteCheckCallback siteCheck;
-  final ByedpiProbePortAllocator allocateProbePort;
   final DateTime Function() now;
+  final ByedpiProbePortAllocator allocateProbePort;
 
   @override
   ByedpiBinaryBridge get binary => super.binary as ByedpiBinaryBridge;
@@ -295,69 +254,34 @@ class ByedpiNodeController
   }
 
   @override
-  Future<bool> startPlan(
-    ByedpiSharedInstallLayout sharedLayout,
+  Future<LocalNodeLaunchExtras> buildLaunchExtras(
     BuiltInProxyNodePlan plan,
+    ByedpiSharedInstallLayout sharedLayout,
     ByedpiNodeLayout layout,
   ) async {
     final config = await _readNodeConfig(plan, layout);
+    var strategy = config.args;
     if (config.isAuto) {
-      return _startAutoPlan(sharedLayout, plan, layout, config);
-    }
-    final arguments = _buildArguments(config.args, config);
-    final started = await runtime.startNode(
-      nodeId: plan.nodeId,
-      executablePath: sharedLayout.executablePath,
-      workingDirectory: layout.workingDirectoryPath,
-      arguments: arguments,
-    );
-    if (!started) {
-      return false;
-    }
-    return true;
-  }
-
-  @override
-  Future<LocalNodeColdStartExtras> buildColdStartExtras(
-    BuiltInProxyNodePlan plan,
-    ByedpiSharedInstallLayout sharedLayout,
-    ByedpiNodeLayout layout,
-  ) async {
-    final config = await _readNodeConfig(plan, layout);
-    if (!config.isAuto) {
-      return LocalNodeColdStartExtras(
-        extraFields: {
-          'arguments': _buildArguments(config.args, config),
-        },
+      strategy = await _resolveAutoStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
       );
     }
-    final cached = await _readCache(layout);
-    if (cached == null) {
-      return const LocalNodeColdStartExtras.skip();
-    }
-    return LocalNodeColdStartExtras(
-      extraFields: {
-        'arguments': _buildArguments(cached.strategy, config),
+    return LocalNodeLaunchExtras(
+      fields: {
+        'arguments': _buildArguments(strategy, config),
       },
     );
   }
 
-  @override
-  Future<String> rollbackStageFailure({
-    required List<LocalNodeMutation<ByedpiNodeLayout>> mutations,
-    required String failureMessage,
-  }) =>
-      rollbackStageFailureWithRestart(
-        mutations: mutations,
-        failureMessage: failureMessage,
-      );
-
-  Future<bool> _startAutoPlan(
-    ByedpiSharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    ByedpiNodeLayout layout,
-    _ByedpiConfig config,
-  ) async {
+  Future<String> _resolveAutoStrategy({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+  }) async {
     final strategies = await _resolveStrategies(config);
     final fingerprint = _fingerprint(
       strategies: strategies,
@@ -366,28 +290,14 @@ class ByedpiNodeController
     );
     final cached = await _readCache(layout);
     if (_canUseCache(cached, fingerprint, config)) {
-      if (!_needsRecheck(cached!, config)) {
-        return _startWithStrategy(
-          sharedLayout,
-          plan,
-          layout,
-          config,
-          cached.strategy,
-          waitForReady: false,
-        );
-      }
-      final started = await _startWithStrategy(
-        sharedLayout,
-        plan,
-        layout,
-        config,
-        cached.strategy,
-      );
-      if (!started) {
-        return false;
-      }
-      final passed = await _checkStrategy(cached.strategy, config);
-      if (passed) {
+      if (!_needsRecheck(cached!, config)) return cached.strategy;
+      if (await _probeStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategy: cached.strategy,
+      )) {
         await _writeCache(
           layout,
           _ByedpiStrategyCache(
@@ -397,9 +307,8 @@ class ByedpiNodeController
             failures: 0,
           ),
         );
-        return true;
+        return cached.strategy;
       }
-      await runtime.stopNode(nodeId: plan.nodeId);
       final failures = cached.failures + 1;
       if (failures < config.failureThreshold) {
         await _writeCache(
@@ -411,200 +320,101 @@ class ByedpiNodeController
             failures: failures,
           ),
         );
-        return _startWithStrategy(
-          sharedLayout,
-          plan,
-          layout,
-          config,
-          cached.strategy,
-          waitForReady: false,
-        );
+        return cached.strategy;
       }
     }
 
-    final selected = await _selectStrategy(
-      sharedLayout,
-      plan,
-      layout,
-      config,
-      strategies,
-    );
-    if (selected != null) {
-      await _writeCache(
-        layout,
-        _ByedpiStrategyCache(
-          fingerprint: fingerprint,
-          strategy: selected,
-          checkedAt: now(),
-          failures: 0,
-        ),
-      );
-      return _startWithStrategy(
-        sharedLayout,
-        plan,
-        layout,
-        config,
-        selected,
-        waitForReady: false,
-      );
+    for (final strategy in strategies.take(_byedpiAutoMaxProbeCount)) {
+      if (await _probeStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategy: strategy,
+      )) {
+        await _writeCache(
+          layout,
+          _ByedpiStrategyCache(
+            fingerprint: fingerprint,
+            strategy: strategy,
+            checkedAt: now(),
+            failures: 0,
+          ),
+        );
+        return strategy;
+      }
     }
 
     if (cached != null && cached.fingerprint == fingerprint) {
       commonPrint.log(
         'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
       );
-      return _startWithStrategy(
-        sharedLayout,
-        plan,
-        layout,
-        config,
-        cached.strategy,
-        waitForReady: false,
-      );
+      return cached.strategy;
     }
-
     commonPrint.log(
       'byedpi node `${plan.name}` did not select a strategy quickly; '
       'using bundled fallback.',
     );
-    await _writeCache(
-      layout,
-      _ByedpiStrategyCache(
-        fingerprint: fingerprint,
-        strategy: _byedpiAutoFallbackStrategy,
-        checkedAt: now(),
-        failures: 0,
-      ),
+    final fallback = _ByedpiStrategyCache(
+      fingerprint: fingerprint,
+      strategy: _byedpiAutoFallbackStrategy,
+      checkedAt: now(),
+      failures: 0,
     );
-    return _startWithStrategy(
-      sharedLayout,
-      plan,
-      layout,
-      config,
-      _byedpiAutoFallbackStrategy,
-      waitForReady: false,
-    );
+    await _writeCache(layout, fallback);
+    return fallback.strategy;
   }
 
-  Future<String?> _selectStrategy(
-    ByedpiSharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    ByedpiNodeLayout layout,
-    _ByedpiConfig config,
-    List<String> strategies,
-  ) async {
-    for (final strategy in strategies.take(_byedpiAutoMaxProbeCount)) {
-      final probePort = await allocateProbePort();
-      final probeConfig = config.copyWith(
-        listenPort: probePort,
-        timeout: _shorterDuration(config.timeout, _byedpiAutoProbeTimeout),
-      );
-      final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
-      final started = await _startWithStrategy(
-        sharedLayout,
-        plan,
-        layout,
-        probeConfig,
-        strategy,
-        nodeId: probeNodeId,
-      );
-      if (!started) {
-        continue;
-      }
-      try {
-        final passed = await _checkStrategy(strategy, probeConfig);
-        if (passed) {
-          return strategy;
-        }
-      } finally {
-        await runtime.stopNode(nodeId: probeNodeId);
-      }
-    }
-    return null;
-  }
-
-  Future<bool> _startWithStrategy(
-    ByedpiSharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    ByedpiNodeLayout layout,
-    _ByedpiConfig config,
-    String strategy, {
-    String? nodeId,
-    bool waitForReady = true,
+  Future<bool> _probeStrategy({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+    required String strategy,
   }) async {
-    final started = await runtime.startNode(
-      nodeId: nodeId ?? plan.nodeId,
-      executablePath: sharedLayout.executablePath,
-      workingDirectory: layout.workingDirectoryPath,
-      arguments: _buildArguments(strategy, config),
+    final RuntimeNodeProbePlatformBridge probeBridge;
+    if (runtime case final RuntimeNodeProbePlatformBridge bridge) {
+      probeBridge = bridge;
+    } else {
+      return false;
+    }
+    final probePort = await allocateProbePort();
+    final probeConfig = config.copyWith(
+      listenPort: probePort,
+      timeout: _shorterDuration(config.timeout, _byedpiAutoProbeTimeout),
     );
-    if (!started) {
-      return false;
-    }
-    if (waitForReady) {
-      await waitForListener(
-        config.listenHost,
-        config.listenPort,
-        config.timeout,
+    final timeoutSeconds = probeConfig.timeout.inSeconds.clamp(1, 60);
+    final startupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
+    final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
+    try {
+      return await probeBridge.probeNode(<String, dynamic>{
+        'nodeId': probeNodeId,
+        'type': plan.type.label,
+        'name': '${plan.name} strategy probe',
+        'host': probeConfig.listenHost,
+        'port': probeConfig.listenPort,
+        'executablePath': sharedLayout.executablePath,
+        'workingDirectory': layout.workingDirectoryPath,
+        'arguments': _buildArguments(strategy, probeConfig),
+        'revision': sha256.convert(utf8.encode(strategy)).toString(),
+        'connectivityCheck': <String, dynamic>{
+          'urls': probeConfig.testUrls.map((url) => '$url').toList(),
+          'required': true,
+          'timeout': timeoutSeconds,
+          'startup-timeout': startupTimeoutSeconds,
+          'retry-interval': 1,
+          'requests': probeConfig.requests,
+          'concurrency': probeConfig.concurrency,
+          'min-success-ratio': probeConfig.minSuccessRatio,
+        },
+      });
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${plan.name}` strategy probe failed: $error',
       );
-    }
-    return true;
-  }
-
-  Future<bool> _checkStrategy(String strategy, _ByedpiConfig config) async {
-    final checks = <Uri>[
-      for (final url in config.testUrls)
-        for (var i = 0; i < config.requests; i++) url,
-    ];
-    if (checks.isEmpty) {
       return false;
     }
-
-    var success = 0;
-    var nextCheck = 0;
-    final requestedConcurrency =
-        config.concurrency < 1 ? 1 : config.concurrency;
-    final workerCount = requestedConcurrency < checks.length
-        ? requestedConcurrency
-        : checks.length;
-
-    Future<void> worker() async {
-      while (true) {
-        final index = nextCheck++;
-        if (index >= checks.length) {
-          return;
-        }
-        final url = checks[index];
-        if (await siteCheck(
-          host: config.listenHost,
-          port: config.listenPort,
-          url: url,
-          timeout: config.timeout,
-        )) {
-          success++;
-        }
-      }
-    }
-
-    await Future.wait([
-      for (var i = 0; i < workerCount; i++) worker(),
-    ]);
-    return success / checks.length >= config.minSuccessRatio;
   }
-
-  bool _canUseCache(
-    _ByedpiStrategyCache? cached,
-    String fingerprint,
-    _ByedpiConfig config,
-  ) {
-    if (cached == null || cached.fingerprint != fingerprint) {
-      return false;
-    }
-    return now().difference(cached.checkedAt) <= config.cacheTtl;
-  }
-
-  bool _needsRecheck(_ByedpiStrategyCache cached, _ByedpiConfig config) =>
-      now().difference(cached.checkedAt) >= config.recheckAfter;
 
   List<String> _buildArguments(String strategy, _ByedpiConfig config) => [
         '--ip',
@@ -615,12 +425,8 @@ class ByedpiNodeController
       ];
 
   Future<List<String>> _resolveStrategies(_ByedpiConfig config) async {
-    if (config.strategies.isNotEmpty) {
-      return config.strategies;
-    }
-    if (config.strategyList != 'byebyeedpi') {
-      return const [];
-    }
+    if (config.strategies.isNotEmpty) return config.strategies;
+    if (config.strategyList != 'byebyeedpi') return const [];
     final content = await binary.loadBundledStrategyList(
       byedpiStrategyListAssetPath,
     );
@@ -630,9 +436,6 @@ class ByedpiNodeController
         .where((line) => line.isNotEmpty && !line.startsWith('#'))
         .toList(growable: false);
   }
-
-  Duration _shorterDuration(Duration left, Duration right) =>
-      left <= right ? left : right;
 
   Future<_ByedpiConfig> _readNodeConfig(
     BuiltInProxyNodePlan plan,
@@ -668,9 +471,7 @@ class ByedpiNodeController
       requests: (test['requests'] as num?)?.toInt() ?? 1,
       concurrency: (test['concurrency'] as num?)?.toInt() ?? 4,
       minSuccessRatio: (test['min-success-ratio'] as num?)?.toDouble() ?? 1.0,
-      cacheTtl: Duration(
-        seconds: (cache['ttl'] as num?)?.toInt() ?? 604800,
-      ),
+      cacheTtl: Duration(seconds: (cache['ttl'] as num?)?.toInt() ?? 604800),
       recheckAfter: Duration(
         seconds: (cache['recheck-after'] as num?)?.toInt() ?? 86400,
       ),
@@ -680,21 +481,33 @@ class ByedpiNodeController
 
   Future<_ByedpiStrategyCache?> _readCache(ByedpiNodeLayout layout) async {
     final file = File(layout.cachePath);
-    if (!file.existsSync()) {
-      return null;
-    }
+    if (!file.existsSync()) return null;
     return _ByedpiStrategyCache.fromJson(await file.readAsString());
   }
 
   Future<void> _writeCache(
     ByedpiNodeLayout layout,
     _ByedpiStrategyCache cache,
-  ) async {
-    await File(layout.cachePath).writeAsString(
-      json.encode(cache.toJson()),
-      flush: true,
-    );
-  }
+  ) =>
+      File(layout.cachePath).writeAsString(
+        json.encode(cache.toJson()),
+        flush: true,
+      );
+
+  bool _canUseCache(
+    _ByedpiStrategyCache? cache,
+    String fingerprint,
+    _ByedpiConfig config,
+  ) =>
+      cache != null &&
+      cache.fingerprint == fingerprint &&
+      now().difference(cache.checkedAt) <= config.cacheTtl;
+
+  bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
+      now().difference(cache.checkedAt) >= config.recheckAfter;
+
+  Duration _shorterDuration(Duration left, Duration right) =>
+      left <= right ? left : right;
 
   String _fingerprint({
     required List<String> strategies,
@@ -719,9 +532,7 @@ class ByedpiNodeController
           .toString();
 
   Map<String, dynamic> _asMap(Object? value) {
-    if (value is! Map) {
-      return <String, dynamic>{};
-    }
+    if (value is! Map) return <String, dynamic>{};
     return value.map((key, mapValue) => MapEntry('$key', mapValue));
   }
 
@@ -735,36 +546,26 @@ class ByedpiNodeController
       if (escape) {
         buffer.write(char);
         escape = false;
-        continue;
-      }
-      if (char == r'\') {
+      } else if (char == r'\') {
         escape = true;
-        continue;
-      }
-      if (quote.isNotEmpty) {
+      } else if (quote.isNotEmpty) {
         if (char == quote) {
           quote = '';
         } else {
           buffer.write(char);
         }
-        continue;
-      }
-      if (char == '"' || char == "'") {
+      } else if (char == '"' || char == "'") {
         quote = char;
-        continue;
-      }
-      if (char.trim().isEmpty) {
+      } else if (char.trim().isEmpty) {
         if (buffer.isNotEmpty) {
           args.add(buffer.toString());
           buffer.clear();
         }
-        continue;
+      } else {
+        buffer.write(char);
       }
-      buffer.write(char);
     }
-    if (buffer.isNotEmpty) {
-      args.add(buffer.toString());
-    }
+    if (buffer.isNotEmpty) args.add(buffer.toString());
     return args;
   }
 
@@ -773,268 +574,5 @@ class ByedpiNodeController
     final port = socket.port;
     await socket.close();
     return port;
-  }
-
-  static Future<bool> _checkUrlViaSocks({
-    required String host,
-    required int port,
-    required Uri url,
-    required Duration timeout,
-  }) async {
-    Socket? socket;
-    _SocketByteReader? reader;
-    try {
-      if (!isSafeConnectivityUri(url)) return false;
-      final addresses = await InternetAddress.lookup(url.host).timeout(timeout);
-      if (addresses.isEmpty ||
-          addresses.any((item) => !isPublicInternetAddress(item))) {
-        return false;
-      }
-      socket = await Socket.connect(host, port, timeout: timeout);
-      final targetHost = url.host;
-      final targetPort =
-          url.hasPort ? url.port : (url.scheme == 'http' ? 80 : 443);
-      reader = _SocketByteReader(socket);
-      await _performSocksGreeting(
-        socket: socket,
-        reader: reader,
-        timeout: timeout,
-      );
-      await _performSocksConnect(
-        socket: socket,
-        reader: reader,
-        targetHost: addresses.first.address,
-        targetPort: targetPort,
-        timeout: timeout,
-      );
-      if (_usesTls(url, targetPort)) {
-        socket = await SecureSocket.secure(
-          socket,
-          host: targetHost,
-        ).timeout(timeout);
-        reader = _SocketByteReader(socket);
-      }
-      socket.add(
-        utf8.encode(
-          _buildHttpProbeRequest(
-            url: url,
-            targetHost: targetHost,
-            targetPort: targetPort,
-          ),
-        ),
-      );
-      await socket.flush().timeout(timeout);
-      final readPhaseStopwatch = Stopwatch()..start();
-      final statusLine = await reader.readLine(
-        timeout: timeout,
-        maxLength: 4096,
-        elapsed: () => readPhaseStopwatch.elapsed,
-      );
-      return _isValidHttpStatusLine(statusLine);
-    } on Object {
-      return false;
-    } finally {
-      socket?.destroy();
-    }
-  }
-
-  static Future<void> _performSocksGreeting({
-    required Socket socket,
-    required _SocketByteReader reader,
-    required Duration timeout,
-  }) async {
-    socket.add(const [0x05, 0x01, 0x00]);
-    await socket.flush().timeout(timeout);
-    final response = await reader.readBytes(2, timeout);
-    if (response[0] != 0x05 || response[1] != 0x00) {
-      throw const SocketException('SOCKS5 greeting failed');
-    }
-  }
-
-  static Future<void> _performSocksConnect({
-    required Socket socket,
-    required _SocketByteReader reader,
-    required String targetHost,
-    required int targetPort,
-    required Duration timeout,
-  }) async {
-    socket.add(_buildSocksConnectRequest(targetHost, targetPort));
-    await socket.flush().timeout(timeout);
-    final header = await reader.readBytes(4, timeout);
-    if (header[0] != 0x05 || header[1] != 0x00 || header[2] != 0x00) {
-      throw const SocketException('SOCKS5 connect failed');
-    }
-    await _discardSocksAddress(reader, header[3], timeout);
-    await reader.readBytes(2, timeout);
-  }
-
-  static List<int> _buildSocksConnectRequest(String host, int port) {
-    final address = InternetAddress.tryParse(host);
-    if (address?.type == InternetAddressType.IPv4) {
-      return [
-        0x05,
-        0x01,
-        0x00,
-        0x01,
-        ...address!.rawAddress,
-        (port >> 8) & 0xff,
-        port & 0xff,
-      ];
-    }
-    if (address?.type == InternetAddressType.IPv6) {
-      return [
-        0x05,
-        0x01,
-        0x00,
-        0x04,
-        ...address!.rawAddress,
-        (port >> 8) & 0xff,
-        port & 0xff,
-      ];
-    }
-    final hostBytes = utf8.encode(host);
-    if (hostBytes.length > 255) {
-      throw const SocketException('SOCKS5 host name is too long');
-    }
-    return [
-      0x05,
-      0x01,
-      0x00,
-      0x03,
-      hostBytes.length,
-      ...hostBytes,
-      (port >> 8) & 0xff,
-      port & 0xff,
-    ];
-  }
-
-  static Future<void> _discardSocksAddress(
-    _SocketByteReader reader,
-    int addressType,
-    Duration timeout,
-  ) async {
-    switch (addressType) {
-      case 0x01:
-        await reader.readBytes(4, timeout);
-        return;
-      case 0x03:
-        final length = (await reader.readBytes(1, timeout)).single;
-        await reader.readBytes(length, timeout);
-        return;
-      case 0x04:
-        await reader.readBytes(16, timeout);
-        return;
-      default:
-        throw const SocketException('SOCKS5 returned unknown address type');
-    }
-  }
-
-  static bool _usesTls(Uri url, int targetPort) =>
-      url.scheme == 'https' || targetPort == 443;
-
-  static String _buildHttpProbeRequest({
-    required Uri url,
-    required String targetHost,
-    required int targetPort,
-  }) {
-    final requestTarget = url.path.isEmpty
-        ? '/${url.hasQuery ? '?${url.query}' : ''}'
-        : '${url.path}${url.hasQuery ? '?${url.query}' : ''}';
-    final defaultPort = url.scheme == 'http' ? 80 : 443;
-    final hostHeader = targetHost.contains(':') ? '[$targetHost]' : targetHost;
-    final authority = url.hasPort && targetPort != defaultPort
-        ? '$hostHeader:$targetPort'
-        : hostHeader;
-    return 'HEAD $requestTarget HTTP/1.1\r\n'
-        'Host: $authority\r\n'
-        'Connection: close\r\n'
-        '\r\n';
-  }
-
-  static bool _isValidHttpStatusLine(String statusLine) {
-    final match = RegExp(r'^HTTP/\d\.\d\s+([1-5]\d{2})\b').firstMatch(
-      statusLine.trim(),
-    );
-    if (match == null) {
-      return false;
-    }
-    final statusCode = int.tryParse(match.group(1) ?? '');
-    return statusCode != null && statusCode >= 100 && statusCode <= 599;
-  }
-}
-
-class _SocketByteReader {
-  _SocketByteReader(Stream<List<int>> stream)
-      : _iterator = StreamIterator<List<int>>(stream);
-
-  final StreamIterator<List<int>> _iterator;
-  List<int> _buffer = <int>[];
-
-  Future<List<int>> readBytes(int length, Duration timeout) async {
-    while (_buffer.length < length) {
-      final hasNext = await _iterator.moveNext().timeout(timeout);
-      if (!hasNext) {
-        throw const SocketException('Unexpected socket close');
-      }
-      _buffer.addAll(_iterator.current);
-    }
-    return _take(length);
-  }
-
-  Future<String> readLine({
-    required Duration timeout,
-    required int maxLength,
-    Duration Function()? elapsed,
-  }) async {
-    while (true) {
-      final newlineIndex = _buffer.indexOf(0x0a);
-      if (newlineIndex != -1) {
-        return _decodeLine(_take(newlineIndex + 1));
-      }
-      if (_buffer.length >= maxLength) {
-        return _decodeLine(_take(maxLength));
-      }
-      final hasNext = await _iterator.moveNext().timeout(
-            _remainingTimeout(timeout, elapsed),
-          );
-      if (!hasNext) {
-        if (_buffer.isEmpty) {
-          throw const SocketException('Unexpected socket close');
-        }
-        return _decodeLine(_take(_buffer.length));
-      }
-      _buffer.addAll(_iterator.current);
-    }
-  }
-
-  Duration _remainingTimeout(
-    Duration timeout,
-    Duration Function()? elapsed,
-  ) {
-    if (elapsed == null) {
-      return timeout;
-    }
-    final remaining = timeout - elapsed();
-    if (remaining <= Duration.zero) {
-      throw TimeoutException('Socket read timed out');
-    }
-    return remaining;
-  }
-
-  List<int> _take(int length) {
-    final result = _buffer.sublist(0, length);
-    _buffer = length == _buffer.length ? <int>[] : _buffer.sublist(length);
-    return result;
-  }
-
-  String _decodeLine(List<int> bytes) {
-    var end = bytes.length;
-    if (end > 0 && bytes[end - 1] == 0x0a) {
-      end--;
-    }
-    if (end > 0 && bytes[end - 1] == 0x0d) {
-      end--;
-    }
-    return latin1.decode(bytes.sublist(0, end));
   }
 }

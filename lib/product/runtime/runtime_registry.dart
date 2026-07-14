@@ -71,7 +71,6 @@ class RuntimeRegistry {
               capabilities: {
                 RuntimeCapability.tun,
                 RuntimeCapability.coldStartPersistence,
-                RuntimeCapability.pendingBinarySwap,
               },
             ),
             availability: const RuntimeAvailability.supported(

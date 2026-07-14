@@ -1,392 +1,145 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/olcrtc_node_controller.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
 
 void main() {
   group('OlcRtcNodeController', () {
-    late _FakeOlcRtcBinaryBridge binary;
-    late _FakeRuntimeNodeBridge runtime;
     late Directory tempDir;
-    late OlcRtcSharedInstallLayout sharedLayout;
-    late List<String> waitedListeners;
-
-    OlcRtcNodeController buildController() => OlcRtcNodeController(
-          binary: binary,
-          runtime: runtime,
-          waitForListener: (host, port, _) async {
-            waitedListeners.add('$host:$port');
-          },
-        );
-
-    BuiltInProxyNodePlan buildPlan(
-      String name, {
-      required String nodeId,
-      required int listenPort,
-      required String roomId,
-    }) =>
-        BuiltInProxyNodePlan(
-          nodeId: nodeId,
-          name: name,
-          type: BuiltInProxyType.olcrtc,
-          listenHost: '127.0.0.1',
-          listenPort: listenPort,
-          protocol: BuiltInProxyProtocol.socks5,
-          udp: false,
-          files: {
-            'built-in-proxies/olcrtc/$nodeId/config.yaml': 'mode: "cnc"\n'
-                'room:\n'
-                '  id: "$roomId"\n'
-                'socks:\n'
-                '  host: "127.0.0.1"\n'
-                '  port: $listenPort',
-          },
-        );
+    late OlcRtcSharedInstallLayout layout;
+    late _FakeRuntimeNodeBridge runtime;
+    late OlcRtcNodeController controller;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('flclashm-olcrtc-');
-      sharedLayout = OlcRtcSharedInstallLayout(
+      tempDir = await Directory.systemTemp.createTemp('olcrtc-controller-');
+      layout = OlcRtcSharedInstallLayout(
         abi: 'arm64-v8a',
         runtimeRootPath: tempDir.path,
         nodesDirectoryPath: '${tempDir.path}/nodes',
-        executablePath: '${tempDir.path}/olcrtc',
-        pendingPath: '${tempDir.path}/olcrtc.pending',
-        rollbackPath: '${tempDir.path}/olcrtc.rollback',
-        versionPath: '${tempDir.path}/bundled.version',
-        pendingVersionPath: '${tempDir.path}/bundled.pending.version',
-        bundledAssetPath: 'assets/runtimes/olcrtc/android/arm64-v8a/olcrtc',
+        executablePath: '${tempDir.path}/libolcrtc.so',
       );
-      binary = _FakeOlcRtcBinaryBridge(layout: sharedLayout);
       runtime = _FakeRuntimeNodeBridge();
-      waitedListeners = <String>[];
-    });
-
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
-    });
-
-    test('stages updated config and restarts a running node', () async {
-      final controller = buildController();
-      final plan = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-new',
-      );
-      final configPath =
-          '${sharedLayout.nodesDirectoryPath}/node-a/$olcRtcConfigFileName';
-      await Directory('${sharedLayout.nodesDirectoryPath}/node-a')
-          .create(recursive: true);
-      await File(configPath).writeAsString(currentConfig(roomId: 'room-old'));
-      runtime.runningNodes['node-a'] = DateTime(2026, 5, 1, 2, 3, 4);
-
-      final message = await controller.stageRuntimePlan(
-        currentPlans: [plan],
-        nextPlans: [plan],
-      );
-
-      expect(message, isEmpty);
-      expect(runtime.stopCalls, ['node-a']);
-      expect(runtime.startCalls, ['node-a']);
-      expect(
-        await File(configPath).readAsString(),
-        currentConfig(roomId: 'room-new'),
-      );
-    });
-
-    test('rolls staged config back after a later core failure', () async {
-      final controller = buildController();
-      final plan = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-new',
-      );
-      final configPath =
-          '${sharedLayout.nodesDirectoryPath}/node-a/$olcRtcConfigFileName';
-      await Directory('${sharedLayout.nodesDirectoryPath}/node-a')
-          .create(recursive: true);
-      await File(configPath).writeAsString(currentConfig(roomId: 'room-old'));
-      runtime.runningNodes['node-a'] = DateTime(2026, 5, 1, 2, 3, 4);
-
-      final stageMessage = await controller.stageRuntimePlan(
-        currentPlans: [plan],
-        nextPlans: [plan],
-      );
-      final rollbackMessage = await controller.rollbackStagedRuntimePlan();
-
-      expect(stageMessage, isEmpty);
-      expect(rollbackMessage, isEmpty);
-      expect(
-        await File(configPath).readAsString(),
-        currentConfig(roomId: 'room-old'),
-      );
-      expect(runtime.startCalls, ['node-a', 'node-a']);
-      expect(runtime.stopCalls, ['node-a', 'node-a']);
-    });
-
-    test('restores previous config and listener when staged restart fails',
-        () async {
-      final controller = buildController();
-      final currentPlan = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-old',
-      );
-      final nextPlan = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35011,
-        roomId: 'room-new',
-      );
-      final configPath =
-          '${sharedLayout.nodesDirectoryPath}/node-a/$olcRtcConfigFileName';
-      await Directory('${sharedLayout.nodesDirectoryPath}/node-a')
-          .create(recursive: true);
-      await File(configPath).writeAsString(currentPlan.files.values.single);
-      runtime.runningNodes['node-a'] = DateTime(2026, 5, 1, 2, 3, 4);
-      runtime.startResults.addAll([false, true]);
-
-      final message = await controller.stageRuntimePlan(
-        currentPlans: [currentPlan],
-        nextPlans: [nextPlan],
-      );
-
-      expect(message, contains('failed to restart after config update'));
-      expect(await File(configPath).readAsString(),
-          currentPlan.files.values.single);
-      expect(runtime.startCalls, ['node-a', 'node-a']);
-      expect(runtime.stopCalls, ['node-a', 'node-a']);
-      expect(waitedListeners, ['127.0.0.1:35010']);
-      expect(runtime.runningNodes['node-a'], isNotNull);
-    });
-
-    test('commit removes dropped node runtime directories', () async {
-      final controller = buildController();
-      final planA = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-a',
-      );
-      final planB = buildPlan(
-        'Node B',
-        nodeId: 'node-b',
-        listenPort: 35011,
-        roomId: 'room-b',
-      );
-      await Directory('${sharedLayout.nodesDirectoryPath}/node-a')
-          .create(recursive: true);
-      await Directory('${sharedLayout.nodesDirectoryPath}/node-b')
-          .create(recursive: true);
-      runtime.runningNodes['node-b'] = DateTime(2026, 5, 1, 2, 3, 4);
-
-      final stageMessage = await controller.stageRuntimePlan(
-        currentPlans: [planA, planB],
-        nextPlans: [planA],
-      );
-      await controller.commitStagedRuntimePlan();
-
-      expect(stageMessage, isEmpty);
-      expect(runtime.stopCalls, ['node-b']);
-      expect(
-          Directory('${sharedLayout.nodesDirectoryPath}/node-b').existsSync(),
-          isFalse);
-    });
-
-    test('starts and stops multiple nodes independently', () async {
-      final controller = buildController();
-      final planA = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-a',
-      );
-      final planB = buildPlan(
-        'Node B',
-        nodeId: 'node-b',
-        listenPort: 35011,
-        roomId: 'room-b',
-      );
-      await controller.stageRuntimePlan(
-        currentPlans: const [],
-        nextPlans: [planA, planB],
-      );
-      await controller.commitStagedRuntimePlan();
-
-      final started = await controller.startNodes([planA, planB]);
-      await controller.stopNodes([planA, planB]);
-
-      expect(started, isTrue);
-      expect(runtime.startCalls, ['node-a', 'node-b']);
-      expect(runtime.startArguments, [
-        [path.join(sharedLayout.nodesDirectoryPath, 'node-a', 'config.yaml')],
-        [path.join(sharedLayout.nodesDirectoryPath, 'node-b', 'config.yaml')],
-      ]);
-      expect(runtime.stopCalls, ['node-a', 'node-b']);
-      expect(
-        Directory(path.join(path.dirname(sharedLayout.executablePath), 'data'))
-            .existsSync(),
-        isFalse,
-        reason: 'OlcRTC uses embedded dictionaries when overrides are absent',
-      );
-    });
-
-    test('reports OlcRTC output immediately when the process exits', () async {
-      final controller = OlcRtcNodeController(
-        binary: binary,
+      controller = OlcRtcNodeController(
+        binary: _FakeBinaryBridge(layout),
         runtime: runtime,
-        waitForListener: (_, __, ___) => Completer<void>().future,
-      );
-      final plan = buildPlan(
-        'Broken node',
-        nodeId: 'node-broken',
-        listenPort: 35012,
-        roomId: 'room-broken',
-      );
-      await controller.stageRuntimePlan(
-        currentPlans: const [],
-        nextPlans: [plan],
-      );
-      await controller.commitStagedRuntimePlan();
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 20), () {
-        runtime.runningNodes.remove(plan.nodeId);
-        runtime.lastErrors[plan.nodeId] =
-            'runtime node exited with code 1: validate config: dns server required (set net.dns)';
-      }));
-
-      await expectLater(
-        controller.startNodes([plan]),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            allOf(
-              contains('Broken node'),
-              contains('dns server required'),
-            ),
-          ),
-        ),
       );
     });
 
-    test('keeps each node config in its own working directory', () {
-      final controller = buildController();
-
-      final nodeA = controller.resolveNodeLayout(sharedLayout, 'node-a');
-      final nodeB = controller.resolveNodeLayout(sharedLayout, 'node-b');
-
-      expect(
-        nodeA.workingDirectoryPath,
-        path.join(sharedLayout.nodesDirectoryPath, 'node-a'),
-      );
-      expect(nodeA.configPath,
-          path.join(nodeA.workingDirectoryPath, 'config.yaml'));
-      expect(
-        nodeB.workingDirectoryPath,
-        path.join(sharedLayout.nodesDirectoryPath, 'node-b'),
-      );
-      expect(nodeB.configPath,
-          path.join(nodeB.workingDirectoryPath, 'config.yaml'));
+    tearDown(() async {
+      if (tempDir.existsSync()) await tempDir.delete(recursive: true);
     });
 
-    test('creates runtime directories during pending update check', () async {
-      final controller = buildController();
-
-      await controller.applyPendingUpdate();
-
-      expect(Directory(sharedLayout.runtimeRootPath).existsSync(), isTrue);
-      expect(Directory(sharedLayout.nodesDirectoryPath).existsSync(), isTrue);
-      expect(File(sharedLayout.executablePath).existsSync(), isFalse);
-    });
-
-    test('persists cold-start manifest and clears it for empty plans',
+    test('stages and rolls config back without controlling processes',
         () async {
-      final controller = buildController();
-      final plan = buildPlan(
-        'Node A',
-        nodeId: 'node-a',
-        listenPort: 35010,
-        roomId: 'room-a',
+      final oldPlan = _plan('old-room');
+      final newPlan = _plan('new-room');
+      final config =
+          File('${layout.nodesDirectoryPath}/node-a/$olcRtcConfigFileName');
+      await config.parent.create(recursive: true);
+      await config.writeAsString(oldPlan.files.values.single);
+
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: [oldPlan],
+          nextPlans: [newPlan],
+        ),
+        isEmpty,
+      );
+      expect(await config.readAsString(), newPlan.files.values.single);
+      expect(runtime.applyCalls, 0);
+
+      expect(await controller.rollbackStagedRuntimePlan(), isEmpty);
+      expect(await config.readAsString(), oldPlan.files.values.single);
+    });
+
+    test('passes the node-specific config path to Android', () async {
+      final plan = _plan('room-a');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
       );
 
-      await controller.persistColdStart([plan]);
-      expect(runtime.savedManifest, isNotNull);
-      final manifest = json.decode(runtime.savedManifest!) as Map;
-      final nodes = manifest['nodes'] as List;
-      expect(nodes.single['arguments'], [
-        path.join(sharedLayout.nodesDirectoryPath, 'node-a', 'config.yaml'),
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(node['type'], 'olcrtc');
+      expect(node['arguments'], [
+        '${layout.nodesDirectoryPath}/node-a/$olcRtcConfigFileName',
       ]);
-      expect(runtime.clearColdStartCalls, 0);
+      expect(node['revision'], hasLength(64));
+    });
+
+    test('persists one manifest and clears it for an empty plan', () async {
+      await controller.persistColdStart([_plan('room-a')]);
+      expect(
+          (json.decode(runtime.savedManifest!) as Map)['nodes'], hasLength(1));
 
       await controller.persistColdStart(const []);
-      expect(runtime.clearColdStartCalls, 1);
+      expect(runtime.savedManifest, isNull);
     });
   });
 }
 
-String currentConfig({required String roomId, int listenPort = 35010}) =>
-    'mode: "cnc"\n'
-    'room:\n'
-    '  id: "$roomId"\n'
-    'socks:\n'
-    '  host: "127.0.0.1"\n'
-    '  port: $listenPort';
+BuiltInProxyNodePlan _plan(String room) => BuiltInProxyNodePlan(
+      nodeId: 'node-a',
+      name: 'OlcRTC',
+      type: BuiltInProxyType.olcrtc,
+      listenHost: '127.0.0.1',
+      listenPort: 35910,
+      protocol: BuiltInProxyProtocol.socks5,
+      udp: false,
+      files: {
+        'built-in-proxies/olcrtc/node-a/config.yaml': 'mode: "cnc"\n'
+            'room:\n'
+            '  id: "$room"\n'
+            'socks:\n'
+            '  host: "127.0.0.1"\n'
+            '  port: 35910',
+      },
+    );
 
-class _FakeOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
-  _FakeOlcRtcBinaryBridge({
-    required this.layout,
-  });
-
+class _FakeBinaryBridge implements OlcRtcBinaryBridge {
+  const _FakeBinaryBridge(this.layout);
   final OlcRtcSharedInstallLayout layout;
-
-  @override
-  String get bundledReleaseTag => olcRtcPinnedReleaseTag;
 
   @override
   Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout() async =>
       layout;
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async =>
-      Uint8List.fromList('bundled-binary'.codeUnits);
 }
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
-  final Map<String, DateTime> runningNodes = {};
-  final Map<String, String> lastErrors = {};
-  final List<String> startCalls = [];
-  final List<List<String>> startArguments = [];
-  final List<String> stopCalls = [];
-  final List<bool> startResults = [];
+  int applyCalls = 0;
   String? savedManifest;
-  int clearColdStartCalls = 0;
 
   @override
-  Future<void> clearColdStartNodes() async {
-    clearColdStartCalls++;
-    savedManifest = null;
+  Future<RuntimeNodePlanState> applyPlan(
+      List<Map<String, dynamic>> nodes) async {
+    applyCalls++;
+    return RuntimeNodePlanState(
+      generation: applyCalls,
+      status: nodes.isEmpty ? 'idle' : 'ready',
+      message: '',
+      nodes: nodes,
+      optionalCheckActive: false,
+    );
   }
 
   @override
-  Future<DateTime?> readNodeStartTime({
-    required String nodeId,
-  }) async =>
-      runningNodes[nodeId];
+  Future<void> clearColdStartNodes() async => savedManifest = null;
 
   @override
-  Future<String?> readNodeLastError({required String nodeId}) async =>
-      lastErrors[nodeId];
+  Future<RuntimeNodePlanState> readPlanState() async =>
+      const RuntimeNodePlanState(
+        generation: 0,
+        status: 'idle',
+        message: '',
+        nodes: [],
+        optionalCheckActive: false,
+      );
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {
@@ -394,27 +147,5 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   }
 
   @override
-  Future<bool> startNode({
-    required String nodeId,
-    required String executablePath,
-    required String workingDirectory,
-    List<String> arguments = const [],
-  }) async {
-    startCalls.add(nodeId);
-    startArguments.add(arguments);
-    final result = startResults.isEmpty ? true : startResults.removeAt(0);
-    if (!result) {
-      return false;
-    }
-    runningNodes[nodeId] = DateTime(2026, 5, 1, 2, 3, 4);
-    return true;
-  }
-
-  @override
-  Future<void> stopNode({
-    required String nodeId,
-  }) async {
-    stopCalls.add(nodeId);
-    runningNodes.remove(nodeId);
-  }
+  Future<void> stopPlan() async {}
 }

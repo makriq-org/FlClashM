@@ -296,34 +296,44 @@ object Service {
     suspend fun getTotalTraffic(): String =
         delegate.useService { it.totalTraffic }.getOrNull() ?: ""
 
-    suspend fun startRuntimeNode(
-        nodeId: String,
-        executablePath: String,
-        workingDirectory: String,
-        arguments: List<String> = emptyList(),
-    ): Long =
-        delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb ->
-                proxy.startRuntimeNode(
-                    nodeId,
-                    executablePath,
-                    workingDirectory,
-                    arguments,
-                    cb,
-                )
+    suspend fun applyRuntimeNodePlan(plan: String): String =
+        delegate.useService(timeoutMillis = 305_000L) { proxy ->
+            suspendCancellableCoroutine { cont ->
+                val callback = object : ICallbackInterface.Stub() {
+                    override fun onResult(
+                        result: ByteArray?,
+                        isSuccess: Boolean,
+                        ack: IAckInterface?,
+                    ) {
+                        ack?.onAck()
+                        if (isSuccess && cont.isActive) {
+                            cont.resume((result ?: byteArrayOf()).toString(Charsets.UTF_8))
+                        }
+                    }
+                }
+                runCatching { proxy.applyRuntimeNodePlan(plan, callback) }
+                    .onFailure { if (cont.isActive) cont.resumeWithException(it) }
             }
-        }.getOrNull() ?: 0L
+        }.getOrNull() ?: ""
 
-    suspend fun stopRuntimeNode(nodeId: String): Long =
+    suspend fun getRuntimeNodePlanState(): String =
+        delegate.useService { it.runtimeNodePlanState }.getOrNull() ?: ""
+
+    suspend fun stopRuntimeNodePlan(): Long =
         delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.stopRuntimeNode(nodeId, cb) }
+            awaitResult { cb -> proxy.stopRuntimeNodePlan(cb) }
         }.getOrNull() ?: 0L
 
-    suspend fun getRuntimeNodeRunTime(nodeId: String): Long =
-        delegate.useService { it.getRuntimeNodeRunTime(nodeId) }.getOrNull() ?: 0L
+    suspend fun probeRuntimeNode(node: String): Boolean =
+        delegate.useService(timeoutMillis = 65_000L) { proxy ->
+            awaitResult { cb -> proxy.probeRuntimeNode(node, cb) }
+        }.getOrNull() == 1L
 
-    suspend fun getRuntimeNodeLastError(nodeId: String): String =
-        delegate.useService { it.getRuntimeNodeLastError(nodeId) }.getOrNull() ?: ""
+    suspend fun attachRuntimeNodeClient(): Result<Unit> =
+        delegate.useService { it.attachRuntimeNodeClient() }
+
+    suspend fun detachRuntimeNodeClient(): Result<Unit> =
+        delegate.useService { it.detachRuntimeNodeClient() }
 
     suspend fun startListener(): Result<Unit> =
         delegate.useService { it.startListener() }

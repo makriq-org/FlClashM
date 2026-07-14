@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flclashx/enum/enum.dart';
@@ -18,34 +19,6 @@ void main() {
       if (tempDir.existsSync()) {
         tempDir.deleteSync(recursive: true);
       }
-    });
-
-    test('restores raw client-only tun fields from profile YAML', () async {
-      final profileFile = File(path.join(tempDir.path, 'profile.yaml'))
-        ..createSync(recursive: true)
-        ..writeAsStringSync('''
-tun:
-  exclude-package-url: https://example.com/packages.txt
-  include-package-file:
-    - lists/include.txt
-''');
-
-      final restored = await restoreAndroidProfileSplitTunnelingFields(
-        {
-          'tun': {'enable': true},
-        },
-        isAndroid: true,
-        profilePath: profileFile.path,
-      );
-
-      expect(
-        restored['tun']['exclude-package-url'],
-        'https://example.com/packages.txt',
-      );
-      expect(
-        restored['tun']['include-package-file'],
-        ['lists/include.txt'],
-      );
     });
 
     test('expands local package lists into an access-control override',
@@ -245,6 +218,55 @@ tun:
       );
     });
 
+    test('returns a saved network list before one background refresh',
+        () async {
+      final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
+        ..createSync(recursive: true);
+      final rawConfig = {
+        'tun': {
+          'include-package-url': 'https://example.com/background.txt',
+        },
+      };
+      await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-background',
+        installedPackageNames: const ['com.cached.app'],
+        readRemoteSource: (_) async => 'com.cached.app\n',
+      );
+
+      final refresh = Completer<String>();
+      var refreshCalls = 0;
+      Future<String> readRemote(String _) {
+        refreshCalls++;
+        return refresh.future;
+      }
+
+      final first = await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-background',
+        installedPackageNames: const ['com.cached.app'],
+        readRemoteSource: readRemote,
+      ).timeout(const Duration(seconds: 1));
+      final second = await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-background',
+        installedPackageNames: const ['com.cached.app'],
+        readRemoteSource: readRemote,
+      ).timeout(const Duration(seconds: 1));
+
+      expect(first.config['tun']['include-package'], ['com.cached.app']);
+      expect(second.config['tun']['include-package'], ['com.cached.app']);
+      expect(refreshCalls, 1);
+      refresh.complete('com.cached.app\n');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    });
+
     test('keeps the last validated URL cache when a later fetch is invalid',
         () async {
       final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
@@ -264,17 +286,24 @@ tun:
         readRemoteSource: (_) async => 'org.mozilla.firefox\n',
       );
 
-      await expectLater(
-        () => resolveAndroidProfileSplitTunneling(
-          rawConfig: rawConfig,
-          isAndroid: true,
-          profilesPath: profilesDir.path,
-          profileId: 'profile-cache-validated',
-          installedPackageNames: const ['org.mozilla.firefox'],
-          readRemoteSource: (_) async => 're:[\n',
-        ),
-        throwsA(isA<FormatException>()),
+      final invalidRefreshStarted = Completer<void>();
+      final cachedResolved = await resolveAndroidProfileSplitTunneling(
+        rawConfig: rawConfig,
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-cache-validated',
+        installedPackageNames: const ['org.mozilla.firefox'],
+        readRemoteSource: (_) async {
+          invalidRefreshStarted.complete();
+          return 're:[\n';
+        },
       );
+      expect(
+        cachedResolved.config['tun']['include-package'],
+        ['org.mozilla.firefox'],
+      );
+      await invalidRefreshStarted.future;
+      await Future<void>.delayed(Duration.zero);
 
       final fallbackResolved = await resolveAndroidProfileSplitTunneling(
         rawConfig: rawConfig,

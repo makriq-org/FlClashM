@@ -8,6 +8,7 @@ import '../runtime/runtime_types.dart';
 class CompiledProfileMetadata {
   const CompiledProfileMetadata({
     required this.externalController,
+    this.secret = '',
     required this.tcpConcurrent,
     required this.unifiedDelay,
     required this.logLevel,
@@ -16,6 +17,7 @@ class CompiledProfileMetadata {
   });
 
   final String externalController;
+  final String secret;
   final bool tcpConcurrent;
   final bool unifiedDelay;
   final String logLevel;

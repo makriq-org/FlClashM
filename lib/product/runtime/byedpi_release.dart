@@ -8,8 +8,6 @@ const byedpiBundledAssetRoot = 'assets/runtimes/byedpi/android';
 const byedpiRuntimeDirectoryName = 'byedpi';
 const byedpiExecutableFileName = 'ciadpi';
 const byedpiAndroidNativeLibraryFileName = 'libflclashm_byedpi.so';
-const byedpiBundledVersionFileName = 'bundled.version';
-const byedpiPendingVersionFileName = 'bundled.pending.version';
 const byedpiConfigFileName = 'config.json';
 const byedpiStrategyListAssetPath =
     '$byedpiBundledAssetRoot/byebyeedpi-strategies.list';

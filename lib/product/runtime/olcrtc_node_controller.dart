@@ -2,7 +2,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import 'built_in_proxy_types.dart';
@@ -16,12 +15,6 @@ class OlcRtcSharedInstallLayout extends LocalNodeSharedInstallLayout {
     required super.runtimeRootPath,
     required super.nodesDirectoryPath,
     required super.executablePath,
-    required super.pendingPath,
-    required super.rollbackPath,
-    required super.versionPath,
-    required super.pendingVersionPath,
-    required super.bundledAssetPath,
-    super.managedBinaryUpdateEnabled = true,
   });
 }
 
@@ -43,9 +36,6 @@ class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
   });
 
   final AndroidRuntimeNodeNativeLibraryBridge nativeLibrary;
-
-  @override
-  String get bundledReleaseTag => olcRtcPinnedReleaseTag;
 
   @override
   Future<OlcRtcSharedInstallLayout> resolveSharedInstallLayout() async {
@@ -88,31 +78,7 @@ class DefaultOlcRtcBinaryBridge implements OlcRtcBinaryBridge {
       runtimeRootPath: runtimeRootPath,
       nodesDirectoryPath: path.join(runtimeRootPath, 'nodes'),
       executablePath: executablePath,
-      pendingPath: path.join(
-        runtimeRootPath,
-        '$olcRtcExecutableFileName.pending',
-      ),
-      rollbackPath: path.join(
-        runtimeRootPath,
-        '$olcRtcExecutableFileName.rollback',
-      ),
-      versionPath: path.join(
-        runtimeRootPath,
-        olcRtcBundledVersionFileName,
-      ),
-      pendingVersionPath: path.join(
-        runtimeRootPath,
-        olcRtcPendingVersionFileName,
-      ),
-      bundledAssetPath: asset.bundledAssetPath,
-      managedBinaryUpdateEnabled: false,
     );
-  }
-
-  @override
-  Future<Uint8List> loadBundledBinary(String assetPath) async {
-    final data = await rootBundle.load(assetPath);
-    return data.buffer.asUint8List();
   }
 }
 
@@ -121,8 +87,6 @@ class OlcRtcNodeController
   OlcRtcNodeController({
     OlcRtcBinaryBridge binary = const DefaultOlcRtcBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
-    super.waitForListener = waitForLocalNodeListener,
-    super.connectivityChecker,
   }) : super(
           typeLabel: 'olcrtc',
           configArtifactName: 'config.yaml',
@@ -158,49 +122,14 @@ class OlcRtcNodeController
   List<String> _buildArguments(OlcRtcNodeLayout layout) => [layout.configPath];
 
   @override
-  Future<bool> startPlan(
-    OlcRtcSharedInstallLayout sharedLayout,
-    BuiltInProxyNodePlan plan,
-    OlcRtcNodeLayout layout,
-  ) =>
-      runtime.startNode(
-        nodeId: plan.nodeId,
-        executablePath: sharedLayout.executablePath,
-        workingDirectory: layout.workingDirectoryPath,
-        arguments: _buildArguments(layout),
-      );
-
-  @override
-  Future<LocalNodeColdStartExtras> buildColdStartExtras(
+  Future<LocalNodeLaunchExtras> buildLaunchExtras(
     BuiltInProxyNodePlan plan,
     OlcRtcSharedInstallLayout sharedLayout,
     OlcRtcNodeLayout layout,
   ) async =>
-      LocalNodeColdStartExtras(
-        extraFields: {
+      LocalNodeLaunchExtras(
+        fields: {
           'arguments': _buildArguments(layout),
         },
-      );
-
-  @override
-  Future<String> rollbackStageFailure({
-    required List<LocalNodeMutation<OlcRtcNodeLayout>> mutations,
-    required String failureMessage,
-  }) =>
-      rollbackStageFailureWithRestart(
-        mutations: mutations,
-        failureMessage: failureMessage,
-      );
-
-  @override
-  Future<void> handleStartNodesException({
-    required Object error,
-    required StackTrace stackTrace,
-    required List<BuiltInProxyNodePlan> startedNodes,
-  }) =>
-      rethrowStartNodesExceptionWithCleanup(
-        error: error,
-        stackTrace: stackTrace,
-        startedNodes: startedNodes,
       );
 }

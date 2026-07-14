@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
@@ -12,10 +12,8 @@ void main() {
     late _FakeMihomoCoreBridge core;
     late _FakeMihomoLifecycleBridge lifecycle;
     late _FakeMihomoPlatformBridge platform;
-    late _FakeMihomoUpdateBridge update;
     late _FakeBuiltInProxySupervisor builtInProxySupervisor;
     late List<String> callOrder;
-    late Directory tempDir;
 
     MihomoEngineAdapter buildAdapter({
       AccessControl? accessControl,
@@ -24,7 +22,6 @@ void main() {
           core: core,
           lifecycle: lifecycle,
           platform: platform,
-          update: update,
           builtInProxySupervisor: builtInProxySupervisor,
           readAccessControl: () => accessControl ?? const AccessControl(),
         );
@@ -36,16 +33,6 @@ void main() {
       platform = _FakeMihomoPlatformBridge();
       builtInProxySupervisor = _FakeBuiltInProxySupervisor()
         ..callOrder = callOrder;
-      tempDir = await Directory.systemTemp.createTemp('flclashm-mihomo-');
-      update = _FakeMihomoUpdateBridge(
-        corePath: '${tempDir.path}/FlClashCore',
-      );
-    });
-
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
     });
 
     test('starts even when notification title handoff fails', () async {
@@ -175,6 +162,7 @@ void main() {
       expect(builtInProxySupervisor.commitCalls, 1);
       expect(builtInProxySupervisor.startCalls, 1);
       expect(builtInProxySupervisor.rollbackCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
       expect(callOrder, [
         'stageLocalNodes',
         'startLocalNodes',
@@ -246,14 +234,12 @@ void main() {
       expect(message, contains('core setup failed'));
       expect(builtInProxySupervisor.stageCalls, 1);
       expect(builtInProxySupervisor.startCalls, 1);
-      expect(builtInProxySupervisor.stopRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 0);
       expect(builtInProxySupervisor.rollbackCalls, 1);
       expect(callOrder, [
         'stageLocalNodes',
         'startLocalNodes',
         'setupCore',
-        'stopStartedLocalNodes',
         'rollbackLocalNodes',
       ]);
     });
@@ -291,48 +277,50 @@ void main() {
       expect(message, isEmpty);
       expect(core.setupRuntimePlanCalls, 1);
       expect(builtInProxySupervisor.stageCalls, 1);
-      expect(builtInProxySupervisor.startCalls, 0);
+      expect(builtInProxySupervisor.startCalls, 1);
       expect(builtInProxySupervisor.commitCalls, 1);
       expect(callOrder, [
         'stageLocalNodes',
+        'startLocalNodes',
         'setupCore',
         'commitLocalNodes',
       ]);
     });
 
-    test('atomically swaps in a pending core update', () async {
+    test('does not register VPN until all runtime nodes are ready', () async {
+      final ready = Completer<void>();
+      builtInProxySupervisor.startCompleter = ready;
       final adapter = buildAdapter();
-      final target = File(update.corePath);
-      final pending = File(update.corePendingPath);
-      await target.writeAsString('old-core');
-      await pending.writeAsString('new-core');
 
-      await adapter.applyPendingUpdate();
+      final starting = adapter.start();
+      await Future<void>.delayed(Duration.zero);
 
-      expect(await target.readAsString(), 'new-core');
-      expect(pending.existsSync(), isFalse);
-      expect(File('${update.corePath}.rollback').existsSync(), isFalse);
-      expect(update.setExecutableCalls, 1);
-      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
+      expect(core.startListenerCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
+
+      ready.complete();
+      expect(await starting, isTrue);
+      expect(core.startListenerCalls, 1);
+      expect(platform.lastStartAccessControl, isNotNull);
     });
 
-    test('restores the previous core when pending activation fails', () async {
-      update.setExecutableError = StateError('chmod failed');
+    test('required runtime-node failure prevents VPN registration', () async {
+      builtInProxySupervisor.startResult = false;
       final adapter = buildAdapter();
-      final target = File(update.corePath);
-      final pending = File(update.corePendingPath);
-      await target.writeAsString('old-core');
-      await pending.writeAsString('new-core');
 
-      await expectLater(
-        adapter.applyPendingUpdate,
-        throwsA(isA<StateError>()),
-      );
+      expect(await adapter.start(), isFalse);
+      expect(core.startListenerCalls, 0);
+      expect(platform.lastStartAccessControl, isNull);
+    });
 
-      expect(await target.readAsString(), 'old-core');
-      expect(await pending.readAsString(), 'new-core');
-      expect(File('${update.corePath}.rollback').existsSync(), isFalse);
-      expect(builtInProxySupervisor.applyPendingUpdateCalls, 1);
+    test('ordinary VPN stop leaves warmed runtime nodes running', () async {
+      final adapter = buildAdapter();
+
+      await adapter.stop();
+
+      expect(core.stopListenerCalls, 1);
+      expect(platform.stopVpnCalls, 1);
+      expect(builtInProxySupervisor.stopCalls, 0);
     });
 
     test('delegates runtime start time and cold-start persistence', () async {
@@ -362,26 +350,19 @@ void main() {
 }
 
 class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
-  int applyPendingUpdateCalls = 0;
   int stageCalls = 0;
   int commitCalls = 0;
   int rollbackCalls = 0;
   int startCalls = 0;
-  int stopRuntimePlanCalls = 0;
+  int stopCalls = 0;
   int persistColdStartCalls = 0;
   bool startResult = true;
   bool hasCommittedRuntimePlanValue = false;
-  List<BuiltInProxyNodePlan> startRuntimePlanStartedPlans = const [];
-  List<BuiltInProxyNodePlan> lastStoppedRuntimePlan = const [];
+  Completer<void>? startCompleter;
   List<String>? callOrder;
 
   @override
   bool get hasCommittedRuntimePlan => hasCommittedRuntimePlanValue;
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    applyPendingUpdateCalls++;
-  }
 
   @override
   Future<void> prepareForRestart() async {}
@@ -414,11 +395,9 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }) async {
     startCalls++;
     callOrder?.add('startLocalNodes');
+    await startCompleter?.future;
     return BuiltInProxyRuntimePlanStartResult(
       isSuccess: startResult,
-      startedPlans: startRuntimePlanStartedPlans.isEmpty
-          ? List<BuiltInProxyNodePlan>.unmodifiable(plans)
-          : startRuntimePlanStartedPlans,
     );
   }
 
@@ -431,14 +410,7 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
           .isSuccess;
 
   @override
-  Future<void> stopRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
-    stopRuntimePlanCalls++;
-    lastStoppedRuntimePlan = List<BuiltInProxyNodePlan>.unmodifiable(plans);
-    callOrder?.add('stopStartedLocalNodes');
-  }
-
-  @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopCalls++;
 
   @override
   Future<void> persistColdStart() async {
@@ -560,32 +532,6 @@ class _FakeMihomoPlatformBridge implements MihomoPlatformBridge {
     stopVpnCalls++;
     if (stopVpnError != null) {
       throw stopVpnError!;
-    }
-  }
-}
-
-class _FakeMihomoUpdateBridge implements MihomoUpdateBridge {
-  _FakeMihomoUpdateBridge({
-    required this.corePath,
-  });
-
-  @override
-  final String corePath;
-
-  Error? setExecutableError;
-  int setExecutableCalls = 0;
-
-  @override
-  String get corePendingPath => '$corePath.pending';
-
-  @override
-  bool get supportsExecutableBit => true;
-
-  @override
-  Future<void> setExecutable(String path) async {
-    setExecutableCalls++;
-    if (setExecutableError != null) {
-      throw setExecutableError!;
     }
   }
 }

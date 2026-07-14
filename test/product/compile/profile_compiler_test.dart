@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
@@ -198,7 +200,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -268,7 +269,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -332,7 +332,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: profilesDir.path,
-          profilePath: path.join(profilesDir.path, 'profile-split.yaml'),
           readInstalledPackageNames: () async => const [
             'com.termux',
             'org.mozilla.firefox',
@@ -369,8 +368,27 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('skips profile split tunneling when runtime tun is disabled',
+    test('cold start preserves every Android split-tunneling source type',
         () async {
+      final tempDir = await Directory.systemTemp.createTemp('cold-split-');
+      final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
+        ..createSync(recursive: true);
+      File(path.join(profilesDir.path, 'lists', 'include.txt'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('com.android.chrome\n');
+      const networkUrl = 'https://example.com/include.txt';
+      final refreshStarted = Completer<void>();
+      File(
+        path.join(
+          profilesDir.path,
+          'providers',
+          'profile-split-disabled',
+          'packages',
+          networkUrl.toMd5(),
+        ),
+      )
+        ..createSync(recursive: true)
+        ..writeAsStringSync('com.network.app\n');
       const profile = Profile(
         id: 'profile-split-disabled',
         autoUpdateDuration: Duration.zero,
@@ -379,7 +397,13 @@ void main() {
         profile: profile,
         config: const <String, dynamic>{
           'tun': {
-            'include-package': ['*.mozilla.*'],
+            'include-package': [
+              'com.termux',
+              '*.mozilla.*',
+              r're:^org\.telegram\..+$',
+            ],
+            'include-package-file': 'lists/include.txt',
+            'include-package-url': networkUrl,
           },
         },
       );
@@ -401,10 +425,17 @@ void main() {
           overrideDns: false,
           routeMode: RouteMode.config,
           hasCurrentScript: false,
-          profilesPath: '',
-          profilePath: '',
-          readInstalledPackageNames: () async {
-            throw StateError('package inventory should not be read');
+          profilesPath: profilesDir.path,
+          readInstalledPackageNames: () async => const [
+            'com.termux',
+            'org.mozilla.firefox',
+            'org.telegram.messenger',
+            'com.android.chrome',
+            'com.network.app',
+          ],
+          readSplitTunnelingRemoteSource: (_) async {
+            refreshStarted.complete();
+            return 'com.network.app\n';
           },
         ),
         securedProfile: SecuredProfilePatch(
@@ -418,8 +449,42 @@ void main() {
             '/tmp/$profileId/$type/$url',
       );
 
-      expect(runtimePlan.profileAccessControl, isNull);
+      expect(
+        runtimePlan.profileAccessControl,
+        const AccessControl(
+          enable: true,
+          mode: AccessControlMode.acceptSelected,
+          acceptList: [
+            'com.termux',
+            'org.mozilla.firefox',
+            'org.telegram.messenger',
+            'com.android.chrome',
+            'com.network.app',
+          ],
+        ),
+      );
+      expect(
+        runtimePlan.config['tun']['include-package'],
+        [
+          'com.termux',
+          'org.mozilla.firefox',
+          'org.telegram.messenger',
+          'com.android.chrome',
+          'com.network.app',
+        ],
+      );
       expect(runtimePlan.config['tun']['enable'], isFalse);
+      expect(
+        runtimePlan.config['tun'].keys,
+        isNot(contains('include-package-file')),
+      );
+      expect(
+        runtimePlan.config['tun'].keys,
+        isNot(contains('include-package-url')),
+      );
+      await refreshStarted.future;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await tempDir.delete(recursive: true);
     });
 
     test('rewrites providers and merges dns, hosts and override rules',
@@ -504,7 +569,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -588,7 +652,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: true,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -665,7 +728,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -786,7 +848,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -859,7 +920,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -919,7 +979,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -1006,7 +1065,6 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
-          profilePath: '',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -1080,7 +1138,6 @@ void main() {
             routeMode: RouteMode.config,
             hasCurrentScript: false,
             profilesPath: '',
-            profilePath: '',
             readInstalledPackageNames: _readNoInstalledPackages,
           ),
           securedProfile: SecuredProfilePatch(
@@ -1128,7 +1185,6 @@ void main() {
               routeMode: RouteMode.config,
               hasCurrentScript: false,
               profilesPath: '',
-              profilePath: '',
               readInstalledPackageNames: _readNoInstalledPackages,
             ),
             securedProfile: SecuredProfilePatch(

@@ -290,8 +290,6 @@ class EngineManager {
 
     final targetAdapter = compiledRuntimePlan.resolvedRuntime.engine.adapter;
 
-    await targetAdapter.applyPendingUpdate();
-
     if (!await targetAdapter.isInitialized()) {
       await targetAdapter.initialize(
         initParams: await _buildInitParams(),
@@ -737,6 +735,7 @@ class EngineManager {
           ? null
           : CompiledProfileMetadata(
               externalController: updateParams.externalController.value,
+              secret: metadata.secret,
               tcpConcurrent: updateParams.tcpConcurrent,
               unifiedDelay: updateParams.unifiedDelay,
               logLevel: updateParams.logLevel.name,

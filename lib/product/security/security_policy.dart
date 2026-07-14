@@ -1,3 +1,4 @@
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
@@ -7,9 +8,15 @@ import '../compile/runtime_plan.dart';
 class SecurityPolicyContext {
   const SecurityPolicyContext({
     required this.isAndroid,
+    this.explicitAllowLan = false,
+    this.explicitExternalController = ExternalControllerStatus.close,
+    this.controllerSecret = '',
   });
 
   final bool isAndroid;
+  final bool explicitAllowLan;
+  final ExternalControllerStatus explicitExternalController;
+  final String controllerSecret;
 }
 
 @immutable

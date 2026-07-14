@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
@@ -8,7 +5,6 @@ import 'package:flclashx/models/models.dart';
 import '../compile/product_compile.dart';
 import '../services/product_services.dart';
 import 'built_in_proxy_supervisor.dart';
-import 'built_in_proxy_types.dart';
 import 'engine_adapter.dart';
 
 typedef ReadAccessControlCallback = AccessControl Function();
@@ -130,46 +126,6 @@ class DefaultMihomoPlatformBridge implements MihomoPlatformBridge {
   Future<void> stopVpn() => productServices.accessControl.stopVpn();
 }
 
-abstract interface class MihomoUpdateBridge {
-  String get corePath;
-
-  String get corePendingPath;
-
-  bool get supportsExecutableBit;
-
-  Future<void> setExecutable(String path);
-}
-
-class DefaultMihomoUpdateBridge implements MihomoUpdateBridge {
-  const DefaultMihomoUpdateBridge();
-
-  @override
-  String get corePath => appPath.corePath;
-
-  @override
-  String get corePendingPath => appPath.corePendingPath;
-
-  @override
-  bool get supportsExecutableBit => !Platform.isWindows;
-
-  @override
-  Future<void> setExecutable(String path) async {
-    if (!supportsExecutableBit) {
-      return;
-    }
-
-    final result = await Process.run('chmod', ['+x', path]);
-    if (result.exitCode != 0) {
-      throw ProcessException(
-        'chmod',
-        ['+x', path],
-        '${result.stderr}'.trim(),
-        result.exitCode,
-      );
-    }
-  }
-}
-
 class _BoundaryCleanupFailure {
   const _BoundaryCleanupFailure({
     required this.message,
@@ -185,7 +141,6 @@ class MihomoEngineAdapter implements EngineAdapter {
     this.core = const DefaultMihomoCoreBridge(),
     this.lifecycle = const DefaultMihomoLifecycleBridge(),
     this.platform = const DefaultMihomoPlatformBridge(),
-    this.update = const DefaultMihomoUpdateBridge(),
     BuiltInProxySupervisor? builtInProxySupervisor,
     required ReadAccessControlCallback readAccessControl,
     ReadProfileAccessControlCallback? readProfileAccessControl,
@@ -197,64 +152,12 @@ class MihomoEngineAdapter implements EngineAdapter {
   final MihomoCoreBridge core;
   final MihomoLifecycleBridge lifecycle;
   final MihomoPlatformBridge platform;
-  final MihomoUpdateBridge update;
   final BuiltInProxySupervisor builtInProxySupervisor;
   final ReadAccessControlCallback _readAccessControl;
   final ReadProfileAccessControlCallback? _readProfileAccessControl;
-  Future<void> _builtInProxyStartChain = Future.value();
 
   AccessControl get _accessControl => _readAccessControl();
   AccessControl? get _profileAccessControl => _readProfileAccessControl?.call();
-
-  String get _coreRollbackPath => '${update.corePath}.rollback';
-
-  @override
-  Future<void> applyPendingUpdate() async {
-    await builtInProxySupervisor.applyPendingUpdate();
-    final pending = File(update.corePendingPath);
-    if (!pending.existsSync()) {
-      return;
-    }
-
-    commonPrint.log("Applying pending core update...");
-    final target = File(update.corePath);
-    final rollback = File(_coreRollbackPath);
-    var targetMovedToRollback = false;
-    var pendingMovedToTarget = false;
-
-    try {
-      await _deleteWithRetry(rollback);
-      if (target.existsSync()) {
-        await _renameWithRetry(target, rollback.path);
-        targetMovedToRollback = true;
-      }
-
-      await _renameWithRetry(pending, target.path);
-      pendingMovedToTarget = true;
-      await update.setExecutable(target.path);
-      await _deleteWithRetry(rollback);
-      commonPrint.log("Pending core update applied successfully");
-    } catch (e, stackTrace) {
-      final rollbackFailure = await _rollbackPendingUpdate(
-        target: target,
-        pending: pending,
-        rollback: rollback,
-        targetMovedToRollback: targetMovedToRollback,
-        pendingMovedToTarget: pendingMovedToTarget,
-      );
-      commonPrint.log("Failed to apply pending core update: $e");
-      if (rollbackFailure != null) {
-        Error.throwWithStackTrace(
-          StateError(
-            'Failed to apply pending core update: $e. '
-            'Rollback also failed: ${rollbackFailure.message}',
-          ),
-          rollbackFailure.stackTrace,
-        );
-      }
-      Error.throwWithStackTrace(e, stackTrace);
-    }
-  }
 
   @override
   Future<void> prepareForRestart() async {
@@ -305,24 +208,23 @@ class MihomoEngineAdapter implements EngineAdapter {
       return stageMessage;
     }
 
-    BuiltInProxyRuntimePlanStartResult? startedRuntimePlan;
-    if (runtimePlan.builtInProxyNodes.isNotEmpty) {
-      try {
-        startedRuntimePlan = await builtInProxySupervisor.startRuntimePlan(
-          runtimePlan.builtInProxyNodes,
-          stopAllOnFailure: true,
-        );
-      } catch (e) {
-        return _rollbackRuntimePlanSetup(
-          message: 'Built-in proxy nodes failed to start: $e',
-        );
-      }
-
+    try {
+      final startedRuntimePlan = await builtInProxySupervisor.startRuntimePlan(
+        runtimePlan.builtInProxyNodes,
+        stopAllOnFailure: true,
+      );
       if (!startedRuntimePlan.isSuccess) {
+        final stateMessage = startedRuntimePlan.state?.message;
         return _rollbackRuntimePlanSetup(
-          message: 'Built-in proxy nodes did not start.',
+          message: stateMessage?.isNotEmpty ?? false
+              ? stateMessage!
+              : 'Built-in proxy nodes did not start.',
         );
       }
+    } catch (e) {
+      return _rollbackRuntimePlanSetup(
+        message: 'Built-in proxy nodes failed to start: $e',
+      );
     }
 
     final message = await core.setupRuntimePlan(runtimePlan);
@@ -333,10 +235,7 @@ class MihomoEngineAdapter implements EngineAdapter {
       return '';
     }
 
-    return _rollbackRuntimePlanSetup(
-      message: message,
-      startedPlans: startedRuntimePlan?.startedPlans ?? const [],
-    );
+    return _rollbackRuntimePlanSetup(message: message);
   }
 
   @override
@@ -357,11 +256,15 @@ class MihomoEngineAdapter implements EngineAdapter {
     var vpnStartAttempted = false;
 
     try {
+      final nodesReady = await builtInProxySupervisor.start(
+        stopAllOnFailure: true,
+      );
+      if (!nodesReady) return false;
+
       await core.startListener();
       listenerStarted = true;
 
       if (await readStartTime() != null) {
-        _startBuiltInProxyNodesInBackground();
         return true;
       }
 
@@ -372,13 +275,9 @@ class MihomoEngineAdapter implements EngineAdapter {
           profileAccessControl: _profileAccessControl,
         ),
       );
-      if (started) {
-        _startBuiltInProxyNodesInBackground();
-        return true;
-      }
+      if (started) return true;
     } catch (e, stackTrace) {
       final rollbackFailure = await _rollbackFailedStart(
-        builtInNodesStarted: false,
         listenerStarted: listenerStarted,
         vpnStartAttempted: vpnStartAttempted,
       );
@@ -395,7 +294,6 @@ class MihomoEngineAdapter implements EngineAdapter {
     }
 
     final rollbackFailure = await _rollbackFailedStart(
-      builtInNodesStarted: false,
       listenerStarted: listenerStarted,
       vpnStartAttempted: vpnStartAttempted,
     );
@@ -411,54 +309,10 @@ class MihomoEngineAdapter implements EngineAdapter {
     return false;
   }
 
-  void _startBuiltInProxyNodesInBackground([
-    List<BuiltInProxyNodePlan>? runtimePlan,
-  ]) {
-    final task = _builtInProxyStartChain.then((_) async {
-      final message = await _startBuiltInProxyNodes(runtimePlan);
-      if (message.isNotEmpty) {
-        commonPrint.log(message);
-      }
-    });
-    _builtInProxyStartChain = task.catchError((Object e, StackTrace s) {
-      commonPrint.log('Failed to start built-in proxy nodes: $e');
-    });
-    unawaited(_builtInProxyStartChain);
-  }
-
-  Future<String> _startBuiltInProxyNodes([
-    List<BuiltInProxyNodePlan>? runtimePlan,
-  ]) async {
-    try {
-      final started = runtimePlan == null
-          ? await builtInProxySupervisor.start(stopAllOnFailure: false)
-          : (await builtInProxySupervisor.startRuntimePlan(
-              runtimePlan,
-              stopAllOnFailure: false,
-            ))
-              .isSuccess;
-      if (started) {
-        return '';
-      }
-      return 'Built-in proxy nodes did not start.';
-    } catch (e) {
-      return 'Failed to start built-in proxy nodes: $e';
-    }
-  }
-
   Future<String> _rollbackRuntimePlanSetup({
     required String message,
-    List<BuiltInProxyNodePlan> startedPlans = const [],
   }) async {
     final cleanupMessages = <String>[];
-
-    if (startedPlans.isNotEmpty) {
-      try {
-        await builtInProxySupervisor.stopRuntimePlan(startedPlans);
-      } catch (e) {
-        cleanupMessages.add('Failed to stop started local nodes: $e');
-      }
-    }
 
     final rollbackMessage =
         await builtInProxySupervisor.rollbackStagedRuntimePlan();
@@ -495,18 +349,6 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
     }
 
-    try {
-      await builtInProxySupervisor.stop();
-    } catch (e, s) {
-      if (error != null) {
-        commonPrint
-            .log("Failed to stop built-in proxy nodes after stop error: $e");
-      } else {
-        error = e;
-        stackTrace = s;
-      }
-    }
-
     if (error != null) {
       Error.throwWithStackTrace(error, stackTrace!);
     }
@@ -529,61 +371,7 @@ class MihomoEngineAdapter implements EngineAdapter {
     await builtInProxySupervisor.persistColdStart();
   }
 
-  Future<_BoundaryCleanupFailure?> _rollbackPendingUpdate({
-    required File target,
-    required File pending,
-    required File rollback,
-    required bool targetMovedToRollback,
-    required bool pendingMovedToTarget,
-  }) async {
-    _BoundaryCleanupFailure? failure;
-
-    void captureFailure(
-      String message,
-      Object error,
-      StackTrace stackTrace,
-    ) {
-      commonPrint.log("$message: $error");
-      failure ??= _BoundaryCleanupFailure(
-        message: '$message: $error',
-        stackTrace: stackTrace,
-      );
-    }
-
-    try {
-      if (pendingMovedToTarget &&
-          target.existsSync() &&
-          !pending.existsSync()) {
-        await _renameWithRetry(target, pending.path);
-      }
-    } catch (e, s) {
-      captureFailure('Failed to move new core back to pending', e, s);
-    }
-
-    if (targetMovedToRollback) {
-      try {
-        if (rollback.existsSync()) {
-          await _deleteWithRetry(target);
-          await _renameWithRetry(rollback, target.path);
-        }
-      } catch (e, s) {
-        captureFailure(
-            'Failed to restore previous core after update error', e, s);
-      } finally {
-        try {
-          await _deleteWithRetry(rollback);
-        } catch (e, s) {
-          captureFailure(
-              'Failed to clean rollback core after update error', e, s);
-        }
-      }
-    }
-
-    return failure;
-  }
-
   Future<_BoundaryCleanupFailure?> _rollbackFailedStart({
-    required bool builtInNodesStarted,
     required bool listenerStarted,
     required bool vpnStartAttempted,
   }) async {
@@ -617,50 +405,6 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
     }
 
-    if (builtInNodesStarted) {
-      try {
-        await builtInProxySupervisor.stop();
-      } catch (e, s) {
-        captureFailure(
-          'Failed to stop built-in proxy nodes during mihomo rollback',
-          e,
-          s,
-        );
-      }
-    }
-
     return failure;
-  }
-
-  Future<void> _deleteWithRetry(File file) async {
-    if (!file.existsSync()) {
-      return;
-    }
-
-    for (var i = 0; i < 10; i++) {
-      try {
-        await file.delete();
-        return;
-      } catch (_) {
-        if (i == 9) {
-          rethrow;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
-  }
-
-  Future<void> _renameWithRetry(File source, String targetPath) async {
-    for (var i = 0; i < 10; i++) {
-      try {
-        await source.rename(targetPath);
-        return;
-      } catch (_) {
-        if (i == 9) {
-          rethrow;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
   }
 }

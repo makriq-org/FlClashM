@@ -349,14 +349,10 @@ class GlobalState {
     required ClashConfig runtimePatchConfig,
   }) async {
     final profilesPath = await appPath.profilesPath;
-    final profilePath = rawProfile == null
-        ? ''
-        : await appPath.getProfilePath(rawProfile.profile.id);
     return _profilePipeline.buildRuntimePlan(
       rawProfile: rawProfile,
       context: _buildRuntimePlanContext(
         profilesPath: profilesPath,
-        profilePath: profilePath,
       ),
       securedProfile: securedProfile,
       runtimePatchConfig: runtimePatchConfig,
@@ -407,11 +403,13 @@ class GlobalState {
 
   SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
         isAndroid: Platform.isAndroid,
+        explicitAllowLan: config.patchClashConfig.allowLan,
+        explicitExternalController: config.patchClashConfig.externalController,
+        controllerSecret: effectiveSecret.value,
       );
 
   RuntimePlanBuildContext _buildRuntimePlanContext({
     required String profilesPath,
-    required String profilePath,
   }) =>
       RuntimePlanBuildContext(
         isAndroid: Platform.isAndroid,
@@ -420,7 +418,6 @@ class GlobalState {
         routeMode: config.networkProps.routeMode,
         hasCurrentScript: config.scriptProps.currentScript != null,
         profilesPath: profilesPath,
-        profilePath: profilePath,
         readInstalledPackageNames: readInstalledPackageNames,
       );
 

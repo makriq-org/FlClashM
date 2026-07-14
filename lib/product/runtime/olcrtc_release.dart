@@ -8,8 +8,6 @@ const olcRtcBundledAssetRoot = 'assets/runtimes/olcrtc/android';
 const olcRtcRuntimeDirectoryName = 'olcrtc';
 const olcRtcExecutableFileName = 'olcrtc';
 const olcRtcAndroidNativeLibraryFileName = 'libflclashm_olcrtc.so';
-const olcRtcBundledVersionFileName = 'bundled.version';
-const olcRtcPendingVersionFileName = 'bundled.pending.version';
 const olcRtcConfigFileName = 'config.yaml';
 
 class OlcRtcReleaseAsset {

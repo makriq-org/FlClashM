@@ -26,7 +26,6 @@ enum RuntimeCapability {
   localSocks5Listener,
   vpnProtect,
   coldStartPersistence,
-  pendingBinarySwap,
   externalServerDependency,
   transparentProxy,
 }
