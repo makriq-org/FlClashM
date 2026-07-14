@@ -12,6 +12,8 @@ import '../../plugins/app.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
 import '../services/app_update_manifest.dart';
+import '../services/app_update_manifest_release.dart';
+import '../services/app_update_manifest_rollback.dart';
 import '../services/app_update_release.dart';
 
 final Dio _appUpdateDio = Dio(

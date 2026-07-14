@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flclashx/product/services/app_update_manifest.dart';
+import 'package:flclashx/product/services/app_update_manifest_release.dart';
+import 'package:flclashx/product/services/app_update_manifest_rollback.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,9 +1,6 @@
 import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'app_update_release.dart';
 
 const appUpdateManifestSchemaVersion = 1;
 const appUpdateManifestPublicKeyBase64 =
@@ -15,6 +12,9 @@ const sourceForgeUpdateRootUrl =
     'https://$sourceForgeProjectName.sourceforge.io/update';
 final appUpdateReleaseTagPattern =
     RegExp(r'^v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$');
+final appUpdateAndroidApkAssetPattern = RegExp(
+  r'-android(?:-([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*))?\.apk$',
+);
 
 enum AppUpdateChannel {
   stable('stable'),
@@ -133,15 +133,6 @@ class AppUpdateManifest {
           'assets': assets.map((asset) => asset.toJson()).toList(),
         },
       };
-
-  AppRelease toRelease() => AppRelease(
-        tagName: tagName,
-        body: body,
-        htmlUrl: htmlUrl,
-        assets: assets.map((asset) => asset.toReleaseAsset()).toList(),
-        prerelease: channel == AppUpdateChannel.prerelease,
-        draft: false,
-      );
 }
 
 class AppUpdateManifestAsset {
@@ -178,14 +169,7 @@ class AppUpdateManifestAsset {
       return url;
     }).toList(growable: false);
 
-    final releaseAsset = ReleaseAsset(
-      name: name,
-      browserDownloadUrl: urls.first,
-      downloadUrls: urls,
-      size: size,
-      digest: 'sha256:$sha256',
-    );
-    if (!releaseAsset.isAndroidApk) {
+    if (!isAppUpdateAndroidApkAssetName(name)) {
       throw const FormatException('Manifest asset is not an Android APK.');
     }
 
@@ -208,14 +192,6 @@ class AppUpdateManifestAsset {
         'sha256': sha256,
         'urls': urls,
       };
-
-  ReleaseAsset toReleaseAsset() => ReleaseAsset(
-        name: name,
-        browserDownloadUrl: urls.first,
-        downloadUrls: urls,
-        size: size,
-        digest: 'sha256:$sha256',
-      );
 }
 
 class AppUpdateManifestVerifier {
@@ -257,70 +233,6 @@ class AppUpdateManifestVerifier {
   }
 }
 
-abstract interface class AppUpdateManifestRollbackGuard {
-  Future<void> validateAndRecord(AppUpdateManifest manifest);
-}
-
-class SharedPreferencesAppUpdateManifestRollbackGuard
-    implements AppUpdateManifestRollbackGuard {
-  const SharedPreferencesAppUpdateManifestRollbackGuard();
-
-  static const _keyPrefix = 'flclashm.appUpdate.highestManifest';
-
-  @override
-  Future<void> validateAndRecord(AppUpdateManifest manifest) async {
-    final preferences = await SharedPreferences.getInstance();
-    final channelKey = '$_keyPrefix.${manifest.channel.wireName}';
-    final highest = _readHighestManifestState(
-      preferences.getString(channelKey),
-    );
-    final publishedAt = manifest.publishedAt.millisecondsSinceEpoch;
-
-    if (manifest.versionCode < highest.versionCode ||
-        (manifest.versionCode == highest.versionCode &&
-            publishedAt < highest.publishedAtMillis)) {
-      throw const FormatException('App update manifest rollback rejected.');
-    }
-    if (manifest.versionCode > highest.versionCode ||
-        publishedAt > highest.publishedAtMillis) {
-      final stored = await preferences.setString(
-        channelKey,
-        jsonEncode({
-          'versionCode': manifest.versionCode,
-          'publishedAtMillis': publishedAt,
-        }),
-      );
-      if (!stored) {
-        throw StateError('Unable to persist app update rollback state.');
-      }
-    }
-  }
-}
-
-({int versionCode, int publishedAtMillis}) _readHighestManifestState(
-  String? raw,
-) {
-  if (raw == null) {
-    return (versionCode: 0, publishedAtMillis: 0);
-  }
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map<String, dynamic>) {
-    throw const FormatException('Invalid app update rollback state.');
-  }
-  final versionCode = decoded['versionCode'];
-  final publishedAtMillis = decoded['publishedAtMillis'];
-  if (versionCode is! int ||
-      versionCode < 0 ||
-      publishedAtMillis is! int ||
-      publishedAtMillis < 0) {
-    throw const FormatException('Invalid app update rollback state.');
-  }
-  return (
-    versionCode: versionCode,
-    publishedAtMillis: publishedAtMillis,
-  );
-}
-
 String appUpdateManifestUrl(AppUpdateChannel channel) =>
     '$sourceForgeUpdateRootUrl/${channel.wireName}.json';
 
@@ -332,6 +244,9 @@ bool appUpdateReleaseTagMatchesChannel(
   AppUpdateChannel channel,
 ) =>
     (channel == AppUpdateChannel.prerelease) == tagName.contains('-');
+
+bool isAppUpdateAndroidApkAssetName(String name) =>
+    appUpdateAndroidApkAssetPattern.hasMatch(name);
 
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
