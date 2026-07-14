@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flclashx/product/services/app_update_manifest.dart';
-import 'package:flclashx/product/services/app_update_release.dart';
 
 import 'release_contract.dart';
 
@@ -59,12 +58,7 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
     ..sort((left, right) => left.path.compareTo(right.path));
   for (final file in files) {
     final name = file.uri.pathSegments.last;
-    final releaseAsset = ReleaseAsset(
-      name: name,
-      browserDownloadUrl: 'https://invalid.example',
-      size: file.lengthSync(),
-    );
-    if (!releaseAsset.isAndroidApk) {
+    if (!isAppUpdateAndroidApkAssetName(name)) {
       continue;
     }
     final digest = await sha256.bind(file.openRead()).first;

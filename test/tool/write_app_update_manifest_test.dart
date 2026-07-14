@@ -93,4 +93,38 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('starts under the standalone Dart VM used by the release workflow',
+      () async {
+    final tempDir = Directory.systemTemp.createTempSync('update-manifest-vm-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final dist = Directory('${tempDir.path}/dist')..createSync();
+    File('${dist.path}/FlClashM-android-arm64-v8a.apk')
+        .writeAsBytesSync([1, 2, 3]);
+    final notes = File('${tempDir.path}/release.md')
+      ..writeAsStringSync('- Проверка запуска\n');
+    final result = await Process.run(
+      'dart',
+      [
+        'tool/write_app_update_manifest.dart',
+        '--dist=${dist.path}',
+        '--out=${tempDir.path}/pre.json',
+        '--release-notes=${notes.path}',
+        '--tag=v0.10.5-pre7',
+        '--github-repository=makriq-org/FlClashM',
+        '--channel=pre',
+        '--published-at=2026-07-14T10:00:00.000Z',
+      ],
+      workingDirectory: Directory.current.path,
+      environment: {
+        ...Platform.environment,
+        'APP_UPDATE_SIGNING_KEY': base64Encode(List<int>.filled(32, 1)),
+      },
+    );
+    final output = '${result.stdout}\n${result.stderr}';
+
+    expect(result.exitCode, isNot(0));
+    expect(output, contains('does not match the embedded public key'));
+    expect(output, isNot(contains("Dart library 'dart:ui' is not available")));
+  });
 }
