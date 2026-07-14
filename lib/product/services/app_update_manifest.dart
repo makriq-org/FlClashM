@@ -7,7 +7,7 @@ import 'app_update_release.dart';
 
 const appUpdateManifestSchemaVersion = 1;
 const appUpdateManifestPublicKeyBase64 =
-    'QjT+WuXOVvbNeB+HFJpJUdNwLn9AbebOn2lObU5pTPQ=';
+    'S5W0qI3x7cXrnGhbrL4YV9JwCJSrASo+Tu2gkgKSGaw=';
 const sourceForgeProjectName = 'flclashm';
 const sourceForgeProjectUrl =
     'https://sourceforge.net/projects/$sourceForgeProjectName';

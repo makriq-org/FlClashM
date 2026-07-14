@@ -3,7 +3,7 @@
   "releaseRepository": "makriq-org/FlClashM",
   "appUpdate": {
     "sourceForgeProject": "flclashm",
-    "manifestPublicKeyBase64": "QjT+WuXOVvbNeB+HFJpJUdNwLn9AbebOn2lObU5pTPQ="
+    "manifestPublicKeyBase64": "S5W0qI3x7cXrnGhbrL4YV9JwCJSrASo+Tu2gkgKSGaw="
   },
   "requiredReleaseSecrets": [
     "KEYSTORE",
