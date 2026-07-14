@@ -14,6 +14,7 @@ import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
+const _byedpiAutoSelectionRevision = 1;
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
 
@@ -142,8 +143,7 @@ class _ByedpiConfig {
 
   bool get isAuto => mode == 'auto';
 
-  _ByedpiConfig withListenPort(int listenPort) =>
-      _ByedpiConfig(
+  _ByedpiConfig withListenPort(int listenPort) => _ByedpiConfig(
         mode: mode,
         listenHost: listenHost,
         listenPort: listenPort,
@@ -169,18 +169,21 @@ class _ByedpiStrategyCache {
     required this.strategy,
     required this.checkedAt,
     required this.failures,
+    required this.selectionRevision,
   });
 
   final String fingerprint;
   final String strategy;
   final DateTime checkedAt;
   final int failures;
+  final int selectionRevision;
 
   Map<String, dynamic> toJson() => {
         'fingerprint': fingerprint,
         'strategy': strategy,
         'checkedAt': checkedAt.toIso8601String(),
         'failures': failures,
+        'selectionRevision': selectionRevision,
       };
 
   static _ByedpiStrategyCache? fromJson(String content) {
@@ -197,6 +200,7 @@ class _ByedpiStrategyCache {
       strategy: strategy,
       checkedAt: checkedAt,
       failures: (value['failures'] as num?)?.toInt() ?? 0,
+      selectionRevision: (value['selectionRevision'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -300,6 +304,7 @@ class ByedpiNodeController
             strategy: cached.strategy,
             checkedAt: now(),
             failures: 0,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return cached.strategy;
@@ -313,6 +318,7 @@ class ByedpiNodeController
             strategy: cached.strategy,
             checkedAt: cached.checkedAt,
             failures: failures,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return cached.strategy;
@@ -334,17 +340,18 @@ class ByedpiNodeController
             strategy: strategy,
             checkedAt: now(),
             failures: 0,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return strategy;
       }
     }
 
-    if (cached != null && cached.fingerprint == fingerprint) {
+    if (_matchesCurrentCache(cached, fingerprint)) {
       commonPrint.log(
         'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
       );
-      return cached.strategy;
+      return cached!.strategy;
     }
     commonPrint.log(
       'byedpi node `${plan.name}` did not select a strategy; '
@@ -355,6 +362,7 @@ class ByedpiNodeController
       strategy: _byedpiAutoFallbackStrategy,
       checkedAt: now(),
       failures: 0,
+      selectionRevision: _byedpiAutoSelectionRevision,
     );
     await _writeCache(layout, fallback);
     return fallback.strategy;
@@ -491,9 +499,16 @@ class ByedpiNodeController
     String fingerprint,
     _ByedpiConfig config,
   ) =>
+      _matchesCurrentCache(cache, fingerprint) &&
+      now().difference(cache!.checkedAt) <= config.cacheTtl;
+
+  bool _matchesCurrentCache(
+    _ByedpiStrategyCache? cache,
+    String fingerprint,
+  ) =>
       cache != null &&
-      cache.fingerprint == fingerprint &&
-      now().difference(cache.checkedAt) <= config.cacheTtl;
+      cache.selectionRevision == _byedpiAutoSelectionRevision &&
+      cache.fingerprint == fingerprint;
 
   bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
       now().difference(cache.checkedAt) >= config.recheckAfter;

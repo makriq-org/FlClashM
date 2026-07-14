@@ -136,6 +136,31 @@ void main() {
       );
     });
 
+    test('reselects a strategy from a legacy fallback cache', () async {
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+      await controller.buildRuntimeNodes([plan]);
+      final cache =
+          File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
+      final legacyCache = json.decode(await cache.readAsString()) as Map
+        ..remove('selectionRevision');
+      await cache.writeAsString(json.encode(legacyCache), flush: true);
+      runtime.probeResults.add(true);
+
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(runtime.probeCalls, hasLength(3));
+      expect(node['arguments'], containsAllInOrder(['--fake', '1']));
+      expect(
+        (json.decode(await cache.readAsString()) as Map)['selectionRevision'],
+        1,
+      );
+    });
+
     test('staging rollback restores the previous configuration', () async {
       final oldPlan = _plan(mode: 'manual', args: '--fake 1');
       final newPlan = _plan(mode: 'manual', args: '--fake 2');
