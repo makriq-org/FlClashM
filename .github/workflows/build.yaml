@@ -368,34 +368,3 @@ jobs:
           files: ./dist/*
           body_path: "./release.md"
           prerelease: true
-
-      - name: Prepare commit list for notification
-        id: prepare_commits
-        run: |
-          main_commit=$(git log -1 --pretty=format:"%s" "${{ github.ref_name }}")
-          other_commits=$(awk '
-            $0 == "## Что изменилось" { capture = 1; next }
-            capture && /^## / { exit }
-            capture && /^- / { print }
-          ' release.md | grep -v "^- ${main_commit}$" | head -n 9)
-          commits="• ${main_commit}"
-          if [ -n "$other_commits" ]; then
-            commits="${commits}"$'\n'"${other_commits}"
-          fi
-          commits_escaped=$(echo "$commits" | jq -Rs .)
-          echo "commits=$commits_escaped" >> "$GITHUB_OUTPUT"
-
-      - name: Send Telegram notifications
-        if: success()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHANNEL_ID_1: ${{ secrets.TELEGRAM_CHANNEL_ID_1 }}
-          TELEGRAM_CHANNEL_ID_2: ${{ secrets.TELEGRAM_CHANNEL_ID_2 }}
-          TELEGRAM_CHANNEL_ID_3: ${{ secrets.TELEGRAM_CHANNEL_ID_3 }}
-          VERSION: ${{ github.ref_name }}
-          COMMITS: ${{ fromJSON(steps.prepare_commits.outputs.commits) }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
-          IS_STABLE: ${{ env.IS_STABLE }}
-        run: |
-          python3 -m pip install requests --quiet
-          python3 .github/scripts/notify_telegram.py
