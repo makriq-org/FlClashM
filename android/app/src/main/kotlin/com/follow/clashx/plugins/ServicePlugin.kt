@@ -122,6 +122,10 @@ class ServicePlugin :
                 Service.stopRuntimeNodePlan()
                 result.successOnMain(true)
             }
+            "probeRuntimeNode" -> launch {
+                val node = call.argument<String>("node") ?: "{}"
+                result.successOnMain(Service.probeRuntimeNode(node))
+            }
             "resolveNativeRuntimeLibrary" -> {
                 val name = call.argument<String>("name") ?: ""
                 val file = File(context.applicationInfo.nativeLibraryDir, name)

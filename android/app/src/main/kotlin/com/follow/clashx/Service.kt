@@ -324,6 +324,11 @@ object Service {
             awaitResult { cb -> proxy.stopRuntimeNodePlan(cb) }
         }.getOrNull() ?: 0L
 
+    suspend fun probeRuntimeNode(node: String): Boolean =
+        delegate.useService(timeoutMillis = 65_000L) { proxy ->
+            awaitResult { cb -> proxy.probeRuntimeNode(node, cb) }
+        }.getOrNull() == 1L
+
     suspend fun attachRuntimeNodeClient(): Result<Unit> =
         delegate.useService { it.attachRuntimeNodeClient() }
 

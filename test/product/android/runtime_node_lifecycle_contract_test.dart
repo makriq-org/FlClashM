@@ -46,6 +46,19 @@ void main() {
     expect(required, greaterThan(alive));
   });
 
+  test('strategy probes are service-owned, serialized and always stopped', () {
+    final probe = manager.indexOf('suspend fun probeNode');
+    final lock = manager.indexOf('planLock.withLock', probe);
+    final prepare = manager.indexOf('prepareNode(spec).ready', probe);
+    final cleanup = manager.indexOf('stop(spec.nodeId)', prepare);
+
+    expect(probe, greaterThan(0));
+    expect(lock, greaterThan(probe));
+    expect(prepare, greaterThan(lock));
+    expect(cleanup, greaterThan(prepare));
+    expect(remoteService, contains('RuntimeNodeProcessManager.probeNode'));
+  });
+
   test('optional checks are one non-blocking job per plan generation', () {
     expect(manager, contains('optionalCheckJob?.cancelAndJoin()'));
     expect(manager, contains('optionalCheckJob = GlobalState.scope.launch'));

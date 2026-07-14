@@ -46,7 +46,12 @@ abstract interface class RuntimeNodePlatformBridge {
   Future<void> clearColdStartNodes();
 }
 
-class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
+abstract interface class RuntimeNodeProbePlatformBridge {
+  Future<bool> probeNode(Map<String, dynamic> node);
+}
+
+class AndroidRuntimeNodeBridge
+    implements RuntimeNodePlatformBridge, RuntimeNodeProbePlatformBridge {
   const AndroidRuntimeNodeBridge();
 
   static const MethodChannel _channel =
@@ -73,6 +78,14 @@ class AndroidRuntimeNodeBridge implements RuntimeNodePlatformBridge {
 
   @override
   Future<void> stopPlan() => _channel.invokeMethod<void>('stopRuntimeNodePlan');
+
+  @override
+  Future<bool> probeNode(Map<String, dynamic> node) async =>
+      await _channel.invokeMethod<bool>(
+        'probeRuntimeNode',
+        <String, String>{'node': json.encode(node)},
+      ) ??
+      false;
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {

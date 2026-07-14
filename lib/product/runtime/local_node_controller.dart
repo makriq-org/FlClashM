@@ -162,16 +162,23 @@ abstract class LocalNodeController<
     final stagedState = _stagedState;
     if (stagedState == null) return;
     _stagedState = null;
-    final sharedLayout = await binary.resolveSharedInstallLayout();
-    await Future.wait([
-      for (final removedPlan in stagedState.removedPlans)
-        deleteDirectoryIfExists(
-          Directory(
-            resolveNodeLayout(sharedLayout, removedPlan.nodeId)
-                .workingDirectoryPath,
+    try {
+      final sharedLayout = await binary.resolveSharedInstallLayout();
+      await Future.wait([
+        for (final removedPlan in stagedState.removedPlans)
+          deleteDirectoryIfExists(
+            Directory(
+              resolveNodeLayout(sharedLayout, removedPlan.nodeId)
+                  .workingDirectoryPath,
+            ),
           ),
-        ),
-    ]);
+      ]);
+    } catch (error) {
+      commonPrint.log(
+        '$typeLabel runtime plan committed, but stale node cleanup failed: '
+        '$error',
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> buildRuntimeNodes(

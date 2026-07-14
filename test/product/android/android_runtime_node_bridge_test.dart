@@ -32,6 +32,7 @@ void main() {
             'nodes': const [],
           }),
         'stopRuntimeNodePlan' => true,
+        'probeRuntimeNode' => true,
         _ => null,
       };
     });
@@ -76,5 +77,14 @@ void main() {
       'getRuntimeNodePlanState',
       'stopRuntimeNodePlan',
     ]);
+  });
+
+  test('delegates an isolated runtime-node probe to Android', () async {
+    const bridge = AndroidRuntimeNodeBridge();
+
+    expect(await bridge.probeNode({'nodeId': 'probe-a'}), isTrue);
+    expect(calls.single.method, 'probeRuntimeNode');
+    final arguments = calls.single.arguments as Map;
+    expect(json.decode(arguments['node'] as String), {'nodeId': 'probe-a'});
   });
 }

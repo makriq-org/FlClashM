@@ -26,6 +26,7 @@ void main() {
       controller = ByedpiNodeController(
         binary: _FakeBinaryBridge(layout),
         runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.probeCalls.length,
         now: () => DateTime.utc(2026, 1, 1),
       );
     });
@@ -75,6 +76,32 @@ void main() {
       expect(cache.existsSync(), isTrue);
       expect((json.decode(await cache.readAsString()) as Map)['strategy'],
           isNotEmpty);
+    });
+
+    test('selects and caches the first strategy that passes a native probe',
+        () async {
+      runtime.probeResults.addAll([false, true]);
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+
+      final first = (await controller.buildRuntimeNodes([plan])).single;
+      final probeCount = runtime.probeCalls.length;
+      final second = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(runtime.probeCalls, hasLength(2));
+      expect(probeCount, 2);
+      expect(first['arguments'], containsAllInOrder(['--disorder', '1']));
+      expect(second['arguments'], first['arguments']);
+      expect(
+        (runtime.probeCalls.singleWhere(
+          (node) => (node['arguments'] as List).contains('--disorder'),
+        )['connectivityCheck'] as Map)['required'],
+        isTrue,
+      );
     });
 
     test('staging rollback restores the previous configuration', () async {
@@ -158,9 +185,12 @@ class _FakeBinaryBridge implements ByedpiBinaryBridge {
       layout;
 }
 
-class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
+class _FakeRuntimeNodeBridge
+    implements RuntimeNodePlatformBridge, RuntimeNodeProbePlatformBridge {
   int applyCalls = 0;
   String? savedManifest;
+  final List<bool> probeResults = [];
+  final List<Map<String, dynamic>> probeCalls = [];
 
   @override
   Future<RuntimeNodePlanState> applyPlan(
@@ -177,6 +207,12 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
 
   @override
   Future<void> clearColdStartNodes() async => savedManifest = null;
+
+  @override
+  Future<bool> probeNode(Map<String, dynamic> node) async {
+    probeCalls.add(node);
+    return probeResults.isEmpty ? false : probeResults.removeAt(0);
+  }
 
   @override
   Future<RuntimeNodePlanState> readPlanState() async =>

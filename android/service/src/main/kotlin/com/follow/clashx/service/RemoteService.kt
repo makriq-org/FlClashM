@@ -372,6 +372,17 @@ class RemoteService : Service() {
             }
         }
 
+        override fun probeRuntimeNode(node: String, result: IResultInterface) {
+            GlobalState.launch {
+                val passed = runCatching { RuntimeNodeProcessManager.probeNode(node) }
+                    .onFailure {
+                        GlobalState.log("Runtime-node probe failed: ${it.message}")
+                    }
+                    .getOrDefault(false)
+                result.onResult(if (passed) 1L else 0L)
+            }
+        }
+
         override fun attachRuntimeNodeClient() {
             RuntimeNodeClientRegistry.attach()
         }

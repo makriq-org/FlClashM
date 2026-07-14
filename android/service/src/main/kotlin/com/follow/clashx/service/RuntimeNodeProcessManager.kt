@@ -201,6 +201,24 @@ object RuntimeNodeProcessManager {
         lastStateJson
     }
 
+    suspend fun probeNode(nodeJson: String): Boolean = planLock.withLock {
+        val spec = RuntimeNodeSpec.fromJson(JSONObject(nodeJson), 0)
+        require(
+            !activePlan.containsKey(spec.nodeId) &&
+                !runningNodes.containsKey(spec.nodeId),
+        ) {
+            "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
+        }
+        require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
+            "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
+        }
+        try {
+            prepareNode(spec).ready
+        } finally {
+            stop(spec.nodeId)
+        }
+    }
+
     fun readPlanState(): String = runCatching {
         JSONObject(lastStateJson)
             .put("optionalCheckActive", optionalCheckJob?.isActive == true)

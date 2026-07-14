@@ -56,6 +56,8 @@ interface IRemoteInterface {
 
     void stopRuntimeNodePlan(in IResultInterface result);
 
+    void probeRuntimeNode(in String node, in IResultInterface result);
+
     void attachRuntimeNodeClient();
 
     void detachRuntimeNodeClient();

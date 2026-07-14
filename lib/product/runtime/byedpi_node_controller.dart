@@ -14,6 +14,10 @@ import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
+const _byedpiAutoMaxProbeCount = 4;
+const _byedpiAutoProbeTimeout = Duration(seconds: 1);
+
+typedef ByedpiProbePortAllocator = Future<int> Function();
 
 @immutable
 class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
@@ -118,6 +122,8 @@ class _ByedpiConfig {
     required this.concurrency,
     required this.minSuccessRatio,
     required this.cacheTtl,
+    required this.recheckAfter,
+    required this.failureThreshold,
   });
 
   final String mode;
@@ -133,8 +139,32 @@ class _ByedpiConfig {
   final int concurrency;
   final double minSuccessRatio;
   final Duration cacheTtl;
+  final Duration recheckAfter;
+  final int failureThreshold;
 
   bool get isAuto => mode == 'auto';
+
+  _ByedpiConfig copyWith({
+    int? listenPort,
+    Duration? timeout,
+  }) =>
+      _ByedpiConfig(
+        mode: mode,
+        listenHost: listenHost,
+        listenPort: listenPort ?? this.listenPort,
+        args: args,
+        strategies: strategies,
+        strategyList: strategyList,
+        testUrls: testUrls,
+        testSni: testSni,
+        timeout: timeout ?? this.timeout,
+        requests: requests,
+        concurrency: concurrency,
+        minSuccessRatio: minSuccessRatio,
+        cacheTtl: cacheTtl,
+        recheckAfter: recheckAfter,
+        failureThreshold: failureThreshold,
+      );
 }
 
 @immutable
@@ -143,16 +173,19 @@ class _ByedpiStrategyCache {
     required this.fingerprint,
     required this.strategy,
     required this.checkedAt,
+    required this.failures,
   });
 
   final String fingerprint;
   final String strategy;
   final DateTime checkedAt;
+  final int failures;
 
   Map<String, dynamic> toJson() => {
         'fingerprint': fingerprint,
         'strategy': strategy,
         'checkedAt': checkedAt.toIso8601String(),
+        'failures': failures,
       };
 
   static _ByedpiStrategyCache? fromJson(String content) {
@@ -168,6 +201,7 @@ class _ByedpiStrategyCache {
       fingerprint: fingerprint,
       strategy: strategy,
       checkedAt: checkedAt,
+      failures: (value['failures'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -177,6 +211,7 @@ class ByedpiNodeController
   ByedpiNodeController({
     ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
+    this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
   })  : now = now ?? DateTime.now,
         super(
@@ -186,6 +221,7 @@ class ByedpiNodeController
         );
 
   final DateTime Function() now;
+  final ByedpiProbePortAllocator allocateProbePort;
 
   @override
   ByedpiBinaryBridge get binary => super.binary as ByedpiBinaryBridge;
@@ -226,28 +262,158 @@ class ByedpiNodeController
     final config = await _readNodeConfig(plan, layout);
     var strategy = config.args;
     if (config.isAuto) {
-      final strategies = await _resolveStrategies(config);
-      final fingerprint = _fingerprint(
-        strategies: strategies,
+      strategy = await _resolveAutoStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
         config: config,
-        releaseTag: sharedLayout.abi + binary.bundledReleaseTag,
       );
-      var cached = await _readCache(layout);
-      if (!_canUseCache(cached, fingerprint, config)) {
-        cached = _ByedpiStrategyCache(
-          fingerprint: fingerprint,
-          strategy: _byedpiAutoFallbackStrategy,
-          checkedAt: now(),
-        );
-        await _writeCache(layout, cached);
-      }
-      strategy = cached!.strategy;
     }
     return LocalNodeLaunchExtras(
       fields: {
         'arguments': _buildArguments(strategy, config),
       },
     );
+  }
+
+  Future<String> _resolveAutoStrategy({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+  }) async {
+    final strategies = await _resolveStrategies(config);
+    final fingerprint = _fingerprint(
+      strategies: strategies,
+      config: config,
+      releaseTag: sharedLayout.abi + binary.bundledReleaseTag,
+    );
+    final cached = await _readCache(layout);
+    if (_canUseCache(cached, fingerprint, config)) {
+      if (!_needsRecheck(cached!, config)) return cached.strategy;
+      if (await _probeStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategy: cached.strategy,
+      )) {
+        await _writeCache(
+          layout,
+          _ByedpiStrategyCache(
+            fingerprint: fingerprint,
+            strategy: cached.strategy,
+            checkedAt: now(),
+            failures: 0,
+          ),
+        );
+        return cached.strategy;
+      }
+      final failures = cached.failures + 1;
+      if (failures < config.failureThreshold) {
+        await _writeCache(
+          layout,
+          _ByedpiStrategyCache(
+            fingerprint: fingerprint,
+            strategy: cached.strategy,
+            checkedAt: cached.checkedAt,
+            failures: failures,
+          ),
+        );
+        return cached.strategy;
+      }
+    }
+
+    for (final strategy in strategies.take(_byedpiAutoMaxProbeCount)) {
+      if (await _probeStrategy(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategy: strategy,
+      )) {
+        await _writeCache(
+          layout,
+          _ByedpiStrategyCache(
+            fingerprint: fingerprint,
+            strategy: strategy,
+            checkedAt: now(),
+            failures: 0,
+          ),
+        );
+        return strategy;
+      }
+    }
+
+    if (cached != null && cached.fingerprint == fingerprint) {
+      commonPrint.log(
+        'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
+      );
+      return cached.strategy;
+    }
+    commonPrint.log(
+      'byedpi node `${plan.name}` did not select a strategy quickly; '
+      'using bundled fallback.',
+    );
+    final fallback = _ByedpiStrategyCache(
+      fingerprint: fingerprint,
+      strategy: _byedpiAutoFallbackStrategy,
+      checkedAt: now(),
+      failures: 0,
+    );
+    await _writeCache(layout, fallback);
+    return fallback.strategy;
+  }
+
+  Future<bool> _probeStrategy({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+    required String strategy,
+  }) async {
+    final RuntimeNodeProbePlatformBridge probeBridge;
+    if (runtime case final RuntimeNodeProbePlatformBridge bridge) {
+      probeBridge = bridge;
+    } else {
+      return false;
+    }
+    final probePort = await allocateProbePort();
+    final probeConfig = config.copyWith(
+      listenPort: probePort,
+      timeout: _shorterDuration(config.timeout, _byedpiAutoProbeTimeout),
+    );
+    final timeoutSeconds = probeConfig.timeout.inSeconds.clamp(1, 60);
+    final startupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
+    final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
+    try {
+      return await probeBridge.probeNode(<String, dynamic>{
+        'nodeId': probeNodeId,
+        'type': plan.type.label,
+        'name': '${plan.name} strategy probe',
+        'host': probeConfig.listenHost,
+        'port': probeConfig.listenPort,
+        'executablePath': sharedLayout.executablePath,
+        'workingDirectory': layout.workingDirectoryPath,
+        'arguments': _buildArguments(strategy, probeConfig),
+        'revision': sha256.convert(utf8.encode(strategy)).toString(),
+        'connectivityCheck': <String, dynamic>{
+          'urls': probeConfig.testUrls.map((url) => '$url').toList(),
+          'required': true,
+          'timeout': timeoutSeconds,
+          'startup-timeout': startupTimeoutSeconds,
+          'retry-interval': 1,
+          'requests': probeConfig.requests,
+          'concurrency': probeConfig.concurrency,
+          'min-success-ratio': probeConfig.minSuccessRatio,
+        },
+      });
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${plan.name}` strategy probe failed: $error',
+      );
+      return false;
+    }
   }
 
   List<String> _buildArguments(String strategy, _ByedpiConfig config) => [
@@ -306,6 +472,10 @@ class ByedpiNodeController
       concurrency: (test['concurrency'] as num?)?.toInt() ?? 4,
       minSuccessRatio: (test['min-success-ratio'] as num?)?.toDouble() ?? 1.0,
       cacheTtl: Duration(seconds: (cache['ttl'] as num?)?.toInt() ?? 604800),
+      recheckAfter: Duration(
+        seconds: (cache['recheck-after'] as num?)?.toInt() ?? 86400,
+      ),
+      failureThreshold: (cache['failure-threshold'] as num?)?.toInt() ?? 2,
     );
   }
 
@@ -332,6 +502,12 @@ class ByedpiNodeController
       cache != null &&
       cache.fingerprint == fingerprint &&
       now().difference(cache.checkedAt) <= config.cacheTtl;
+
+  bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
+      now().difference(cache.checkedAt) >= config.recheckAfter;
+
+  Duration _shorterDuration(Duration left, Duration right) =>
+      left <= right ? left : right;
 
   String _fingerprint({
     required List<String> strategies,
@@ -391,5 +567,12 @@ class ByedpiNodeController
     }
     if (buffer.isNotEmpty) args.add(buffer.toString());
     return args;
+  }
+
+  static Future<int> _allocateLoopbackPort() async {
+    final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = socket.port;
+    await socket.close();
+    return port;
   }
 }

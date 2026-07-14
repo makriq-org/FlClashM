@@ -11,6 +11,7 @@ void main() {
   group('NaiveProxyNodeController', () {
     late Directory tempDir;
     late NaiveProxySharedInstallLayout layout;
+    late _FakeBinaryBridge binary;
     late _FakeRuntimeNodeBridge runtime;
     late NaiveProxyNodeController controller;
 
@@ -22,9 +23,10 @@ void main() {
         nodesDirectoryPath: '${tempDir.path}/nodes',
         executablePath: '${tempDir.path}/libnaive.so',
       );
+      binary = _FakeBinaryBridge(layout);
       runtime = _FakeRuntimeNodeBridge();
       controller = NaiveProxyNodeController(
-        binary: _FakeBinaryBridge(layout),
+        binary: binary,
         runtime: runtime,
       );
     });
@@ -91,6 +93,19 @@ void main() {
       expect(nodeDirectory.existsSync(), isFalse);
     });
 
+    test('cleanup failure does not turn an applied plan into a failure',
+        () async {
+      final plan = _plan('https://example.com');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: [plan], nextPlans: const []),
+        isEmpty,
+      );
+      binary.failResolve = true;
+
+      await expectLater(controller.commitStagedRuntimePlan(), completes);
+    });
+
     test('persists and clears the cold-start manifest', () async {
       final plan = _plan('https://example.com');
       await controller.persistColdStart([plan]);
@@ -120,12 +135,15 @@ BuiltInProxyNodePlan _plan(String proxy) => BuiltInProxyNodePlan(
     );
 
 class _FakeBinaryBridge implements NaiveProxyBinaryBridge {
-  const _FakeBinaryBridge(this.layout);
+  _FakeBinaryBridge(this.layout);
   final NaiveProxySharedInstallLayout layout;
+  bool failResolve = false;
 
   @override
-  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async =>
-      layout;
+  Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
+    if (failResolve) throw const FileSystemException('cleanup failed');
+    return layout;
+  }
 }
 
 class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {

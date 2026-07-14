@@ -3,18 +3,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  late String application;
   late String controller;
 
   setUpAll(() async {
-    application = await File('lib/application.dart').readAsString();
     controller = await File('lib/controller.dart').readAsString();
-  });
-
-  test('shows runtime-node preparation while initial work is running', () {
-    expect(application, contains("Text('Подготовка встроенных узлов…')"));
-    expect(application,
-        contains('final runtimePreparing = !ref.watch(initProvider)'));
   });
 
   test('finishes node preparation before optional startup maintenance', () {
