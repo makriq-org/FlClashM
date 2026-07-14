@@ -11,15 +11,93 @@ import '../../common/common.dart';
 import '../../plugins/app.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
+import '../services/app_update_manifest.dart';
 import '../services/app_update_release.dart';
 
 final Dio _appUpdateDio = Dio(
   BaseOptions(
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 30),
     headers: {
       'User-Agent': browserUa,
     },
   ),
 );
+
+abstract interface class AppUpdateHttpClient {
+  Future<List<int>> readBytes(String url);
+
+  Future<List<dynamic>> readJsonList(String url);
+
+  Future<String?> readText(String url);
+
+  Future<void> download(
+    String url,
+    String targetPath, {
+    void Function(int received, int total)? onReceiveProgress,
+  });
+}
+
+class DioAppUpdateHttpClient implements AppUpdateHttpClient {
+  const DioAppUpdateHttpClient();
+
+  @override
+  Future<List<int>> readBytes(String url) async {
+    final response = await _appUpdateDio.get<List<int>>(
+      url,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = response.data;
+    if (response.statusCode != 200 || data == null) {
+      throw StateError('Unable to read `$url`.');
+    }
+    return data;
+  }
+
+  @override
+  Future<List<dynamic>> readJsonList(String url) async {
+    final response = await _appUpdateDio.get<List<dynamic>>(
+      url,
+      options: Options(responseType: ResponseType.json),
+    );
+    final data = response.data;
+    if (response.statusCode != 200 || data == null) {
+      throw StateError('Unable to read `$url`.');
+    }
+    return data;
+  }
+
+  @override
+  Future<String?> readText(String url) async {
+    final response = await _appUpdateDio.get<String>(
+      url,
+      options: Options(responseType: ResponseType.plain),
+    );
+    if (response.statusCode != 200) {
+      return null;
+    }
+    return response.data;
+  }
+
+  @override
+  Future<void> download(
+    String url,
+    String targetPath, {
+    void Function(int received, int total)? onReceiveProgress,
+  }) async {
+    await _appUpdateDio.download(
+      url,
+      targetPath,
+      onReceiveProgress: onReceiveProgress,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'User-Agent': globalState.ua,
+        },
+      ),
+    );
+  }
+}
 
 abstract interface class AppUpdatePlatformBridge {
   String get latestReleaseUrl;
@@ -75,46 +153,96 @@ enum AppUpdatePromptAction {
 }
 
 class AndroidUpdateBridge implements AppUpdatePlatformBridge {
-  const AndroidUpdateBridge();
+  const AndroidUpdateBridge({
+    this.manifestVerifier = const AppUpdateManifestVerifier(),
+    this.rollbackGuard =
+        const SharedPreferencesAppUpdateManifestRollbackGuard(),
+    this.httpClient = const DioAppUpdateHttpClient(),
+  });
+
+  final AppUpdateManifestVerifier manifestVerifier;
+  final AppUpdateManifestRollbackGuard rollbackGuard;
+  final AppUpdateHttpClient httpClient;
 
   @override
-  String get latestReleaseUrl =>
-      'https://github.com/$repository/releases/latest';
+  String get latestReleaseUrl => '$sourceForgeProjectUrl/files/releases/';
 
   @override
   Future<AppRelease?> checkForAppUpdate({
     required bool includePrerelease,
     required String skippedTagName,
   }) async {
-    try {
-      final response = await _appUpdateDio.get<List<dynamic>>(
-        'https://api.github.com/repos/$repository/releases?per_page=20',
-        options: Options(responseType: ResponseType.json),
-      );
-      final data = response.data;
-      if (response.statusCode != 200 || data == null) {
-        return null;
-      }
+    final sourceForge = await _readSourceForgeReleases(
+      includePrerelease: includePrerelease,
+    );
+    final availableReleases = <AppRelease>[
+      ...sourceForge.releases,
+      if (!sourceForge.complete) ...await _readGitHubReleases(),
+    ];
+    final release = selectLatestAppRelease(
+      availableReleases,
+      includePrerelease: includePrerelease,
+    );
+    if (release == null || release.tagName == skippedTagName.trim()) {
+      return null;
+    }
 
-      final releases = data
+    final hasUpdate = utils.compareVersions(
+          release.version,
+          globalState.packageInfo.version,
+        ) >
+        0;
+    return hasUpdate ? release : null;
+  }
+
+  Future<({List<AppRelease> releases, bool complete})>
+      _readSourceForgeReleases({
+    required bool includePrerelease,
+  }) async {
+    final channels = <AppUpdateChannel>[
+      AppUpdateChannel.stable,
+      if (includePrerelease) AppUpdateChannel.prerelease,
+    ];
+    final releases = <AppRelease>[];
+    var complete = true;
+    for (final channel in channels) {
+      try {
+        final manifestBytes = await httpClient.readBytes(
+          appUpdateManifestUrl(channel),
+        );
+        final signatureBytes = await httpClient.readBytes(
+          appUpdateManifestSignatureUrl(channel),
+        );
+        final manifest = await manifestVerifier.verifyAndDecode(
+          manifestBytes: manifestBytes,
+          signatureBytes: signatureBytes,
+          expectedChannel: channel,
+        );
+        await rollbackGuard.validateAndRecord(manifest);
+        releases.add(manifest.toRelease());
+      } catch (error) {
+        complete = false;
+        commonPrint.log(
+          'Failed to read signed ${channel.wireName} app update manifest: '
+          '$error',
+        );
+      }
+    }
+    return (releases: releases, complete: complete);
+  }
+
+  Future<List<AppRelease>> _readGitHubReleases() async {
+    try {
+      final data = await httpClient.readJsonList(
+        'https://api.github.com/repos/$repository/releases?per_page=20',
+      );
+      return data
           .whereType<Map>()
           .map((item) => AppRelease.fromJson(Map<String, dynamic>.from(item)))
           .toList(growable: false);
-      final release = selectLatestAppRelease(
-        releases,
-        includePrerelease: includePrerelease,
-      );
-      if (release == null || release.tagName == skippedTagName.trim()) {
-        return null;
-      }
-
-      final hasUpdate = utils.compareVersions(
-              release.version, globalState.packageInfo.version) >
-          0;
-      return hasUpdate ? release : null;
     } catch (error) {
-      commonPrint.log('Failed to check app updates: $error');
-      return null;
+      commonPrint.log('Failed to read GitHub app releases: $error');
+      return const [];
     }
   }
 
@@ -207,16 +335,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   }
 
   @override
-  Future<String?> readRemoteText(String url) async {
-    final response = await _appUpdateDio.get<String>(
-      url,
-      options: Options(responseType: ResponseType.plain),
-    );
-    if (response.statusCode != 200) {
-      return null;
-    }
-    return response.data;
-  }
+  Future<String?> readRemoteText(String url) => httpClient.readText(url);
 
   @override
   Future<void> downloadReleaseAsset(
@@ -224,17 +343,25 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
   }) async {
-    await _appUpdateDio.download(
-      asset.browserDownloadUrl,
-      targetPath,
-      onReceiveProgress: onReceiveProgress,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: {
-          'User-Agent': globalState.ua,
-        },
-      ),
-    );
+    Object? lastError;
+    for (final url in asset.downloadUrls) {
+      try {
+        final target = File(targetPath);
+        if (target.existsSync()) {
+          target.deleteSync();
+        }
+        await httpClient.download(
+          url,
+          targetPath,
+          onReceiveProgress: onReceiveProgress,
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        commonPrint.log('Failed to download app update mirror `$url`: $error');
+      }
+    }
+    throw StateError('All app update mirrors failed: $lastError');
   }
 
   @visibleForTesting

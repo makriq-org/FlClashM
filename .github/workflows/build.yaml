@@ -59,7 +59,7 @@ jobs:
         run: flutter test test/product test/tool
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   build:
     runs-on: ubuntu-latest
@@ -321,6 +321,15 @@ jobs:
           pattern: artifact-android
           merge-multiple: true
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
       - name: Generate release.md
         run: |
           version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
@@ -352,6 +361,82 @@ jobs:
             printf '## Что изменилось\n\n'
             printf '%s\n' "$changelog_block"
           } >> release.md
+
+      - name: Require app update publishing secrets
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
+        run: |
+          if [ -z "$APP_UPDATE_SIGNING_KEY" ] || \
+             [ -z "$SOURCEFORGE_SSH_KEY" ] || \
+             [ -z "$SOURCEFORGE_USERNAME" ]; then
+            echo "Tag releases require app update publishing secrets." >&2
+            exit 1
+          fi
+
+      - name: Generate signed app update manifest
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          published_at=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          dart tool/write_app_update_manifest.dart \
+            --dist dist \
+            --out "dist/${release_channel}.json" \
+            --release-notes release.md \
+            --tag "${{ github.ref_name }}" \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --channel "$release_channel" \
+            --published-at "$published_at"
+
+      - name: Configure verified SourceForge SSH access
+        env:
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SOURCEFORGE_SSH_KEY" > "$HOME/.ssh/sourceforge"
+          chmod 600 "$HOME/.ssh/sourceforge"
+          : > "$HOME/.ssh/known_hosts"
+          for host in frs.sourceforge.net web.sourceforge.net; do
+            host_key=$(ssh-keyscan -t ed25519 "$host" 2>/dev/null)
+            fingerprint=$(printf '%s\n' "$host_key" | ssh-keygen -lf - | awk '{print $2}' | sort -u)
+            if [ "$fingerprint" != "SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY" ]; then
+              echo "Unexpected SourceForge SSH host key for $host: $fingerprint" >&2
+              exit 1
+            fi
+            printf '%s\n' "$host_key" >> "$HOME/.ssh/known_hosts"
+          done
+
+      - name: Publish Android update to SourceForge
+        env:
+          SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
+        run: |
+          ssh_options="-i $HOME/.ssh/sourceforge -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          release_path="/home/frs/project/f/fl/flclashm/releases/${{ github.ref_name }}"
+          rsync -av --checksum \
+            -e "ssh $ssh_options" \
+            --rsync-path="mkdir -p '$release_path' && rsync" \
+            dist/ \
+            "$SOURCEFORGE_USERNAME@frs.sourceforge.net:$release_path/"
+
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          update_path="/home/project-web/flclashm/htdocs/update"
+          rsync -av --checksum \
+            -e "ssh $ssh_options" \
+            --rsync-path="mkdir -p '$update_path' && rsync" \
+            "dist/${release_channel}.json.sig" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:$update_path/"
+          rsync -av --checksum \
+            -e "ssh $ssh_options" \
+            "dist/${release_channel}.json" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:$update_path/"
 
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}
