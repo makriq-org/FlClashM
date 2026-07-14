@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late String manager;
+  late String connectivityChecker;
   late String remoteService;
   late String vpnService;
 
@@ -11,6 +12,10 @@ void main() {
     manager = await File(
       'android/service/src/main/kotlin/com/follow/clashx/service/'
       'RuntimeNodeProcessManager.kt',
+    ).readAsString();
+    connectivityChecker = await File(
+      'android/service/src/main/kotlin/com/follow/clashx/service/'
+      'RuntimeNodeConnectivityChecker.kt',
     ).readAsString();
     remoteService = await File(
       'android/service/src/main/kotlin/com/follow/clashx/service/'
@@ -44,6 +49,19 @@ void main() {
     expect(listener, greaterThan(0));
     expect(alive, greaterThan(listener));
     expect(required, greaterThan(alive));
+  });
+
+  test('connectivity probes close sockets on every exit path', () {
+    final probeStart = connectivityChecker.indexOf('private suspend fun probe');
+    final probeEnd = connectivityChecker.indexOf(
+      'private fun socksConnect',
+      probeStart,
+    );
+    final probe = connectivityChecker.substring(probeStart, probeEnd);
+
+    expect(probe, contains('finally'));
+    expect(probe, contains('socket.close()'));
+    expect(probe, contains('rawSocket.close()'));
   });
 
   test('strategy probes are service-owned, serialized and always stopped', () {

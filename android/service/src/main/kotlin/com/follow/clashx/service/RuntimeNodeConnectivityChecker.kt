@@ -200,38 +200,47 @@ object RuntimeNodeConnectivityChecker {
                 val addresses = InetAddress.getAllByName(uri.host)
                 require(addresses.isNotEmpty() && addresses.all(::isPublicAddress))
                 val targetPort = if (uri.port > 0) uri.port else if (uri.scheme == "http") 80 else 443
-                var socket = Socket().apply {
-                    connect(
-                        InetSocketAddress(socksHost, socksPort),
-                        timeoutMillis.toInt(),
-                    )
-                    soTimeout = timeoutMillis.toInt()
-                }
-                socksConnect(socket, addresses.first(), targetPort)
-                if (uri.scheme == "https") {
-                    socket = ((SSLSocketFactory.getDefault() as SSLSocketFactory)
-                        .createSocket(socket, uri.host, targetPort, true) as SSLSocket).apply {
+                val rawSocket = Socket()
+                var socket: Socket = rawSocket
+                try {
+                    rawSocket.apply {
+                        connect(
+                            InetSocketAddress(socksHost, socksPort),
+                            timeoutMillis.toInt(),
+                        )
                         soTimeout = timeoutMillis.toInt()
-                        sslParameters = sslParameters.apply {
-                            endpointIdentificationAlgorithm = "HTTPS"
-                        }
-                        startHandshake()
                     }
-                }
-                socket.use {
+                    socksConnect(rawSocket, addresses.first(), targetPort)
+                    if (uri.scheme == "https") {
+                        val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                            .createSocket(rawSocket, uri.host, targetPort, true) as SSLSocket
+                        socket = tlsSocket
+                        tlsSocket.apply {
+                            soTimeout = timeoutMillis.toInt()
+                            sslParameters = sslParameters.apply {
+                                endpointIdentificationAlgorithm = "HTTPS"
+                            }
+                            startHandshake()
+                        }
+                    }
                     val target = (uri.rawPath?.takeIf(String::isNotEmpty) ?: "/") +
                         (uri.rawQuery?.let { query -> "?$query" } ?: "")
                     val defaultPort = if (uri.scheme == "http") 80 else 443
                     val authority = if (uri.port > 0 && targetPort != defaultPort) {
                         "${uri.host}:$targetPort"
                     } else uri.host
-                    it.getOutputStream().write(
+                    socket.getOutputStream().write(
                         "HEAD $target HTTP/1.1\r\nHost: $authority\r\nConnection: close\r\n\r\n"
                             .toByteArray(StandardCharsets.US_ASCII),
                     )
-                    it.getOutputStream().flush()
-                    val status = BufferedInputStream(it.getInputStream()).bufferedReader().readLine()
+                    socket.getOutputStream().flush()
+                    val status = BufferedInputStream(socket.getInputStream())
+                        .bufferedReader()
+                        .readLine()
                     status?.matches(Regex("^HTTP/\\d\\.\\d [1-5]\\d{2}(?: .*)?$")) == true
+                } finally {
+                    runCatching { socket.close() }
+                    if (socket !== rawSocket) runCatching { rawSocket.close() }
                 }
             }.getOrDefault(false)
         }
