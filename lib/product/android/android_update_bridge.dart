@@ -126,6 +126,7 @@ abstract interface class AppUpdatePlatformBridge {
   Future<void> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
+    required String expectedSha256,
     void Function(int received, int total)? onReceiveProgress,
   });
 
@@ -341,12 +342,13 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   Future<void> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
+    required String expectedSha256,
     void Function(int received, int total)? onReceiveProgress,
   }) async {
     Object? lastError;
     for (final url in asset.downloadUrls) {
+      final target = File(targetPath);
       try {
-        final target = File(targetPath);
         if (target.existsSync()) {
           target.deleteSync();
         }
@@ -355,10 +357,17 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
           targetPath,
           onReceiveProgress: onReceiveProgress,
         );
+        final actualSha256 = await computeFileSha256(target);
+        if (actualSha256 != expectedSha256) {
+          throw StateError('SHA256 verification failed for mirror `$url`.');
+        }
         return;
       } catch (error) {
         lastError = error;
         commonPrint.log('Failed to download app update mirror `$url`: $error');
+        if (target.existsSync()) {
+          target.deleteSync();
+        }
       }
     }
     throw StateError('All app update mirrors failed: $lastError');

@@ -289,10 +289,27 @@ void _checkBuildWorkflow({
   _expectPatternExists(
     content: content,
     pattern: RegExp(
-      r'/home/frs/project/[^"\s]+/'
-      '${RegExp.escape(contract.appUpdate.sourceForgeProject)}',
+      '/home/frs/project/'
+      '${RegExp.escape(contract.appUpdate.sourceForgeProject)}/',
     ),
     label: 'SourceForge project pin in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      r'release_relative_path="releases/\$\{GITHUB_REF_NAME\}"',
+    ),
+    label: 'SourceForge release path in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      '/home/project-web/'
+      '${RegExp.escape(contract.appUpdate.sourceForgeProject)}/htdocs/',
+    ),
+    label: 'SourceForge project web pin in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(
@@ -305,6 +322,20 @@ void _checkBuildWorkflow({
     content: content,
     pattern: RegExp(r'rsync\s+-av\s+--checksum'),
     label: 'SourceForge release upload in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'--ignore-existing\s+--relative'),
+    label: 'immutable SourceForge release upload in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      r'rsync\s+-rcn\s+--delete\s+--itemize-changes',
+    ),
+    label: 'SourceForge release immutability check in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(

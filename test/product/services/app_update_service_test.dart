@@ -94,6 +94,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   Future<void> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
+    required String expectedSha256,
     void Function(int received, int total)? onReceiveProgress,
   }) async {
     downloadedAssets.add(asset.browserDownloadUrl);
@@ -146,6 +147,7 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
   final downloadCalls = <String>[];
   final failedDownloadUrls = <String>{};
   final downloadBytes = <int>[1, 2, 3, 4];
+  final downloadBytesByUrl = <String, List<int>>{};
   final jsonLists = <String, List<dynamic>>{};
 
   @override
@@ -158,8 +160,9 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
     if (failedDownloadUrls.contains(url)) {
       throw StateError('unavailable mirror');
     }
-    File(targetPath).writeAsBytesSync(downloadBytes);
-    onReceiveProgress?.call(downloadBytes.length, downloadBytes.length);
+    final bytes = downloadBytesByUrl[url] ?? downloadBytes;
+    File(targetPath).writeAsBytesSync(bytes);
+    onReceiveProgress?.call(bytes.length, bytes.length);
   }
 
   @override
@@ -193,13 +196,50 @@ void main() {
         size: 4,
       );
 
-      await bridge.downloadReleaseAsset(asset, targetPath);
+      await bridge.downloadReleaseAsset(
+        asset,
+        targetPath,
+        expectedSha256: sha256.convert(client.downloadBytes).toString(),
+      );
 
       expect(client.downloadCalls, [
         'https://sourceforge.example/app.apk',
         'https://github.example/app.apk',
       ]);
       expect(File(targetPath).readAsBytesSync(), client.downloadBytes);
+    });
+
+    test('tries the next mirror when SHA256 verification fails', () async {
+      final tempDir = Directory.systemTemp.createTempSync('update-mirrors-');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+      final validBytes = utf8.encode('valid APK');
+      final client = _FakeAppUpdateHttpClient()
+        ..downloadBytesByUrl['https://sourceforge.example/app.apk'] =
+            utf8.encode('invalid APK')
+        ..downloadBytesByUrl['https://github.example/app.apk'] = validBytes;
+      final bridge = AndroidUpdateBridge(httpClient: client);
+      final targetPath = '${tempDir.path}/app.apk.part';
+      final asset = ReleaseAsset(
+        name: 'FlClashM-android-arm64-v8a.apk',
+        browserDownloadUrl: 'https://sourceforge.example/app.apk',
+        downloadUrls: const [
+          'https://sourceforge.example/app.apk',
+          'https://github.example/app.apk',
+        ],
+        size: validBytes.length,
+      );
+
+      await bridge.downloadReleaseAsset(
+        asset,
+        targetPath,
+        expectedSha256: sha256.convert(validBytes).toString(),
+      );
+
+      expect(client.downloadCalls, [
+        'https://sourceforge.example/app.apk',
+        'https://github.example/app.apk',
+      ]);
+      expect(File(targetPath).readAsBytesSync(), validBytes);
     });
 
     test('falls back to GitHub when signed manifests are unavailable',

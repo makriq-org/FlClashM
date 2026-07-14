@@ -384,9 +384,10 @@ jobs:
             release_channel=stable
           fi
           published_at=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          mkdir -p "${RUNNER_TEMP}/app-update"
           dart tool/write_app_update_manifest.dart \
             --dist dist \
-            --out "dist/${release_channel}.json" \
+            --out "${RUNNER_TEMP}/app-update/${release_channel}.json" \
             --release-notes release.md \
             --tag "${{ github.ref_name }}" \
             --github-repository "${GITHUB_REPOSITORY}" \
@@ -416,27 +417,44 @@ jobs:
           SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
         run: |
           ssh_options="-i $HOME/.ssh/sourceforge -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
-          release_path="/home/frs/project/f/fl/flclashm/releases/${{ github.ref_name }}"
-          rsync -av --checksum \
+          release_relative_path="releases/${GITHUB_REF_NAME}"
+          release_path="/home/frs/project/flclashm/${release_relative_path}"
+          release_stage="${RUNNER_TEMP}/sourceforge-release"
+          mkdir -p "${release_stage}/${release_relative_path}"
+          cp -a dist/. "${release_stage}/${release_relative_path}/"
+          rsync -av --checksum --ignore-existing --relative \
             -e "ssh $ssh_options" \
-            --rsync-path="mkdir -p '$release_path' && rsync" \
+            "${release_stage}/./${release_relative_path}/" \
+            "$SOURCEFORGE_USERNAME@frs.sourceforge.net:/home/frs/project/flclashm/"
+
+          release_drift=$(rsync -rcn --delete --itemize-changes \
+            -e "ssh $ssh_options" \
             dist/ \
-            "$SOURCEFORGE_USERNAME@frs.sourceforge.net:$release_path/"
+            "$SOURCEFORGE_USERNAME@frs.sourceforge.net:${release_path}/")
+          if [ -n "$release_drift" ]; then
+            echo "SourceForge release directory is not immutable:" >&2
+            printf '%s\n' "$release_drift" >&2
+            exit 1
+          fi
 
           release_channel=pre
           if [ "${{ env.IS_STABLE }}" = "true" ]; then
             release_channel=stable
           fi
-          update_path="/home/project-web/flclashm/htdocs/update"
-          rsync -av --checksum \
+          manifest_root="${RUNNER_TEMP}/app-update"
+          web_stage="${RUNNER_TEMP}/sourceforge-web"
+          mkdir -p "${web_stage}/update"
+          cp "${manifest_root}/${release_channel}.json" \
+            "${manifest_root}/${release_channel}.json.sig" \
+            "${web_stage}/update/"
+          rsync -av --checksum --relative \
             -e "ssh $ssh_options" \
-            --rsync-path="mkdir -p '$update_path' && rsync" \
-            "dist/${release_channel}.json.sig" \
-            "$SOURCEFORGE_USERNAME@web.sourceforge.net:$update_path/"
-          rsync -av --checksum \
+            "${web_stage}/./update/${release_channel}.json.sig" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+          rsync -av --checksum --relative \
             -e "ssh $ssh_options" \
-            "dist/${release_channel}.json" \
-            "$SOURCEFORGE_USERNAME@web.sourceforge.net:$update_path/"
+            "${web_stage}/./update/${release_channel}.json" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
 
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}
