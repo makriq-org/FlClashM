@@ -1,0 +1,96 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:cryptography/cryptography.dart';
+import 'package:flclashx/product/services/app_update_manifest.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../tool/write_app_update_manifest.dart';
+
+void main() {
+  test('builds and signs a SourceForge-first Android update manifest',
+      () async {
+    final tempDir = Directory.systemTemp.createTempSync('update-manifest-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final dist = Directory('${tempDir.path}/dist')..createSync();
+    File('${dist.path}/FlClashM-android-arm64-v8a.apk')
+        .writeAsBytesSync([1, 2, 3]);
+    File('${dist.path}/FlClashM-android-release.aab')
+        .writeAsBytesSync([4, 5, 6]);
+    final notes = File('${tempDir.path}/release.md')
+      ..writeAsStringSync('## Что изменилось\n\n- Проверка\n');
+    final options = ManifestOptions(
+      distPath: dist.path,
+      outputPath: '${dist.path}/stable.json',
+      releaseNotesPath: notes.path,
+      tagName: 'v0.10.5',
+      githubRepository: 'makriq-org/FlClashM',
+      channel: AppUpdateChannel.stable,
+      publishedAt: DateTime.utc(2026, 7, 14, 10),
+    );
+
+    final manifest = await buildAppUpdateManifest(options);
+    final bytes = utf8.encode(jsonEncode(manifest.toJson()));
+    final seed = List<int>.generate(32, (index) => index + 1);
+    final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+    final publicKey = await keyPair.extractPublicKey();
+    final signature = await signAppUpdateManifest(
+      bytes,
+      signingKeyBase64: base64Encode(seed),
+      expectedPublicKeyBase64: base64Encode(publicKey.bytes),
+    );
+    final verified = await AppUpdateManifestVerifier(
+      publicKeyBase64: base64Encode(publicKey.bytes),
+    ).verifyAndDecode(
+      manifestBytes: bytes,
+      signatureBytes: signature,
+      expectedChannel: AppUpdateChannel.stable,
+    );
+
+    expect(verified.assets, hasLength(1));
+    expect(verified.assets.single.name, 'FlClashM-android-arm64-v8a.apk');
+    expect(
+      verified.assets.single.urls.first,
+      'https://sourceforge.net/projects/flclashm/files/releases/v0.10.5/'
+      'FlClashM-android-arm64-v8a.apk/download',
+    );
+    expect(
+      verified.assets.single.urls.last,
+      'https://github.com/makriq-org/FlClashM/releases/download/v0.10.5/'
+      'FlClashM-android-arm64-v8a.apk',
+    );
+  });
+
+  test('rejects a release tag that does not match the channel', () {
+    expect(
+      () => ManifestOptions.parse([
+        '--dist=dist',
+        '--out=dist/stable.json',
+        '--release-notes=release.md',
+        '--tag=v0.10.5-pre1',
+        '--github-repository=makriq-org/FlClashM',
+        '--channel=stable',
+        '--published-at=2026-07-14T10:00:00.000Z',
+      ]),
+      throwsArgumentError,
+    );
+  });
+
+  test('rejects a signing key that does not match the embedded public key',
+      () async {
+    final signingSeed = List<int>.generate(32, (index) => index);
+    final otherKeyPair = await Ed25519().newKeyPairFromSeed(
+      List<int>.generate(32, (index) => index + 1),
+    );
+    final otherPublicKey = await otherKeyPair.extractPublicKey();
+
+    await expectLater(
+      signAppUpdateManifest(
+        utf8.encode('{}'),
+        signingKeyBase64: base64Encode(signingSeed),
+        expectedPublicKeyBase64: base64Encode(otherPublicKey.bytes),
+      ),
+      throwsFormatException,
+    );
+  });
+}

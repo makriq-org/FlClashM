@@ -10,6 +10,7 @@ void main(List<String> args) {
   final pubspec = readFileIfExists(pubspecPath, failures);
   final gradle = readFileIfExists(androidGradlePath, failures);
   final runtimeConstants = readFileIfExists(runtimeConstantsPath, failures);
+  final appUpdateManifest = readFileIfExists(appUpdateManifestPath, failures);
   final buildWorkflow = readFileIfExists(buildWorkflowPath, failures);
   final continuityWorkflow = readFileIfExists(continuityWorkflowPath, failures);
   final setup = readFileIfExists(setupPath, failures);
@@ -62,6 +63,14 @@ void main(List<String> args) {
       pattern: RegExp(r'const\s+repository\s*=\s*"([^"]+)";'),
       expected: contract.releaseRepository,
       label: 'runtime release repository',
+      failures: failures,
+    );
+  }
+
+  if (appUpdateManifest != null) {
+    _checkAppUpdateManifestContract(
+      content: appUpdateManifest,
+      contract: contract,
       failures: failures,
     );
   }
@@ -252,10 +261,81 @@ void _checkBuildWorkflow({
     }
   }
 
+  for (final secret in const [
+    'APP_UPDATE_SIGNING_KEY',
+    'SOURCEFORGE_SSH_KEY',
+    'SOURCEFORGE_USERNAME',
+  ]) {
+    if (!content.contains('secrets.$secret')) {
+      failures.add(
+        'Missing app update publishing secret `$secret` in '
+        '`$buildWorkflowPath`.',
+      );
+    }
+  }
+
   _expectPatternExists(
     content: content,
     pattern: RegExp(r'awk -v header="\$header" '),
     label: 'CHANGELOG.md section extraction in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'dart\s+tool/write_app_update_manifest\.dart(?:\s|$)'),
+    label: 'signed app update manifest generation in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      '/home/frs/project/'
+      '${RegExp.escape(contract.appUpdate.sourceForgeProject)}/',
+    ),
+    label: 'SourceForge project pin in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      r'release_relative_path="releases/\$\{GITHUB_REF_NAME\}"',
+    ),
+    label: 'SourceForge release path in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      '/home/project-web/'
+      '${RegExp.escape(contract.appUpdate.sourceForgeProject)}/htdocs/',
+    ),
+    label: 'SourceForge project web pin in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY'),
+    label: 'SourceForge SSH host key pin in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'rsync\s+-av\s+--checksum'),
+    label: 'SourceForge release upload in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'--ignore-existing\s+--relative'),
+    label: 'immutable SourceForge release upload in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(
+      r'rsync\s+-rcn\s+--delete\s+--itemize-changes',
+    ),
+    label: 'SourceForge release immutability check in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(
@@ -354,6 +434,43 @@ void _checkBuildWorkflow({
     ],
     description:
         'release continuity guard must run before signing, build, metadata and artifact assertions',
+    failures: failures,
+  );
+  _expectOrdering(
+    content: content,
+    labels: const [
+      'name: Generate release.md',
+      'name: Require app update publishing secrets',
+      'name: Generate signed app update manifest',
+      'name: Configure verified SourceForge SSH access',
+      'name: Publish Android update to SourceForge',
+      'name: Release (Stable)',
+    ],
+    description:
+        'SourceForge assets and signed channel manifest must publish before GitHub release',
+    failures: failures,
+  );
+}
+
+void _checkAppUpdateManifestContract({
+  required String content,
+  required ReleaseContract contract,
+  required List<String> failures,
+}) {
+  _expectQuotedValue(
+    content: content,
+    pattern: RegExp(
+      r"const\s+appUpdateManifestPublicKeyBase64\s*=\s*'([^']+)';",
+    ),
+    expected: contract.appUpdate.manifestPublicKeyBase64,
+    label: 'app update manifest public key',
+    failures: failures,
+  );
+  _expectQuotedValue(
+    content: content,
+    pattern: RegExp(r"const\s+sourceForgeProjectName\s*=\s*'([^']+)';"),
+    expected: contract.appUpdate.sourceForgeProject,
+    label: 'SourceForge app update project',
     failures: failures,
   );
 }

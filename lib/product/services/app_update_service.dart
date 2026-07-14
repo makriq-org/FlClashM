@@ -148,6 +148,7 @@ class AppUpdateService {
       downloadTask: (onReceiveProgress) => platform.downloadReleaseAsset(
         androidAsset.apkAsset,
         tempFile.path,
+        expectedSha256: expectedSha256,
         onReceiveProgress: onReceiveProgress,
       ),
     );

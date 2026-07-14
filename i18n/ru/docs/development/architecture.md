@@ -39,5 +39,6 @@ dart tool/check_product_boundaries.dart
 | `ProfileCompiler` | Чтение и нормализация профиля |
 | `SecurityPolicy` | Обязательные правила |
 | `EngineManager` | Жизненный цикл движка |
-| `AppUpdateService` | Проверка и установка обновлений |
+| `AppUpdateService` | Проверка, загрузка и установка обновлений приложения |
+| `AppUpdateManifestVerifier` | Проверка подписи и контракта каталога обновлений |
 | `AccessControlService` | Раздельное туннелирование |

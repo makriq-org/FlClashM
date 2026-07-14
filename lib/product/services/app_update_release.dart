@@ -9,13 +9,19 @@ class ReleaseAsset {
     required this.browserDownloadUrl,
     required this.size,
     this.digest,
-  });
+    List<String>? downloadUrls,
+  }) : downloadUrls = List.unmodifiable(
+          downloadUrls ?? <String>[browserDownloadUrl],
+        );
 
   factory ReleaseAsset.fromJson(Map<String, dynamic> json) => ReleaseAsset(
         name: json['name']?.toString() ?? '',
         browserDownloadUrl: json['browser_download_url']?.toString() ?? '',
         size: (json['size'] as num?)?.toInt() ?? 0,
         digest: json['digest']?.toString(),
+        downloadUrls: <String>[
+          json['browser_download_url']?.toString() ?? '',
+        ],
       );
 
   static final RegExp _androidAssetPattern = RegExp(
@@ -26,6 +32,7 @@ class ReleaseAsset {
   final String browserDownloadUrl;
   final int size;
   final String? digest;
+  final List<String> downloadUrls;
 
   bool get isAndroidApk => _androidAssetPattern.hasMatch(name);
 

@@ -5,6 +5,7 @@ const baselinePath = 'tool/release_continuity_baseline.json';
 const pubspecPath = 'pubspec.yaml';
 const androidGradlePath = 'android/app/build.gradle.kts';
 const runtimeConstantsPath = 'lib/common/constant.dart';
+const appUpdateManifestPath = 'lib/product/services/app_update_manifest.dart';
 const buildWorkflowPath = '.github/workflows/build.yaml';
 const continuityWorkflowPath = '.github/workflows/continuity.yaml';
 const setupPath = 'setup.dart';
@@ -121,6 +122,7 @@ class ReleaseContract {
   const ReleaseContract({
     required this.applicationId,
     required this.releaseRepository,
+    required this.appUpdate,
     required this.requiredReleaseSecrets,
     required this.continuitySigner,
     required this.versionCodeFloor,
@@ -132,6 +134,9 @@ class ReleaseContract {
       ReleaseContract(
         applicationId: _readString(json, key: 'applicationId'),
         releaseRepository: _readString(json, key: 'releaseRepository'),
+        appUpdate: AppUpdateContract.fromJson(
+          _readMap(json, key: 'appUpdate'),
+        ),
         requiredReleaseSecrets: _readStringList(
           json,
           key: 'requiredReleaseSecrets',
@@ -149,6 +154,7 @@ class ReleaseContract {
 
   final String applicationId;
   final String releaseRepository;
+  final AppUpdateContract appUpdate;
   final List<String> requiredReleaseSecrets;
   final ReleaseSigner continuitySigner;
   final int versionCodeFloor;
@@ -169,6 +175,28 @@ class ReleaseContract {
     }
     return artifact.substring(0, markerIndex);
   }
+}
+
+class AppUpdateContract {
+  const AppUpdateContract({
+    required this.sourceForgeProject,
+    required this.manifestPublicKeyBase64,
+  });
+
+  factory AppUpdateContract.fromJson(Map<String, dynamic> json) =>
+      AppUpdateContract(
+        sourceForgeProject: _readString(
+          json,
+          key: 'sourceForgeProject',
+        ),
+        manifestPublicKeyBase64: _readString(
+          json,
+          key: 'manifestPublicKeyBase64',
+        ),
+      );
+
+  final String sourceForgeProject;
+  final String manifestPublicKeyBase64;
 }
 
 class ReleaseSigner {
