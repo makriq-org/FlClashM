@@ -15,6 +15,7 @@ import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
 const _byedpiAutoSelectionRevision = 1;
+const _byedpiAutoSelectionBudget = Duration(minutes: 1);
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
 
@@ -281,6 +282,7 @@ class ByedpiNodeController
     required ByedpiNodeLayout layout,
     required _ByedpiConfig config,
   }) async {
+    final selectionDeadline = now().add(_byedpiAutoSelectionBudget);
     final strategies = await _resolveStrategies(config);
     final fingerprint = _fingerprint(
       strategies: strategies,
@@ -296,6 +298,7 @@ class ByedpiNodeController
         layout: layout,
         config: config,
         strategy: cached.strategy,
+        selectionDeadline: selectionDeadline,
       )) {
         await _writeCache(
           layout,
@@ -326,12 +329,20 @@ class ByedpiNodeController
     }
 
     for (final strategy in strategies) {
+      if (!now().isBefore(selectionDeadline)) {
+        commonPrint.log(
+          'byedpi node `${plan.name}` stopped strategy selection after '
+          'reaching its time budget.',
+        );
+        break;
+      }
       if (await _probeStrategy(
         plan: plan,
         sharedLayout: sharedLayout,
         layout: layout,
         config: config,
         strategy: strategy,
+        selectionDeadline: selectionDeadline,
       )) {
         await _writeCache(
           layout,
@@ -374,6 +385,7 @@ class ByedpiNodeController
     required ByedpiNodeLayout layout,
     required _ByedpiConfig config,
     required String strategy,
+    required DateTime selectionDeadline,
   }) async {
     final RuntimeNodeProbePlatformBridge probeBridge;
     if (runtime case final RuntimeNodeProbePlatformBridge bridge) {
@@ -383,8 +395,15 @@ class ByedpiNodeController
     }
     final probePort = await allocateProbePort();
     final probeConfig = config.withListenPort(probePort);
+    final remainingBudgetSeconds =
+        selectionDeadline.difference(now()).inSeconds;
+    if (remainingBudgetSeconds <= 0) return false;
     final timeoutSeconds = probeConfig.timeout.inSeconds.clamp(1, 60);
-    final startupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
+    final requestedStartupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
+    final startupTimeoutSeconds =
+        remainingBudgetSeconds < requestedStartupTimeoutSeconds
+            ? remainingBudgetSeconds
+            : requestedStartupTimeoutSeconds;
     final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
     try {
       return await probeBridge.probeNode(<String, dynamic>{

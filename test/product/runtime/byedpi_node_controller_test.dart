@@ -136,6 +136,64 @@ void main() {
       );
     });
 
+    test('stops strategy selection when its total time budget expires',
+        () async {
+      var currentTime = DateTime.utc(2026, 1, 1);
+      runtime.probeResults.addAll([false, false, false]);
+      runtime.onProbe = () {
+        currentTime = currentTime.add(const Duration(seconds: 31));
+      };
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(
+          layout,
+          strategies: '--strategy 1\n--strategy 2\n--strategy 3',
+        ),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.probeCalls.length,
+        now: () => currentTime,
+      );
+      final plan = _plan(mode: 'auto', args: '', timeout: 5);
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(runtime.probeCalls, hasLength(2));
+      expect(node['arguments'], containsAllInOrder(['--disorder', '1']));
+    });
+
+    test('caps a probe by the remaining strategy selection budget', () async {
+      final startedAt = DateTime.utc(2026, 1, 1);
+      var clockCall = 0;
+      runtime.probeResults.add(true);
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout, strategies: '--strategy 1'),
+        runtime: runtime,
+        allocateProbePort: () async => 39800,
+        now: () {
+          final offset = clockCall++ == 0 ? 0 : 56;
+          return startedAt.add(Duration(seconds: offset));
+        },
+      );
+      final plan = _plan(mode: 'auto', args: '', timeout: 5);
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+
+      await controller.buildRuntimeNodes([plan]);
+
+      expect(
+        (runtime.probeCalls.single['connectivityCheck']
+            as Map)['startup-timeout'],
+        4,
+      );
+    });
+
     test('reselects a strategy from a legacy fallback cache', () async {
       final plan = _plan(mode: 'auto', args: '');
       expect(
@@ -255,6 +313,7 @@ class _FakeRuntimeNodeBridge
   String? savedManifest;
   final List<bool> probeResults = [];
   final List<Map<String, dynamic>> probeCalls = [];
+  void Function()? onProbe;
 
   @override
   Future<RuntimeNodePlanState> applyPlan(
@@ -275,6 +334,7 @@ class _FakeRuntimeNodeBridge
   @override
   Future<bool> probeNode(Map<String, dynamic> node) async {
     probeCalls.add(node);
+    onProbe?.call();
     return probeResults.isEmpty ? false : probeResults.removeAt(0);
   }
 
