@@ -86,6 +86,7 @@
   "urlDesc": "通过URL获取配置文件",
   "file": "文件",
   "fileDesc": "直接上传配置文件",
+  "fileTooLarge": "文件过大",
   "name": "名称",
   "profileNameNullValidationDesc": "请输入配置名称",
   "profileUrlNullValidationDesc": "请输入配置URL",
@@ -231,6 +232,8 @@
   "autoCloseConnectionsDesc": "切换节点后自动关闭连接",
   "onlyStatisticsProxy": "仅统计代理",
   "onlyStatisticsProxyDesc": "开启后，将只统计代理流量",
+  "crashlytics": "崩溃报告",
+  "crashlyticsDesc": "通过 Firebase Crashlytics 自动上传崩溃日志，不包含敏感信息",
   "pureBlackMode": "纯黑模式",
   "keepAliveIntervalDesc": "TCP保持活动间隔",
   "entries": "个条目",
@@ -447,5 +450,9 @@
   "batteryOptimization": "电池优化",
   "batteryOptimizationDesc": "将应用加入白名单，避免系统在后台杀死 VPN",
   "autoStart": "自启动",
-  "autoStartDesc": "允许后台自启动，使 VPN 在重启和更新后仍能恢复（MIUI/EMUI 等）"
+  "autoStartDesc": "允许后台自启动，使 VPN 在重启和更新后仍能恢复（MIUI/EMUI 等）",
+  "zashboardInApp": "在应用内打开 zashboard",
+  "zashboardInAppDesc": "使用内置浏览器显示控制面板，无需跳转到外部浏览器",
+  "openPanel": "打开面板",
+  "downloadingZashboard": "正在下载 Zashboard…"
 }

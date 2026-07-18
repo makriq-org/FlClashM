@@ -342,6 +342,18 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
   }
 
+  /// Toggle Crashlytics collection. Kotlin persists the flag (SavedParams)
+  /// and applies it in both the main and :remote processes.
+  Future<void> setCrashlytics(bool enable) async {
+    try {
+      await _channel
+          .invokeMethod('setCrashlytics', enable)
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      commonPrint.log('setCrashlytics error: $e');
+    }
+  }
+
   /// Persist quickStart-equivalent params so tile/widget/Always-on can
   /// cold-start without Flutter via FlVpnService.coldStart().
   Future<void> saveParamsForColdStart({

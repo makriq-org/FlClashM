@@ -36,6 +36,8 @@ interface IRemoteInterface {
 
     void setState(in String state);
 
+    void setCrashlytics(boolean enable);
+
     void updateDns(in String dns);
 
     String getAndroidVpnOptions();

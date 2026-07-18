@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class StartButton extends ConsumerStatefulWidget {
@@ -65,6 +68,9 @@ class _StartButtonState extends ConsumerState<StartButton>
   }
 
   void handleSwitchStart() {
+    if (Platform.isAndroid) {
+      HapticFeedback.mediumImpact();
+    }
     isStart = !isStart;
     updateController();
     debouncer.call(

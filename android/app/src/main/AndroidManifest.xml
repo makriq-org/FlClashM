@@ -27,6 +27,11 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <!-- Vendor runtime permission (ITGSA standard on vivo/OPPO/Xiaomi ROMs) gating
+         the installed-app list. Without it those ROMs silently return a near-empty
+         list from getInstalledPackages even though QUERY_ALL_PACKAGES is held, so
+         AccessControl shows no apps. Unknown and ignored on AOSP-like ROMs. -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
 
     <application
         android:name=".FlClashApplication"
@@ -35,7 +40,8 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:label="FlClashM"
-        android:memtagMode="off">
+        android:memtagMode="off"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
             android:name="com.follow.clashx.MainActivity"
@@ -88,9 +94,13 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <!-- Impeller OFF (Skia): Impeller's Vulkan backend janks animations on some
+             Pixel GPUs (Tensor) even at a forced 120 Hz, while other devices are
+             fine — the classic device-specific Impeller regression. Skia renders
+             smoothly here. Revisit if a future Flutter drops the Skia backend. -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="true" />
+            android:value="false" />
 
         <!-- Public automation entry point (MacroDroid/Tasker send START/STOP/CHANGE
              intents): must stay callable by third-party apps, so no signature

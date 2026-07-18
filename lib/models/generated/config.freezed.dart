@@ -40,6 +40,8 @@ mixin _$AppSettingProps {
   bool get minimizeOnExit => throw _privateConstructorUsedError;
   bool get hidden => throw _privateConstructorUsedError;
   bool get developerMode => throw _privateConstructorUsedError;
+  bool get crashlytics => throw _privateConstructorUsedError;
+  bool get zashboardInApp => throw _privateConstructorUsedError;
   bool get overrideProviderSettings => throw _privateConstructorUsedError;
   bool get overrideNetworkSettings => throw _privateConstructorUsedError;
   RecoveryStrategy get recoveryStrategy => throw _privateConstructorUsedError;
@@ -81,6 +83,8 @@ abstract class $AppSettingPropsCopyWith<$Res> {
       bool minimizeOnExit,
       bool hidden,
       bool developerMode,
+      bool crashlytics,
+      bool zashboardInApp,
       bool overrideProviderSettings,
       bool overrideNetworkSettings,
       RecoveryStrategy recoveryStrategy,
@@ -120,6 +124,8 @@ class _$AppSettingPropsCopyWithImpl<$Res, $Val extends AppSettingProps>
     Object? minimizeOnExit = null,
     Object? hidden = null,
     Object? developerMode = null,
+    Object? crashlytics = null,
+    Object? zashboardInApp = null,
     Object? overrideProviderSettings = null,
     Object? overrideNetworkSettings = null,
     Object? recoveryStrategy = null,
@@ -198,6 +204,14 @@ class _$AppSettingPropsCopyWithImpl<$Res, $Val extends AppSettingProps>
           ? _value.developerMode
           : developerMode // ignore: cast_nullable_to_non_nullable
               as bool,
+      crashlytics: null == crashlytics
+          ? _value.crashlytics
+          : crashlytics // ignore: cast_nullable_to_non_nullable
+              as bool,
+      zashboardInApp: null == zashboardInApp
+          ? _value.zashboardInApp
+          : zashboardInApp // ignore: cast_nullable_to_non_nullable
+              as bool,
       overrideProviderSettings: null == overrideProviderSettings
           ? _value.overrideProviderSettings
           : overrideProviderSettings // ignore: cast_nullable_to_non_nullable
@@ -246,6 +260,8 @@ abstract class _$$AppSettingPropsImplCopyWith<$Res>
       bool minimizeOnExit,
       bool hidden,
       bool developerMode,
+      bool crashlytics,
+      bool zashboardInApp,
       bool overrideProviderSettings,
       bool overrideNetworkSettings,
       RecoveryStrategy recoveryStrategy,
@@ -283,6 +299,8 @@ class __$$AppSettingPropsImplCopyWithImpl<$Res>
     Object? minimizeOnExit = null,
     Object? hidden = null,
     Object? developerMode = null,
+    Object? crashlytics = null,
+    Object? zashboardInApp = null,
     Object? overrideProviderSettings = null,
     Object? overrideNetworkSettings = null,
     Object? recoveryStrategy = null,
@@ -361,6 +379,14 @@ class __$$AppSettingPropsImplCopyWithImpl<$Res>
           ? _value.developerMode
           : developerMode // ignore: cast_nullable_to_non_nullable
               as bool,
+      crashlytics: null == crashlytics
+          ? _value.crashlytics
+          : crashlytics // ignore: cast_nullable_to_non_nullable
+              as bool,
+      zashboardInApp: null == zashboardInApp
+          ? _value.zashboardInApp
+          : zashboardInApp // ignore: cast_nullable_to_non_nullable
+              as bool,
       overrideProviderSettings: null == overrideProviderSettings
           ? _value.overrideProviderSettings
           : overrideProviderSettings // ignore: cast_nullable_to_non_nullable
@@ -404,6 +430,8 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
       this.minimizeOnExit = false,
       this.hidden = false,
       this.developerMode = false,
+      this.crashlytics = true,
+      this.zashboardInApp = true,
       this.overrideProviderSettings = false,
       this.overrideNetworkSettings = false,
       this.recoveryStrategy = RecoveryStrategy.compatible,
@@ -475,6 +503,12 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
   final bool developerMode;
   @override
   @JsonKey()
+  final bool crashlytics;
+  @override
+  @JsonKey()
+  final bool zashboardInApp;
+  @override
+  @JsonKey()
   final bool overrideProviderSettings;
   @override
   @JsonKey()
@@ -487,7 +521,7 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
 
   @override
   String toString() {
-    return 'AppSettingProps(locale: $locale, dashboardWidgets: $dashboardWidgets, onlyStatisticsProxy: $onlyStatisticsProxy, autoLaunch: $autoLaunch, silentLaunch: $silentLaunch, autoRun: $autoRun, openLogs: $openLogs, closeConnections: $closeConnections, testUrl: $testUrl, isAnimateToPage: $isAnimateToPage, autoCheckUpdate: $autoCheckUpdate, includePrereleaseUpdates: $includePrereleaseUpdates, skippedAppUpdateTagName: $skippedAppUpdateTagName, showLabel: $showLabel, disclaimerAccepted: $disclaimerAccepted, minimizeOnExit: $minimizeOnExit, hidden: $hidden, developerMode: $developerMode, overrideProviderSettings: $overrideProviderSettings, overrideNetworkSettings: $overrideNetworkSettings, recoveryStrategy: $recoveryStrategy, newDashboard: $newDashboard)';
+    return 'AppSettingProps(locale: $locale, dashboardWidgets: $dashboardWidgets, onlyStatisticsProxy: $onlyStatisticsProxy, autoLaunch: $autoLaunch, silentLaunch: $silentLaunch, autoRun: $autoRun, openLogs: $openLogs, closeConnections: $closeConnections, testUrl: $testUrl, isAnimateToPage: $isAnimateToPage, autoCheckUpdate: $autoCheckUpdate, includePrereleaseUpdates: $includePrereleaseUpdates, skippedAppUpdateTagName: $skippedAppUpdateTagName, showLabel: $showLabel, disclaimerAccepted: $disclaimerAccepted, minimizeOnExit: $minimizeOnExit, hidden: $hidden, developerMode: $developerMode, crashlytics: $crashlytics, zashboardInApp: $zashboardInApp, overrideProviderSettings: $overrideProviderSettings, overrideNetworkSettings: $overrideNetworkSettings, recoveryStrategy: $recoveryStrategy, newDashboard: $newDashboard)';
   }
 
   @override
@@ -529,6 +563,10 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
             (identical(other.hidden, hidden) || other.hidden == hidden) &&
             (identical(other.developerMode, developerMode) ||
                 other.developerMode == developerMode) &&
+            (identical(other.crashlytics, crashlytics) ||
+                other.crashlytics == crashlytics) &&
+            (identical(other.zashboardInApp, zashboardInApp) ||
+                other.zashboardInApp == zashboardInApp) &&
             (identical(
                     other.overrideProviderSettings, overrideProviderSettings) ||
                 other.overrideProviderSettings == overrideProviderSettings) &&
@@ -563,6 +601,8 @@ class _$AppSettingPropsImpl implements _AppSettingProps {
         minimizeOnExit,
         hidden,
         developerMode,
+        crashlytics,
+        zashboardInApp,
         overrideProviderSettings,
         overrideNetworkSettings,
         recoveryStrategy,
@@ -607,6 +647,8 @@ abstract class _AppSettingProps implements AppSettingProps {
       final bool minimizeOnExit,
       final bool hidden,
       final bool developerMode,
+      final bool crashlytics,
+      final bool zashboardInApp,
       final bool overrideProviderSettings,
       final bool overrideNetworkSettings,
       final RecoveryStrategy recoveryStrategy,
@@ -652,6 +694,10 @@ abstract class _AppSettingProps implements AppSettingProps {
   bool get hidden;
   @override
   bool get developerMode;
+  @override
+  bool get crashlytics;
+  @override
+  bool get zashboardInApp;
   @override
   bool get overrideProviderSettings;
   @override

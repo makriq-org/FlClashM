@@ -410,6 +410,12 @@ enum DashboardWidget {
       crossAxisCellCount: 8,
       child: ServiceInfoWidget(),
     ),
+  ),
+  zashboardButton(
+    GridItem(
+      crossAxisCellCount: 4,
+      child: ZashboardButton(),
+    ),
   );
 
   final GridItem widget;
@@ -474,6 +480,7 @@ enum RuleAction {
   DOMAIN_SUFFIX("DOMAIN-SUFFIX"),
   DOMAIN_KEYWORD("DOMAIN-KEYWORD"),
   DOMAIN_REGEX("DOMAIN-REGEX"),
+  DOMAIN_WILDCARD("DOMAIN-WILDCARD"),
   GEOSITE("GEOSITE"),
   IP_CIDR("IP-CIDR"),
   IP_CIDR6("IP-CIDR6"),
@@ -490,10 +497,13 @@ enum RuleAction {
   IN_TYPE("IN-TYPE"),
   IN_USER("IN-USER"),
   IN_NAME("IN-NAME"),
+  REMATCH_NAME("REMATCH-NAME"),
   PROCESS_PATH("PROCESS-PATH"),
   PROCESS_PATH_REGEX("PROCESS-PATH-REGEX"),
+  PROCESS_PATH_WILDCARD("PROCESS-PATH-WILDCARD"),
   PROCESS_NAME("PROCESS-NAME"),
   PROCESS_NAME_REGEX("PROCESS-NAME-REGEX"),
+  PROCESS_NAME_WILDCARD("PROCESS-NAME-WILDCARD"),
   UID("UID"),
   NETWORK("NETWORK"),
   DSCP("DSCP"),

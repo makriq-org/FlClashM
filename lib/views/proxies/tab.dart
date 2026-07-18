@@ -1,6 +1,3 @@
-import 'dart:math';
-
-import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
@@ -8,11 +5,8 @@ import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/common.dart';
 import 'card.dart';
 import 'common.dart';
-
-typedef GroupNameKeyMap = Map<String, GlobalObjectKey<ProxyGroupViewState>>;
 
 class ProxiesTabView extends ConsumerStatefulWidget {
   const ProxiesTabView({super.key});
@@ -25,7 +19,6 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
     with TickerProviderStateMixin {
   TabController? _tabController;
   final _hasMoreButtonNotifier = ValueNotifier<bool>(false);
-  GroupNameKeyMap _keyMap = {};
 
   @override
   void initState() {
@@ -37,16 +30,6 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
   void dispose() {
     _destroyTabController();
     super.dispose();
-  }
-
-  void scrollToGroupSelected() {
-    final currentGroupName = globalState.appController.getCurrentGroupName();
-    _keyMap[currentGroupName]?.currentState?.scrollToSelected();
-  }
-
-  Future<void> delayTestCurrentGroup() async {
-    final currentGroupName = globalState.appController.getCurrentGroupName();
-    await clashCore.healthCheck(currentGroupName ?? '');
   }
 
   Consumer _buildMoreButton() => Consumer(
@@ -183,17 +166,12 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
         label: appLocalizations.nullTip(appLocalizations.proxies),
       );
     }
-    final GroupNameKeyMap keyMap = {};
-    final children = groupNames.map((groupName) {
-      keyMap[groupName] = GlobalObjectKey(groupName);
-      return KeepScope(
+    final children = groupNames.map((groupName) => KeepScope(
         child: ProxyGroupView(
-          key: keyMap[groupName],
+          key: ValueKey(groupName),
           groupName: groupName,
         ),
-      );
-    }).toList();
-    _keyMap = keyMap;
+      )).toList();
     return Column(
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,33 +256,12 @@ class ProxyGroupView extends ConsumerStatefulWidget {
 class ProxyGroupViewState extends ConsumerState<ProxyGroupView> {
   final _controller = ScrollController();
 
-  List<Proxy> proxies = [];
-  String? testUrl;
-
   String get groupName => widget.groupName;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  void scrollToSelected() {
-    if (_controller.position.maxScrollExtent == 0) {
-      return;
-    }
-    _controller.animateTo(
-      min(
-        16 +
-            getScrollToSelectedOffset(
-              groupName: groupName,
-              proxies: proxies,
-            ),
-        _controller.position.maxScrollExtent,
-      ),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeIn,
-    );
   }
 
   @override
@@ -317,9 +274,6 @@ class ProxyGroupViewState extends ConsumerState<ProxyGroupView> {
       proxies,
       state.testUrl,
     );
-    this.proxies = sortedProxies;
-    testUrl = state.testUrl;
-
     return Align(
       alignment: Alignment.topCenter,
       child: CommonAutoHiddenScrollBar(
@@ -354,81 +308,4 @@ class ProxyGroupViewState extends ConsumerState<ProxyGroupView> {
       ),
     );
   }
-}
-
-class DelayTestButton extends StatefulWidget {
-
-  const DelayTestButton({
-    super.key,
-    required this.onClick,
-  });
-  final Future Function() onClick;
-
-  @override
-  State<DelayTestButton> createState() => _DelayTestButtonState();
-}
-
-class _DelayTestButtonState extends State<DelayTestButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  Future<void> _healthcheck() async {
-    if (_controller.isAnimating) {
-      return;
-    }
-    _controller.forward();
-    await widget.onClick();
-    if (mounted) {
-      _controller.reverse();
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(
-        milliseconds: 200,
-      ),
-    );
-    _scale = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(
-          0,
-          1,
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-      animation: _controller.view,
-      builder: (_, child) => SizedBox(
-          width: 56,
-          height: 56,
-          child: Transform.scale(
-            scale: _scale.value,
-            child: child,
-          ),
-        ),
-      child: FloatingActionButton(
-        heroTag: null,
-        tooltip: appLocalizations.testAllDelay,
-        onPressed: _healthcheck,
-        child: const Icon(Icons.network_ping),
-      ),
-    );
 }

@@ -321,9 +321,13 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
         });
         
         return RepaintBoundary(
-          child: FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: Expansible(
+          // No per-group FocusTraversalGroup: wrapping each card in its own
+          // traversal group made every group a membrane the D-pad had to step
+          // out of and back into, costing an extra press to cross between groups.
+          // The whole list shares the outer group (ProxiesListView), so
+          // directional nav flows straight through; ExcludeFocus still keeps a
+          // folded group's hidden proxies out of the traversal.
+          child: Expansible(
               controller: _expansibleController,
               headerBuilder: (context, animation) => GestureDetector(
                 onTap: () => _toggleExpansion(unfoldSet),
@@ -381,17 +385,30 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
                       ),
                       Row(
                         children: [
-                          if (isExpand) ...[
-                            IconButton(
-                              onPressed: _delayTest,
-                              visualDensity: VisualDensity.standard,
-                              icon: const Icon(Icons.network_ping),
-                            ),
-                            const SizedBox(width: 6),
-                          ] else
-                            const SizedBox(width: 4),
+                          // Ping the whole group straight from the header —
+                          // available while collapsed too (previously expand-only),
+                          // which also gives the TV D-pad a focus target on a
+                          // folded group.
+                          //
+                          // Both header buttons share the exact same box so their
+                          // top/bottom edges line up. With a D-pad, a vertical press
+                          // then can't land on the horizontal sibling (which had a
+                          // taller filled-tonal box), so up/down moves straight to
+                          // the next/previous group in one press; left/right switches
+                          // between ping and expand within the group.
+                          IconButton(
+                            onPressed: _delayTest,
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                const BoxConstraints.tightFor(width: 40, height: 40),
+                            icon: const Icon(Icons.network_ping),
+                          ),
+                          const SizedBox(width: 6),
                           IconButton.filledTonal(
                             onPressed: () => _toggleExpansion(unfoldSet),
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                const BoxConstraints.tightFor(width: 40, height: 40),
                             icon: CommonExpandIcon(expand: isExpand),
                           ),
                         ],
@@ -400,15 +417,23 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
                   ),
                 ),
               ),
-              bodyBuilder: (context, animation) => RepaintBoundary(
-                child: SizeTransition(
-                  sizeFactor: animation,
-                  axisAlignment: -1.0,
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Column(children: widget.proxies),
+              bodyBuilder: (context, animation) => ExcludeFocus(
+                // A collapsed group keeps its proxy cards mounted — SizeTransition
+                // only clips them to zero height — and every card is a focusable
+                // OutlinedButton. On Android TV the D-pad would otherwise dive into
+                // these invisible cards, so the highlight jitters and looks like it
+                // skips whole groups. Drop the folded body from focus traversal.
+                excluding: !shouldExpand,
+                child: RepaintBoundary(
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1.0,
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Column(children: widget.proxies),
+                      ),
                     ),
                   ),
                 ),
@@ -416,7 +441,6 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
               expansibleBuilder: (context, header, body, animation) =>
                   Column(children: [header, body]),
             ),
-          ),
         );
       },
     );

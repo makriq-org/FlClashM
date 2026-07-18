@@ -24,12 +24,14 @@ _$AppSettingPropsImpl _$$AppSettingPropsImplFromJson(
       autoCheckUpdate: json['autoCheckUpdate'] as bool? ?? false,
       includePrereleaseUpdates:
           json['includePrereleaseUpdates'] as bool? ?? false,
-      skippedAppUpdateTagName: json['skippedAppUpdateTagName'] as String? ?? '',
+      skippedAppUpdateTagName: json['skippedAppUpdateTagName'] as String? ?? "",
       showLabel: json['showLabel'] as bool? ?? false,
       disclaimerAccepted: json['disclaimerAccepted'] as bool? ?? false,
       minimizeOnExit: json['minimizeOnExit'] as bool? ?? false,
       hidden: json['hidden'] as bool? ?? false,
       developerMode: json['developerMode'] as bool? ?? false,
+      crashlytics: json['crashlytics'] as bool? ?? true,
+      zashboardInApp: json['zashboardInApp'] as bool? ?? true,
       overrideProviderSettings:
           json['overrideProviderSettings'] as bool? ?? false,
       overrideNetworkSettings:
@@ -63,6 +65,8 @@ Map<String, dynamic> _$$AppSettingPropsImplToJson(
       'minimizeOnExit': instance.minimizeOnExit,
       'hidden': instance.hidden,
       'developerMode': instance.developerMode,
+      'crashlytics': instance.crashlytics,
+      'zashboardInApp': instance.zashboardInApp,
       'overrideProviderSettings': instance.overrideProviderSettings,
       'overrideNetworkSettings': instance.overrideNetworkSettings,
       'recoveryStrategy': _$RecoveryStrategyEnumMap[instance.recoveryStrategy]!,
@@ -89,6 +93,7 @@ const _$DashboardWidgetEnumMap = {
   DashboardWidget.memoryInfo: 'memoryInfo',
   DashboardWidget.changeServerButton: 'changeServerButton',
   DashboardWidget.serviceInfo: 'serviceInfo',
+  DashboardWidget.zashboardButton: 'zashboardButton',
 };
 
 _$AccessControlImpl _$$AccessControlImplFromJson(Map<String, dynamic> json) =>

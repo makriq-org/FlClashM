@@ -278,6 +278,9 @@ object Service {
     suspend fun setState(state: String): Result<Unit> =
         delegate.useService { it.setState(state) }
 
+    suspend fun setCrashlytics(enable: Boolean): Result<Unit> =
+        delegate.useService { it.setCrashlytics(enable) }
+
     suspend fun updateDns(dns: String): Result<Unit> =
         delegate.useService { it.updateDns(dns) }
 

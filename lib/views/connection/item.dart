@@ -156,6 +156,8 @@ class ConnectionRow extends StatelessWidget {
       future = _packageIconFuture(process);
     } else if (Platform.isWindows) {
       future = windowsProcessIcon(connection.id);
+    } else if (Platform.isLinux) {
+      future = linuxProcessIcon(connection.id, process);
     }
     if (future == null) return _genericIcon(context);
     return FutureBuilder<ImageProvider?>(

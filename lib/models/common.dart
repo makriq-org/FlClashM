@@ -291,6 +291,20 @@ extension GroupsExt on List<Group> {
     if (now == 'DIRECT' || now == 'REJECT') return now;
     return resolveToLeafProxy(now, depth + 1);
   }
+
+  /// The label to show for [proxyName]'s group: the entry it currently points
+  /// at. That is the selected leaf host — the real location — when the pick is a
+  /// plain proxy, or the sub-group's own name when the pick is itself a group
+  /// (its `now`, e.g. "Germany 2", is a moving host, not a stable label, so we
+  /// show the group the user actually selected instead of descending into it).
+  /// A leaf / empty / DIRECT / REJECT selection passes straight through.
+  String resolveToDisplayName(String proxyName) {
+    final group = getGroup(proxyName);
+    if (group == null) return proxyName; // already a leaf proxy
+    final now = group.now;
+    if (now == null || now.isEmpty) return group.name;
+    return now; // a leaf host (location) or a sub-group's own name
+  }
 }
 
 extension GroupExt on Group {

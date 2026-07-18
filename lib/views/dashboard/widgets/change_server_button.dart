@@ -80,7 +80,12 @@ class ChangeServerButton extends ConsumerWidget {
       return _buildSimpleButton(context);
     }
 
-    final currentServerName = group.now ?? '-';
+    // Show the group's current pick: the selected leaf host (the real location),
+    // or — when the pick is itself a sub-group — that sub-group's own name (its
+    // moving `now` host isn't a stable label). `now` already carries whichever it
+    // is, so no group-type branching is needed.
+    final now = group.now;
+    final currentServerName = (now != null && now.isNotEmpty) ? now : group.name;
 
     final currentProxy = group.all.firstWhere(
       (proxy) => proxy.name == currentServerName,
