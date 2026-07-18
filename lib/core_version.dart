@@ -2,4 +2,4 @@
 // ignore_for_file: constant_identifier_names
 
 /// Embedded mihomo version (see core/constant/version.go).
-const String kCoreVersionFromSource = 'v1.19.28';
+const String kCoreVersionFromSource = 'v1.19.29';
