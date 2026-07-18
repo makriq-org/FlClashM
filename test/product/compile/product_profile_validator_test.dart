@@ -146,6 +146,39 @@ proxies:
       );
     });
 
+    test('accepts the minimal explicit ByeDPI auto contract', () {
+      final normalized = validator.normalizeForValidation('''
+proxies:
+  - name: ByeDPI Auto
+    type: byedpi
+    mode: auto
+    strategy-test:
+      urls:
+        - https://example.org/
+''');
+
+      expect(normalized['proxies'][0]['type'], 'socks5');
+      expect(normalized['proxies'][0]['server'], '127.0.0.1');
+    });
+
+    test('requires an explicit ByeDPI mode', () {
+      expect(
+        () => validator.normalizeForValidation('''
+proxies:
+  - name: ByeDPI
+    type: byedpi
+    args: "--fake -1"
+'''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('explicit `mode'),
+          ),
+        ),
+      );
+    });
+
     test('rejects byedpi local listener overrides', () {
       expect(
         () => validator.normalizeForValidation('''

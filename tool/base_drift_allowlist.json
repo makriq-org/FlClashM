@@ -221,6 +221,11 @@
       "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
     },
     {
+      "path": "android/service/build.gradle.kts",
+      "bucket": "budget",
+      "reason": "Зависимости локальных тестов Android runtime-узлов относятся к проверке платформенного бюджетного дрейфа."
+    },
+    {
       "path": "android/service/src/main/AndroidManifest.xml",
       "bucket": "budget",
       "reason": "Android manifest форка должен оставаться согласованным с ярлыками и special-use FGS."
@@ -274,6 +279,11 @@
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
       "bucket": "budget",
       "reason": "Исправления DNS и системной сети относятся к platform/runtime слою Android."
+    },
+    {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeProbeBatchTest.kt",
+      "bucket": "budget",
+      "reason": "Тест ограниченного параллелизма временных runtime-процессов проверяет Android batch-probe встроенных узлов."
     },
     {
       "path": "android/service/src/main/res/drawable/ic_notification.xml",

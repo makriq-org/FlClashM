@@ -2,17 +2,23 @@ package com.follow.clashx.service
 
 import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -83,6 +89,43 @@ object RuntimeNodeClientRegistry {
     fun clear() {
         clients.set(0)
     }
+}
+
+internal suspend fun selectRuntimeNodeProbeIndex(
+    nodeCount: Int,
+    concurrency: Int,
+    probe: suspend (Int) -> Boolean,
+): Int = coroutineScope {
+    require(nodeCount > 0) { "Runtime-node probe batch must not be empty" }
+    require(concurrency > 0) { "Runtime-node probe concurrency must be positive" }
+    val workerCount = minOf(concurrency, nodeCount)
+    val nextIndex = AtomicInteger(0)
+    val remainingWorkers = AtomicInteger(workerCount)
+    val selected = CompletableDeferred<Int?>()
+    val workers = List(workerCount) {
+        launch {
+            try {
+                while (isActive && !selected.isCompleted) {
+                    val index = nextIndex.getAndIncrement()
+                    if (index >= nodeCount) break
+                    if (probe(index)) {
+                        selected.complete(index)
+                        break
+                    }
+                }
+            } finally {
+                if (remainingWorkers.decrementAndGet() == 0) {
+                    selected.complete(null)
+                }
+            }
+        }
+    }
+    val selectedIndex = selected.await()
+    if (selectedIndex != null) {
+        workers.forEach { it.cancel() }
+    }
+    workers.joinAll()
+    selectedIndex ?: -1
 }
 
 object RuntimeNodeProcessManager {
@@ -219,6 +262,41 @@ object RuntimeNodeProcessManager {
         }
     }
 
+    suspend fun probeNodes(requestJson: String): Int = planLock.withLock {
+        val request = JSONObject(requestJson)
+        val values = request.optJSONArray("nodes") ?: JSONArray()
+        val concurrency = request.optInt("concurrency", 1)
+        require(concurrency in 1..MAX_PROBE_CONCURRENCY) {
+            "Runtime-node probe concurrency must be between 1 and $MAX_PROBE_CONCURRENCY"
+        }
+        require(values.length() in 1..MAX_PROBE_NODES) {
+            "Runtime-node probe batch must contain between 1 and $MAX_PROBE_NODES nodes"
+        }
+        val specs = buildList {
+            val nodeIds = mutableSetOf<String>()
+            for (index in 0 until values.length()) {
+                val spec = RuntimeNodeSpec.fromJson(values.getJSONObject(index), index)
+                require(nodeIds.add(spec.nodeId)) {
+                    "Runtime-node probe `${spec.nodeId}` is duplicated"
+                }
+                require(
+                    !activePlan.containsKey(spec.nodeId) &&
+                        !runningNodes.containsKey(spec.nodeId),
+                ) {
+                    "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
+                }
+                require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
+                    "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
+                }
+                add(spec)
+            }
+        }
+
+        selectRuntimeNodeProbeIndex(specs.size, concurrency) { index ->
+            probeNodeOnce(specs[index])
+        }
+    }
+
     fun readPlanState(): String = runCatching {
         JSONObject(lastStateJson)
             .put("optionalCheckActive", optionalCheckJob?.isActive == true)
@@ -310,6 +388,31 @@ object RuntimeNodeProcessManager {
                 reused = false,
                 message = error.message ?: error.toString(),
             )
+        }
+    }
+
+    private suspend fun probeNodeOnce(spec: RuntimeNodeSpec): Boolean {
+        return try {
+            val startedAt = start(spec)
+            if (startedAt <= 0L) return false
+            val deadline =
+                SystemClock.elapsedRealtime() + spec.connectivityCheck.startupTimeoutMillis
+            waitForListener(spec, deadline)
+            if (readStartTime(spec.nodeId) <= 0L) return false
+            val remaining = deadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) return false
+            withTimeoutOrNull(remaining) {
+                RuntimeNodeConnectivityChecker.checkOnce(
+                    host = spec.host,
+                    port = spec.port,
+                    config = spec.connectivityCheck,
+                )
+            } == true && readStartTime(spec.nodeId) > 0L
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            false
+        } finally {
+            withContext(NonCancellable) { stop(spec.nodeId) }
         }
     }
 
@@ -550,4 +653,6 @@ object RuntimeNodeProcessManager {
     private const val EMERGENCY_WAIT_MILLIS = 500L
     private const val MAX_OUTPUT_LINES = 20
     private const val MAX_OUTPUT_LENGTH = 4096
+    private const val MAX_PROBE_CONCURRENCY = 16
+    private const val MAX_PROBE_NODES = 64
 }

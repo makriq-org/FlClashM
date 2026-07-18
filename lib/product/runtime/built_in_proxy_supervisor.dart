@@ -59,6 +59,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   final RuntimeNodePlatformBridge runtime;
 
   List<BuiltInProxyNodePlan> _currentPlans = const [];
+  int _planGeneration = 0;
 
   @override
   bool get hasCommittedRuntimePlan => _currentPlans.isNotEmpty;
@@ -70,10 +71,15 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       plans.where((plan) => plan.type == type).toList(growable: false);
 
   @override
-  Future<void> prepareForRestart() async {}
+  Future<void> prepareForRestart() async {
+    _planGeneration++;
+    byedpi.cancelBackgroundSelection();
+  }
 
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
+    _planGeneration++;
+    byedpi.cancelBackgroundSelection();
     final naiveMessage = await naiveProxy.stageRuntimePlan(
       currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
       nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
@@ -130,6 +136,11 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       olcRtc.commitStagedRuntimePlan(),
     ]);
     _currentPlans = List<BuiltInProxyNodePlan>.unmodifiable(plans);
+    final generation = _planGeneration;
+    byedpi.startBackgroundSelection(
+      _filter(_currentPlans, BuiltInProxyType.byedpi),
+      onSelectionChanged: () => _activateBackgroundSelection(generation),
+    );
   }
 
   @override
@@ -153,7 +164,11 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
           .isSuccess;
 
   @override
-  Future<void> stop() => runtime.stopPlan();
+  Future<void> stop() async {
+    _planGeneration++;
+    byedpi.cancelBackgroundSelection();
+    await runtime.stopPlan();
+  }
 
   @override
   Future<void> persistColdStart() async {
@@ -185,5 +200,20 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       ),
     ]);
     return [for (final group in groups) ...group];
+  }
+
+  Future<bool> _activateBackgroundSelection(int generation) async {
+    final nodes = await _buildRuntimeNodes(_currentPlans);
+    if (generation != _planGeneration) return false;
+    final state = await runtime.applyPlan(nodes);
+    if (!state.isReady) return false;
+    if (generation != _planGeneration) return false;
+    try {
+      await naiveProxy.saveRuntimeNodes(nodes);
+    } catch (_) {
+      // The live runtime has already switched successfully. Cold-start state
+      // will be refreshed by the next normal persistence point.
+    }
+    return true;
   }
 }

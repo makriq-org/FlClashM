@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/built_in_proxy_compiler.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
@@ -268,6 +270,134 @@ void main() {
         'message',
         contains('Rename it to `strategy-test`'),
       )),
+    );
+  });
+
+  test('compiles the minimal ByeDPI auto contract with bundled defaults', () {
+    final plan = compile({
+      'proxies': [
+        {
+          'name': 'ByeDPI',
+          'type': 'byedpi',
+          'mode': 'auto',
+          'strategy-test': {
+            'urls': ['https://strategy.example/'],
+          },
+        },
+      ],
+    });
+
+    final config = json.decode(plan.files.values.single) as Map;
+    expect(config['strategyList'], 'byebyeedpi');
+    expect(config['strategies'], isEmpty);
+    expect(
+        (config['strategyTest'] as Map)['urls'], ['https://strategy.example/']);
+    expect(config['selection'], isEmpty);
+    expect(config['cache'], isEmpty);
+  });
+
+  test('serializes ByeDPI auto overrides without changing the test contract',
+      () {
+    final plan = compile({
+      'proxies': [
+        {
+          'name': 'ByeDPI',
+          'type': 'byedpi',
+          'mode': 'auto',
+          'strategies': ['--fake 1', '--disorder 1'],
+          'strategy-test': {
+            'urls': ['https://strategy.example/'],
+            'timeout': 3,
+            'concurrency': 2,
+          },
+          'selection': {
+            'concurrency': 6,
+            'foreground-timeout': 12,
+            'background': false,
+          },
+          'cache': {
+            'ttl': 600,
+            'recheck-after': 300,
+            'retry-after': 30,
+            'failure-threshold': 3,
+          },
+          'fallback-args': '--split 1',
+        },
+      ],
+    });
+
+    final config = json.decode(plan.files.values.single) as Map;
+    expect(config['strategyList'], isNull);
+    expect(config['strategies'], ['--fake 1', '--disorder 1']);
+    expect(config['selection'], {
+      'concurrency': 6,
+      'foreground-timeout': 12,
+      'background': false,
+    });
+    expect(config['cache'], {
+      'ttl': 600,
+      'recheck-after': 300,
+      'retry-after': 30,
+      'failure-threshold': 3,
+    });
+    expect(config['fallbackArgs'], '--split 1');
+  });
+
+  test('rejects invalid or ambiguous ByeDPI auto overrides', () {
+    final invalidFields = <String, dynamic>{
+      'strategies': '--fake 1',
+      'selection': {'concurrency': 17},
+      'selection-background': {
+        'selection': {'background': 'yes'},
+      },
+      'cache': {'recheck-after': 700000},
+      'cache-unknown': {
+        'cache': {'unknown': 1},
+      },
+      'fallback-args': 1,
+      'unknown': true,
+    };
+    for (final entry in invalidFields.entries) {
+      final override = entry.value is Map &&
+              (entry.key == 'selection-background' ||
+                  entry.key == 'cache-unknown')
+          ? Map<String, dynamic>.from(entry.value as Map)
+          : <String, dynamic>{entry.key: entry.value};
+      expect(
+        () => compile({
+          'proxies': [
+            {
+              'name': 'ByeDPI',
+              'type': 'byedpi',
+              'mode': 'auto',
+              'strategy-test': {
+                'urls': ['https://strategy.example/'],
+              },
+              ...override,
+            },
+          ],
+        }),
+        throwsA(isA<FormatException>()),
+        reason: entry.key,
+      );
+    }
+
+    expect(
+      () => compile({
+        'proxies': [
+          {
+            'name': 'ByeDPI',
+            'type': 'byedpi',
+            'mode': 'auto',
+            'strategies': ['--fake 1'],
+            'strategy-list': 'byebyeedpi',
+            'strategy-test': {
+              'urls': ['https://strategy.example/'],
+            },
+          },
+        ],
+      }),
+      throwsA(isA<FormatException>()),
     );
   });
 }

@@ -40,4 +40,4 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 
 - Built-in nodes only work in the `proxies` section
 - Local addresses and ports are determined by the client
-- ByeDPI in `auto` mode only tests URLs from `test.urls`
+- ByeDPI in `auto` mode only tests URLs from `strategy-test.urls`

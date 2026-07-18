@@ -50,8 +50,18 @@ abstract interface class RuntimeNodeProbePlatformBridge {
   Future<bool> probeNode(Map<String, dynamic> node);
 }
 
+abstract interface class RuntimeNodeBatchProbePlatformBridge {
+  Future<int?> probeNodes(
+    List<Map<String, dynamic>> nodes, {
+    required int concurrency,
+  });
+}
+
 class AndroidRuntimeNodeBridge
-    implements RuntimeNodePlatformBridge, RuntimeNodeProbePlatformBridge {
+    implements
+        RuntimeNodePlatformBridge,
+        RuntimeNodeProbePlatformBridge,
+        RuntimeNodeBatchProbePlatformBridge {
   const AndroidRuntimeNodeBridge();
 
   static const MethodChannel _channel =
@@ -86,6 +96,23 @@ class AndroidRuntimeNodeBridge
         <String, String>{'node': json.encode(node)},
       ) ??
       false;
+
+  @override
+  Future<int?> probeNodes(
+    List<Map<String, dynamic>> nodes, {
+    required int concurrency,
+  }) async {
+    final selectedIndex = await _channel.invokeMethod<int>(
+      'probeRuntimeNodes',
+      <String, String>{
+        'request': json.encode(<String, dynamic>{
+          'nodes': nodes,
+          'concurrency': concurrency,
+        }),
+      },
+    );
+    return selectedIndex == null || selectedIndex < 0 ? null : selectedIndex;
+  }
 
   @override
   Future<void> saveColdStartNodes(String manifestJson) async {

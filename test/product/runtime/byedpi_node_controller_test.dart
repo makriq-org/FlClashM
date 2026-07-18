@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +14,7 @@ void main() {
     late ByedpiSharedInstallLayout layout;
     late _FakeRuntimeNodeBridge runtime;
     late ByedpiNodeController controller;
+    late Duration monotonicTime;
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('byedpi-controller-');
@@ -23,11 +25,13 @@ void main() {
         executablePath: '${tempDir.path}/libbyedpi.so',
       );
       runtime = _FakeRuntimeNodeBridge();
+      monotonicTime = Duration.zero;
       controller = ByedpiNodeController(
         binary: _FakeBinaryBridge(layout),
         runtime: runtime,
-        allocateProbePort: () async => 39800 + runtime.probeCalls.length,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
         now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
       );
     });
 
@@ -58,7 +62,8 @@ void main() {
       ]);
     });
 
-    test('uses a persisted fallback for automatic mode', () async {
+    test('persists fallback as provisional and honors its retry cooldown',
+        () async {
       final plan = _plan(mode: 'auto', args: '');
       expect(
         await controller
@@ -74,13 +79,15 @@ void main() {
       expect(first['arguments'], second['arguments']);
       expect(first['arguments'], containsAllInOrder(['--disorder', '1']));
       expect(cache.existsSync(), isTrue);
-      expect((json.decode(await cache.readAsString()) as Map)['strategy'],
-          isNotEmpty);
+      final cached = json.decode(await cache.readAsString()) as Map;
+      expect(cached['strategy'], isNotEmpty);
+      expect(cached['verified'], isFalse);
+      expect(runtime.batchCalls, hasLength(1));
     });
 
-    test('selects and caches the first strategy that passes a native probe',
+    test('selects and caches a strategy from one parallel native batch',
         () async {
-      runtime.probeResults.addAll([false, true]);
+      runtime.batchResults.add(1);
       final plan = _plan(mode: 'auto', args: '');
       expect(
         await controller
@@ -89,28 +96,29 @@ void main() {
       );
 
       final first = (await controller.buildRuntimeNodes([plan])).single;
-      final probeCount = runtime.probeCalls.length;
       final second = (await controller.buildRuntimeNodes([plan])).single;
 
-      expect(runtime.probeCalls, hasLength(2));
-      expect(probeCount, 2);
+      expect(runtime.batchCalls, hasLength(1));
+      expect(runtime.batchCalls.single.nodes, hasLength(2));
+      expect(runtime.batchCalls.single.concurrency, 4);
       expect(first['arguments'], containsAllInOrder(['--disorder', '1']));
       expect(second['arguments'], first['arguments']);
       expect(
-        (runtime.probeCalls.singleWhere(
+        (runtime.batchCalls.single.nodes.singleWhere(
           (node) => (node['arguments'] as List).contains('--disorder'),
         )['connectivityCheck'] as Map)['required'],
         isTrue,
       );
+      final cache = json.decode(await File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      ).readAsString()) as Map;
+      expect(cache['verified'], isTrue);
     });
 
-    test('checks the full bundled-size list with the configured timeout',
+    test('bounds foreground selection and probes candidates concurrently',
         () async {
       const strategyCount = 60;
-      runtime.probeResults.addAll([
-        ...List.filled(strategyCount - 1, false),
-        true,
-      ]);
+      runtime.onBatch = () => monotonicTime += const Duration(seconds: 5);
       controller = ByedpiNodeController(
         binary: _FakeBinaryBridge(
           layout,
@@ -120,10 +128,16 @@ void main() {
           ).join('\n'),
         ),
         runtime: runtime,
-        allocateProbePort: () async => 39800 + runtime.probeCalls.length,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
         now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
       );
-      final plan = _plan(mode: 'auto', args: '', timeout: 5);
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        timeout: 5,
+        foregroundTimeout: 5,
+      );
       expect(
         await controller
             .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
@@ -132,16 +146,188 @@ void main() {
 
       final node = (await controller.buildRuntimeNodes([plan])).single;
 
-      expect(runtime.probeCalls, hasLength(strategyCount));
+      expect(runtime.batchCalls, hasLength(1));
+      expect(runtime.batchCalls.single.nodes, hasLength(4));
+      expect(node['arguments'], containsAllInOrder(['--disorder', '1']));
       expect(
-        node['arguments'],
-        containsAllInOrder(['--strategy', '$strategyCount']),
-      );
-      expect(
-        runtime.probeCalls
+        runtime.batchCalls.single.nodes
             .map((probe) => (probe['connectivityCheck'] as Map)['timeout']),
         everyElement(5),
       );
+      expect(
+        runtime.batchCalls.single.nodes.map(
+          (probe) => (probe['connectivityCheck'] as Map)['startup-timeout'],
+        ),
+        everyElement(5),
+      );
+      final cache = json.decode(await File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      ).readAsString()) as Map;
+      expect(cache['verified'], isFalse);
+      expect(cache['nextIndex'], 4);
+    });
+
+    test('continues the remaining strategies in background and promotes one',
+        () async {
+      runtime.onBatch = () {
+        if (runtime.batchCalls.length == 1) {
+          monotonicTime += const Duration(seconds: 1);
+        }
+      };
+      final strategies = List.generate(
+        6,
+        (index) => '--strategy ${index + 1}',
+      ).join('\n');
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout, strategies: strategies),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        timeout: 1,
+        foregroundTimeout: 1,
+        selectionConcurrency: 2,
+      );
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+      await controller.buildRuntimeNodes([plan]);
+      runtime.batchResults.add(1);
+      final promoted = Completer<void>();
+
+      controller.startBackgroundSelection(
+        [plan],
+        onSelectionChanged: () async {
+          promoted.complete();
+          return true;
+        },
+      );
+      await promoted.future.timeout(const Duration(seconds: 1));
+
+      expect(runtime.batchCalls, hasLength(2));
+      final cache = json.decode(await File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      ).readAsString()) as Map;
+      expect(cache['verified'], isTrue);
+      expect(cache['strategy'], '--strategy 4');
+    });
+
+    test('restores the provisional cache when background activation fails',
+        () async {
+      runtime.onBatch = () {
+        if (runtime.batchCalls.length == 1) {
+          monotonicTime += const Duration(seconds: 1);
+        }
+      };
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(
+          layout,
+          strategies: List.generate(
+            6,
+            (index) => '--strategy ${index + 1}',
+          ).join('\n'),
+        ),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        timeout: 1,
+        foregroundTimeout: 1,
+        selectionConcurrency: 2,
+      );
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+      await controller.buildRuntimeNodes([plan]);
+      final cache = File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      );
+      final provisional = json.decode(await cache.readAsString()) as Map;
+      runtime.batchResults.add(0);
+      var activationCalls = 0;
+      final restored = Completer<void>();
+
+      controller.startBackgroundSelection(
+        [plan],
+        onSelectionChanged: () async {
+          activationCalls++;
+          if (activationCalls == 2) restored.complete();
+          if (activationCalls == 1) throw StateError('activation failed');
+          return true;
+        },
+      );
+      await restored.future.timeout(const Duration(seconds: 1));
+
+      expect(activationCalls, 2);
+      expect(json.decode(await cache.readAsString()), provisional);
+    });
+
+    test('ignores a stale background result after cancellation', () async {
+      runtime.onBatch = () {
+        if (runtime.batchCalls.length == 1) {
+          monotonicTime += const Duration(seconds: 1);
+        }
+      };
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(
+          layout,
+          strategies: List.generate(
+            6,
+            (index) => '--strategy ${index + 1}',
+          ).join('\n'),
+        ),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        timeout: 1,
+        foregroundTimeout: 1,
+        selectionConcurrency: 2,
+      );
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+      await controller.buildRuntimeNodes([plan]);
+      final cache = File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      );
+      final provisional = json.decode(await cache.readAsString()) as Map;
+      runtime
+        ..batchGate = Completer<int?>()
+        ..batchFinished = Completer<void>();
+      var activationCalls = 0;
+
+      controller.startBackgroundSelection(
+        [plan],
+        onSelectionChanged: () async {
+          activationCalls++;
+          return true;
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+      controller.cancelBackgroundSelection();
+      runtime.batchGate!.complete(0);
+      await runtime.batchFinished!.future.timeout(const Duration(seconds: 1));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(activationCalls, 0);
+      expect(json.decode(await cache.readAsString()), provisional);
     });
 
     test('reselects a strategy from a legacy fallback cache', () async {
@@ -157,15 +343,16 @@ void main() {
       final legacyCache = json.decode(await cache.readAsString()) as Map
         ..remove('selectionRevision');
       await cache.writeAsString(json.encode(legacyCache), flush: true);
-      runtime.probeResults.add(true);
+      controller.cancelBackgroundSelection();
+      runtime.batchResults.add(0);
 
       final node = (await controller.buildRuntimeNodes([plan])).single;
 
-      expect(runtime.probeCalls, hasLength(3));
+      expect(runtime.batchCalls, hasLength(2));
       expect(node['arguments'], containsAllInOrder(['--fake', '1']));
       expect(
         (json.decode(await cache.readAsString()) as Map)['selectionRevision'],
-        1,
+        2,
       );
     });
 
@@ -213,6 +400,8 @@ BuiltInProxyNodePlan _plan({
   required String mode,
   required String args,
   int timeout = 1,
+  int foregroundTimeout = 15,
+  int selectionConcurrency = 4,
 }) =>
     BuiltInProxyNodePlan(
       nodeId: 'node-a',
@@ -232,6 +421,10 @@ BuiltInProxyNodePlan _plan({
           'strategyTest': {
             'urls': ['https://example.com'],
             'timeout': timeout,
+          },
+          'selection': {
+            'foreground-timeout': foregroundTimeout,
+            'concurrency': selectionConcurrency,
           },
           'cache': {'ttl': 604800},
         }),
@@ -258,11 +451,20 @@ class _FakeBinaryBridge implements ByedpiBinaryBridge {
 }
 
 class _FakeRuntimeNodeBridge
-    implements RuntimeNodePlatformBridge, RuntimeNodeProbePlatformBridge {
+    implements
+        RuntimeNodePlatformBridge,
+        RuntimeNodeProbePlatformBridge,
+        RuntimeNodeBatchProbePlatformBridge {
   int applyCalls = 0;
+  int allocatedPorts = 0;
   String? savedManifest;
   final List<bool> probeResults = [];
   final List<Map<String, dynamic>> probeCalls = [];
+  final List<int?> batchResults = [];
+  final List<_BatchCall> batchCalls = [];
+  void Function()? onBatch;
+  Completer<int?>? batchGate;
+  Completer<void>? batchFinished;
 
   @override
   Future<RuntimeNodePlanState> applyPlan(
@@ -287,6 +489,20 @@ class _FakeRuntimeNodeBridge
   }
 
   @override
+  Future<int?> probeNodes(
+    List<Map<String, dynamic>> nodes, {
+    required int concurrency,
+  }) async {
+    batchCalls.add(_BatchCall(nodes: nodes, concurrency: concurrency));
+    onBatch?.call();
+    final result = batchGate == null
+        ? (batchResults.isEmpty ? null : batchResults.removeAt(0))
+        : await batchGate!.future;
+    batchFinished?.complete();
+    return result;
+  }
+
+  @override
   Future<RuntimeNodePlanState> readPlanState() async =>
       const RuntimeNodePlanState(
         generation: 0,
@@ -303,4 +519,11 @@ class _FakeRuntimeNodeBridge
 
   @override
   Future<void> stopPlan() async {}
+}
+
+class _BatchCall {
+  const _BatchCall({required this.nodes, required this.concurrency});
+
+  final List<Map<String, dynamic>> nodes;
+  final int concurrency;
 }

@@ -44,8 +44,7 @@ proxies:
   - name: "dpi-auto"
     type: byedpi
     mode: auto
-    strategy-list: byebyeedpi
-    test:
+    strategy-test:
       urls:
         - "https://example.com/"
 ```

@@ -19,8 +19,7 @@ proxies:
   - name: "dpi-auto"
     type: byedpi
     mode: auto
-    strategy-list: byebyeedpi
-    test:
+    strategy-test:
       urls:
         - "https://example.com/"
       sni: "example.com"
@@ -38,16 +37,27 @@ proxies:
 
 | پارامتر | توضیحات |
 |---------|---------|
-| `strategy-list` | نام لیست استراتژی (`byebyeedpi`) |
-| `test.urls` | آدرس‌های تست |
-| `test.sni` | نام میزبان برای جایگزینی `{sni}` |
-| `test.timeout` | زمان‌توقف هر تست به ثانیه (پیش‌فرض ۵) |
-| `test.requests` | تعداد درخواست‌ها به ازای هر استراتژی (پیش‌فرض ۱) |
-| `test.concurrency` | تست‌های موازی (پیش‌فرض ۴) |
-| `test.min-success-ratio` | حداقل نسبت موفقیت (پیش‌فرض ۱.۰) |
+| `strategy-list` | نام لیست استراتژی؛ پیش‌فرض `byebyeedpi` |
+| `strategies` | فهرست مرتب استراتژی‌های سفارشی به‌جای `strategy-list` |
+| `strategy-test.urls` | آدرس‌های تست (اجباری) |
+| `strategy-test.sni` | نام میزبان برای جایگزینی `{sni}` |
+| `strategy-test.timeout` | زمان‌توقف هر تست به ثانیه (پیش‌فرض ۵) |
+| `strategy-test.requests` | تعداد درخواست‌ها به ازای هر استراتژی (پیش‌فرض ۱) |
+| `strategy-test.concurrency` | درخواست‌های HTTP موازی در یک استراتژی (پیش‌فرض ۴) |
+| `strategy-test.min-success-ratio` | حداقل نسبت موفقیت (پیش‌فرض ۱.۰) |
+| `selection.concurrency` | تعداد استراتژی‌هایی که هم‌زمان بررسی می‌شوند (پیش‌فرض ۴) |
+| `selection.foreground-timeout` | بودجه زمانی کل پیش از اجرای نود، به ثانیه (پیش‌فرض ۱۵) |
+| `selection.background` | ادامه بررسی پس از اجرای fallback (پیش‌فرض `true`) |
+| `fallback-args` | آرگومان‌های موقت fallback پس از پایان بودجه foreground |
 | `cache.ttl` | عمر کش به ثانیه (پیش‌فرض ۷ روز) |
 | `cache.recheck-after` | فاصله بررسی مجدد به ثانیه (پیش‌فرض ۱ روز) |
+| `cache.retry-after` | فاصله تلاش دوباره پس از fallback موقت (پیش‌فرض ۵ دقیقه) |
 | `cache.failure-threshold` | تعداد خطا قبل از ابطال کش (پیش‌فرض ۲) |
+
+استراتژی‌ها در دسته‌های موازی و محدود بررسی می‌شوند. پس از پایان بودجه foreground،
+ByeDPI فوراً با fallback اجرا می‌شود و بررسی بقیه فهرست در پس‌زمینه ادامه پیدا می‌کند.
+هر پاسخ HTTP معتبر سرور، از جمله `4xx` و `5xx`، موفق محسوب می‌شود و fallback موقت
+هیچ‌گاه به‌عنوان نتیجه تأییدشده ذخیره نمی‌شود.
 
 اگر هیچ استراتژی کار نکرد، از حالت پشتیبان استفاده می‌شود.
 

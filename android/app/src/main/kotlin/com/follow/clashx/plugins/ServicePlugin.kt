@@ -136,6 +136,10 @@ class ServicePlugin :
                 val node = call.argument<String>("node") ?: "{}"
                 result.successOnMain(Service.probeRuntimeNode(node))
             }
+            "probeRuntimeNodes" -> launch {
+                val request = call.argument<String>("request") ?: "{}"
+                result.successOnMain(Service.probeRuntimeNodes(request))
+            }
             "resolveNativeRuntimeLibrary" -> {
                 val name = call.argument<String>("name") ?: ""
                 val file = File(context.applicationInfo.nativeLibraryDir, name)

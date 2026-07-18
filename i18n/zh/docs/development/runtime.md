@@ -40,4 +40,4 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 - 内置节点只能在 `proxies` 部分工作
 - 本地地址和端口由客户端确定
-- `auto` 模式下的 ByeDPI 仅测试 `test.urls` 中的 URL
+- `auto` 模式下的 ByeDPI 仅测试 `strategy-test.urls` 中的 URL

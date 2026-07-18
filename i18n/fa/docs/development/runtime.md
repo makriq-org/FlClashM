@@ -40,4 +40,4 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 - نودهای داخلی فقط در بخش `proxies` کار می‌کنند
 - آدرس‌ها و پورت‌های محلی توسط کلاینت تعیین می‌شوند
-- ByeDPI در حالت `auto` فقط URLهای `test.urls` را بررسی می‌کند
+- ByeDPI در حالت `auto` فقط URLهای `strategy-test.urls` را بررسی می‌کند
