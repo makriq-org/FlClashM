@@ -434,9 +434,6 @@ class GlobalState {
 
   SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
         isAndroid: Platform.isAndroid,
-        explicitAllowLan: config.patchClashConfig.allowLan,
-        explicitExternalController: config.patchClashConfig.externalController,
-        controllerSecret: effectiveSecret.value,
       );
 
   RuntimePlanBuildContext _buildRuntimePlanContext({
