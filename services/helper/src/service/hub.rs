@@ -18,6 +18,12 @@ pub struct StartParams {
     pub home_dir: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ReplaceParams {
+    pub pending: String,
+    pub target: String,
+}
+
 fn sha256_file(path: &str) -> Result<String, Error> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
@@ -107,6 +113,29 @@ fn start(start_params: StartParams) -> impl Reply {
     }
 }
 
+/// Swap in a downloaded core update. The service runs as SYSTEM, so it can
+/// write into Program Files where the unelevated app cannot (the app's own
+/// rename fails with access-denied for a per-machine install). Stops the core
+/// first to release the exe lock, moves pending->target, then refreshes the
+/// allow-list hash so the new binary passes the /start check — all as SYSTEM,
+/// no UAC prompt. Returns "" on success or an error string.
+fn replace_core(params: ReplaceParams) -> impl Reply {
+    stop();
+    if let Err(e) = std::fs::rename(&params.pending, &params.target) {
+        // Cross-device or transient lock: fall back to copy+remove.
+        if std::fs::copy(&params.pending, &params.target).is_err() {
+            return format!("replace_core failed: {}", e);
+        }
+        let _ = std::fs::remove_file(&params.pending);
+    }
+    if let Ok(hash) = sha256_file(&params.target) {
+        if let Some(path) = allowed_hash_path() {
+            let _ = std::fs::write(&path, hash);
+        }
+    }
+    "".to_string()
+}
+
 fn stop() -> impl Reply {
     let mut process = PROCESS.lock().unwrap();
     if let Some(mut child) = process.take() {
@@ -145,12 +174,23 @@ pub async fn run_service() -> anyhow::Result<()> {
 
     let api_stop = warp::post().and(warp::path("stop")).map(|| stop());
 
+    let api_replace = warp::post()
+        .and(warp::path("replace_core"))
+        .and(warp::body::json())
+        .map(|params: ReplaceParams| replace_core(params));
+
     let api_logs = warp::get().and(warp::path("logs")).map(|| get_logs());
 
 
-    warp::serve(api_ping.or(api_start).or(api_stop).or(api_logs))
-        .run(([127, 0, 0, 1], LISTEN_PORT))
-        .await;
+    warp::serve(
+        api_ping
+            .or(api_start)
+            .or(api_stop)
+            .or(api_replace)
+            .or(api_logs),
+    )
+    .run(([127, 0, 0, 1], LISTEN_PORT))
+    .await;
 
     Ok(())
 }

@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/core.dart';
@@ -133,27 +130,6 @@ class ProviderItem extends StatelessWidget {
     globalState.appController.updateGroupsDebounce();
   }
 
-  Future<void> _handleSideLoadProvider() async {
-    await globalState.safeRun<void>(() async {
-      final platformFile = await picker.pickerFile();
-      final bytes = platformFile?.bytes;
-      if (bytes == null || provider.path == null) return;
-      final file = await File(provider.path!).create(recursive: true);
-      await file.writeAsBytes(bytes);
-      final providerName = provider.name;
-      final message = await clashCore.sideLoadExternalProvider(
-        providerName: providerName,
-        data: utf8.decode(bytes),
-      );
-      if (message.isNotEmpty) throw message;
-      globalState.appController.setProvider(
-        await clashCore.getExternalProvider(provider.name),
-      );
-      if (message.isNotEmpty) throw message;
-    });
-    globalState.appController.updateGroupsDebounce();
-  }
-
   String _buildProviderDesc() {
     final baseInfo = provider.updateAt.lastUpdateTimeDesc;
     final count = provider.count;
@@ -193,11 +169,6 @@ class ProviderItem extends StatelessWidget {
             runSpacing: 6,
             spacing: 12,
             children: [
-              CommonChip(
-                avatar: const Icon(Icons.upload),
-                label: appLocalizations.upload,
-                onPressed: _handleSideLoadProvider,
-              ),
               if (provider.vehicleType == "HTTP")
                 CommonChip(
                   avatar: const Icon(Icons.sync),

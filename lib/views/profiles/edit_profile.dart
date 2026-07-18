@@ -6,6 +6,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/pages/editor.dart';
+import 'package:flclashx/pages/editor_window.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -153,6 +154,51 @@ class _EditProfileViewState extends State<EditProfileView> {
     }
     if (!mounted) return;
     final title = widget.profile.label ?? widget.profile.id;
+
+    // macOS lives in the tray popover — too cramped to edit a config. Open it in
+    // a standalone native window (its own engine, see editor_window). Its Save
+    // round-trips here to validate + persist via the core, then closes.
+    if (Platform.isMacOS) {
+      await EditorWindowBridge.open(
+        title: title,
+        content: rawText!,
+        isDark: Theme.of(context).brightness == Brightness.dark,
+        saveLabel: appLocalizations.save,
+        // A URL profile with auto-update on would overwrite manual edits on its
+        // next refresh — the window asks whether to disable auto-update, exactly
+        // like _handleConfirm does for the in-app editor.
+        promptAutoUpdate: widget.profile.type == ProfileType.url && autoUpdate,
+        promptTitle: appLocalizations.tip,
+        promptMessage: appLocalizations.profileHasUpdate,
+        confirmLabel: appLocalizations.confirm,
+        cancelLabel: appLocalizations.cancel,
+        onSave: (content, disableAutoUpdate) async {
+          try {
+            var saved = await widget.profile.saveFileWithString(content);
+            if (disableAutoUpdate) {
+              saved = saved.copyWith(autoUpdate: false);
+            }
+            globalState.appController.setProfileAndAutoApply(saved);
+            if (mounted) {
+              rawText = content;
+              fileData = null;
+              if (disableAutoUpdate) {
+                setState(() => autoUpdate = false);
+              }
+              fileInfoNotifier.value = fileInfoNotifier.value?.copyWith(
+                size: utf8.encode(content).length,
+                lastModified: DateTime.now(),
+              );
+            }
+            return null;
+          } catch (e) {
+            return e.toString();
+          }
+        },
+      );
+      return;
+    }
+
     final editorPage = EditorPage(
       title: title,
       content: rawText!,
@@ -186,16 +232,6 @@ class _EditProfileViewState extends State<EditProfileView> {
     }
     rawText = data;
     fileData = Uint8List.fromList(utf8.encode(data));
-    fileInfoNotifier.value = fileInfoNotifier.value?.copyWith(
-      size: fileData?.length ?? 0,
-      lastModified: DateTime.now(),
-    );
-  }
-
-  Future<void> _uploadProfileFile() async {
-    final platformFile = await globalState.safeRun(picker.pickerFile);
-    if (platformFile?.bytes == null) return;
-    fileData = platformFile?.bytes;
     fileInfoNotifier.value = fileInfoNotifier.value?.copyWith(
       size: fileData?.length ?? 0,
       lastModified: DateTime.now(),
@@ -319,11 +355,6 @@ class _EditProfileViewState extends State<EditProfileView> {
                               avatar: const Icon(Icons.edit),
                               label: appLocalizations.edit,
                               onPressed: _editProfileFile,
-                            ),
-                            CommonChip(
-                              avatar: const Icon(Icons.upload),
-                              label: appLocalizations.upload,
-                              onPressed: _uploadProfileFile,
                             ),
                           ],
                         ),

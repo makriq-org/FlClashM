@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/common/common.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/services/product_services.dart';
@@ -8,6 +9,7 @@ import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AccessView extends ConsumerStatefulWidget {
@@ -19,12 +21,15 @@ class AccessView extends ConsumerStatefulWidget {
 
 class _AccessViewState extends ConsumerState<AccessView> {
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   final _scrollController = ScrollController();
   final _loadCompleter = Completer<List<Package>>();
   late AccessControlEditorState _editorState;
   late final ProfileManagedAccessController _managedAccessController;
   bool _profileManaged = false;
   ProfileManagedAccessNotice _notice = ProfileManagedAccessNotice.none;
+  bool _isTV = false;
+  bool _searchEditing = false;
 
   @override
   void initState() {
@@ -48,6 +53,31 @@ class _AccessViewState extends ConsumerState<AccessView> {
         .addListener(_handleProfileAccessControlChanged);
     _loadCompleter.complete(_loadPackages());
     unawaited(_refreshManagedAccess());
+    system.isAndroidTV.then((value) {
+      if (mounted && value) setState(() => _isTV = value);
+    });
+    _searchFocusNode.addListener(_onSearchFocusChange);
+    _searchFocusNode.onKeyEvent = _onSearchKey;
+  }
+
+  void _onSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus && _searchEditing) {
+      setState(() => _searchEditing = false);
+    }
+  }
+
+  KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
+    if (!_isTV || _searchEditing || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.select ||
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+      setState(() => _searchEditing = true);
+      SystemChannels.textInput.invokeMethod('TextInput.show');
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -56,6 +86,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
         .removeListener(_handleProfileAccessControlChanged);
     _managedAccessController.dispose();
     _persist();
+    _searchFocusNode.removeListener(_onSearchFocusChange);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -96,11 +128,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
   void _persist() {
     if (_profileManaged || !_editorState.dirty) return;
     ref.read(vpnSettingProvider.notifier).updateState(
-      (state) => productServices.accessControl.applyEditorState(
-        state,
-        _editorState,
-      ),
-    );
+          (state) => productServices.accessControl.applyEditorState(
+            state,
+            _editorState,
+          ),
+        );
     _editorState = _editorState.copyWith(dirty: false);
   }
 
@@ -202,11 +234,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
               onChanged: _profileManaged
                   ? null
                   : (v) => setState(() {
-                      _editorState = productServices.accessControl.setEnabled(
-                        _editorState,
-                        enabled: v,
-                      );
-                    }),
+                        _editorState = productServices.accessControl.setEnabled(
+                          _editorState,
+                          enabled: v,
+                        );
+                      }),
             ),
           ),
           if (noticeMessage != null)
@@ -218,8 +250,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: GestureDetector(
                       onLongPress: _showModeHelp,
                       child: SegmentedButton<AccessControlMode>(
@@ -248,6 +280,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     child: TextField(
                       controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      readOnly: _isTV && !_searchEditing,
+                      onSubmitted: (_) {
+                        if (_isTV) setState(() => _searchEditing = false);
+                      },
                       decoration: InputDecoration(
                         hintText: appLocale.search,
                         prefixIcon: const Icon(Icons.search, size: 20),
@@ -263,8 +300,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
-                                    _editorState = productServices.accessControl
-                                        .setQuery(
+                                    _editorState =
+                                        productServices.accessControl.setQuery(
                                       _editorState,
                                       '',
                                     );
@@ -282,8 +319,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       children: [
                         IconButton(
@@ -309,7 +346,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                             _editorState.selectedPackages.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all, size: 18),
-                            label: Text('${_editorState.selectedPackages.length}'),
+                            label:
+                                Text('${_editorState.selectedPackages.length}'),
                             onPressed: () => setState(() {
                               _editorState = productServices.accessControl
                                   .clearSelection(_editorState);

@@ -22,7 +22,6 @@ class ProxiesView extends ConsumerStatefulWidget {
 }
 
 class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
-  final GlobalKey<ProxiesTabViewState> _proxiesTabKey = GlobalKey();
   bool _hasProviders = false;
   bool _isTab = false;
 
@@ -53,25 +52,14 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
           child: const _ModeSelectorAction(),
         ),
         const SearchOrderMarker(),
-        if (_isTab)
-          IconButton(
-            tooltip: appLocalizations.goToSelected,
-            onPressed: () {
-              _proxiesTabKey.currentState?.scrollToGroupSelected();
-            },
-            icon: const Icon(
-              Icons.adjust,
-              weight: 1,
-            ),
+        IconButton(
+          tooltip: appLocalizations.testAllDelay,
+          onPressed: _pingAllGroups,
+          icon: const Icon(
+            Icons.network_ping,
           ),
+        ),
         if (!_isTab) ...[
-          IconButton(
-            tooltip: appLocalizations.testAllDelay,
-            onPressed: _pingAllGroups,
-            icon: const Icon(
-              Icons.network_ping,
-            ),
-          ),
           Consumer(
             builder: (_, ref, __) {
               final unfoldSet = ref.watch(unfoldSetProvider);
@@ -174,15 +162,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
   }
 
   @override
-  DelayTestButton? get floatingActionButton => _isTab
-      ? DelayTestButton(
-          onClick: () async {
-            await _proxiesTabKey.currentState?.delayTestCurrentGroup();
-          },
-        )
-      : null;
-
-  @override
   void initState() {
     ref.listenManual(
       proxiesActionsStateProvider,
@@ -231,9 +210,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> with PageMixin {
       ),
     );
     return switch (proxiesType) {
-      ProxiesType.tab => ProxiesTabView(
-          key: _proxiesTabKey,
-        ),
+      ProxiesType.tab => const ProxiesTabView(),
       ProxiesType.list => const ProxiesListView(),
     };
   }

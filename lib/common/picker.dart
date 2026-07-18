@@ -3,17 +3,40 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/state.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class Picker {
+  // A profile/config file is tiny; a much larger pick is a mistake. Reading one
+  // (a user picked ~120 MB) OOM'd — file_picker's withData streamed the whole
+  // file through the platform channel, which allocated a >100 MB direct
+  // ByteBuffer. So don't stream bytes over the channel: take the path and read
+  // it in Dart, bounded by this cap.
+  static const _maxImportBytes = 20 * 1024 * 1024;
+
   Future<PlatformFile?> pickerFile() async {
     final filePickerResult = await FilePicker.platform.pickFiles(
-      withData: true,
+      withData: false,
       allowMultiple: false,
       initialDirectory: await appPath.downloadDirPath,
     );
-    return filePickerResult?.files.first;
+    final file = filePickerResult?.files.first;
+    if (file == null) return null;
+    if (file.size > _maxImportBytes) {
+      globalState.showNotifier(appLocalizations.fileTooLarge);
+      return null;
+    }
+    final path = file.path;
+    // No path (e.g. web) — return whatever the picker provided as-is.
+    if (path == null) return file;
+    final bytes = await File(path).readAsBytes();
+    return PlatformFile(
+      name: file.name,
+      size: file.size,
+      path: path,
+      bytes: bytes,
+    );
   }
 
   Future<String?> saveFile(String fileName, Uint8List bytes) async {

@@ -51,6 +51,10 @@ import java.util.zip.ZipFile
 // process-lifetime cache never showed apps (un)installed while FlClashX ran.
 private const val PACKAGES_CACHE_TTL_MS = 30_000L
 
+// Vendor runtime permission (ITGSA standard) gating the installed-app list on
+// vivo/OPPO/Xiaomi ROMs; unknown on AOSP. See withInstalledAppsPermission.
+private const val GET_INSTALLED_APPS_PERMISSION = "com.android.permission.GET_INSTALLED_APPS"
+
 class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
 
     private var activityRef: WeakReference<Activity>? = null
@@ -133,7 +137,13 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     val NOTIFICATION_PERMISSION_REQUEST_CODE = 1002
 
+    val GET_INSTALLED_APPS_PERMISSION_REQUEST_CODE = 1003
+
     private var isBlockNotification: Boolean = false
+
+    // Callers waiting on a single in-flight GET_INSTALLED_APPS dialog; same
+    // main-thread-only queue pattern as vpnCallBacks.
+    private val installedAppsCallbacks = mutableListOf<() -> Unit>()
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -197,9 +207,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }
 
             "getPackages" -> {
-                scope.launch(Dispatchers.IO) {
-                    val json = getPackagesToJson()
-                    result.successOnMain(json)
+                withInstalledAppsPermission {
+                    scope.launch(Dispatchers.IO) {
+                        val json = getPackagesToJson()
+                        result.successOnMain(json)
+                    }
                 }
             }
 
@@ -440,6 +452,42 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         return iconMap[packageName]
     }
 
+    // vivo/OPPO/Xiaomi (ITGSA) ROMs gate the installed-app list behind a vendor
+    // runtime permission; without it getInstalledPackages silently returns a
+    // near-empty list even with QUERY_ALL_PACKAGES held (AccessControl looks
+    // blank). Prompt for it when the list is actually requested; on ROMs that
+    // don't define the permission (plain AOSP/Pixel) proceed immediately.
+    // Main thread only (channel handler + permission result), like vpnCallBacks.
+    private fun withInstalledAppsPermission(onReady: () -> Unit) {
+        val context = FlClashApplication.getAppContext()
+        val activity = activityRef?.get()
+        val defined = try {
+            context.packageManager?.getPermissionInfo(GET_INSTALLED_APPS_PERMISSION, 0) != null
+        } catch (_: Exception) {
+            false
+        }
+        if (!defined || activity == null ||
+            ContextCompat.checkSelfPermission(context, GET_INSTALLED_APPS_PERMISSION) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            onReady()
+            return
+        }
+        val alreadyInFlight = installedAppsCallbacks.isNotEmpty()
+        installedAppsCallbacks.add(onReady)
+        // Only the first requester launches the dialog; the rest ride along and
+        // resolve together in onRequestPermissionsResultListener. A permanently
+        // denied permission yields an immediate DENIED result — the load then
+        // proceeds with whatever the ROM exposes, so callers never hang.
+        if (!alreadyInFlight) {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(GET_INSTALLED_APPS_PERMISSION),
+                GET_INSTALLED_APPS_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
     @Synchronized
     private fun getPackages(): List<Package> {
         val packageManager = FlClashApplication.getAppContext().packageManager
@@ -644,6 +692,12 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         val pending = vpnCallBacks.toList()
         vpnCallBacks.clear()
         pending.forEach { it.invoke(false) }
+        // Same for a permission dialog interrupted by activity teardown: resolve
+        // waiters so the package-list fetch proceeds (with whatever is visible)
+        // instead of stranding the Dart call.
+        val pendingApps = installedAppsCallbacks.toList()
+        installedAppsCallbacks.clear()
+        pendingApps.forEach { it.invoke() }
     }
 
     private fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
@@ -663,6 +717,19 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     ): Boolean {
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
             isBlockNotification = true
+        }
+        if (requestCode == GET_INSTALLED_APPS_PERMISSION_REQUEST_CODE) {
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
+                // A pre-grant load may have cached the ROM's stripped-down list
+                // moments ago; drop it so the pending callbacks fetch the real one.
+                synchronized(this) {
+                    packages.clear()
+                    packagesLoadedAt = 0L
+                }
+            }
+            val pending = installedAppsCallbacks.toList()
+            installedAppsCallbacks.clear()
+            pending.forEach { it.invoke() }
         }
         return true
     }

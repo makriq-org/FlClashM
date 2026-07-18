@@ -1,7 +1,7 @@
 name: flclashx
 description: FlClashM is an Android-only fork of FlClashX, with preserved Android package continuity from makriq.
 publish_to: "none"
-version: 0.10.5+2026071001
+version: 0.10.6+2026071801
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -16,6 +16,7 @@ dependencies:
   path: ^1.9.1
   shared_preferences: ^2.3.5
   window_manager: ^0.5.1
+  desktop_multi_window: ^0.3.0
   dynamic_color: ^1.8.1
   proxy:
     path: plugins/proxy
@@ -66,12 +67,17 @@ dependencies:
   yaml: ^3.1.3
   re_editor: ^0.10.0
   re_highlight: ^0.0.3
+  flutter_displaymode: ^0.7.0
+  # In-app zashboard panel (Android/iOS/macOS; no Windows/Linux implementation —
+  # those fall back to the external browser).
+  webview_flutter: ^4.13.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   build_runner: ^2.4.15
+  intl_utils: ^2.8.11
   freezed: ^2.5.7
   json_serializable: ^6.8.0
   riverpod_generator: ^2.4.3
@@ -131,3 +137,13 @@ flutter_launcher_icons:
   adaptive_icon_background: "#202020"
   adaptive_icon_foreground: "assets/images/icon.png"
   adaptive_icon_monochrome: "assets/images/icon_white.png"
+msix_config:
+  display_name: FlClashX
+  publisher_display_name: pluralplay
+  publisher: CN=F778E60B-B797-4F7E-AE56-743F6A0F5B32
+  identity_name: pluralplay.FlClashX
+  msix_version: 0.4.2.0
+  logo_path: assets/images/icon.png
+  capabilities: internetClient, privateNetworkClientServer
+  languages: en, ru, zh-CN
+  store: true

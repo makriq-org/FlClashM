@@ -577,6 +577,24 @@ class AppController {
     });
   }
 
+  /// Flip the core's external-controller API on/off for a zashboard session
+  /// (see openZashboard / ZashboardWebViewPage). Reuses the same updateConfig
+  /// path as the manual toggle, so the core brings the API listener up/down
+  /// live. updateConfig does NOT recompute effectiveExternalController (that's
+  /// the applyProfile path), so set it here too — the zashboard URL reads it.
+  Future<void> setExternalControllerEnabled(bool enable) async {
+    _ref.read(patchClashConfigProvider.notifier).updateState(
+          (state) => state.copyWith(
+            externalController: enable
+                ? ExternalControllerStatus.open
+                : ExternalControllerStatus.close,
+          ),
+        );
+    globalState.effectiveExternalController.value =
+        enable ? ExternalControllerStatus.open.value : "";
+    await updateClashConfig();
+  }
+
   Future<void> _updateClashConfig() async {
     final securedPatchConfig = globalState.securePatchConfig(
       patchConfig: _ref.read(patchClashConfigProvider),

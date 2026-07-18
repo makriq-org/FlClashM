@@ -112,6 +112,15 @@ class ClashCore {
     // every defined group is available (the hidden flag still controls display).
     if (globalState.globalOverrideEnabled.value) {
       final seen = {UsedProxy.GLOBAL.name, ...fromGlobal};
+      // proxies.keys arrive alphabetically (Go's json.Marshal sorts map keys),
+      // so enumerate in profile-declaration order first, then append any leftover
+      // groups not named in proxy-groups (still alphabetical, but a rare tail).
+      final declared = globalState.proxyGroupOrder.value;
+      final extra = declared
+          .where((name) => !seen.contains(name) && isGroup(name))
+          .toList();
+      groupNames.addAll(extra);
+      seen.addAll(extra);
       groupNames.addAll(
         proxies.keys.where((name) => !seen.contains(name) && isGroup(name)),
       );

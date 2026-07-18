@@ -200,6 +200,7 @@ void main() {
           routeMode: RouteMode.config,
           hasCurrentScript: false,
           profilesPath: '',
+          homeDirPath: '/app-home',
           readInstalledPackageNames: _readNoInstalledPackages,
         ),
         securedProfile: SecuredProfilePatch(
@@ -218,6 +219,7 @@ void main() {
       expect(runtimePlan.config['mixed-port'], 7890);
       expect(runtimePlan.config['find-process-mode'], 'strict');
       expect(runtimePlan.config['tun']['stack'], 'system');
+      expect(runtimePlan.config['external-ui'], '/app-home/zashboard');
     });
 
     test('defers Android proxy group health checks during setup', () async {

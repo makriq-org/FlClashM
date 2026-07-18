@@ -41,3 +41,4 @@ export 'tray.dart';
 export 'utils.dart';
 export 'window.dart';
 export 'windows.dart';
+export 'zashboard.dart';
