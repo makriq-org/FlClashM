@@ -369,32 +369,12 @@ jobs:
           body_path: "./release.md"
           prerelease: true
 
-      - name: Prepare commit list for notification
-        id: prepare_commits
-        run: |
-          main_commit=$(git log -1 --pretty=format:"%s" ${{ github.ref_name }})
-          other_commits=$(head -n 20 release.md | grep "^- " | grep -v "^- ${main_commit}$" | head -n 9)
-          commits="• ${main_commit}"
-          if [ -n "$other_commits" ]; then
-            commits="${commits}"$'\n'"${other_commits}"
-          fi
-          commits_escaped=$(echo "$commits" | jq -Rs .)
-          echo "commits=$commits_escaped" >> $GITHUB_OUTPUT
-
-      - name: Send Telegram notifications
-        if: success()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHANNEL_ID_1: ${{ secrets.TELEGRAM_CHANNEL_ID_1 }}
-          TELEGRAM_CHANNEL_ID_2: ${{ secrets.TELEGRAM_CHANNEL_ID_2 }}
-          TELEGRAM_CHANNEL_ID_3: ${{ secrets.TELEGRAM_CHANNEL_ID_3 }}
-          VERSION: ${{ github.ref_name }}
-          COMMITS: ${{ fromJSON(steps.prepare_commits.outputs.commits) }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
-          IS_STABLE: ${{ env.IS_STABLE }}
-        run: |
-          python3 -m pip install requests --quiet
-          python3 .github/scripts/notify_telegram.py
+      - name: Upload release notes for notification
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-notes
+          path: release.md
+          retention-days: 1
 
   aur-publish:
     needs: [upload]
@@ -497,3 +477,46 @@ jobs:
             git commit -m "Update to $GITHUB_REF_NAME"
             git push
           fi
+
+  notify:
+    needs: [upload, aur-publish]
+    # Runs after AUR publish; posts as long as the GitHub release succeeded,
+    # regardless of the AUR result.
+    if: always() && needs.upload.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download release notes
+        uses: actions/download-artifact@v6
+        with:
+          name: release-notes
+
+      - name: Prepare commit list for notification
+        id: prepare_commits
+        run: |
+          main_commit=$(git log -1 --pretty=format:"%s" ${{ github.ref_name }})
+          other_commits=$(head -n 20 release.md | grep "^- " | grep -v "^- ${main_commit}$" | head -n 9)
+          commits="• ${main_commit}"
+          if [ -n "$other_commits" ]; then
+            commits="${commits}"$'\n'"${other_commits}"
+          fi
+          commits_escaped=$(echo "$commits" | jq -Rs .)
+          echo "commits=$commits_escaped" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram notifications
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID_1: ${{ secrets.TELEGRAM_CHANNEL_ID_1 }}
+          TELEGRAM_CHANNEL_ID_2: ${{ secrets.TELEGRAM_CHANNEL_ID_2 }}
+          TELEGRAM_CHANNEL_ID_3: ${{ secrets.TELEGRAM_CHANNEL_ID_3 }}
+          VERSION: ${{ github.ref_name }}
+          COMMITS: ${{ fromJSON(steps.prepare_commits.outputs.commits) }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+          IS_STABLE: ${{ env.IS_STABLE }}
+        run: |
+          python3 -m pip install requests --quiet
+          python3 .github/scripts/notify_telegram.py

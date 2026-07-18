@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
 import sys
+import html
 import requests
 import json
 
-def send_telegram_message(bot_token, chat_id, message, parse_mode='Markdown'):
+def send_telegram_message(bot_token, chat_id, message, parse_mode='HTML'):
     """Send a message to a Telegram chat."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
@@ -25,18 +26,24 @@ def send_telegram_message(bot_token, chat_id, message, parse_mode='Markdown'):
         return False
 
 def format_release_message(version, commits, release_url, is_stable):
-    """Format the release notification message."""
-    version_clean = version.lstrip('v')
-    
+    """Format the release notification message (HTML parse mode).
+
+    Commit subjects contain Markdown-hostile characters (e.g. `_` in
+    "file_picker", `startForeground`), which broke the legacy Markdown parser
+    with a 400 "can't parse entities". HTML only needs &<> escaped, so escape
+    every dynamic part and use HTML tags for formatting.
+    """
+    version_clean = html.escape(version.lstrip('v'))
+
     emoji = "🎉" if is_stable else "🚀"
     release_type = "FlClashX. Stable Version on GitHub" if is_stable else "FlClashX. PreRelease Version on GitHub"
-    
-    message = f"{emoji} **{version_clean} in GitHub!** {emoji}\n\n"
-    message += f"_{release_type}_\n\n"
-    message += "**Whats new:**\n"
-    message += commits + "\n"
-    message += f"🔗 [DOWNLOAD]({release_url})\n"
-    
+
+    message = f"{emoji} <b>{version_clean} in GitHub!</b> {emoji}\n\n"
+    message += f"<i>{release_type}</i>\n\n"
+    message += "<b>Whats new:</b>\n"
+    message += html.escape(commits) + "\n"
+    message += f'🔗 <a href="{html.escape(release_url)}">DOWNLOAD</a>\n'
+
     return message
 
 def main():
@@ -64,7 +71,7 @@ def main():
     message = format_release_message(version, commits, release_url, is_stable)
     
     # Simple notification message for channel 3
-    version_clean = version.lstrip('v')
+    version_clean = html.escape(version.lstrip('v'))
     simple_message = f"Новый релиз!❤️\nFlClashX {version_clean}\nПосмотреть: https://t.me/flclashx"
     
     # Log notification details (without secrets)
