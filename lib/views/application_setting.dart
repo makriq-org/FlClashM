@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/config.dart';
@@ -57,28 +58,28 @@ class ResetAppItem extends ConsumerWidget {
           style: TextStyle(
             color: context.colorScheme.error,
             fontWeight: FontWeight.bold,
-        ),
-      ),
-      leading: Icon(
-        Icons.delete_forever,
-        color: context.colorScheme.error,
-      ),
-      onTap: () async {
-        final res = await globalState.showMessage(
-          title: appLocalizations.clearData,
-          message: TextSpan(
-            text: appLocalizations.clearDataTip,
-            style: TextStyle(
-              color: context.colorScheme.onSurface,
-            ),
           ),
-        );
-        if (res == true) {
-          await globalState.appController.handleClear();
-          system.exit();
-        }
-      },
-    );
+        ),
+        leading: Icon(
+          Icons.delete_forever,
+          color: context.colorScheme.error,
+        ),
+        onTap: () async {
+          final res = await globalState.showMessage(
+            title: appLocalizations.clearData,
+            message: TextSpan(
+              text: appLocalizations.clearDataTip,
+              style: TextStyle(
+                color: context.colorScheme.onSurface,
+              ),
+            ),
+          );
+          if (res == true) {
+            await globalState.appController.handleClear();
+            system.exit();
+          }
+        },
+      );
 }
 
 class OverrideProviderSettingsItem extends ConsumerWidget {
@@ -109,7 +110,10 @@ class OverrideProviderSettingsItem extends ConsumerWidget {
         if (!overrideProviderSettings)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.5),
             child: Row(
               children: [
                 Icon(
@@ -155,13 +159,15 @@ class CloseConnectionsItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.autoCloseConnectionsDesc),
         delegate: SwitchDelegate(
           value: closeConnections,
-          onChanged: isEnabled ? (value) async {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    closeConnections: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (value) async {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          closeConnections: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -193,6 +199,32 @@ class UsageItem extends ConsumerWidget {
   }
 }
 
+class CrashlyticsItem extends ConsumerWidget {
+  const CrashlyticsItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final crashlytics = ref.watch(
+      appSettingProvider.select((state) => state.crashlytics),
+    );
+    return ListItem.switchItem(
+      title: Text(appLocalizations.crashlytics),
+      subtitle: Text(appLocalizations.crashlyticsDesc),
+      delegate: SwitchDelegate(
+        value: crashlytics,
+        onChanged: (bool value) async {
+          ref.read(appSettingProvider.notifier).updateState(
+                (state) => state.copyWith(
+                  crashlytics: value,
+                ),
+              );
+          await clashLib?.setCrashlytics(value);
+        },
+      ),
+    );
+  }
+}
+
 class MinimizeItem extends ConsumerWidget {
   const MinimizeItem({super.key});
 
@@ -212,13 +244,15 @@ class MinimizeItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.minimizeOnExitDesc),
         delegate: SwitchDelegate(
           value: minimizeOnExit,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    minimizeOnExit: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          minimizeOnExit: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -244,13 +278,15 @@ class AutoLaunchItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.autoLaunchDesc),
         delegate: SwitchDelegate(
           value: autoLaunch,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    autoLaunch: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          autoLaunch: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -276,13 +312,15 @@ class SilentLaunchItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.silentLaunchDesc),
         delegate: SwitchDelegate(
           value: silentLaunch,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    silentLaunch: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          silentLaunch: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -308,13 +346,15 @@ class AutoRunItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.autoRunDesc),
         delegate: SwitchDelegate(
           value: autoRun,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    autoRun: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          autoRun: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -462,13 +502,15 @@ class OpenLogsItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.logcatDesc),
         delegate: SwitchDelegate(
           value: openLogs,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    openLogs: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          openLogs: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -494,13 +536,15 @@ class AutoCheckUpdateItem extends ConsumerWidget {
         subtitle: Text(appLocalizations.autoCheckUpdateDesc),
         delegate: SwitchDelegate(
           value: autoCheckUpdate,
-          onChanged: isEnabled ? (bool value) {
-            ref.read(appSettingProvider.notifier).updateState(
-                  (state) => state.copyWith(
-                    autoCheckUpdate: value,
-                  ),
-                );
-          } : null,
+          onChanged: isEnabled
+              ? (bool value) {
+                  ref.read(appSettingProvider.notifier).updateState(
+                        (state) => state.copyWith(
+                          autoCheckUpdate: value,
+                        ),
+                      );
+                }
+              : null,
         ),
       ),
     );
@@ -542,6 +586,31 @@ class IncludePrereleaseUpdatesItem extends ConsumerWidget {
   }
 }
 
+class ZashboardInAppItem extends ConsumerWidget {
+  const ZashboardInAppItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final zashboardInApp = ref.watch(
+      appSettingProvider.select((state) => state.zashboardInApp),
+    );
+    return ListItem.switchItem(
+      title: Text(appLocalizations.zashboardInApp),
+      subtitle: Text(appLocalizations.zashboardInAppDesc),
+      delegate: SwitchDelegate(
+        value: zashboardInApp,
+        onChanged: (bool value) {
+          ref.read(appSettingProvider.notifier).updateState(
+                (state) => state.copyWith(
+                  zashboardInApp: value,
+                ),
+              );
+        },
+      ),
+    );
+  }
+}
+
 class ApplicationSettingView extends StatelessWidget {
   const ApplicationSettingView({super.key});
 
@@ -564,12 +633,17 @@ class ApplicationSettingView extends StatelessWidget {
         HiddenItem(),
         BatteryOptimizationItem(),
         AutoStartItem(),
+        CrashlyticsItem(),
       ],
       AnimateTabItem(),
       OpenLogsItem(),
       CloseConnectionsItem(),
       AutoCheckUpdateItem(),
       IncludePrereleaseUpdatesItem(),
+      // The in-app webview exists only on Android/iOS/macOS (webview_flutter);
+      // hide the toggle where it could never take effect.
+      if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)
+        ZashboardInAppItem(),
       if (system.isDesktop) ...[
         Padding(
           padding: const EdgeInsets.only(top: 16),

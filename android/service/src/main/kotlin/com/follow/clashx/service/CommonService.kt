@@ -42,6 +42,20 @@ class CommonService : Service(), IBaseService {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // startForegroundService() requires startForeground() within ~5s on every
+        // delivery — including a stop sent this way and a start landing on an
+        // already-created instance (onCreate only promotes on first creation).
+        // Promote here every time (idempotent) or the OS throws
+        // ForegroundServiceDidNotStartInTimeException.
+        if (!promoteToForeground(
+                R.drawable.ic_notification,
+                SavedParams.loadNotificationTitle(),
+            )
+        ) {
+            GlobalState.log("CommonService: foreground promotion denied in onStartCommand, stopping")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action == "com.makriq.flclash.service.STOP") {
             GlobalState.launch { State.runLock.withLock { handleStop() } }
             return START_NOT_STICKY

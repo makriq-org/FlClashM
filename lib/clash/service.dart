@@ -35,6 +35,13 @@ class ClashService extends ClashHandlerInterface {
   int _crashCount = 0;
   DateTime? _lastCrashTime;
   bool _recovering = false;
+  // Set while an intentional teardown is in flight (shutdown/destroy, e.g. from
+  // handleRestart/handleExit). The socket EOF that a deliberate stop produces
+  // must NOT be mistaken for a core crash — otherwise the recovery path fires a
+  // restart that races the app restart and leaves the core offline / the UI
+  // wedged. On Windows the helper kills the core before we cancel the socket
+  // subscription, so this window is real.
+  bool _stopping = false;
 
   /// Set by AppController to a guarded restartCore(). A crashed desktop core is a
   /// dead child process whose whole state is gone (unlike Android, where :remote
@@ -164,6 +171,9 @@ class ClashService extends ClashHandlerInterface {
 
   @override
   Future<bool> destroy() async {
+    // No reset: destroy() only runs on paths that end the process
+    // (handleRestart/handleExit), so any trailing socket EOF stays suppressed.
+    _stopping = true;
     try {
       final server = await serverCompleter.future;
       await server.close();
@@ -204,7 +214,7 @@ class ClashService extends ClashHandlerInterface {
   }
 
   void _onCoreLost(String reason) {
-    if (_recovering || isStarting) return;
+    if (_recovering || isStarting || _stopping) return;
     _recovering = true;
     _flushPendingCompleters();
     unawaited(_handleCrashRestart(reason));
@@ -303,17 +313,25 @@ class ClashService extends ClashHandlerInterface {
 
   @override
   Future<bool> shutdown() async {
-    if (Platform.isWindows) {
-      await request.stopCoreByHelper();
+    // Guard the whole teardown: the EOF from killing the core (helper stop on
+    // Windows arrives before we cancel the subscription below) must not trip the
+    // crash-recovery path into a restart that races an intentional stop/restart.
+    _stopping = true;
+    try {
+      if (Platform.isWindows) {
+        await request.stopCoreByHelper();
+      }
+      await _stdoutSubscription?.cancel();
+      _stdoutSubscription = null;
+      await _stderrSubscription?.cancel();
+      _stderrSubscription = null;
+      await _destroySocket();
+      process?.kill();
+      process = null;
+      return true;
+    } finally {
+      _stopping = false;
     }
-    await _stdoutSubscription?.cancel();
-    _stdoutSubscription = null;
-    await _stderrSubscription?.cancel();
-    _stderrSubscription = null;
-    await _destroySocket();
-    process?.kill();
-    process = null;
-    return true;
   }
 
   @override

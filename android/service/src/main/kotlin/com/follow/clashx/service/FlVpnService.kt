@@ -131,12 +131,36 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // startForegroundService() imposes a ~5s deadline to call startForeground()
+        // on EVERY delivery — including a stop delivered this way (GlobalState /
+        // RemoteService send the stop via startForegroundService), and any start
+        // that lands on an already-created instance (onCreate, which promotes, only
+        // runs on first creation). Promote here every time (idempotent) so the
+        // deadline is always met before we branch; missing it is exactly the
+        // ForegroundServiceDidNotStartInTimeException crash. If promotion is denied
+        // (A12+ background restriction), stop instead of lingering.
+        if (!promoteToForeground(
+                R.drawable.ic_notification,
+                SavedParams.loadNotificationTitle(),
+            )
+        ) {
+            GlobalState.log("FlVpnService: foreground promotion denied in onStartCommand, stopping")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             GlobalState.launch {
                 State.runLock.withLock { handleStop() }
-                // handleStop early-returns when nothing is running; for a recreated-
-                // then-stopped process that still left the foreground notification up,
-                // guarantee teardown so no empty foreground service lingers.
+                // handleStop early-returns when nothing is running — which is exactly
+                // the OEM-kill case: MIUI killed :remote, so the recreated process has
+                // runTime==0 and handleStop skips clearing the persisted intent flag.
+                // The notification stop then only removed the notification while the
+                // tile stayed on, the timer kept running and the tunnel resurrected on
+                // next app open (StateHub's recovery bias reads isVpnActive()==true).
+                // Force the persisted teardown so a notification stop fully stops,
+                // matching the quick-settings tile stop even after a kill.
+                SavedParams.setVpnActive(false)
+                StateHub.publish(StateHub.STOPPED, message = "notification stop")
                 if (!destroyed) {
                     stopForegroundCompat()
                     stopSelf()
@@ -147,8 +171,8 @@ class FlVpnService : VpnService(), IBaseService {
         // A null intent here is a START_STICKY auto-restart by the OS (every explicit
         // start — app-driven, tile, boot — passes a non-null Intent). onCreate has
         // already promoted the foreground notification; if there is no VPN to recover,
-        // don't let that notification linger over a non-running core (the "висит до
-        // последнего" orphan after an OEM force-stop). A genuinely-active tunnel
+        // don't let that notification linger over a non-running core (the
+        // "hangs-on-forever" orphan after an OEM force-stop). A genuinely-active tunnel
         // (isVpnActive) still falls through to coldStart and is restored.
         if (intent == null && !SavedParams.isVpnActive()) {
             GlobalState.log("FlVpnService: sticky restart with no active VPN, stopping")

@@ -5,20 +5,19 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
-import 'package:flclashx/state.dart';
+import 'package:flclashx/views/zashboard.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'item.dart';
 import 'requests.dart';
 
 enum _ConnTab { active, log }
 
-/// The merged "Подключения" page: one nav entry hosting an Active/Log segmented
+/// The merged "Connections" page: one nav entry hosting an Active/Log segmented
 /// switch over an IndexedStack of the two bodies. Owns the shared app-bar (actions,
 /// search, keyword chips) and routes the close-all action to the Active tab only.
 class ConnectionsView extends ConsumerStatefulWidget {
@@ -136,67 +135,32 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
   }
 }
 
-// Public zashboard instance, used when the profile doesn't self-host one (no
-// external-ui set). Change this to point at a different hosted dashboard.
-const _publicZashboardBase = 'https://board.zash.run.place';
-
-/// Opens zashboard in the browser, pointed at this client's external-controller.
-/// URL: http://host:port/#/setup?hostname=host&port=port&secret=secret — host/port
-/// and secret are taken from the active profile's external-controller config.
-class _ZashboardButton extends StatelessWidget {
+/// Opens zashboard pointed at this client's external-controller — in the
+/// built-in webview or the external browser, per the zashboardInApp setting.
+/// URL building lives in [buildZashboardUrl].
+class _ZashboardButton extends ConsumerWidget {
   const _ZashboardButton();
 
-  String? _buildUrl() {
-    final ec = globalState.effectiveExternalController.value.trim();
-    if (ec.isEmpty) return null;
-    final idx = ec.lastIndexOf(':');
-    var host = idx > 0 ? ec.substring(0, idx).trim() : '';
-    final port = idx >= 0 ? ec.substring(idx + 1).trim() : ec.trim();
-    // 0.0.0.0/empty bind addresses aren't browser-reachable; assume same device.
-    if (host.isEmpty || host == '0.0.0.0' || host == '::') {
-      host = '127.0.0.1';
-    }
-    final secret = globalState.effectiveSecret.value.trim();
-    final query =
-        'hostname=$host&port=$port&secret=${Uri.encodeQueryComponent(secret)}';
-    // Self-hosted: the core serves zashboard at external-ui (e.g. /ui/). When no
-    // external-ui is set, fall back to the public instance so users who don't host
-    // their own dashboard still get a working link.
-    final ui = globalState.effectiveExternalUi.value
-        .trim()
-        .replaceAll(RegExp(r'^/+|/+$'), '');
-    if (ui.isEmpty) {
-      return '$_publicZashboardBase/#/setup?$query';
-    }
-    return 'http://$host:$port/$ui/#/setup?$query';
-  }
-
-  Future<void> _open(BuildContext context) async {
-    final url = _buildUrl();
-    if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('external-controller is not set')),
-      );
-      return;
-    }
-    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-  }
-
   @override
-  Widget build(BuildContext context) => IconButton(
-        tooltip: 'zashboard',
-        onPressed: () => _open(context),
-        icon: SvgPicture.asset(
-          'assets/images/icons/zashboard.svg',
-          width: 20,
-          height: 20,
-          // Match the other app-bar icons (muted) rather than render pure white.
-          colorFilter: ColorFilter.mode(
-            context.colorScheme.onSurfaceVariant,
-            BlendMode.srcIn,
-          ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inApp = ref.watch(
+      appSettingProvider.select((state) => state.zashboardInApp),
+    );
+    return IconButton(
+      tooltip: 'zashboard',
+      onPressed: () => openZashboard(context, inApp: inApp),
+      icon: SvgPicture.asset(
+        'assets/images/icons/zashboard.svg',
+        width: 20,
+        height: 20,
+        // Match the other app-bar icons (muted) rather than render pure white.
+        colorFilter: ColorFilter.mode(
+          context.colorScheme.onSurfaceVariant,
+          BlendMode.srcIn,
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// The "Active" tab body: a 2s snapshot poll of live connections (gated on the page

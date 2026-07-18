@@ -50,7 +50,22 @@ class CoreUpdater {
     }
     commonPrint.log("Applying pending core update...");
     try {
+      // Windows service mode: the core lives under Program Files, which the
+      // unelevated app can't overwrite (rename -> access-denied). The SYSTEM
+      // helper does the swap (stop + move + refresh allow-list hash) for us.
       if (Platform.isWindows) {
+        final status = await windows?.checkService();
+        if (status == WindowsHelperServiceStatus.running) {
+          final ok = await request.replaceCoreByHelper(
+            appPath.corePendingPath,
+            appPath.corePath,
+          );
+          if (ok) {
+            commonPrint.log("Pending core update applied via helper");
+            return;
+          }
+          commonPrint.log("Helper swap failed, falling back to local swap");
+        }
         // A helper-started core survives app restarts and holds the exe lock.
         await request.stopCoreByHelper();
       }

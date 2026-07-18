@@ -10,6 +10,7 @@ import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -41,6 +42,18 @@ class ApplicationState extends ConsumerState<Application> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isWindows) {
+      windows?.enableDarkModeForApp();
+    }
+
+    if (Platform.isAndroid) {
+      // Pin the highest refresh rate (per session) so the Flutter engine samples
+      // 120 Hz at surface creation. A hand-rolled preferredDisplayModeId left LTPO
+      // Pixel panels showing 120 Hz while the engine rendered at 60 (visible jank);
+      // flutter_displaymode handles the OEM quirks. Best-effort, never fatal.
+      unawaited(FlutterDisplayMode.setHighRefreshRate().catchError((_) {}));
+    }
+
     globalState.startGroupsUpdateTask();
     _autoUpdateProfilesTask();
     globalState.appController = AppController(context, ref);

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_js/flutter_js.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
@@ -60,6 +61,10 @@ class GlobalState {
   bool isPre = true;
   String? coreSHA256;
   String? coreVersion;
+  // Full release version baked in at build time via --dart-define=APP_VERSION
+  // (the CI git tag, e.g. "0.4.1-pre.18", leading `v` stripped). Empty on local
+  // builds, where [_uaVersion] falls back to the pubspec version + a `-pre` mark.
+  String appVersionTag = "";
   late PackageInfo packageInfo;
   Function? updateCurrentDelayDebounce;
   late Measure measure;
@@ -87,6 +92,18 @@ class GlobalState {
   // card instead of its type (Fallback/URLTest/Selector).
   final groupDescriptions = ValueNotifier<Map<String, String>>({});
   final globalOverrideEnabled = ValueNotifier<bool>(false);
+  // Curated member list for the GLOBAL group, parsed from the profile YAML
+  // (the proxy-groups entry named GLOBAL). Populated only when the override flag
+  // above is set; updateGroups then filters and reorders the core's GLOBAL group
+  // to exactly these names, in this order.
+  final globalGroupOrder = ValueNotifier<List<String>>([]);
+  // All proxy-group names in profile-declaration order. Used only under the
+  // GLOBAL override to order the service groups that getProxiesGroups appends
+  // from the core's proxies map — that map's keys arrive alphabetically (Go's
+  // json.Marshal sorts map keys), so without this the rule-mode group tabs would
+  // sort alphabetically instead of following the config.
+  final proxyGroupOrder = ValueNotifier<List<String>>([]);
+
   final navigatorKey = GlobalKey<NavigatorState>();
   AppController? _appController;
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
@@ -135,6 +152,10 @@ class GlobalState {
     coreVersion =
         coreVersionEnv.isEmpty ? kCoreVersionFromSource : coreVersionEnv;
     isPre = const String.fromEnvironment("APP_ENV") != 'stable';
+    const appVersionEnv = String.fromEnvironment("APP_VERSION");
+    final tag = appVersionEnv.trim();
+    appVersionTag =
+        (tag.startsWith("v") || tag.startsWith("V")) ? tag.substring(1) : tag;
     appState = AppState(
       version: version,
       viewSize: Size.zero,
@@ -166,7 +187,15 @@ class GlobalState {
     );
   }
 
-  String get ua => config.patchClashConfig.globalUa ?? packageInfo.ua;
+  // Version shown in the User-Agent: the exact release tag when present,
+  // otherwise the pubspec version with a `-pre` marker for non-stable builds.
+  String get _uaVersion => appVersionTag.isNotEmpty
+      ? appVersionTag
+      : (isPre ? "${packageInfo.version}-pre" : packageInfo.version);
+
+  String get ua =>
+      config.patchClashConfig.globalUa ??
+      packageInfo.ua(appVersion: _uaVersion, coreVersion: coreVersion);
 
   Future<bool?> showMessage({
     String? title,
@@ -349,10 +378,12 @@ class GlobalState {
     required ClashConfig runtimePatchConfig,
   }) async {
     final profilesPath = await appPath.profilesPath;
+    final homeDirPath = await appPath.homeDirPath;
     return _profilePipeline.buildRuntimePlan(
       rawProfile: rawProfile,
       context: _buildRuntimePlanContext(
         profilesPath: profilesPath,
+        homeDirPath: homeDirPath,
       ),
       securedProfile: securedProfile,
       runtimePatchConfig: runtimePatchConfig,
@@ -410,6 +441,7 @@ class GlobalState {
 
   RuntimePlanBuildContext _buildRuntimePlanContext({
     required String profilesPath,
+    required String homeDirPath,
   }) =>
       RuntimePlanBuildContext(
         isAndroid: Platform.isAndroid,
@@ -418,6 +450,7 @@ class GlobalState {
         routeMode: config.networkProps.routeMode,
         hasCurrentScript: config.scriptProps.currentScript != null,
         profilesPath: profilesPath,
+        homeDirPath: homeDirPath,
         readInstalledPackageNames: readInstalledPackageNames,
       );
 
@@ -443,6 +476,7 @@ class GlobalState {
       effectiveLogLevel.value = LogLevel.info.name;
       effectiveKeepAliveInterval.value = defaultKeepAliveInterval;
       globalOverrideEnabled.value = false;
+      proxyGroupOrder.value = const [];
       return;
     }
     groupDescriptions.value = metadata.groupDescriptions;
@@ -458,6 +492,7 @@ class GlobalState {
       effectiveSecret.value = "";
       effectiveExternalUi.value = "";
       globalOverrideEnabled.value = false;
+      proxyGroupOrder.value = const [];
       return;
     }
 
@@ -469,6 +504,7 @@ class GlobalState {
         (runtimeConfig["external-ui"] as String?)?.trim() ?? "";
 
     var parsedGlobalOverride = false;
+    final parsedProxyGroupOrder = <String>[];
     final proxyGroups = runtimeConfig["proxy-groups"];
     if (proxyGroups is List) {
       for (final group in proxyGroups) {
@@ -476,14 +512,16 @@ class GlobalState {
           continue;
         }
         final name = group["name"]?.toString().trim();
-        if (name != GroupName.GLOBAL.name) {
-          continue;
+        if (name != null && name.isNotEmpty) {
+          parsedProxyGroupOrder.add(name);
         }
-        parsedGlobalOverride = group["flclashx-override"] == true;
-        break;
+        if (name == GroupName.GLOBAL.name) {
+          parsedGlobalOverride = group["flclashx-override"] == true;
+        }
       }
     }
     globalOverrideEnabled.value = parsedGlobalOverride;
+    proxyGroupOrder.value = parsedProxyGroupOrder;
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {

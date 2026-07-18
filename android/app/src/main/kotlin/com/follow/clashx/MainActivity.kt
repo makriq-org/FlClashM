@@ -23,29 +23,9 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme()
         super.onCreate(savedInstanceState)
-
-        if (Build.VERSION.SDK_INT in Build.VERSION_CODES.R until 36) {
-            // Re-assign via the setter: mutating the getter's LayoutParams in place is
-            // not applied to the window until window.attributes is set again.
-            window.attributes = window.attributes.apply {
-                preferredDisplayModeId = getHighestRefreshRateDisplayMode()
-            }
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun getHighestRefreshRateDisplayMode(): Int {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return 0
-        val modes = windowManager.defaultDisplay.supportedModes
-        var maxRefreshRate = 60f
-        var modeId = 0
-        for (mode in modes) {
-            if (mode.refreshRate > maxRefreshRate) {
-                maxRefreshRate = mode.refreshRate
-                modeId = mode.modeId
-            }
-        }
-        return modeId
+        // High refresh rate is driven from Dart via the flutter_displaymode package
+        // (see main.dart) — it pins the fastest mode at the current resolution and
+        // handles the OEM quirks that a hand-rolled preferredDisplayModeId missed.
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

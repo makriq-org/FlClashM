@@ -2,6 +2,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
@@ -35,6 +36,7 @@ class RuntimePlanBuildContext {
     required this.hasCurrentScript,
     required this.profilesPath,
     required this.readInstalledPackageNames,
+    this.homeDirPath,
     this.readSplitTunnelingRemoteSource,
   });
 
@@ -44,6 +46,7 @@ class RuntimePlanBuildContext {
   final RouteMode routeMode;
   final bool hasCurrentScript;
   final String profilesPath;
+  final String? homeDirPath;
   final Future<List<String>> Function() readInstalledPackageNames;
   final ReadProfileSplitTunnelingRemoteSource? readSplitTunnelingRemoteSource;
 }
@@ -138,6 +141,9 @@ class ProfileCompiler {
       patchConfig: patchConfig,
       metadata: metadata,
       overrideNetworkSettings: context.overrideNetworkSettings,
+      localZashboardPath: context.homeDirPath == null
+          ? null
+          : path.join(context.homeDirPath!, 'zashboard'),
     );
     _applyTunSettings(
       rawConfig: rawConfig,
@@ -270,12 +276,13 @@ class ProfileCompiler {
     required ClashConfig patchConfig,
     required CompiledProfileMetadata metadata,
     required bool overrideNetworkSettings,
+    required String? localZashboardPath,
   }) {
     rawConfig["external-controller"] = metadata.externalController;
     rawConfig["secret"] = metadata.secret;
-    if (rawConfig["external-ui"] == null || rawConfig["external-ui"] == "") {
-      rawConfig["external-ui"] = "";
-    }
+    final providerUi = rawConfig["external-ui"]?.toString().trim() ?? "";
+    rawConfig["external-ui"] =
+        providerUi.isNotEmpty ? providerUi : (localZashboardPath ?? "");
     rawConfig["interface-name"] = "";
     if (rawConfig["external-ui-url"] == null ||
         rawConfig["external-ui-url"] == "") {

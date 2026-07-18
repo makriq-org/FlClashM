@@ -72,6 +72,9 @@ store/
 /android/app/keystore.jks
 *.jks
 
+# Firebase config (per-developer / CI secret)
+/android/app/google-services.json
+
 # Environment variables (contains sensitive data)
 .env
 *.local.sh

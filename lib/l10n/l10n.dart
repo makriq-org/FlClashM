@@ -914,6 +914,16 @@ class AppLocalizations {
     );
   }
 
+  /// `File is too large`
+  String get fileTooLarge {
+    return Intl.message(
+      'File is too large',
+      name: 'fileTooLarge',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Name`
   String get name {
     return Intl.message('Name', name: 'name', desc: '', args: []);
@@ -1274,10 +1284,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Android proxy client based on FlClashX with the mihomo core, open-source and ad-free.`
+  /// `A multi-platform proxy client based on ClashMeta, simple and easy to use, open-source and ad-free.`
   String get desc {
     return Intl.message(
-      'Android proxy client based on FlClashX with the mihomo core, open-source and ad-free.',
+      'A multi-platform proxy client based on ClashMeta, simple and easy to use, open-source and ad-free.',
       name: 'desc',
       desc: '',
       args: [],
@@ -1499,6 +1509,31 @@ class AppLocalizations {
     );
   }
 
+  /// `Later`
+  String get later {
+    return Intl.message('Later', name: 'later', desc: '', args: []);
+  }
+
+  /// `Skip version`
+  String get skipVersion {
+    return Intl.message(
+      'Skip version',
+      name: 'skipVersion',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Downloading update`
+  String get downloadUpdate {
+    return Intl.message(
+      'Downloading update',
+      name: 'downloadUpdate',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Discover the new version`
   String get discoverNewVersion {
     return Intl.message(
@@ -1524,31 +1559,6 @@ class AppLocalizations {
     return Intl.message(
       'Go to download',
       name: 'goDownload',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Later`
-  String get later {
-    return Intl.message('Later', name: 'later', desc: '', args: []);
-  }
-
-  /// `Skip version`
-  String get skipVersion {
-    return Intl.message(
-      'Skip version',
-      name: 'skipVersion',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Downloading update`
-  String get downloadUpdate {
-    return Intl.message(
-      'Downloading update',
-      name: 'downloadUpdate',
       desc: '',
       args: [],
     );
@@ -2044,6 +2054,26 @@ class AppLocalizations {
     return Intl.message(
       'When turned on, only proxy traffic will be counted in statistics',
       name: 'onlyStatisticsProxyDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Crash reports`
+  String get crashlytics {
+    return Intl.message(
+      'Crash reports',
+      name: 'crashlytics',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Automatically upload crash logs via Firebase Crashlytics; no sensitive data is included`
+  String get crashlyticsDesc {
+    return Intl.message(
+      'Automatically upload crash logs via Firebase Crashlytics; no sensitive data is included',
+      name: 'crashlyticsDesc',
       desc: '',
       args: [],
     );
@@ -3938,7 +3968,43 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  /// `Open zashboard in the app`
+  String get zashboardInApp {
+    return Intl.message(
+      'Open zashboard in the app',
+      name: 'zashboardInApp',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Show the control panel in the built-in browser instead of switching to an external one`
+  String get zashboardInAppDesc {
+    return Intl.message(
+      'Show the control panel in the built-in browser instead of switching to an external one',
+      name: 'zashboardInAppDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Open panel`
+  String get openPanel {
+    return Intl.message('Open panel', name: 'openPanel', desc: '', args: []);
+  }
+
+  /// `Downloading Zashboard…`
+  String get downloadingZashboard {
+    return Intl.message(
+      'Downloading Zashboard…',
+      name: 'downloadingZashboard',
+      desc: '',
+      args: [],
+    );
+  }
 }
+
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {
   const AppLocalizationDelegate();
 
