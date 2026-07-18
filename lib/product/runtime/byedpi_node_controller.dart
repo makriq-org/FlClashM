@@ -14,8 +14,7 @@ import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
-const _byedpiAutoMaxProbeCount = 4;
-const _byedpiAutoProbeTimeout = Duration(seconds: 1);
+const _byedpiAutoSelectionRevision = 1;
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
 
@@ -144,20 +143,16 @@ class _ByedpiConfig {
 
   bool get isAuto => mode == 'auto';
 
-  _ByedpiConfig copyWith({
-    int? listenPort,
-    Duration? timeout,
-  }) =>
-      _ByedpiConfig(
+  _ByedpiConfig withListenPort(int listenPort) => _ByedpiConfig(
         mode: mode,
         listenHost: listenHost,
-        listenPort: listenPort ?? this.listenPort,
+        listenPort: listenPort,
         args: args,
         strategies: strategies,
         strategyList: strategyList,
         testUrls: testUrls,
         testSni: testSni,
-        timeout: timeout ?? this.timeout,
+        timeout: timeout,
         requests: requests,
         concurrency: concurrency,
         minSuccessRatio: minSuccessRatio,
@@ -174,18 +169,21 @@ class _ByedpiStrategyCache {
     required this.strategy,
     required this.checkedAt,
     required this.failures,
+    required this.selectionRevision,
   });
 
   final String fingerprint;
   final String strategy;
   final DateTime checkedAt;
   final int failures;
+  final int selectionRevision;
 
   Map<String, dynamic> toJson() => {
         'fingerprint': fingerprint,
         'strategy': strategy,
         'checkedAt': checkedAt.toIso8601String(),
         'failures': failures,
+        'selectionRevision': selectionRevision,
       };
 
   static _ByedpiStrategyCache? fromJson(String content) {
@@ -202,6 +200,7 @@ class _ByedpiStrategyCache {
       strategy: strategy,
       checkedAt: checkedAt,
       failures: (value['failures'] as num?)?.toInt() ?? 0,
+      selectionRevision: (value['selectionRevision'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -305,6 +304,7 @@ class ByedpiNodeController
             strategy: cached.strategy,
             checkedAt: now(),
             failures: 0,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return cached.strategy;
@@ -318,13 +318,14 @@ class ByedpiNodeController
             strategy: cached.strategy,
             checkedAt: cached.checkedAt,
             failures: failures,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return cached.strategy;
       }
     }
 
-    for (final strategy in strategies.take(_byedpiAutoMaxProbeCount)) {
+    for (final strategy in strategies) {
       if (await _probeStrategy(
         plan: plan,
         sharedLayout: sharedLayout,
@@ -339,20 +340,21 @@ class ByedpiNodeController
             strategy: strategy,
             checkedAt: now(),
             failures: 0,
+            selectionRevision: _byedpiAutoSelectionRevision,
           ),
         );
         return strategy;
       }
     }
 
-    if (cached != null && cached.fingerprint == fingerprint) {
+    if (_matchesCurrentCache(cached, fingerprint)) {
       commonPrint.log(
         'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
       );
-      return cached.strategy;
+      return cached!.strategy;
     }
     commonPrint.log(
-      'byedpi node `${plan.name}` did not select a strategy quickly; '
+      'byedpi node `${plan.name}` did not select a strategy; '
       'using bundled fallback.',
     );
     final fallback = _ByedpiStrategyCache(
@@ -360,6 +362,7 @@ class ByedpiNodeController
       strategy: _byedpiAutoFallbackStrategy,
       checkedAt: now(),
       failures: 0,
+      selectionRevision: _byedpiAutoSelectionRevision,
     );
     await _writeCache(layout, fallback);
     return fallback.strategy;
@@ -379,10 +382,7 @@ class ByedpiNodeController
       return false;
     }
     final probePort = await allocateProbePort();
-    final probeConfig = config.copyWith(
-      listenPort: probePort,
-      timeout: _shorterDuration(config.timeout, _byedpiAutoProbeTimeout),
-    );
+    final probeConfig = config.withListenPort(probePort);
     final timeoutSeconds = probeConfig.timeout.inSeconds.clamp(1, 60);
     final startupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
     final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
@@ -499,15 +499,19 @@ class ByedpiNodeController
     String fingerprint,
     _ByedpiConfig config,
   ) =>
+      _matchesCurrentCache(cache, fingerprint) &&
+      now().difference(cache!.checkedAt) <= config.cacheTtl;
+
+  bool _matchesCurrentCache(
+    _ByedpiStrategyCache? cache,
+    String fingerprint,
+  ) =>
       cache != null &&
-      cache.fingerprint == fingerprint &&
-      now().difference(cache.checkedAt) <= config.cacheTtl;
+      cache.selectionRevision == _byedpiAutoSelectionRevision &&
+      cache.fingerprint == fingerprint;
 
   bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
       now().difference(cache.checkedAt) >= config.recheckAfter;
-
-  Duration _shorterDuration(Duration left, Duration right) =>
-      left <= right ? left : right;
 
   String _fingerprint({
     required List<String> strategies,

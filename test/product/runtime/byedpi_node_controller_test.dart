@@ -104,6 +104,71 @@ void main() {
       );
     });
 
+    test('checks the full bundled-size list with the configured timeout',
+        () async {
+      const strategyCount = 60;
+      runtime.probeResults.addAll([
+        ...List.filled(strategyCount - 1, false),
+        true,
+      ]);
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(
+          layout,
+          strategies: List.generate(
+            strategyCount,
+            (index) => '--strategy ${index + 1}',
+          ).join('\n'),
+        ),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.probeCalls.length,
+        now: () => DateTime.utc(2026, 1, 1),
+      );
+      final plan = _plan(mode: 'auto', args: '', timeout: 5);
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(runtime.probeCalls, hasLength(strategyCount));
+      expect(
+        node['arguments'],
+        containsAllInOrder(['--strategy', '$strategyCount']),
+      );
+      expect(
+        runtime.probeCalls
+            .map((probe) => (probe['connectivityCheck'] as Map)['timeout']),
+        everyElement(5),
+      );
+    });
+
+    test('reselects a strategy from a legacy fallback cache', () async {
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+      await controller.buildRuntimeNodes([plan]);
+      final cache =
+          File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
+      final legacyCache = json.decode(await cache.readAsString()) as Map
+        ..remove('selectionRevision');
+      await cache.writeAsString(json.encode(legacyCache), flush: true);
+      runtime.probeResults.add(true);
+
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(runtime.probeCalls, hasLength(3));
+      expect(node['arguments'], containsAllInOrder(['--fake', '1']));
+      expect(
+        (json.decode(await cache.readAsString()) as Map)['selectionRevision'],
+        1,
+      );
+    });
+
     test('staging rollback restores the previous configuration', () async {
       final oldPlan = _plan(mode: 'manual', args: '--fake 1');
       final newPlan = _plan(mode: 'manual', args: '--fake 2');
@@ -144,7 +209,11 @@ void main() {
   });
 }
 
-BuiltInProxyNodePlan _plan({required String mode, required String args}) =>
+BuiltInProxyNodePlan _plan({
+  required String mode,
+  required String args,
+  int timeout = 1,
+}) =>
     BuiltInProxyNodePlan(
       nodeId: 'node-a',
       name: 'ByeDPI',
@@ -162,7 +231,7 @@ BuiltInProxyNodePlan _plan({required String mode, required String args}) =>
           'strategyList': 'byebyeedpi',
           'strategyTest': {
             'urls': ['https://example.com'],
-            'timeout': 1,
+            'timeout': timeout,
           },
           'cache': {'ttl': 604800},
         }),
@@ -170,15 +239,18 @@ BuiltInProxyNodePlan _plan({required String mode, required String args}) =>
     );
 
 class _FakeBinaryBridge implements ByedpiBinaryBridge {
-  const _FakeBinaryBridge(this.layout);
+  const _FakeBinaryBridge(
+    this.layout, {
+    this.strategies = '--fake 1\n--disorder 1',
+  });
   final ByedpiSharedInstallLayout layout;
+  final String strategies;
 
   @override
   String get bundledReleaseTag => byedpiPinnedReleaseTag;
 
   @override
-  Future<String> loadBundledStrategyList(String assetPath) async =>
-      '--fake 1\n--disorder 1';
+  Future<String> loadBundledStrategyList(String assetPath) async => strategies;
 
   @override
   Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async =>
