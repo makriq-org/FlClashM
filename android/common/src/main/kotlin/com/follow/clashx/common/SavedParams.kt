@@ -56,6 +56,7 @@ object SavedParams {
     }
 
     fun setVpnActive(active: Boolean) {
+        GlobalState.crashKey("vpn_active", active.toString())
         runCatching {
             if (active) {
                 activeFile.writeText("1")

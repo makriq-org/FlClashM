@@ -21,6 +21,11 @@ class FlClashXApplication : Application() {
         CommonGlobalState.setCrashlytics(SavedParams.isCrashlyticsEnabled())
         if (isMainProcess()) {
             GlobalState.install()
+        } else {
+            // :remote hosts the Go core — capture its stderr so a core SIGABRT
+            // (fatal error / panic) arrives with the Go reason, not just a
+            // native stack.
+            CommonGlobalState.captureNativeStderr()
         }
     }
 

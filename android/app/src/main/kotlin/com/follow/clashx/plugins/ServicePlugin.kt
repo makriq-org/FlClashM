@@ -260,13 +260,14 @@ class ServicePlugin :
 
     private fun handleUpdateNotificationParams(call: MethodCall, result: MethodChannel.Result) {
         val json = call.arguments<String>() ?: ""
-        CommonGlobalState.log("updateNotificationParams: raw=$json")
+        // Don't log the raw JSON or the title itself — it's the profile/service
+        // name (user data) and GlobalState.log is now a Crashlytics breadcrumb.
         val params = try {
             gson.fromJson(json, NotificationParams::class.java) ?: NotificationParams()
         } catch (_: Exception) {
             NotificationParams()
         }
-        CommonGlobalState.log("updateNotificationParams: title=${params.title}")
+        CommonGlobalState.log("updateNotificationParams: titleLen=${params.title?.length ?: 0}")
         launch {
             runCatching { Service.updateNotificationParams(params) }
                 .onFailure { Log.w("ServicePlugin", "updateNotificationParams failed: ${it.message}") }
