@@ -296,6 +296,7 @@ class ByedpiNodeController
   final ByedpiProbePortAllocator allocateProbePort;
   final Map<String, _ByedpiPendingSelection> _pendingSelections = {};
   int _backgroundGeneration = 0;
+  Future<void>? _backgroundWorker;
 
   @override
   ByedpiBinaryBridge get binary => super.binary as ByedpiBinaryBridge;
@@ -442,9 +443,12 @@ class ByedpiNodeController
     return config.fallbackStrategy;
   }
 
-  void cancelBackgroundSelection({bool clearPending = true}) {
+  Future<void> cancelBackgroundSelection({bool clearPending = true}) async {
     _backgroundGeneration++;
     if (clearPending) _pendingSelections.clear();
+    final worker = _backgroundWorker;
+    await worker;
+    if (identical(_backgroundWorker, worker)) _backgroundWorker = null;
   }
 
   void startBackgroundSelection(
@@ -457,13 +461,31 @@ class ByedpiNodeController
         .toList(growable: false);
     if (pending.isEmpty) return;
     final generation = ++_backgroundGeneration;
-    for (final selection in pending) {
-      unawaited(
-        _continueSelection(
-          selection,
-          generation: generation,
-          onSelectionChanged: onSelectionChanged,
-        ),
+    final previousWorker = _backgroundWorker;
+    final worker = () async {
+      await previousWorker;
+      if (generation != _backgroundGeneration) return;
+      await _continueSelections(
+        pending,
+        generation: generation,
+        onSelectionChanged: onSelectionChanged,
+      );
+    }();
+    _backgroundWorker = worker;
+    unawaited(worker);
+  }
+
+  Future<void> _continueSelections(
+    List<_ByedpiPendingSelection> selections, {
+    required int generation,
+    required Future<bool> Function() onSelectionChanged,
+  }) async {
+    for (final selection in selections) {
+      if (generation != _backgroundGeneration) return;
+      await _continueSelection(
+        selection,
+        generation: generation,
+        onSelectionChanged: onSelectionChanged,
       );
     }
   }
@@ -844,12 +866,7 @@ class ByedpiNodeController
     final target = File(layout.cachePath);
     final temporary = File('${layout.cachePath}.tmp');
     await temporary.writeAsString(json.encode(cache.toJson()), flush: true);
-    try {
-      await temporary.rename(target.path);
-    } on FileSystemException {
-      if (target.existsSync()) await target.delete();
-      await temporary.rename(target.path);
-    }
+    await temporary.rename(target.path);
   }
 
   Future<void> _restoreCache(

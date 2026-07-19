@@ -161,6 +161,32 @@ void main() {
       );
     });
 
+    test('serializes background activation of multiple ByeDPI nodes', () async {
+      var elapsed = Duration.zero;
+      runtime.onBatch = () => elapsed += const Duration(seconds: 1);
+      final supervisor = buildSupervisor(
+        byedpiStrategies: '--strategy 1\n--strategy 2',
+        monotonicNow: () => elapsed,
+      );
+      final plans = [
+        _byedpiAutoPlan(),
+        _byedpiAutoPlan(nodeId: 'byedpi-auto-b', port: 35112),
+      ];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      expect((await supervisor.startRuntimePlan(plans)).isSuccess, isTrue);
+      runtime
+        ..batchResults.addAll([0, 0])
+        ..applyGate = Completer<void>();
+
+      await supervisor.commitStagedRuntimePlan(plans);
+      await _waitUntil(() => runtime.activeApplyCalls == 1);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(runtime.maximumActiveApplyCalls, 1);
+      runtime.applyGate!.complete();
+      await _waitUntil(() => runtime.appliedPlans.length == 3);
+    });
+
     test('does not apply a background strategy after a new plan is staged',
         () async {
       var elapsed = Duration.zero;
@@ -242,18 +268,22 @@ BuiltInProxyNodePlan _byedpiPlan() => BuiltInProxyNodePlan(
       },
     );
 
-BuiltInProxyNodePlan _byedpiAutoPlan() => BuiltInProxyNodePlan(
-      nodeId: 'byedpi-auto',
+BuiltInProxyNodePlan _byedpiAutoPlan({
+  String nodeId = 'byedpi-auto',
+  int port = 35111,
+}) =>
+    BuiltInProxyNodePlan(
+      nodeId: nodeId,
       name: 'ByeDPI Auto',
       type: BuiltInProxyType.byedpi,
       listenHost: '127.0.0.1',
-      listenPort: 35111,
+      listenPort: port,
       protocol: BuiltInProxyProtocol.socks5,
       udp: false,
       files: {
-        'built-in-proxies/byedpi/byedpi-auto/config.json': json.encode({
+        'built-in-proxies/byedpi/$nodeId/config.json': json.encode({
           'listenHost': '127.0.0.1',
-          'listenPort': 35111,
+          'listenPort': port,
           'mode': 'auto',
           'strategyList': 'byebyeedpi',
           'strategyTest': {
@@ -358,28 +388,40 @@ class _FakeRuntimeNodeBridge
   final List<int?> batchResults = [];
   int generation = 0;
   int allocatedPorts = 0;
+  int activeApplyCalls = 0;
+  int maximumActiveApplyCalls = 0;
   String? savedManifest;
   void Function()? onBatch;
+  Completer<void>? applyGate;
 
   @override
   Future<RuntimeNodePlanState> applyPlan(
     List<Map<String, dynamic>> nodes,
   ) async {
-    final snapshot = [
-      for (final node in nodes) Map<String, dynamic>.from(node)
-    ];
-    if (appliedPlans.isEmpty ||
-        appliedPlans.last.toString() != snapshot.toString()) {
-      generation++;
+    activeApplyCalls++;
+    if (activeApplyCalls > maximumActiveApplyCalls) {
+      maximumActiveApplyCalls = activeApplyCalls;
     }
-    appliedPlans.add(snapshot);
-    return RuntimeNodePlanState(
-      generation: generation,
-      status: nodes.isEmpty ? 'idle' : 'ready',
-      message: '',
-      nodes: snapshot,
-      optionalCheckActive: false,
-    );
+    try {
+      await applyGate?.future;
+      final snapshot = [
+        for (final node in nodes) Map<String, dynamic>.from(node)
+      ];
+      if (appliedPlans.isEmpty ||
+          appliedPlans.last.toString() != snapshot.toString()) {
+        generation++;
+      }
+      appliedPlans.add(snapshot);
+      return RuntimeNodePlanState(
+        generation: generation,
+        status: nodes.isEmpty ? 'idle' : 'ready',
+        message: '',
+        nodes: snapshot,
+        optionalCheckActive: false,
+      );
+    } finally {
+      activeApplyCalls--;
+    }
   }
 
   @override

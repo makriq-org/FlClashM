@@ -392,10 +392,10 @@ void main() {
         },
       );
       await Future<void>.delayed(Duration.zero);
-      controller.cancelBackgroundSelection();
+      final cancellation = controller.cancelBackgroundSelection();
       runtime.batchGate!.complete(0);
       await runtime.batchFinished!.future.timeout(const Duration(seconds: 1));
-      await Future<void>.delayed(Duration.zero);
+      await cancellation;
 
       expect(activationCalls, 0);
       expect(json.decode(await cache.readAsString()), provisional);
@@ -414,7 +414,7 @@ void main() {
       final legacyCache = json.decode(await cache.readAsString()) as Map
         ..remove('selectionRevision');
       await cache.writeAsString(json.encode(legacyCache), flush: true);
-      controller.cancelBackgroundSelection();
+      await controller.cancelBackgroundSelection();
       runtime.batchResults.add(0);
 
       final node = (await controller.buildRuntimeNodes([plan])).single;

@@ -93,6 +93,39 @@ void main() {
     );
   });
 
+  test('plan transitions cancel and join registered batch probes', () {
+    final probe = manager.indexOf('suspend fun probeNodes');
+    final probeEnd = manager.indexOf('fun readPlanState', probe);
+    final batchProbe = manager.substring(probe, probeEnd);
+    final transition = manager.indexOf(
+      'private suspend fun <T> withBatchProbesStopped',
+    );
+    final transitionEnd = manager.indexOf('suspend fun stopIfIdle', transition);
+    final transitionBody = manager.substring(transition, transitionEnd);
+    final cancellationCheck =
+        transitionBody.indexOf('currentCoroutineContext().ensureActive()');
+    final planChange =
+        transitionBody.indexOf('planLock.withLock { block() }');
+
+    expect(batchProbe, contains('activeBatchProbeJobs.add(probeJob)'));
+    expect(batchProbe, contains('activeBatchProbeJobs.remove(probeJob)'));
+    expect(transition, greaterThan(0));
+    expect(manager, contains('activeBatchProbeJobs.forEach { it.cancel() }'));
+    expect(manager, contains('val jobs = planLock.withLock'));
+    expect(manager, contains('jobs.joinAll()'));
+    expect(cancellationCheck, greaterThan(0));
+    expect(planChange, greaterThan(cancellationCheck));
+    expect(
+      manager,
+      contains('suspend fun stopAll() = withBatchProbesStopped'),
+    );
+    expect(
+      manager,
+      contains('suspend fun applyPlan(planJson: String): String =\n'
+          '        withBatchProbesStopped'),
+    );
+  });
+
   test('optional checks are one non-blocking job per plan generation', () {
     expect(manager, contains('optionalCheckJob?.cancelAndJoin()'));
     expect(manager, contains('optionalCheckJob = GlobalState.scope.launch'));

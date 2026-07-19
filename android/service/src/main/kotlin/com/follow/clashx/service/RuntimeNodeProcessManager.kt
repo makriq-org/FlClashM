@@ -12,9 +12,11 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -163,15 +165,19 @@ object RuntimeNodeProcessManager {
     )
 
     private val planLock = Mutex()
+    private val planTransitionLock = Mutex()
     private val nodeLocks = ConcurrentHashMap<String, Mutex>()
     private val runningNodes = ConcurrentHashMap<String, RunningNode>()
+    private val activeBatchProbeJobs = mutableSetOf<Job>()
     private val readyNodeIds = ConcurrentHashMap.newKeySet<String>()
     private var activePlan = linkedMapOf<String, RuntimeNodeSpec>()
+    private var acceptingBatchProbes = true
     @Volatile private var generation = 0L
     private var optionalCheckJob: Job? = null
     @Volatile private var lastStateJson = stateJson(0L, "idle", emptyList())
 
-    suspend fun applyPlan(planJson: String): String = planLock.withLock {
+    suspend fun applyPlan(planJson: String): String =
+        withBatchProbesStopped {
         val target = parsePlan(planJson)
         val previousPlan = activePlan
         val previousReady = readyNodeIds.toSet()
@@ -187,7 +193,7 @@ object RuntimeNodeProcessManager {
                 if (target.isEmpty()) "idle" else "ready",
                 target.values.map { NodeOutcome(it, ready = true, reused = true) },
             )
-            return@withLock lastStateJson
+            return@withBatchProbesStopped lastStateJson
         }
 
         generation += 1L
@@ -224,7 +230,7 @@ object RuntimeNodeProcessManager {
                 outcomes,
                 failure.message.ifBlank { "Runtime node `${failure.spec.nodeId}` is not ready" },
             )
-            return@withLock lastStateJson
+            return@withBatchProbesStopped lastStateJson
         }
 
         activePlan = LinkedHashMap(target)
@@ -245,6 +251,7 @@ object RuntimeNodeProcessManager {
     }
 
     suspend fun probeNode(nodeJson: String): Boolean = planLock.withLock {
+        check(acceptingBatchProbes) { "Runtime-node plan transition is in progress" }
         val spec = RuntimeNodeSpec.fromJson(JSONObject(nodeJson), 0)
         require(
             !activePlan.containsKey(spec.nodeId) &&
@@ -272,30 +279,45 @@ object RuntimeNodeProcessManager {
         require(values.length() in 1..MAX_PROBE_NODES) {
             "Runtime-node probe batch must contain between 1 and $MAX_PROBE_NODES nodes"
         }
+        val probeJob = checkNotNull(currentCoroutineContext()[Job])
         val specs = planLock.withLock {
-            buildList {
-                val nodeIds = mutableSetOf<String>()
-                for (index in 0 until values.length()) {
-                    val spec = RuntimeNodeSpec.fromJson(values.getJSONObject(index), index)
-                    require(nodeIds.add(spec.nodeId)) {
-                        "Runtime-node probe `${spec.nodeId}` is duplicated"
+            check(acceptingBatchProbes) { "Runtime-node plan transition is in progress" }
+            try {
+                buildList {
+                    val nodeIds = mutableSetOf<String>()
+                    for (index in 0 until values.length()) {
+                        val spec = RuntimeNodeSpec.fromJson(values.getJSONObject(index), index)
+                        require(nodeIds.add(spec.nodeId)) {
+                            "Runtime-node probe `${spec.nodeId}` is duplicated"
+                        }
+                        require(
+                            !activePlan.containsKey(spec.nodeId) &&
+                                !runningNodes.containsKey(spec.nodeId),
+                        ) {
+                            "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
+                        }
+                        require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
+                            "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
+                        }
+                        add(spec)
                     }
-                    require(
-                        !activePlan.containsKey(spec.nodeId) &&
-                            !runningNodes.containsKey(spec.nodeId),
-                    ) {
-                        "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
-                    }
-                    require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
-                        "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
-                    }
-                    add(spec)
+                }.also {
+                    activeBatchProbeJobs.add(probeJob)
                 }
+            } catch (error: Throwable) {
+                activeBatchProbeJobs.remove(probeJob)
+                throw error
             }
         }
 
-        return selectRuntimeNodeProbeIndex(specs.size, concurrency) { index ->
-            probeNodeOnce(specs[index])
+        return try {
+            selectRuntimeNodeProbeIndex(specs.size, concurrency) { index ->
+                probeNodeOnce(specs[index])
+            }
+        } finally {
+            withContext(NonCancellable) {
+                planLock.withLock { activeBatchProbeJobs.remove(probeJob) }
+            }
         }
     }
 
@@ -305,7 +327,7 @@ object RuntimeNodeProcessManager {
             .toString()
     }.getOrDefault(lastStateJson)
 
-    suspend fun stopAll() = planLock.withLock {
+    suspend fun stopAll() = withBatchProbesStopped {
         optionalCheckJob?.cancelAndJoin()
         optionalCheckJob = null
         stopAllProcesses()
@@ -314,6 +336,26 @@ object RuntimeNodeProcessManager {
         generation += 1L
         lastStateJson = stateJson(generation, "idle", emptyList())
     }
+
+    private suspend fun <T> withBatchProbesStopped(block: suspend () -> T): T =
+        planTransitionLock.withLock {
+            val jobs = planLock.withLock {
+                acceptingBatchProbes = false
+                activeBatchProbeJobs.forEach { it.cancel() }
+                activeBatchProbeJobs.toList()
+            }
+            try {
+                withContext(NonCancellable) { jobs.joinAll() }
+                currentCoroutineContext().ensureActive()
+                planLock.withLock { block() }
+            } finally {
+                withContext(NonCancellable) {
+                    planLock.withLock {
+                        acceptingBatchProbes = true
+                    }
+                }
+            }
+        }
 
     suspend fun stopIfIdle(vpnActive: Boolean) {
         if (!vpnActive && !RuntimeNodeClientRegistry.hasClients) {
