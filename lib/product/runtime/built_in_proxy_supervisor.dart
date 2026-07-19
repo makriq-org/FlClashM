@@ -73,13 +73,13 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> prepareForRestart() async {
     _planGeneration++;
-    byedpi.cancelBackgroundSelection();
+    await byedpi.cancelBackgroundSelection();
   }
 
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     _planGeneration++;
-    byedpi.cancelBackgroundSelection();
+    await byedpi.cancelBackgroundSelection();
     final naiveMessage = await naiveProxy.stageRuntimePlan(
       currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
       nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
@@ -166,7 +166,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> stop() async {
     _planGeneration++;
-    byedpi.cancelBackgroundSelection();
+    await byedpi.cancelBackgroundSelection();
     await runtime.stopPlan();
   }
 
