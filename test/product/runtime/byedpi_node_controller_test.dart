@@ -115,6 +115,35 @@ void main() {
       expect(cache['verified'], isTrue);
     });
 
+    test('reselects in foreground after the verified cache TTL expires',
+        () async {
+      var wallClock = DateTime.utc(2026, 1, 1);
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => wallClock,
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        cacheTtl: 1,
+        recheckAfter: 1,
+      );
+      runtime.batchResults.addAll([0, 1]);
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+
+      await controller.buildRuntimeNodes([plan]);
+      wallClock = wallClock.add(const Duration(seconds: 2));
+      await controller.buildRuntimeNodes([plan]);
+
+      expect(runtime.batchCalls, hasLength(2));
+    });
+
     test('bounds foreground selection and probes candidates concurrently',
         () async {
       const strategyCount = 60;
@@ -445,6 +474,7 @@ BuiltInProxyNodePlan _plan({
   int foregroundTimeout = 15,
   int selectionConcurrency = 4,
   int failureThreshold = 2,
+  int cacheTtl = 604800,
   int recheckAfter = 86400,
 }) =>
     BuiltInProxyNodePlan(
@@ -471,7 +501,7 @@ BuiltInProxyNodePlan _plan({
             'concurrency': selectionConcurrency,
           },
           'cache': {
-            'ttl': 604800,
+            'ttl': cacheTtl,
             'recheck-after': recheckAfter,
             'failure-threshold': failureThreshold,
           },

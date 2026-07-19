@@ -368,7 +368,9 @@ class ByedpiNodeController
       return cached?.strategy ?? config.fallbackStrategy;
     }
 
-    if (_matchesCurrentCache(cached, fingerprint) && cached!.verified) {
+    if (_matchesCurrentCache(cached, fingerprint) &&
+        cached!.verified &&
+        now().difference(cached.checkedAt) <= config.cacheTtl) {
       if (_needsRecheck(cached, config)) {
         _pendingSelections[plan.nodeId] = _ByedpiPendingSelection(
           plan: plan,
@@ -865,8 +867,7 @@ class ByedpiNodeController
       cache.fingerprint == fingerprint;
 
   bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
-      now().difference(cache.checkedAt) >= config.recheckAfter ||
-      now().difference(cache.checkedAt) > config.cacheTtl;
+      now().difference(cache.checkedAt) >= config.recheckAfter;
 
   _ByedpiStrategyCache _verifiedCache({
     required String fingerprint,
