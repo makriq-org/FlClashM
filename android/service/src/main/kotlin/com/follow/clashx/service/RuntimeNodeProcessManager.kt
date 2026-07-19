@@ -262,7 +262,7 @@ object RuntimeNodeProcessManager {
         }
     }
 
-    suspend fun probeNodes(requestJson: String): Int = planLock.withLock {
+    suspend fun probeNodes(requestJson: String): Int {
         val request = JSONObject(requestJson)
         val values = request.optJSONArray("nodes") ?: JSONArray()
         val concurrency = request.optInt("concurrency", 1)
@@ -272,27 +272,29 @@ object RuntimeNodeProcessManager {
         require(values.length() in 1..MAX_PROBE_NODES) {
             "Runtime-node probe batch must contain between 1 and $MAX_PROBE_NODES nodes"
         }
-        val specs = buildList {
-            val nodeIds = mutableSetOf<String>()
-            for (index in 0 until values.length()) {
-                val spec = RuntimeNodeSpec.fromJson(values.getJSONObject(index), index)
-                require(nodeIds.add(spec.nodeId)) {
-                    "Runtime-node probe `${spec.nodeId}` is duplicated"
+        val specs = planLock.withLock {
+            buildList {
+                val nodeIds = mutableSetOf<String>()
+                for (index in 0 until values.length()) {
+                    val spec = RuntimeNodeSpec.fromJson(values.getJSONObject(index), index)
+                    require(nodeIds.add(spec.nodeId)) {
+                        "Runtime-node probe `${spec.nodeId}` is duplicated"
+                    }
+                    require(
+                        !activePlan.containsKey(spec.nodeId) &&
+                            !runningNodes.containsKey(spec.nodeId),
+                    ) {
+                        "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
+                    }
+                    require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
+                        "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
+                    }
+                    add(spec)
                 }
-                require(
-                    !activePlan.containsKey(spec.nodeId) &&
-                        !runningNodes.containsKey(spec.nodeId),
-                ) {
-                    "Runtime-node probe `${spec.nodeId}` conflicts with an active node"
-                }
-                require(spec.connectivityCheck.required && spec.connectivityCheck.urls.isNotEmpty()) {
-                    "Runtime-node probe `${spec.nodeId}` requires a connectivity check"
-                }
-                add(spec)
             }
         }
 
-        selectRuntimeNodeProbeIndex(specs.size, concurrency) { index ->
+        return selectRuntimeNodeProbeIndex(specs.size, concurrency) { index ->
             probeNodeOnce(specs[index])
         }
     }

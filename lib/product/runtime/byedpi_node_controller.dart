@@ -576,46 +576,16 @@ class ByedpiNodeController
         if (generation != _backgroundGeneration) return;
         nextIndex = batchEnd;
         if (selected != null) {
-          final previousCache = await _readCache(pending.layout);
-          if (generation != _backgroundGeneration) return;
-          await _writeCache(
-            pending.layout,
-            _verifiedCache(
+          await _activateSelectionCache(
+            pending: pending,
+            generation: generation,
+            cache: _verifiedCache(
               fingerprint: pending.fingerprint,
               strategy: selected,
             ),
+            fallbackNextIndex: nextIndex,
+            onSelectionChanged: onSelectionChanged,
           );
-          if (generation != _backgroundGeneration) return;
-          _pendingSelections.remove(pending.plan.nodeId);
-          var activated = false;
-          try {
-            activated = await onSelectionChanged();
-          } catch (error) {
-            commonPrint.log(
-              'byedpi node `${pending.plan.name}` could not activate the '
-              'background strategy: $error',
-            );
-          }
-          if (!activated) {
-            await _restoreCache(
-              pending.layout,
-              previousCache ??
-                  _provisionalCache(
-                    fingerprint: pending.fingerprint,
-                    strategy: pending.config.fallbackStrategy,
-                    nextIndex: nextIndex,
-                  ),
-            );
-            if (generation != _backgroundGeneration) return;
-            try {
-              await onSelectionChanged();
-            } catch (error) {
-              commonPrint.log(
-                'byedpi node `${pending.plan.name}` could not restore the '
-                'previous runtime strategy: $error',
-              );
-            }
-          }
           return;
         }
         if (cached == null) {
@@ -630,10 +600,68 @@ class ByedpiNodeController
           _pendingSelections[pending.plan.nodeId] = pending;
         }
       }
+      if (cached != null && generation == _backgroundGeneration) {
+        await _activateSelectionCache(
+          pending: pending,
+          generation: generation,
+          cache: _provisionalCache(
+            fingerprint: pending.fingerprint,
+            strategy: pending.config.fallbackStrategy,
+            nextIndex: 0,
+          ),
+          fallbackNextIndex: 0,
+          onSelectionChanged: onSelectionChanged,
+        );
+        return;
+      }
       _pendingSelections.remove(pending.plan.nodeId);
     } catch (error) {
       commonPrint.log(
         'byedpi node `${pending.plan.name}` background selection failed: $error',
+      );
+    }
+  }
+
+  Future<void> _activateSelectionCache({
+    required _ByedpiPendingSelection pending,
+    required int generation,
+    required _ByedpiStrategyCache cache,
+    required int fallbackNextIndex,
+    required Future<bool> Function() onSelectionChanged,
+  }) async {
+    final previousCache = await _readCache(pending.layout);
+    if (generation != _backgroundGeneration) return;
+    await _writeCache(pending.layout, cache);
+    if (generation != _backgroundGeneration) return;
+    _pendingSelections.remove(pending.plan.nodeId);
+
+    var activated = false;
+    try {
+      activated = await onSelectionChanged();
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${pending.plan.name}` could not activate the '
+        'background strategy: $error',
+      );
+    }
+    if (activated) return;
+
+    await _restoreCache(
+      pending.layout,
+      previousCache ??
+          _provisionalCache(
+            fingerprint: pending.fingerprint,
+            strategy: pending.config.fallbackStrategy,
+            nextIndex: fallbackNextIndex,
+          ),
+    );
+    if (generation != _backgroundGeneration) return;
+    try {
+      await onSelectionChanged();
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${pending.plan.name}` could not restore the '
+        'previous runtime strategy: $error',
       );
     }
   }

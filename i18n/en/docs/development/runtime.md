@@ -32,6 +32,7 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 - **Type:** `byedpi`
 - **`manual` mode:** accepts an `args` string
 - **`auto` mode:** cycles through ByeByeDPI strategies, caches the working one
+- Without `mode`, `args` selects manual mode and its absence selects auto mode
 - Supports `{sni}` substitution
 - UDP is enabled by default and passed to the local Mihomo node; `udp: false`
   disables it, and no UDP argument is passed to the ByeDPI process
@@ -40,4 +41,4 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 
 - Built-in nodes only work in the `proxies` section
 - Local addresses and ports are determined by the client
-- ByeDPI in `auto` mode only tests URLs from `strategy-test.urls`
+- ByeDPI in `auto` mode tests `strategy-test.urls` or the bundled YouTube endpoint

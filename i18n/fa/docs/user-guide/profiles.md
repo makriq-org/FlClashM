@@ -18,19 +18,6 @@ UDP به‌طور پیش‌فرض فعال است. برای غیرفعال کر�
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-test:
-      urls:
-        - "https://example.com/"
-      sni: "example.com"
-      timeout: 5
-      requests: 1
-      concurrency: 4
-      min-success-ratio: 1.0
-    cache:
-      ttl: 604800
-      recheck-after: 86400
-      failure-threshold: 2
 ```
 
 **پارامترها:**
@@ -39,7 +26,7 @@ proxies:
 |---------|---------|
 | `strategy-list` | نام لیست استراتژی؛ پیش‌فرض `byebyeedpi` |
 | `strategies` | فهرست مرتب استراتژی‌های سفارشی به‌جای `strategy-list` |
-| `strategy-test.urls` | آدرس‌های تست (اجباری) |
+| `strategy-test.urls` | آدرس‌های انتخاب استراتژی؛ پیش‌فرض endpoint داخلی YouTube است |
 | `strategy-test.sni` | نام میزبان برای جایگزینی `{sni}` |
 | `strategy-test.timeout` | زمان‌توقف هر تست به ثانیه (پیش‌فرض ۵) |
 | `strategy-test.requests` | تعداد درخواست‌ها به ازای هر استراتژی (پیش‌فرض ۱) |
@@ -58,6 +45,9 @@ proxies:
 ByeDPI فوراً با fallback اجرا می‌شود و بررسی بقیه فهرست در پس‌زمینه ادامه پیدا می‌کند.
 هر پاسخ HTTP معتبر سرور، از جمله `4xx` و `5xx`، موفق محسوب می‌شود و fallback موقت
 هیچ‌گاه به‌عنوان نتیجه تأییدشده ذخیره نمی‌شود.
+
+اگر `mode` مشخص نشود، وجود `args` حالت دستی را انتخاب می‌کند و در غیر این صورت
+حالت خودکار استفاده می‌شود. `strategy-test.urls` endpoint داخلی را بازنویسی می‌کند.
 
 اگر هیچ استراتژی کار نکرد، از حالت پشتیبان استفاده می‌شود.
 

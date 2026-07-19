@@ -18,6 +18,8 @@ class CompiledBuiltInProxyNodes {
   final List<BuiltInProxyNodePlan> nodes;
 }
 
+const _defaultByedpiStrategyTestUrl = 'https://youtube.com/generate_204';
+
 class BuiltInProxyCompiler {
   const BuiltInProxyCompiler({
     this.registry = builtInProxyRegistry,
@@ -353,12 +355,10 @@ class BuiltInProxyCompiler {
       );
     }
 
-    final mode = _trimmedString(rawConfig.remove('mode'))?.toLowerCase();
-    if (mode == null) {
-      throw const FormatException(
-        'byedpi built-in nodes require an explicit `mode: manual` or `mode: auto`.',
-      );
-    }
+    final modeValue = rawConfig.remove('mode');
+    final mode = modeValue == null
+        ? (rawConfig.containsKey('args') ? 'manual' : 'auto')
+        : _trimmedString(modeValue)?.toLowerCase();
     if (mode != 'manual' && mode != 'auto') {
       throw const FormatException(
         'byedpi built-in nodes support only `mode: manual` or `mode: auto`.',
@@ -408,21 +408,20 @@ class BuiltInProxyCompiler {
           'byedpi auto nodes require `strategies` or `strategy-list: byebyeedpi`.',
         );
       }
-      final strategyTestValue = rawConfig.remove('strategy-test');
-      if (strategyTestValue is! Map) {
-        throw const FormatException(
-          'byedpi auto nodes require a `strategy-test` map.',
-        );
-      }
-      final strategyTest = _asStringKeyedMap(strategyTestValue);
-      final urls = _parseSafeUrls(
+      final strategyTest = _optionalMap(
+        rawConfig.remove('strategy-test'),
+        'byedpi `strategy-test`',
+      );
+      var urls = _parseSafeUrls(
         strategyTest['urls'],
         label: 'byedpi `strategy-test.urls`',
-        required: true,
+        required: false,
       );
       if (urls.isEmpty) {
-        throw const FormatException(
-          'byedpi auto nodes require non-empty `strategy-test.urls`; these addresses are not inherited.',
+        urls = _parseSafeUrls(
+          [_defaultByedpiStrategyTestUrl],
+          label: 'bundled byedpi strategy test address',
+          required: true,
         );
       }
       _validateStrategyTest(strategyTest);

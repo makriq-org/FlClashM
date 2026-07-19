@@ -273,25 +273,24 @@ void main() {
     );
   });
 
-  test('compiles the minimal ByeDPI auto contract with bundled defaults', () {
+  test('compiles a minimal ByeDPI node as auto with bundled defaults', () {
     final plan = compile({
       'proxies': [
         {
           'name': 'ByeDPI',
           'type': 'byedpi',
-          'mode': 'auto',
-          'strategy-test': {
-            'urls': ['https://strategy.example/'],
-          },
         },
       ],
     });
 
     final config = json.decode(plan.files.values.single) as Map;
+    expect(config['mode'], 'auto');
     expect(config['strategyList'], 'byebyeedpi');
     expect(config['strategies'], isEmpty);
     expect(
-        (config['strategyTest'] as Map)['urls'], ['https://strategy.example/']);
+      (config['strategyTest'] as Map)['urls'],
+      ['https://youtube.com/generate_204'],
+    );
     expect(config['selection'], isEmpty);
     expect(config['cache'], isEmpty);
   });
@@ -345,6 +344,7 @@ void main() {
 
   test('rejects invalid or ambiguous ByeDPI auto overrides', () {
     final invalidFields = <String, dynamic>{
+      'mode': 123,
       'strategies': '--fake 1',
       'selection': {'concurrency': 17},
       'selection-background': {

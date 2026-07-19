@@ -39,24 +39,6 @@ UDP включён по умолчанию. Чтобы отключить его
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-test:
-      urls:
-        - "https://example.com/"
-      sni: "example.com"
-      timeout: 5
-      requests: 1
-      concurrency: 4
-      min-success-ratio: 1.0
-    selection:
-      concurrency: 4
-      foreground-timeout: 15
-      background: true
-    cache:
-      ttl: 604800
-      recheck-after: 86400
-      retry-after: 300
-      failure-threshold: 2
 ```
 
 **Параметры:**
@@ -65,7 +47,7 @@ proxies:
 |----------|----------|
 | `strategy-list` | Имя списка стратегий; по умолчанию `byebyeedpi` |
 | `strategies` | Собственный упорядоченный список аргументов вместо `strategy-list` |
-| `strategy-test.urls` | Адреса для подбора стратегии (обязательны и не наследуются) |
+| `strategy-test.urls` | Адреса для подбора; по умолчанию используется встроенный тестовый endpoint YouTube |
 | `strategy-test.sni` | Имя хоста для подстановки `{sni}` |
 | `strategy-test.timeout` | Таймаут одной проверки в секундах (по умолчанию 5) |
 | `strategy-test.requests` | Количество запросов на стратегию (по умолчанию 1) |
@@ -85,7 +67,7 @@ proxies:
 проверяется в фоне. Найденная стратегия переключается в рабочий план и
 сохраняется для холодного запуска.
 
-`strategy-test` используется только при подборе стратегии ByeDPI Auto. Его адреса обязательны, не наследуются и не заменяют `connectivity-check`. Старая секция `test` запрещена; её нужно переименовать в `strategy-test`.
+Если `mode` не указан, узел с `args` работает в ручном режиме, а без `args` — в автоматическом. `strategy-test` используется только при автоподборе и переопределяет встроенный тестовый endpoint, не заменяя `connectivity-check`. Старая секция `test` запрещена; её нужно переименовать в `strategy-test`.
 
 Любой корректный HTTP-ответ сервера, включая `4xx` и `5xx`, считается успешной
 проверкой. Проверенный результат и временный fallback хранятся в кэше раздельно:

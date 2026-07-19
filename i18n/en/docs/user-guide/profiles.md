@@ -18,24 +18,6 @@ The client cycles through strategies from the ByeByeDPI list, finds a working on
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-test:
-      urls:
-        - "https://example.com/"
-      sni: "example.com"
-      timeout: 5
-      requests: 1
-      concurrency: 4
-      min-success-ratio: 1.0
-    selection:
-      concurrency: 4
-      foreground-timeout: 15
-      background: true
-    cache:
-      ttl: 604800
-      recheck-after: 86400
-      retry-after: 300
-      failure-threshold: 2
 ```
 
 **Parameters:**
@@ -44,7 +26,7 @@ proxies:
 |-----------|-------------|
 | `strategy-list` | Strategy list name (default `byebyeedpi`) |
 | `strategies` | Ordered custom strategies instead of `strategy-list` |
-| `strategy-test.urls` | Required URLs used only for strategy selection |
+| `strategy-test.urls` | Strategy-selection URLs; defaults to the bundled YouTube test endpoint |
 | `strategy-test.sni` | Hostname for `{sni}` substitution |
 | `strategy-test.timeout` | Timeout per candidate in seconds (default 5) |
 | `strategy-test.requests` | Number of requests per URL (default 1) |
@@ -63,6 +45,9 @@ Candidates are probed in bounded parallel batches. When the foreground budget
 expires, the fallback starts immediately and the remaining list continues in the
 background. Any valid HTTP response from the server, including `4xx` and `5xx`,
 counts as success. A provisional fallback is never treated as a verified result.
+Without `mode`, nodes with `args` use manual mode and all other nodes use auto
+mode. `strategy-test.urls` overrides the bundled test endpoint and remains
+separate from `connectivity-check`.
 
 ### Manual strategy
 

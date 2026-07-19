@@ -218,6 +218,48 @@ void main() {
       expect(cache['strategy'], '--strategy 4');
     });
 
+    test('demotes a failed verified cache after the failure threshold',
+        () async {
+      var wallClock = DateTime.utc(2026, 1, 1);
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => wallClock,
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        failureThreshold: 1,
+        recheckAfter: 1,
+      );
+      runtime.batchResults.add(0);
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+      await controller.buildRuntimeNodes([plan]);
+      wallClock = wallClock.add(const Duration(seconds: 1));
+      await controller.buildRuntimeNodes([plan]);
+      final activated = Completer<void>();
+
+      controller.startBackgroundSelection(
+        [plan],
+        onSelectionChanged: () async {
+          activated.complete();
+          return true;
+        },
+      );
+      await activated.future.timeout(const Duration(seconds: 1));
+
+      final cache = json.decode(await File(
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+      ).readAsString()) as Map;
+      expect(cache['verified'], isFalse);
+      expect(cache['strategy'], contains('--disorder 1'));
+    });
+
     test('restores the provisional cache when background activation fails',
         () async {
       runtime.onBatch = () {
@@ -402,6 +444,8 @@ BuiltInProxyNodePlan _plan({
   int timeout = 1,
   int foregroundTimeout = 15,
   int selectionConcurrency = 4,
+  int failureThreshold = 2,
+  int recheckAfter = 86400,
 }) =>
     BuiltInProxyNodePlan(
       nodeId: 'node-a',
@@ -426,7 +470,11 @@ BuiltInProxyNodePlan _plan({
             'foreground-timeout': foregroundTimeout,
             'concurrency': selectionConcurrency,
           },
-          'cache': {'ttl': 604800},
+          'cache': {
+            'ttl': 604800,
+            'recheck-after': recheckAfter,
+            'failure-threshold': failureThreshold,
+          },
         }),
       },
     );
