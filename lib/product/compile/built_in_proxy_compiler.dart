@@ -18,6 +18,8 @@ class CompiledBuiltInProxyNodes {
   final List<BuiltInProxyNodePlan> nodes;
 }
 
+const _defaultByedpiStrategyTestUrl = 'https://youtube.com/generate_204';
+
 class BuiltInProxyCompiler {
   const BuiltInProxyCompiler({
     this.registry = builtInProxyRegistry,
@@ -353,8 +355,10 @@ class BuiltInProxyCompiler {
       );
     }
 
-    final mode =
-        (_trimmedString(rawConfig.remove('mode')) ?? 'manual').toLowerCase();
+    final modeValue = rawConfig.remove('mode');
+    final mode = modeValue == null
+        ? (rawConfig.containsKey('args') ? 'manual' : 'auto')
+        : _trimmedString(modeValue)?.toLowerCase();
     if (mode != 'manual' && mode != 'auto') {
       throw const FormatException(
         'byedpi built-in nodes support only `mode: manual` or `mode: auto`.',
@@ -365,7 +369,6 @@ class BuiltInProxyCompiler {
       'mode': mode,
       'listenHost': localhost,
       'listenPort': listenPort,
-      'cache': _asStringKeyedMap(rawConfig.remove('cache')),
     };
 
     if (mode == 'manual') {
@@ -382,44 +385,79 @@ class BuiltInProxyCompiler {
       }
       config['args'] = args;
     } else {
-      final strategies = _stringList(rawConfig.remove('strategies'));
-      final strategyList = _trimmedString(
-        rawConfig.remove('strategy-list'),
-      )?.toLowerCase();
-      if (strategies.isEmpty &&
-          (strategyList == null || strategyList != 'byebyeedpi')) {
+      final strategies = _strictStringList(
+        rawConfig.remove('strategies'),
+        'byedpi `strategies`',
+      );
+      final strategyListValue = rawConfig.remove('strategy-list');
+      final strategyList = strategyListValue == null
+          ? 'byebyeedpi'
+          : _trimmedString(strategyListValue)?.toLowerCase();
+      if (strategyList == null) {
+        throw const FormatException(
+          'byedpi `strategy-list` must be a non-empty string.',
+        );
+      }
+      if (strategies.isNotEmpty && strategyListValue != null) {
+        throw const FormatException(
+          'byedpi auto nodes must use either `strategies` or `strategy-list`, not both.',
+        );
+      }
+      if (strategies.isEmpty && strategyList != 'byebyeedpi') {
         throw const FormatException(
           'byedpi auto nodes require `strategies` or `strategy-list: byebyeedpi`.',
         );
       }
-      final strategyTestValue = rawConfig.remove('strategy-test');
-      if (strategyTestValue is! Map) {
-        throw const FormatException(
-          'byedpi auto nodes require a `strategy-test` map.',
-        );
-      }
-      final strategyTest = _asStringKeyedMap(strategyTestValue);
-      final urls = _parseSafeUrls(
+      final strategyTest = _optionalMap(
+        rawConfig.remove('strategy-test'),
+        'byedpi `strategy-test`',
+      );
+      var urls = _parseSafeUrls(
         strategyTest['urls'],
         label: 'byedpi `strategy-test.urls`',
-        required: true,
+        required: false,
       );
       if (urls.isEmpty) {
-        throw const FormatException(
-          'byedpi auto nodes require non-empty `strategy-test.urls`; these addresses are not inherited.',
+        urls = _parseSafeUrls(
+          [_defaultByedpiStrategyTestUrl],
+          label: 'bundled byedpi strategy test address',
+          required: true,
         );
       }
       _validateStrategyTest(strategyTest);
+      final selection = _optionalMap(
+        rawConfig.remove('selection'),
+        'byedpi `selection`',
+      );
+      _validateByedpiSelection(selection);
+      final cache = _optionalMap(
+        rawConfig.remove('cache'),
+        'byedpi `cache`',
+      );
+      _validateByedpiCache(cache);
+      final fallbackValue = rawConfig.remove('fallback-args');
+      final fallbackArgs = _trimmedString(fallbackValue);
+      if (fallbackValue != null && fallbackArgs == null) {
+        throw const FormatException(
+          'byedpi `fallback-args` must be a non-empty string.',
+        );
+      }
       config['strategies'] = strategies;
       config['strategyList'] = strategies.isEmpty ? strategyList : null;
       config['strategyTest'] = <String, dynamic>{
         ...strategyTest,
         'urls': urls.map((url) => url.toString()).toList(growable: false),
       };
+      config['selection'] = selection;
+      config['cache'] = cache;
+      if (fallbackArgs != null) config['fallbackArgs'] = fallbackArgs;
     }
 
     if (rawConfig.isNotEmpty) {
-      config['options'] = rawConfig;
+      throw FormatException(
+        'byedpi node `${definition.name}` has unknown or mode-incompatible fields: '
+        '${rawConfig.keys.join(', ')}.',
+      );
     }
 
     return BuiltInProxyNodePlan(
@@ -633,17 +671,103 @@ class BuiltInProxyCompiler {
     _ratio(value['min-success-ratio'], 'strategy-test.min-success-ratio');
   }
 
+  void _validateByedpiSelection(Map<String, dynamic> value) {
+    const fields = {'concurrency', 'foreground-timeout', 'background'};
+    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
+    if (unknown.isNotEmpty) {
+      throw FormatException(
+        'byedpi `selection` has unknown fields: ${unknown.join(', ')}.',
+      );
+    }
+    _boundedInt(
+      value['concurrency'],
+      'selection.concurrency',
+      4,
+      connectivityCheckMaxConcurrency,
+    );
+    _seconds(
+      value['foreground-timeout'],
+      'selection.foreground-timeout',
+      15,
+      const Duration(minutes: 1),
+    );
+    final background = value['background'];
+    if (background != null && background is! bool) {
+      throw const FormatException(
+        '`selection.background` must be a boolean.',
+      );
+    }
+  }
+
+  void _validateByedpiCache(Map<String, dynamic> value) {
+    const fields = {
+      'ttl',
+      'recheck-after',
+      'failure-threshold',
+      'retry-after',
+    };
+    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
+    if (unknown.isNotEmpty) {
+      throw FormatException(
+        'byedpi `cache` has unknown fields: ${unknown.join(', ')}.',
+      );
+    }
+    const maximum = Duration(days: 365);
+    final ttl = _seconds(value['ttl'], 'cache.ttl', 604800, maximum);
+    final recheckAfter = _seconds(
+      value['recheck-after'],
+      'cache.recheck-after',
+      86400,
+      maximum,
+    );
+    _seconds(
+      value['retry-after'],
+      'cache.retry-after',
+      300,
+      maximum,
+    );
+    _boundedInt(
+      value['failure-threshold'],
+      'cache.failure-threshold',
+      2,
+      32,
+    );
+    if (recheckAfter > ttl) {
+      throw const FormatException(
+        '`cache.recheck-after` must not exceed `cache.ttl`.',
+      );
+    }
+  }
+
+  Map<String, dynamic> _optionalMap(Object? value, String label) {
+    if (value == null) return <String, dynamic>{};
+    if (value is! Map) throw FormatException('$label must be a map.');
+    return _asStringKeyedMap(value);
+  }
+
+  List<String> _strictStringList(Object? value, String label) {
+    if (value == null) return const [];
+    if (value is! List) throw FormatException('$label must be a list.');
+    final result = <String>[];
+    for (final item in value) {
+      final normalized = _trimmedString(item);
+      if (normalized == null) {
+        throw FormatException('$label must contain non-empty strings.');
+      }
+      result.add(normalized);
+    }
+    return List<String>.unmodifiable(result);
+  }
+
   Duration _seconds(
       Object? value, String field, int fallback, Duration maximum) {
     final seconds = value ?? fallback;
     if (seconds is! num || seconds.toInt() != seconds || seconds <= 0) {
-      throw FormatException(
-          '`connectivity-check.$field` must be a positive integer.');
+      throw FormatException('`$field` must be a positive integer.');
     }
     final result = Duration(seconds: seconds.toInt());
     if (result > maximum) {
-      throw FormatException(
-          '`connectivity-check.$field` exceeds the supported limit.');
+      throw FormatException('`$field` exceeds the supported limit.');
     }
     return result;
   }

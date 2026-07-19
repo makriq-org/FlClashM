@@ -60,6 +60,8 @@ interface IRemoteInterface {
 
     void probeRuntimeNode(in String node, in IResultInterface result);
 
+    void probeRuntimeNodes(in String request, in IResultInterface result);
+
     void attachRuntimeNodeClient();
 
     void detachRuntimeNodeClient();

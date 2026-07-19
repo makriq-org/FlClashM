@@ -18,38 +18,36 @@ The client cycles through strategies from the ByeByeDPI list, finds a working on
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-list: byebyeedpi
-    test:
-      urls:
-        - "https://example.com/"
-      sni: "example.com"
-      timeout: 5
-      requests: 1
-      concurrency: 4
-      min-success-ratio: 1.0
-    cache:
-      ttl: 604800
-      recheck-after: 86400
-      failure-threshold: 2
 ```
 
 **Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `strategy-list` | Strategy list name (`byebyeedpi`) |
-| `test.urls` | URLs to test |
-| `test.sni` | Hostname for `{sni}` substitution |
-| `test.timeout` | Timeout per test in seconds (default 5) |
-| `test.requests` | Number of requests per strategy (default 1) |
-| `test.concurrency` | Parallel tests (default 4) |
-| `test.min-success-ratio` | Minimum success ratio (default 1.0) |
+| `strategy-list` | Strategy list name (default `byebyeedpi`) |
+| `strategies` | Ordered custom strategies instead of `strategy-list` |
+| `strategy-test.urls` | Strategy-selection URLs; defaults to the bundled YouTube test endpoint |
+| `strategy-test.sni` | Hostname for `{sni}` substitution |
+| `strategy-test.timeout` | Timeout per candidate in seconds (default 5) |
+| `strategy-test.requests` | Number of requests per URL (default 1) |
+| `strategy-test.concurrency` | Parallel HTTP requests within one candidate (default 4) |
+| `strategy-test.min-success-ratio` | Minimum success ratio (default 1.0) |
+| `selection.concurrency` | Strategies probed at once (default 4) |
+| `selection.foreground-timeout` | Total foreground budget in seconds (default 15) |
+| `selection.background` | Continue after starting the fallback (default `true`) |
+| `fallback-args` | Temporary fallback arguments |
 | `cache.ttl` | Cache lifetime in seconds (default 7 days) |
 | `cache.recheck-after` | Recheck interval in seconds (default 1 day) |
+| `cache.retry-after` | Cooldown after a provisional fallback (default 5 minutes) |
 | `cache.failure-threshold` | Errors before cache invalidation (default 2) |
 
-If no strategy works, a fallback is used.
+Candidates are probed in bounded parallel batches. When the foreground budget
+expires, the fallback starts immediately and the remaining list continues in the
+background. Any valid HTTP response from the server, including `4xx` and `5xx`,
+counts as success. A provisional fallback is never treated as a verified result.
+Without `mode`, nodes with `args` use manual mode and all other nodes use auto
+mode. `strategy-test.urls` overrides the bundled test endpoint and remains
+separate from `connectivity-check`.
 
 ### Manual strategy
 

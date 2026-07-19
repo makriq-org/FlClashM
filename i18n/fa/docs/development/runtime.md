@@ -32,6 +32,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **نوع:** `byedpi`
 - **حالت `manual`:** رشته `args` را می‌پذیرد
 - **حالت `auto`:** استراتژی‌های ByeByeDPI را بررسی و نسخه کارآمد را کش می‌کند
+- بدون `mode`، وجود `args` حالت دستی و نبود آن حالت خودکار را انتخاب می‌کند
 - جایگزینی `{sni}` پشتیبانی می‌شود
 - UDP به‌طور پیش‌فرض فعال و به نود محلی Mihomo داده می‌شود؛ `udp: false` آن را
   غیرفعال می‌کند و هیچ پارامتر UDP به فرایند ByeDPI داده نمی‌شود
@@ -40,4 +41,4 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 - نودهای داخلی فقط در بخش `proxies` کار می‌کنند
 - آدرس‌ها و پورت‌های محلی توسط کلاینت تعیین می‌شوند
-- ByeDPI در حالت `auto` فقط URLهای `test.urls` را بررسی می‌کند
+- ByeDPI در حالت `auto` از `strategy-test.urls` یا endpoint داخلی YouTube استفاده می‌کند

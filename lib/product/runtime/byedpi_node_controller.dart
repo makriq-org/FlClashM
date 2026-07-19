@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,7 +15,8 @@ import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
-const _byedpiAutoSelectionRevision = 1;
+const _byedpiAutoSelectionRevision = 2;
+final _byedpiMonotonicClock = Stopwatch()..start();
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
 
@@ -123,6 +125,11 @@ class _ByedpiConfig {
     required this.cacheTtl,
     required this.recheckAfter,
     required this.failureThreshold,
+    required this.retryAfter,
+    required this.selectionConcurrency,
+    required this.foregroundTimeout,
+    required this.backgroundSelection,
+    required this.fallbackStrategy,
   });
 
   final String mode;
@@ -140,6 +147,11 @@ class _ByedpiConfig {
   final Duration cacheTtl;
   final Duration recheckAfter;
   final int failureThreshold;
+  final Duration retryAfter;
+  final int selectionConcurrency;
+  final Duration foregroundTimeout;
+  final bool backgroundSelection;
+  final String fallbackStrategy;
 
   bool get isAuto => mode == 'auto';
 
@@ -159,6 +171,11 @@ class _ByedpiConfig {
         cacheTtl: cacheTtl,
         recheckAfter: recheckAfter,
         failureThreshold: failureThreshold,
+        retryAfter: retryAfter,
+        selectionConcurrency: selectionConcurrency,
+        foregroundTimeout: foregroundTimeout,
+        backgroundSelection: backgroundSelection,
+        fallbackStrategy: fallbackStrategy,
       );
 }
 
@@ -170,6 +187,8 @@ class _ByedpiStrategyCache {
     required this.checkedAt,
     required this.failures,
     required this.selectionRevision,
+    required this.verified,
+    required this.nextIndex,
   });
 
   final String fingerprint;
@@ -177,6 +196,8 @@ class _ByedpiStrategyCache {
   final DateTime checkedAt;
   final int failures;
   final int selectionRevision;
+  final bool verified;
+  final int nextIndex;
 
   Map<String, dynamic> toJson() => {
         'fingerprint': fingerprint,
@@ -184,6 +205,8 @@ class _ByedpiStrategyCache {
         'checkedAt': checkedAt.toIso8601String(),
         'failures': failures,
         'selectionRevision': selectionRevision,
+        'verified': verified,
+        'nextIndex': nextIndex,
       };
 
   static _ByedpiStrategyCache? fromJson(String content) {
@@ -201,8 +224,55 @@ class _ByedpiStrategyCache {
       checkedAt: checkedAt,
       failures: (value['failures'] as num?)?.toInt() ?? 0,
       selectionRevision: (value['selectionRevision'] as num?)?.toInt() ?? 0,
+      verified: value['verified'] == true,
+      nextIndex: (value['nextIndex'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+@immutable
+class _ByedpiPendingSelection {
+  const _ByedpiPendingSelection({
+    required this.plan,
+    required this.sharedLayout,
+    required this.layout,
+    required this.config,
+    required this.strategies,
+    required this.fingerprint,
+    required this.nextIndex,
+    this.verifiedCache,
+  });
+
+  final BuiltInProxyNodePlan plan;
+  final ByedpiSharedInstallLayout sharedLayout;
+  final ByedpiNodeLayout layout;
+  final _ByedpiConfig config;
+  final List<String> strategies;
+  final String fingerprint;
+  final int nextIndex;
+  final _ByedpiStrategyCache? verifiedCache;
+
+  _ByedpiPendingSelection copyWith({int? nextIndex}) => _ByedpiPendingSelection(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategies: strategies,
+        fingerprint: fingerprint,
+        nextIndex: nextIndex ?? this.nextIndex,
+        verifiedCache: verifiedCache,
+      );
+}
+
+@immutable
+class _ByedpiSelectionResult {
+  const _ByedpiSelectionResult({
+    required this.nextIndex,
+    this.strategy,
+  });
+
+  final String? strategy;
+  final int nextIndex;
 }
 
 class ByedpiNodeController
@@ -212,7 +282,9 @@ class ByedpiNodeController
     super.runtime = const AndroidRuntimeNodeBridge(),
     this.allocateProbePort = _allocateLoopbackPort,
     DateTime Function()? now,
+    Duration Function()? monotonicNow,
   })  : now = now ?? DateTime.now,
+        monotonicNow = monotonicNow ?? _readMonotonicClock,
         super(
           typeLabel: 'byedpi',
           configArtifactName: 'config.json',
@@ -220,7 +292,10 @@ class ByedpiNodeController
         );
 
   final DateTime Function() now;
+  final Duration Function() monotonicNow;
   final ByedpiProbePortAllocator allocateProbePort;
+  final Map<String, _ByedpiPendingSelection> _pendingSelections = {};
+  int _backgroundGeneration = 0;
 
   @override
   ByedpiBinaryBridge get binary => super.binary as ByedpiBinaryBridge;
@@ -288,133 +363,390 @@ class ByedpiNodeController
       releaseTag: sharedLayout.abi + binary.bundledReleaseTag,
     );
     final cached = await _readCache(layout);
-    if (_canUseCache(cached, fingerprint, config)) {
-      if (!_needsRecheck(cached!, config)) return cached.strategy;
-      if (await _probeStrategy(
-        plan: plan,
-        sharedLayout: sharedLayout,
-        layout: layout,
-        config: config,
-        strategy: cached.strategy,
-      )) {
-        await _writeCache(
-          layout,
-          _ByedpiStrategyCache(
-            fingerprint: fingerprint,
-            strategy: cached.strategy,
-            checkedAt: now(),
-            failures: 0,
-            selectionRevision: _byedpiAutoSelectionRevision,
-          ),
-        );
-        return cached.strategy;
-      }
-      final failures = cached.failures + 1;
-      if (failures < config.failureThreshold) {
-        await _writeCache(
-          layout,
-          _ByedpiStrategyCache(
-            fingerprint: fingerprint,
-            strategy: cached.strategy,
-            checkedAt: cached.checkedAt,
-            failures: failures,
-            selectionRevision: _byedpiAutoSelectionRevision,
-          ),
-        );
-        return cached.strategy;
-      }
+    final pending = _pendingSelections[plan.nodeId];
+    if (pending != null && pending.fingerprint == fingerprint) {
+      return cached?.strategy ?? config.fallbackStrategy;
     }
 
-    for (final strategy in strategies) {
-      if (await _probeStrategy(
-        plan: plan,
-        sharedLayout: sharedLayout,
-        layout: layout,
-        config: config,
-        strategy: strategy,
-      )) {
-        await _writeCache(
-          layout,
-          _ByedpiStrategyCache(
-            fingerprint: fingerprint,
-            strategy: strategy,
-            checkedAt: now(),
-            failures: 0,
-            selectionRevision: _byedpiAutoSelectionRevision,
-          ),
+    if (_matchesCurrentCache(cached, fingerprint) &&
+        cached!.verified &&
+        now().difference(cached.checkedAt) <= config.cacheTtl) {
+      if (_needsRecheck(cached, config)) {
+        _pendingSelections[plan.nodeId] = _ByedpiPendingSelection(
+          plan: plan,
+          sharedLayout: sharedLayout,
+          layout: layout,
+          config: config,
+          strategies: strategies,
+          fingerprint: fingerprint,
+          nextIndex: 0,
+          verifiedCache: cached,
         );
-        return strategy;
       }
+      return cached.strategy;
     }
 
-    if (_matchesCurrentCache(cached, fingerprint)) {
-      commonPrint.log(
-        'byedpi node `${plan.name}` did not find a new strategy; using cached strategy.',
+    var startIndex = 0;
+    if (_matchesCurrentCache(cached, fingerprint) && !cached!.verified) {
+      if (now().difference(cached.checkedAt) < config.retryAfter) {
+        return cached.strategy;
+      }
+      startIndex = cached.nextIndex.clamp(0, strategies.length);
+      if (startIndex >= strategies.length) startIndex = 0;
+    }
+
+    final selection = await _selectWithinForegroundBudget(
+      plan: plan,
+      sharedLayout: sharedLayout,
+      layout: layout,
+      config: config,
+      strategies: strategies,
+      startIndex: startIndex,
+    );
+    if (selection.strategy case final strategy?) {
+      await _writeCache(
+        layout,
+        _verifiedCache(
+          fingerprint: fingerprint,
+          strategy: strategy,
+        ),
       );
-      return cached!.strategy;
+      _pendingSelections.remove(plan.nodeId);
+      return strategy;
+    }
+
+    final provisional = _provisionalCache(
+      fingerprint: fingerprint,
+      strategy: config.fallbackStrategy,
+      nextIndex:
+          selection.nextIndex >= strategies.length ? 0 : selection.nextIndex,
+    );
+    await _writeCache(layout, provisional);
+    if (config.backgroundSelection && selection.nextIndex < strategies.length) {
+      _pendingSelections[plan.nodeId] = _ByedpiPendingSelection(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategies: strategies,
+        fingerprint: fingerprint,
+        nextIndex: selection.nextIndex,
+      );
+    } else {
+      _pendingSelections.remove(plan.nodeId);
     }
     commonPrint.log(
-      'byedpi node `${plan.name}` did not select a strategy; '
-      'using bundled fallback.',
+      'byedpi node `${plan.name}` did not select a strategy within the '
+      'foreground budget; using fallback.',
     );
-    final fallback = _ByedpiStrategyCache(
-      fingerprint: fingerprint,
-      strategy: _byedpiAutoFallbackStrategy,
-      checkedAt: now(),
-      failures: 0,
-      selectionRevision: _byedpiAutoSelectionRevision,
-    );
-    await _writeCache(layout, fallback);
-    return fallback.strategy;
+    return config.fallbackStrategy;
   }
 
-  Future<bool> _probeStrategy({
+  void cancelBackgroundSelection({bool clearPending = true}) {
+    _backgroundGeneration++;
+    if (clearPending) _pendingSelections.clear();
+  }
+
+  void startBackgroundSelection(
+    List<BuiltInProxyNodePlan> plans, {
+    required Future<bool> Function() onSelectionChanged,
+  }) {
+    final planIds = plans.map((plan) => plan.nodeId).toSet();
+    final pending = _pendingSelections.values
+        .where((selection) => planIds.contains(selection.plan.nodeId))
+        .toList(growable: false);
+    if (pending.isEmpty) return;
+    final generation = ++_backgroundGeneration;
+    for (final selection in pending) {
+      unawaited(
+        _continueSelection(
+          selection,
+          generation: generation,
+          onSelectionChanged: onSelectionChanged,
+        ),
+      );
+    }
+  }
+
+  Future<_ByedpiSelectionResult> _selectWithinForegroundBudget({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+    required List<String> strategies,
+    required int startIndex,
+  }) async {
+    final deadline = monotonicNow() + config.foregroundTimeout;
+    var nextIndex = startIndex;
+    while (nextIndex < strategies.length) {
+      final remaining = deadline - monotonicNow();
+      // The native probe timeout is expressed in whole seconds. Starting one
+      // with less than a second left would let it overrun the foreground
+      // budget by almost a full timeout unit.
+      if (remaining < const Duration(seconds: 1)) break;
+      final batchEnd = (nextIndex + config.selectionConcurrency).clamp(
+        nextIndex,
+        strategies.length,
+      );
+      final batch = strategies.sublist(nextIndex, batchEnd);
+      final selected = await _probeStrategies(
+        plan: plan,
+        sharedLayout: sharedLayout,
+        layout: layout,
+        config: config,
+        strategies: batch,
+        maximumDuration: remaining,
+      );
+      nextIndex = batchEnd;
+      if (selected != null) {
+        return _ByedpiSelectionResult(
+          strategy: selected,
+          nextIndex: nextIndex,
+        );
+      }
+    }
+    return _ByedpiSelectionResult(nextIndex: nextIndex);
+  }
+
+  Future<void> _continueSelection(
+    _ByedpiPendingSelection initial, {
+    required int generation,
+    required Future<bool> Function() onSelectionChanged,
+  }) async {
+    var pending = initial;
+    try {
+      final cached = pending.verifiedCache;
+      if (cached != null) {
+        final selected = await _probeStrategies(
+          plan: pending.plan,
+          sharedLayout: pending.sharedLayout,
+          layout: pending.layout,
+          config: pending.config,
+          strategies: [cached.strategy],
+          maximumDuration: pending.config.timeout,
+        );
+        if (generation != _backgroundGeneration) return;
+        if (selected != null) {
+          await _writeCache(
+            pending.layout,
+            _verifiedCache(
+              fingerprint: pending.fingerprint,
+              strategy: cached.strategy,
+            ),
+          );
+          if (generation != _backgroundGeneration) return;
+          _pendingSelections.remove(pending.plan.nodeId);
+          return;
+        }
+        final failures = cached.failures + 1;
+        if (failures < pending.config.failureThreshold) {
+          await _writeCache(
+            pending.layout,
+            _ByedpiStrategyCache(
+              fingerprint: cached.fingerprint,
+              strategy: cached.strategy,
+              checkedAt: cached.checkedAt,
+              failures: failures,
+              selectionRevision: _byedpiAutoSelectionRevision,
+              verified: true,
+              nextIndex: 0,
+            ),
+          );
+          if (generation != _backgroundGeneration) return;
+          _pendingSelections.remove(pending.plan.nodeId);
+          return;
+        }
+      }
+
+      var nextIndex = pending.nextIndex;
+      while (generation == _backgroundGeneration &&
+          nextIndex < pending.strategies.length) {
+        final batchEnd =
+            (nextIndex + pending.config.selectionConcurrency).clamp(
+          nextIndex,
+          pending.strategies.length,
+        );
+        final batch = pending.strategies.sublist(nextIndex, batchEnd);
+        final selected = await _probeStrategies(
+          plan: pending.plan,
+          sharedLayout: pending.sharedLayout,
+          layout: pending.layout,
+          config: pending.config,
+          strategies: batch,
+          maximumDuration: pending.config.timeout,
+        );
+        if (generation != _backgroundGeneration) return;
+        nextIndex = batchEnd;
+        if (selected != null) {
+          await _activateSelectionCache(
+            pending: pending,
+            generation: generation,
+            cache: _verifiedCache(
+              fingerprint: pending.fingerprint,
+              strategy: selected,
+            ),
+            fallbackNextIndex: nextIndex,
+            onSelectionChanged: onSelectionChanged,
+          );
+          return;
+        }
+        if (cached == null) {
+          final provisional = _provisionalCache(
+            fingerprint: pending.fingerprint,
+            strategy: pending.config.fallbackStrategy,
+            nextIndex: nextIndex >= pending.strategies.length ? 0 : nextIndex,
+          );
+          await _writeCache(pending.layout, provisional);
+          if (generation != _backgroundGeneration) return;
+          pending = pending.copyWith(nextIndex: nextIndex);
+          _pendingSelections[pending.plan.nodeId] = pending;
+        }
+      }
+      if (cached != null && generation == _backgroundGeneration) {
+        await _activateSelectionCache(
+          pending: pending,
+          generation: generation,
+          cache: _provisionalCache(
+            fingerprint: pending.fingerprint,
+            strategy: pending.config.fallbackStrategy,
+            nextIndex: 0,
+          ),
+          fallbackNextIndex: 0,
+          onSelectionChanged: onSelectionChanged,
+        );
+        return;
+      }
+      _pendingSelections.remove(pending.plan.nodeId);
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${pending.plan.name}` background selection failed: $error',
+      );
+    }
+  }
+
+  Future<void> _activateSelectionCache({
+    required _ByedpiPendingSelection pending,
+    required int generation,
+    required _ByedpiStrategyCache cache,
+    required int fallbackNextIndex,
+    required Future<bool> Function() onSelectionChanged,
+  }) async {
+    final previousCache = await _readCache(pending.layout);
+    if (generation != _backgroundGeneration) return;
+    await _writeCache(pending.layout, cache);
+    if (generation != _backgroundGeneration) return;
+    _pendingSelections.remove(pending.plan.nodeId);
+
+    var activated = false;
+    try {
+      activated = await onSelectionChanged();
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${pending.plan.name}` could not activate the '
+        'background strategy: $error',
+      );
+    }
+    if (activated) return;
+
+    await _restoreCache(
+      pending.layout,
+      previousCache ??
+          _provisionalCache(
+            fingerprint: pending.fingerprint,
+            strategy: pending.config.fallbackStrategy,
+            nextIndex: fallbackNextIndex,
+          ),
+    );
+    if (generation != _backgroundGeneration) return;
+    try {
+      await onSelectionChanged();
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${pending.plan.name}` could not restore the '
+        'previous runtime strategy: $error',
+      );
+    }
+  }
+
+  Future<String?> _probeStrategies({
+    required BuiltInProxyNodePlan plan,
+    required ByedpiSharedInstallLayout sharedLayout,
+    required ByedpiNodeLayout layout,
+    required _ByedpiConfig config,
+    required List<String> strategies,
+    required Duration maximumDuration,
+  }) async {
+    if (strategies.isEmpty || maximumDuration <= Duration.zero) return null;
+    final timeoutSeconds = _wholeSeconds(
+      maximumDuration < config.timeout ? maximumDuration : config.timeout,
+    ).clamp(1, 60);
+    final ports = await _allocateDistinctProbePorts(strategies.length);
+    final nodes = <Map<String, dynamic>>[
+      for (var index = 0; index < strategies.length; index++)
+        _buildProbeNode(
+          plan: plan,
+          sharedLayout: sharedLayout,
+          layout: layout,
+          config: config.withListenPort(ports[index]),
+          strategy: strategies[index],
+          timeoutSeconds: timeoutSeconds,
+        ),
+    ];
+    try {
+      if (runtime case final RuntimeNodeBatchProbePlatformBridge bridge) {
+        final selectedIndex = await bridge.probeNodes(
+          nodes,
+          concurrency: config.selectionConcurrency,
+        );
+        if (selectedIndex == null ||
+            selectedIndex < 0 ||
+            selectedIndex >= strategies.length) {
+          return null;
+        }
+        return strategies[selectedIndex];
+      }
+      if (runtime case final RuntimeNodeProbePlatformBridge bridge) {
+        for (var index = 0; index < nodes.length; index++) {
+          if (await bridge.probeNode(nodes[index])) return strategies[index];
+        }
+      }
+    } catch (error) {
+      commonPrint.log(
+        'byedpi node `${plan.name}` strategy probe failed: $error',
+      );
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _buildProbeNode({
     required BuiltInProxyNodePlan plan,
     required ByedpiSharedInstallLayout sharedLayout,
     required ByedpiNodeLayout layout,
     required _ByedpiConfig config,
     required String strategy,
-  }) async {
-    final RuntimeNodeProbePlatformBridge probeBridge;
-    if (runtime case final RuntimeNodeProbePlatformBridge bridge) {
-      probeBridge = bridge;
-    } else {
-      return false;
-    }
-    final probePort = await allocateProbePort();
-    final probeConfig = config.withListenPort(probePort);
-    final timeoutSeconds = probeConfig.timeout.inSeconds.clamp(1, 60);
-    final startupTimeoutSeconds = (timeoutSeconds * 2).clamp(2, 300);
-    final probeNodeId = '${plan.nodeId}-probe-${strategy.toMd5()}';
-    try {
-      return await probeBridge.probeNode(<String, dynamic>{
-        'nodeId': probeNodeId,
+    required int timeoutSeconds,
+  }) =>
+      <String, dynamic>{
+        'nodeId': '${plan.nodeId}-probe-${strategy.toMd5()}',
         'type': plan.type.label,
         'name': '${plan.name} strategy probe',
-        'host': probeConfig.listenHost,
-        'port': probeConfig.listenPort,
+        'host': config.listenHost,
+        'port': config.listenPort,
         'executablePath': sharedLayout.executablePath,
         'workingDirectory': layout.workingDirectoryPath,
-        'arguments': _buildArguments(strategy, probeConfig),
+        'arguments': _buildArguments(strategy, config),
         'revision': sha256.convert(utf8.encode(strategy)).toString(),
         'connectivityCheck': <String, dynamic>{
-          'urls': probeConfig.testUrls.map((url) => '$url').toList(),
+          'urls': config.testUrls.map((url) => '$url').toList(),
           'required': true,
           'timeout': timeoutSeconds,
-          'startup-timeout': startupTimeoutSeconds,
+          'startup-timeout': timeoutSeconds,
           'retry-interval': 1,
-          'requests': probeConfig.requests,
-          'concurrency': probeConfig.concurrency,
-          'min-success-ratio': probeConfig.minSuccessRatio,
+          'requests': config.requests,
+          'concurrency': config.concurrency,
+          'min-success-ratio': config.minSuccessRatio,
         },
-      });
-    } catch (error) {
-      commonPrint.log(
-        'byedpi node `${plan.name}` strategy probe failed: $error',
-      );
-      return false;
-    }
-  }
+      };
 
   List<String> _buildArguments(String strategy, _ByedpiConfig config) => [
         '--ip',
@@ -425,16 +757,17 @@ class ByedpiNodeController
       ];
 
   Future<List<String>> _resolveStrategies(_ByedpiConfig config) async {
-    if (config.strategies.isNotEmpty) return config.strategies;
-    if (config.strategyList != 'byebyeedpi') return const [];
-    final content = await binary.loadBundledStrategyList(
-      byedpiStrategyListAssetPath,
-    );
-    return content
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && !line.startsWith('#'))
-        .toList(growable: false);
+    final values = config.strategies.isNotEmpty
+        ? config.strategies
+        : config.strategyList == 'byebyeedpi'
+            ? (await binary.loadBundledStrategyList(
+                byedpiStrategyListAssetPath,
+              ))
+                .split('\n')
+                .map((line) => line.trim())
+                .where((line) => line.isNotEmpty && !line.startsWith('#'))
+            : const <String>[];
+    return List<String>.unmodifiable(values.toSet());
   }
 
   Future<_ByedpiConfig> _readNodeConfig(
@@ -451,6 +784,7 @@ class ByedpiNodeController
     }
     final test = _asMap(value['strategyTest']);
     final cache = _asMap(value['cache']);
+    final selection = _asMap(value['selection']);
     final urls = [
       for (final item in (test['urls'] as List? ?? const []))
         if (Uri.tryParse('$item') case final uri?) uri,
@@ -476,31 +810,53 @@ class ByedpiNodeController
         seconds: (cache['recheck-after'] as num?)?.toInt() ?? 86400,
       ),
       failureThreshold: (cache['failure-threshold'] as num?)?.toInt() ?? 2,
+      retryAfter: Duration(
+        seconds: (cache['retry-after'] as num?)?.toInt() ?? 300,
+      ),
+      selectionConcurrency: (selection['concurrency'] as num?)?.toInt() ?? 4,
+      foregroundTimeout: Duration(
+        seconds: (selection['foreground-timeout'] as num?)?.toInt() ?? 15,
+      ),
+      backgroundSelection: selection['background'] as bool? ?? true,
+      fallbackStrategy:
+          '${value['fallbackArgs'] ?? _byedpiAutoFallbackStrategy}',
     );
   }
 
   Future<_ByedpiStrategyCache?> _readCache(ByedpiNodeLayout layout) async {
     final file = File(layout.cachePath);
     if (!file.existsSync()) return null;
-    return _ByedpiStrategyCache.fromJson(await file.readAsString());
+    try {
+      return _ByedpiStrategyCache.fromJson(await file.readAsString());
+    } catch (error) {
+      commonPrint.log(
+        'byedpi ignored an unreadable strategy cache at ${layout.cachePath}: '
+        '$error',
+      );
+      return null;
+    }
   }
 
   Future<void> _writeCache(
     ByedpiNodeLayout layout,
     _ByedpiStrategyCache cache,
-  ) =>
-      File(layout.cachePath).writeAsString(
-        json.encode(cache.toJson()),
-        flush: true,
-      );
+  ) async {
+    final target = File(layout.cachePath);
+    final temporary = File('${layout.cachePath}.tmp');
+    await temporary.writeAsString(json.encode(cache.toJson()), flush: true);
+    try {
+      await temporary.rename(target.path);
+    } on FileSystemException {
+      if (target.existsSync()) await target.delete();
+      await temporary.rename(target.path);
+    }
+  }
 
-  bool _canUseCache(
-    _ByedpiStrategyCache? cache,
-    String fingerprint,
-    _ByedpiConfig config,
+  Future<void> _restoreCache(
+    ByedpiNodeLayout layout,
+    _ByedpiStrategyCache cache,
   ) =>
-      _matchesCurrentCache(cache, fingerprint) &&
-      now().difference(cache!.checkedAt) <= config.cacheTtl;
+      _writeCache(layout, cache);
 
   bool _matchesCurrentCache(
     _ByedpiStrategyCache? cache,
@@ -512,6 +868,35 @@ class ByedpiNodeController
 
   bool _needsRecheck(_ByedpiStrategyCache cache, _ByedpiConfig config) =>
       now().difference(cache.checkedAt) >= config.recheckAfter;
+
+  _ByedpiStrategyCache _verifiedCache({
+    required String fingerprint,
+    required String strategy,
+  }) =>
+      _ByedpiStrategyCache(
+        fingerprint: fingerprint,
+        strategy: strategy,
+        checkedAt: now(),
+        failures: 0,
+        selectionRevision: _byedpiAutoSelectionRevision,
+        verified: true,
+        nextIndex: 0,
+      );
+
+  _ByedpiStrategyCache _provisionalCache({
+    required String fingerprint,
+    required String strategy,
+    required int nextIndex,
+  }) =>
+      _ByedpiStrategyCache(
+        fingerprint: fingerprint,
+        strategy: strategy,
+        checkedAt: now(),
+        failures: 0,
+        selectionRevision: _byedpiAutoSelectionRevision,
+        verified: false,
+        nextIndex: nextIndex,
+      );
 
   String _fingerprint({
     required List<String> strategies,
@@ -530,10 +915,31 @@ class ByedpiNodeController
                 'requests': config.requests,
                 'concurrency': config.concurrency,
                 'minSuccessRatio': config.minSuccessRatio,
+                'fallbackStrategy': config.fallbackStrategy,
               }),
             ),
           )
           .toString();
+
+  Future<List<int>> _allocateDistinctProbePorts(int count) async {
+    final ports = <int>{};
+    final maximumAttempts = count * 16 + 16;
+    var attempts = 0;
+    while (ports.length < count && attempts < maximumAttempts) {
+      ports.add(await allocateProbePort());
+      attempts++;
+    }
+    if (ports.length != count) {
+      throw StateError(
+        'Could not allocate $count distinct ByeDPI probe ports after '
+        '$maximumAttempts attempts.',
+      );
+    }
+    return ports.toList(growable: false);
+  }
+
+  int _wholeSeconds(Duration duration) =>
+      (duration.inMilliseconds / Duration.millisecondsPerSecond).ceil();
 
   Map<String, dynamic> _asMap(Object? value) {
     if (value is! Map) return <String, dynamic>{};
@@ -579,4 +985,6 @@ class ByedpiNodeController
     await socket.close();
     return port;
   }
+
+  static Duration _readMonotonicClock() => _byedpiMonotonicClock.elapsed;
 }

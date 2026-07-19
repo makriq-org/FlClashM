@@ -387,6 +387,17 @@ class RemoteService : Service() {
             }
         }
 
+        override fun probeRuntimeNodes(request: String, result: IResultInterface) {
+            GlobalState.launch {
+                val selectedIndex = runCatching {
+                    RuntimeNodeProcessManager.probeNodes(request)
+                }.onFailure {
+                    GlobalState.log("Runtime-node batch probe failed: ${it.message}")
+                }.getOrDefault(-1)
+                result.onResult(selectedIndex.toLong())
+            }
+        }
+
         override fun attachRuntimeNodeClient() {
             RuntimeNodeClientRegistry.attach()
         }

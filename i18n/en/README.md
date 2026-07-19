@@ -39,11 +39,6 @@ Unlike regular clients, FlClashM can launch **special nodes directly from the YA
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-list: byebyeedpi
-    test:
-      urls:
-        - "https://example.com/"
 ```
 
 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — encrypted TCP-over-WebRTC tunnel disguised as a video call through Jitsi Meet or Yandex Telemost. Passes through provider whitelists.

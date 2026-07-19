@@ -18,36 +18,35 @@ UDP 默认启用。可在节点中设置 `udp: false` 将其关闭。
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-list: byebyeedpi
-    test:
-      urls:
-        - "https://example.com/"
-      sni: "example.com"
-      timeout: 5
-      requests: 1
-      concurrency: 4
-      min-success-ratio: 1.0
-    cache:
-      ttl: 604800
-      recheck-after: 86400
-      failure-threshold: 2
 ```
 
 **参数：**
 
 | 参数 | 描述 |
 |------|------|
-| `strategy-list` | 策略列表名称 (`byebyeedpi`) |
-| `test.urls` | 测试地址 |
-| `test.sni` | 用于 `{sni}` 替换的主机名 |
-| `test.timeout` | 单次测试超时时间（秒），默认 5 |
-| `test.requests` | 每个策略的请求数，默认 1 |
-| `test.concurrency` | 并行测试数，默认 4 |
-| `test.min-success-ratio` | 最小成功率，默认 1.0 |
+| `strategy-list` | 策略列表名称，默认 `byebyeedpi` |
+| `strategies` | 替代 `strategy-list` 的自定义有序策略列表 |
+| `strategy-test.urls` | 策略测试地址；默认使用内置 YouTube 测试端点 |
+| `strategy-test.sni` | 用于 `{sni}` 替换的主机名 |
+| `strategy-test.timeout` | 单次测试超时时间（秒），默认 5 |
+| `strategy-test.requests` | 每个策略的请求数，默认 1 |
+| `strategy-test.concurrency` | 一个策略内的并行 HTTP 请求数，默认 4 |
+| `strategy-test.min-success-ratio` | 最小成功率，默认 1.0 |
+| `selection.concurrency` | 同时检查的策略数，默认 4 |
+| `selection.foreground-timeout` | 启动节点前的总时间预算（秒），默认 15 |
+| `selection.background` | 启动备用策略后继续后台检查，默认 `true` |
+| `fallback-args` | 前台选择超时后使用的临时策略参数 |
 | `cache.ttl` | 缓存有效期（秒），默认 7 天 |
 | `cache.recheck-after` | 重新检查间隔（秒），默认 1 天 |
+| `cache.retry-after` | 临时备用策略后的重试间隔，默认 5 分钟 |
 | `cache.failure-threshold` | 缓存失效前的错误次数，默认 2 |
+
+候选策略会以受限并行批次进行检查。前台时间预算用尽后，ByeDPI
+立即使用备用策略启动，并在后台继续检查剩余列表。服务器返回的任何有效
+HTTP 响应（包括 `4xx` 和 `5xx`）都视为成功；临时备用策略不会被当作已验证结果。
+
+未指定 `mode` 时，包含 `args` 的节点使用手动模式，否则使用自动模式。
+`strategy-test.urls` 可覆盖内置测试端点。
 
 如果没有策略可用，将使用备用策略。
 

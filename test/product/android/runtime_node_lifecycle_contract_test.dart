@@ -77,6 +77,22 @@ void main() {
     expect(remoteService, contains('RuntimeNodeProcessManager.probeNode'));
   });
 
+  test('batch strategy probes release the plan lock before running', () {
+    final probe = manager.indexOf('suspend fun probeNodes');
+    final end = manager.indexOf('fun readPlanState', probe);
+    final batchProbe = manager.substring(probe, end);
+
+    expect(
+      batchProbe,
+      isNot(contains('requestJson: String): Int = planLock.withLock')),
+    );
+    expect(batchProbe, contains('val specs = planLock.withLock'));
+    expect(
+      batchProbe.indexOf('selectRuntimeNodeProbeIndex'),
+      greaterThan(batchProbe.lastIndexOf('val specs = planLock.withLock')),
+    );
+  });
+
   test('optional checks are one non-blocking job per plan generation', () {
     expect(manager, contains('optionalCheckJob?.cancelAndJoin()'));
     expect(manager, contains('optionalCheckJob = GlobalState.scope.launch'));

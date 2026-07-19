@@ -39,11 +39,6 @@
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-list: byebyeedpi
-    test:
-      urls:
-        - "https://example.com/"
 ```
 
 مثال برای [OlcRTC](https://github.com/openlibrecommunity/olcrtc).

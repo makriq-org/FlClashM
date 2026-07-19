@@ -33,4 +33,5 @@ dependencies {
     implementation("androidx.annotation:annotation-jvm:1.9.1")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    testImplementation(kotlin("test"))
 }

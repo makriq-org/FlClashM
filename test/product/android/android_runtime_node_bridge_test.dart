@@ -33,6 +33,7 @@ void main() {
           }),
         'stopRuntimeNodePlan' => true,
         'probeRuntimeNode' => true,
+        'probeRuntimeNodes' => 2,
         _ => null,
       };
     });
@@ -86,5 +87,26 @@ void main() {
     expect(calls.single.method, 'probeRuntimeNode');
     final arguments = calls.single.arguments as Map;
     expect(json.decode(arguments['node'] as String), {'nodeId': 'probe-a'});
+  });
+
+  test('delegates a bounded runtime-node batch probe to Android', () async {
+    const bridge = AndroidRuntimeNodeBridge();
+
+    expect(
+      await bridge.probeNodes(
+        [
+          {'nodeId': 'probe-a'},
+          {'nodeId': 'probe-b'},
+          {'nodeId': 'probe-c'},
+        ],
+        concurrency: 2,
+      ),
+      2,
+    );
+    expect(calls.single.method, 'probeRuntimeNodes');
+    final arguments = calls.single.arguments as Map;
+    final request = json.decode(arguments['request'] as String) as Map;
+    expect(request['nodes'], hasLength(3));
+    expect(request['concurrency'], 2);
   });
 }

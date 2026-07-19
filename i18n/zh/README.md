@@ -39,11 +39,6 @@
 proxies:
   - name: "dpi-auto"
     type: byedpi
-    mode: auto
-    strategy-list: byebyeedpi
-    test:
-      urls:
-        - "https://example.com/"
 ```
 
 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — 基于 WebRTC 的加密 TCP 隧道，伪装为通过 Jitsi Meet 或 Yandex Telemost 的视频通话。可以通过提供商的白名单。
