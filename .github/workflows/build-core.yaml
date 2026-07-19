@@ -80,9 +80,14 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           cd core
+          # Desktop-only matrix (windows/linux/macos): NO `cmfa` tag. cmfa flips
+          # features.CMFA=true, which routes process lookup through the Android
+          # package-name resolver (nil on desktop) instead of the OS resolver, so
+          # the core reports empty `process` for every connection. Matches the app
+          # build (setup.dart uses cmfa only for android).
           go build \
             -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version=${{ github.event.inputs.version }}" \
-            -tags="with_gvisor,cmfa" \
+            -tags="with_gvisor" \
             -o "../FlClashCore-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
 
       - name: Upload artifact
