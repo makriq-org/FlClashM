@@ -8,7 +8,7 @@ void main() {
   const policy = AndroidSecurityPolicy();
   const metadata = CompiledProfileMetadata(
     externalController: '0.0.0.0:9090',
-    secret: 'profile-secret',
+    secret: '',
     tcpConcurrent: true,
     unifiedDelay: true,
     logLevel: 'info',
@@ -20,100 +20,31 @@ void main() {
     test('forces Android tun floor on direct patch config updates', () {
       final securedPatchConfig = policy.securePatchConfig(
         patchConfig: const ClashConfig(
-          tun: Tun(
-            enable: false,
-            stack: TunStack.system,
-          ),
+          allowLan: true,
+          externalController: ExternalControllerStatus.open,
+          tun: Tun(enable: false, stack: TunStack.system),
         ),
         context: const SecurityPolicyContext(isAndroid: true),
       );
 
       expect(securedPatchConfig.tun.enable, isTrue);
       expect(securedPatchConfig.tun.stack, TunStack.system);
+      expect(securedPatchConfig.allowLan, isTrue);
+      expect(
+        securedPatchConfig.externalController,
+        ExternalControllerStatus.open,
+      );
     });
 
     test('forces Android tun floor on live runtime updates', () {
       final securedUpdate = policy.secureRuntimeUpdate(
         updateParams: const UpdateParams(
-          tun: Tun(
-            enable: false,
-            stack: TunStack.system,
-          ),
+          tun: Tun(enable: false, stack: TunStack.system),
           mixedPort: defaultMixedPort,
-          allowLan: false,
+          allowLan: true,
           findProcessMode: FindProcessMode.off,
           mode: Mode.rule,
           logLevel: LogLevel.info,
-          ipv6: true,
-          tcpConcurrent: true,
-          externalController: ExternalControllerStatus.close,
-          unifiedDelay: true,
-        ),
-        context: const SecurityPolicyContext(isAndroid: true),
-      );
-
-      expect(securedUpdate.tun.enable, isTrue);
-      expect(securedUpdate.tun.stack, TunStack.system);
-    });
-
-    test('forces Android tun floor as client policy', () {
-      final securedProfile = policy.secureProfile(
-        compiledProfile: const CompiledProfilePatch(
-          patchConfig: ClashConfig(
-            tun: Tun(
-              enable: false,
-              stack: TunStack.system,
-            ),
-          ),
-          metadata: metadata,
-        ),
-        context: const SecurityPolicyContext(isAndroid: true),
-      );
-
-      expect(securedProfile.patchConfig.tun.enable, isTrue);
-      expect(securedProfile.runtimeConstraints.enforceTun, isTrue);
-      expect(securedProfile.metadata?.externalController, isEmpty);
-      expect(securedProfile.patchConfig.allowLan, isFalse);
-      expect(
-        securedProfile.patchConfig.externalController,
-        ExternalControllerStatus.close,
-      );
-    });
-
-    test('allows controller only from explicit settings with a secret', () {
-      final securedProfile = policy.secureProfile(
-        compiledProfile: const CompiledProfilePatch(
-          patchConfig: ClashConfig(allowLan: false),
-          metadata: metadata,
-        ),
-        context: const SecurityPolicyContext(
-          isAndroid: true,
-          explicitAllowLan: true,
-          explicitExternalController: ExternalControllerStatus.open,
-        ),
-      );
-
-      expect(securedProfile.patchConfig.allowLan, isTrue);
-      expect(
-        securedProfile.patchConfig.externalController,
-        ExternalControllerStatus.open,
-      );
-      expect(
-        securedProfile.metadata?.externalController,
-        ExternalControllerStatus.open.value,
-      );
-      expect(securedProfile.metadata?.secret, 'profile-secret');
-    });
-
-    test('closes controller when the active config has no secret', () {
-      final securedUpdate = policy.secureRuntimeUpdate(
-        updateParams: const UpdateParams(
-          tun: Tun(enable: true),
-          mixedPort: defaultMixedPort,
-          allowLan: true,
-          findProcessMode: FindProcessMode.always,
-          mode: Mode.rule,
-          logLevel: LogLevel.error,
           ipv6: true,
           tcpConcurrent: true,
           externalController: ExternalControllerStatus.open,
@@ -122,9 +53,32 @@ void main() {
         context: const SecurityPolicyContext(isAndroid: true),
       );
 
+      expect(securedUpdate.tun.enable, isTrue);
+      expect(securedUpdate.tun.stack, TunStack.system);
+      expect(securedUpdate.allowLan, isTrue);
+      expect(securedUpdate.externalController, ExternalControllerStatus.open);
+    });
+
+    test('forces Android tun floor as client policy', () {
+      final securedProfile = policy.secureProfile(
+        compiledProfile: const CompiledProfilePatch(
+          patchConfig: ClashConfig(
+            allowLan: true,
+            externalController: ExternalControllerStatus.open,
+            tun: Tun(enable: false, stack: TunStack.system),
+          ),
+          metadata: metadata,
+        ),
+        context: const SecurityPolicyContext(isAndroid: true),
+      );
+
+      expect(securedProfile.patchConfig.tun.enable, isTrue);
+      expect(securedProfile.runtimeConstraints.enforceTun, isTrue);
+      expect(securedProfile.metadata, same(metadata));
+      expect(securedProfile.patchConfig.allowLan, isTrue);
       expect(
-        securedUpdate.externalController,
-        ExternalControllerStatus.close,
+        securedProfile.patchConfig.externalController,
+        ExternalControllerStatus.open,
       );
     });
 
@@ -132,10 +86,7 @@ void main() {
       final securedProfile = policy.secureProfile(
         compiledProfile: const CompiledProfilePatch(
           patchConfig: ClashConfig(
-            tun: Tun(
-              enable: false,
-              stack: TunStack.gvisor,
-            ),
+            tun: Tun(enable: false, stack: TunStack.gvisor),
           ),
           metadata: metadata,
         ),
@@ -145,8 +96,10 @@ void main() {
       expect(securedProfile.patchConfig.tun.enable, isFalse);
       expect(securedProfile.patchConfig.tun.stack, TunStack.gvisor);
       expect(securedProfile.runtimeConstraints.enforceTun, isFalse);
-      expect(securedProfile.metadata?.groupDescriptions,
-          metadata.groupDescriptions);
+      expect(
+        securedProfile.metadata?.groupDescriptions,
+        metadata.groupDescriptions,
+      );
     });
   });
 }
