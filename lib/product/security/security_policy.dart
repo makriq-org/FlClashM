@@ -1,4 +1,3 @@
-import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
@@ -6,24 +5,14 @@ import '../compile/runtime_plan.dart';
 
 @immutable
 class SecurityPolicyContext {
-  const SecurityPolicyContext({
-    required this.isAndroid,
-    this.explicitAllowLan = false,
-    this.explicitExternalController = ExternalControllerStatus.close,
-    this.controllerSecret = '',
-  });
+  const SecurityPolicyContext({required this.isAndroid});
 
   final bool isAndroid;
-  final bool explicitAllowLan;
-  final ExternalControllerStatus explicitExternalController;
-  final String controllerSecret;
 }
 
 @immutable
 class RuntimeSecurityConstraints {
-  const RuntimeSecurityConstraints({
-    this.enforceTun = false,
-  });
+  const RuntimeSecurityConstraints({this.enforceTun = false});
 
   final bool enforceTun;
 }

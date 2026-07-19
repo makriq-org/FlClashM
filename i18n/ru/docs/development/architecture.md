@@ -12,7 +12,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 |--------|----------|
 | **RawProfile** | Исходный профиль |
 | **ProfileCompiler** | Читает профиль, нормализует раздельное туннелирование |
-| **SecurityPolicy** | Применяет защиты Android |
+| **SecurityPolicy** | Принудительно включает TUN на Android |
 | **RuntimePlan** | Строит план запуска среды выполнения |
 | **EngineManager** | Управляет жизненным циклом движка |
 | **EngineAdapter** | Мост к `mihomo` |
@@ -37,7 +37,7 @@ dart tool/check_product_boundaries.dart
 | Сервис | Отвечает за |
 |--------|-------------|
 | `ProfileCompiler` | Чтение и нормализация профиля |
-| `SecurityPolicy` | Обязательные правила |
+| `SecurityPolicy` | Обязательное включение TUN на Android |
 | `EngineManager` | Жизненный цикл движка |
 | `AppUpdateService` | Проверка, загрузка и установка обновлений приложения |
 | `AppUpdateManifestVerifier` | Проверка подписи и контракта каталога обновлений |
