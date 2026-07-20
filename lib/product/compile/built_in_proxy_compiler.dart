@@ -7,7 +7,9 @@ import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/connectivity_check.dart';
 import 'package:flutter/foundation.dart';
 
+import 'byedpi_config_validator.dart';
 import 'config_tree.dart';
+import 'naiveproxy_config_validator.dart';
 import 'olcrtc_config_validator.dart';
 
 @immutable
@@ -23,11 +25,32 @@ const _defaultByedpiStrategyTestUrl = 'https://youtube.com/generate_204';
 class BuiltInProxyCompiler {
   const BuiltInProxyCompiler({
     this.registry = builtInProxyRegistry,
+    this.naiveProxyConfigValidator = const NaiveProxyConfigValidator(),
+    this.byedpiConfigValidator = const ByedpiConfigValidator(),
     this.olcRtcConfigValidator = const OlcRtcConfigValidator(),
   });
 
   final BuiltInProxyRegistry registry;
+  final NaiveProxyConfigValidator naiveProxyConfigValidator;
+  final ByedpiConfigValidator byedpiConfigValidator;
   final OlcRtcConfigValidator olcRtcConfigValidator;
+
+  void validateConfig(Map<String, dynamic> rawConfig) {
+    _rejectLegacyRuntimeSelection(rawConfig);
+    final proxyEntries = rawConfig['proxies'];
+    if (proxyEntries is! List) {
+      return;
+    }
+    for (final proxy in proxyEntries) {
+      if (proxy is! Map) {
+        continue;
+      }
+      final definition = _parseBuiltInProxyNode(proxy);
+      if (definition != null) {
+        _validateDefinition(definition);
+      }
+    }
+  }
 
   CompiledBuiltInProxyNodes compile({
     required Map<String, dynamic> rawConfig,
@@ -37,7 +60,7 @@ class BuiltInProxyCompiler {
     final normalizedConfig = copyConfigTree(rawConfig);
     final proxyEntries = normalizedConfig['proxies'];
     if (proxyEntries is! List) {
-      _rejectLegacyRuntimeSelection(normalizedConfig);
+      validateConfig(normalizedConfig);
       normalizedConfig.remove('x-flclashm-runtime');
       return CompiledBuiltInProxyNodes(
         config: normalizedConfig,
@@ -45,7 +68,7 @@ class BuiltInProxyCompiler {
       );
     }
 
-    _rejectLegacyRuntimeSelection(normalizedConfig);
+    validateConfig(normalizedConfig);
     normalizedConfig.remove('x-flclashm-runtime');
 
     final reservedPorts = _collectReservedPorts(
@@ -92,6 +115,17 @@ class BuiltInProxyCompiler {
       config: normalizedConfig,
       nodes: compiledNodes,
     );
+  }
+
+  void _validateDefinition(BuiltInProxyNodeDefinition definition) {
+    switch (definition.type) {
+      case BuiltInProxyType.naiveproxy:
+        naiveProxyConfigValidator.validate(definition.rawConfig);
+      case BuiltInProxyType.byedpi:
+        byedpiConfigValidator.validate(definition.rawConfig);
+      case BuiltInProxyType.olcrtc:
+        olcRtcConfigValidator.validateBuiltInNode(definition.rawConfig);
+    }
   }
 
   BuiltInProxyNodeDefinition? _parseBuiltInProxyNode(dynamic proxy) {
@@ -195,12 +229,7 @@ class BuiltInProxyCompiler {
       );
     }
 
-    final proxy = _trimmedString(rawConfig['proxy']);
-    if (proxy == null) {
-      throw const FormatException(
-        'naiveproxy built-in nodes require a non-empty `proxy` field.',
-      );
-    }
+    final proxy = rawConfig['proxy'];
 
     return BuiltInProxyNodePlan(
       nodeId: nodeId,

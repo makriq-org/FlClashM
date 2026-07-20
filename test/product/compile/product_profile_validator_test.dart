@@ -71,7 +71,7 @@ proxies:
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('requires `net.dns`'),
+            contains('olcrtc.net.dns'),
           ),
         ),
       );
@@ -164,7 +164,7 @@ proxies:
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('must not override'),
+            allOf(contains('byedpi.port'), contains('forbidden')),
           ),
         ),
       );
