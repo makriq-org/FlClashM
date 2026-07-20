@@ -934,6 +934,9 @@ class AppController {
     await clashCore.changeProxy(
       ChangeProxyParams(groupName: groupName, proxyName: proxyName),
     );
+    unawaited(
+      globalState.engineManager.notifyProxySelected(groupName, proxyName),
+    );
     if (_ref.read(appSettingProvider).closeConnections) {
       clashCore.closeConnections();
     }

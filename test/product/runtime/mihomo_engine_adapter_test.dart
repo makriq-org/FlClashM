@@ -410,6 +410,9 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
           .isSuccess;
 
   @override
+  Future<void> notifyProxySelected(String groupName, String proxyName) async {}
+
+  @override
   Future<void> stop() async => stopCalls++;
 
   @override

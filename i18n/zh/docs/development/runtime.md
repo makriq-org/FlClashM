@@ -27,6 +27,12 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 仅在 CNC（客户端）模式下工作
 - 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
 
+使用 `activation.mode: auto` 时，supervisor 会预先放置 OlcRTC 配置文件，但不会把休眠备用节点写入 live 或 cold-start manifest。因此，OlcRTC 的强制端到端检查不再阻塞 VPN 启动。watchdog 探测监视组，在达到失败次数后唤醒备用节点，原子地重新应用完整 plan，并强制测试 OlcRTC 本身的 delay。当空闲期内没有连接链包含该节点，且所有直接包含它的组都未选择它时，plan 会在移除该节点后再次应用。切换配置或停止时通过 generation token 取消转换；休眠状态不会持久化。
+
+Mihomo 和网络状态通过 `RuntimeHealthProbe` 跨越 app 边界；该接口只暴露 delay 测试、活动连接链、组的 `now` 值和设备网络可用性。app layer 的实现基于 `clashCore` 与 `connectivity_plus`。未注入 probe 时，自动 watchdog 保持空闲，但 staging、停止和手动唤醒仍然安全。`always` 模式保持原来的启动事务不变。
+
+该集成随应用的 Dart 层更新，不改变 Android bridge。运行时回退可设置 `activation: always`，回退应用版本无需迁移状态。
+
 ### byedpi
 
 - **类型：** `byedpi`

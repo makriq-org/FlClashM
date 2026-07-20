@@ -1,8 +1,10 @@
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import 'built_in_proxy_supervisor.dart';
 import 'engine_adapter.dart';
 import 'mihomo_engine_adapter.dart';
+import 'runtime_health_probe.dart';
 import 'runtime_types.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
@@ -10,8 +12,12 @@ typedef EngineAdapterFactory = EngineAdapter Function();
 EngineAdapter _buildMihomoEngineAdapter(
   ReadAccessControlCallback readAccessControl,
   AccessControl? Function()? readProfileAccessControl,
+  RuntimeHealthProbe? runtimeHealthProbe,
 ) =>
     MihomoEngineAdapter(
+      builtInProxySupervisor: DefaultBuiltInProxySupervisor(
+        healthProbe: runtimeHealthProbe,
+      ),
       readAccessControl: readAccessControl,
       readProfileAccessControl: readProfileAccessControl,
     );
@@ -60,6 +66,7 @@ class RuntimeRegistry {
   factory RuntimeRegistry.flClashM({
     required ReadAccessControlCallback readAccessControl,
     AccessControl? Function()? readProfileAccessControl,
+    RuntimeHealthProbe? runtimeHealthProbe,
   }) =>
       RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
@@ -82,6 +89,7 @@ class RuntimeRegistry {
             adapterFactory: () => _buildMihomoEngineAdapter(
               readAccessControl,
               readProfileAccessControl,
+              runtimeHealthProbe,
             ),
           ),
         ],

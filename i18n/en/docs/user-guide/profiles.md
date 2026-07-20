@@ -78,6 +78,11 @@ proxies:
     net:
       transport: datachannel
       dns: "1.1.1.1:53"
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://example.org/generate_204"
+    proxies: ["DIRECT", "rtc"]
 ```
 
 **Parameters:**
@@ -89,6 +94,50 @@ proxies:
 | `crypto.key` | 256-bit encryption key: exactly 64 hexadecimal characters |
 | `net.transport` | Transport (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
 | `net.dns` | Required DNS resolver in `host:port` format |
+
+### Activation
+
+OlcRTC is a reserve node by default: its configuration is prepared in advance,
+but the process sleeps until the primary group probe fails or the user selects
+OlcRTC manually. Shorthand form:
+
+```yaml
+activation: auto
+# activation: always  # old behavior: start together with the VPN
+```
+
+Full form:
+
+```yaml
+activation:
+  mode: auto
+  wake:
+    urls: ["https://example.org/generate_204"]
+    interval: 30
+    failures: 2
+    retry-after: 300
+  sleep:
+    idle: 900
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `mode` | `auto` | `auto` keeps the reserve asleep; `always` restores permanent startup |
+| `wake.urls` | `connectivity-check` chain | Public HTTP(S) addresses used to probe the watched group |
+| `wake.interval` | `30` | Seconds between watchdog rounds while asleep |
+| `wake.failures` | `2` | Consecutive failed rounds required to wake |
+| `wake.retry-after` | `300` | Backoff in seconds after a failed wake attempt |
+| `sleep.idle` | `900` | Seconds without traffic or selection before sleep; `0` keeps it awake until VPN restart |
+
+In `auto` mode the node must be a direct member of at least one proxy group, and
+probe addresses must resolve from `wake.urls`, the node's `connectivity-check`,
+the nearest containing group, or the application's global test URL. After wake,
+the client immediately tests OlcRTC itself. It stops the process again after no
+containing group selects it and no active connection uses it for `sleep.idle`;
+manual selection wakes it immediately.
+
+`auto` is now the default even when `activation` is omitted. Set
+`activation: always` to restore the previous always-on behavior exactly.
 
 ## NaiveProxy
 

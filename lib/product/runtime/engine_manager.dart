@@ -204,6 +204,9 @@ class EngineManager {
     return true;
   }
 
+  Future<void> notifyProxySelected(String groupName, String proxyName) =>
+      _adapter.notifyProxySelected(groupName, proxyName);
+
   Future<void> stop() async {
     Object? error;
     StackTrace? stackTrace;

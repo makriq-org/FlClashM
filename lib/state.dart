@@ -4,6 +4,7 @@ import 'dart:ffi' show Pointer;
 import 'dart:io' show Platform;
 
 import 'package:animations/animations.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flclashx/clash/clash.dart';
@@ -29,6 +30,55 @@ import 'product/compile/product_compile.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/security/product_security.dart';
 
+class AppRuntimeHealthProbe implements RuntimeHealthProbe {
+  const AppRuntimeHealthProbe();
+
+  @override
+  Future<bool> hasDeviceNetwork() async {
+    final results = await Connectivity().checkConnectivity();
+    return results.any((result) => result != ConnectivityResult.none);
+  }
+
+  @override
+  Future<bool> testDelay({
+    required String proxyName,
+    required List<Uri> urls,
+  }) async {
+    for (final url in urls) {
+      try {
+        final delay = await clashCore.getDelay(url.toString(), proxyName);
+        if ((delay.value ?? 0) > 0) return true;
+      } catch (_) {
+        // Try the next validated probe address.
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<List<List<String>>> activeConnectionChains() async => [
+        for (final connection in await clashCore.getConnections())
+          List<String>.unmodifiable(connection.chains),
+      ];
+
+  @override
+  Future<Map<String, String>> selectedProxies(List<String> groupNames) async {
+    final requested = groupNames.toSet();
+    final selected = <String, String>{
+      for (final group in await clashCore.getProxiesGroups())
+        if (requested.contains(group.name) && group.now != null)
+          group.name: group.now!,
+    };
+    final missing = requested.difference(selected.keys.toSet());
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'Could not read current selections for groups: ${missing.join(', ')}.',
+      );
+    }
+    return selected;
+  }
+}
+
 class GlobalState {
   factory GlobalState() {
     _instance ??= GlobalState._internal();
@@ -39,6 +89,7 @@ class GlobalState {
     runtimeRegistry = RuntimeRegistry.flClashM(
       readAccessControl: () => config.vpnProps.accessControl,
       readProfileAccessControl: () => activeProfileAccessControl,
+      runtimeHealthProbe: const AppRuntimeHealthProbe(),
     );
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,
@@ -528,7 +579,10 @@ class GlobalState {
 
   Future<String> validateProfileConfigText(String text) async {
     try {
-      final normalizedConfig = _profileValidator.normalizeForValidation(text);
+      final normalizedConfig = _profileValidator.normalizeForValidation(
+        text,
+        globalTestUrl: config.appSetting.testUrl,
+      );
       final yamlBuffer = StringBuffer();
       yamlDump(yamlBuffer, normalizedConfig, 0);
       return clashCore.validateConfig(yamlBuffer.toString());

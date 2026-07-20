@@ -114,6 +114,7 @@ Map<String, dynamic> _validNode(BuiltInProxyType type) => switch (type) {
   BuiltInProxyType.olcrtc => <String, dynamic>{
     'name': 'OlcRTC Local',
     'type': 'olcrtc',
+    'activation': 'always',
     'auth': {'provider': 'none'},
     'crypto': {
       'key': '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

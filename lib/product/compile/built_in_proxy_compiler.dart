@@ -20,6 +20,19 @@ class CompiledBuiltInProxyNodes {
 
 const _defaultByedpiStrategyTestUrl = 'https://youtube.com/generate_204';
 
+@immutable
+class _ContainingGroupResolution {
+  const _ContainingGroupResolution({
+    this.urls = const [],
+    this.watchGroup = '',
+    this.directGroups = const [],
+  });
+
+  final List<Uri> urls;
+  final String watchGroup;
+  final List<String> directGroups;
+}
+
 class BuiltInProxyCompiler {
   const BuiltInProxyCompiler({
     this.registry = builtInProxyRegistry,
@@ -63,6 +76,13 @@ class BuiltInProxyCompiler {
       if (definition == null) {
         continue;
       }
+      if (definition.type != BuiltInProxyType.olcrtc &&
+          definition.rawConfig.containsKey('activation')) {
+        throw FormatException(
+          '`activation` is supported only for olcrtc built-in nodes; '
+          '${definition.type.label} node `${definition.name}` must remove it.',
+        );
+      }
 
       final descriptor = registry.resolveSupported(definition.type);
       final listenPort = _allocateListenPort(
@@ -77,12 +97,20 @@ class BuiltInProxyCompiler {
         config: normalizedConfig,
         globalTestUrl: globalTestUrl,
       );
+      final activation = definition.type == BuiltInProxyType.olcrtc
+          ? _parseActivation(
+              definition: definition,
+              config: normalizedConfig,
+              resolvedWakeUrls: connectivityCheck.urls,
+            )
+          : null;
       final plan = _buildPlan(
         definition: definition,
         descriptor: descriptor,
         nodeId: nodeId,
         listenPort: listenPort,
         connectivityCheck: connectivityCheck,
+        activation: activation,
       );
       compiledNodes.add(plan);
       proxyEntries[i] = plan.toProxyConfig();
@@ -123,6 +151,7 @@ class BuiltInProxyCompiler {
     required String nodeId,
     required int listenPort,
     required ConnectivityCheckConfig connectivityCheck,
+    required NodeActivationConfig? activation,
   }) {
     final udp = _resolveUdp(definition: definition, descriptor: descriptor);
     return switch (definition.type) {
@@ -141,6 +170,7 @@ class BuiltInProxyCompiler {
           listenPort: listenPort,
           udp: udp,
           connectivityCheck: connectivityCheck,
+          activation: activation!,
         ),
       BuiltInProxyType.byedpi => _buildByedpiPlan(
           definition: definition,
@@ -229,12 +259,14 @@ class BuiltInProxyCompiler {
     required int listenPort,
     required bool udp,
     required ConnectivityCheckConfig connectivityCheck,
+    required NodeActivationConfig activation,
   }) {
     final rawConfig = copyConfigTree(definition.rawConfig)
       ..remove('name')
       ..remove('type')
       ..remove('udp')
-      ..remove('connectivity-check');
+      ..remove('connectivity-check')
+      ..remove('activation');
     if (rawConfig.containsKey('listen') ||
         rawConfig.containsKey('server') ||
         rawConfig.containsKey('port') ||
@@ -282,6 +314,7 @@ class BuiltInProxyCompiler {
       protocol: descriptor.protocol,
       udp: udp,
       connectivityCheck: connectivityCheck,
+      activation: activation,
       files: {
         'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
       },
@@ -475,6 +508,124 @@ class BuiltInProxyCompiler {
     );
   }
 
+  NodeActivationConfig _parseActivation({
+    required BuiltInProxyNodeDefinition definition,
+    required Map<String, dynamic> config,
+    required List<Uri> resolvedWakeUrls,
+  }) {
+    final rawValue = definition.rawConfig['activation'];
+    Map<String, dynamic> raw;
+    String modeValue;
+    if (rawValue == null) {
+      raw = <String, dynamic>{};
+      modeValue = 'auto';
+    } else if (rawValue is String) {
+      raw = <String, dynamic>{};
+      modeValue = rawValue.trim().toLowerCase();
+    } else if (rawValue is Map) {
+      raw = _asStringKeyedMap(rawValue);
+      const fields = {'mode', 'wake', 'sleep'};
+      final unknown = raw.keys.where((key) => !fields.contains(key)).toList();
+      if (unknown.isNotEmpty) {
+        throw FormatException(
+          'olcrtc node `${definition.name}` has unknown activation fields: '
+          '${unknown.join(', ')}.',
+        );
+      }
+      final parsedMode = raw['mode'];
+      modeValue = parsedMode == null
+          ? 'auto'
+          : _trimmedString(parsedMode)?.toLowerCase() ?? '';
+    } else {
+      throw FormatException(
+        'olcrtc node `${definition.name}` requires `activation` to be `auto`, '
+        '`always`, or a map.',
+      );
+    }
+
+    final mode = switch (modeValue) {
+      'auto' => NodeActivationMode.auto,
+      'always' => NodeActivationMode.always,
+      _ => throw FormatException(
+          'olcrtc node `${definition.name}` supports only '
+          '`activation.mode: auto` or `activation.mode: always`.',
+        ),
+    };
+    final wake = _optionalMap(raw['wake'], '`activation.wake`');
+    const wakeFields = {'urls', 'interval', 'failures', 'retry-after'};
+    final unknownWake =
+        wake.keys.where((key) => !wakeFields.contains(key)).toList();
+    if (unknownWake.isNotEmpty) {
+      throw FormatException(
+        'olcrtc node `${definition.name}` has unknown activation.wake fields: '
+        '${unknownWake.join(', ')}.',
+      );
+    }
+    final sleep = _optionalMap(raw['sleep'], '`activation.sleep`');
+    const sleepFields = {'idle'};
+    final unknownSleep =
+        sleep.keys.where((key) => !sleepFields.contains(key)).toList();
+    if (unknownSleep.isNotEmpty) {
+      throw FormatException(
+        'olcrtc node `${definition.name}` has unknown activation.sleep fields: '
+        '${unknownSleep.join(', ')}.',
+      );
+    }
+
+    var wakeUrls = _parseSafeUrls(
+      wake['urls'],
+      label: '`activation.wake.urls`',
+      required: false,
+    );
+    if (wakeUrls.isEmpty) wakeUrls = resolvedWakeUrls;
+    final groups = _resolveContainingGroups(config, definition.name);
+    if (mode == NodeActivationMode.auto && groups.directGroups.isEmpty) {
+      throw FormatException(
+        'olcrtc node `${definition.name}` uses automatic activation but is not '
+        'a direct member of any proxy group. Add it to a group or use '
+        '`activation: always`.',
+      );
+    }
+    if (mode == NodeActivationMode.auto && wakeUrls.isEmpty) {
+      throw FormatException(
+        'olcrtc node `${definition.name}` uses automatic activation but no wake '
+        'address was found in activation.wake.urls, connectivity-check, '
+        'containing groups, or application settings.',
+      );
+    }
+
+    return NodeActivationConfig(
+      mode: mode,
+      wakeUrls: List<Uri>.unmodifiable(wakeUrls),
+      wakeInterval: _seconds(
+        wake['interval'],
+        'activation.wake.interval',
+        30,
+        const Duration(hours: 1),
+      ),
+      wakeFailures: _boundedInt(
+        wake['failures'],
+        'activation.wake.failures',
+        2,
+        10,
+      ),
+      wakeRetryAfter: _seconds(
+        wake['retry-after'],
+        'activation.wake.retry-after',
+        300,
+        const Duration(days: 1),
+      ),
+      sleepIdle: _nonNegativeSeconds(
+        sleep['idle'],
+        'activation.sleep.idle',
+        900,
+        const Duration(days: 1),
+      ),
+      watchGroup: groups.watchGroup,
+      containingGroups: List<String>.unmodifiable(groups.directGroups),
+    );
+  }
+
   ConnectivityCheckConfig _parseConnectivityCheck({
     required BuiltInProxyNodeDefinition definition,
     required Map<String, dynamic> config,
@@ -514,7 +665,7 @@ class BuiltInProxyCompiler {
       required: false,
     );
     if (urls.isEmpty) {
-      urls = _resolveContainingGroupUrls(config, definition.name);
+      urls = _resolveContainingGroups(config, definition.name).urls;
     }
     if (urls.isEmpty && globalTestUrl.trim().isNotEmpty) {
       urls = _parseSafeUrls(
@@ -557,18 +708,26 @@ class BuiltInProxyCompiler {
     );
   }
 
-  List<Uri> _resolveContainingGroupUrls(
+  _ContainingGroupResolution _resolveContainingGroups(
     Map<String, dynamic> config,
     String nodeName,
   ) {
     final values = config['proxy-groups'];
-    if (values is! List) return const [];
+    if (values is! List) return const _ContainingGroupResolution();
     final groups = [
       for (final value in values)
         if (value is Map) _asStringKeyedMap(value),
     ];
+    final directGroups = <String>[];
+    for (final group in groups) {
+      final name = _trimmedString(group['name']);
+      if (name != null && _stringList(group['proxies']).contains(nodeName)) {
+        directGroups.add(name);
+      }
+    }
     var members = <String>{nodeName};
     final visited = <String>{};
+    var resolvedUrls = const <Uri>[];
     while (members.isNotEmpty) {
       final parents = <String>{};
       for (final group in groups) {
@@ -588,20 +747,31 @@ class BuiltInProxyCompiler {
           label: 'proxy group `$name` connectivity addresses',
           required: false,
         );
-        if (checkUrls.isNotEmpty) return checkUrls;
+        if (checkUrls.isNotEmpty) {
+          resolvedUrls = checkUrls;
+          members = const {};
+          break;
+        }
         final url = _trimmedString(group['url']);
         if (url != null) {
-          return _parseSafeUrls(
+          resolvedUrls = _parseSafeUrls(
             <String>[url],
             label: 'proxy group `$name` url',
             required: false,
           );
+          members = const {};
+          break;
         }
         parents.add(name);
       }
+      if (resolvedUrls.isNotEmpty) break;
       members = parents;
     }
-    return const [];
+    return _ContainingGroupResolution(
+      urls: resolvedUrls,
+      watchGroup: directGroups.isEmpty ? '' : directGroups.first,
+      directGroups: List<String>.unmodifiable(directGroups),
+    );
   }
 
   List<Uri> _parseSafeUrls(
@@ -764,6 +934,23 @@ class BuiltInProxyCompiler {
     final seconds = value ?? fallback;
     if (seconds is! num || seconds.toInt() != seconds || seconds <= 0) {
       throw FormatException('`$field` must be a positive integer.');
+    }
+    final result = Duration(seconds: seconds.toInt());
+    if (result > maximum) {
+      throw FormatException('`$field` exceeds the supported limit.');
+    }
+    return result;
+  }
+
+  Duration _nonNegativeSeconds(
+    Object? value,
+    String field,
+    int fallback,
+    Duration maximum,
+  ) {
+    final seconds = value ?? fallback;
+    if (seconds is! num || seconds.toInt() != seconds || seconds < 0) {
+      throw FormatException('`$field` must be a non-negative integer.');
     }
     final result = Duration(seconds: seconds.toInt());
     if (result > maximum) {

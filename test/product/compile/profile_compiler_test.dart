@@ -806,6 +806,7 @@ void main() {
             {
               'name': 'OLC Local',
               'type': 'olcrtc',
+              'activation': 'always',
               'auth': {'provider': 'jitsi'},
               'room': {'id': 'https://meet.example.org/room'},
               'crypto': {
@@ -1027,6 +1028,7 @@ void main() {
             {
               'name': 'OLC Local',
               'type': 'olcrtc',
+              'activation': 'always',
               'auth': {'provider': 'jitsi'},
               'room': {'id': 'https://meet.example.org/room'},
               'crypto': {
@@ -1117,6 +1119,7 @@ void main() {
             {
               'name': 'OLC Local',
               'type': 'olcrtc',
+              'activation': 'always',
               'socks': {'host': '0.0.0.0'},
             },
           ],
@@ -1163,6 +1166,7 @@ void main() {
       );
 
       Future<void> expectRejected(Map<String, dynamic> proxy) async {
+        proxy.putIfAbsent('activation', () => 'always');
         final rawProfile = RawProfile.fromConfig(
           profile: profile,
           config: {
