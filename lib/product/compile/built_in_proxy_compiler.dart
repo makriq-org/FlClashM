@@ -283,7 +283,7 @@ class BuiltInProxyCompiler {
     if (rawConfig.containsKey('host-resolver-rules')) {
       final hostResolverRules = rawConfig['host-resolver-rules'];
       final rules = _trimmedString(hostResolverRules);
-      if (rules == null || rules.contains(RegExp(r'[\x00\r\n]'))) {
+      if (rules == null || rules.contains(RegExp(r'[\x00-\x1F\x7F]'))) {
         throw const FormatException(
           'naiveproxy `host-resolver-rules` must be a non-empty single-line string.',
         );
@@ -324,6 +324,7 @@ class BuiltInProxyCompiler {
 
   int _requiredPort(Object? value, String field) {
     if (value is! num ||
+        !value.isFinite ||
         value.toInt() != value ||
         value.toInt() < 1 ||
         value.toInt() > 65535) {
@@ -341,6 +342,7 @@ class BuiltInProxyCompiler {
 
   int _requiredPositiveInt(Object? value, String field) {
     if (value is! num ||
+        !value.isFinite ||
         value.toInt() != value ||
         value.toInt() < 1 ||
         value.toInt() > 2147483647) {
@@ -364,7 +366,7 @@ class BuiltInProxyCompiler {
         );
       }
       if (headerValue is! String ||
-          headerValue.contains(RegExp(r'[\x00\r\n]'))) {
+          headerValue.contains(RegExp(r'[\x00-\x1F\x7F]'))) {
         throw FormatException(
           'naiveproxy header `$name` must have a string value without control characters.',
         );
@@ -914,7 +916,10 @@ class BuiltInProxyCompiler {
   Duration _seconds(
       Object? value, String field, int fallback, Duration maximum) {
     final seconds = value ?? fallback;
-    if (seconds is! num || seconds.toInt() != seconds || seconds <= 0) {
+    if (seconds is! num ||
+        !seconds.isFinite ||
+        seconds.toInt() != seconds ||
+        seconds <= 0) {
       throw FormatException('`$field` must be a positive integer.');
     }
     final result = Duration(seconds: seconds.toInt());
@@ -927,6 +932,7 @@ class BuiltInProxyCompiler {
   int _boundedInt(Object? value, String field, int fallback, int maximum) {
     final number = value ?? fallback;
     if (number is! num ||
+        !number.isFinite ||
         number.toInt() != number ||
         number < 1 ||
         number > maximum) {
@@ -937,7 +943,7 @@ class BuiltInProxyCompiler {
 
   double? _ratio(Object? value, String field) {
     if (value == null) return null;
-    if (value is! num || value <= 0 || value > 1) {
+    if (value is! num || !value.isFinite || value <= 0 || value > 1) {
       throw FormatException(
           '`$field` must be greater than 0 and no greater than 1.');
     }
@@ -986,7 +992,7 @@ class BuiltInProxyCompiler {
       'mixed-port',
     ]) {
       final rawValue = config[key];
-      if (rawValue is num && rawValue.toInt() > 0) {
+      if (rawValue is num && rawValue.isFinite && rawValue.toInt() > 0) {
         reserved.add(rawValue.toInt());
       }
     }

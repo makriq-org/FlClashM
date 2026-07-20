@@ -223,6 +223,49 @@ void main() {
       }
     });
 
+    test('rejects non-finite and fractional numeric settings', () {
+      for (final (field, value) in <(String, num)>[
+        ('port', double.nan),
+        ('port', double.infinity),
+        ('port', 443.5),
+        ('insecure-concurrency', double.nan),
+        ('insecure-concurrency', double.negativeInfinity),
+        ('insecure-concurrency', 1.5),
+        ('tunnel-timeout', double.nan),
+        ('tunnel-timeout', double.infinity),
+        ('tunnel-timeout', 1.5),
+        ('idle-timeout', double.nan),
+        ('idle-timeout', double.negativeInfinity),
+        ('idle-timeout', 1.5),
+      ]) {
+        final node = _validNaiveProxy()..[field] = value;
+
+        expect(
+          () => _compileNode(compiler, node),
+          throwsA(isA<FormatException>()),
+          reason: '$field=$value',
+        );
+      }
+    });
+
+    test('accepts supported numeric boundaries', () {
+      final node = _validNaiveProxy()
+        ..['port'] = 65535
+        ..['insecure-concurrency'] = 4
+        ..['tunnel-timeout'] = 2147483647
+        ..['idle-timeout'] = 1;
+
+      final runtimeConfig = json.decode(
+        _compileNode(compiler, node).nodes.single.files.values.single,
+      ) as Map<String, dynamic>;
+
+      expect(
+          runtimeConfig['proxy'], 'https://user:pass@proxy.example.com:65535');
+      expect(runtimeConfig['insecure-concurrency'], 4);
+      expect(runtimeConfig['tunnel-timeout'], 2147483647);
+      expect(runtimeConfig['idle-timeout'], 1);
+    });
+
     test('rejects null optional native settings', () {
       for (final field in const [
         'insecure-concurrency',
@@ -250,6 +293,21 @@ void main() {
         () => _compileNode(compiler, node),
         throwsA(isA<FormatException>()),
       );
+    });
+
+    test('rejects every HTTP control character in header values', () {
+      for (final codeUnit in const [0x00, 0x01, 0x09, 0x0b, 0x1f, 0x7f]) {
+        final node = _validNaiveProxy()
+          ..['headers'] = {
+            'X-Test': 'before${String.fromCharCode(codeUnit)}after',
+          };
+
+        expect(
+          () => _compileNode(compiler, node),
+          throwsA(isA<FormatException>()),
+          reason: 'codeUnit=0x${codeUnit.toRadixString(16)}',
+        );
+      }
     });
   });
 }
