@@ -265,25 +265,27 @@ void main() {
       expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
       expect((await supervisor.startRuntimePlan([plan])).isSuccess, isTrue);
       await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
       await _waitUntil(() => probe.delayCalls.length == 1);
-      expect(runtime.appliedPlans, hasLength(1));
+      expect(runtime.appliedPlans, isEmpty);
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
       await _waitUntil(() => probe.delayCalls.length == 2);
-      expect(runtime.appliedPlans, hasLength(1));
+      expect(runtime.appliedPlans, isEmpty);
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
       await _waitUntil(() => probe.delayCalls.length == 3);
-      expect(runtime.appliedPlans, hasLength(1));
+      expect(runtime.appliedPlans, isEmpty);
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
-      await _waitUntil(() => runtime.appliedPlans.length == 2);
+      await _waitUntil(() => runtime.appliedPlans.length == 1);
       expect(runtime.appliedPlans.last.single['type'], 'olcrtc');
       expect(probe.delayCalls.last.proxyName, plan.name);
       await _waitUntil(() => runtime.savedManifest != null);
@@ -307,6 +309,8 @@ void main() {
         final plan = _olcReservePlan(failures: 1);
         expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
         await supervisor.commitStagedRuntimePlan([plan]);
+        expect(await supervisor.start(), isTrue);
+        runtime.appliedPlans.clear();
         await _waitUntil(() => clock.pendingTimers == 1);
 
         clock.elapse(const Duration(seconds: 3));
@@ -328,7 +332,6 @@ void main() {
       final clock = _FakeWatchdogClock();
       final probe = _FakeRuntimeHealthProbe()
         ..delayResults.addAll([false, false]);
-      runtime.applyResults.add(false);
       final supervisor = buildSupervisor(
         healthProbe: probe,
         monotonicNow: clock.now,
@@ -340,10 +343,14 @@ void main() {
       );
       expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
       await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      runtime.applyResults.add(false);
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
-      await _waitUntil(() => runtime.appliedPlans.length == 1);
+      await _waitUntil(() => runtime.appliedPlans.length == 2);
+      expect(runtime.appliedPlans.last, isEmpty);
       final callsAfterFailure = probe.delayCalls.length;
       await _waitUntil(() => clock.pendingTimers == 1);
       clock.elapse(const Duration(seconds: 4));
@@ -352,6 +359,36 @@ void main() {
 
       clock.elapse(const Duration(seconds: 1));
       await _waitUntil(() => probe.delayCalls.length > callsAfterFailure);
+      await supervisor.stop();
+    });
+
+    test('failed wake restores the previously running node plan', () async {
+      final probe = _FakeRuntimeHealthProbe()..delayResults.add(true);
+      final supervisor = buildSupervisor(healthProbe: probe);
+      final reserve = _olcReservePlan();
+      final plans = [_naivePlan(), reserve];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      expect((await supervisor.startRuntimePlan(plans)).isSuccess, isTrue);
+      await supervisor.commitStagedRuntimePlan(plans);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      runtime.applyResults.add(false);
+
+      await supervisor.notifyProxySelected('Reserve', reserve.name);
+
+      expect(runtime.appliedPlans, hasLength(2));
+      expect(
+        runtime.appliedPlans.first.map((node) => node['type']),
+        containsAll(<String>['naiveproxy', 'olcrtc']),
+      );
+      expect(
+        runtime.appliedPlans.last.map((node) => node['type']),
+        ['naiveproxy'],
+      );
+      expect(
+        (json.decode(runtime.savedManifest!)['nodes'] as List).single['type'],
+        'naiveproxy',
+      );
       await supervisor.stop();
     });
 
@@ -367,6 +404,8 @@ void main() {
       final plan = _olcReservePlan(failures: 1);
       expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
       await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
       await _waitUntil(() => clock.pendingTimers == 1);
 
       clock.elapse(const Duration(seconds: 1));
@@ -395,6 +434,8 @@ void main() {
         final plan = _olcReservePlan();
         expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
         await supervisor.commitStagedRuntimePlan([plan]);
+        expect(await supervisor.start(), isTrue);
+        runtime.appliedPlans.clear();
 
         await supervisor.notifyProxySelected('Reserve', 'Other');
         expect(runtime.appliedPlans, isEmpty);
@@ -419,6 +460,8 @@ void main() {
         final plan = _olcReservePlan(idle: const Duration(seconds: 2));
         expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
         await supervisor.commitStagedRuntimePlan([plan]);
+        expect(await supervisor.start(), isTrue);
+        runtime.appliedPlans.clear();
         await supervisor.notifyProxySelected('Reserve', plan.name);
         await _waitUntil(() => clock.pendingTimers == 1);
 
@@ -461,6 +504,8 @@ void main() {
       final plan = _olcReservePlan(idle: Duration.zero);
       expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
       await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
       await supervisor.notifyProxySelected('Reserve', plan.name);
       await _waitUntil(() => clock.pendingTimers == 1);
 
@@ -468,6 +513,123 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(runtime.appliedPlans, hasLength(1));
       expect(probe.connectionCalls, 0);
+      await supervisor.stop();
+    });
+
+    test('VPN stop pauses auto activation but keeps always-on nodes warm',
+        () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _FakeRuntimeHealthProbe()..delayResults.add(true);
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final reserve = _olcReservePlan(idle: Duration.zero);
+      final plans = [_naivePlan(), reserve];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      await supervisor.notifyProxySelected('Reserve', reserve.name);
+      await _waitUntil(() => clock.pendingTimers == 1);
+
+      await supervisor.pauseAutoActivation();
+
+      expect(runtime.appliedPlans.last.map((node) => node['type']), [
+        'naiveproxy',
+      ]);
+      expect(
+        (json.decode(runtime.savedManifest!)['nodes'] as List).single['type'],
+        'naiveproxy',
+      );
+      final applyCount = runtime.appliedPlans.length;
+      final networkCallCount = probe.networkCalls;
+      final delayCallCount = probe.delayCalls.length;
+      final connectionCallCount = probe.connectionCalls;
+      final selectionCallCount = probe.selectionCalls;
+      clock.elapse(const Duration(hours: 1));
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.appliedPlans, hasLength(applyCount));
+      expect(probe.networkCalls, networkCallCount);
+      expect(probe.delayCalls, hasLength(delayCallCount));
+      expect(probe.connectionCalls, connectionCallCount);
+      expect(probe.selectionCalls, selectionCallCount);
+      await supervisor.notifyProxySelected('Reserve', reserve.name);
+      expect(runtime.appliedPlans, hasLength(applyCount));
+      await supervisor.stop();
+    });
+
+    test('restart prep removes awake reserve from cold start', () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _FakeRuntimeHealthProbe()..delayResults.add(true);
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final reserve = _olcReservePlan(idle: Duration.zero);
+      final plans = [_naivePlan(), reserve];
+      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
+      await supervisor.commitStagedRuntimePlan(plans);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      await supervisor.notifyProxySelected('Reserve', reserve.name);
+      await _waitUntil(() => clock.pendingTimers == 1);
+
+      await supervisor.prepareForRestart();
+
+      expect(runtime.appliedPlans.last.map((node) => node['type']), [
+        'naiveproxy',
+      ]);
+      expect(
+        (json.decode(runtime.savedManifest!)['nodes'] as List).single['type'],
+        'naiveproxy',
+      );
+      final applyCount = runtime.appliedPlans.length;
+      final networkCallCount = probe.networkCalls;
+      final delayCallCount = probe.delayCalls.length;
+      final connectionCallCount = probe.connectionCalls;
+      final selectionCallCount = probe.selectionCalls;
+      clock.elapse(const Duration(hours: 1));
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.appliedPlans, hasLength(applyCount));
+      expect(probe.networkCalls, networkCallCount);
+      expect(probe.delayCalls, hasLength(delayCallCount));
+      expect(probe.connectionCalls, connectionCallCount);
+      expect(probe.selectionCalls, selectionCallCount);
+      await supervisor.stop();
+    });
+
+    test('failed sleep restores the awake runtime plan', () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _FakeRuntimeHealthProbe()..delayResults.add(true);
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final plan = _olcReservePlan(idle: const Duration(seconds: 1));
+      expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      await supervisor.notifyProxySelected('Reserve', plan.name);
+      runtime.applyResults.add(false);
+      await _waitUntil(() => clock.pendingTimers == 1);
+
+      clock.elapse(const Duration(seconds: 1));
+      await _waitUntil(() => probe.connectionCalls == 1);
+      await _waitUntil(() => clock.pendingTimers == 1);
+      clock.elapse(const Duration(seconds: 1));
+      await _waitUntil(() => runtime.appliedPlans.length == 3);
+
+      expect(runtime.appliedPlans[1], isEmpty);
+      expect(runtime.appliedPlans.last.single['type'], 'olcrtc');
+      expect(
+        (json.decode(runtime.savedManifest!)['nodes'] as List).single['type'],
+        'olcrtc',
+      );
       await supervisor.stop();
     });
 
@@ -486,6 +648,8 @@ void main() {
           final plan = _olcReservePlan(failures: 1);
           expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
           await supervisor.commitStagedRuntimePlan([plan]);
+          expect(await supervisor.start(), isTrue);
+          runtime.appliedPlans.clear();
           runtime.applyGate = Completer<void>();
           await _waitUntil(() => clock.pendingTimers == 1);
           clock.elapse(const Duration(seconds: 1));
@@ -499,6 +663,8 @@ void main() {
           await cancelling;
 
           expect(runtime.savedManifest, isNull);
+          expect(runtime.appliedPlans.last, isEmpty);
+          expect(runtime.stopPlanCalls, cancelWithStop ? 1 : 0);
           runtime
             ..applyGate = null
             ..appliedPlans.clear();
@@ -517,6 +683,8 @@ void main() {
         final plan = _olcReservePlan();
         expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
         await supervisor.commitStagedRuntimePlan([plan]);
+        expect(await supervisor.start(), isTrue);
+        runtime.appliedPlans.clear();
 
         expect(clock.pendingTimers, 0);
         expect(runtime.appliedPlans, isEmpty);
@@ -731,6 +899,7 @@ class _FakeRuntimeNodeBridge
   int allocatedPorts = 0;
   int activeApplyCalls = 0;
   int maximumActiveApplyCalls = 0;
+  int stopPlanCalls = 0;
   String? savedManifest;
   void Function()? onBatch;
   Completer<void>? applyGate;
@@ -794,7 +963,9 @@ class _FakeRuntimeNodeBridge
   }
 
   @override
-  Future<void> stopPlan() async {}
+  Future<void> stopPlan() async {
+    stopPlanCalls++;
+  }
 }
 
 class _SupervisorBatchCall {

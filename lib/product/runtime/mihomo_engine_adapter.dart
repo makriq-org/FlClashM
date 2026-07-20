@@ -353,6 +353,19 @@ class MihomoEngineAdapter implements EngineAdapter {
       }
     }
 
+    try {
+      await builtInProxySupervisor.pauseAutoActivation();
+    } catch (e, s) {
+      if (error != null) {
+        commonPrint.log(
+          "Failed to pause built-in proxy auto activation after stop error: $e",
+        );
+      } else {
+        error = e;
+        stackTrace = s;
+      }
+    }
+
     if (error != null) {
       Error.throwWithStackTrace(error, stackTrace!);
     }
@@ -407,6 +420,16 @@ class MihomoEngineAdapter implements EngineAdapter {
       } catch (e, s) {
         captureFailure('Failed to stop listener during mihomo rollback', e, s);
       }
+    }
+
+    try {
+      await builtInProxySupervisor.pauseAutoActivation();
+    } catch (e, s) {
+      captureFailure(
+        'Failed to pause built-in proxy auto activation during rollback',
+        e,
+        s,
+      );
     }
 
     return failure;

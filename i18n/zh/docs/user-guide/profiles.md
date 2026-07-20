@@ -142,13 +142,27 @@ activation:
 proxies:
   - name: "naive"
     type: naiveproxy
-    proxy: "https://user:pass@example.com"
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 ```
+
+必填字段：`name`、`type`、`server`、`port`、`username`、`password`。
+`transport` 默认为 `https`，也允许 `quic`。可选字段包括
+`insecure-concurrency`（1–4）、`tunnel-timeout`、`idle-timeout`、
+`post-quantum`、`headers` 映射、`host-resolver-rules` 和通用的
+`connectivity-check`。
+
+客户端会安全地转义凭据并构造供 NaiveProxy 使用的 URI，同时为 Mihomo
+生成本地 SOCKS5 节点。旧字段 `proxy` 不受支持。`listen`、诊断文件、
+代理链和任何未知字段都会在配置验证时被拒绝。
 
 ## 限制
 
 - 内置节点只能在 `proxies` 部分定义。
 - 客户端自动管理本地地址和端口。
-- 配置文件不能设置 `listen`、`server`、`port`、`ip`。
+- 配置文件不能设置本地 `listen`；NaiveProxy 的 `server` 和 `port`
+  只描述远程服务器。
 - ByeDPI 默认使用 UDP，可通过 `udp: false` 关闭。NaiveProxy 和 OlcRTC
   不支持 UDP。

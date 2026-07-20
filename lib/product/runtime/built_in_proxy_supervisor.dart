@@ -40,6 +40,8 @@ abstract interface class BuiltInProxySupervisor {
 
   Future<void> notifyProxySelected(String groupName, String proxyName);
 
+  Future<void> pauseAutoActivation();
+
   Future<void> stop();
 
   Future<void> persistColdStart();
@@ -82,6 +84,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   Future<void>? _watchdogWorker;
   Completer<void>? _watchdogCancellation;
   Future<void> _runtimeMutation = Future<void>.value();
+  bool _autoActivationRunning = false;
 
   @override
   bool get hasCommittedRuntimePlan => _currentPlans.isNotEmpty;
@@ -93,115 +96,123 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       plans.where((plan) => plan.type == type).toList(growable: false);
 
   @override
-  Future<void> prepareForRestart() async {
+  Future<void> prepareForRestart() {
     _planGeneration++;
-    await _cancelWatchdog();
-    await byedpi.cancelBackgroundSelection();
-    _awakeReserveNodeIds.clear();
-    _reserveStates.clear();
+    return _serializeRuntimeMutation(() async {
+      await _pauseAutoActivationLocked(cancelBackgroundSelection: true);
+    });
   }
 
   @override
-  Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
+  Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) {
     _planGeneration++;
-    await _cancelWatchdog();
-    await byedpi.cancelBackgroundSelection();
-    _rollbackAwakeReserveNodeIds = Set<String>.from(_awakeReserveNodeIds);
-    final naiveMessage = await naiveProxy.stageRuntimePlan(
-      currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
-      nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
-    );
-    if (naiveMessage.isNotEmpty) {
-      _startWatchdog(_planGeneration);
-      return naiveMessage;
-    }
+    return _serializeRuntimeMutation(() async {
+      await _cancelWatchdog();
+      await byedpi.cancelBackgroundSelection();
+      _rollbackAwakeReserveNodeIds = Set<String>.from(_awakeReserveNodeIds);
+      final naiveMessage = await naiveProxy.stageRuntimePlan(
+        currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
+        nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
+      );
+      if (naiveMessage.isNotEmpty) {
+        _startWatchdog(_planGeneration);
+        return naiveMessage;
+      }
 
-    final byedpiMessage = await byedpi.stageRuntimePlan(
-      currentPlans: _filter(_currentPlans, BuiltInProxyType.byedpi),
-      nextPlans: _filter(plans, BuiltInProxyType.byedpi),
-    );
-    if (byedpiMessage.isNotEmpty) {
-      final rollback = await naiveProxy.rollbackStagedRuntimePlan();
-      _startWatchdog(_planGeneration);
-      return rollback.isEmpty
-          ? byedpiMessage
-          : '$byedpiMessage Local-node rollback failed: $rollback';
-    }
+      final byedpiMessage = await byedpi.stageRuntimePlan(
+        currentPlans: _filter(_currentPlans, BuiltInProxyType.byedpi),
+        nextPlans: _filter(plans, BuiltInProxyType.byedpi),
+      );
+      if (byedpiMessage.isNotEmpty) {
+        final rollback = await naiveProxy.rollbackStagedRuntimePlan();
+        _startWatchdog(_planGeneration);
+        return rollback.isEmpty
+            ? byedpiMessage
+            : '$byedpiMessage Local-node rollback failed: $rollback';
+      }
 
-    final olcMessage = await olcRtc.stageRuntimePlan(
-      currentPlans: _filter(_currentPlans, BuiltInProxyType.olcrtc),
-      nextPlans: _filter(plans, BuiltInProxyType.olcrtc),
-    );
-    if (olcMessage.isEmpty) {
-      _awakeReserveNodeIds.clear();
-      _reserveStates.clear();
-      return '';
-    }
-    final rollback = await Future.wait([
-      byedpi.rollbackStagedRuntimePlan(),
-      naiveProxy.rollbackStagedRuntimePlan(),
-    ]);
-    final failures = rollback.where((message) => message.isNotEmpty).join(' ');
-    _startWatchdog(_planGeneration);
-    return failures.isEmpty
-        ? olcMessage
-        : '$olcMessage Local-node rollback failed: $failures';
+      final olcMessage = await olcRtc.stageRuntimePlan(
+        currentPlans: _filter(_currentPlans, BuiltInProxyType.olcrtc),
+        nextPlans: _filter(plans, BuiltInProxyType.olcrtc),
+      );
+      if (olcMessage.isEmpty) {
+        _awakeReserveNodeIds.clear();
+        _reserveStates.clear();
+        return '';
+      }
+      final rollback = await Future.wait([
+        byedpi.rollbackStagedRuntimePlan(),
+        naiveProxy.rollbackStagedRuntimePlan(),
+      ]);
+      final failures =
+          rollback.where((message) => message.isNotEmpty).join(' ');
+      _startWatchdog(_planGeneration);
+      return failures.isEmpty
+          ? olcMessage
+          : '$olcMessage Local-node rollback failed: $failures';
+    });
   }
 
   @override
-  Future<String> rollbackStagedRuntimePlan() async {
-    final messages = await Future.wait([
-      olcRtc.rollbackStagedRuntimePlan(),
-      byedpi.rollbackStagedRuntimePlan(),
-      naiveProxy.rollbackStagedRuntimePlan(),
-    ]);
-    final failures = messages.where((message) => message.isNotEmpty).join(' ');
-    if (failures.isNotEmpty) return failures;
+  Future<String> rollbackStagedRuntimePlan() =>
+      _serializeRuntimeMutation(() async {
+        final messages = await Future.wait([
+          olcRtc.rollbackStagedRuntimePlan(),
+          byedpi.rollbackStagedRuntimePlan(),
+          naiveProxy.rollbackStagedRuntimePlan(),
+        ]);
+        final failures =
+            messages.where((message) => message.isNotEmpty).join(' ');
+        if (failures.isNotEmpty) return failures;
 
-    _awakeReserveNodeIds = Set<String>.from(_rollbackAwakeReserveNodeIds);
-    final restored = await _applyPlans(_currentPlans);
-    if (!restored.isReady) {
-      return 'Previous runtime-node plan could not be restored: ${restored.message}';
-    }
-    _startWatchdog(_planGeneration);
-    return '';
-  }
+        _awakeReserveNodeIds = Set<String>.from(_rollbackAwakeReserveNodeIds);
+        final restored = await _applyPlans(_currentPlans);
+        if (!restored.isReady) {
+          return 'Previous runtime-node plan could not be restored: ${restored.message}';
+        }
+        _startWatchdog(_planGeneration);
+        return '';
+      });
 
   @override
-  Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
-    await Future.wait([
-      naiveProxy.commitStagedRuntimePlan(),
-      byedpi.commitStagedRuntimePlan(),
-      olcRtc.commitStagedRuntimePlan(),
-    ]);
-    _currentPlans = List<BuiltInProxyNodePlan>.unmodifiable(plans);
-    final generation = _planGeneration;
-    byedpi.startBackgroundSelection(
-      _filter(_currentPlans, BuiltInProxyType.byedpi),
-      onSelectionChanged: () => _activateBackgroundSelection(generation),
-    );
-    _startWatchdog(generation);
-  }
+  Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) =>
+      _serializeRuntimeMutation(() async {
+        await Future.wait([
+          naiveProxy.commitStagedRuntimePlan(),
+          byedpi.commitStagedRuntimePlan(),
+          olcRtc.commitStagedRuntimePlan(),
+        ]);
+        _currentPlans = List<BuiltInProxyNodePlan>.unmodifiable(plans);
+        final generation = _planGeneration;
+        byedpi.startBackgroundSelection(
+          _filter(_currentPlans, BuiltInProxyType.byedpi),
+          onSelectionChanged: () => _activateBackgroundSelection(generation),
+        );
+        _startWatchdog(generation);
+      });
 
   @override
   Future<BuiltInProxyRuntimePlanStartResult> startRuntimePlan(
     List<BuiltInProxyNodePlan> plans, {
     bool stopAllOnFailure = true,
-  }) async {
-    final state = await _applyPlans(plans);
-    return BuiltInProxyRuntimePlanStartResult(
-      isSuccess: state.isReady,
-      state: state,
-    );
-  }
+  }) =>
+      _serializeRuntimeMutation(() async {
+        final state = await _applyPlans(plans);
+        return BuiltInProxyRuntimePlanStartResult(
+          isSuccess: state.isReady,
+          state: state,
+        );
+      });
 
   @override
-  Future<bool> start({bool stopAllOnFailure = true}) async =>
-      (await startRuntimePlan(
-        _currentPlans,
-        stopAllOnFailure: stopAllOnFailure,
-      ))
-          .isSuccess;
+  Future<bool> start({bool stopAllOnFailure = true}) =>
+      _serializeRuntimeMutation(() async {
+        final state = await _applyPlans(_currentPlans);
+        if (!state.isReady) return false;
+        _autoActivationRunning = true;
+        _startWatchdog(_planGeneration);
+        return true;
+      });
 
   @override
   Future<void> notifyProxySelected(String groupName, String proxyName) async {
@@ -219,13 +230,22 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
-  Future<void> stop() async {
+  Future<void> pauseAutoActivation() {
     _planGeneration++;
-    await _cancelWatchdog();
-    await byedpi.cancelBackgroundSelection();
-    _awakeReserveNodeIds.clear();
-    _reserveStates.clear();
-    await runtime.stopPlan();
+    return _serializeRuntimeMutation(_pauseAutoActivationLocked);
+  }
+
+  @override
+  Future<void> stop() {
+    _planGeneration++;
+    return _serializeRuntimeMutation(() async {
+      _autoActivationRunning = false;
+      await _cancelWatchdog();
+      await byedpi.cancelBackgroundSelection();
+      _awakeReserveNodeIds.clear();
+      _reserveStates.clear();
+      await runtime.stopPlan();
+    });
   }
 
   @override
@@ -233,6 +253,26 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
         final nodes = await _buildRuntimeNodes(_currentPlans);
         await _saveRuntimeNodes(nodes);
       });
+
+  Future<void> _pauseAutoActivationLocked({
+    bool cancelBackgroundSelection = false,
+  }) async {
+    _autoActivationRunning = false;
+    await _cancelWatchdog();
+    if (cancelBackgroundSelection) {
+      await byedpi.cancelBackgroundSelection();
+    }
+    _awakeReserveNodeIds.clear();
+    _reserveStates.clear();
+    final nodes = await _buildRuntimeNodes(_currentPlans);
+    final state = await runtime.applyPlan(nodes);
+    try {
+      await _saveRuntimeNodes(nodes);
+    } catch (_) {}
+    if (!state.isReady) {
+      throw StateError(state.message);
+    }
+  }
 
   Future<RuntimeNodePlanState> _applyPlans(
     List<BuiltInProxyNodePlan> plans,
@@ -245,8 +285,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     final activePlans = plans
         .where(
           (plan) =>
-              !_isReserve(plan) ||
-              _awakeReserveNodeIds.contains(plan.nodeId),
+              !_isReserve(plan) || _awakeReserveNodeIds.contains(plan.nodeId),
         )
         .toList(growable: false);
     final groups = await Future.wait([
@@ -287,7 +326,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   void _startWatchdog(int planGeneration) {
     final reservePlans = _reservePlans;
     _reserveStates.clear();
-    if (reservePlans.isEmpty) return;
+    if (!_autoActivationRunning || reservePlans.isEmpty) return;
     final now = monotonicNow();
     for (final plan in reservePlans) {
       final activation = plan.activation!;
@@ -409,29 +448,41 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             )) {
           return;
         }
-        var appliedAwakePlan = false;
+        var attemptedAwakePlan = false;
         _awakeReserveNodeIds.add(plan.nodeId);
         try {
           final nodes = await _buildRuntimeNodes(_currentPlans);
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreSleepingReserve(plan.nodeId, applyPlan: false);
+            return;
+          }
+          attemptedAwakePlan = true;
           final result = await runtime.applyPlan(nodes);
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreSleepingReserve(plan.nodeId);
+            return;
+          }
           if (!result.isReady) throw StateError(result.message);
-          appliedAwakePlan = true;
           try {
             await _saveRuntimeNodes(nodes);
           } catch (_) {
             // Live activation succeeded; the next persistence point retries
             // the cold-start snapshot without tearing the node back down.
           }
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreSleepingReserve(plan.nodeId);
+            return;
+          }
           final probe = healthProbe;
           if (probe != null) {
             final alive = await probe.testDelay(
               proxyName: plan.name,
               urls: plan.activation!.wakeUrls,
             );
-            if (generation != _planGeneration) return;
+            if (generation != _planGeneration) {
+              await _restoreSleepingReserve(plan.nodeId);
+              return;
+            }
             if (!alive) {
               throw StateError('OlcRTC node delay test failed after wake.');
             }
@@ -442,24 +493,37 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             ..idleSince = monotonicNow()
             ..nextCheck = monotonicNow() + plan.activation!.wakeInterval;
         } catch (_) {
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreSleepingReserve(
+              plan.nodeId,
+              applyPlan: attemptedAwakePlan,
+            );
+            return;
+          }
           _awakeReserveNodeIds.remove(plan.nodeId);
           state
             ..failures = 0
             ..idleSince = null
             ..retryUntil = monotonicNow() + plan.activation!.wakeRetryAfter
             ..nextCheck = monotonicNow() + plan.activation!.wakeRetryAfter;
-          if (appliedAwakePlan) {
+          if (attemptedAwakePlan) {
             final sleepingNodes = await _buildRuntimeNodes(_currentPlans);
-            if (generation != _planGeneration) return;
-            final rollback = await runtime.applyPlan(sleepingNodes);
-            if (generation != _planGeneration) return;
-            if (!rollback.isReady) {
-              _awakeReserveNodeIds.add(plan.nodeId);
-              state
-                ..retryUntil = Duration.zero
-                ..idleSince = monotonicNow()
-                ..nextCheck = monotonicNow() + plan.activation!.wakeInterval;
+            if (generation != _planGeneration) {
+              await _restoreSleepingReserve(plan.nodeId);
+              return;
+            }
+            RuntimeNodePlanState? rollback;
+            try {
+              rollback = await runtime.applyPlan(sleepingNodes);
+            } catch (_) {}
+            if (generation != _planGeneration) {
+              await _restoreSleepingReserve(plan.nodeId);
+              return;
+            }
+            if (!(rollback?.isReady ?? false)) {
+              try {
+                await _saveRuntimeNodes(sleepingNodes);
+              } catch (_) {}
               return;
             }
             try {
@@ -521,10 +585,18 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
         if (generation != _planGeneration) return;
         _awakeReserveNodeIds.remove(plan.nodeId);
         final nodes = await _buildRuntimeNodes(_currentPlans);
-        if (generation != _planGeneration) return;
+        if (generation != _planGeneration) {
+          await _restoreAwakeReserve(plan.nodeId, applyPlan: false);
+          return;
+        }
+        var attemptedSleepingPlan = false;
         try {
+          attemptedSleepingPlan = true;
           final result = await runtime.applyPlan(nodes);
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreAwakeReserve(plan.nodeId);
+            return;
+          }
           if (!result.isReady) throw StateError(result.message);
           state
             ..failures = 0
@@ -535,18 +607,67 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
           } catch (_) {
             // Live sleep succeeded; cold-start persistence is retried later.
           }
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreAwakeReserve(plan.nodeId);
+            return;
+          }
         } catch (_) {
-          if (generation != _planGeneration) return;
+          if (generation != _planGeneration) {
+            await _restoreAwakeReserve(
+              plan.nodeId,
+              applyPlan: attemptedSleepingPlan,
+            );
+            return;
+          }
           _awakeReserveNodeIds.add(plan.nodeId);
           state
             ..idleSince = null
             ..nextCheck = monotonicNow() + plan.activation!.wakeInterval;
+          if (attemptedSleepingPlan) {
+            final awakeNodes = await _buildRuntimeNodes(_currentPlans);
+            if (generation != _planGeneration) {
+              await _restoreAwakeReserve(plan.nodeId);
+              return;
+            }
+            try {
+              await runtime.applyPlan(awakeNodes);
+            } catch (_) {}
+          }
         }
       });
     } finally {
       state.transitioning = false;
     }
+  }
+
+  Future<void> _restoreSleepingReserve(
+    String nodeId, {
+    bool applyPlan = true,
+  }) async {
+    _awakeReserveNodeIds.remove(nodeId);
+    if (!applyPlan) return;
+    final nodes = await _buildRuntimeNodes(_currentPlans);
+    try {
+      await runtime.applyPlan(nodes);
+    } catch (_) {}
+    try {
+      await _saveRuntimeNodes(nodes);
+    } catch (_) {}
+  }
+
+  Future<void> _restoreAwakeReserve(
+    String nodeId, {
+    bool applyPlan = true,
+  }) async {
+    _awakeReserveNodeIds.add(nodeId);
+    if (!applyPlan) return;
+    final nodes = await _buildRuntimeNodes(_currentPlans);
+    try {
+      await runtime.applyPlan(nodes);
+    } catch (_) {}
+    try {
+      await _saveRuntimeNodes(nodes);
+    } catch (_) {}
   }
 
   Future<T> _serializeRuntimeMutation<T>(Future<T> Function() action) async {
@@ -563,9 +684,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     }
   }
 
-  List<BuiltInProxyNodePlan> get _reservePlans => _currentPlans
-      .where(_isReserve)
-      .toList(growable: false);
+  List<BuiltInProxyNodePlan> get _reservePlans =>
+      _currentPlans.where(_isReserve).toList(growable: false);
 
   bool _isReserve(BuiltInProxyNodePlan plan) =>
       plan.type == BuiltInProxyType.olcrtc &&

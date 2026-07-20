@@ -148,7 +148,7 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('unknown activation'),
+            allOf(contains('olcrtc.activation'), contains('unknown')),
           ),
         ),
       );
@@ -160,7 +160,10 @@ void main() {
       {
         'name': 'Naive',
         'type': 'naiveproxy',
-        'proxy': 'https://user:pass@example.com',
+        'server': 'example.com',
+        'port': 443,
+        'username': 'user',
+        'password': 'pass',
         'activation': 'auto',
       },
       {
@@ -182,7 +185,7 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('supported only for olcrtc'),
+            allOf(contains('.activation'), contains('unknown')),
           ),
         ),
       );

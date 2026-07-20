@@ -688,7 +688,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
               'host-resolver-rules': 'MAP * ~NOTFOUND , EXCLUDE localhost',
             },
           ],
@@ -795,7 +798,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
             },
             {
               'name': 'ByeDPI Local',
@@ -894,7 +900,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
             },
           ],
         },
@@ -1044,7 +1053,6 @@ void main() {
                 {
                   'name': 'fallback',
                   'auth': {'provider': 'telemost'},
-                  'future_safe_option': {'enabled': true},
                 },
               ],
             },
@@ -1102,11 +1110,9 @@ void main() {
       expect(runtimeConfig['socks']['port'], builtInNode.listenPort);
       expect(runtimeConfig['debug'], isTrue);
       expect(runtimeConfig['profiles'][0]['name'], 'fallback');
-      expect(runtimeConfig['profiles'][0]['future_safe_option']['enabled'],
-          isTrue);
     });
 
-    test('rejects unsafe olcrtc local bind overrides', () async {
+    test('rejects unsafe olcrtc local bind overrides before security', () {
       const profile = Profile(
         id: 'profile-olcrtc-bind',
         autoUpdateDuration: Duration.zero,
@@ -1125,47 +1131,31 @@ void main() {
           ],
         },
       );
-      final compiledProfile = compiler.compileProfilePatch(
-        rawProfile: rawProfile,
-        context: const ProfilePatchContext(
-          patchConfig: ClashConfig(),
-          overrideNetworkSettings: false,
-        ),
-      );
-
-      await expectLater(
-        compiler.buildRuntimePlan(
+      expect(
+        () => compiler.compileProfilePatch(
           rawProfile: rawProfile,
-          context: const RuntimePlanBuildContext(
-            isAndroid: false,
+          context: const ProfilePatchContext(
+            patchConfig: ClashConfig(),
             overrideNetworkSettings: false,
-            overrideDns: false,
-            routeMode: RouteMode.config,
-            hasCurrentScript: false,
-            profilesPath: '',
-            readInstalledPackageNames: _readNoInstalledPackages,
           ),
-          securedProfile: SecuredProfilePatch(
-            patchConfig: compiledProfile.patchConfig,
-            metadata: compiledProfile.metadata,
-          ),
-          runtimePatchConfig: compiledProfile.patchConfig,
-          selectedMap: const {},
-          testUrl: 'https://cp.cloudflare.com/generate_204',
-          providerAssetPathResolver: (profileId, type, url) async =>
-              '/tmp/$profileId/$type/$url',
         ),
-        throwsA(isA<FormatException>()),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('olcrtc.socks.host'),
+          ),
+        ),
       );
     });
 
-    test('rejects non-client olcrtc modes and key files', () async {
+    test('rejects non-client olcrtc modes and key files before security', () {
       const profile = Profile(
         id: 'profile-olcrtc-mode',
         autoUpdateDuration: Duration.zero,
       );
 
-      Future<void> expectRejected(Map<String, dynamic> proxy) async {
+      void expectRejected(Map<String, dynamic> proxy) {
         proxy.putIfAbsent('activation', () => 'always');
         final rawProfile = RawProfile.fromConfig(
           profile: profile,
@@ -1173,51 +1163,29 @@ void main() {
             'proxies': [proxy],
           },
         );
-        final compiledProfile = compiler.compileProfilePatch(
-          rawProfile: rawProfile,
-          context: const ProfilePatchContext(
-            patchConfig: ClashConfig(),
-            overrideNetworkSettings: false,
-          ),
-        );
-
-        await expectLater(
-          compiler.buildRuntimePlan(
+        expect(
+          () => compiler.compileProfilePatch(
             rawProfile: rawProfile,
-            context: const RuntimePlanBuildContext(
-              isAndroid: false,
+            context: const ProfilePatchContext(
+              patchConfig: ClashConfig(),
               overrideNetworkSettings: false,
-              overrideDns: false,
-              routeMode: RouteMode.config,
-              hasCurrentScript: false,
-              profilesPath: '',
-              readInstalledPackageNames: _readNoInstalledPackages,
             ),
-            securedProfile: SecuredProfilePatch(
-              patchConfig: compiledProfile.patchConfig,
-              metadata: compiledProfile.metadata,
-            ),
-            runtimePatchConfig: compiledProfile.patchConfig,
-            selectedMap: const {},
-            testUrl: 'https://cp.cloudflare.com/generate_204',
-            providerAssetPathResolver: (profileId, type, url) async =>
-                '/tmp/$profileId/$type/$url',
           ),
           throwsA(isA<FormatException>()),
         );
       }
 
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Server',
         'type': 'olcrtc',
         'mode': 'srv',
       });
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Key File',
         'type': 'olcrtc',
         'crypto': {'key_file': './olcrtc.key'},
       });
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Nested Bind Host',
         'type': 'olcrtc',
         'profiles': [
@@ -1227,7 +1195,7 @@ void main() {
           },
         ],
       });
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Deep Nested Bind Port',
         'type': 'olcrtc',
         'profiles': [
@@ -1243,7 +1211,7 @@ void main() {
           },
         ],
       });
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Nested Key File',
         'type': 'olcrtc',
         'profiles': [
@@ -1253,7 +1221,7 @@ void main() {
           },
         ],
       });
-      await expectRejected({
+      expectRejected({
         'name': 'OLC Invalid Profiles',
         'type': 'olcrtc',
         'profiles': {'name': 'not-a-list'},

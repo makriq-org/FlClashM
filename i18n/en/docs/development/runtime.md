@@ -15,10 +15,14 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 ### naiveproxy
 
 - **Type:** `naiveproxy`
-- **Required fields:** `name`, `proxy`
+- **Required fields:** `name`, `type`, `server`, `port`, `username`, `password`
+- Only `https` and `quic` transports are allowed; anonymous access is rejected
 - UDP is unsupported; the resulting local Mihomo node uses `udp: false`
 - The client chooses the local SOCKS5 address automatically
-- Launched with an auto-generated `config.json`
+- The compiler escapes credentials, builds one internal URI, and launches
+  NaiveProxy with an auto-generated `config.json`
+- An allowlist rejects `proxy`, `listen`, diagnostic files, proxy chains, and
+  unknown fields
 
 ### olcrtc
 
@@ -43,6 +47,7 @@ and device-network availability. The app-layer implementation uses `clashCore`
 and `connectivity_plus`. Without an injected probe the automatic watchdog stays
 idle, while staging, stopping, and manual wake remain safe. `always` mode keeps
 the original startup transaction unchanged.
+
 This integration ships with the app's Dart layer and does not change the Android
 bridge. `activation: always` is the operational rollback, and a version rollback
 requires no state migration.

@@ -1,5 +1,13 @@
+import '../runtime/built_in_proxy_types.dart';
+import 'built_in_proxy_schema.dart';
+import 'strict_config_schema_validator.dart';
+
 class OlcRtcConfigValidator {
-  const OlcRtcConfigValidator();
+  const OlcRtcConfigValidator({
+    this.schemaValidator = const StrictConfigSchemaValidator(),
+  });
+
+  final StrictConfigSchemaValidator schemaValidator;
 
   static const supportedProviders = {
     'jitsi',
@@ -13,6 +21,20 @@ class OlcRtcConfigValidator {
     'seichannel',
     'videochannel',
   };
+
+  void validateBuiltInNode(Map<String, dynamic> config) {
+    final rawMode = config['mode'];
+    final mode = rawMode == null
+        ? 'cnc'
+        : rawMode is String
+            ? rawMode
+            : null;
+    schemaValidator.validate(
+      config,
+      schema: builtInProxySchemas[BuiltInProxyType.olcrtc]!,
+      mode: mode,
+    );
+  }
 
   void validate(Map<String, dynamic> config) {
     _validateSectionTypes(config, prefix: '');
@@ -39,7 +61,7 @@ class OlcRtcConfigValidator {
 
     final profiles = profilesValue is List ? profilesValue : const [];
     if (profiles.isEmpty) {
-      _validateEffectiveConfig(config, label: 'olcrtc node');
+      _validateEffectiveConfig(config, path: 'olcrtc');
       return;
     }
 
@@ -56,51 +78,53 @@ class OlcRtcConfigValidator {
       _validateSectionTypes(normalized, prefix: 'profiles[$index].');
       _validateEffectiveConfig(
         _overlayProfile(config, normalized),
-        label: 'olcrtc profile `${_string(normalized['name']) ?? index + 1}`',
+        path: 'olcrtc.profiles[$index]',
       );
     }
   }
 
   void _validateEffectiveConfig(
     Map<String, dynamic> config, {
-    required String label,
+    required String path,
   }) {
     final auth = _section(config, 'auth');
     final provider = _exactString(auth['provider']);
     if (provider == null) {
-      throw FormatException('$label requires non-empty `auth.provider`.');
+      throw FormatException('$path.auth.provider must be non-empty.');
     }
     if (!supportedProviders.contains(provider)) {
       throw FormatException(
-        '$label has unsupported `auth.provider: $provider`; supported values: '
+        '$path.auth.provider has unsupported value `$provider`; supported values: '
         '${supportedProviders.join(', ')}.',
       );
     }
 
     if (provider != 'none' &&
         _exactString(_section(config, 'room')['id']) == null) {
-      throw FormatException('$label requires non-empty `room.id`.');
+      throw FormatException(
+        '$path.room.id must be non-empty when $path.auth.provider is not `none`.',
+      );
     }
 
     final crypto = _section(config, 'crypto');
     final key = _exactString(crypto['key']);
     if (key == null) {
-      throw FormatException('$label requires non-empty `crypto.key`.');
+      throw FormatException('$path.crypto.key must be non-empty.');
     }
     if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(key)) {
       throw FormatException(
-        '$label requires `crypto.key` to contain exactly 64 hexadecimal characters.',
+        '$path.crypto.key must contain exactly 64 hexadecimal characters.',
       );
     }
 
     final net = _section(config, 'net');
     final transport = _exactString(net['transport']);
     if (transport == null) {
-      throw FormatException('$label requires non-empty `net.transport`.');
+      throw FormatException('$path.net.transport must be non-empty.');
     }
     if (!supportedTransports.contains(transport)) {
       throw FormatException(
-        '$label has unsupported `net.transport: $transport`; supported values: '
+        '$path.net.transport has unsupported value `$transport`; supported values: '
         '${supportedTransports.join(', ')}.',
       );
     }
@@ -108,12 +132,12 @@ class OlcRtcConfigValidator {
     final dns = _exactString(net['dns']);
     if (dns == null) {
       throw FormatException(
-        '$label requires `net.dns` in `host:port` format, for example `1.1.1.1:53`.',
+        '$path.net.dns must use `host:port`, for example `1.1.1.1:53`.',
       );
     }
     if (!_isHostPort(dns)) {
       throw FormatException(
-        '$label has invalid `net.dns: $dns`; expected `host:port`.',
+        '$path.net.dns has invalid value `$dns`; expected `host:port`.',
       );
     }
 
@@ -122,7 +146,7 @@ class OlcRtcConfigValidator {
         config,
         section: 'vp8',
         fields: const ['fps', 'batch_size'],
-        label: label,
+        path: path,
       );
     } else if (transport == 'seichannel') {
       _validatePositiveIntSection(
@@ -134,14 +158,14 @@ class OlcRtcConfigValidator {
           'fragment_size',
           'ack_timeout_ms',
         ],
-        label: label,
+        path: path,
       );
     } else if (transport == 'videochannel') {
       _validatePositiveIntSection(
         config,
         section: 'video',
         fields: const ['width', 'height', 'fps'],
-        label: label,
+        path: path,
       );
     }
 
@@ -152,7 +176,7 @@ class OlcRtcConfigValidator {
         codec != 'qrcode' &&
         codec != 'tile') {
       throw FormatException(
-        '$label has invalid `video.codec: $codec`; supported values: qrcode, tile.',
+        '$path.video.codec has invalid value `$codec`; supported values: qrcode, tile.',
       );
     }
     if (transport == 'videochannel' && codec == 'tile') {
@@ -160,26 +184,32 @@ class OlcRtcConfigValidator {
       final height = _int(video['height']) ?? 1080;
       if (width != 1080 || height != 1080) {
         throw FormatException(
-          '$label requires `video.width: 1080` and `video.height: 1080` for the tile codec.',
+          '$path.video.width and $path.video.height must both be 1080 for the tile codec.',
         );
       }
     }
 
     final liveness = _section(config, 'liveness');
     _validatePositiveDuration(
-        liveness['interval'], '$label `liveness.interval`');
-    _validatePositiveDuration(liveness['timeout'], '$label `liveness.timeout`');
+      liveness['interval'],
+      '$path.liveness.interval',
+    );
+    _validatePositiveDuration(
+      liveness['timeout'],
+      '$path.liveness.timeout',
+    );
     final failures = _int(liveness['failures']);
     if (liveness.containsKey('failures') &&
         (failures == null || failures < 0)) {
       throw FormatException(
-          '$label `liveness.failures` must be a non-negative integer.');
+        '$path.liveness.failures must be a non-negative integer.',
+      );
     }
 
     final lifecycle = _section(config, 'lifecycle');
     _validatePositiveDuration(
       lifecycle['max_session_duration'],
-      '$label `lifecycle.max_session_duration`',
+      '$path.lifecycle.max_session_duration',
     );
 
     final traffic = _section(config, 'traffic');
@@ -189,16 +219,16 @@ class OlcRtcConfigValidator {
             maxPayloadSize < 0 ||
             (maxPayloadSize > 0 && maxPayloadSize < 49))) {
       throw FormatException(
-        '$label `traffic.max_payload_size` must be zero or at least 49.',
+        '$path.traffic.max_payload_size must be zero or at least 49.',
       );
     }
     _validateNonNegativeDuration(
       traffic['min_delay'],
-      '$label `traffic.min_delay`',
+      '$path.traffic.min_delay',
     );
     _validateNonNegativeDuration(
       traffic['max_delay'],
-      '$label `traffic.max_delay`',
+      '$path.traffic.max_delay',
     );
     final minDelay = _goDurationMicroseconds(traffic['min_delay']);
     final maxDelay = _goDurationMicroseconds(traffic['max_delay']);
@@ -207,7 +237,7 @@ class OlcRtcConfigValidator {
         maxDelay > 0 &&
         maxDelay < minDelay) {
       throw FormatException(
-        '$label `traffic.max_delay` must not be less than `traffic.min_delay`.',
+        '$path.traffic.max_delay must not be less than $path.traffic.min_delay.',
       );
     }
   }
@@ -265,7 +295,7 @@ class OlcRtcConfigValidator {
     Map<String, dynamic> config, {
     required String section,
     required List<String> fields,
-    required String label,
+    required String path,
   }) {
     final values = _section(config, section);
     for (final field in fields) {
@@ -275,7 +305,8 @@ class OlcRtcConfigValidator {
       final value = _int(values[field]);
       if (value == null || value <= 0) {
         throw FormatException(
-            '$label `$section.$field` must be a positive integer.');
+          '$path.$section.$field must be a positive integer.',
+        );
       }
     }
   }
@@ -369,14 +400,6 @@ class OlcRtcConfigValidator {
   Map<String, dynamic> _stringKeyedMap(Map value) => value.map(
         (key, mapValue) => MapEntry(key.toString(), mapValue),
       );
-
-  String? _string(Object? value) {
-    if (value is! String) {
-      return null;
-    }
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
-  }
 
   String? _exactString(Object? value) {
     if (value is! String || value.isEmpty || value != value.trim()) {

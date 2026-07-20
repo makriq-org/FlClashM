@@ -313,7 +313,8 @@ void main() {
       expect(platform.lastStartAccessControl, isNull);
     });
 
-    test('ordinary VPN stop leaves warmed runtime nodes running', () async {
+    test('ordinary VPN stop pauses auto activation but leaves nodes warmed',
+        () async {
       final adapter = buildAdapter();
 
       await adapter.stop();
@@ -321,6 +322,7 @@ void main() {
       expect(core.stopListenerCalls, 1);
       expect(platform.stopVpnCalls, 1);
       expect(builtInProxySupervisor.stopCalls, 0);
+      expect(builtInProxySupervisor.pauseAutoActivationCalls, 1);
     });
 
     test('delegates runtime start time and cold-start persistence', () async {
@@ -355,6 +357,7 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   int rollbackCalls = 0;
   int startCalls = 0;
   int stopCalls = 0;
+  int pauseAutoActivationCalls = 0;
   int persistColdStartCalls = 0;
   bool startResult = true;
   bool hasCommittedRuntimePlanValue = false;
@@ -411,6 +414,11 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
 
   @override
   Future<void> notifyProxySelected(String groupName, String proxyName) async {}
+
+  @override
+  Future<void> pauseAutoActivation() async {
+    pauseAutoActivationCalls++;
+  }
 
   @override
   Future<void> stop() async => stopCalls++;

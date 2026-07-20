@@ -15,6 +15,7 @@ import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
+const _defaultByedpiStrategyTestSni = 'google.com';
 const _byedpiAutoSelectionRevision = 2;
 final _byedpiMonotonicClock = Stopwatch()..start();
 
@@ -822,7 +823,7 @@ class ByedpiNodeController
       ],
       strategyList: '${value['strategyList'] ?? ''}',
       testUrls: urls,
-      testSni: '${test['sni'] ?? (urls.isEmpty ? '' : urls.first.host)}',
+      testSni: '${test['sni'] ?? _defaultByedpiStrategyTestSni}',
       timeout: Duration(seconds: (test['timeout'] as num?)?.toInt() ?? 5),
       requests: (test['requests'] as num?)?.toInt() ?? 1,
       concurrency: (test['concurrency'] as num?)?.toInt() ?? 4,

@@ -269,7 +269,7 @@ void main() {
       throwsA(isA<FormatException>().having(
         (error) => error.message,
         'message',
-        contains('Rename it to `strategy-test`'),
+        allOf(contains('byedpi.test'), contains('forbidden')),
       )),
     );
   });
@@ -406,5 +406,8 @@ void main() {
 const _naive = <String, dynamic>{
   'name': 'Naive',
   'type': 'naiveproxy',
-  'proxy': 'https://user:pass@example.com',
+  'server': 'example.com',
+  'port': 443,
+  'username': 'user',
+  'password': 'pass',
 };

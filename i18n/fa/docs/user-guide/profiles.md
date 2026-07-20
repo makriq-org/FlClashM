@@ -143,13 +143,28 @@ UDP پشتیبانی نمی‌شود؛ فقط `udp: false` مجاز است.
 proxies:
   - name: "naive"
     type: naiveproxy
-    proxy: "https://user:pass@example.com"
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 ```
+
+فیلدهای الزامی عبارت‌اند از `name`، `type`، `server`، `port`، `username` و
+`password`. مقدار پیش‌فرض `transport` برابر `https` است و `quic` نیز مجاز است.
+فیلدهای اختیاری شامل `insecure-concurrency` (از ۱ تا ۴)، `tunnel-timeout`،
+`idle-timeout`، `post-quantum`، نگاشت `headers`، `host-resolver-rules` و
+`connectivity-check` مشترک هستند.
+
+کلاینت اطلاعات ورود را escape می‌کند، URI داخلی NaiveProxy را می‌سازد و برای
+Mihomo یک SOCKS5 محلی قرار می‌دهد. فیلد قدیمی `proxy` پشتیبانی نمی‌شود.
+`listen`، فایل‌های تشخیصی، زنجیره پروکسی و فیلدهای ناشناخته هنگام اعتبارسنجی رد
+می‌شوند.
 
 ## محدودیت‌ها
 
 - نودهای داخلی فقط در بخش `proxies` قابل تعریف هستند.
 - کلاینت آدرس‌ها و پورت‌های محلی را خودکار مدیریت می‌کند.
-- پروفایل نمی‌تواند `listen`، `server`، `port`، `ip` را تنظیم کند.
+- پروفایل نمی‌تواند `listen` محلی را تنظیم کند؛ `server` و `port` در NaiveProxy
+  فقط سرور راه‌دور را توصیف می‌کنند.
 - ByeDPI به‌طور پیش‌فرض از UDP استفاده می‌کند و با `udp: false` می‌توان آن را
   غیرفعال کرد. NaiveProxy و OlcRTC از UDP پشتیبانی نمی‌کنند.
