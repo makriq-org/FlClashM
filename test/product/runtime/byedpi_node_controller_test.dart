@@ -62,6 +62,33 @@ void main() {
       ]);
     });
 
+    test('uses google.com as the default strategy SNI', () async {
+      runtime.batchResults.add(0);
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(
+          layout,
+          strategies: '--fake-sni {sni} --fake 1',
+        ),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(mode: 'auto', args: '');
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+
+      await controller.buildRuntimeNodes([plan]);
+
+      expect(
+        runtime.batchCalls.single.nodes.single['arguments'],
+        containsAllInOrder(['--fake-sni', 'google.com']),
+      );
+    });
+
     test('persists fallback as provisional and honors its retry cooldown',
         () async {
       final plan = _plan(mode: 'auto', args: '');
