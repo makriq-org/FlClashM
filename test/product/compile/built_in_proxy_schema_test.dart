@@ -56,6 +56,59 @@ void main() {
     );
   });
 
+  test('naiveproxy schema matches the user-facing compiler contract', () {
+    final fields = {
+      for (final field
+          in builtInProxySchemas[BuiltInProxyType.naiveproxy]!.fields)
+        field.path: field,
+    };
+
+    expect(
+      fields.values.where((field) => field.required).map((field) => field.path),
+      unorderedEquals(<String>{
+        'naiveproxy.name',
+        'naiveproxy.type',
+        'naiveproxy.server',
+        'naiveproxy.port',
+        'naiveproxy.username',
+        'naiveproxy.password',
+      }),
+    );
+    expect(fields['naiveproxy.port']!.range.minimum, 1);
+    expect(fields['naiveproxy.port']!.range.maximum, 65535);
+    expect(fields['naiveproxy.transport']!.allowedValues, {'https', 'quic'});
+    expect(fields['naiveproxy.transport']!.defaultValue.value, 'https');
+    expect(fields['naiveproxy.insecure-concurrency']!.range.minimum, 1);
+    expect(fields['naiveproxy.insecure-concurrency']!.range.maximum, 4);
+
+    for (final entry in const <String, ConfigValueType>{
+      'naiveproxy.transport': ConfigValueType.string,
+      'naiveproxy.insecure-concurrency': ConfigValueType.integer,
+      'naiveproxy.tunnel-timeout': ConfigValueType.integer,
+      'naiveproxy.idle-timeout': ConfigValueType.integer,
+      'naiveproxy.post-quantum': ConfigValueType.boolean,
+      'naiveproxy.headers': ConfigValueType.object,
+      'naiveproxy.host-resolver-rules': ConfigValueType.string,
+    }.entries) {
+      expect(fields[entry.key]!.type, entry.value, reason: entry.key);
+      expect(fields[entry.key]!.required, isFalse, reason: entry.key);
+      expect(fields[entry.key]!.forbiddenReason, isNull, reason: entry.key);
+    }
+
+    for (final path in const <String>{
+      'naiveproxy.proxy',
+      'naiveproxy.listen',
+      'naiveproxy.log',
+      'naiveproxy.log-net-log',
+      'naiveproxy.ssl-key-log-file',
+      'naiveproxy.no-post-quantum',
+      'naiveproxy.resolver-range',
+      'naiveproxy.extra-headers',
+    }) {
+      expect(fields[path]!.forbiddenReason, isNotEmpty, reason: path);
+    }
+  });
+
   test('registry exposes pinned effective OlcRTC defaults', () {
     final fields = {
       for (final field in builtInProxySchemas[BuiltInProxyType.olcrtc]!.fields)

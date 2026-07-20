@@ -33,13 +33,20 @@ void main() {
         'name': 'Naive',
         'type': 'naiveproxy',
         'udp': false,
-        'proxy': 'https://user:pass@example.com',
+        'server': 'example.com',
+        'port': 8443,
+        'username': 'user',
+        'password': 'pass',
+        'transport': 'quic',
         'insecure-concurrency': 4,
         'tunnel-timeout': 3600,
         'idle-timeout': 600,
-        'extra-headers': 'X-Test: value',
+        'post-quantum': false,
+        'headers': {
+          'X-Test': 'value',
+          'User-Agent': 'FlClashM',
+        },
         'host-resolver-rules': 'MAP example.com 203.0.113.10',
-        'resolver-range': '100.64.0.0/10',
         'connectivity-check': {
           'urls': ['https://example.org/generate_204'],
           'required': true,
@@ -53,72 +60,41 @@ void main() {
       });
 
       final config = jsonDecode(result.nodes.single.files.values.single) as Map;
-      expect(config['proxy'], 'https://user:pass@example.com');
+      expect(config['proxy'], 'quic://user:pass@example.com:8443');
       expect(config['insecure-concurrency'], 4);
+      expect(config['no-post-quantum'], isTrue);
+      expect(
+        config['extra-headers'],
+        'X-Test: value\r\nUser-Agent: FlClashM',
+      );
     });
 
-    test('accepts the pinned list form for alternative proxy chains', () {
-      final result = compile(<String, dynamic>{
-        'name': 'Naive alternatives',
-        'type': 'naiveproxy',
-        'proxy': [
-          'quic://edge-a.example.com,https://origin.example.com',
-          'https://edge-b.example.com',
-        ],
-      });
-
-      final config = jsonDecode(result.nodes.single.files.values.single) as Map;
-      expect(config['proxy'], hasLength(2));
-    });
-
-    test('accepts canonical decimal strings supported by the pinned parser',
-        () {
+    test('accepts the minimal config with the default HTTPS transport', () {
       final result = compile(<String, dynamic>{
         ..._naive,
-        'insecure-concurrency': '4',
-        'tunnel-timeout': '600',
-        'idle-timeout': '300',
       });
 
+      // Dart's Uri omits the default HTTPS port, and naive treats a missing
+      // port as 443, so the compiled URI carries no explicit port.
       final config = jsonDecode(result.nodes.single.files.values.single) as Map;
-      expect(config['insecure-concurrency'], '4');
-      expect(config['tunnel-timeout'], '600');
-      expect(config['idle-timeout'], '300');
+      expect(config['proxy'], 'https://user:pass@example.com');
     });
 
-    test('reports semantic proxy-chain failures with the list index', () {
-      expect(
-        () => compile(<String, dynamic>{
-          ..._naive,
-          'proxy': [
-            'https://valid.example.com',
-            'https://tcp.example.com,quic://invalid.example.com',
-          ],
-        }),
-        failsAt('naiveproxy.proxy[1]', 'QUIC'),
-      );
-    });
-
-    test('requires strict CRLF framing for extra headers', () {
-      expect(
-        () => compile(<String, dynamic>{
-          ..._naive,
-          'extra-headers': 'X-First: one\r\nX-Second: two',
-        }),
-        returnsNormally,
-      );
-      for (final value in [
-        'X-First: one\nX-Injected: two',
-        'X-First: one\rX-Injected: two',
-        'Bad Name: value',
+    test('rejects invalid header names, values, and types', () {
+      for (final headers in <Object?>[
+        {'Bad Name': 'value'},
+        {'X-Test': 'value\r\nInjected: true'},
+        {'X-Test': 'value\nInjected: true'},
+        {'X-Test': 1},
+        ['X-Test: value'],
       ]) {
         expect(
           () => compile(<String, dynamic>{
             ..._naive,
-            'extra-headers': value,
+            'headers': headers,
           }),
-          failsAt('naiveproxy.extra-headers'),
-          reason: value,
+          failsAt('naiveproxy.headers'),
+          reason: '$headers',
         );
       }
     });
@@ -126,11 +102,10 @@ void main() {
     test('rejects unknown fields at every depth with nearest-name hints', () {
       expect(
         () => compile(<String, dynamic>{
-          'name': 'Naive',
-          'type': 'naiveproxy',
-          'proxxy': 'https://example.com',
+          ..._naive,
+          'servre': 'typo.example.com',
         }),
-        failsAt('naiveproxy.proxxy', 'proxy'),
+        failsAt('naiveproxy.servre', 'server'),
       );
       expect(
         () => compile(<String, dynamic>{
@@ -141,12 +116,17 @@ void main() {
       );
     });
 
-    test('rejects wrong types, ranges, and client-owned fields', () {
+    test('rejects wrong types and values', () {
       for (final invalid in <String, Object?>{
-        'proxy': 1,
+        'server': 'https://example.com',
+        'port': 65536,
+        'transport': 'http',
         'insecure-concurrency': 0,
         'tunnel-timeout': double.nan,
         'idle-timeout': 1.5,
+        'post-quantum': 'false',
+        'host-resolver-rules':
+            'MAP example.com 203.0.113.10\nEXCLUDE localhost',
       }.entries) {
         expect(
           () => compile(<String, dynamic>{
@@ -157,26 +137,31 @@ void main() {
           reason: invalid.key,
         );
       }
-      for (final field in ['listen', 'server', 'port']) {
+    });
+
+    test('rejects fields outside the user contract', () {
+      for (final entry in <String, Object?>{
+        'proxy': 'https://user:pass@example.com',
+        'listen': 'socks://127.0.0.1:1080',
+        'log': '/tmp/naiveproxy.log',
+        'log-net-log': '/tmp/netlog.json',
+        'ssl-key-log-file': '/tmp/keys.log',
+        'no-post-quantum': true,
+        'resolver-range': '100.64.0.0/10',
+        'extra-headers': 'X-Test: value',
+      }.entries) {
         expect(
           () => compile(<String, dynamic>{
             ..._naive,
-            field: field == 'port' ? 1080 : 'value',
+            entry.key: entry.value,
           }),
-          failsAt('naiveproxy.$field', 'owned'),
-          reason: field,
+          failsAt('naiveproxy.${entry.key}', 'forbidden'),
+          reason: entry.key,
         );
       }
-      for (final value in <Object?>[true, false, null, 'yes']) {
-        expect(
-          () => compile(<String, dynamic>{
-            ..._naive,
-            'no-post-quantum': value,
-          }),
-          failsAt('naiveproxy.no-post-quantum', 'cannot be disabled'),
-          reason: '$value',
-        );
-      }
+    });
+
+    test('keeps common connectivity validation strict', () {
       expect(
         () => compile(<String, dynamic>{
           ..._naive,
@@ -345,7 +330,7 @@ void main() {
         'proxies': [
           {
             ..._naive,
-            'proxxy': 'https://typo.example.com',
+            'servre': 'typo.example.com',
           },
         ],
       },
@@ -359,7 +344,7 @@ void main() {
           overrideNetworkSettings: false,
         ),
       ),
-      failsAt('naiveproxy.proxxy', 'proxy'),
+      failsAt('naiveproxy.servre', 'server'),
     );
   });
 }
@@ -369,7 +354,10 @@ const _key = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const _naive = <String, dynamic>{
   'name': 'Naive',
   'type': 'naiveproxy',
-  'proxy': 'https://user:pass@example.com',
+  'server': 'example.com',
+  'port': 443,
+  'username': 'user',
+  'password': 'pass',
 };
 
 const _minimalOlcRtc = <String, dynamic>{

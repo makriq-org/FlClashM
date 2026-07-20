@@ -45,11 +45,15 @@ class StrictConfigSchemaValidator {
       if (field == null) {
         final suggestion = _nearest(key, fieldNames);
         throw FormatException(
-          '$fieldPath is unknown.${suggestion == null ? '' : ' Did you mean `$suggestion`?'}',
+          '$fieldPath is unknown; unknown or forbidden fields are not supported.'
+          '${suggestion == null ? '' : ' Did you mean `$suggestion`?'}',
         );
       }
       if (field.forbiddenReason case final reason?) {
-        throw FormatException('$fieldPath is forbidden: $reason.');
+        throw FormatException(
+          '$fieldPath is forbidden: $reason; '
+          'unknown or forbidden fields are not supported.',
+        );
       }
       if (field.modes.isNotEmpty && !field.modes.contains(mode)) {
         throw FormatException(
@@ -59,7 +63,9 @@ class StrictConfigSchemaValidator {
       }
 
       _validateValue(entry.value, field: field, actualPath: fieldPath);
-      if (entry.value is Map) {
+      if (entry.value is Map &&
+          schema.fields.any(
+              (candidate) => candidate.path.startsWith('${field.path}.'))) {
         _validateObject(
           entry.value as Map,
           schema: schema,
