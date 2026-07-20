@@ -268,7 +268,7 @@ void main() {
       throwsA(isA<FormatException>().having(
         (error) => error.message,
         'message',
-        contains('Rename it to `strategy-test`'),
+        allOf(contains('byedpi.test'), contains('forbidden')),
       )),
     );
   });
