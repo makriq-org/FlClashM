@@ -1042,6 +1042,7 @@ void main() {
                 {
                   'name': 'fallback',
                   'auth': {'provider': 'telemost'},
+                  'future_safe_option': {'enabled': true},
                 },
               ],
             },
@@ -1099,9 +1100,11 @@ void main() {
       expect(runtimeConfig['socks']['port'], builtInNode.listenPort);
       expect(runtimeConfig['debug'], isTrue);
       expect(runtimeConfig['profiles'][0]['name'], 'fallback');
+      expect(runtimeConfig['profiles'][0]['future_safe_option']['enabled'],
+          isTrue);
     });
 
-    test('rejects unsafe olcrtc local bind overrides before security', () {
+    test('rejects unsafe olcrtc local bind overrides', () async {
       const profile = Profile(
         id: 'profile-olcrtc-bind',
         autoUpdateDuration: Duration.zero,
@@ -1119,60 +1122,98 @@ void main() {
           ],
         },
       );
-      expect(
-        () => compiler.compileProfilePatch(
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      await expectLater(
+        compiler.buildRuntimePlan(
           rawProfile: rawProfile,
-          context: const ProfilePatchContext(
-            patchConfig: ClashConfig(),
+          context: const RuntimePlanBuildContext(
+            isAndroid: false,
             overrideNetworkSettings: false,
+            overrideDns: false,
+            routeMode: RouteMode.config,
+            hasCurrentScript: false,
+            profilesPath: '',
+            readInstalledPackageNames: _readNoInstalledPackages,
           ),
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('olcrtc.socks.host'),
+          securedProfile: SecuredProfilePatch(
+            patchConfig: compiledProfile.patchConfig,
+            metadata: compiledProfile.metadata,
           ),
+          runtimePatchConfig: compiledProfile.patchConfig,
+          selectedMap: const {},
+          testUrl: 'https://cp.cloudflare.com/generate_204',
+          providerAssetPathResolver: (profileId, type, url) async =>
+              '/tmp/$profileId/$type/$url',
         ),
+        throwsA(isA<FormatException>()),
       );
     });
 
-    test('rejects non-client olcrtc modes and key files before security', () {
+    test('rejects non-client olcrtc modes and key files', () async {
       const profile = Profile(
         id: 'profile-olcrtc-mode',
         autoUpdateDuration: Duration.zero,
       );
 
-      void expectRejected(Map<String, dynamic> proxy) {
+      Future<void> expectRejected(Map<String, dynamic> proxy) async {
         final rawProfile = RawProfile.fromConfig(
           profile: profile,
           config: {
             'proxies': [proxy],
           },
         );
-        expect(
-          () => compiler.compileProfilePatch(
+        final compiledProfile = compiler.compileProfilePatch(
+          rawProfile: rawProfile,
+          context: const ProfilePatchContext(
+            patchConfig: ClashConfig(),
+            overrideNetworkSettings: false,
+          ),
+        );
+
+        await expectLater(
+          compiler.buildRuntimePlan(
             rawProfile: rawProfile,
-            context: const ProfilePatchContext(
-              patchConfig: ClashConfig(),
+            context: const RuntimePlanBuildContext(
+              isAndroid: false,
               overrideNetworkSettings: false,
+              overrideDns: false,
+              routeMode: RouteMode.config,
+              hasCurrentScript: false,
+              profilesPath: '',
+              readInstalledPackageNames: _readNoInstalledPackages,
             ),
+            securedProfile: SecuredProfilePatch(
+              patchConfig: compiledProfile.patchConfig,
+              metadata: compiledProfile.metadata,
+            ),
+            runtimePatchConfig: compiledProfile.patchConfig,
+            selectedMap: const {},
+            testUrl: 'https://cp.cloudflare.com/generate_204',
+            providerAssetPathResolver: (profileId, type, url) async =>
+                '/tmp/$profileId/$type/$url',
           ),
           throwsA(isA<FormatException>()),
         );
       }
 
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Server',
         'type': 'olcrtc',
         'mode': 'srv',
       });
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Key File',
         'type': 'olcrtc',
         'crypto': {'key_file': './olcrtc.key'},
       });
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Nested Bind Host',
         'type': 'olcrtc',
         'profiles': [
@@ -1182,7 +1223,7 @@ void main() {
           },
         ],
       });
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Deep Nested Bind Port',
         'type': 'olcrtc',
         'profiles': [
@@ -1198,7 +1239,7 @@ void main() {
           },
         ],
       });
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Nested Key File',
         'type': 'olcrtc',
         'profiles': [
@@ -1208,7 +1249,7 @@ void main() {
           },
         ],
       });
-      expectRejected({
+      await expectRejected({
         'name': 'OLC Invalid Profiles',
         'type': 'olcrtc',
         'profiles': {'name': 'not-a-list'},

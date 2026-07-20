@@ -79,7 +79,7 @@ void main() {
               isA<FormatException>().having(
                 (error) => error.message,
                 'message',
-                contains('${type.label}.udp must be a boolean'),
+                contains('requires `udp` to be a boolean'),
               ),
             ),
           );
