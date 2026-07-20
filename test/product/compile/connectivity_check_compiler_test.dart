@@ -405,5 +405,8 @@ void main() {
 const _naive = <String, dynamic>{
   'name': 'Naive',
   'type': 'naiveproxy',
-  'proxy': 'https://user:pass@example.com',
+  'server': 'example.com',
+  'port': 443,
+  'username': 'user',
+  'password': 'pass',
 };

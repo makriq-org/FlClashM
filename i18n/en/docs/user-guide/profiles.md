@@ -100,13 +100,27 @@ UDP is not supported; only `udp: false` is allowed.
 proxies:
   - name: "naive"
     type: naiveproxy
-    proxy: "https://user:pass@example.com"
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 ```
+
+Required fields: `name`, `type`, `server`, `port`, `username`, and `password`.
+`transport` defaults to `https`; `quic` is also allowed. Optional settings are
+`insecure-concurrency` (1–4), `tunnel-timeout`, `idle-timeout`, `post-quantum`,
+the `headers` map, `host-resolver-rules`, and the common `connectivity-check`.
+
+The client safely builds a URI with escaped credentials for NaiveProxy and
+replaces the Mihomo node with a local SOCKS5 proxy. The old `proxy` field is not
+supported. `listen`, diagnostic files, proxy chains, and unknown fields are
+rejected during profile validation.
 
 ## Limitations
 
 - Built-in nodes can only be defined in the `proxies` section.
 - The client manages local addresses and ports automatically.
-- The profile cannot set `listen`, `server`, `port`, `ip`.
+- The profile cannot set a local `listen`; NaiveProxy `server` and `port`
+  describe only the remote server.
 - ByeDPI uses UDP by default and allows it to be disabled with `udp: false`.
   NaiveProxy and OlcRTC do not support UDP.
