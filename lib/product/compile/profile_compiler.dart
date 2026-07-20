@@ -66,6 +66,7 @@ class ProfileCompiler {
     CompiledProfileMetadata? metadata;
 
     if (rawProfile != null) {
+      builtInProxyCompiler.validateConfig(rawProfile.config);
       if (!context.overrideNetworkSettings) {
         final providerSettings = rawProfile.providerHints.network;
         patchConfig = patchConfig

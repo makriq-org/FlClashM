@@ -42,7 +42,7 @@ void main() {
         isA<FormatException>().having(
           (error) => error.message,
           'message',
-          contains('requires `net.dns`'),
+          contains('olcrtc.net.dns'),
         ),
       ),
     );
