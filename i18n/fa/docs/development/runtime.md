@@ -15,10 +15,14 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### naiveproxy
 
 - **نوع:** `naiveproxy`
-- **فیلدهای الزامی:** `name`, `proxy`
+- **فیلدهای الزامی:** `name`, `type`, `server`, `port`, `username`, `password`
+- فقط انتقال‌های `https` و `quic` مجاز هستند و دسترسی ناشناس رد می‌شود
 - UDP پشتیبانی نمی‌شود؛ نود محلی Mihomo با `udp: false` ساخته می‌شود
 - کلاینت آدرس SOCKS5 محلی را خودکار انتخاب می‌کند
-- با `config.json` تولیدشده خودکار اجرا می‌شود
+- کامپایلر اطلاعات ورود را escape می‌کند، یک URI داخلی می‌سازد و NaiveProxy را
+  با `config.json` تولیدشده خودکار اجرا می‌کند
+- allowlist فیلدهای `proxy`، `listen`، فایل‌های تشخیصی، زنجیره پروکسی و فیلدهای
+  ناشناخته را رد می‌کند
 
 ### olcrtc
 

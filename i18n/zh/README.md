@@ -64,7 +64,10 @@ proxies:
 proxies:
   - name: "naive"
     type: naiveproxy
-    proxy: "https://user:pass@example.com"
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 ```
 
 [了解更多关于内置节点的信息](docs/user-guide/profiles.md)

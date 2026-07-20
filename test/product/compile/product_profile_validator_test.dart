@@ -11,7 +11,10 @@ void main() {
 proxies:
   - name: NaiveProxy Local
     type: naiveproxy
-    proxy: https://user:pass@example.com
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 proxy-groups:
   - name: Main
     type: select

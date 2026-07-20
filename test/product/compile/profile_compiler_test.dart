@@ -688,7 +688,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
               'host-resolver-rules': 'MAP * ~NOTFOUND , EXCLUDE localhost',
             },
           ],
@@ -795,7 +798,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
             },
             {
               'name': 'ByeDPI Local',
@@ -893,7 +899,10 @@ void main() {
             {
               'name': 'NaiveProxy Local',
               'type': 'naiveproxy',
-              'proxy': 'https://user:pass@example.com',
+              'server': 'example.com',
+              'port': 443,
+              'username': 'user',
+              'password': 'pass',
             },
           ],
         },

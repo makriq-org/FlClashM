@@ -109,7 +109,10 @@ Map<String, dynamic> _validNode(BuiltInProxyType type) => switch (type) {
   BuiltInProxyType.naiveproxy => <String, dynamic>{
     'name': 'NaiveProxy Local',
     'type': 'naiveproxy',
-    'proxy': 'https://user:pass@example.com',
+    'server': 'example.com',
+    'port': 443,
+    'username': 'user',
+    'password': 'pass',
   },
   BuiltInProxyType.olcrtc => <String, dynamic>{
     'name': 'OlcRTC Local',

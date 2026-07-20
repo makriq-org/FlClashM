@@ -64,7 +64,10 @@ proxies:
 proxies:
   - name: "naive"
     type: naiveproxy
-    proxy: "https://user:pass@example.com"
+    server: example.com
+    port: 443
+    username: user
+    password: pass
 ```
 
 [جزئیات بیشتر درباره نودهای داخلی](docs/user-guide/profiles.md)

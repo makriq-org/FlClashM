@@ -15,10 +15,14 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 ### naiveproxy
 
 - **Type:** `naiveproxy`
-- **Required fields:** `name`, `proxy`
+- **Required fields:** `name`, `type`, `server`, `port`, `username`, `password`
+- Only `https` and `quic` transports are allowed; anonymous access is rejected
 - UDP is unsupported; the resulting local Mihomo node uses `udp: false`
 - The client chooses the local SOCKS5 address automatically
-- Launched with an auto-generated `config.json`
+- The compiler escapes credentials, builds one internal URI, and launches
+  NaiveProxy with an auto-generated `config.json`
+- An allowlist rejects `proxy`, `listen`, diagnostic files, proxy chains, and
+  unknown fields
 
 ### olcrtc
 

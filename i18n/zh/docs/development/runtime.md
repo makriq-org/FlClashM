@@ -15,10 +15,13 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### naiveproxy
 
 - **类型：** `naiveproxy`
-- **必填字段：** `name`, `proxy`
+- **必填字段：** `name`, `type`, `server`, `port`, `username`, `password`
+- 仅允许 `https` 和 `quic` 传输；拒绝匿名访问
 - 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
 - 客户端自动选择本地 SOCKS5 地址
-- 使用自动生成的 `config.json` 启动
+- 编译器转义凭据、构造唯一的内部 URI，并使用自动生成的 `config.json`
+  启动 NaiveProxy
+- allowlist 拒绝 `proxy`、`listen`、诊断文件、代理链和未知字段
 
 ### olcrtc
 
