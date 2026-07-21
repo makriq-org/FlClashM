@@ -564,6 +564,49 @@ void main() {
       expect(manager.performanceCounters.verifiedPlanReuses, 0);
     });
 
+    test('discards an older pending plan after a newer plan is applied',
+        () async {
+      var buildCalls = 0;
+      manager = buildManager(
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async {
+          buildCalls++;
+          return RuntimePlan.empty(
+            selectedMap: const {},
+            testUrl: 'https://example.com',
+            runtime: runtimeSelection,
+          );
+        },
+      );
+
+      await manager.initializeCore(
+        runtimePlanRequest: const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+          settingsRevision: 1,
+        ),
+        coldStartPatchConfig: const ClashConfig(),
+        setupRuntimePlan: false,
+      );
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+          settingsRevision: 2,
+        ),
+      );
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+          settingsRevision: 1,
+        ),
+      );
+
+      expect(buildCalls, 3);
+      expect(manager.performanceCounters.verifiedPlanReuses, 0);
+    });
+
     test('derives and deduplicates cold-start snapshots without rebuilding',
         () async {
       await manager.setupRuntimePlan(

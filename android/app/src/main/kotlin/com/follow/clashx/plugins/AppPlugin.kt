@@ -4,8 +4,11 @@ import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ComponentInfo
 import android.content.pm.PackageManager
@@ -79,6 +82,14 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var packagesLoadedAt = 0L
     private var installedPackageNames: List<String> = emptyList()
     private var installedPackageNamesLoadedAt = 0L
+    private var installedAppsPermissionGranted: Boolean? = null
+    private var packageChangesReceiverRegistered = false
+
+    private val packageChangesReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            invalidatePackageCaches()
+        }
+    }
 
     private val skipPrefixList = listOf(
         "com.google",
@@ -151,6 +162,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "app")
         channel.setMethodCallHandler(this)
+        registerPackageChangesReceiver()
     }
 
     private fun initShortcuts(toggle: String, start: String, stop: String) {
@@ -176,7 +188,66 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        unregisterPackageChangesReceiver()
         scope.cancel()
+    }
+
+    private fun registerPackageChangesReceiver() {
+        if (packageChangesReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        packageChangesReceiverRegistered = runCatching {
+            ContextCompat.registerReceiver(
+                FlClashApplication.getAppContext(),
+                packageChangesReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }.isSuccess
+    }
+
+    private fun unregisterPackageChangesReceiver() {
+        if (!packageChangesReceiverRegistered) return
+        runCatching {
+            FlClashApplication.getAppContext().unregisterReceiver(packageChangesReceiver)
+        }
+        packageChangesReceiverRegistered = false
+    }
+
+    @Synchronized
+    private fun invalidatePackageCaches() {
+        packages.clear()
+        packagesLoadedAt = 0L
+        installedPackageNames = emptyList()
+        installedPackageNamesLoadedAt = 0L
+        iconMap.clear()
+    }
+
+    private fun hasInstalledAppsPermission(): Boolean {
+        val context = FlClashApplication.getAppContext()
+        val defined = try {
+            context.packageManager?.getPermissionInfo(GET_INSTALLED_APPS_PERMISSION, 0) != null
+        } catch (_: Exception) {
+            false
+        }
+        return !defined || ContextCompat.checkSelfPermission(
+            context,
+            GET_INSTALLED_APPS_PERMISSION,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @Synchronized
+    private fun refreshInstalledAppsPermissionState() {
+        val granted = hasInstalledAppsPermission()
+        if (installedAppsPermissionGranted != null && installedAppsPermissionGranted != granted) {
+            invalidatePackageCaches()
+        }
+        installedAppsPermissionGranted = granted
     }
 
     private fun tip(message: String?) {
@@ -492,6 +563,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     @Synchronized
     private fun getPackages(): List<Package> {
+        refreshInstalledAppsPermissionState()
         val packageManager = FlClashApplication.getAppContext().packageManager
         val now = android.os.SystemClock.elapsedRealtime()
         if (packages.isNotEmpty() && now - packagesLoadedAt < PACKAGES_CACHE_TTL_MS) {
@@ -525,6 +597,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     @Synchronized
     private fun getInstalledPackageNamesSnapshot(): List<String> {
+        refreshInstalledAppsPermissionState()
         val now = android.os.SystemClock.elapsedRealtime()
         if (installedPackageNamesLoadedAt != 0L &&
             now - installedPackageNamesLoadedAt < PACKAGES_CACHE_TTL_MS
@@ -738,10 +811,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 // A pre-grant load may have cached the ROM's stripped-down list
                 // moments ago; drop it so the pending callbacks fetch the real one.
                 synchronized(this) {
-                    packages.clear()
-                    packagesLoadedAt = 0L
-                    installedPackageNames = emptyList()
-                    installedPackageNamesLoadedAt = 0L
+                    invalidatePackageCaches()
+                    installedAppsPermissionGranted = true
                 }
             }
             val pending = installedAppsCallbacks.toList()

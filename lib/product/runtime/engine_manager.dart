@@ -571,9 +571,9 @@ class EngineManager {
 
     _activeRuntime = compiledRuntimePlan.resolvedRuntime;
     _lastCompiledRuntimePlan = compiledRuntimePlan;
-    if (identical(_pendingCompiledRuntimePlan, compiledRuntimePlan)) {
-      _pendingCompiledRuntimePlan = null;
-    }
+    // Once any plan is applied, an older init-only candidate must never become
+    // reusable again if settings later happen to match its old revision.
+    _pendingCompiledRuntimePlan = null;
     _applyRuntimePlan(compiledRuntimePlan.appliedRuntimePlan.runtimePlan);
 
     if (coldStartPatchConfig != null) {

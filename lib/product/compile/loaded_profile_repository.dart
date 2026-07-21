@@ -24,7 +24,9 @@ class LoadedProfileRepository {
     _loading = task;
     try {
       final loaded = await task;
-      if (_loadingRevision == revision) _cached = loaded;
+      if (identical(_loading, task) && _loadingRevision == revision) {
+        _cached = loaded;
+      }
       return loaded;
     } finally {
       if (identical(_loading, task)) {
@@ -36,5 +38,7 @@ class LoadedProfileRepository {
 
   void clear() {
     _cached = null;
+    _loading = null;
+    _loadingRevision = null;
   }
 }

@@ -98,8 +98,19 @@ abstract class LocalNodeController<
   LocalNodeStageState<TNodeLayout>? _stagedState;
   Future<TSharedLayout>? _sharedLayout;
 
-  Future<TSharedLayout> _resolveSharedLayout() =>
-      _sharedLayout ??= binary.resolveSharedInstallLayout();
+  Future<TSharedLayout> _resolveSharedLayout() async {
+    final cached = _sharedLayout;
+    if (cached != null) return cached;
+
+    final task = binary.resolveSharedInstallLayout();
+    _sharedLayout = task;
+    try {
+      return await task;
+    } catch (_) {
+      if (identical(_sharedLayout, task)) _sharedLayout = null;
+      rethrow;
+    }
+  }
 
   Future<String> stageRuntimePlan({
     required List<BuiltInProxyNodePlan> currentPlans,

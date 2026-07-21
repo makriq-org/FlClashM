@@ -44,7 +44,8 @@ class AppBootstrap {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       commonPrint.log(
-        '[Perf] bootstrap.firstFrameMs=${bootstrapTimer.elapsedMilliseconds}',
+        '[Perf] bootstrap.firstFrameCallbackMs='
+        '${bootstrapTimer.elapsedMilliseconds}',
       );
     });
     unawaited(

@@ -573,10 +573,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     final probe = healthProbe!;
     List<List<String>> chains;
     try {
-      chains = await probe.activeConnectionChains().timeout(
-            healthProbeTimeout,
-            onTimeout: () => const <List<String>>[],
-          );
+      chains = await probe.activeConnectionChains().timeout(healthProbeTimeout);
     } catch (_) {
       state.idleSince = null;
       return;
@@ -586,7 +583,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     try {
       selections = await probe
           .selectedProxies(activation.containingGroups)
-          .timeout(healthProbeTimeout, onTimeout: () => const {});
+          .timeout(healthProbeTimeout);
     } catch (_) {
       state.idleSince = null;
       return;

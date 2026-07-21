@@ -97,4 +97,45 @@ void main() {
 
     expect(loadCalls, 4);
   });
+
+  test('clear does not reuse or recache an in-flight revision', () async {
+    final repository = LoadedProfileRepository();
+    const revision = RawProfileRevision(
+      profile: profile,
+      lastModifiedMicros: 10,
+      fileSize: 100,
+    );
+    final staleLoad = Completer<RawProfile>();
+    var loadCalls = 0;
+
+    final first = repository.load(revision, () {
+      loadCalls++;
+      return staleLoad.future;
+    });
+    repository.clear();
+    final fresh = repository.load(revision, () async {
+      loadCalls++;
+      return RawProfile.fromConfig(
+        profile: profile,
+        config: const {'revision': 'fresh'},
+        revision: revision,
+      );
+    });
+    staleLoad.complete(
+      RawProfile.fromConfig(
+        profile: profile,
+        config: const {'revision': 'stale'},
+        revision: revision,
+      ),
+    );
+
+    expect((await first).config['revision'], 'stale');
+    expect((await fresh).config['revision'], 'fresh');
+    expect(
+      (await repository.load(revision, () => throw StateError('unexpected')))
+          .config['revision'],
+      'fresh',
+    );
+    expect(loadCalls, 2);
+  });
 }

@@ -410,6 +410,7 @@ class GlobalState {
         config.overrideDns,
         config.networkProps.routeMode,
         config.appSetting.testUrl,
+        json.encode(config.currentProfile?.selectedMap ?? const {}),
       );
 
   CompiledProfilePatch compileProfilePatch({

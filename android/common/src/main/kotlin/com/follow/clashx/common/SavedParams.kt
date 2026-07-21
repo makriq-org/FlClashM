@@ -154,8 +154,8 @@ object SavedParams {
 
     fun saveNotificationTitle(title: String) {
         runCatching {
-            if (notifTitleFile.exists() && notifTitleFile.readText() == title) return
-            writeAtomic(notifTitleFile, title)
+            val persistedTitle = runCatching { notifTitleFile.readText() }.getOrNull()
+            if (persistedTitle != title) writeAtomic(notifTitleFile, title)
             legacyNotifTitleFile.delete()
         }
             .onFailure { GlobalState.log("saveNotificationTitle error: ${it.message}") }

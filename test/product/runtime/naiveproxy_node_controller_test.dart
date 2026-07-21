@@ -140,6 +140,30 @@ void main() {
 
       expect(binary.resolveCalls, 1);
     });
+
+    test('retries shared layout resolution after a transient failure',
+        () async {
+      final plan = _plan('https://example.com');
+      binary.failResolve = true;
+
+      await expectLater(
+        controller.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [plan],
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      binary.failResolve = false;
+
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [plan],
+        ),
+        isEmpty,
+      );
+      expect(binary.resolveCalls, 2);
+    });
   });
 }
 

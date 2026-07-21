@@ -51,7 +51,12 @@ class AppController {
   }
 
   void updateGroupsDebounce() {
-    debouncer.call(FunctionTag.updateGroups, updateGroups);
+    debouncer.call(
+      FunctionTag.updateGroups,
+      () => updateGroups(
+        syncNotification: Platform.isAndroid && globalState.isStart,
+      ),
+    );
   }
 
   void addCheckIpNumDebounce() {

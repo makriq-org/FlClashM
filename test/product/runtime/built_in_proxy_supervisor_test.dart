@@ -513,6 +513,34 @@ void main() {
       await supervisor.stop();
     });
 
+    test('does not sleep an awake reserve when usage probes time out',
+        () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _StuckActiveConnectionsProbe()..delayResults.add(true);
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        healthProbeTimeout: const Duration(milliseconds: 20),
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final plan = _olcReservePlan(idle: const Duration(seconds: 1));
+      expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      await supervisor.notifyProxySelected('Reserve', plan.name);
+      await _waitUntil(() => clock.pendingTimers == 1);
+
+      clock.elapse(const Duration(seconds: 1));
+      await probe.entered.future.timeout(const Duration(seconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(runtime.appliedPlans, hasLength(1));
+      expect(runtime.appliedPlans.single.single['type'], 'olcrtc');
+      expect(probe.selectionCalls, 0);
+      await supervisor.stop();
+    });
+
     test('VPN stop pauses auto activation but keeps always-on nodes warm',
         () async {
       final clock = _FakeWatchdogClock();
@@ -1084,5 +1112,16 @@ class _StuckRuntimeHealthProbe extends _FakeRuntimeHealthProbe {
   }) {
     if (!entered.isCompleted) entered.complete();
     return result.future;
+  }
+}
+
+class _StuckActiveConnectionsProbe extends _FakeRuntimeHealthProbe {
+  final entered = Completer<void>();
+
+  @override
+  Future<List<List<String>>> activeConnectionChains() {
+    connectionCalls++;
+    if (!entered.isCompleted) entered.complete();
+    return Completer<List<List<String>>>().future;
   }
 }

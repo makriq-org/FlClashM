@@ -15,6 +15,7 @@ class AndroidShellService {
   final AndroidShellPlatformBridge platform;
   final AndroidForegroundNotificationPolicy foregroundNotification;
   String? _lastForegroundNotificationTitle;
+  Future<void> _foregroundNotificationPush = Future<void>.value();
 
   void bindTileCommands({
     AndroidTileStartHandler? onStart,
@@ -68,12 +69,16 @@ class AndroidShellService {
   }) =>
       foregroundNotification.buildTitle(profile, groups: groups);
 
-  Future<void> pushForegroundNotificationTitle(String title) async {
-    if (title.isEmpty || title == _lastForegroundNotificationTitle) {
-      return;
-    }
-    await platform.pushForegroundNotificationTitle(title);
-    _lastForegroundNotificationTitle = title;
+  Future<void> pushForegroundNotificationTitle(String title) {
+    if (title.isEmpty) return Future<void>.value();
+
+    final task = _foregroundNotificationPush.then((_) async {
+      if (title == _lastForegroundNotificationTitle) return;
+      await platform.pushForegroundNotificationTitle(title);
+      _lastForegroundNotificationTitle = title;
+    });
+    _foregroundNotificationPush = task.catchError((_) {});
+    return task;
   }
 
   Future<void> syncForegroundNotification({

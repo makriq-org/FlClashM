@@ -78,6 +78,33 @@ void main() {
       expect(bridge.pushedTitles, ['Stable title', 'Changed title']);
     });
 
+    test('serializes concurrent notification updates in request order',
+        () async {
+      final firstGate = Completer<void>();
+      final secondGate = Completer<void>();
+      final bridge = _FakeAndroidShellPlatformBridge()
+        ..pushGates.addAll([firstGate, secondGate]);
+      final service = AndroidShellService(platform: bridge);
+
+      final first = service.pushForegroundNotificationTitle('First title');
+      final second = service.pushForegroundNotificationTitle('Second title');
+      await Future<void>.delayed(Duration.zero);
+      expect(bridge.pushedTitles, ['First title']);
+
+      firstGate.complete();
+      await first;
+      await Future<void>.delayed(Duration.zero);
+      expect(bridge.pushedTitles, ['First title', 'Second title']);
+      secondGate.complete();
+      await second;
+
+      await service.pushForegroundNotificationTitle('First title');
+      expect(
+        bridge.pushedTitles,
+        ['First title', 'Second title', 'First title'],
+      );
+    });
+
     test('delegates tile and app hooks through the platform bridge', () async {
       final bridge = _FakeAndroidShellPlatformBridge();
       final service = AndroidShellService(platform: bridge);
@@ -138,6 +165,7 @@ class _FakeAndroidShellPlatformBridge implements AndroidShellPlatformBridge {
   FutureOr<void> Function()? _onExit;
 
   final pushedTitles = <String>[];
+  final pushGates = <Completer<void>>[];
   final syncedModes = <String>[];
   final globalModeValues = <bool>[];
   final excludeFromRecentsValues = <bool>[];
@@ -203,6 +231,9 @@ class _FakeAndroidShellPlatformBridge implements AndroidShellPlatformBridge {
   @override
   Future<void> pushForegroundNotificationTitle(String title) async {
     pushedTitles.add(title);
+    if (pushGates.isNotEmpty) {
+      await pushGates.removeAt(0).future;
+    }
   }
 
   Future<void> triggerStart() async {

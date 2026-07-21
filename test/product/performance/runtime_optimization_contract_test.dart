@@ -21,6 +21,10 @@ void main() {
 
     expect(method, isNot(contains('updateGroups')));
     expect(method, isNot(contains('syncForegroundNotification')));
+    expect(
+      source,
+      contains('syncNotification: Platform.isAndroid && globalState.isStart'),
+    );
   });
 
   test('installed package names use native TTL and a direct channel list',
@@ -35,9 +39,27 @@ void main() {
 
     expect(kotlin, contains('installedPackageNamesLoadedAt'));
     expect(kotlin, contains('PACKAGES_CACHE_TTL_MS'));
+    expect(kotlin, contains('Intent.ACTION_PACKAGE_ADDED'));
+    expect(kotlin, contains('invalidatePackageCaches()'));
+    expect(kotlin, contains('refreshInstalledAppsPermissionState()'));
     expect(method, contains('invokeMethod<List<dynamic>>'));
     expect(method, isNot(contains('Isolate.run')));
     expect(method, isNot(contains('json.decode')));
+  });
+
+  test('notification dedupe still repairs cross-process persistence', () async {
+    final source = await File(
+      'android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt',
+    ).readAsString();
+    final start = source.indexOf(
+      'override fun updateNotificationParams(params: NotificationParams)',
+    );
+    final end = source.indexOf('\n        }', start);
+    final method = source.substring(start, end);
+
+    expect(method, contains('State.notificationParamsFlow.value != params'));
+    expect(method, contains('SavedParams.saveNotificationTitle(params.title)'));
+    expect(method, isNot(contains('== params) return')));
   });
 
   test('access search is debounced outside the selection state', () async {
@@ -46,5 +68,22 @@ void main() {
     expect(source, contains('Duration(milliseconds: 180)'));
     expect(source, contains('buildPackageIndex(packages)'));
     expect(source, contains('_searchDebounce?.cancel()'));
+  });
+
+  test('first-frame metric names the post-frame callback boundary', () async {
+    final source =
+        await File('lib/product/bootstrap/app_bootstrap.dart').readAsString();
+
+    expect(source, contains('bootstrap.firstFrameCallbackMs'));
+    expect(source, isNot(contains('bootstrap.firstFrameMs=')));
+  });
+
+  test('pending runtime-plan revision includes proxy selections', () async {
+    final source = await File('lib/state.dart').readAsString();
+
+    expect(
+      source,
+      contains('json.encode(config.currentProfile?.selectedMap ?? const {})'),
+    );
   });
 }
