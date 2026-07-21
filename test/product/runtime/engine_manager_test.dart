@@ -578,6 +578,9 @@ class _FakeEngineAdapter implements EngineAdapter {
   Future<void> prepareForRestart() async {}
 
   @override
+  Future<void> notifyProxySelected(String groupName, String proxyName) async {}
+
+  @override
   Future<bool> isInitialized() async => isInitializedValue;
 
   @override

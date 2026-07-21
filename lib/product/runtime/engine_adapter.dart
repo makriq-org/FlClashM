@@ -18,6 +18,8 @@ abstract interface class EngineAdapter {
 
   Future<bool> start({String? notificationTitle});
 
+  Future<void> notifyProxySelected(String groupName, String proxyName);
+
   Future<void> stop();
 
   Future<DateTime?> readStartTime();

@@ -80,6 +80,11 @@ proxies:
     net:
       transport: datachannel
       dns: "1.1.1.1:53"
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://example.org/generate_204"
+    proxies: ["DIRECT", "rtc"]
 ```
 
 **پارامترها:**
@@ -91,6 +96,42 @@ proxies:
 | `crypto.key` | کلید رمزنگاری ۲۵۶ بیتی (hex) |
 | `net.transport` | انتقال (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
 | `net.dns` | سرور DNS الزامی با قالب `host:port` |
+
+### فعال‌سازی
+
+OlcRTC به‌طور پیش‌فرض یک نود ذخیره است: پیکربندی از قبل آماده می‌شود، اما فرایند تا شکست بررسی گروه اصلی یا انتخاب دستی OlcRTC در حالت خواب می‌ماند. شکل کوتاه:
+
+```yaml
+activation: auto
+# activation: always  # رفتار قدیمی: اجرا همراه با VPN
+```
+
+شکل کامل:
+
+```yaml
+activation:
+  mode: auto
+  wake:
+    urls: ["https://example.org/generate_204"]
+    interval: 30
+    failures: 2
+    retry-after: 300
+  sleep:
+    idle: 900
+```
+
+| پارامتر | پیش‌فرض | توضیح |
+|---------|---------|-------|
+| `mode` | `auto` | در `auto` نود ذخیره می‌خوابد؛ `always` اجرای دائمی قبلی را برمی‌گرداند |
+| `wake.urls` | زنجیره `connectivity-check` | آدرس‌های عمومی HTTP(S) برای بررسی گروه تحت نظر |
+| `wake.interval` | `30` | فاصله دورهای watchdog هنگام خواب، بر حسب ثانیه |
+| `wake.failures` | `2` | تعداد شکست‌های پیاپی لازم برای بیدارشدن |
+| `wake.retry-after` | `300` | زمان انتظار پس از تلاش ناموفق بیدارسازی، بر حسب ثانیه |
+| `sleep.idle` | `900` | زمان بدون ترافیک و انتخاب تا خواب دوباره؛ `0` یعنی بیدار ماندن تا راه‌اندازی مجدد VPN |
+
+در حالت `auto`، نود باید عضو مستقیم حداقل یک گروه پروکسی باشد و آدرس بررسی باید از `wake.urls`، ‏`connectivity-check` نود، نزدیک‌ترین گروه دربرگیرنده یا URL آزمایش سراسری برنامه به دست آید. پس از بیدارسازی، کلاینت خود OlcRTC را فوراً آزمایش می‌کند. اگر در مدت `sleep.idle` هیچ اتصال فعالی از آن عبور نکند و هیچ گروه دربرگیرنده‌ای آن را انتخاب نکرده باشد، فرایند دوباره متوقف می‌شود؛ انتخاب دستی آن را فوراً بیدار می‌کند.
+
+اکنون حتی با حذف `activation` نیز مقدار پیش‌فرض `auto` است. برای بازگرداندن کامل رفتار همیشه‌روشن قبلی، `activation: always` را تنظیم کنید.
 
 ## NaiveProxy
 

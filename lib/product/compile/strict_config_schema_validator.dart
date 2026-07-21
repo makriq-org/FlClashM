@@ -154,10 +154,11 @@ class StrictConfigSchemaValidator {
     }.any((type) => _matchesType(value, type));
     if (!matchesType) {
       throw FormatException(
-        '$actualPath must be ${_typeLabel(field.type)}; got ${value.runtimeType}.',
+        '$actualPath must be ${_typeLabel(field)}; got ${value.runtimeType}.',
       );
     }
     if (field.allowedValues.isNotEmpty &&
+        _matchesType(value, field.type) &&
         !field.allowedValues.contains(value)) {
       throw FormatException(
         '$actualPath must be one of: ${field.allowedValues.join(', ')}.',
@@ -193,7 +194,17 @@ class StrictConfigSchemaValidator {
         ConfigValueType.list => value is List,
       };
 
-  String _typeLabel(ConfigValueType type) => switch (type) {
+  String _typeLabel(BuiltInProxyFieldSchema field) {
+    final labels = <String>[
+      _singleTypeLabel(field.type),
+      for (final type in field.additionalTypes) _singleTypeLabel(type),
+    ];
+    return labels.length == 1
+        ? labels.single
+        : '${labels.sublist(0, labels.length - 1).join(', ')} or ${labels.last}';
+  }
+
+  String _singleTypeLabel(ConfigValueType type) => switch (type) {
         ConfigValueType.string => 'a string',
         ConfigValueType.boolean => 'a boolean',
         ConfigValueType.integer => 'an integer',

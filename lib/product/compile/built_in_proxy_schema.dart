@@ -460,6 +460,60 @@ final builtInProxySchemas = <BuiltInProxyType, BuiltInProxySchema>{
 
 final _olcRtcFields = <BuiltInProxyFieldSchema>[
   const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation',
+    type: ConfigValueType.string,
+    additionalTypes: <ConfigValueType>{ConfigValueType.object},
+    allowedValues: <Object>{'auto', 'always'},
+    defaultValue: ConfigDefaultValue.of('auto'),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.mode',
+    type: ConfigValueType.string,
+    allowedValues: <Object>{'auto', 'always'},
+    defaultValue: ConfigDefaultValue.of('auto'),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake',
+    type: ConfigValueType.object,
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake.urls',
+    type: ConfigValueType.list,
+    defaultValue: ConfigDefaultValue.of(<String>[]),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake.urls[]',
+    type: ConfigValueType.string,
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake.interval',
+    type: ConfigValueType.integer,
+    range: ConfigValueRange(minimum: 1, maximum: 3600),
+    defaultValue: ConfigDefaultValue.of(30),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake.failures',
+    type: ConfigValueType.integer,
+    range: ConfigValueRange(minimum: 1, maximum: 10),
+    defaultValue: ConfigDefaultValue.of(2),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.wake.retry-after',
+    type: ConfigValueType.integer,
+    range: ConfigValueRange(minimum: 1, maximum: 86400),
+    defaultValue: ConfigDefaultValue.of(300),
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.sleep',
+    type: ConfigValueType.object,
+  ),
+  const BuiltInProxyFieldSchema(
+    path: 'olcrtc.activation.sleep.idle',
+    type: ConfigValueType.integer,
+    range: ConfigValueRange(minimum: 0, maximum: 86400),
+    defaultValue: ConfigDefaultValue.of(900),
+  ),
+  const BuiltInProxyFieldSchema(
     path: 'olcrtc.mode',
     type: ConfigValueType.string,
     allowedValues: <Object>{'cnc'},

@@ -34,6 +34,53 @@ extension BuiltInProxyProtocolLabel on BuiltInProxyProtocol {
       };
 }
 
+enum NodeActivationMode { auto, always }
+
+extension NodeActivationModeLabel on NodeActivationMode {
+  String get label => switch (this) {
+        NodeActivationMode.auto => 'auto',
+        NodeActivationMode.always => 'always',
+      };
+}
+
+@immutable
+class NodeActivationConfig {
+  const NodeActivationConfig({
+    this.mode = NodeActivationMode.auto,
+    this.wakeUrls = const [],
+    this.wakeInterval = const Duration(seconds: 30),
+    this.wakeFailures = 2,
+    this.wakeRetryAfter = const Duration(seconds: 300),
+    this.sleepIdle = const Duration(seconds: 900),
+    this.watchGroup = '',
+    this.containingGroups = const [],
+  });
+
+  final NodeActivationMode mode;
+  final List<Uri> wakeUrls;
+  final Duration wakeInterval;
+  final int wakeFailures;
+  final Duration wakeRetryAfter;
+  final Duration sleepIdle;
+  final String watchGroup;
+  final List<String> containingGroups;
+
+  bool get isAuto => mode == NodeActivationMode.auto;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'mode': mode.label,
+        'wake': <String, dynamic>{
+          'urls': wakeUrls.map((url) => url.toString()).toList(growable: false),
+          'interval': wakeInterval.inSeconds,
+          'failures': wakeFailures,
+          'retry-after': wakeRetryAfter.inSeconds,
+        },
+        'sleep': <String, dynamic>{'idle': sleepIdle.inSeconds},
+        'watch-group': watchGroup,
+        'containing-groups': containingGroups,
+      };
+}
+
 enum BuiltInProxyAvailabilityStatus { supported, unsupported }
 
 @immutable
@@ -103,6 +150,7 @@ class BuiltInProxyNodePlan {
     required this.protocol,
     required this.udp,
     this.connectivityCheck = const ConnectivityCheckConfig(),
+    this.activation,
     this.files = const {},
   });
 
@@ -114,6 +162,7 @@ class BuiltInProxyNodePlan {
   final BuiltInProxyProtocol protocol;
   final bool udp;
   final ConnectivityCheckConfig connectivityCheck;
+  final NodeActivationConfig? activation;
   final Map<String, String> files;
 
   Map<String, dynamic> toProxyConfig() => <String, dynamic>{

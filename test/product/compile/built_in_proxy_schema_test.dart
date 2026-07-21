@@ -52,7 +52,37 @@ void main() {
     final olcrtc = builtInProxySchemas[BuiltInProxyType.olcrtc]!;
     expect(
       olcrtc.fields.map((field) => field.path),
-      contains('olcrtc.profiles[].crypto.key'),
+      containsAll(<String>{
+        'olcrtc.profiles[].crypto.key',
+        'olcrtc.activation',
+        'olcrtc.activation.wake.urls[]',
+        'olcrtc.activation.sleep.idle',
+      }),
+    );
+    final activation = olcrtc.fields.singleWhere(
+      (field) => field.path == 'olcrtc.activation',
+    );
+    expect(activation.type, ConfigValueType.string);
+    expect(activation.additionalTypes, {ConfigValueType.object});
+    expect(activation.allowedValues, {'auto', 'always'});
+    expect(activation.defaultValue.value, 'auto');
+    expect(
+      olcrtc.fields
+          .singleWhere(
+            (field) => field.path == 'olcrtc.activation.wake.interval',
+          )
+          .defaultValue
+          .value,
+      30,
+    );
+    expect(
+      olcrtc.fields
+          .singleWhere(
+            (field) => field.path == 'olcrtc.activation.sleep.idle',
+          )
+          .defaultValue
+          .value,
+      900,
     );
   });
 

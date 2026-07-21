@@ -7,7 +7,8 @@ void main() {
   group('ProductProfileValidator', () {
     test('normalizes built-in proxy nodes into core-compatible local proxies',
         () {
-      final normalized = validator.normalizeForValidation('''
+      final normalized = validator.normalizeForValidation(
+        '''
 proxies:
   - name: NaiveProxy Local
     type: naiveproxy
@@ -48,7 +49,13 @@ proxies:
     net:
       transport: datachannel
       dns: 8.8.8.8:53
-''');
+proxy-groups:
+  - name: Main
+    type: fallback
+    proxies: [OLC Local]
+''',
+        globalTestUrl: 'https://example.org/generate_204',
+      );
 
       expect(normalized['proxies'][0]['type'], 'socks5');
       expect(normalized['proxies'][0]['server'], '127.0.0.1');
@@ -61,6 +68,7 @@ proxies:
 proxies:
   - name: OLC Local
     type: olcrtc
+    activation: always
     auth:
       provider: wbstream
     room:

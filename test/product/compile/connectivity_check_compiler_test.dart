@@ -61,6 +61,7 @@ void main() {
           {
             'name': 'OlcRTC',
             'type': 'olcrtc',
+            'activation': 'always',
             'auth': {'provider': 'jitsi'},
             'room': {'id': 'https://meet.example.org/room'},
             'crypto': {

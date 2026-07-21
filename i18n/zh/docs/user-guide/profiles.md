@@ -79,6 +79,11 @@ proxies:
     net:
       transport: datachannel
       dns: "1.1.1.1:53"
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://example.org/generate_204"
+    proxies: ["DIRECT", "rtc"]
 ```
 
 **参数：**
@@ -90,6 +95,42 @@ proxies:
 | `crypto.key` | 256 位加密密钥（十六进制） |
 | `net.transport` | 传输方式 (`datachannel`, `vp8channel`, `seichannel`, `videochannel`) |
 | `net.dns` | 必填 DNS 服务器，格式为 `host:port` |
+
+### 激活
+
+OlcRTC 默认作为备用节点：客户端会预先准备配置，但进程保持休眠，直到主组探测失败或用户手动选择 OlcRTC。简写形式：
+
+```yaml
+activation: auto
+# activation: always  # 旧行为：随 VPN 一起启动
+```
+
+完整形式：
+
+```yaml
+activation:
+  mode: auto
+  wake:
+    urls: ["https://example.org/generate_204"]
+    interval: 30
+    failures: 2
+    retry-after: 300
+  sleep:
+    idle: 900
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `mode` | `auto` | `auto` 让备用节点休眠；`always` 恢复始终启动 |
+| `wake.urls` | `connectivity-check` 解析链 | 用于探测监视组的公共 HTTP(S) 地址 |
+| `wake.interval` | `30` | 休眠时 watchdog 每轮探测的间隔（秒） |
+| `wake.failures` | `2` | 唤醒前所需的连续失败轮数 |
+| `wake.retry-after` | `300` | 唤醒失败后的退避时间（秒） |
+| `sleep.idle` | `900` | 无流量且未被选择后再次休眠的秒数；`0` 表示保持运行到 VPN 重启 |
+
+在 `auto` 模式下，节点必须是至少一个代理组的直接成员，并且探测地址必须能从 `wake.urls`、节点的 `connectivity-check`、最近的包含组或应用全局测试 URL 中解析出来。唤醒后客户端会立即测试 OlcRTC 本身；当所有直接包含它的组都未选择它，且连续 `sleep.idle` 秒没有活动连接经过它时，进程会再次停止。手动选择会立即唤醒节点。
+
+现在即使省略 `activation`，默认值也是 `auto`。设置 `activation: always` 可完整恢复原先的常驻行为。
 
 ## NaiveProxy
 

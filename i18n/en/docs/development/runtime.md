@@ -31,6 +31,27 @@ Built-in nodes are defined as regular proxies in the profile. Their lifecycle is
 - Only works in CNC (client) mode
 - UDP is unsupported; the resulting local Mihomo node uses `udp: false`
 
+With `activation.mode: auto`, the supervisor stages OlcRTC artifacts but omits a
+sleeping reserve from both live and cold-start manifests. Its mandatory
+end-to-end check therefore no longer gates VPN startup. The watchdog probes the
+watched group, wakes the reserve after the configured failures, atomically
+reapplies the full plan, and forces a delay test of OlcRTC itself. After the idle
+period has no matching connection chains and no directly containing group
+selects the node, the plan is reapplied without it. Profile switches and stops
+cancel transitions with a generation token; sleep state is intentionally not
+persisted.
+
+Mihomo and network access cross the app boundary through `RuntimeHealthProbe`,
+which exposes only delay tests, active connection chains, group `now` values,
+and device-network availability. The app-layer implementation uses `clashCore`
+and `connectivity_plus`. Without an injected probe the automatic watchdog stays
+idle, while staging, stopping, and manual wake remain safe. `always` mode keeps
+the original startup transaction unchanged.
+
+This integration ships with the app's Dart layer and does not change the Android
+bridge. `activation: always` is the operational rollback, and a version rollback
+requires no state migration.
+
 ### byedpi
 
 - **Type:** `byedpi`

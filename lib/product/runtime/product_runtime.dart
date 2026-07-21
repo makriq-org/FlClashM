@@ -11,6 +11,7 @@ export 'naiveproxy_node_controller.dart';
 export 'naiveproxy_release.dart';
 export 'olcrtc_node_controller.dart';
 export 'olcrtc_release.dart';
+export 'runtime_health_probe.dart';
 export 'runtime_registry.dart';
 export 'runtime_types.dart';
 export 'vpn_access_control.dart';

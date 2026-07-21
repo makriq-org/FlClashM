@@ -256,6 +256,58 @@ void main() {
       expect(() => compile(_maximalOlcRtc), returnsNormally);
     });
 
+    test('accepts activation shorthand and complete map forms', () {
+      expect(
+        () => compile(<String, dynamic>{
+          ..._minimalOlcRtc,
+          'activation': 'always',
+        }),
+        returnsNormally,
+      );
+      expect(
+        () => compile(<String, dynamic>{
+          ..._minimalOlcRtc,
+          'activation': {
+            'mode': 'always',
+            'wake': {
+              'urls': ['https://example.org/generate_204'],
+              'interval': 3600,
+              'failures': 10,
+              'retry-after': 86400,
+            },
+            'sleep': {'idle': 0},
+          },
+        }),
+        returnsNormally,
+      );
+    });
+
+    test('rejects unknown nested activation fields and wrong types', () {
+      expect(
+        () => compile(<String, dynamic>{
+          ..._minimalOlcRtc,
+          'activation': {
+            'wake': {'intervall': 30},
+          },
+        }),
+        failsAt('olcrtc.activation.wake.intervall', 'interval'),
+      );
+      expect(
+        () => compile(<String, dynamic>{
+          ..._minimalOlcRtc,
+          'activation': true,
+        }),
+        failsAt('olcrtc.activation', 'string'),
+      );
+      expect(
+        () => compile(<String, dynamic>{
+          ..._minimalOlcRtc,
+          'activation': 'sometimes',
+        }),
+        failsAt('olcrtc.activation', 'auto'),
+      );
+    });
+
     test('rejects unknown fields recursively with indexed paths', () {
       expect(
         () => compile(<String, dynamic>{
@@ -363,6 +415,7 @@ const _naive = <String, dynamic>{
 const _minimalOlcRtc = <String, dynamic>{
   'name': 'OlcRTC',
   'type': 'olcrtc',
+  'activation': 'always',
   'mode': 'cnc',
   'auth': {'provider': 'jitsi'},
   'room': {'id': 'https://meet.example.org/room'},
@@ -373,6 +426,16 @@ const _minimalOlcRtc = <String, dynamic>{
 final _maximalOlcRtc = <String, dynamic>{
   'name': 'OlcRTC',
   'type': 'olcrtc',
+  'activation': {
+    'mode': 'always',
+    'wake': {
+      'urls': ['https://example.org/generate_204'],
+      'interval': 3600,
+      'failures': 10,
+      'retry-after': 86400,
+    },
+    'sleep': {'idle': 0},
+  },
   'mode': 'cnc',
   'udp': false,
   'auth': {'provider': 'jitsi', 'token': 'account-token'},

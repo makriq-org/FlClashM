@@ -10,12 +10,16 @@ class ProductProfileValidator {
 
   final BuiltInProxyCompiler builtInProxyCompiler;
 
-  Map<String, dynamic> normalizeForValidation(String text) {
+  Map<String, dynamic> normalizeForValidation(
+    String text, {
+    String globalTestUrl = '',
+  }) {
     final rawConfig = loadProfileConfigFromString(text);
     return builtInProxyCompiler
         .compile(
           rawConfig: rawConfig,
           patchConfig: const ClashConfig(),
+          globalTestUrl: globalTestUrl,
         )
         .config;
   }
