@@ -21,4 +21,25 @@ void main() {
         1);
     expect(copiedItems[1], same(marker));
   });
+
+  test('freezes every source profile container', () {
+    final frozen = freezeConfigTree({
+      'nested': {
+        'items': [
+          {'value': 1},
+        ],
+      },
+    });
+
+    expect(() => frozen['new'] = true, throwsUnsupportedError);
+    expect(
+      () => ((frozen['nested'] as Map)['items'] as List).add(2),
+      throwsUnsupportedError,
+    );
+    expect(
+      () => ((((frozen['nested'] as Map)['items'] as List).first
+          as Map)['value'] = 2),
+      throwsUnsupportedError,
+    );
+  });
 }

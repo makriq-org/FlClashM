@@ -122,6 +122,26 @@ typedef LoadCurrentRawProfile = Future<RawProfile?> Function();
 typedef ReadProfilesPath = Future<String> Function();
 typedef ReadInstalledPackageNames = Future<List<String>> Function();
 
+@immutable
+class AccessPackageKeys {
+  const AccessPackageKeys({
+    required this.label,
+    required this.packageName,
+    required this.pinyin,
+  });
+
+  final String label;
+  final String packageName;
+  final String pinyin;
+}
+
+@immutable
+class AccessPackageIndex {
+  const AccessPackageIndex(this.keysByPackageName);
+
+  final Map<String, AccessPackageKeys> keysByPackageName;
+}
+
 class ProfileManagedAccessController {
   ProfileManagedAccessController({
     required this.service,
@@ -273,10 +293,13 @@ class AccessControlService {
   List<Package> filterPackages({
     required List<Package> packages,
     required AccessControlEditorState editorState,
+    AccessPackageIndex? index,
   }) {
     final query = editorState.query.toLowerCase();
     final selectedPackages = editorState.selectedPackages;
+    final resolvedIndex = index ?? buildPackageIndex(packages);
     final filtered = packages.where((package) {
+      final keys = resolvedIndex.keysByPackageName[package.packageName]!;
       if (!editorState.showSystemApps && package.system) {
         return false;
       }
@@ -284,8 +307,8 @@ class AccessControlService {
         return false;
       }
       if (query.isNotEmpty &&
-          !package.label.toLowerCase().contains(query) &&
-          !package.packageName.toLowerCase().contains(query)) {
+          !keys.label.contains(query) &&
+          !keys.packageName.contains(query)) {
         return false;
       }
       return true;
@@ -298,17 +321,36 @@ class AccessControlService {
         if (selectedA != selectedB) {
           return selectedA ? -1 : 1;
         }
-        return _comparePackages(a, b, editorState.sort);
+        return _comparePackages(a, b, editorState.sort, resolvedIndex);
       });
   }
 
-  int _comparePackages(Package a, Package b, AccessSortType sort) =>
+  AccessPackageIndex buildPackageIndex(List<Package> packages) =>
+      AccessPackageIndex(
+        Map<String, AccessPackageKeys>.unmodifiable({
+          for (final package in packages)
+            package.packageName: AccessPackageKeys(
+              label: package.label.toLowerCase(),
+              packageName: package.packageName.toLowerCase(),
+              pinyin: utils.getPinyin(package.label),
+            ),
+        }),
+      );
+
+  int _comparePackages(
+    Package a,
+    Package b,
+    AccessSortType sort,
+    AccessPackageIndex index,
+  ) =>
       switch (sort) {
         AccessSortType.none =>
-          a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+          index.keysByPackageName[a.packageName]!.label.compareTo(
+            index.keysByPackageName[b.packageName]!.label,
+          ),
         AccessSortType.name => utils.sortByChar(
-            utils.getPinyin(a.label),
-            utils.getPinyin(b.label),
+            index.keysByPackageName[a.packageName]!.pinyin,
+            index.keysByPackageName[b.packageName]!.pinyin,
           ),
         AccessSortType.time => b.lastUpdateTime.compareTo(a.lastUpdateTime),
       };

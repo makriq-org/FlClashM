@@ -7,13 +7,14 @@ import '../android/android_foreground_notification_policy.dart';
 import '../android/android_shell_bridge.dart';
 
 class AndroidShellService {
-  const AndroidShellService({
-    this.platform = const AndroidShellBridge(),
+  AndroidShellService({
+    AndroidShellPlatformBridge? platform,
     this.foregroundNotification = const AndroidForegroundNotificationPolicy(),
-  });
+  }) : platform = platform ?? const AndroidShellBridge();
 
   final AndroidShellPlatformBridge platform;
   final AndroidForegroundNotificationPolicy foregroundNotification;
+  String? _lastForegroundNotificationTitle;
 
   void bindTileCommands({
     AndroidTileStartHandler? onStart,
@@ -67,8 +68,13 @@ class AndroidShellService {
   }) =>
       foregroundNotification.buildTitle(profile, groups: groups);
 
-  Future<void> pushForegroundNotificationTitle(String title) =>
-      platform.pushForegroundNotificationTitle(title);
+  Future<void> pushForegroundNotificationTitle(String title) async {
+    if (title.isEmpty || title == _lastForegroundNotificationTitle) {
+      return;
+    }
+    await platform.pushForegroundNotificationTitle(title);
+    _lastForegroundNotificationTitle = title;
+  }
 
   Future<void> syncForegroundNotification({
     required Profile? profile,

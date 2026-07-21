@@ -33,6 +33,7 @@ void main() {
       Duration Function()? monotonicNow,
       Future<void> Function(Duration)? delay,
       RuntimeHealthProbe? healthProbe,
+      Duration healthProbeTimeout = const Duration(seconds: 5),
     }) {
       final naiveLayout = NaiveProxySharedInstallLayout(
         abi: 'arm64-v8a',
@@ -57,6 +58,7 @@ void main() {
         healthProbe: healthProbe,
         monotonicNow: monotonicNow,
         delay: delay,
+        healthProbeTimeout: healthProbeTimeout,
         naiveProxy: NaiveProxyNodeController(
           binary: _FakeNaiveProxyBinaryBridge(naiveLayout, gate),
           runtime: runtime,
@@ -93,7 +95,8 @@ void main() {
       );
     });
 
-    test('prepares independent node types concurrently', () async {
+    test('reuses staged layouts while preparing independent node types',
+        () async {
       final gate = _ResolveGate(3);
       final supervisor = buildSupervisor(gate: gate);
       final plans = [_naivePlan(), _byedpiPlan(), _olcPlan()];
@@ -101,12 +104,8 @@ void main() {
       await supervisor.commitStagedRuntimePlan(plans);
       gate.enabled = true;
 
-      final starting = supervisor.start();
-      await gate.allEntered.future.timeout(const Duration(seconds: 1));
-      expect(runtime.appliedPlans, isEmpty);
-
-      gate.release.complete();
-      expect(await starting, isTrue);
+      expect(await supervisor.start(), isTrue);
+      expect(gate.entered, 0);
       expect(runtime.appliedPlans.single, hasLength(3));
     });
 
@@ -194,19 +193,15 @@ void main() {
       await _waitUntil(() => runtime.appliedPlans.length == 3);
     });
 
-    test('does not apply a background strategy after a new plan is staged',
+    test('does not persist a background strategy after a new plan is staged',
         () async {
       var elapsed = Duration.zero;
-      final gate = _ResolveGate(1);
       runtime.onBatch = () {
         if (runtime.batchCalls.length == 1) {
           elapsed += const Duration(seconds: 1);
-        } else {
-          gate.enabled = true;
         }
       };
       final supervisor = buildSupervisor(
-        gate: gate,
         byedpiStrategies: '--strategy 1\n--strategy 2',
         monotonicNow: () => elapsed,
       );
@@ -214,19 +209,21 @@ void main() {
       expect(await supervisor.stageRuntimePlan(plans), isEmpty);
       expect((await supervisor.startRuntimePlan(plans)).isSuccess, isTrue);
       runtime.batchResults.add(0);
+      runtime.applyGate = Completer<void>();
 
       await supervisor.commitStagedRuntimePlan(plans);
-      await gate.allEntered.future.timeout(const Duration(seconds: 1));
+      await _waitUntil(() => runtime.activeApplyCalls == 1);
       final staging = supervisor.stageRuntimePlan([_byedpiPlan()]);
       await Future<void>.delayed(Duration.zero);
-      gate.release.complete();
+      runtime.applyGate!.complete();
       expect(
         await staging.timeout(const Duration(seconds: 1)),
         isEmpty,
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(runtime.appliedPlans, hasLength(1));
+      expect(runtime.appliedPlans, hasLength(2));
+      expect(runtime.savedManifest, isNull);
     });
 
     test(
@@ -693,6 +690,31 @@ void main() {
         await supervisor.stop();
       },
     );
+
+    test('bounds cancellation while the current health probe is stuck',
+        () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _StuckRuntimeHealthProbe();
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        healthProbeTimeout: const Duration(milliseconds: 20),
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final plan = _olcReservePlan(failures: 1);
+      expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      clock.elapse(const Duration(seconds: 1));
+      await probe.entered.future.timeout(const Duration(seconds: 1));
+
+      await supervisor.stageRuntimePlan(const []).timeout(
+          const Duration(milliseconds: 250));
+      probe.result.complete(false);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(runtime.appliedPlans.last, isEmpty);
+    });
   });
 }
 
@@ -1048,5 +1070,19 @@ class _FakeRuntimeHealthProbe implements RuntimeHealthProbe {
   Future<Map<String, String>> selectedProxies(List<String> groupNames) async {
     selectionCalls++;
     return selections;
+  }
+}
+
+class _StuckRuntimeHealthProbe extends _FakeRuntimeHealthProbe {
+  final entered = Completer<void>();
+  final result = Completer<bool>();
+
+  @override
+  Future<bool> testDelay({
+    required String proxyName,
+    required List<Uri> urls,
+  }) {
+    if (!entered.isCompleted) entered.complete();
+    return result.future;
   }
 }

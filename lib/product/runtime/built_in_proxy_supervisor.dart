@@ -56,6 +56,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     this.healthProbe,
     Duration Function()? monotonicNow,
     Future<void> Function(Duration)? delay,
+    this.healthProbeTimeout = const Duration(seconds: 5),
   })  : naiveProxy = naiveProxy ?? NaiveProxyNodeController(),
         byedpi = byedpi ?? ByedpiNodeController(),
         olcRtc = olcRtc ?? OlcRtcNodeController(),
@@ -74,6 +75,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   final RuntimeHealthProbe? healthProbe;
   final Duration Function() monotonicNow;
   final Future<void> Function(Duration) delay;
+  final Duration healthProbeTimeout;
 
   List<BuiltInProxyNodePlan> _currentPlans = const [];
   Set<String> _awakeReserveNodeIds = <String>{};
@@ -110,19 +112,27 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       await _cancelWatchdog();
       await byedpi.cancelBackgroundSelection();
       _rollbackAwakeReserveNodeIds = Set<String>.from(_awakeReserveNodeIds);
-      final naiveMessage = await naiveProxy.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
-        nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
-      );
+      final currentNaive = _filter(_currentPlans, BuiltInProxyType.naiveproxy);
+      final nextNaive = _filter(plans, BuiltInProxyType.naiveproxy);
+      final naiveMessage = currentNaive.isEmpty && nextNaive.isEmpty
+          ? ''
+          : await naiveProxy.stageRuntimePlan(
+              currentPlans: currentNaive,
+              nextPlans: nextNaive,
+            );
       if (naiveMessage.isNotEmpty) {
         _startWatchdog(_planGeneration);
         return naiveMessage;
       }
 
-      final byedpiMessage = await byedpi.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.byedpi),
-        nextPlans: _filter(plans, BuiltInProxyType.byedpi),
-      );
+      final currentByedpi = _filter(_currentPlans, BuiltInProxyType.byedpi);
+      final nextByedpi = _filter(plans, BuiltInProxyType.byedpi);
+      final byedpiMessage = currentByedpi.isEmpty && nextByedpi.isEmpty
+          ? ''
+          : await byedpi.stageRuntimePlan(
+              currentPlans: currentByedpi,
+              nextPlans: nextByedpi,
+            );
       if (byedpiMessage.isNotEmpty) {
         final rollback = await naiveProxy.rollbackStagedRuntimePlan();
         _startWatchdog(_planGeneration);
@@ -131,10 +141,14 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             : '$byedpiMessage Local-node rollback failed: $rollback';
       }
 
-      final olcMessage = await olcRtc.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.olcrtc),
-        nextPlans: _filter(plans, BuiltInProxyType.olcrtc),
-      );
+      final currentOlcRtc = _filter(_currentPlans, BuiltInProxyType.olcrtc);
+      final nextOlcRtc = _filter(plans, BuiltInProxyType.olcrtc);
+      final olcMessage = currentOlcRtc.isEmpty && nextOlcRtc.isEmpty
+          ? ''
+          : await olcRtc.stageRuntimePlan(
+              currentPlans: currentOlcRtc,
+              nextPlans: nextOlcRtc,
+            );
       if (olcMessage.isEmpty) {
         _awakeReserveNodeIds.clear();
         _reserveStates.clear();
@@ -360,7 +374,12 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     }
     _watchdogCancellation = null;
     final worker = _watchdogWorker;
-    await worker;
+    try {
+      await worker?.timeout(healthProbeTimeout);
+    } on TimeoutException {
+      // RuntimeHealthProbe has no cancellation primitive. The generation checks
+      // after every probe boundary prevent a late result touching a newer plan.
+    }
     if (identical(_watchdogWorker, worker)) _watchdogWorker = null;
   }
 
@@ -404,7 +423,10 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     final probe = healthProbe!;
     bool hasNetwork;
     try {
-      hasNetwork = await probe.hasDeviceNetwork();
+      hasNetwork = await probe.hasDeviceNetwork().timeout(
+            healthProbeTimeout,
+            onTimeout: () => false,
+          );
     } catch (_) {
       hasNetwork = false;
     }
@@ -415,10 +437,12 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     }
     bool healthy;
     try {
-      healthy = await probe.testDelay(
-        proxyName: plan.activation!.watchGroup,
-        urls: plan.activation!.wakeUrls,
-      );
+      healthy = await probe
+          .testDelay(
+            proxyName: plan.activation!.watchGroup,
+            urls: plan.activation!.wakeUrls,
+          )
+          .timeout(healthProbeTimeout, onTimeout: () => false);
     } catch (_) {
       healthy = false;
     }
@@ -475,10 +499,12 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
           }
           final probe = healthProbe;
           if (probe != null) {
-            final alive = await probe.testDelay(
-              proxyName: plan.name,
-              urls: plan.activation!.wakeUrls,
-            );
+            final alive = await probe
+                .testDelay(
+                  proxyName: plan.name,
+                  urls: plan.activation!.wakeUrls,
+                )
+                .timeout(healthProbeTimeout, onTimeout: () => false);
             if (generation != _planGeneration) {
               await _restoreSleepingReserve(plan.nodeId);
               return;
@@ -547,7 +573,10 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     final probe = healthProbe!;
     List<List<String>> chains;
     try {
-      chains = await probe.activeConnectionChains();
+      chains = await probe.activeConnectionChains().timeout(
+            healthProbeTimeout,
+            onTimeout: () => const <List<String>>[],
+          );
     } catch (_) {
       state.idleSince = null;
       return;
@@ -555,7 +584,9 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     if (generation != _planGeneration) return;
     Map<String, String> selections;
     try {
-      selections = await probe.selectedProxies(activation.containingGroups);
+      selections = await probe
+          .selectedProxies(activation.containingGroups)
+          .timeout(healthProbeTimeout, onTimeout: () => const {});
     } catch (_) {
       state.idleSince = null;
       return;

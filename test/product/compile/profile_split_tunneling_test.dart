@@ -235,6 +235,7 @@ void main() {
         installedPackageNames: const ['com.cached.app'],
         readRemoteSource: (_) async => 'com.cached.app\n',
       );
+      _agePackageListCaches(profilesDir);
 
       final refresh = Completer<String>();
       var refreshCalls = 0;
@@ -285,6 +286,7 @@ void main() {
         installedPackageNames: const ['org.mozilla.firefox'],
         readRemoteSource: (_) async => 'org.mozilla.firefox\n',
       );
+      _agePackageListCaches(profilesDir);
 
       final invalidRefreshStarted = Completer<void>();
       final cachedResolved = await resolveAndroidProfileSplitTunneling(
@@ -351,4 +353,11 @@ void main() {
       );
     });
   });
+}
+
+void _agePackageListCaches(Directory profilesDir) {
+  final oldTimestamp = DateTime.now().subtract(const Duration(hours: 7));
+  for (final entity in profilesDir.listSync(recursive: true)) {
+    if (entity is File) entity.setLastModifiedSync(oldTimestamp);
+  }
 }

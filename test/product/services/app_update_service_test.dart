@@ -143,6 +143,18 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   }
 }
 
+class _MemoryAutomaticUpdateCheckStore implements AutomaticUpdateCheckStore {
+  DateTime? value;
+
+  @override
+  Future<DateTime?> readLastAttempt() async => value;
+
+  @override
+  Future<void> writeLastAttempt(DateTime value) async {
+    this.value = value;
+  }
+}
+
 class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
   final downloadCalls = <String>[];
   final failedDownloadUrls = <String>{};
@@ -417,7 +429,10 @@ void main() {
 
     test('passes update channel and skipped tag to automatic checks', () async {
       final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
-      final service = AppUpdateService(platform: bridge);
+      final service = AppUpdateService(
+        platform: bridge,
+        automaticCheckStore: _MemoryAutomaticUpdateCheckStore(),
+      );
 
       await service.autoCheck(
         enabled: true,
@@ -428,6 +443,37 @@ void main() {
       expect(bridge.checkCalls, 1);
       expect(bridge.includePrereleaseArgs, [true]);
       expect(bridge.skippedTagNameArgs, ['v1.2.3']);
+    });
+
+    test('does not repeat automatic network checks inside the TTL', () async {
+      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
+      final store = _MemoryAutomaticUpdateCheckStore();
+      var now = DateTime(2026, 7, 21, 10);
+      final service = AppUpdateService(
+        platform: bridge,
+        automaticCheckStore: store,
+        now: () => now,
+      );
+
+      await service.autoCheck(
+        enabled: true,
+        includePrerelease: false,
+        skippedTagName: '',
+      );
+      now = now.add(const Duration(hours: 1));
+      await service.autoCheck(
+        enabled: true,
+        includePrerelease: false,
+        skippedTagName: '',
+      );
+      now = now.add(const Duration(hours: 12));
+      await service.autoCheck(
+        enabled: true,
+        includePrerelease: false,
+        skippedTagName: '',
+      );
+
+      expect(bridge.checkCalls, 2);
     });
 
     test('downloads verifies and installs a compatible Android APK', () async {

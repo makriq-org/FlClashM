@@ -58,6 +58,15 @@ class ApplicationState extends ConsumerState<Application> {
     _autoUpdateProfilesTask();
     globalState.appController = AppController(context, ref);
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
+      unawaited(
+        globalState.loadDynamicColor().then((_) {
+          if (!mounted) return;
+          ref.invalidate(genColorSchemeProvider);
+          setState(() {});
+        }).catchError((Object error) {
+          commonPrint.log('Dynamic color init failed: $error');
+        }),
+      );
       final currentContext = globalState.navigatorKey.currentContext;
       if (currentContext != null) {
         globalState.appController = AppController(currentContext, ref);

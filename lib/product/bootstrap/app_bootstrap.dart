@@ -9,6 +9,7 @@ import '../../clash/core.dart';
 import '../../clash/lib.dart';
 import '../../common/android.dart';
 import '../../common/http.dart';
+import '../../common/print.dart';
 import '../../common/system.dart';
 import '../../state.dart';
 import '../android/android_entrypoint.dart';
@@ -18,6 +19,7 @@ class AppBootstrap {
   const AppBootstrap._();
 
   static Future<void> run() async {
+    final bootstrapTimer = Stopwatch()..start();
     WidgetsFlutterBinding.ensureInitialized();
 
     if (!productPlatform.supported) {
@@ -26,8 +28,8 @@ class AppBootstrap {
       );
     }
 
+    globalState.corePreload = clashCore.preload();
     final version = await system.version;
-    await clashCore.preload();
     await globalState.initApp(version);
     await android?.init();
     await androidEntrypoint.init();
@@ -37,5 +39,22 @@ class AppBootstrap {
 
     HttpOverrides.global = FlClashHttpOverrides();
     runApp(const ProviderScope(child: Application()));
+    commonPrint.log(
+      '[Perf] bootstrap.runAppMs=${bootstrapTimer.elapsedMilliseconds}',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      commonPrint.log(
+        '[Perf] bootstrap.firstFrameMs=${bootstrapTimer.elapsedMilliseconds}',
+      );
+    });
+    unawaited(
+      globalState.corePreload.then((_) {
+        commonPrint.log(
+          '[Perf] bootstrap.corePreloadMs=${bootstrapTimer.elapsedMilliseconds}',
+        );
+      }).catchError((Object error) {
+        commonPrint.log('[Perf] bootstrap.corePreloadFailed=$error');
+      }),
+    );
   }
 }

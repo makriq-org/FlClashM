@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../common/common.dart';
 import '../android/android_update_bridge.dart';
@@ -18,12 +19,47 @@ enum AppUpdateCheckTrigger {
 
 typedef SkipAppUpdateRelease = Future<void> Function(String tagName);
 
+abstract interface class AutomaticUpdateCheckStore {
+  Future<DateTime?> readLastAttempt();
+
+  Future<void> writeLastAttempt(DateTime value);
+}
+
+class SharedPreferencesAutomaticUpdateCheckStore
+    implements AutomaticUpdateCheckStore {
+  const SharedPreferencesAutomaticUpdateCheckStore();
+
+  static const _key = 'flclashm.lastAutomaticUpdateCheckMillis';
+
+  @override
+  Future<DateTime?> readLastAttempt() async {
+    final millis = (await SharedPreferences.getInstance()).getInt(_key);
+    return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  @override
+  Future<void> writeLastAttempt(DateTime value) async {
+    await (await SharedPreferences.getInstance()).setInt(
+      _key,
+      value.millisecondsSinceEpoch,
+    );
+  }
+}
+
 class AppUpdateService {
-  const AppUpdateService({
+  AppUpdateService({
     this.platform = const AndroidUpdateBridge(),
-  });
+    AutomaticUpdateCheckStore? automaticCheckStore,
+    DateTime Function()? now,
+    this.automaticCheckInterval = const Duration(hours: 12),
+  })  : automaticCheckStore = automaticCheckStore ??
+            const SharedPreferencesAutomaticUpdateCheckStore(),
+        now = now ?? DateTime.now;
 
   final AppUpdatePlatformBridge platform;
+  final AutomaticUpdateCheckStore automaticCheckStore;
+  final DateTime Function() now;
+  final Duration automaticCheckInterval;
 
   Future<void> autoCheck({
     required bool enabled,
@@ -34,6 +70,15 @@ class AppUpdateService {
     if (!enabled) {
       return;
     }
+    final attemptTime = now();
+    final lastAttempt = await automaticCheckStore.readLastAttempt();
+    if (lastAttempt != null) {
+      final age = attemptTime.difference(lastAttempt);
+      if (!age.isNegative && age < automaticCheckInterval) return;
+    }
+    // Persist before network I/O so repeated UI opens while offline do not
+    // restart the same multi-request check indefinitely.
+    await automaticCheckStore.writeLastAttempt(attemptTime);
 
     final release = await platform.checkForAppUpdate(
       includePrerelease: includePrerelease,

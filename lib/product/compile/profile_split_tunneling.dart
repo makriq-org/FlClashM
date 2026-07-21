@@ -15,6 +15,8 @@ typedef ReadProfileSplitTunnelingRemoteSource = Future<String> Function(
   String url,
 );
 
+const _remotePackageListRefreshInterval = Duration(hours: 6);
+
 @immutable
 class ResolvedProfileSplitTunneling {
   const ResolvedProfileSplitTunneling({
@@ -479,12 +481,15 @@ Future<_PackageListReadResult> _readPackageListFromRemoteSource(
   final cacheFile = File(cachePath);
   await cacheFile.parent.create(recursive: true);
   if (cacheFile.existsSync()) {
-    _scheduleRemotePackageListRefresh(
-      url: rawUrl,
-      cachePath: cachePath,
-      fieldName: fieldName,
-      readRemoteSource: readRemoteSource,
-    );
+    final cacheAge = DateTime.now().difference(cacheFile.lastModifiedSync());
+    if (cacheAge >= _remotePackageListRefreshInterval || cacheAge.isNegative) {
+      _scheduleRemotePackageListRefresh(
+        url: rawUrl,
+        cachePath: cachePath,
+        fieldName: fieldName,
+        readRemoteSource: readRemoteSource,
+      );
+    }
     return _PackageListReadResult(
       content: await cacheFile.readAsString(),
       cachePath: cachePath,
@@ -760,6 +765,7 @@ List<String> _resolvePackageSelectors(
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty),
   ).toList();
+  final installedPackageSet = normalizedInstalledPackages.toSet();
 
   if (normalizedInstalledPackages.isEmpty) {
     final resolvedPackages = <String>{};
@@ -794,8 +800,11 @@ List<String> _resolvePackageSelectors(
   final resolvedPackages = <String>{};
   for (var index = 0; index < compiledSelectors.length; index++) {
     final selector = compiledSelectors[index];
-    final matches =
-        normalizedInstalledPackages.where(selector.matches).toList();
+    final matches = selector.requiresInstalledPackageScan
+        ? normalizedInstalledPackages.where(selector.matches).toList()
+        : installedPackageSet.contains(selector.pattern)
+            ? <String>[selector.pattern]
+            : const <String>[];
     matchCounters[index] = matches.length;
     if (matches.isEmpty) {
       continue;

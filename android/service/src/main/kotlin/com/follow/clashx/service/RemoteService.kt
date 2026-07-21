@@ -126,6 +126,7 @@ class RemoteService : Service() {
         }
 
         override fun updateNotificationParams(params: NotificationParams) {
+            if (State.notificationParamsFlow.value == params) return
             State.notificationParamsFlow.value = params
             com.follow.clashx.common.SavedParams.saveNotificationTitle(params.title)
         }

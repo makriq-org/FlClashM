@@ -115,6 +115,31 @@ void main() {
       await controller.persistColdStart(const []);
       expect(runtime.savedManifest, isNull);
     });
+
+    test('skips empty staging and reuses the stable shared layout', () async {
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: const [],
+        ),
+        isEmpty,
+      );
+      expect(binary.resolveCalls, 0);
+
+      final plan = _plan('https://user:pass@example.com');
+      expect(
+        await controller.stageRuntimePlan(
+          currentPlans: const [],
+          nextPlans: [plan],
+        ),
+        isEmpty,
+      );
+      await controller.commitStagedRuntimePlan();
+      await controller.buildRuntimeNodes([plan]);
+      await controller.buildRuntimeNodes([plan]);
+
+      expect(binary.resolveCalls, 1);
+    });
   });
 }
 
@@ -138,9 +163,11 @@ class _FakeBinaryBridge implements NaiveProxyBinaryBridge {
   _FakeBinaryBridge(this.layout);
   final NaiveProxySharedInstallLayout layout;
   bool failResolve = false;
+  int resolveCalls = 0;
 
   @override
   Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
+    resolveCalls++;
     if (failResolve) throw const FileSystemException('cleanup failed');
     return layout;
   }

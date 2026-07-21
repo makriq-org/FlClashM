@@ -9,15 +9,16 @@ export 'app_update_service.dart';
 export 'product_contributors.dart';
 
 class ProductServices {
-  const ProductServices({
+  ProductServices({
     this.accessControl = const AccessControlService(),
-    this.androidShell = const AndroidShellService(),
-    this.appUpdate = const AppUpdateService(),
-  });
+    AndroidShellService? androidShell,
+    AppUpdateService? appUpdate,
+  })  : androidShell = androidShell ?? AndroidShellService(),
+        appUpdate = appUpdate ?? AppUpdateService();
 
   final AccessControlService accessControl;
   final AndroidShellService androidShell;
   final AppUpdateService appUpdate;
 }
 
-const productServices = ProductServices();
+final productServices = ProductServices();

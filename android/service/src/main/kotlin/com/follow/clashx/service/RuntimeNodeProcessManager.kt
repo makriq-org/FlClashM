@@ -627,7 +627,7 @@ object RuntimeNodeProcessManager {
         readyNodeIds.remove(nodeId)
     }
 
-    private fun killMatchingRuntimeProcesses(spec: RuntimeNodeSpec) {
+    private suspend fun killMatchingRuntimeProcesses(spec: RuntimeNodeSpec) {
         val expected = listOf(spec.executablePath) + spec.arguments
         val selfPid = android.os.Process.myPid()
         val entries = File("/proc").listFiles() ?: return
@@ -655,11 +655,11 @@ object RuntimeNodeProcessManager {
             .filter { it.isNotEmpty() }
     }.getOrNull()
 
-    private fun waitForProcessExit(pid: Int) {
+    private suspend fun waitForProcessExit(pid: Int) {
         val procPath = File("/proc/$pid")
         val deadline = System.currentTimeMillis() + EMERGENCY_WAIT_MILLIS
         while (procPath.exists() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50L)
+            delay(50L)
         }
     }
 

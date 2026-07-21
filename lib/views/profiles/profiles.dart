@@ -203,10 +203,12 @@ class _ProfileItemState extends State<ProfileItem> {
   final FocusNode _menuFocusNode = FocusNode();
   bool _isMenuFocused = false;
   bool _isTV = false;
+  late ProductDisplayHints _displayHints;
 
   @override
   void initState() {
     super.initState();
+    _displayHints = ProductProviderAdvisory.fromProfile(widget.profile).display;
     _checkIfTV();
     _menuFocusNode.addListener(() {
       if (mounted) {
@@ -215,6 +217,15 @@ class _ProfileItemState extends State<ProfileItem> {
         });
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile != widget.profile) {
+      _displayHints =
+          ProductProviderAdvisory.fromProfile(widget.profile).display;
+    }
   }
 
   Future<void> _checkIfTV() async {
@@ -389,8 +400,7 @@ class _ProfileItemState extends State<ProfileItem> {
 
   @override
   Widget build(BuildContext context) {
-    final displayHints =
-        ProductProviderAdvisory.fromProfile(widget.profile).display;
+    final displayHints = _displayHints;
     return CommonCard(
       isSelected: widget.profile.id == widget.groupValue,
       onPressed: _isTV

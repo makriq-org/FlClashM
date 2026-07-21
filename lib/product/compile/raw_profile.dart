@@ -2,6 +2,46 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
+import 'config_tree.dart';
+
+@immutable
+class RawProfileRevision {
+  const RawProfileRevision({
+    required this.profile,
+    required this.lastModifiedMicros,
+    required this.fileSize,
+    this.scriptId,
+    this.scriptContent,
+  });
+
+  final Profile profile;
+  final int lastModifiedMicros;
+  final int fileSize;
+  final String? scriptId;
+  final String? scriptContent;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RawProfileRevision &&
+      other.profile.id == profile.id &&
+      other.profile.overrideData == profile.overrideData &&
+      other.lastModifiedMicros == lastModifiedMicros &&
+      other.fileSize == fileSize &&
+      other.scriptId == scriptId &&
+      other.scriptContent == scriptContent;
+
+  @override
+  int get hashCode =>
+      Object.hash(
+        profile.id,
+        profile.overrideData,
+        lastModifiedMicros,
+        fileSize,
+        scriptId,
+        scriptContent,
+      );
+}
+
 @immutable
 class RawProfile {
   const RawProfile({
@@ -9,15 +49,17 @@ class RawProfile {
     required this.config,
     required this.groupDescriptions,
     required this.providerHints,
+    this.revision,
   });
 
   factory RawProfile.fromConfig({
     required Profile profile,
     required Map<String, dynamic> config,
+    RawProfileRevision? revision,
   }) =>
       RawProfile(
         profile: profile,
-        config: config,
+        config: freezeConfigTree(config),
         groupDescriptions: _parseGroupDescriptions(config["proxy-groups"]),
         providerHints: ProviderAdvisoryHints(
           network: ProviderNetworkHints(
@@ -36,12 +78,14 @@ class RawProfile {
           externalController:
               _trimmedString(config["external-controller"]) ?? "",
         ),
+        revision: revision,
       );
 
   final Profile profile;
   final Map<String, dynamic> config;
   final Map<String, String> groupDescriptions;
   final ProviderAdvisoryHints providerHints;
+  final RawProfileRevision? revision;
 
   static Map<String, String> _parseGroupDescriptions(Object? groups) {
     final descriptions = <String, String>{};

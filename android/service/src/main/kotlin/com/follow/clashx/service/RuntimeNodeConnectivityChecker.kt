@@ -81,6 +81,9 @@ data class RuntimeNodeConnectivityCheck(
 }
 
 object RuntimeNodeConnectivityChecker {
+    private val ipv4LiteralPattern = Regex("(?:\\d{1,3}\\.){3}\\d{1,3}")
+    private val httpStatusPattern = Regex("^HTTP/\\d\\.\\d [1-5]\\d{2}(?: .*)?$")
+
     suspend fun checkUntilDeadline(
         nodeId: String,
         host: String,
@@ -151,7 +154,7 @@ object RuntimeNodeConnectivityChecker {
             host.endsWith(".local") || host.endsWith(".internal") ||
             host.endsWith(".home.arpa")
         ) return false
-        val isLiteral = host.contains(':') || host.matches(Regex("(?:\\d{1,3}\\.){3}\\d{1,3}"))
+        val isLiteral = host.contains(':') || host.matches(ipv4LiteralPattern)
         return if (isLiteral) {
             runCatching { InetAddress.getByName(host) }
                 .getOrNull()
@@ -237,7 +240,7 @@ object RuntimeNodeConnectivityChecker {
                     val status = BufferedInputStream(socket.getInputStream())
                         .bufferedReader()
                         .readLine()
-                    status?.matches(Regex("^HTTP/\\d\\.\\d [1-5]\\d{2}(?: .*)?$")) == true
+                    status?.matches(httpStatusPattern) == true
                 } finally {
                     runCatching { socket.close() }
                     if (socket !== rawSocket) runCatching { rawSocket.close() }

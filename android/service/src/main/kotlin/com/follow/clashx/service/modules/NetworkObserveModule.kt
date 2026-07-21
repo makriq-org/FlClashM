@@ -114,8 +114,9 @@ class NetworkObserveModule(
         }
     }
 
-    private val connectivityManager: ConnectivityManager
-        get() = service.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val connectivityManager: ConnectivityManager by lazy {
+        service.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
 
     private fun isSystemNetwork(capabilities: NetworkCapabilities): Boolean {
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&

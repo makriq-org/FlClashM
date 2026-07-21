@@ -67,6 +67,17 @@ void main() {
       expect(bridge.pushedTitles, ['Service Name / Node B']);
     });
 
+    test('skips unchanged foreground notification IPC', () async {
+      final bridge = _FakeAndroidShellPlatformBridge();
+      final service = AndroidShellService(platform: bridge);
+
+      await service.pushForegroundNotificationTitle('Stable title');
+      await service.pushForegroundNotificationTitle('Stable title');
+      await service.pushForegroundNotificationTitle('Changed title');
+
+      expect(bridge.pushedTitles, ['Stable title', 'Changed title']);
+    });
+
     test('delegates tile and app hooks through the platform bridge', () async {
       final bridge = _FakeAndroidShellPlatformBridge();
       final service = AndroidShellService(platform: bridge);

@@ -152,6 +152,54 @@ void main() {
   });
 
   group('ProfileCompiler.buildRuntimePlan', () {
+    test('validates once and mutates the compiler transaction copy', () async {
+      final builtInCompiler = _RecordingBuiltInProxyCompiler();
+      final profileCompiler = ProfileCompiler(
+        builtInProxyCompiler: builtInCompiler,
+      );
+      const profile = Profile(
+        id: 'profile-transaction',
+        autoUpdateDuration: Duration.zero,
+      );
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const {'proxies': []},
+      );
+      final compiled = profileCompiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: true,
+        ),
+      );
+
+      await profileCompiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: false,
+          overrideNetworkSettings: true,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiled.patchConfig,
+          metadata: compiled.metadata,
+        ),
+        runtimePatchConfig: compiled.patchConfig,
+        selectedMap: const {},
+        testUrl: 'https://example.com',
+        providerAssetPathResolver: (_, __, ___) async => '',
+      );
+
+      expect(builtInCompiler.validateCalls, 1);
+      expect(builtInCompiler.lastCompileCopiedConfig, isFalse);
+      expect(builtInCompiler.lastCompileValidated, isFalse);
+      expect(rawProfile.config, const {'proxies': []});
+    });
+
     test('writes sanitized compiled network settings into runtime config',
         () async {
       const profile = Profile(
@@ -390,7 +438,10 @@ void main() {
         ),
       )
         ..createSync(recursive: true)
-        ..writeAsStringSync('com.network.app\n');
+        ..writeAsStringSync('com.network.app\n')
+        ..setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 7)),
+        );
       const profile = Profile(
         id: 'profile-split-disabled',
         autoUpdateDuration: Duration.zero,
@@ -1231,3 +1282,34 @@ void main() {
 }
 
 Future<List<String>> _readNoInstalledPackages() async => const [];
+
+class _RecordingBuiltInProxyCompiler extends BuiltInProxyCompiler {
+  int validateCalls = 0;
+  bool? lastCompileCopiedConfig;
+  bool? lastCompileValidated;
+
+  @override
+  void validateConfig(Map<String, dynamic> rawConfig) {
+    validateCalls++;
+    super.validateConfig(rawConfig);
+  }
+
+  @override
+  CompiledBuiltInProxyNodes compile({
+    required Map<String, dynamic> rawConfig,
+    required ClashConfig patchConfig,
+    String globalTestUrl = '',
+    bool copyConfig = true,
+    bool validate = true,
+  }) {
+    lastCompileCopiedConfig = copyConfig;
+    lastCompileValidated = validate;
+    return super.compile(
+      rawConfig: rawConfig,
+      patchConfig: patchConfig,
+      globalTestUrl: globalTestUrl,
+      copyConfig: copyConfig,
+      validate: validate,
+    );
+  }
+}

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' show Pointer;
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 
 import 'package:animations/animations.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -17,7 +17,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_js/flutter_js.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
@@ -110,6 +109,7 @@ class GlobalState {
   late Config config;
   late AppState appState;
   bool isPre = true;
+  Future<void> corePreload = Future<void>.value();
   String? coreSHA256;
   String? coreVersion;
   // Full release version baked in at build time via --dart-define=APP_VERSION
@@ -125,6 +125,7 @@ class GlobalState {
   Map<String, dynamic>? lastRuntimeConfig;
   final activeProfileAccessControlNotifier =
       ValueNotifier<AccessControl?>(null);
+  final _loadedProfiles = LoadedProfileRepository();
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -215,11 +216,11 @@ class GlobalState {
       traffics: FixedList(30),
       totalTraffic: Traffic(),
     );
-    await _initDynamicColor();
+    accentColor = const Color(defaultPrimaryColor);
     await init();
   }
 
-  Future<void> _initDynamicColor() async {
+  Future<void> loadDynamicColor() async {
     try {
       corePalette = await DynamicColorPlugin.getCorePalette();
       accentColor = await DynamicColorPlugin.getAccentColor() ??
@@ -228,9 +229,10 @@ class GlobalState {
   }
 
   Future<void> init() async {
-    packageInfo = await PackageInfo.fromPlatform();
-    config = await preferences.getConfig() ??
-        const Config(themeProps: defaultThemeProps);
+    final packageInfoFuture = PackageInfo.fromPlatform();
+    final configFuture = preferences.getConfig();
+    packageInfo = await packageInfoFuture;
+    config = await configFuture ?? const Config(themeProps: defaultThemeProps);
     await globalState.migrateOldData(config);
     await AppLocalizations.load(
       utils.getLocaleForString(config.appSetting.locale) ??
@@ -378,17 +380,37 @@ class GlobalState {
   Future<RawProfile?> loadCurrentRawProfile() async {
     final profile = config.currentProfile;
     if (profile == null) {
+      _loadedProfiles.clear();
       return null;
     }
     final profilePath = await appPath.getProfilePath(profile.id);
-    final rawConfig = await handleEvaluate(
-      await loadProfileConfigFromFile(profilePath),
-    );
-    return RawProfile.fromConfig(
+    final profileStat = await File(profilePath).stat();
+    final currentScript = config.scriptProps.currentScript;
+    final revision = RawProfileRevision(
       profile: profile,
-      config: rawConfig,
+      lastModifiedMicros: profileStat.modified.microsecondsSinceEpoch,
+      fileSize: profileStat.size,
+      scriptId: currentScript?.id,
+      scriptContent: currentScript?.content,
     );
+    return _loadedProfiles.load(revision, () async {
+      final rawConfig = await handleEvaluate(
+        await loadProfileConfigFromFile(profilePath),
+      );
+      return RawProfile.fromConfig(
+        profile: profile,
+        config: rawConfig,
+        revision: revision,
+      );
+    });
   }
+
+  Object get runtimePlanSettingsRevision => (
+        config.appSetting.overrideNetworkSettings,
+        config.overrideDns,
+        config.networkProps.routeMode,
+        config.appSetting.testUrl,
+      );
 
   CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
@@ -603,18 +625,22 @@ class GlobalState {
     }
     final configJs = json.encode(config);
     final runtime = getJavascriptRuntime();
-    final res = await runtime.evaluateAsync("""
-      ${currentScript.content}
-      main($configJs)
-    """);
-    if (res.isError) {
-      throw res.stringResult;
+    try {
+      final res = await runtime.evaluateAsync("""
+        ${currentScript.content}
+        main($configJs)
+      """);
+      if (res.isError) {
+        throw res.stringResult;
+      }
+      final value = switch (res.rawResult is Pointer) {
+        true => runtime.convertValue<Map<String, dynamic>>(res),
+        false => Map<String, dynamic>.from(res.rawResult),
+      };
+      return value ?? config;
+    } finally {
+      runtime.dispose();
     }
-    final value = switch (res.rawResult is Pointer) {
-      true => runtime.convertValue<Map<String, dynamic>>(res),
-      false => Map<String, dynamic>.from(res.rawResult),
-    };
-    return value ?? config;
   }
 }
 

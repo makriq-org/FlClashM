@@ -37,7 +37,6 @@ class AppController {
   Future<bool>? _setupClashConfigFuture;
   ClashConfig? _lastAppliedPatchConfig;
   bool _applyProfileAgain = false;
-  DateTime? _lastRuntimeGroupsSync;
 
   void setupClashConfigDebounce() {
     debouncer.call(FunctionTag.setupClashConfig, () async {
@@ -202,7 +201,6 @@ class AppController {
       await StatusBarManager.updateIcon(isConnected: true);
     }
 
-    _lastRuntimeGroupsSync = null;
     startRunTimeTimer();
     if (!checkProfileModified) {
       return;
@@ -227,7 +225,6 @@ class AppController {
     }
 
     stopRunTimeTimer();
-    _lastRuntimeGroupsSync = null;
     clashCore.resetTraffic();
     _ref.read(trafficsProvider.notifier).clear();
     _ref.read(totalTrafficProvider.notifier).value = Traffic();
@@ -266,20 +263,6 @@ class AppController {
     _ref.read(trafficsProvider.notifier).addTraffic(traffic);
     _ref.read(totalTrafficProvider.notifier).value =
         await clashCore.getTotalTraffic();
-    await _syncRuntimeGroupsForNotification();
-  }
-
-  Future<void> _syncRuntimeGroupsForNotification() async {
-    if (!Platform.isAndroid || !_ref.read(runTimeProvider.notifier).isStart) {
-      return;
-    }
-    final now = DateTime.now();
-    final lastSync = _lastRuntimeGroupsSync;
-    if (lastSync != null && now.difference(lastSync).inSeconds < 6) {
-      return;
-    }
-    _lastRuntimeGroupsSync = now;
-    await updateGroups(syncNotification: true);
   }
 
   void markRuntimeConfigListenerReady() {
@@ -646,6 +629,10 @@ class AppController {
   }) =>
       EngineRuntimePlanRequest(
         patchConfig: patchConfig,
+        settingsRevision: (
+          globalState.runtimePlanSettingsRevision,
+          _ref.read(realTunEnableProvider),
+        ),
         refreshProfile: refreshProfile
             ? () async {
                 await _ref.read(currentProfileProvider)?.checkAndUpdate();
@@ -1171,15 +1158,18 @@ class AppController {
     await handleExit();
   }
 
-  Future<bool> _initCore() => globalState.engineManager.initializeCore(
-        runtimePlanRequest: _buildRuntimePlanRequest(
-          patchConfig: _ref.read(patchClashConfigProvider),
-        ),
-        coldStartPatchConfig: _buildColdStartPatchConfig(
-          _ref.read(patchClashConfigProvider),
-        ),
-        setupRuntimePlan: false,
-      );
+  Future<bool> _initCore() async {
+    await globalState.corePreload;
+    return globalState.engineManager.initializeCore(
+      runtimePlanRequest: _buildRuntimePlanRequest(
+        patchConfig: _ref.read(patchClashConfigProvider),
+      ),
+      coldStartPatchConfig: _buildColdStartPatchConfig(
+        _ref.read(patchClashConfigProvider),
+      ),
+      setupRuntimePlan: false,
+    );
+  }
 
   Future<void> init() async {
     FlutterError.onError = (details) {
@@ -1207,10 +1197,14 @@ class AppController {
       clashCore.stopLog();
     }
     await _initStatus();
+    Future<bool>? preload;
     if (!_ref.read(runTimeProvider.notifier).isStart) {
-      await _preloadClashConfig();
+      preload = _preloadClashConfig();
     }
     _ref.read(initProvider.notifier).value = true;
+    if (preload != null) {
+      unawaited(preload);
+    }
     autoLaunch?.updateStatus(_ref.read(appSettingProvider).autoLaunch);
     unawaited(_runStartupMaintenance());
     if (!Platform.isMacOS) {

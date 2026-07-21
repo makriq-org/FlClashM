@@ -30,6 +30,9 @@ class _AccessViewState extends ConsumerState<AccessView> {
   ProfileManagedAccessNotice _notice = ProfileManagedAccessNotice.none;
   bool _isTV = false;
   bool _searchEditing = false;
+  Timer? _searchDebounce;
+  List<Package>? _indexedPackages;
+  AccessPackageIndex? _packageIndex;
 
   @override
   void initState() {
@@ -89,6 +92,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
     _searchFocusNode.removeListener(_onSearchFocusChange);
     _searchFocusNode.dispose();
     _searchController.dispose();
+    _searchDebounce?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -199,9 +203,14 @@ class _AccessViewState extends ConsumerState<AccessView> {
         (_, __) => unawaited(_refreshManagedAccess()),
       );
     final packages = ref.watch(packagesProvider);
+    if (!identical(packages, _indexedPackages)) {
+      _indexedPackages = packages;
+      _packageIndex = productServices.accessControl.buildPackageIndex(packages);
+    }
     final filtered = productServices.accessControl.filterPackages(
       packages: packages,
       editorState: _editorState,
+      index: _packageIndex,
     );
     final appLocale = AppLocalizations.of(context);
     final isWhitelist = _editorState.isWhitelist;
@@ -298,6 +307,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
+                                  _searchDebounce?.cancel();
                                   _searchController.clear();
                                   setState(() {
                                     _editorState =
@@ -310,12 +320,19 @@ class _AccessViewState extends ConsumerState<AccessView> {
                               )
                             : null,
                       ),
-                      onChanged: (v) => setState(() {
-                        _editorState = productServices.accessControl.setQuery(
-                          _editorState,
-                          v,
+                      onChanged: (value) {
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 180),
+                          () {
+                            if (!mounted) return;
+                            setState(() {
+                              _editorState = productServices.accessControl
+                                  .setQuery(_editorState, value);
+                            });
+                          },
                         );
-                      }),
+                      },
                     ),
                   ),
                   Padding(

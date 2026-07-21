@@ -96,6 +96,10 @@ abstract class LocalNodeController<
   final RuntimeNodePlatformBridge runtime;
 
   LocalNodeStageState<TNodeLayout>? _stagedState;
+  Future<TSharedLayout>? _sharedLayout;
+
+  Future<TSharedLayout> _resolveSharedLayout() =>
+      _sharedLayout ??= binary.resolveSharedInstallLayout();
 
   Future<String> stageRuntimePlan({
     required List<BuiltInProxyNodePlan> currentPlans,
@@ -104,8 +108,11 @@ abstract class LocalNodeController<
     if (_stagedState != null) {
       return '$typeLabel runtime plan stage is already active.';
     }
+    if (currentPlans.isEmpty && nextPlans.isEmpty) {
+      return '';
+    }
 
-    final sharedLayout = await binary.resolveSharedInstallLayout();
+    final sharedLayout = await _resolveSharedLayout();
     await Directory(sharedLayout.runtimeRootPath).create(recursive: true);
     await Directory(sharedLayout.nodesDirectoryPath).create(recursive: true);
     final nextIds = nextPlans.map((plan) => plan.nodeId).toSet();
@@ -163,7 +170,7 @@ abstract class LocalNodeController<
     if (stagedState == null) return;
     _stagedState = null;
     try {
-      final sharedLayout = await binary.resolveSharedInstallLayout();
+      final sharedLayout = await _resolveSharedLayout();
       await Future.wait([
         for (final removedPlan in stagedState.removedPlans)
           deleteDirectoryIfExists(
@@ -185,7 +192,7 @@ abstract class LocalNodeController<
     List<BuiltInProxyNodePlan> plans,
   ) async {
     if (plans.isEmpty) return const [];
-    final sharedLayout = await binary.resolveSharedInstallLayout();
+    final sharedLayout = await _resolveSharedLayout();
     return Future.wait([
       for (final plan in plans)
         _buildRuntimeNode(sharedLayout: sharedLayout, plan: plan),

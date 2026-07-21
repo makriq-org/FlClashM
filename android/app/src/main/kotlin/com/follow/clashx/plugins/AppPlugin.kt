@@ -77,6 +77,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     private val packages = mutableListOf<Package>()
     private var packagesLoadedAt = 0L
+    private var installedPackageNames: List<String> = emptyList()
+    private var installedPackageNamesLoadedAt = 0L
 
     private val skipPrefixList = listOf(
         "com.google",
@@ -521,15 +523,28 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
-    private suspend fun getInstalledPackageNames(): String {
+    @Synchronized
+    private fun getInstalledPackageNamesSnapshot(): List<String> {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (installedPackageNamesLoadedAt != 0L &&
+            now - installedPackageNamesLoadedAt < PACKAGES_CACHE_TTL_MS
+        ) {
+            return installedPackageNames
+        }
+        val packageManager = FlClashApplication.getAppContext().packageManager
+        installedPackageNames = packageManager
+            ?.getInstalledPackages(0)
+            ?.map { it.packageName }
+            ?.filter { it.isNotBlank() }
+            ?.distinct()
+            ?: emptyList()
+        installedPackageNamesLoadedAt = now
+        return installedPackageNames
+    }
+
+    private suspend fun getInstalledPackageNames(): List<String> {
         return withContext(Dispatchers.IO) {
-            val packageManager = FlClashApplication.getAppContext().packageManager
-            val packageNames = packageManager
-                ?.getInstalledPackages(0)
-                ?.map { it.packageName }
-                ?.filter { it.isNotBlank() }
-                ?: emptyList()
-            Gson().toJson(packageNames)
+            getInstalledPackageNamesSnapshot()
         }
     }
 
@@ -725,6 +740,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 synchronized(this) {
                     packages.clear()
                     packagesLoadedAt = 0L
+                    installedPackageNames = emptyList()
+                    installedPackageNamesLoadedAt = 0L
                 }
             }
             val pending = installedAppsCallbacks.toList()

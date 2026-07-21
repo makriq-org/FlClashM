@@ -9,12 +9,13 @@ void main() {
     controller = await File('lib/controller.dart').readAsString();
   });
 
-  test('finishes node preparation before optional startup maintenance', () {
-    final preload = controller.indexOf('await _preloadClashConfig();');
+  test('exposes UI readiness while node preparation continues', () {
+    final preload = controller.indexOf('preload = _preloadClashConfig();');
     final ready = controller.indexOf(
       '_ref.read(initProvider.notifier).value = true;',
       preload,
     );
+    final detachedPreload = controller.indexOf('unawaited(preload);', ready);
     final maintenance = controller.indexOf(
       'unawaited(_runStartupMaintenance());',
       ready,
@@ -22,6 +23,7 @@ void main() {
 
     expect(preload, greaterThan(0));
     expect(ready, greaterThan(preload));
+    expect(detachedPreload, greaterThan(ready));
     expect(maintenance, greaterThan(ready));
   });
 
