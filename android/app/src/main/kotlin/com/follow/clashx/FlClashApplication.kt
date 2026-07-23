@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.os.Build
 import com.follow.clashx.common.GlobalState as CommonGlobalState
-import com.follow.clashx.common.SavedParams
 
 class FlClashApplication : Application() {
     companion object {
@@ -16,15 +15,11 @@ class FlClashApplication : Application() {
         super.onCreate()
         instance = this
         CommonGlobalState.init(this)
-        // Before the main-process gate: :remote and headless starts must apply
-        // the persisted flag too.
-        CommonGlobalState.setCrashlytics(SavedParams.isCrashlyticsEnabled())
         if (isMainProcess()) {
             GlobalState.install()
         } else {
-            // :remote hosts the Go core — capture its stderr so a core SIGABRT
-            // (fatal error / panic) arrives with the Go reason, not just a
-            // native stack.
+            // :remote hosts the Go core. Mirror stderr to local logcat so fatal
+            // reasons remain available through adb without remote telemetry.
             CommonGlobalState.captureNativeStderr()
         }
     }

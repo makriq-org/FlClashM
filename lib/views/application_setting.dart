@@ -199,32 +199,6 @@ class UsageItem extends ConsumerWidget {
   }
 }
 
-class CrashlyticsItem extends ConsumerWidget {
-  const CrashlyticsItem({super.key});
-
-  @override
-  Widget build(BuildContext context, ref) {
-    final crashlytics = ref.watch(
-      appSettingProvider.select((state) => state.crashlytics),
-    );
-    return ListItem.switchItem(
-      title: Text(appLocalizations.crashlytics),
-      subtitle: Text(appLocalizations.crashlyticsDesc),
-      delegate: SwitchDelegate(
-        value: crashlytics,
-        onChanged: (bool value) async {
-          ref.read(appSettingProvider.notifier).updateState(
-                (state) => state.copyWith(
-                  crashlytics: value,
-                ),
-              );
-          await clashLib?.setCrashlytics(value);
-        },
-      ),
-    );
-  }
-}
-
 class MinimizeItem extends ConsumerWidget {
   const MinimizeItem({super.key});
 
@@ -633,7 +607,6 @@ class ApplicationSettingView extends StatelessWidget {
         HiddenItem(),
         BatteryOptimizationItem(),
         AutoStartItem(),
-        CrashlyticsItem(),
       ],
       AnimateTabItem(),
       OpenLogsItem(),

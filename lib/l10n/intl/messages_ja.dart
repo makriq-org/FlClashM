@@ -177,10 +177,6 @@ class MessageLookup extends MessageLookupByLibrary {
         "coreInfo": MessageLookupByLibrary.simpleMessage("コア情報"),
         "country": MessageLookupByLibrary.simpleMessage("国"),
         "crashTest": MessageLookupByLibrary.simpleMessage("クラッシュテスト"),
-        "crashlytics": MessageLookupByLibrary.simpleMessage("クラッシュレポート"),
-        "crashlyticsDesc": MessageLookupByLibrary.simpleMessage(
-          "Firebase Crashlytics でクラッシュログを自動送信します。機密情報は含まれません",
-        ),
         "create": MessageLookupByLibrary.simpleMessage("作成"),
         "cut": MessageLookupByLibrary.simpleMessage("切り取り"),
         "dark": MessageLookupByLibrary.simpleMessage("ダーク"),

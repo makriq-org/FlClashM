@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application.dart';
 import '../../clash/core.dart';
-import '../../clash/lib.dart';
 import '../../common/android.dart';
 import '../../common/http.dart';
 import '../../common/system.dart';
@@ -31,9 +29,6 @@ class AppBootstrap {
     await globalState.initApp(version);
     await android?.init();
     await androidEntrypoint.init();
-    unawaited(
-      clashLib?.setCrashlytics(globalState.config.appSetting.crashlytics),
-    );
 
     HttpOverrides.global = FlClashHttpOverrides();
     runApp(const ProviderScope(child: Application()));

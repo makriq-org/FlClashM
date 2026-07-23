@@ -260,8 +260,6 @@
   "autoCloseConnectionsDesc": "Автоматически закрывать соединения при смене сервера",
   "onlyStatisticsProxy": "Учитывать только прокси-трафик",
   "onlyStatisticsProxyDesc": "Учитывать в статистике только трафик через прокси",
-  "crashlytics": "Отчёты о сбоях",
-  "crashlyticsDesc": "Автоматически отправлять журналы сбоев через Firebase Crashlytics; конфиденциальные данные не передаются",
   "pureBlackMode": "Чисто черный режим",
   "keepAliveIntervalDesc": "Интервал поддержания TCP-соединения",
   "entries": " записей",

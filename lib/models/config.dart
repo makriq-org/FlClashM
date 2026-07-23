@@ -82,7 +82,6 @@ class AppSettingProps with _$AppSettingProps {
     @Default(false) bool minimizeOnExit,
     @Default(false) bool hidden,
     @Default(false) bool developerMode,
-    @Default(true) bool crashlytics,
     @Default(true) bool zashboardInApp,
     @Default(false) bool overrideProviderSettings,
     @Default(false) bool overrideNetworkSettings,

@@ -2,7 +2,7 @@
   description = "FlClashM Android development environment";
 
   inputs.nixpkgs.url =
-    "github:NixOS/nixpkgs/5f85796ab70f9a6ac935b366065d4565288947ac";
+    "github:NixOS/nixpkgs/eb1e54bea78e7537f0f12b649afc3d395a48c6f5";
 
   outputs = { nixpkgs, ... }:
     let

@@ -260,8 +260,6 @@
   "autoCloseConnectionsDesc": "Auto close connections after change node",
   "onlyStatisticsProxy": "Count only proxy traffic",
   "onlyStatisticsProxyDesc": "When turned on, only proxy traffic will be counted in statistics",
-  "crashlytics": "Crash reports",
-  "crashlyticsDesc": "Automatically upload crash logs via Firebase Crashlytics; no sensitive data is included",
   "pureBlackMode": "Pure black mode",
   "keepAliveIntervalDesc": "Tcp keep alive interval",
   "entries": " entries",
