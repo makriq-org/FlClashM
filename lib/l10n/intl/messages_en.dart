@@ -255,10 +255,6 @@ class MessageLookup extends MessageLookupByLibrary {
         ),
         "country": MessageLookupByLibrary.simpleMessage("Country"),
         "crashTest": MessageLookupByLibrary.simpleMessage("Crash test"),
-        "crashlytics": MessageLookupByLibrary.simpleMessage("Crash reports"),
-        "crashlyticsDesc": MessageLookupByLibrary.simpleMessage(
-          "Automatically upload crash logs via Firebase Crashlytics; no sensitive data is included",
-        ),
         "create": MessageLookupByLibrary.simpleMessage("Create"),
         "cut": MessageLookupByLibrary.simpleMessage("Cut"),
         "dark": MessageLookupByLibrary.simpleMessage("Dark"),

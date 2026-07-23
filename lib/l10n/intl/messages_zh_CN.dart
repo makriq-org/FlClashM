@@ -162,10 +162,6 @@ class MessageLookup extends MessageLookupByLibrary {
         "coreInfo": MessageLookupByLibrary.simpleMessage("内核信息"),
         "country": MessageLookupByLibrary.simpleMessage("区域"),
         "crashTest": MessageLookupByLibrary.simpleMessage("崩溃测试"),
-        "crashlytics": MessageLookupByLibrary.simpleMessage("崩溃报告"),
-        "crashlyticsDesc": MessageLookupByLibrary.simpleMessage(
-          "通过 Firebase Crashlytics 自动上传崩溃日志，不包含敏感信息",
-        ),
         "create": MessageLookupByLibrary.simpleMessage("创建"),
         "cut": MessageLookupByLibrary.simpleMessage("剪切"),
         "dark": MessageLookupByLibrary.simpleMessage("深色"),

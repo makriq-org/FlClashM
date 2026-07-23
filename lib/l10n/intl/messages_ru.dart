@@ -266,10 +266,6 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("Ядро обновлено"),
         "country": MessageLookupByLibrary.simpleMessage("Страна"),
         "crashTest": MessageLookupByLibrary.simpleMessage("Тест на сбои"),
-        "crashlytics": MessageLookupByLibrary.simpleMessage("Отчёты о сбоях"),
-        "crashlyticsDesc": MessageLookupByLibrary.simpleMessage(
-          "Автоматически отправлять журналы сбоев через Firebase Crashlytics; конфиденциальные данные не передаются",
-        ),
         "create": MessageLookupByLibrary.simpleMessage("Создать"),
         "cut": MessageLookupByLibrary.simpleMessage("Вырезать"),
         "dark": MessageLookupByLibrary.simpleMessage("Темный"),

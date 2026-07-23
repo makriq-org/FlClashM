@@ -3,8 +3,6 @@ package com.follow.clashx.common
 import android.app.Application
 import android.system.Os
 import android.util.Log
-import com.google.firebase.FirebaseApp
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,9 +23,6 @@ object GlobalState {
         private set
 
     @Volatile
-    private var crashlyticsReady = false
-
-    @Volatile
     private var stderrCaptured = false
 
     private val exceptionHandler = CoroutineExceptionHandler { _, e ->
@@ -45,41 +40,12 @@ object GlobalState {
 
     fun log(message: String) {
         Log.d(TAG, message)
-        // Breadcrumb attached to the next crash report. Only app-internal
-        // technical messages flow through here; user data (configs, hosts,
-        // notification titles) is deliberately kept out — see the "no sensitive
-        // data" promise in settings.
-        if (crashlyticsReady) {
-            runCatching { FirebaseCrashlytics.getInstance().log(message) }
-        }
-    }
-
-    /** Index a non-sensitive state value on subsequent crash reports. */
-    fun crashKey(key: String, value: String) {
-        if (!crashlyticsReady) return
-        runCatching { FirebaseCrashlytics.getInstance().setCustomKey(key, value) }
-    }
-
-    fun setCrashlytics(enable: Boolean) {
-        runCatching {
-            // initializeApp returns null when the APK carries no Firebase config
-            // (built without google-services.json) — degrade to a no-op then.
-            FirebaseApp.initializeApp(application) ?: return
-            FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = enable
-            crashlyticsReady = enable
-            log("crashlytics collection enabled=$enable")
-        }.onFailure { log("setCrashlytics($enable) error: ${it.message}") }
     }
 
     /**
-     * Redirect this process's stderr (fd 2) into a reader that mirrors every
-     * line back to logcat and forwards it as a Crashlytics breadcrumb. The Go
-     * core prints its fatal reason ("fatal error: concurrent map…", panics,
-     * goroutine dumps) straight to stderr, bypassing every logger, so without
-     * this a core SIGABRT arrives with a native stack but no cause. Call once in
-     * the process that hosts the core (:remote). The captured text is Go-runtime
-     * output, not user data. Mirroring keeps `adb logcat` working; the forward
-     * only happens when Crashlytics is enabled.
+     * Redirect this process's stderr (fd 2) into local logcat. The Go core prints
+     * fatal reasons and panic details straight to stderr, bypassing other loggers.
+     * Call once in the process that hosts the core (:remote).
      */
     fun captureNativeStderr() {
         if (stderrCaptured) return
@@ -94,11 +60,6 @@ object GlobalState {
                     BufferedReader(InputStreamReader(FileInputStream(readFd))).useLines { lines ->
                         lines.forEach { line ->
                             Log.i("$TAG-native", line)
-                            if (crashlyticsReady) {
-                                runCatching {
-                                    FirebaseCrashlytics.getInstance().log("native: $line")
-                                }
-                            }
                         }
                     }
                 }

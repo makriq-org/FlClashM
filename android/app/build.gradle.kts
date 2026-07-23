@@ -6,13 +6,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Firebase only activates when the config is present — building without it stays
-// valid (contributors and CI runs without the secret).
-if (file("google-services.json").exists()) {
-    apply(plugin = "com.google.gms.google-services")
-    apply(plugin = "com.google.firebase.crashlytics")
-}
-
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties().apply {
     if (localPropertiesFile.exists()) {
@@ -110,9 +103,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.10.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
-    implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
-    implementation("com.google.firebase:firebase-crashlytics-ndk")
-    implementation("com.google.firebase:firebase-analytics")
 }
 
 fun detectKeystoreType(file: File): String? {
