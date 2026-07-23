@@ -142,7 +142,7 @@ class AppUpdateService {
       tempFile.deleteSync();
     }
 
-    await platform.showDownloadProgress<void>(
+    final actualSha256 = await platform.showDownloadProgress<String>(
       release: release,
       asset: androidAsset.apkAsset,
       downloadTask: (onReceiveProgress) => platform.downloadReleaseAsset(
@@ -153,7 +153,6 @@ class AppUpdateService {
       ),
     );
 
-    final actualSha256 = await computeFileSha256(tempFile);
     if (actualSha256 != expectedSha256) {
       await tempFile.delete();
       throw StateError(

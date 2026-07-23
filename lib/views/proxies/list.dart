@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -15,8 +13,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'card.dart';
 import 'common.dart';
 
-typedef GroupNameProxiesMap = Map<String, List<Proxy>>;
-
 class ProxiesListView extends StatefulWidget {
   const ProxiesListView({super.key});
 
@@ -26,48 +22,13 @@ class ProxiesListView extends StatefulWidget {
 
 class _ProxiesListViewState extends State<ProxiesListView> {
   final _controller = ScrollController();
-  final _headerStateNotifier = ValueNotifier<ProxiesListHeaderSelectorState>(
-    const ProxiesListHeaderSelectorState(
-      offset: 0,
-      currentIndex: 0,
-    ),
-  );
-  final List<double> _headerOffset = [];
-  GroupNameProxiesMap _lastGroupNameProxiesMap = {};
 
   int _lastGroupsVersion = 0;
   List<String> _lastGroupNames = [];
 
   @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_adjustHeader);
-  }
-
-  void _adjustHeader() {
-    final offset = _controller.offset;
-    final index = _headerOffset.findInterval(offset);
-    final currentIndex = index;
-    var headerOffset = 0.0;
-    if (index + 1 <= _headerOffset.length - 1) {
-      final endOffset = _headerOffset[index + 1];
-      final startOffset = endOffset - listHeaderHeight - 8;
-      if (offset > startOffset && offset < endOffset) {
-        headerOffset = offset - startOffset;
-      }
-    }
-    _headerStateNotifier.value = _headerStateNotifier.value.copyWith(
-      currentIndex: currentIndex,
-      offset: max(headerOffset, 0),
-    );
-  }
-
-  @override
   void dispose() {
-    _headerStateNotifier.dispose();
-    _controller
-      ..removeListener(_adjustHeader)
-      ..dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -75,12 +36,10 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     WidgetRef ref, {
     required List<String> groupNames,
     required int columns,
-    required Set<String> currentUnfoldSet,
     required ProxyCardType type,
     required String query,
   }) {
     final items = <Widget>[];
-    final groupNameProxiesMap = <String, List<Proxy>>{};
     for (final groupName in groupNames) {
       final group = ref.watch(
         groupsProvider.select(
@@ -90,58 +49,16 @@ class _ProxiesListViewState extends State<ProxiesListView> {
       if (group == null) {
         continue;
       }
-      final sortedProxies = globalState.appController.getSortProxies(
-        group.all
-            .where((item) => item.name.toLowerCase().contains(query))
-            .toList(),
-        group.testUrl,
+      items.add(
+        ProxyGroupCard(
+          key: ValueKey(groupName),
+          group: group,
+          columns: columns,
+          type: type,
+          query: query,
+        ),
       );
-      groupNameProxiesMap[groupName] = sortedProxies;
-      final chunks = sortedProxies.chunks(columns);
-      final rows = chunks
-          .map<Widget>((proxies) {
-            final children = proxies
-                .map<Widget>(
-                  (proxy) => Flexible(
-                    flex: 1,
-                    child: RepaintBoundary(
-                      child: ProxyCard(
-                        testUrl: group.testUrl,
-                        type: type,
-                        groupType: group.type,
-                        key: ValueKey('$groupName.${proxy.name}'),
-                        proxy: proxy,
-                        groupName: groupName,
-                      ),
-                    ),
-                  ),
-                )
-                .fill(
-                  columns,
-                  filler: (_) => const Flexible(
-                    child: SizedBox(),
-                  ),
-                )
-                .separated(
-                  const SizedBox(
-                    width: 8,
-                  ),
-                );
-
-            return Row(
-              children: children.toList(),
-            );
-          })
-          .separated(
-            SizedBox(
-              height: type == ProxyCardType.oneline ? 4 : 8,
-            ),
-          )
-          .toList();
-
-      items.add(ProxyGroupCard(group: group, proxies: rows));
     }
-    _lastGroupNameProxiesMap = groupNameProxiesMap;
     return items;
   }
 
@@ -159,8 +76,6 @@ class _ProxiesListViewState extends State<ProxiesListView> {
           _lastGroupsVersion = groupsVersion;
           _lastGroupNames = state.groupNames;
 
-          _lastGroupNameProxiesMap.clear();
-
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {});
@@ -176,7 +91,6 @@ class _ProxiesListViewState extends State<ProxiesListView> {
         final items = _buildItems(
           ref,
           groupNames: state.groupNames,
-          currentUnfoldSet: state.currentUnfoldSet,
           columns: state.columns,
           type: state.proxyCardType,
           query: state.query,
@@ -213,20 +127,25 @@ class ProxyGroupCard extends StatefulWidget {
   const ProxyGroupCard({
     super.key,
     required this.group,
-    required this.proxies,
+    required this.columns,
+    required this.type,
+    required this.query,
   });
   final Group group;
-  final List<Widget> proxies;
+  final int columns;
+  final ProxyCardType type;
+  final String query;
 
   @override
   State<ProxyGroupCard> createState() => _ProxyGroupCardState();
 }
 
-class _ProxyGroupCardState extends State<ProxyGroupCard>
-    with AutomaticKeepAliveClientMixin {
+class _ProxyGroupCardState extends State<ProxyGroupCard> {
   final _expansibleController = ExpansibleController();
 
   bool isLock = false;
+  bool _bodyMounted = false;
+  late List<Proxy> _sortedProxies;
 
   String get icon => widget.group.icon;
 
@@ -234,6 +153,39 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
 
   bool get isExpand => _expansibleController.isExpanded;
 
+  List<Proxy> _resolveProxies() =>
+      globalState.appController.getSortProxies(
+        widget.group.all
+            .where(
+              (item) => item.name.toLowerCase().contains(widget.query),
+            )
+            .toList(),
+        widget.group.testUrl,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _sortedProxies = _resolveProxies();
+  }
+
+  @override
+  void didUpdateWidget(ProxyGroupCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.group != widget.group ||
+        oldWidget.query != widget.query) {
+      _sortedProxies = _resolveProxies();
+    }
+  }
+
+  void _collapseAndReleaseBody() {
+    _expansibleController.collapse();
+    Future<void>.delayed(kThemeAnimationDuration, () {
+      if (mounted && !_expansibleController.isExpanded) {
+        setState(() => _bodyMounted = false);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -246,9 +198,10 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
     final unfoldSet = Set<String>.from(currentUnfoldSet);
     
     if (_expansibleController.isExpanded) {
-      _expansibleController.collapse();
+      _collapseAndReleaseBody();
       unfoldSet.remove(groupName);
     } else {
+      setState(() => _bodyMounted = true);
       _expansibleController.expand();
       unfoldSet.add(groupName);
     }
@@ -303,20 +256,54 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
       },
     );
 
+  List<Widget> _buildProxyRows() => _sortedProxies
+      .chunks(widget.columns)
+      .map<Widget>((proxies) {
+        final children = proxies
+            .map<Widget>(
+              (proxy) => Flexible(
+                flex: 1,
+                child: RepaintBoundary(
+                  child: ProxyCard(
+                    testUrl: widget.group.testUrl,
+                    type: widget.type,
+                    groupType: widget.group.type,
+                    key: ValueKey('$groupName.${proxy.name}'),
+                    proxy: proxy,
+                    groupName: groupName,
+                  ),
+                ),
+              ),
+            )
+            .fill(
+              widget.columns,
+              filler: (_) => const Flexible(child: SizedBox()),
+            )
+            .separated(const SizedBox(width: 8));
+        return Row(children: children.toList());
+      })
+      .separated(
+        SizedBox(
+          height: widget.type == ProxyCardType.oneline ? 4 : 8,
+        ),
+      )
+      .toList();
+
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     final colorScheme = context.colorScheme;
     return Consumer(
       builder: (_, ref, __) {
         final unfoldSet = ref.watch(unfoldSetProvider);
         final shouldExpand = unfoldSet.contains(groupName);
+        final mountBody = _bodyMounted || shouldExpand;
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (shouldExpand && !_expansibleController.isExpanded) {
+            _bodyMounted = true;
             _expansibleController.expand();
           } else if (!shouldExpand && _expansibleController.isExpanded) {
-            _expansibleController.collapse();
+            _collapseAndReleaseBody();
           }
         });
         
@@ -432,7 +419,10 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
                       opacity: animation,
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Column(children: widget.proxies),
+                        child: Column(
+                          children:
+                              mountBody ? _buildProxyRows() : const [],
+                        ),
                       ),
                     ),
                   ),
@@ -445,7 +435,4 @@ class _ProxyGroupCardState extends State<ProxyGroupCard>
       },
     );
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }

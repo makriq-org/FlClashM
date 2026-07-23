@@ -5,6 +5,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/widgets/widgets.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -41,6 +42,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
   @override
   void dispose() {
     _isEditNotifier.dispose();
+    _addedWidgetsNotifier.dispose();
     super.dispose();
   }
 
@@ -191,12 +193,15 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
           ),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _addedWidgetsNotifier.value = DashboardWidget.values
+      final addedWidgets = DashboardWidget.values
           .where(
             (item) => !children.contains(item.widget) && isAllowed(item),
           )
           .map((item) => item.widget)
           .toList();
+      if (!listEquals(_addedWidgetsNotifier.value, addedWidgets)) {
+        _addedWidgetsNotifier.value = addedWidgets;
+      }
     });
     return Column(
       children: [

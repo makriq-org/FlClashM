@@ -160,14 +160,7 @@ class LineChartPainter extends CustomPainter {
   Path getAnimatedPath(Size size) {
     final interpolatedPoints =
         getInterpolatePoints(prevPoints, points, progress);
-    final path = getPath(interpolatedPoints, size);
-
-    final metric = path.computeMetrics().first;
-    final length = metric.length;
-    return metric.extractPath(
-      0,
-      length,
-    );
+    return getPath(interpolatedPoints, size);
   }
 
   @override

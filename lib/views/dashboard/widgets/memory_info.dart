@@ -3,23 +3,26 @@ import 'dart:io';
 
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/common.dart';
+import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final _memoryInfoStateNotifier = ValueNotifier<TrafficValue>(
   const TrafficValue(value: 0),
 );
 
-class MemoryInfo extends StatefulWidget {
+class MemoryInfo extends ConsumerStatefulWidget {
   const MemoryInfo({super.key});
 
   @override
-  State<MemoryInfo> createState() => _MemoryInfoState();
+  ConsumerState<MemoryInfo> createState() => _MemoryInfoState();
 }
 
-class _MemoryInfoState extends State<MemoryInfo> {
+class _MemoryInfoState extends ConsumerState<MemoryInfo> {
   Timer? timer;
 
   @override
@@ -37,10 +40,13 @@ class _MemoryInfoState extends State<MemoryInfo> {
   Future<void> _updateMemory() async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final rss = ProcessInfo.currentRss;
-      _memoryInfoStateNotifier.value = TrafficValue(
-        value: clashLib != null ? rss : await clashCore.getMemory() + rss,
-      );
+      if (ref.read(isCurrentPageProvider(PageLabel.dashboard))) {
+        final rss = ProcessInfo.currentRss;
+        final value = clashLib != null ? rss : await clashCore.getMemory() + rss;
+        if (_memoryInfoStateNotifier.value.value != value) {
+          _memoryInfoStateNotifier.value = TrafficValue(value: value);
+        }
+      }
       timer = Timer(const Duration(seconds: 2), () async {
         _updateMemory();
       });
