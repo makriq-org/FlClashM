@@ -154,6 +154,13 @@ object SavedParams {
 
     fun saveNotificationTitle(title: String) {
         runCatching {
+            val currentTitle = runCatching {
+                if (notifTitleFile.exists()) notifTitleFile.readText() else null
+            }.getOrNull()
+            if (currentTitle == title) {
+                legacyNotifTitleFile.delete()
+                return@runCatching
+            }
             writeAtomic(notifTitleFile, title)
             legacyNotifTitleFile.delete()
         }

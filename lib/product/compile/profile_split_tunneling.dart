@@ -124,6 +124,22 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
   }
 
   final normalizedTun = Map<String, dynamic>.from(tun);
+  final sourceSelectors = await Future.wait([
+    _readPackageLists(
+      mergedIncludeSources,
+      profilesPath: profilesPath,
+      profileId: profileId,
+      fieldName: 'tun.include-package-file',
+      readRemoteSource: readRemoteSource,
+    ),
+    _readPackageLists(
+      mergedExcludeSources,
+      profilesPath: profilesPath,
+      profileId: profileId,
+      fieldName: 'tun.exclude-package-file',
+      readRemoteSource: readRemoteSource,
+    ),
+  ]);
   final includeSelectorEntries = <_PackageSelectorEntry>[
     ...inlineIncludeSelectors.map(
       (selector) => _PackageSelectorEntry(
@@ -131,14 +147,7 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
         preserveExactSelectorWithoutInstalledPackages: true,
       ),
     ),
-    ...(await _readPackageLists(
-      mergedIncludeSources,
-      profilesPath: profilesPath,
-      profileId: profileId,
-      fieldName: 'tun.include-package-file',
-      readRemoteSource: readRemoteSource,
-    ))
-        .map(
+    ...sourceSelectors[0].map(
       (selector) => _PackageSelectorEntry(
         value: selector,
         preserveExactSelectorWithoutInstalledPackages: false,
@@ -152,14 +161,7 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
         preserveExactSelectorWithoutInstalledPackages: true,
       ),
     ),
-    ...(await _readPackageLists(
-      mergedExcludeSources,
-      profilesPath: profilesPath,
-      profileId: profileId,
-      fieldName: 'tun.exclude-package-file',
-      readRemoteSource: readRemoteSource,
-    ))
-        .map(
+    ...sourceSelectors[1].map(
       (selector) => _PackageSelectorEntry(
         value: selector,
         preserveExactSelectorWithoutInstalledPackages: false,
@@ -395,7 +397,7 @@ Future<List<String>> _readPackageLists(
   ReadProfileSplitTunnelingRemoteSource? readRemoteSource,
 }) async {
   final packages = <String>[];
-  for (final source in sources) {
+  Future<List<String>> readSource(_PackageListSource source) async {
     final sourceFieldName =
         source.url != null ? fieldName.replaceAll('-file', '-url') : fieldName;
     final readResult = source.url != null
@@ -423,9 +425,18 @@ Future<List<String>> _readPackageLists(
     if (!readResult.fromCache && readResult.cachePath != null) {
       await _writePackageListCache(readResult.cachePath!, readResult.content);
     }
-    packages.addAll(
-      selectors,
+    return selectors;
+  }
+
+  const maxConcurrentReads = 4;
+  for (var offset = 0; offset < sources.length; offset += maxConcurrentReads) {
+    final proposedEnd = offset + maxConcurrentReads;
+    final end =
+        proposedEnd < sources.length ? proposedEnd : sources.length;
+    final results = await Future.wait(
+      sources.sublist(offset, end).map(readSource),
     );
+    results.forEach(packages.addAll);
   }
   return packages;
 }

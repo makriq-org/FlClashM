@@ -91,7 +91,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   Future<String?> readRemoteText(String url) async => remoteTexts[url];
 
   @override
-  Future<void> downloadReleaseAsset(
+  Future<String> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
     required String expectedSha256,
@@ -107,6 +107,11 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes, flush: true);
     onReceiveProgress?.call(bytes.length, bytes.length);
+    final actualSha256 = sha256.convert(bytes).toString();
+    if (actualSha256 != expectedSha256) {
+      throw StateError('SHA256 verification failed for fake asset.');
+    }
+    return actualSha256;
   }
 
   @override

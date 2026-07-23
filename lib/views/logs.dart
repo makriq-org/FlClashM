@@ -17,13 +17,12 @@ class LogsView extends ConsumerStatefulWidget {
 
 class _LogsViewState extends ConsumerState<LogsView> with PageMixin {
   final _logsStateNotifier = ValueNotifier<LogsState>(
-    const LogsState(loading: true),
+    const LogsState(),
   );
   late ScrollController _scrollController;
 
   double _currentMaxWidth = 0;
   final _tag = CacheTag.rules;
-  bool _isLoad = false;
 
   List<Log> _logs = [];
 
@@ -143,42 +142,6 @@ class _LogsViewState extends ConsumerState<LogsView> with PageMixin {
     }, duration: commonDuration);
   }
 
-  void _preLoad() {
-    if (_isLoad == true) {
-      return;
-    }
-    _isLoad = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-      final isMobileView = ref.read(isMobileViewProvider);
-      if (isMobileView) {
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-      final parts = _logs.batch(10);
-      globalState.cacheHeightMap[_tag] ??= FixedMap(
-        _logs.length,
-      );
-      for (var i = 0; i < parts.length; i++) {
-        final part = parts[i];
-        await Future(
-          () {
-            for (final log in part) {
-              globalState.cacheHeightMap[_tag]?.updateCacheValue(
-                log.payload,
-                () => _getItemHeight(log),
-              );
-            }
-          },
-        );
-      }
-      _logsStateNotifier.value = _logsStateNotifier.value.copyWith(
-        loading: false,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (_, constraints) {
@@ -186,24 +149,8 @@ class _LogsViewState extends ConsumerState<LogsView> with PageMixin {
           return ValueListenableBuilder<LogsState>(
             valueListenable: _logsStateNotifier,
             builder: (_, state, __) {
-              _preLoad();
               final logs = state.list;
-              final items = logs
-                  .map<Widget>(
-                    (log) => LogItem(
-                      key: Key(log.dateTime),
-                      log: log,
-                      onClick: (value) {
-                        context.commonScaffoldState?.addKeyword(value);
-                      },
-                    ),
-                  )
-                  .separated(
-                    const Divider(
-                      height: 0,
-                    ),
-                  )
-                  .toList();
+              final itemCount = logs.isEmpty ? 0 : logs.length * 2 - 1;
               final content = logs.isEmpty
                   ? NullStatus(
                       label: appLocalizations.nullTip(
@@ -224,14 +171,27 @@ class _LogsViewState extends ConsumerState<LogsView> with PageMixin {
                             shrinkWrap: true,
                             physics: const NextClampingScrollPhysics(),
                             controller: _scrollController,
-                            itemBuilder: (_, index) => items[index],
+                            itemBuilder: (_, index) {
+                              if (index.isOdd) {
+                                return const Divider(height: 0);
+                              }
+                              final log = logs[index ~/ 2];
+                              return LogItem(
+                                key: Key(log.dateTime),
+                                log: log,
+                                onClick: (value) {
+                                  context.commonScaffoldState
+                                      ?.addKeyword(value);
+                                },
+                              );
+                            },
                             itemExtentBuilder: (index) {
                               if (index.isOdd) {
                                 return 0;
                               }
                               return _getItemHeight(logs[index ~/ 2]);
                             },
-                            itemCount: items.length,
+                            itemCount: itemCount,
                             keyBuilder: (index) {
                               if (index.isOdd) {
                                 return "divider";

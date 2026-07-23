@@ -134,6 +134,8 @@ class ProfileCompiler {
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
       globalTestUrl: testUrl,
+      copyConfig: false,
+      validate: false,
     );
     rawConfig = compiledBuiltInProxyNodes.config;
 

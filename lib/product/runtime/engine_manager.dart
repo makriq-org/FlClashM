@@ -58,12 +58,14 @@ class ResolvedTunAccess {
 class EngineRuntimePlanRequest {
   const EngineRuntimePlanRequest({
     required this.patchConfig,
+    this.settingsRevision,
     this.refreshProfile,
     this.resolveTunAccess,
     this.onPatchConfigResolved,
   });
 
   final ClashConfig patchConfig;
+  final Object? settingsRevision;
   final FutureOr<void> Function()? refreshProfile;
   final ResolveTunAccessCallback? resolveTunAccess;
   final ValueChanged<ClashConfig>? onPatchConfigResolved;
@@ -87,12 +89,16 @@ class _CompiledRuntimePlan {
     required this.resolvedRuntime,
     required this.rawProfile,
     required this.securedProfile,
+    required this.requestedPatchConfig,
+    required this.settingsRevision,
   });
 
   final AppliedRuntimePlan appliedRuntimePlan;
   final ResolvedRuntimeSelection resolvedRuntime;
   final RawProfile? rawProfile;
   final SecuredProfilePatch securedProfile;
+  final ClashConfig requestedPatchConfig;
+  final Object? settingsRevision;
 }
 
 class EngineManager {
@@ -133,6 +139,7 @@ class EngineManager {
   RuntimeUpdateTasks _updateTasks = const [];
   DateTime? _startTime;
   _CompiledRuntimePlan? _lastCompiledRuntimePlan;
+  _CompiledRuntimePlan? _pendingCompiledRuntimePlan;
   Future<void> _coldStartPersistChain = Future<void>.value();
 
   EngineAdapter get _adapter => _activeRuntime.engine.adapter;
@@ -204,8 +211,10 @@ class EngineManager {
     return true;
   }
 
-  Future<void> notifyProxySelected(String groupName, String proxyName) =>
-      _adapter.notifyProxySelected(groupName, proxyName);
+  Future<void> notifyProxySelected(String groupName, String proxyName) async {
+    _syncCachedRuntimePlanWithProxySelection(groupName, proxyName);
+    await _adapter.notifyProxySelected(groupName, proxyName);
+  }
 
   Future<void> stop() async {
     Object? error;
@@ -304,6 +313,7 @@ class EngineManager {
     }
 
     if (!setupRuntimePlan) {
+      _pendingCompiledRuntimePlan = compiledRuntimePlan;
       return true;
     }
 
@@ -431,6 +441,14 @@ class EngineManager {
     await request.refreshProfile?.call();
 
     final rawProfile = await _loadCurrentRawProfile();
+    final pending = _pendingCompiledRuntimePlan;
+    if (pending != null &&
+        pending.requestedPatchConfig == request.patchConfig &&
+        pending.settingsRevision == request.settingsRevision &&
+        _sameRawProfileRevision(pending.rawProfile, rawProfile)) {
+      return pending;
+    }
+
     final compiledProfile = _compileProfilePatch(
       rawProfile: rawProfile,
       patchConfig: request.patchConfig,
@@ -466,7 +484,21 @@ class EngineManager {
       resolvedRuntime: resolvedRuntime,
       rawProfile: rawProfile,
       securedProfile: securedProfile,
+      requestedPatchConfig: request.patchConfig,
+      settingsRevision: request.settingsRevision,
     );
+  }
+
+  bool _sameRawProfileRevision(RawProfile? left, RawProfile? right) {
+    if (left == null || right == null) {
+      return left == right;
+    }
+    final leftRevision = left.revision;
+    final rightRevision = right.revision;
+    if (leftRevision != null || rightRevision != null) {
+      return leftRevision == rightRevision;
+    }
+    return identical(left, right);
   }
 
   Future<ClashConfig?> _resolvePatchConfig(
@@ -519,6 +551,7 @@ class EngineManager {
 
     _activeRuntime = compiledRuntimePlan.resolvedRuntime;
     _lastCompiledRuntimePlan = compiledRuntimePlan;
+    _pendingCompiledRuntimePlan = null;
     _applyRuntimePlan(compiledRuntimePlan.appliedRuntimePlan.runtimePlan);
 
     if (coldStartPatchConfig != null) {
@@ -563,27 +596,11 @@ class EngineManager {
     _CompiledRuntimePlan compiledRuntimePlan, {
     required ClashConfig coldStartPatchConfig,
   }) async {
-    final resolvedColdStartPatchConfig = _resolveColdStartPatchConfig(
-      runtimePatchConfig: compiledRuntimePlan.appliedRuntimePlan.patchConfig,
-      coldStartPatchConfig: coldStartPatchConfig,
+    final coldStartRuntimePlan = _deriveColdStartRuntimePlan(
+      compiledRuntimePlan.appliedRuntimePlan.runtimePlan,
+      coldStartPatchConfig,
     );
-    final coldStartSecuredProfile = SecuredProfilePatch(
-      patchConfig: resolvedColdStartPatchConfig,
-      metadata: compiledRuntimePlan.securedProfile.metadata,
-      runtimeConstraints: _resolveColdStartRuntimeConstraints(
-        runtimeConstraints:
-            compiledRuntimePlan.securedProfile.runtimeConstraints,
-        coldStartPatchConfig: resolvedColdStartPatchConfig,
-      ),
-    );
-    final coldStartRuntimePlan = await _buildRuntimePlan(
-      rawProfile: compiledRuntimePlan.rawProfile,
-      securedProfile: coldStartSecuredProfile,
-      runtimePatchConfig: resolvedColdStartPatchConfig,
-    );
-    final resolvedRuntime =
-        _resolveRuntimeSelection(coldStartRuntimePlan.runtime);
-    await resolvedRuntime.engine.adapter.persistColdStart(
+    await compiledRuntimePlan.resolvedRuntime.engine.adapter.persistColdStart(
       initParams: await _buildInitParams(),
       runtimePlan: coldStartRuntimePlan,
       state: _buildCoreState(
@@ -614,19 +631,30 @@ class EngineManager {
     );
   }
 
-  ClashConfig _resolveColdStartPatchConfig({
-    required ClashConfig runtimePatchConfig,
-    required ClashConfig coldStartPatchConfig,
-  }) =>
-      runtimePatchConfig.copyWith.tun(enable: coldStartPatchConfig.tun.enable);
-
-  RuntimeSecurityConstraints _resolveColdStartRuntimeConstraints({
-    required RuntimeSecurityConstraints runtimeConstraints,
-    required ClashConfig coldStartPatchConfig,
-  }) =>
-      coldStartPatchConfig.tun.enable
-          ? runtimeConstraints
-          : const RuntimeSecurityConstraints();
+  RuntimePlan _deriveColdStartRuntimePlan(
+    RuntimePlan runtimePlan,
+    ClashConfig coldStartPatchConfig,
+  ) {
+    final config = Map<String, dynamic>.from(runtimePlan.config);
+    final tun = switch (config["tun"]) {
+      final Map<dynamic, dynamic> value => <String, dynamic>{
+          for (final entry in value.entries) entry.key.toString(): entry.value,
+        },
+      _ => <String, dynamic>{},
+    };
+    tun["enable"] = coldStartPatchConfig.tun.enable;
+    config["tun"] = tun;
+    return RuntimePlan(
+      config: config,
+      selectedMap: runtimePlan.selectedMap,
+      testUrl: runtimePlan.testUrl,
+      runtime: runtimePlan.runtime,
+      files: runtimePlan.files,
+      builtInProxyNodes: runtimePlan.builtInProxyNodes,
+      metadata: runtimePlan.metadata,
+      profileAccessControl: runtimePlan.profileAccessControl,
+    );
+  }
 
   void _syncCachedRuntimePlanWithUpdate(UpdateParams updateParams) {
     final compiledRuntimePlan = _lastCompiledRuntimePlan;
@@ -659,6 +687,43 @@ class EngineManager {
         runtimeConstraints:
             compiledRuntimePlan.securedProfile.runtimeConstraints,
       ),
+      requestedPatchConfig: updatedPatchConfig,
+      settingsRevision: compiledRuntimePlan.settingsRevision,
+    );
+  }
+
+  void _syncCachedRuntimePlanWithProxySelection(
+    String groupName,
+    String proxyName,
+  ) {
+    final compiledRuntimePlan = _lastCompiledRuntimePlan;
+    if (compiledRuntimePlan == null) {
+      return;
+    }
+    final currentPlan = compiledRuntimePlan.appliedRuntimePlan.runtimePlan;
+    if (currentPlan.selectedMap[groupName] == proxyName) {
+      return;
+    }
+    final updatedPlan = RuntimePlan(
+      config: currentPlan.config,
+      selectedMap: {...currentPlan.selectedMap, groupName: proxyName},
+      testUrl: currentPlan.testUrl,
+      runtime: currentPlan.runtime,
+      files: currentPlan.files,
+      builtInProxyNodes: currentPlan.builtInProxyNodes,
+      metadata: currentPlan.metadata,
+      profileAccessControl: currentPlan.profileAccessControl,
+    );
+    _lastCompiledRuntimePlan = _CompiledRuntimePlan(
+      appliedRuntimePlan: AppliedRuntimePlan(
+        patchConfig: compiledRuntimePlan.appliedRuntimePlan.patchConfig,
+        runtimePlan: updatedPlan,
+      ),
+      resolvedRuntime: compiledRuntimePlan.resolvedRuntime,
+      rawProfile: compiledRuntimePlan.rawProfile,
+      securedProfile: compiledRuntimePlan.securedProfile,
+      requestedPatchConfig: compiledRuntimePlan.requestedPatchConfig,
+      settingsRevision: compiledRuntimePlan.settingsRevision,
     );
   }
 

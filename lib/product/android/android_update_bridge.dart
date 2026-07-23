@@ -125,7 +125,7 @@ abstract interface class AppUpdatePlatformBridge {
 
   Future<String?> readRemoteText(String url);
 
-  Future<void> downloadReleaseAsset(
+  Future<String> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
     required String expectedSha256,
@@ -341,7 +341,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   Future<String?> readRemoteText(String url) => httpClient.readText(url);
 
   @override
-  Future<void> downloadReleaseAsset(
+  Future<String> downloadReleaseAsset(
     ReleaseAsset asset,
     String targetPath, {
     required String expectedSha256,
@@ -363,7 +363,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
         if (actualSha256 != expectedSha256) {
           throw StateError('SHA256 verification failed for mirror `$url`.');
         }
-        return;
+        return actualSha256;
       } catch (error) {
         lastError = error;
         commonPrint.log('Failed to download app update mirror `$url`: $error');

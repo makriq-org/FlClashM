@@ -262,10 +262,18 @@ class AppController {
   }
 
   Future<void> updateTraffic() async {
-    final traffic = await clashCore.getTraffic();
+    final trafficResults = await Future.wait([
+      clashCore.getTraffic(),
+      clashCore.getTotalTraffic(),
+    ]);
+    final traffic = trafficResults[0];
+    final totalTraffic = trafficResults[1];
     _ref.read(trafficsProvider.notifier).addTraffic(traffic);
-    _ref.read(totalTrafficProvider.notifier).value =
-        await clashCore.getTotalTraffic();
+    final currentTotalTraffic = _ref.read(totalTrafficProvider);
+    if (currentTotalTraffic.up.value != totalTraffic.up.value ||
+        currentTotalTraffic.down.value != totalTraffic.down.value) {
+      _ref.read(totalTrafficProvider.notifier).value = totalTraffic;
+    }
     await _syncRuntimeGroupsForNotification();
   }
 
@@ -646,6 +654,10 @@ class AppController {
   }) =>
       EngineRuntimePlanRequest(
         patchConfig: patchConfig,
+        settingsRevision: (
+          globalState.runtimePlanSettingsRevision,
+          _ref.read(realTunEnableProvider),
+        ),
         refreshProfile: refreshProfile
             ? () async {
                 await _ref.read(currentProfileProvider)?.checkAndUpdate();
@@ -897,9 +909,11 @@ class AppController {
       );
 
       if (newGroups.isNotEmpty) {
-        _ref.read(groupsProvider.notifier).value = newGroups;
-        _ref.read(versionProvider.notifier).value =
-            _ref.read(versionProvider) + 1;
+        if (!listEquals(_ref.read(groupsProvider), newGroups)) {
+          _ref.read(groupsProvider.notifier).value = newGroups;
+          _ref.read(versionProvider.notifier).value =
+              _ref.read(versionProvider) + 1;
+        }
         if (syncNotification) {
           await syncAndroidForegroundNotification();
         }
