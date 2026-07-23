@@ -2,9 +2,11 @@
   description = "FlClashM Android development environment";
 
   inputs.nixpkgs.url =
+    "github:NixOS/nixpkgs/5f85796ab70f9a6ac935b366065d4565288947ac";
+  inputs.nixpkgsGo.url =
     "github:NixOS/nixpkgs/eb1e54bea78e7537f0f12b649afc3d395a48c6f5";
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, nixpkgsGo, ... }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs {
@@ -14,6 +16,7 @@
           android_sdk.accept_license = true;
         };
       };
+      goPkgs = import nixpkgsGo { inherit system; };
       android = pkgs.androidenv.composeAndroidPackages {
         platformVersions = [ "34" "35" "36" ];
         buildToolsVersions = [ "35.0.0" "36.0.0" ];
@@ -29,7 +32,7 @@
         packages = with pkgs; [
           flutter
           jdk17
-          go_1_26
+          goPkgs.go_1_26
           bash
           git
           android-tools

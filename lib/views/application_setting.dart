@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/config.dart';
