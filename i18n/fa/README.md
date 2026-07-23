@@ -1,39 +1,63 @@
+<div align="center">
+
+<img src="../../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="FlClashM" width="128" height="128">
+
 # FlClashM
 
-[![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
-[![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
-[![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](../../LICENSE)
-[![Based on FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
+**عبور از سانسور در اندروید — پشت یک دکمه.**
 
-> کلاینت اندروید برای `mihomo`، شاخه‌ای از [FlClashX](https://github.com/pluralplay/FlClashX)، که ابزارهای پیچیده دور زدن فیلترینگ را پشت یک دکمه پنهان می‌کند.
+[![دانلودها](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
+[![آخرین نسخه](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
+[![مجوز](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](../../LICENSE)
+[![مبتنی بر FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-[Русская версия](../../README.md) | [English version](../en/README.md) | [中文版](../zh/README.md)
+کلاینت اندرویدی `mihomo`، یک fork از [FlClashX](https://github.com/pluralplay/FlClashX)، که ابزارهای پیچیدهٔ عبور از سانسور را پشت یک کلید پنهان می‌کند.
 
----
+[Русский](../../README.md) · [English](../en/README.md) · [中文](../zh/README.md) · **فارسی**
 
-## چرا این کلاینت
-
-چندین ابزار قدرتمند برای دور زدن فیلترینگ وجود دارد:
-
-- **[ByeDPI](https://github.com/hufrea/byedpi)** — دور زدن DPI برای دسترسی به منابعی که «از داخل» مسدود شده‌اند (مثل یوتیوب یا دیسکورد).
-- **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — دور زدن لیست سفید با جعل تماس‌های WebRTC سرویس‌های مجاز.
-- **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — دور زدن لیست سیاه با جعل ترافیک مرورگر کروم.
-
-هر فناوری برای کار خاصی مناسب است و جایی وجود نداشت که همه این راه‌حل‌ها را یکجا جمع کند. می‌خواستم همه چیز را یکجا تنظیم کنم و فقط دکمه «اتصال» را بزنم.
-
-بنابراین **FlClashM** را ساختم. هدف این پروژه تبدیل شدن به همان **یک دکمه** است: ارائه‌دهنده پیکربندی را آماده می‌کند، کاربر کلید را می‌زند و اتصال در هر شبکه‌ای کار می‌کند.
-
-> ⚠️ این پروژه در حال توسعه فعال است. برخی ویژگی‌ها هنوز در حال تکمیل هستند و رابط کاربری ممکن است تغییر کند.
+</div>
 
 ---
 
-## مزایای اصلی
+> ⚠️ این پروژه در حال توسعهٔ فعال است. برخی قابلیت‌ها هنوز در حال بهبودند و رابط کاربری ممکن است تغییر کند.
 
-### نودهای داخلی مستقیم در پروفایل
+## 📑 فهرست
 
-برخلاف کلاینت‌های معمولی، FlClashM می‌تواند **نودهای ویژه را مستقیماً از پروفایل YAML** اجرا کند. آن‌ها مثل پروکسی‌های معمولی ظاهر می‌شوند و در قوانین مسیریابی شرکت می‌کنند: یک سایت را می‌توان از طریق ByeDPI فرستاد، دیگری را از طریق OlcRTC و بقیه را مستقیم.
+- [چرا این کلاینت](#-چرا-این-کلاینت)
+- [مزیت‌های کلیدی](#-مزیت‌های-کلیدی)
+- [چه کارهای دیگری می‌کند](#-چه-کارهای-دیگری-میکند)
+- [دانلود](#-دانلود)
+- [مستندات](#-مستندات)
+- [ساخت](#-ساخت)
+- [قدردانی](#-قدردانی)
+- [مجوز](#-مجوز)
 
-مثال برای [ByeDPI](https://github.com/hufrea/byedpi). FlClashM به‌طور خودکار استراتژی‌ها را از لیست ByeByeDPI بررسی و نسخه کارآمد را کش می‌کند.
+---
+
+## 🎯 چرا این کلاینت
+
+چند ابزار قدرتمند برای عبور از سانسور وجود دارد، اما هرکدام در جزیرهٔ خود قرار دارند:
+
+- 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** — عبور از DPI با دستکاری بسته‌ها برای دسترسی به منابعی که «از داخل» مسدود شده‌اند (مانند YouTube یا Discord).
+- 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — عبور از لیست‌های سفید با استتار ترافیک به‌صورت تماس WebRTC یک سرویس مجاز مانند Yandex Telemost.
+- 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — عبور از لیست‌های سیاه با تقلید از ترافیک مرورگر Chrome.
+
+هر فناوری برای کار خودش عالی است، اما جایی نبود که همهٔ آن‌ها را کنار هم بیاورد. می‌خواستم همه‌چیز را در یک‌جا تنظیم کنم و فقط «اتصال» را بزنم.
+
+پس **FlClashM** را ساختم. هدفش این است که همان **یک دکمه** باشد: ارائه‌دهنده پیکربندی را آماده می‌کند، کاربر کلید را می‌زند و اتصال در هر شبکه‌ای کار می‌کند.
+
+---
+
+## ✨ مزیت‌های کلیدی
+
+### 🧩 نودهای داخلی، مستقیم در پروفایل
+
+برخلاف کلاینت‌های معمولی، FlClashM می‌تواند **نودهای ویژه را مستقیماً از پروفایل YAML اجرا کند**. آن‌ها مانند پروکسی‌های معمولی به‌نظر می‌رسند و در قوانین مسیریابی شرکت می‌کنند: یک سایت از ByeDPI، سایتی دیگر از OlcRTC و بقیه مستقیم.
+
+<table>
+<tr><td>
+
+🛡 **ByeDPI** — پیمایش خودکار راهبردهای عبور از DPI و کش‌کردن راهبرد کارآمد.
 
 ```yaml
 proxies:
@@ -41,7 +65,10 @@ proxies:
     type: byedpi
 ```
 
-مثال برای [OlcRTC](https://github.com/openlibrecommunity/olcrtc).
+</td></tr>
+<tr><td>
+
+📞 **OlcRTC** — تونلی روی WebRTC که به‌شکل یک تماس تصویری استتار می‌شود.
 
 ```yaml
 proxies:
@@ -58,7 +85,10 @@ proxies:
       dns: "1.1.1.1:53"
 ```
 
-مثال برای [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+</td></tr>
+<tr><td>
+
+🎭 **NaiveProxy** — تقلید از ترافیک Chrome.
 
 ```yaml
 proxies:
@@ -70,11 +100,14 @@ proxies:
     password: pass
 ```
 
-[جزئیات بیشتر درباره نودهای داخلی](docs/user-guide/profiles.md)
+</td></tr>
+</table>
 
-## تونل‌زنی جداگانه از طریق پروفایل
+📖 [دربارهٔ نودهای داخلی بیشتر بدانید ←](docs/user-guide/profiles.md)
 
-ارائه‌دهنده می‌تواند قوانین تونل‌زنی جداگانه را مستقیماً در پروفایل تنظیم کند — کدام برنامه‌ها باید از VPN عبور کنند و کدام نه. نام دقیق پکیج، الگوها و عبارات منظم پشتیبانی می‌شوند.
+### 🎯 تونل‌زنی جداگانه از طریق پروفایل
+
+ارائه‌دهنده می‌تواند قوانین تونل‌زنی جداگانه را مستقیماً در پروفایل تعریف کند — کدام برنامه‌ها از VPN بروند و کدام نه. نام دقیق بسته، wildcard و عبارت باقاعده پشتیبانی می‌شود؛ فهرست‌ها را می‌توان از فایل یا URL بارگذاری کرد. پروفایل بر تنظیمات دستی اولویت دارد.
 
 ```yaml
 tun:
@@ -87,61 +120,80 @@ tun:
     - '!ru.yandex.browser'
 ```
 
-می‌توان لیست‌ها را از فایل‌ها یا URL بارگذاری کرد. پروفایل بر تنظیمات دستی اولویت دارد.
-
-[جزئیات بیشتر درباره تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)
+📖 [دربارهٔ تونل‌زنی جداگانه بیشتر بدانید ←](docs/user-guide/split-tunneling.md)
 
 ---
 
-## ویژگی‌های دیگر
+## 🛠 چه کارهای دیگری می‌کند
 
-- **اتصال VPN/TUN** از طریق `mihomo`.
-- **پروفایل‌ها** از طریق لینک، فایل، کد QR و Android TV.
-- **حالت‌های کار**: قوانین، جهانی، اتصال مستقیم.
-- **ویجت‌ها** و **کاشی تنظیمات سریع** برای مدیریت VPN.
-- **به‌روزرسانی داخلی** با بررسی checksum.
-- **اعلان‌ها** درباره انقضای اشتراک.
-- **اجرای خودکار** پس از ریستارت دستگاه.
-- **پوسته** از طریق hintهای ارائه‌دهنده (هدرها).
+- 🔌 **اتصال VPN/TUN** از طریق `mihomo`.
+- 📥 **پروفایل‌ها** از لینک، فایل، کد QR و Android TV.
+- 🔀 **حالت‌های کار**: قوانین، سراسری، مستقیم.
+- 🧰 **ویجت‌ها** و **کاشی تنظیمات سریع** برای کنترل VPN.
+- ⬆️ **به‌روزرسانی داخلی** با بررسی امضا و checksum.
+- 🔔 **اعلان** انقضای اشتراک.
+- 🚀 **اجرای خودکار** پس از راه‌اندازی مجدد دستگاه.
+- 🎨 **شخصی‌سازی** از طریق [hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md).
 
 ---
 
-## دانلود
+## 📥 دانلود
 
-بیلدهای آماده در [GitHub Releases](https://github.com/makriq-org/FlClashM/releases) منتشر می‌شوند.
+بیلدهای منتشرشده در [GitHub Releases](https://github.com/makriq-org/FlClashM/releases) قرار دارند.
 
-| فایل | توضیحات |
-|------|----------|
-| `FlClashM-android-universal.apk` | بیلد جهانی |
-| `FlClashM-android-arm64-v8a.apk` | ARM شصت و چهار بیتی |
-| `FlClashM-android-armeabi-v7a.apk` | ARM سی و دو بیتی |
-| `FlClashM-android-x86_64.apk` | x86_64 |
+| فایل | برای چه |
+|------|---------|
+| `FlClashM-android-universal.apk` | بیلد همگانی (اگر مطمئن نیستید، همین) |
+| `FlClashM-android-arm64-v8a.apk` | ARM ۶۴بیتی (بیشتر گوشی‌های امروزی) |
+| `FlClashM-android-armeabi-v7a.apk` | ARM ۳۲بیتی (دستگاه‌های قدیمی) |
+| `FlClashM-android-x86_64.apk` | x86_64 (شبیه‌سازها، برخی تبلت‌ها) |
 | `FlClashM-android-release.aab` | Android App Bundle |
 
-به‌طور پیش‌فرض، بارگذار داخلی فقط نسخه‌های پایدار را نشان می‌دهد. بیلدهای آزمایشی را می‌توان در تنظیمات فعال کرد.
+> ℹ️ به‌روزرسان داخلی به‌طور پیش‌فرض فقط نسخه‌های پایدار را نشان می‌دهد. نسخه‌های پیش‌انتشار را می‌توان در تنظیمات فعال کرد.
 
 ---
 
-## مستندات
+## 📚 مستندات
 
-### برای کاربران
-- **[نودهای داخلی](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)** — مدیریت از طریق پروفایل
-- **[Hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md)** — پوسته و رفتار
+مرجع کامل — در **[مرکز مستندات](docs/README.md)**.
 
-### برای توسعه‌دهندگان
-- **[معماری](docs/development/architecture.md)** — لایه‌ها و سرویس‌ها
-- **[محیط اجرا](docs/development/runtime.md)** — پردازش پروفایل و نودهای داخلی
-- **[امنیت](docs/development/security.md)** — سیاست امنیتی
-- **[انتشار](docs/development/release-contract.md)** — انتشار و بازگشت نسخه‌ها
-- **[همگام‌سازی با FlClashX](docs/development/upstream-sync.md)** — به‌روزرسانی پایه
-- **[بررسی بیلد](docs/development/verification.md)** — بررسی‌های محلی و CI
+**🚀 برای کاربران**
+- 🧩 [نودهای داخلی](docs/user-guide/profiles.md) — ByeDPI، OlcRTC، NaiveProxy
+- 🎯 [تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md) — مدیریت از طریق پروفایل
+- 🎨 [hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md) — ظاهر و رفتار
+
+**🛠 برای توسعه‌دهندگان**
+- 🏗 [معماری](docs/development/architecture.md) · ⚙️ [محیط اجرا](docs/development/runtime.md) · 🔒 [امنیت](docs/development/security.md)
+- 📦 [انتشار](docs/development/release-contract.md) · 🔄 [همگام‌سازی با FlClashX](docs/development/upstream-sync.md) · ✅ [بررسی بیلد](docs/development/verification.md)
 
 ---
 
-## ساخت
+## 🏗 ساخت
 
-به Flutter 3.41.x، JDK 17، Android SDK/NDK و Go 1.26.x نیاز دارید.
+نیازمند **Flutter 3.41.x**، **JDK 17**، **Android SDK/NDK** و **Go 1.26.x**.
+
+### روی NixOS (توصیه‌شده)
+
+همهٔ وابستگی‌ها و نسخه‌هایشان را `flake.nix` تثبیت می‌کند. بستهٔ دیباگ arm64 با یک فرمان ساخته می‌شود:
+
+```bash
+nix develop -c make dev
+```
+
+نتیجه: `build/app/outputs/flutter-apk/app-debug.apk`.
+
+سایر کارها هم به همین شکل:
+
+```bash
+nix develop -c make fetch-upstream check
+nix develop -c make install-dev
+nix develop -c make release
+nix develop -c make clean
+```
+
+> هدف‌های `test`، `analyze`، `boundaries`، `release-contract` و `drift` نیز در دسترس‌اند.
+
+### بدون Nix
 
 ```bash
 flutter pub get
@@ -150,16 +202,18 @@ flutter test test/product
 flutter build apk --debug
 ```
 
----
-
-## قدردانی
-
-FlClashM بر پایه [FlClashX](https://github.com/pluralplay/FlClashX) ساخته شده است — یک کلاینت عالی کراس‌پلتفرم برای Clash/Mihomo. از نویسندگان آن برای کار انجام‌شده و کد بازشان بسیار سپاسگزاریم که بدون آن‌ها این پروژه ممکن نبود.
-
-قدردانی ویژه از نویسندگان [ByeDPI](https://github.com/hufrea/byedpi)، [OlcRTC](https://github.com/openlibrecommunity/olcrtc) و [NaiveProxy](https://github.com/klzgrad/naiveproxy) — بدون تلاش آن‌ها دور زدن فیلترینگ ممکن نبود.
+📖 جزئیات بیشتر در [بررسی بیلد](docs/development/verification.md).
 
 ---
 
-## مجوز
+## 🙏 قدردانی
 
-کد اپلیکیشن تحت مجوز GPL-3.0 منتشر می‌شود. هسته‌های شخص ثالث و فایل‌های اجرایی داخلی مجوزهای اصلی خود را حفظ می‌کنند.
+FlClashM بر پایهٔ [FlClashX](https://github.com/pluralplay/FlClashX) ساخته شده — یک کلاینت چندسکویی عالی برای Clash/Mihomo. سپاس فراوان از نویسندگان برای کار و کد متن‌بازشان که بدون آن این پروژه ممکن نبود.
+
+سپاس ویژه از نویسندگان [ByeDPI](https://github.com/hufrea/byedpi)، [OlcRTC](https://github.com/openlibrecommunity/olcrtc) و [NaiveProxy](https://github.com/klzgrad/naiveproxy) — که بدون ابزارهایشان عبور از سانسور ممکن نبود.
+
+---
+
+## 📄 مجوز
+
+کد برنامه تحت مجوز **GPL-3.0** منتشر می‌شود. هسته‌های شخص‌ثالث و فایل‌های اجرایی همراه، مجوزهای اصلی خود را حفظ می‌کنند.

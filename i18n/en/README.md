@@ -1,39 +1,63 @@
+<div align="center">
+
+<img src="../../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="FlClashM" width="128" height="128">
+
 # FlClashM
+
+**Censorship circumvention on Android — behind a single button.**
 
 [![Downloads](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
 [![Latest Version](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![License](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](../../LICENSE)
 [![Based on FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> Android client for `mihomo`, a fork of [FlClashX](https://github.com/pluralplay/FlClashX), that hides complex censorship circumvention tools behind a single button.
+Android client for `mihomo`, a fork of [FlClashX](https://github.com/pluralplay/FlClashX) that hides complex censorship-circumvention tools behind a single switch.
 
-[Русская версия](../../README.md) | [中文版](../zh/README.md) | [نسخه فارسی](../fa/README.md)
+[Русский](../../README.md) · **English** · [中文](../zh/README.md) · [فارسی](../fa/README.md)
+
+</div>
 
 ---
-
-## Why this client
-
-There are several powerful tools for bypassing censorship, but each lives in its own silo:
-
-- **[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through packet manipulation.
-- **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — encrypted tunnel over WebRTC disguised as a video call.
-- **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — traffic parroting via Chromium's network stack.
-
-I was tired of assembling a working solution from dozens of different apps: one client for VPN, another for DPI circumvention, a third for traffic masking. None of them allowed configuring everything in one place and just pressing "connect".
-
-So I made **FlClashM**. Its goal is to become that **single button**: the provider prepares the configuration, the user flips the switch, and the connection works in any network.
 
 > ⚠️ This project is under active development. Some features are still being refined, and the interface may change.
 
+## 📑 Table of contents
+
+- [Why this client](#-why-this-client)
+- [Key advantages](#-key-advantages)
+- [Other features](#-other-features)
+- [Download](#-download)
+- [Documentation](#-documentation)
+- [Building](#-building)
+- [Acknowledgments](#-acknowledgments)
+- [License](#-license)
+
 ---
 
-## Key advantages
+## 🎯 Why this client
 
-### Built-in nodes directly in the profile
+There are several powerful circumvention tools, and each lives in its own silo:
 
-Unlike regular clients, FlClashM can launch **special nodes directly from the YAML profile**. They look like regular proxies and participate in routing rules: one site can be routed through ByeDPI, another through OlcRTC, and everything else directly.
+- 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention for resources blocked "from the inside" (e.g. YouTube or Discord in some regions).
+- 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — bypasses whitelists by disguising traffic as a WebRTC call of an allowed service such as Yandex Telemost.
+- 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — bypasses blocklists by parroting Chrome browser traffic.
 
-**[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention through packet manipulation. FlClashM automatically cycles through strategies from the ByeByeDPI list and caches the working one. UDP is enabled by default and can be disabled per node with `udp: false`.
+Each technology is great for its own job, but there was no single place that brought them all together. I wanted to configure everything in one spot and just press "connect".
+
+So I made **FlClashM**. Its goal is to become that **single button**: the provider prepares the configuration, the user flips the switch, and the connection works on any network.
+
+---
+
+## ✨ Key advantages
+
+### 🧩 Built-in nodes right in the profile
+
+Unlike regular clients, FlClashM can launch **special nodes directly from the YAML profile**. They look like ordinary proxies and take part in routing rules: one site through ByeDPI, another through OlcRTC, and everything else directly.
+
+<table>
+<tr><td>
+
+🛡 **ByeDPI** — automatically cycles through DPI-circumvention strategies and caches the working one.
 
 ```yaml
 proxies:
@@ -41,7 +65,10 @@ proxies:
     type: byedpi
 ```
 
-**[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — encrypted TCP-over-WebRTC tunnel disguised as a video call through Jitsi Meet or Yandex Telemost. Passes through provider whitelists.
+</td></tr>
+<tr><td>
+
+📞 **OlcRTC** — a tunnel over WebRTC disguised as a video call.
 
 ```yaml
 proxies:
@@ -58,7 +85,10 @@ proxies:
       dns: "1.1.1.1:53"
 ```
 
-**[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — traffic parroting via Chromium's network stack. Resistant to TLS fingerprinting and active probing.
+</td></tr>
+<tr><td>
+
+🎭 **NaiveProxy** — parroting of Chrome traffic.
 
 ```yaml
 proxies:
@@ -70,11 +100,14 @@ proxies:
     password: pass
 ```
 
-[More about built-in nodes](docs/user-guide/profiles.md)
+</td></tr>
+</table>
 
-### Split tunneling via profile
+📖 [More about built-in nodes →](docs/user-guide/profiles.md)
 
-The provider can specify which apps should use VPN directly in the profile. Supports exact package names, wildcards, and regular expressions.
+### 🎯 Split tunneling via profile
+
+The provider can define split-tunneling rules directly in the profile — which apps go through the VPN and which don't. Exact package names, wildcards, and regular expressions are supported; lists can be loaded from files or URLs. The profile takes priority over manual settings.
 
 ```yaml
 tun:
@@ -87,61 +120,80 @@ tun:
     - '!ru.yandex.browser'
 ```
 
-Lists can be loaded from files or URLs. Profile settings take priority over manual settings.
-
-[More about split tunneling](docs/user-guide/split-tunneling.md)
+📖 [More about split tunneling →](docs/user-guide/split-tunneling.md)
 
 ---
 
-## Other features
+## 🛠 Other features
 
-- **VPN/TUN connection** through `mihomo`.
-- **Profiles** from links, files, QR codes, and Android TV.
-- **Operating modes**: rules, global, direct.
-- **Widgets** and **Quick Settings tile** for VPN control.
-- **Built-in updates** with checksum verification.
-- **Notifications** about subscription expiration.
-- **Auto-start** after device reboot.
-- **Customization** via provider hints.
+- 🔌 **VPN/TUN connection** through `mihomo`.
+- 📥 **Profiles** from links, files, QR codes, and Android TV.
+- 🔀 **Operating modes**: rules, global, direct.
+- 🧰 **Widgets** and a **Quick Settings tile** for VPN control.
+- ⬆️ **Built-in updates** with signature and checksum verification.
+- 🔔 **Notifications** about subscription expiration.
+- 🚀 **Auto-start** after device reboot.
+- 🎨 **Customization** via [provider hints](docs/user-guide/provider-hints.md).
 
 ---
 
-## Download
+## 📥 Download
 
 Release builds are published in [GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
 
-| File | Description |
-|------|-------------|
-| `FlClashM-android-universal.apk` | Universal build |
-| `FlClashM-android-arm64-v8a.apk` | 64-bit ARM |
-| `FlClashM-android-armeabi-v7a.apk` | 32-bit ARM |
-| `FlClashM-android-x86_64.apk` | x86_64 |
+| File | What it's for |
+|------|---------------|
+| `FlClashM-android-universal.apk` | Universal build (pick this if unsure) |
+| `FlClashM-android-arm64-v8a.apk` | 64-bit ARM (most modern phones) |
+| `FlClashM-android-armeabi-v7a.apk` | 32-bit ARM (older devices) |
+| `FlClashM-android-x86_64.apk` | x86_64 (emulators, some tablets) |
 | `FlClashM-android-release.aab` | Android App Bundle |
 
-By default, the built-in updater shows only stable versions. Pre-releases can be enabled in settings.
+> ℹ️ By default the built-in updater shows only stable versions. Pre-releases can be enabled in settings.
 
 ---
 
-## Documentation
+## 📚 Documentation
 
-### For users
-- **[Built-in nodes](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Split tunneling](docs/user-guide/split-tunneling.md)** — management via profile
-- **[Provider hints](docs/user-guide/provider-hints.md)** — customization and behavior
+Full reference — in the **[documentation hub](docs/README.md)**.
 
-### For developers
-- **[Architecture](docs/development/architecture.md)** — layers and services
-- **[Runtime](docs/development/runtime.md)** — profile processing and built-in nodes
-- **[Security](docs/development/security.md)** — security policy
-- **[Releases](docs/development/release-contract.md)** — version publishing and rollback
-- **[Upstream sync](docs/development/upstream-sync.md)** — base updates
-- **[Build verification](docs/development/verification.md)** — local and CI checks
+**🚀 For users**
+- 🧩 [Built-in nodes](docs/user-guide/profiles.md) — ByeDPI, OlcRTC, NaiveProxy
+- 🎯 [Split tunneling](docs/user-guide/split-tunneling.md) — management via profile
+- 🎨 [Provider hints](docs/user-guide/provider-hints.md) — customization and behavior
+
+**🛠 For developers**
+- 🏗 [Architecture](docs/development/architecture.md) · ⚙️ [Runtime](docs/development/runtime.md) · 🔒 [Security](docs/development/security.md)
+- 📦 [Releases](docs/development/release-contract.md) · 🔄 [Upstream sync](docs/development/upstream-sync.md) · ✅ [Build verification](docs/development/verification.md)
 
 ---
 
-## Building
+## 🏗 Building
 
-Requires Flutter 3.41.x, JDK 17, Android SDK/NDK, and Go 1.26.x.
+Requires **Flutter 3.41.x**, **JDK 17**, **Android SDK/NDK**, and **Go 1.26.x**.
+
+### On NixOS (recommended)
+
+All dependencies and their versions are pinned by `flake.nix`. The arm64 debug package builds with a single command:
+
+```bash
+nix develop -c make dev
+```
+
+Result: `build/app/outputs/flutter-apk/app-debug.apk`.
+
+Other tasks run the same way:
+
+```bash
+nix develop -c make fetch-upstream check
+nix develop -c make install-dev
+nix develop -c make release
+nix develop -c make clean
+```
+
+> The targets `test`, `analyze`, `boundaries`, `release-contract`, and `drift` are also available.
+
+### Without Nix
 
 ```bash
 flutter pub get
@@ -150,9 +202,11 @@ flutter test test/product
 flutter build apk --debug
 ```
 
+📖 More in [build verification](docs/development/verification.md).
+
 ---
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 FlClashM is built on top of [FlClashX](https://github.com/pluralplay/FlClashX) — an excellent cross-platform client for Clash/Mihomo. Huge thanks to the authors for their work and open-source code, without which this project would not have been possible.
 
@@ -160,6 +214,6 @@ Special thanks to the authors of [ByeDPI](https://github.com/hufrea/byedpi), [Ol
 
 ---
 
-## License
+## 📄 License
 
-The app code is distributed under the GPL-3.0 license. Third-party cores and bundled executables retain their original licenses.
+The app code is distributed under the **GPL-3.0** license. Third-party cores and bundled executables retain their original licenses.

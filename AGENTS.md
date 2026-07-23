@@ -43,8 +43,9 @@ touchpoints из `tool/product_touchpoints.json`. Живые `lib/views/**` не
 
 ## Документация
 
-- `i18n/ru/docs/README.md` — обзор документации.
-- `i18n/ru/docs/user-guide/README.md` — руководство пользователя.
+- `i18n/ru/docs/README.md` — центр документации.
+- `i18n/ru/docs/user-guide/README.md` — обзор руководства пользователя.
+- `i18n/ru/docs/development/README.md` — обзор раздела для разработчиков.
 - `i18n/ru/docs/user-guide/profiles.md` — встроенные узлы ByeDPI, OlcRTC, NaiveProxy.
 - `i18n/ru/docs/user-guide/split-tunneling.md` — раздельное туннелирование через профиль.
 - `i18n/ru/docs/user-guide/provider-hints.md` — подсказки провайдера.

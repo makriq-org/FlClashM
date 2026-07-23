@@ -1,12 +1,21 @@
-# 分流
+# 🎯 分流
 
-FlClashM 允许您控制哪些应用使用 VPN，哪些不使用。这可以通过两种方式配置：在应用设置中手动配置，或直接在 YAML 配置文件中配置。
+分流回答一个简单的问题：**哪些应用走 VPN，哪些直连**。有两种设置方式：
 
-## 通过配置文件实现分流
+- 🖐 **手动** —— 在应用设置里；
+- 📄 **通过配置** —— 提供商直接在 YAML 里定义规则。
 
-提供商可以直接在配置文件中指定分流规则。这些规则优先于用户的手动设置。
+> ℹ️ 配置里的规则**优先**于手动设置。若配置定义了分流，应用设置会显示访问控制由配置管理。
 
-### 白名单：仅选定的应用
+---
+
+## 📄 通过配置设置
+
+规则位于 `tun` 段，有两种互斥模式。
+
+### ✅ 白名单 —— 只有选中的应用
+
+**只有**列出的应用走 VPN，其余直连。
 
 ```yaml
 tun:
@@ -16,9 +25,9 @@ tun:
     - com.termux
 ```
 
-只有列出的应用将使用 VPN。
+### ⛔ 黑名单 —— 排除选中的应用
 
-### 黑名单：排除选定的应用
+**除列出的应用之外**都走 VPN。
 
 ```yaml
 tun:
@@ -28,35 +37,39 @@ tun:
     - org.mozilla.firefox
 ```
 
-列出的应用将不使用 VPN。
+> ⚠️ `include-package` 与 `exclude-package` **不能**同时使用。
 
-> 不能同时使用 `include-package` 和 `exclude-package`。
+---
 
-## 选择器格式
+## 🧬 选择器格式
 
-除了精确的包名外，还支持通配符和正则表达式：
+除精确包名外，还支持通配符和正则表达式：
 
-| 格式 | 示例 | 描述 |
+| 格式 | 示例 | 含义 |
 |------|------|------|
-| 精确名称 | `com.termux` | 精确匹配 |
-| 通配符 | `*.yandex.*` | 所有 Yandex 应用 |
-| 正则表达式 | `re:^org\.mozilla\..+$` | 所有 Mozilla 应用 |
-| 排除 | `!ru.yandex.browser` | 从列表中排除 |
+| 🎯 精确名 | `com.termux` | 精确匹配包名 |
+| ✳️ 通配符 | `*.yandex.*` | 所有 Yandex 应用 |
+| 🔤 正则 | `re:^org\.mozilla\..+$` | 所有 Mozilla 应用 |
+| 🚫 排除 | `!ru.yandex.browser` | 从列表中移除 |
 
-### 通配符和排除示例
+它们可以组合 —— 例如「除浏览器外的全部 Yandex，加上全部 Mozilla」：
 
 ```yaml
 tun:
   enable: true
   exclude-package:
     - '*.yandex.*'              # 所有 Yandex 应用
-    - '!ru.yandex.browser'      # 除 Yandex 浏览器外
+    - '!ru.yandex.browser'      # 除 Yandex 浏览器
     - 're:^org\.mozilla\..+$'   # 所有 Mozilla 应用
 ```
 
-## 从文件加载列表
+---
 
-包列表可以存储在单独的文件中：
+## 📥 来自文件与 URL 的列表
+
+较长的列表适合放在外部 —— 每行一个包名或选择器。
+
+**来自文件：**
 
 ```yaml
 tun:
@@ -65,11 +78,7 @@ tun:
     - lists/allowed-apps.txt
 ```
 
-文件必须每行包含一个包名或选择器。
-
-## 从 URL 加载列表
-
-列表可以通过 HTTP(S) 获取：
+**通过 HTTP(S) 从 URL：**
 
 ```yaml
 tun:
@@ -77,13 +86,19 @@ tun:
   include-package-url: https://example.com/packages.txt
 ```
 
-列表会缓存在本地，当 URL 不可用时使用。
+> 💾 URL 列表会缓存在本地，地址不可用时继续沿用。
 
-## 工作原理
+---
 
-1. FlClashM 从配置文件中读取 `tun` 部分。
-2. 将选择器（通配符、正则表达式）解析为具体的已安装包。
-3. 创建访问控制规则。
-4. 这些规则优先于手动设置。
+## ⚙️ 底层如何工作
 
-如果配置文件定义了分流，应用设置中将显示访问控制由配置文件管理。
+1. 📖 FlClashM 读取配置中的 `tun` 段。
+2. 🔎 把选择器（通配符、正则）解析为具体的已安装包。
+3. 🧱 生成访问控制规则。
+4. 🏆 这些规则优先于手动设置。
+
+---
+
+> 📎 「由配置管理」指示器究竟显示什么、以及为何它读取 VPN 服务的快照而非当前内核配置 —— 见[运行时](../development/runtime.md#-android-vpn-应用参数快照)。
+>
+> 🌍 其他语言：[Русский](../../../ru/docs/user-guide/split-tunneling.md) · [English](../../../en/docs/user-guide/split-tunneling.md) · [فارسی](../../../fa/docs/user-guide/split-tunneling.md)

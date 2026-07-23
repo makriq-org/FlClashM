@@ -1,43 +1,58 @@
-# معماری
+# 🏗 معماری
 
-FlClashM بر پایه FlClashX ساخته شده است. منطق محصول از پایه جدا شده تا به‌روزرسانی‌ها قابلیت‌های خاص را خراب نکنند.
+FlClashM بر پایهٔ FlClashX ساخته شده است. منطق محصولِ fork از پایه جدا است تا به‌روزرسانی‌های upstream ویژگی‌های سفارشی را نشکنند.
 
-## زنجیره اصلی
+## 🔗 خط لولهٔ اصلی
 
 ```
 RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineManager → EngineAdapter
 ```
 
-| مرحله | توضیحات |
-|-------|---------|
-| **RawProfile** | پروفایل خام |
-| **ProfileCompiler** | خواندن پروفایل، نرمال‌سازی تونل‌زنی جداگانه |
-| **SecurityPolicy** | اعمال قوانین امنیتی Android |
-| **RuntimePlan** | ساخت برنامه اجرای محیط اجرا |
-| **EngineManager** | مدیریت چرخه حیات موتور |
+| مرحله | چه می‌کند |
+|-------|-----------|
+| **RawProfile** | پروفایل خام همان‌طور که هست |
+| **ProfileCompiler** | خواندن پروفایل، نرمال‌سازی تونل‌زنی جداگانه، کامپایل نودهای داخلی |
+| **SecurityPolicy** | اجبار TUN روی اندروید |
+| **RuntimePlan** | ساخت نقشهٔ راه‌اندازی محیط اجرا |
+| **EngineManager** | مدیریت چرخهٔ حیات موتور |
 | **EngineAdapter** | پل به `mihomo` |
 
-## لایه‌ها
+## 🧱 لایه‌ها
 
-1. **پایه FlClashX** — رابط کاربری، ناوبری، مسیر پایه اجرا.
-2. **لایه محصول** (`lib/product/**`) — کامپایل پروفایل، امنیت، به‌روزرسانی‌ها.
-3. **لایه اجرا** — `mihomo`، نودهای داخلی.
-4. **لایه پلتفرم** — VPN اندروید، سرویس، اعلان‌ها.
+1. 🎛 **پایهٔ FlClashX** — UI، ناوبری، مسیر پایهٔ runtime.
+2. 📦 **لایهٔ محصول** (`lib/product/**`) — کامپایل پروفایل، امنیت، به‌روزرسانی، صفحات مخصوص fork.
+3. ⚙️ **لایهٔ محیط اجرا** — `mihomo` (پایه) و نودهای داخلی `naiveproxy`، `olcrtc`، `byedpi`.
+4. 📱 **لایهٔ سکو** — VPN اندروید، سرویس پیش‌زمینه، نصب‌کننده، اعلان‌ها.
 
-## مرز پایه و محصول
+## 🚧 مرز base/product
 
-کد پایه خارج از `lib/product/**` فقط از طریق نقاط یکپارچه‌سازی در `tool/product_touchpoints.json` به لایه محصول دسترسی دارد.
+<a id="base-product-boundary"></a>
+
+کد پایهٔ بیرون از `lib/product/**` **فقط از طریق** نقاط اتصالِ `tool/product_touchpoints.json` به لایهٔ محصول دسترسی دارد.
+
+- صفحات زندهٔ `lib/views/**` در `lib/product/**` **تکرار نمی‌شوند**: پایه صفحات upstream را با حداقل قلاب نگه می‌دارد.
+- کلاس‌های Widget و کارخانه‌های `Widget` در `lib/product/**` به‌طور پیش‌فرض ممنوع‌اند؛ عناصر خاص FlClashM باید با ذکر دلیل به‌صراحت در `allowedProductUi` از `tool/product_touchpoints.json` ثبت شوند.
+
+با یک گیت اجرا می‌شود:
 
 ```bash
 dart tool/check_product_boundaries.dart
 ```
 
-## سرویس‌های اصلی
+> 📎 ارتباط این با به‌روزرسانی upstream در [همگام‌سازی با FlClashX](upstream-sync.md). قواعد مشارکت‌کنندگان در [AGENTS.md](../../../../AGENTS.md).
 
-| سرویس | مسئول |
-|-------|-------|
+## 🧩 سرویس‌های اصلی
+
+| سرویس | مسئولِ |
+|-------|--------|
 | `ProfileCompiler` | خواندن و نرمال‌سازی پروفایل |
-| `SecurityPolicy` | قوانین امنیتی اجباری |
-| `EngineManager` | چرخه حیات موتور |
-| `AppUpdateService` | بررسی و نصب به‌روزرسانی‌ها |
+| `SecurityPolicy` | اجبار TUN روی اندروید |
+| `EngineManager` | چرخهٔ حیات موتور |
+| `BuiltInProxySupervisor` | چرخهٔ حیات نودهای داخلی |
+| `AppUpdateService` | بررسی، دانلود و نصب به‌روزرسانی برنامه |
+| `AppUpdateManifestVerifier` | بررسی امضا و قرارداد manifest به‌روزرسانی |
 | `AccessControlService` | تونل‌زنی جداگانه |
+
+---
+
+> 🌍 زبان‌های دیگر: [Русский](../../../ru/docs/development/architecture.md) · [English](../../../en/docs/development/architecture.md) · [中文](../../../zh/docs/development/architecture.md)
