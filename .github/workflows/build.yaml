@@ -356,19 +356,26 @@ jobs:
             exit 1
           fi
 
+          tag="${{ github.ref_name }}"
+          repo="${GITHUB_REPOSITORY}"
           if [ "${{ env.IS_STABLE }}" == "true" ]; then
-            sed "s|VERSION|$version|g" ./.github/release_template.md > release.md
+            template=./.github/release_template.md
           else
-            : > release.md
+            template=./.github/pre_release_template.md
           fi
 
-          {
-            if [ "${{ env.IS_STABLE }}" == "true" ]; then
-              printf '\n\n'
-            fi
-            printf '## Что изменилось\n\n'
-            printf '%s\n' "$changelog_block"
-          } >> release.md
+          # Fill in version/tag/repo placeholders, then splice the changelog
+          # bullets in at the {{CHANGES}} marker. The changelog block is injected
+          # verbatim so its lines stay the only `- ` bullets — the update
+          # dialog in the app renders exactly those and skips the rest.
+          printf '%s\n' "$changelog_block" > changes.md
+          sed -e "s|VERSION|$version|g" -e "s|TAG|$tag|g" -e "s|REPO|$repo|g" "$template" > release.tmpl
+          awk '
+            FNR == NR { changes = changes $0 ORS; next }
+            index($0, "{{CHANGES}}") { printf "%s", changes; next }
+            { print }
+          ' changes.md release.tmpl > release.md
+          rm -f changes.md release.tmpl
 
       - name: Require app update publishing secrets
         env:
