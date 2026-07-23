@@ -69,11 +69,15 @@ class BuiltInProxyCompiler {
     required Map<String, dynamic> rawConfig,
     required ClashConfig patchConfig,
     String globalTestUrl = '',
+    bool copyConfig = true,
+    bool validate = true,
   }) {
-    final normalizedConfig = copyConfigTree(rawConfig);
+    final normalizedConfig = copyConfig ? copyConfigTree(rawConfig) : rawConfig;
     final proxyEntries = normalizedConfig['proxies'];
     if (proxyEntries is! List) {
-      validateConfig(normalizedConfig);
+      if (validate) {
+        validateConfig(normalizedConfig);
+      }
       normalizedConfig.remove('x-flclashm-runtime');
       return CompiledBuiltInProxyNodes(
         config: normalizedConfig,
@@ -81,7 +85,9 @@ class BuiltInProxyCompiler {
       );
     }
 
-    validateConfig(normalizedConfig);
+    if (validate) {
+      validateConfig(normalizedConfig);
+    }
     normalizedConfig.remove('x-flclashm-runtime');
 
     final reservedPorts = _collectReservedPorts(

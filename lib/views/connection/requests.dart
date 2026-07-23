@@ -32,7 +32,6 @@ class _LogConnectionsBodyState extends ConsumerState<LogConnectionsBody> {
   List<Connection> _requests = [];
   final _tag = CacheTag.requests;
   late ScrollController _scrollController;
-  bool _isLoad = false;
 
   @override
   void initState() {
@@ -44,7 +43,6 @@ class _LogConnectionsBodyState extends ConsumerState<LogConnectionsBody> {
     _requests = globalState.appState.requests.list;
     _requestsStateNotifier = ValueNotifier<ConnectionsState>(
       ConnectionsState(
-        loading: true,
         connections: _requests,
         query: widget.query,
         keywords: widget.keywords,
@@ -102,66 +100,14 @@ class _LogConnectionsBodyState extends ConsumerState<LogConnectionsBody> {
     }, duration: commonDuration);
   }
 
-  void _preLoad() {
-    if (_isLoad == true) {
-      return;
-    }
-    _isLoad = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-      final isMobileView = ref.read(isMobileViewProvider);
-      if (isMobileView) {
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-      final parts = _requests.batch(10);
-      globalState.cacheHeightMap[_tag] ??= FixedMap(
-        _requests.length,
-      );
-      for (var i = 0; i < parts.length; i++) {
-        final part = parts[i];
-        await Future(
-          () {
-            for (final request in part) {
-              globalState.cacheHeightMap[_tag]?.updateCacheValue(
-                request.id,
-                () => _calcCacheHeight(request),
-              );
-            }
-          },
-        );
-      }
-      _requestsStateNotifier.value = _requestsStateNotifier.value.copyWith(
-        loading: false,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) => TextScaleNotification(
         child: ValueListenableBuilder<ConnectionsState>(
           valueListenable: _requestsStateNotifier,
           builder: (_, state, __) {
-            _preLoad();
             final connections = state.list;
-            final items = connections
-                .map<Widget>(
-                  (connection) => ConnectionRow(
-                    key: Key(connection.id),
-                    connection: connection,
-                    mode: ConnectionRowMode.log,
-                    onClickKeyword: (value) {
-                      context.commonScaffoldState?.addKeyword(value);
-                    },
-                  ),
-                )
-                .separated(
-                  const Divider(
-                    height: 0,
-                  ),
-                )
-                .toList();
+            final itemCount =
+                connections.isEmpty ? 0 : connections.length * 2 - 1;
             final content = connections.isEmpty
                 ? NullStatus(
                     label: appLocalizations
@@ -187,8 +133,21 @@ class _LogConnectionsBodyState extends ConsumerState<LogConnectionsBody> {
                             }
                             return _calcCacheHeight(connections[index ~/ 2]);
                           },
-                          itemBuilder: (_, index) => items[index],
-                          itemCount: items.length,
+                          itemBuilder: (_, index) {
+                            if (index.isOdd) {
+                              return const Divider(height: 0);
+                            }
+                            final connection = connections[index ~/ 2];
+                            return ConnectionRow(
+                              key: Key(connection.id),
+                              connection: connection,
+                              mode: ConnectionRowMode.log,
+                              onClickKeyword: (value) {
+                                context.commonScaffoldState?.addKeyword(value);
+                              },
+                            );
+                          },
+                          itemCount: itemCount,
                           keyBuilder: (index) {
                             if (index.isOdd) {
                               return "divider";

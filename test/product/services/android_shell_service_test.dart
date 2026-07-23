@@ -38,6 +38,20 @@ void main() {
       expect(bridge.pushedTitles, ['Service Name / Runtime Proxy']);
     });
 
+    test('does not push an unchanged foreground notification title', () async {
+      final bridge = _FakeAndroidShellPlatformBridge();
+      final service = AndroidShellService(platform: bridge);
+
+      await service.pushForegroundNotificationTitle('Profile / Node A');
+      await service.pushForegroundNotificationTitle('Profile / Node A');
+      await service.pushForegroundNotificationTitle('Profile / Node B');
+
+      expect(
+        bridge.pushedTitles,
+        ['Profile / Node A', 'Profile / Node B'],
+      );
+    });
+
     test('syncs proxy-change titles only for the tracked server group',
         () async {
       final bridge = _FakeAndroidShellPlatformBridge();

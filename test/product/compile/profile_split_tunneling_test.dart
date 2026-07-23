@@ -320,6 +320,52 @@ void main() {
       );
     });
 
+    test('bounds parallel source reads and preserves source order', () async {
+      final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
+        ..createSync(recursive: true);
+      final urls = [
+        for (var index = 0; index < 8; index++)
+          'https://example.com/list-$index.txt',
+      ];
+      var activeReads = 0;
+      var peakReads = 0;
+
+      final resolved = await resolveAndroidProfileSplitTunneling(
+        rawConfig: {
+          'tun': {
+            'include-package-url': urls,
+          },
+        },
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-parallel-sources',
+        installedPackageNames: [
+          for (var index = 0; index < urls.length; index++) 'com.example.$index',
+        ],
+        readRemoteSource: (url) async {
+          final index = urls.indexOf(url);
+          activeReads++;
+          if (activeReads > peakReads) {
+            peakReads = activeReads;
+          }
+          try {
+            await Future<void>.delayed(
+              Duration(milliseconds: (urls.length - index) * 2),
+            );
+            return 'com.example.$index\n';
+          } finally {
+            activeReads--;
+          }
+        },
+      );
+
+      expect(peakReads, 4);
+      expect(
+        resolved.config['tun']['include-package'],
+        [for (var index = 0; index < urls.length; index++) 'com.example.$index'],
+      );
+    });
+
     test('rejects cache paths outside the profiles directory', () async {
       final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
         ..createSync(recursive: true);
