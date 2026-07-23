@@ -352,8 +352,20 @@ void _checkBuildWorkflow({
   );
   _expectPatternExists(
     content: content,
-    pattern: RegExp(r'## Что изменилось'),
-    label: 'release notes changes heading in `$buildWorkflowPath`',
+    pattern: RegExp(r'\.github/release_template\.md'),
+    label: 'stable release template usage in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'\.github/pre_release_template\.md'),
+    label: 'pre-release template usage in `$buildWorkflowPath`',
+    failures: failures,
+  );
+  _expectPatternExists(
+    content: content,
+    pattern: RegExp(r'\{\{CHANGES\}\}'),
+    label: 'changelog injection marker in `$buildWorkflowPath`',
     failures: failures,
   );
   _expectPatternExists(
@@ -512,54 +524,44 @@ void _checkReleaseTemplate({
   required String templatePath,
   required List<String> failures,
 }) {
-  final lines = content
-      .split(RegExp(r'\r?\n'))
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList();
-  final bulletLines = lines.where((line) => line.startsWith('- ')).toList();
-  final isPreReleaseTemplate = templatePath == preReleaseTemplatePath;
-
-  if (isPreReleaseTemplate && lines.isEmpty) {
+  if (content.trim().isEmpty) {
+    failures.add('Release template `$templatePath` must not be empty.');
     return;
   }
 
-  if (lines.isEmpty || lines.length > 3) {
-    failures.add(
-      'Release template `$templatePath` must contain 1-3 non-empty bullet points.',
-    );
-  }
-
-  if (bulletLines.length != lines.length) {
-    failures.add(
-      'Release template `$templatePath` must contain only Markdown bullet lines.',
-    );
-  }
-
-  if (!content.contains('VERSION')) {
-    failures
-        .add('Release template `$templatePath` must keep VERSION placeholder.');
+  // Placeholders the build workflow fills in (VERSION/TAG/REPO) or splices the
+  // changelog into ({{CHANGES}}). Missing any of them breaks the generated body.
+  for (final placeholder in const ['VERSION', 'TAG', 'REPO', '{{CHANGES}}']) {
+    if (!content.contains(placeholder)) {
+      failures.add(
+        'Release template `$templatePath` must keep the `$placeholder` placeholder.',
+      );
+    }
   }
 
   if (!content.contains(contract.appName)) {
     failures.add(
-        'Release template `$templatePath` must mention `${contract.appName}`.');
-  }
-
-  if (RegExp(r'https?://|<[^>]+>|CHANGELOG|ChangeLog|changelog|img\.shields')
-      .hasMatch(content)) {
-    failures.add(
-      'Release template `$templatePath` must stay concise: no links, HTML, badges or changelog references.',
+      'Release template `$templatePath` must mention `${contract.appName}`.',
     );
   }
 
-  final cyrillic = RegExp(r'[А-Яа-яЁё]');
-  for (final line in bulletLines) {
-    if (!cyrillic.hasMatch(line)) {
-      failures.add(
-        'Release template `$templatePath` must use Russian text in every bullet.',
-      );
-    }
+  // Keep a direct download entry point for the universal APK so users always
+  // have a one-click option in the release notes.
+  final universalArtifact = contract.releaseArtifacts.firstWhere(
+    (artifact) => artifact.contains('universal'),
+    orElse: () => '${contract.appName}-android-universal.apk',
+  );
+  if (!content.contains('releases/download/TAG/') ||
+      !content.contains(universalArtifact)) {
+    failures.add(
+      'Release template `$templatePath` must link to the `$universalArtifact` download.',
+    );
+  }
+
+  if (!RegExp(r'[А-Яа-яЁё]').hasMatch(content)) {
+    failures.add(
+      'Release template `$templatePath` must include Russian text.',
+    );
   }
 }
 
