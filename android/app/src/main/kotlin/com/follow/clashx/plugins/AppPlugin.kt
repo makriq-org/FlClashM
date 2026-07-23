@@ -4,10 +4,12 @@ import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
-import android.content.pm.ComponentInfo
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
@@ -20,7 +22,6 @@ import androidx.core.content.FileProvider
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile
 import com.follow.clashx.FlClashApplication
 import com.follow.clashx.R
 import com.follow.clashx.extensions.getActionIntent
@@ -45,7 +46,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.Collections
-import java.util.zip.ZipFile
 
 // How long the installed-packages snapshot stays fresh. TTL, not load-once: a
 // process-lifetime cache never showed apps (un)installed while FlClashX ran.
@@ -76,61 +76,15 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     )
 
     private val packages = mutableListOf<Package>()
+    private var installedPackageSnapshot: List<android.content.pm.PackageInfo> = emptyList()
     private var packagesLoadedAt = 0L
+    private var installedAppsPermissionGranted: Boolean? = null
+    private var packageChangesReceiverRegistered = false
 
-    private val skipPrefixList = listOf(
-        "com.google",
-        "com.android.chrome",
-        "com.android.vending",
-        "com.microsoft",
-        "com.apple",
-        "com.zhiliaoapp.musically", // Banned by China
-    )
-
-    private val chinaAppPrefixList = listOf(
-        "com.tencent",
-        "com.alibaba",
-        "com.umeng",
-        "com.qihoo",
-        "com.ali",
-        "com.alipay",
-        "com.amap",
-        "com.sina",
-        "com.weibo",
-        "com.vivo",
-        "com.xiaomi",
-        "com.huawei",
-        "com.taobao",
-        "com.secneo",
-        "s.h.e.l.l",
-        "com.stub",
-        "com.kiwisec",
-        "com.secshell",
-        "com.wrapper",
-        "cn.securitystack",
-        "com.mogosec",
-        "com.secoen",
-        "com.netease",
-        "com.mx",
-        "com.qq.e",
-        "com.baidu",
-        "com.bytedance",
-        "com.bugly",
-        "com.miui",
-        "com.oppo",
-        "com.coloros",
-        "com.iqoo",
-        "com.meizu",
-        "com.gionee",
-        "cn.nubia",
-        "com.oplus",
-        "andes.oplus",
-        "com.unionpay",
-        "cn.wps"
-    )
-
-    private val chinaAppRegex by lazy {
-        ("(" + chinaAppPrefixList.joinToString("|").replace(".", "\\.") + ").*").toRegex()
+    private val packageChangesReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            invalidatePackageCaches()
+        }
     }
 
     val VPN_PERMISSION_REQUEST_CODE = 1001
@@ -149,6 +103,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "app")
         channel.setMethodCallHandler(this)
+        registerPackageChangesReceiver()
     }
 
     private fun initShortcuts(toggle: String, start: String, stop: String) {
@@ -174,7 +129,65 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        unregisterPackageChangesReceiver()
         scope.cancel()
+    }
+
+    private fun registerPackageChangesReceiver() {
+        if (packageChangesReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        packageChangesReceiverRegistered = runCatching {
+            ContextCompat.registerReceiver(
+                FlClashApplication.getAppContext(),
+                packageChangesReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }.isSuccess
+    }
+
+    private fun unregisterPackageChangesReceiver() {
+        if (!packageChangesReceiverRegistered) return
+        runCatching {
+            FlClashApplication.getAppContext().unregisterReceiver(packageChangesReceiver)
+        }
+        packageChangesReceiverRegistered = false
+    }
+
+    @Synchronized
+    private fun invalidatePackageCaches() {
+        installedPackageSnapshot = emptyList()
+        packages.clear()
+        packagesLoadedAt = 0L
+        iconMap.clear()
+    }
+
+    private fun hasInstalledAppsPermission(): Boolean {
+        val context = FlClashApplication.getAppContext()
+        val defined = try {
+            context.packageManager?.getPermissionInfo(GET_INSTALLED_APPS_PERMISSION, 0) != null
+        } catch (_: Exception) {
+            false
+        }
+        return !defined || ContextCompat.checkSelfPermission(
+            context,
+            GET_INSTALLED_APPS_PERMISSION,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @Synchronized
+    private fun refreshInstalledAppsPermissionState() {
+        val granted = hasInstalledAppsPermission()
+        if (installedAppsPermissionGranted != null && installedAppsPermissionGranted != granted) {
+            invalidatePackageCaches()
+        }
+        installedAppsPermissionGranted = granted
     }
 
     private fun tip(message: String?) {
@@ -218,13 +231,6 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             "getInstalledPackageNames" -> {
                 scope.launch(Dispatchers.IO) {
                     val names = getInstalledPackageNames()
-                    result.successOnMain(names)
-                }
-            }
-
-            "getChinaPackageNames" -> {
-                scope.launch(Dispatchers.IO) {
-                    val names = getChinaPackageNames()
                     result.successOnMain(names)
                 }
             }
@@ -489,18 +495,31 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     @Synchronized
-    private fun getPackages(): List<Package> {
+    private fun getInstalledPackageSnapshot(): List<android.content.pm.PackageInfo> {
+        refreshInstalledAppsPermissionState()
         val packageManager = FlClashApplication.getAppContext().packageManager
         val now = android.os.SystemClock.elapsedRealtime()
-        if (packages.isNotEmpty() && now - packagesLoadedAt < PACKAGES_CACHE_TTL_MS) {
-            return packages.toList()
+        if (packagesLoadedAt != 0L && now - packagesLoadedAt < PACKAGES_CACHE_TTL_MS) {
+            return installedPackageSnapshot
         }
+        installedPackageSnapshot = packageManager
+            ?.getInstalledPackages(PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS)
+            ?.toList()
+            ?: emptyList()
         packages.clear()
-        packageManager?.getInstalledPackages(PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS)
-            ?.filter {
-                it.packageName != FlClashApplication.getAppContext().packageName || it.packageName == "android"
+        packagesLoadedAt = now
+        return installedPackageSnapshot
+    }
 
-            }?.map {
+    @Synchronized
+    private fun getPackages(): List<Package> {
+        val packageManager = FlClashApplication.getAppContext().packageManager
+        val snapshot = getInstalledPackageSnapshot()
+        if (packages.isEmpty()) {
+            snapshot.filter {
+                it.packageName != FlClashApplication.getAppContext().packageName ||
+                    it.packageName == "android"
+            }.map {
                 Package(
                     packageName = it.packageName,
                     label = it.applicationInfo?.loadLabel(packageManager)?.toString() ?: it.packageName,
@@ -508,10 +527,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     lastUpdateTime = it.lastUpdateTime,
                     internet = it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
                 )
-            }?.let { packages.addAll(it) }
-        packagesLoadedAt = now
-        // Snapshot: callers serialize/filter outside this lock while a later refresh
-        // may clear() the backing list mid-iteration.
+            }.let { packages.addAll(it) }
+        }
         return packages.toList()
     }
 
@@ -521,23 +538,12 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
-    private suspend fun getInstalledPackageNames(): String {
+    private suspend fun getInstalledPackageNames(): List<String> {
         return withContext(Dispatchers.IO) {
-            val packageManager = FlClashApplication.getAppContext().packageManager
-            val packageNames = packageManager
-                ?.getInstalledPackages(0)
-                ?.map { it.packageName }
-                ?.filter { it.isNotBlank() }
-                ?: emptyList()
-            Gson().toJson(packageNames)
-        }
-    }
-
-    private suspend fun getChinaPackageNames(): String {
-        return withContext(Dispatchers.IO) {
-            val packages: List<String> =
-                getPackages().map { it.packageName }.filter { isChinaPackage(it) }
-            Gson().toJson(packages)
+            getInstalledPackageSnapshot()
+                .map { it.packageName }
+                .filter { it.isNotBlank() }
+                .distinct()
         }
     }
 
@@ -590,77 +596,6 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
             }
         }
-    }
-
-    private fun isChinaPackage(packageName: String): Boolean {
-        val packageManager = FlClashApplication.getAppContext().packageManager ?: return false
-        skipPrefixList.forEach {
-            if (packageName == it || packageName.startsWith("$it.")) return false
-        }
-        val packageManagerFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            PackageManager.MATCH_UNINSTALLED_PACKAGES or PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS
-        } else {
-            @Suppress("DEPRECATION")
-            PackageManager.GET_UNINSTALLED_PACKAGES or PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS
-        }
-        if (packageName.matches(chinaAppRegex)) {
-            return true
-        }
-        try {
-            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.PackageInfoFlags.of(packageManagerFlags.toLong())
-                )
-            } else {
-                packageManager.getPackageInfo(
-                    packageName, packageManagerFlags
-                )
-            }
-            mutableListOf<ComponentInfo>().apply {
-                packageInfo.services?.let { addAll(it) }
-                packageInfo.activities?.let { addAll(it) }
-                packageInfo.receivers?.let { addAll(it) }
-                packageInfo.providers?.let { addAll(it) }
-            }.forEach {
-                if (it.name.matches(chinaAppRegex)) return true
-            }
-            packageInfo.applicationInfo?.publicSourceDir?.let {
-                ZipFile(File(it)).use {
-                    for (packageEntry in it.entries()) {
-                        if (packageEntry.name.startsWith("firebase-")) return false
-                    }
-                    for (packageEntry in it.entries()) {
-                        if (!(packageEntry.name.startsWith("classes") && packageEntry.name.endsWith(
-                                ".dex"
-                            ))
-                        ) {
-                            continue
-                        }
-                        if (packageEntry.size > 15000000) {
-                            return true
-                        }
-                        val input = it.getInputStream(packageEntry).buffered()
-                        val dexFile = try {
-                            DexBackedDexFile.fromInputStream(null, input)
-                        } catch (e: Exception) {
-                            return false
-                        } finally {
-                            input.close()
-                        }
-                        for (clazz in dexFile.classes) {
-                            val clazzName =
-                                clazz.type.substring(1, clazz.type.length - 1).replace("/", ".")
-                                    .replace("$", ".")
-                            if (clazzName.matches(chinaAppRegex)) return true
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {
-            return false
-        }
-        return false
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -723,8 +658,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 // A pre-grant load may have cached the ROM's stripped-down list
                 // moments ago; drop it so the pending callbacks fetch the real one.
                 synchronized(this) {
-                    packages.clear()
-                    packagesLoadedAt = 0L
+                    invalidatePackageCaches()
+                    installedAppsPermissionGranted = true
                 }
             }
             val pending = installedAppsCallbacks.toList()

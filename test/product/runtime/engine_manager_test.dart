@@ -494,6 +494,104 @@ void main() {
       expect(manager.activeEngineId, RuntimeId.mihomo);
     });
 
+    test('reuses a verified pending plan between init and setup', () async {
+      var buildCalls = 0;
+      manager = buildManager(
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async {
+          buildCalls++;
+          return RuntimePlan.empty(
+            selectedMap: const {},
+            testUrl: 'https://example.com',
+            runtime: runtimeSelection,
+          );
+        },
+      );
+      const request = EngineRuntimePlanRequest(
+        patchConfig: ClashConfig(),
+        settingsRevision: ('settings', 1),
+      );
+
+      await manager.initializeCore(
+        runtimePlanRequest: request,
+        coldStartPatchConfig: const ClashConfig(),
+        setupRuntimePlan: false,
+      );
+      await manager.setupRuntimePlan(request);
+
+      expect(buildCalls, 1);
+      expect(mihomoAdapter.setupRuntimePlanCalls, 1);
+    });
+
+    test('invalidates pending plan when compiler inputs change', () async {
+      var buildCalls = 0;
+      manager = buildManager(
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async {
+          buildCalls++;
+          return RuntimePlan.empty(
+            selectedMap: const {},
+            testUrl: 'https://example.com',
+            runtime: runtimeSelection,
+          );
+        },
+      );
+
+      await manager.initializeCore(
+        runtimePlanRequest: const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+          settingsRevision: 1,
+        ),
+        coldStartPatchConfig: const ClashConfig(),
+        setupRuntimePlan: false,
+      );
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(
+          patchConfig: ClashConfig(),
+          settingsRevision: 2,
+        ),
+      );
+
+      expect(buildCalls, 2);
+    });
+
+    test('persists the latest proxy selection without rebuilding plan',
+        () async {
+      var buildCalls = 0;
+      manager = buildManager(
+        buildRuntimePlan: ({
+          required rawProfile,
+          required securedProfile,
+          required runtimePatchConfig,
+        }) async {
+          buildCalls++;
+          return RuntimePlan.empty(
+            selectedMap: const {'Auto': 'Node A'},
+            testUrl: 'https://example.com',
+            runtime: runtimeSelection,
+          );
+        },
+      );
+      await manager.setupRuntimePlan(
+        const EngineRuntimePlanRequest(patchConfig: ClashConfig()),
+      );
+
+      await manager.notifyProxySelected('Auto', 'Node B');
+      await manager.persistColdStart(pathConfig: const ClashConfig());
+
+      expect(buildCalls, 1);
+      expect(
+        mihomoAdapter.lastPersistedRuntimePlan?.selectedMap,
+        {'Auto': 'Node B'},
+      );
+    });
+
     test('rejects runtime switch while started', () async {
       final started = await manager.start();
       expect(started, isTrue);

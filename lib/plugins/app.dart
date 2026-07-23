@@ -52,23 +52,10 @@ class App {
   }
 
   Future<List<String>> getInstalledPackageNames() async {
-    final packageNamesString =
-        await methodChannel.invokeMethod<String>("getInstalledPackageNames");
-    return Isolate.run<List<String>>(() {
-      final List<dynamic> packageNamesRaw =
-          packageNamesString != null ? json.decode(packageNamesString) : [];
-      return packageNamesRaw.map((e) => e.toString()).toList();
-    });
-  }
-
-  Future<List<String>> getChinaPackageNames() async {
-    final packageNamesString =
-        await methodChannel.invokeMethod<String>("getChinaPackageNames");
-    return Isolate.run<List<String>>(() {
-      final List<dynamic> packageNamesRaw =
-          packageNamesString != null ? json.decode(packageNamesString) : [];
-      return packageNamesRaw.map((e) => e.toString()).toList();
-    });
+    final packageNames = await methodChannel.invokeListMethod<String>(
+      "getInstalledPackageNames",
+    );
+    return packageNames ?? const [];
   }
 
   Future<bool> openFile(String path) async => await methodChannel.invokeMethod<bool>("openFile", {

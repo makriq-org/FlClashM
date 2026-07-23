@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/models/models.dart';
@@ -31,10 +32,61 @@ String? flagToCountryCode(String text) {
 }
 
 // destIP -> ISO country, cached so the 2s connections re-poll doesn't repeat geoip.
-final Map<String, String> _ipCountryCache = {};
+const _maxIpCountryCacheEntries = 512;
+final LinkedHashMap<String, String> _ipCountryCache = LinkedHashMap();
+final Map<String, Future<String>> _ipCountryInFlight = {};
 // Serialize geoip lookups so a single list build can't flood the core IPC channel
 // with a burst of requests (which would compete with the connections/traffic polls).
 Future<void> _geoipQueue = Future.value();
+
+String? _readCachedCountry(String ip) {
+  final value = _ipCountryCache.remove(ip);
+  if (value != null) {
+    _ipCountryCache[ip] = value;
+  }
+  return value;
+}
+
+void _cacheCountry(String ip, String country) {
+  _ipCountryCache.remove(ip);
+  _ipCountryCache[ip] = country;
+  while (_ipCountryCache.length > _maxIpCountryCacheEntries) {
+    _ipCountryCache.remove(_ipCountryCache.keys.first);
+  }
+}
+
+Future<String> _resolveCountry(String ip) {
+  final cached = _readCachedCountry(ip);
+  if (cached != null) {
+    return Future.value(cached);
+  }
+  final inFlight = _ipCountryInFlight[ip];
+  if (inFlight != null) {
+    return inFlight;
+  }
+  final task = _geoipQueue.catchError((_) {}).then((_) async {
+    final queuedHit = _readCachedCountry(ip);
+    if (queuedHit != null) {
+      return queuedHit;
+    }
+    final info = await clashCore.getCountryCode(ip);
+    final country = info?.countryCode ?? '';
+    _cacheCountry(ip, country);
+    return country;
+  });
+  _geoipQueue = task.then<void>(
+    (_) {},
+    onError: (_, __) {},
+  );
+  _ipCountryInFlight[ip] = task;
+  unawaited(
+    task.then<void>(
+      (_) => _ipCountryInFlight.remove(ip),
+      onError: (_, __) => _ipCountryInFlight.remove(ip),
+    ),
+  );
+  return task;
+}
 
 /// The destination host's country, from the core's local geoip on the connection's
 /// destination IP. Cached per IP and looked up through a serial queue. In badge mode
@@ -82,24 +134,16 @@ class _ConnectionFlagState extends State<ConnectionFlag> {
       _set('');
       return;
     }
-    final cached = _ipCountryCache[ip];
-    if (cached != null) {
-      _set(cached);
-      return;
-    }
-    final completer = Completer<String>();
-    _geoipQueue = _geoipQueue.then((_) async {
-      final hit = _ipCountryCache[ip];
-      if (hit != null) {
-        completer.complete(hit);
-        return;
+    try {
+      final code = await _resolveCountry(ip);
+      if (widget.connection.metadata.destinationIP == ip) {
+        _set(code);
       }
-      final info = await clashCore.getCountryCode(ip);
-      final cc = info?.countryCode ?? '';
-      _ipCountryCache[ip] = cc;
-      completer.complete(cc);
-    });
-    _set(await completer.future);
+    } catch (_) {
+      if (widget.connection.metadata.destinationIP == ip) {
+        _set('');
+      }
+    }
   }
 
   void _set(String code) {

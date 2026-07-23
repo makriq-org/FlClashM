@@ -511,6 +511,11 @@
       "reason": "Убран шумный отладочный лог TunStackItem; форматный дрейф откатан к апстриму."
     },
     {
+      "path": "lib/views/connection/requests.dart",
+      "bucket": "budget",
+      "reason": "Лента соединений строит только видимые строки и не выполняет предварительную загрузку фиксированных высот."
+    },
+    {
       "path": "lib/views/dashboard/dashboard.dart",
       "bucket": "budget",
       "reason": "Живой dashboard оставлен в base и держит только lock-гейты и выбор вида через продуктовые селекторы."
@@ -531,6 +536,11 @@
       "reason": "Живой metainfo-виджет читает support URL через product display hints и снова использует обычный URLFormDialog."
     },
     {
+      "path": "lib/views/dashboard/widgets/memory_info.dart",
+      "bucket": "budget",
+      "reason": "Опрос памяти выполняется только при видимом dashboard и не публикует неизменившееся значение."
+    },
+    {
       "path": "lib/views/dashboard/widgets/service_info_widget.dart",
       "bucket": "budget",
       "reason": "Живой service-info виджет берет брендовые поля и ссылку поддержки через product display hints."
@@ -549,6 +559,26 @@
       "path": "lib/views/profiles/receive_profile_dialog.dart",
       "bucket": "budget",
       "reason": "Запуск фонового сервера в initState помечен через unawaited, чтобы не терять Future."
+    },
+    {
+      "path": "lib/views/logs.dart",
+      "bucket": "budget",
+      "reason": "Лента логов строит элементы лениво и вычисляет высоты по запросу без полной предварительной загрузки."
+    },
+    {
+      "path": "lib/views/proxies/list.dart",
+      "bucket": "budget",
+      "reason": "Карточки прокси создаются только для смонтированных раскрытых групп; свёрнутые и ушедшие с экрана группы освобождают тяжёлые строки."
+    },
+    {
+      "path": "lib/widgets/flag.dart",
+      "bucket": "budget",
+      "reason": "GeoIP-кэш ограничен LRU-бюджетом, а одинаковые запросы объединяются и восстанавливаются после ошибок."
+    },
+    {
+      "path": "lib/widgets/line_chart.dart",
+      "bucket": "budget",
+      "reason": "График использует уже построенный Path без лишнего полного прохода по метрикам на каждом кадре."
     }
   ]
 }
