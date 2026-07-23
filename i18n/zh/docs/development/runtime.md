@@ -1,53 +1,111 @@
-# 运行时
+# ⚙️ 运行时
 
-## 处理流程
+## 🔗 处理流水线
 
 ```
 RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ```
 
-之后，生命周期由 `EngineManager` 和 `EngineAdapter` 管理。
+此后由 `EngineManager` 与 `EngineAdapter` 管理生命周期。
 
-## 内置节点
+---
 
-内置节点在配置文件中定义为普通代理。它们的生命周期由 `BuiltInProxySupervisor` 管理。
+## 🔍 内置节点验证
 
-### naiveproxy
+启动 NaiveProxy、OlcRTC 和 ByeDPI 分**两个阶段**：
+
+1. ✅ 确认存活的进程与本地 SOCKS 端口；
+2. 🌐 严格经该 SOCKS 端口发起端到端 HTTP(S) 请求。
+
+产品层校验并序列化来自 `lib/product/runtime/connectivity_check.dart` 的契约，由 Android 服务经 `RuntimeNodeConnectivityChecker` 执行。
+
+**事务性。** 必需检查属于启动事务：`startup-timeout` 耗尽会停止新节点并回滚已准备的方案。可选检查在后台进行，仅影响日志。已保存的清单携带相同契约，Android 平台层在 always-on 恢复时会在内核快速启动前执行它 —— 因此**正常启动与冷启动的成功条件一致**。
+
+**无直接回退连接。** 名称在 SOCKS 请求之前解析，所有解析出的地址必须是公网，SOCKS 命令收到的是已验证的 IP。TLS 会针对原始名称校验证书。
+
+**进程所有权。** Android 服务是工作进程与 ByeDPI 临时策略选择进程的唯一所有者。单次 `probeRuntimeNode` 与工作方案的替换串行化；批量调用仅在检查快照时持锁，不会在网络请求期间阻塞方案替换。两条路径都要求强制安全检查、始终终止临时进程，且不改变生效或已保存的方案。失败的候选被丢弃；回滚使用旧缓存，若无则使用内置回退策略。该路径的更新对 Dart 桥、AIDL 与 Android 服务一并进行；回退到旧版本无需迁移缓存数据。
+
+**自动选择（批量）。** Android 服务在不同 loopback 端口上启动有限数量的候选，返回第一个成功者并取消其余。单个候选执行一轮 HTTP(S) 请求，不重试、不将给定超时翻倍。Dart 用单调的总预算限制前台阶段；之后启动 fallback 并在后台继续列表。成功的后台结果会原子地提升为已验证缓存、重新应用完整运行时方案并更新冷启动清单。方案替换通过 generation token 取消后续处理，而 Android 始终完成已启动的批次。
+
+---
+
+## 🧩 内置节点
+
+内置节点在配置中声明为普通代理，其生命周期由 `BuiltInProxySupervisor` 管理。
+
+> 📎 面向用户的一侧（YAML、参数）见[内置节点指南](../user-guide/profiles.md)。
+
+### 🎭 naiveproxy
 
 - **类型：** `naiveproxy`
-- **必填字段：** `name`, `type`, `server`, `port`, `username`, `password`
-- 仅允许 `https` 和 `quic` 传输；拒绝匿名访问
-- 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
-- 客户端自动选择本地 SOCKS5 地址
-- 编译器转义凭据、构造唯一的内部 URI，并使用自动生成的 `config.json`
-  启动 NaiveProxy
-- allowlist 拒绝 `proxy`、`listen`、诊断文件、代理链和未知字段
+- **必填字段：** `name`、`type`、`server`、`port`、`username`、`password`
+- 仅允许 `https` 和 `quic` 传输；禁止匿名访问
+- 不支持 UDP；最终的本地 `mihomo` 节点得到 `udp: false`
+- 客户端自行选择本地 SOCKS5 地址
+- 编译器转义凭据、构造唯一的内部 URI，并以自动生成的 `config.json` 启动 NaiveProxy
+- 白名单拒绝 `proxy`、`listen`、诊断文件、代理链及未知字段
 
-### olcrtc
+### 📞 olcrtc
 
 - **类型：** `olcrtc`
-- **必填字段：** `name`, `auth.provider`, `room.id`, `crypto.key`
-- 仅在 CNC（客户端）模式下工作
-- 不支持 UDP；生成的 Mihomo 本地节点使用 `udp: false`
+- **必填字段：** `name`、`auth.provider`、`room.id`（`none` 除外）、`crypto.key`、`net.transport`、`net.dns`
+- 仅在 CNC（客户端）模式工作
+- 不支持 UDP；最终的本地 `mihomo` 节点得到 `udp: false`
+- 启动前 FlClashM 校验必填字段、允许的提供者与传输、密钥、DNS 以及每个最终备用 profile
+- Android 服务保留有限的进程输出尾部；若 OlcRTC 在打开 SOCKS5 端口前退出，原因会立即回传给 Dart 并显示给用户
+- 通过稳定的 `config.yaml` 契约以独立进程运行；不使用移动库
+- 源码固定在提交 `ad5758513335cda54362a64621c29e9d9fe759b4`
+- CLI 需要 `data: data`，但无需单独的目录布局：名称字典已嵌入可执行文件，缺失的外部文件视为可选覆盖
+- 每个二进制的 SHA-256 固定在提交旁；资源准备与测试即使在戳记匹配时也会拒绝过时或被改动的文件
 
-使用 `activation.mode: auto` 时，supervisor 会预先放置 OlcRTC 配置文件，但不会把休眠备用节点写入 live 或 cold-start manifest。因此，OlcRTC 的强制端到端检查不再阻塞 VPN 启动。watchdog 探测监视组，在达到失败次数后唤醒备用节点，原子地重新应用完整 plan，并强制测试 OlcRTC 本身的 delay。当空闲期内没有连接链包含该节点，且所有直接包含它的组都未选择它时，plan 会在移除该节点后再次应用。切换配置或停止时通过 generation token 取消转换；休眠状态不会持久化。
+<details>
+<summary>🔧 olcrtc 的更新与回滚</summary>
 
-Mihomo 和网络状态通过 `RuntimeHealthProbe` 跨越 app 边界；该接口只暴露 delay 测试、活动连接链、组的 `now` 值和设备网络可用性。app layer 的实现基于 `clashCore` 与 `connectivity_plus`。未注入 probe 时，自动 watchdog 保持空闲，但 staging、停止和手动唤醒仍然安全。`always` 模式保持原来的启动事务不变。
+- **更新：** 更换固定提交，用固定的 Go 1.26.4 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
+- **回滚：** 恢复旧提交 `5dd6822d807e3352fe4452a3b071e043d958a020`，并用同一命令重建产物。
 
-该集成随应用的 Dart 层更新，不改变 Android bridge。运行时回退可设置 `activation: always`，回退应用版本无需迁移状态。
+</details>
 
-### byedpi
+**`auto` 激活。** supervisor 提前暂存 OlcRTC 产物，但不把休眠节点纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含 OlcRTC 的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
+
+对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
+
+集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
+
+### 🛡 byedpi
 
 - **类型：** `byedpi`
 - **`manual` 模式：** 接受 `args` 字符串
-- **`auto` 模式：** 循环尝试 ByeByeDPI 策略，缓存有效的策略
-- 未指定 `mode` 时，存在 `args` 表示手动模式，否则使用自动模式
+- **`auto` 模式：** 遍历 ByeByeDPI 策略并缓存可用的一条
+- 无 `mode` 时，有 `args` 选手动，无 `args` 选自动
+- auto 模式下 `strategy-list` 默认为 `byebyeedpi`；无 `strategy-test.urls` 时使用内置 YouTube 测试端点
 - 支持 `{sni}` 替换
-- UDP 默认启用并传递给 Mihomo 本地节点；`udp: false` 可将其关闭，
-  ByeDPI 进程不会收到单独的 UDP 参数
+- 默认启用 UDP 并传给本地 `mihomo` 节点；`udp: false` 将其关闭，而 ByeDPI 进程本身不接收单独的 UDP 参数
 
-## 限制
+---
 
-- 内置节点只能在 `proxies` 部分工作
-- 本地地址和端口由客户端确定
-- `auto` 模式下的 ByeDPI 使用 `strategy-test.urls` 或内置 YouTube 端点
+## 🚧 限制
+
+- 内置节点只能在 `proxies` 段工作
+- 本地地址和端口由客户端决定
+- `auto` 模式下的 ByeDPI 检查 `strategy-test.urls` 里的 URL 或内置 YouTube 端点
+
+---
+
+## 📸 Android VPN 应用参数快照
+
+**在架构中的位置。** `FlVpnService` 仅在 `VpnService.Builder.establish()` 成功**之后**才把参数的不可变快照存入 `State.appliedOptions`，并通过独立的 AIDL/MethodChannel 契约 `getAppliedAndroidVpnOptions` 暴露。`AccessControlService` 将快照与当前配置的声明比对；基线屏幕只接收成品状态。
+
+**契约与约束：**
+
+- 空响应表示没有可用的已确认快照；
+- 带 `includePackage: []` 或 `excludePackage: []` 的 JSON 保留带空列表的显式模式，不等于缺少规则；
+- 普通的内核配置重载不会更新快照，因为 Android 包规则只在 VPN 重建时改变；
+- 该通道只读，不影响路由；
+- 快照不可用时，界面明确说明它显示的是**配置声明**，而不把它冒充为已应用状态。
+
+**更新与回滚。** 通过新增方法完成，不触碰用于启动 VPN 的旧 `getAndroidVpnOptions`。回滚安全：旧启动路径保持不变，新响应缺失时映射为「验证不可用」状态。
+
+---
+
+> 🌍 其他语言：[Русский](../../../ru/docs/development/runtime.md) · [English](../../../en/docs/development/runtime.md) · [فارسی](../../../fa/docs/development/runtime.md)

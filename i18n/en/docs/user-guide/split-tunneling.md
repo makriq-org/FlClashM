@@ -1,12 +1,21 @@
-# Split tunneling
+# 🎯 Split Tunneling
 
-FlClashM lets you control which apps use VPN and which don't. This can be configured in two ways: manually in app settings or directly in the YAML profile.
+Split tunneling answers a simple question: **which apps go through the VPN and which go directly**. There are two ways to set it up:
 
-## Split tunneling via profile
+- 🖐 **manually** — in the app settings;
+- 📄 **via profile** — the provider defines the rules right in the YAML.
 
-The provider can specify split tunneling rules directly in the profile. These rules take priority over the user's manual settings.
+> ℹ️ Rules from the profile take **priority** over manual settings. If the profile defines split tunneling, the app settings will show that access control is managed by the profile.
 
-### Whitelist: only selected apps
+---
+
+## 📄 Configuration via profile
+
+Rules live in the `tun` section. There are two mutually exclusive modes.
+
+### ✅ Whitelist — only selected apps
+
+**Only** the listed apps go through the VPN; everything else goes directly.
 
 ```yaml
 tun:
@@ -16,9 +25,9 @@ tun:
     - com.termux
 ```
 
-Only the listed apps will use VPN.
+### ⛔ Blacklist — exclude selected apps
 
-### Blacklist: exclude selected apps
+**Everything except** the listed apps goes through the VPN.
 
 ```yaml
 tun:
@@ -28,22 +37,22 @@ tun:
     - org.mozilla.firefox
 ```
 
-The listed apps will not use VPN.
+> ⚠️ `include-package` and `exclude-package` **cannot** be used at the same time.
 
-> You cannot use `include-package` and `exclude-package` at the same time.
+---
 
-## Selector formats
+## 🧬 Selector formats
 
-In addition to exact package names, wildcards and regular expressions are supported:
+Besides exact package names, wildcards and regular expressions are supported:
 
-| Format | Example | Description |
-|--------|---------|-------------|
-| Exact name | `com.termux` | Exact match |
-| Wildcard | `*.yandex.*` | All Yandex apps |
-| Regular expression | `re:^org\.mozilla\..+$` | All Mozilla apps |
-| Exclusion | `!ru.yandex.browser` | Exclude from the list |
+| Format | Example | What it means |
+|--------|---------|---------------|
+| 🎯 Exact name | `com.termux` | Exact package match |
+| ✳️ Wildcard | `*.yandex.*` | All Yandex apps |
+| 🔤 Regex | `re:^org\.mozilla\..+$` | All Mozilla apps |
+| 🚫 Exclusion | `!ru.yandex.browser` | Remove from the list |
 
-### Example with wildcards and exclusions
+They can be combined — for example, "all of Yandex except the browser, plus all of Mozilla":
 
 ```yaml
 tun:
@@ -54,9 +63,13 @@ tun:
     - 're:^org\.mozilla\..+$'   # All Mozilla apps
 ```
 
-## Loading lists from files
+---
 
-Package lists can be stored in separate files:
+## 📥 Lists from files and URLs
+
+Long lists are conveniently kept outside — one package name or selector per line.
+
+**From a file:**
 
 ```yaml
 tun:
@@ -65,11 +78,7 @@ tun:
     - lists/allowed-apps.txt
 ```
 
-Files must contain one package name or selector per line.
-
-## Loading lists from URL
-
-Lists can be fetched via HTTP(S):
+**From a URL over HTTP(S):**
 
 ```yaml
 tun:
@@ -77,13 +86,19 @@ tun:
   include-package-url: https://example.com/packages.txt
 ```
 
-The list is cached locally and used when the URL is unavailable.
+> 💾 A URL list is cached locally and used if the address becomes unavailable.
 
-## How it works
+---
 
-1. FlClashM reads the `tun` section from the profile.
-2. Resolves selectors (wildcards, regex) to concrete installed packages.
-3. Creates access control rules.
-4. These rules take priority over manual settings.
+## ⚙️ How it works under the hood
 
-If the profile defines split tunneling, the app settings will show that access control is managed by the profile.
+1. 📖 FlClashM reads the `tun` section from the profile.
+2. 🔎 Resolves selectors (wildcards, regex) into specific installed packages.
+3. 🧱 Builds access-control rules.
+4. 🏆 These rules take priority over manual settings.
+
+---
+
+> 📎 What the "managed by profile" indicator shows exactly and why it reads a snapshot of the VPN service rather than the current core config — in [runtime](../development/runtime.md#-android-vpn-applied-options-snapshot).
+>
+> 🌍 Other languages: [Русский](../../../ru/docs/user-guide/split-tunneling.md) · [中文](../../../zh/docs/user-guide/split-tunneling.md) · [فارسی](../../../fa/docs/user-guide/split-tunneling.md)
