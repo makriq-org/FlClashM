@@ -1,6 +1,26 @@
 {
   "allowedBaseDrift": [
     {
+      "path": "android/common/build.gradle.kts",
+      "bucket": "budget",
+      "reason": "Удаление Firebase SDK из общего Android-модуля является обязательным security-изменением форка."
+    },
+    {
+      "path": "android/settings.gradle.kts",
+      "bucket": "budget",
+      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением."
+    },
+    {
+      "path": "core/go.mod",
+      "bucket": "budget",
+      "reason": "Обновление Go-зависимостей до версий без достижимых CVE относится к runtime-бюджету форка."
+    },
+    {
+      "path": "core/go.sum",
+      "bucket": "budget",
+      "reason": "Хеши обновлённых Go-зависимостей фиксируют security-патч runtime-модуля."
+    },
+    {
       "path": "android/app/build.gradle.kts",
       "bucket": "budget",
       "reason": "applicationId, keystore-логика и dev-suffix принадлежат форковому Android-слою."

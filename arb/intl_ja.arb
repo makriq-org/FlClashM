@@ -232,8 +232,6 @@
   "autoCloseConnectionsDesc": "ノード変更後に接続を自動閉じる",
   "onlyStatisticsProxy": "プロキシのみ統計",
   "onlyStatisticsProxyDesc": "有効化するとプロキシトラフィックのみ統計",
-  "crashlytics": "クラッシュレポート",
-  "crashlyticsDesc": "Firebase Crashlytics でクラッシュログを自動送信します。機密情報は含まれません",
   "pureBlackMode": "純黒モード",
   "keepAliveIntervalDesc": "TCPキープアライブ間隔",
   "entries": " エントリ",

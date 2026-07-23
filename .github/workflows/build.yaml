@@ -101,7 +101,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.26.3"
+          go-version: "1.26.5"
           cache-dependency-path: core/go.sum
 
       - name: Require continuity signing for tag releases
@@ -197,14 +197,6 @@ jobs:
             echo "storePassword=${{ secrets.STORE_PASSWORD }}"
             echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
           } >> android/local.properties
-
-      - name: Setup optional Firebase config
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
-          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
