@@ -23,7 +23,7 @@
 
 所以我创建了 **FlClashM**。它的目标是成为那个**一键解决方案**：提供商准备配置，用户按下开关，连接就能在任何网络中工作。
 
-> ⚠️ 项目正在积极开发中。某些功能仍在完善，界面可能会变化。
+> FlClashM 仅发布 Android 版本。预发布版本可能会调整配置文件约定；部署服务商配置前请检查 CHANGELOG。
 
 ---
 
@@ -70,7 +70,7 @@ proxies:
     password: pass
 ```
 
-[了解更多关于内置节点的信息](docs/user-guide/profiles.md)
+[了解更多关于内置节点的信息（俄语）](../ru/docs/user-guide/profiles.md)
 
 ### 通过配置文件实现分流
 
@@ -89,7 +89,7 @@ tun:
 
 可以从文件或 URL 加载列表。配置文件设置优先于手动设置。
 
-[了解更多关于分流的信息](docs/user-guide/split-tunneling.md)
+[了解更多关于分流的信息（俄语）](../ru/docs/user-guide/split-tunneling.md)
 
 ---
 
@@ -108,7 +108,7 @@ tun:
 
 ## 下载
 
-发布版本在 [GitHub Releases](https://github.com/makriq-org/FlClashM/releases) 发布。
+发布文件主要托管在 [SourceForge](https://sourceforge.net/projects/flclashm/files/releases/)，并镜像到 [GitHub Releases](https://github.com/makriq-org/FlClashM/releases)。
 
 | 文件 | 描述 |
 |------|------|
@@ -125,17 +125,21 @@ tun:
 ## 文档
 
 ### 用户
-- **[内置节点](docs/user-guide/profiles.md)** — ByeDPI、OlcRTC、NaiveProxy
-- **[分流](docs/user-guide/split-tunneling.md)** — 通过配置文件管理
-- **[提供商提示](docs/user-guide/provider-hints.md)** — 自定义和行为
+
+- **[内置节点](../ru/docs/user-guide/profiles.md)** — ByeDPI、OlcRTC、NaiveProxy
+- **[分流](../ru/docs/user-guide/split-tunneling.md)** — 通过配置文件管理
+- **[提供商提示](../ru/docs/user-guide/provider-hints.md)** — 自定义和行为
 
 ### 开发者
-- **[架构](docs/development/architecture.md)** — 层级和服务
-- **[运行时](docs/development/runtime.md)** — 配置文件处理和内置节点
-- **[安全](docs/development/security.md)** — 安全策略
-- **[发布](docs/development/release-contract.md)** — 版本发布和回滚
-- **[上游同步](docs/development/upstream-sync.md)** — 基础更新
-- **[构建验证](docs/development/verification.md)** — 本地和 CI 检查
+
+- **[架构](../ru/docs/development/architecture.md)** — 层级和服务
+- **[运行时](../ru/docs/development/runtime.md)** — 配置文件处理和内置节点
+- **[安全](../ru/docs/development/security.md)** — 安全策略
+- **[发布](../ru/docs/development/release-contract.md)** — 版本发布和回滚
+- **[上游同步](../ru/docs/development/upstream-sync.md)** — 基础更新
+- **[构建验证](../ru/docs/development/verification.md)** — 本地和 CI 检查
+
+详细技术文档以俄语维护，以避免不同翻译之间的配置约定发生偏差。
 
 ---
 

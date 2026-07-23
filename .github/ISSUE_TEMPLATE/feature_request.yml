@@ -1,39 +1,60 @@
-name: Запрос фунционала / Feature request
-title: "[Feature] "
-description: Предложите новый функционал / Propose your feature request
-
+name: Предложить изменение / Feature request
+description: Новый Android-сценарий или улучшение поддерживаемой функции
+title: "[FEATURE] "
+labels:
+  - enhancement
 body:
   - type: markdown
     attributes:
       value: |
-        ## Прежде чем создавать проблему, убедитесь в следующем:
-        1. Обязательно укажите краткий и понятный заголовок, чтобы другим было проще найти вашу проблему.
-        2. Убедитесь, что похожая проблема ещё не создана в разделе [существующих проблем](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), иначе обсудите свой вопрос там.
-        3. Опишите проблему подробно и по шаблону, иначе заявка будет закрыта без рассмотрения.
-        ## Before submitting the issue, please make sure of the following checklist:
-        1. Please be sure to fill in a concise and clear title for the issue so that others can quickly search
-        2. Please make sure there is no similar issue in the [existing issues](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), otherwise please discuss under the existing issue
-        3. Please describe the problem in detail according to the template specification, otherwise issue will be closed directly.
+        FlClashM выпускается для Android и развивается в режиме дешёвой синхронизации с FlClashX. Опишите пользовательскую задачу и ограничения; конкретную реализацию можно обсудить после этого.
+
+        Перед созданием запроса проверьте [существующие issues](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue). Не публикуйте приватный профиль, URL подписки или ключи.
 
   - type: textarea
-    id: description
+    id: problem
     attributes:
-      label: Описание фунции / Feature description
-      description: Четкое и краткое описание функции / A clear and concise description of what the feature is
+      label: Какая задача сейчас не решается
+      description: Кто сталкивается с ограничением, в каком Android-сценарии и как приходится обходить его сейчас.
     validations:
       required: true
+
   - type: textarea
+    id: result
     attributes:
-      label: Сценарий использования / Use case
-      description: Пожалуйста, опишите сценарий использования вашего запроса на функцию / Please describe the use case of your feature request
+      label: Желаемый результат
+      description: Как должно выглядеть поведение для пользователя или оператора профиля.
     validations:
       required: true
-  - type: checkboxes
-    id: os-labels
+
+  - type: dropdown
+    id: area
     attributes:
-      label: Операционная система / Target OS
-      description: Android is the only supported target OS for this product.
+      label: Область
       options:
-        - label: Android
+        - Android VPN и lifecycle
+        - Профили и маршрутизация
+        - NaiveProxy, ByeDPI или OlcRTC
+        - Раздельное туннелирование
+        - Обновления приложения
+        - Интерфейс и доступность
+        - Документация
+        - Другое
     validations:
       required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы и ограничения
+      description: Какие решения уже проверялись; нужны ли изменения формата профиля, runtime binary, Android service или серверной стороны.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Подтверждение
+      options:
+        - label: Запрос относится к поддерживаемой Android-версии FlClashM.
+          required: true
+        - label: Я проверил похожие issues и не включил в описание секреты.
+          required: true

@@ -23,7 +23,7 @@
 
 بنابراین **FlClashM** را ساختم. هدف این پروژه تبدیل شدن به همان **یک دکمه** است: ارائه‌دهنده پیکربندی را آماده می‌کند، کاربر کلید را می‌زند و اتصال در هر شبکه‌ای کار می‌کند.
 
-> ⚠️ این پروژه در حال توسعه فعال است. برخی ویژگی‌ها هنوز در حال تکمیل هستند و رابط کاربری ممکن است تغییر کند.
+> نسخه‌های FlClashM فقط برای اندروید منتشر می‌شوند. قرارداد پروفایل در نسخه‌های آزمایشی ممکن است تغییر کند؛ پیش از انتشار پروفایل ارائه‌دهنده CHANGELOG را بررسی کنید.
 
 ---
 
@@ -70,7 +70,7 @@ proxies:
     password: pass
 ```
 
-[جزئیات بیشتر درباره نودهای داخلی](docs/user-guide/profiles.md)
+[جزئیات بیشتر درباره نودهای داخلی (روسی)](../ru/docs/user-guide/profiles.md)
 
 ## تونل‌زنی جداگانه از طریق پروفایل
 
@@ -89,7 +89,7 @@ tun:
 
 می‌توان لیست‌ها را از فایل‌ها یا URL بارگذاری کرد. پروفایل بر تنظیمات دستی اولویت دارد.
 
-[جزئیات بیشتر درباره تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)
+[جزئیات بیشتر درباره تونل‌زنی جداگانه (روسی)](../ru/docs/user-guide/split-tunneling.md)
 
 ---
 
@@ -108,7 +108,7 @@ tun:
 
 ## دانلود
 
-بیلدهای آماده در [GitHub Releases](https://github.com/makriq-org/FlClashM/releases) منتشر می‌شوند.
+فایل‌های انتشار ابتدا در [SourceForge](https://sourceforge.net/projects/flclashm/files/releases/) قرار می‌گیرند و در [GitHub Releases](https://github.com/makriq-org/FlClashM/releases) آینه می‌شوند.
 
 | فایل | توضیحات |
 |------|----------|
@@ -125,17 +125,21 @@ tun:
 ## مستندات
 
 ### برای کاربران
-- **[نودهای داخلی](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md)** — مدیریت از طریق پروفایل
-- **[Hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md)** — پوسته و رفتار
+
+- **[نودهای داخلی](../ru/docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
+- **[تونل‌زنی جداگانه](../ru/docs/user-guide/split-tunneling.md)** — مدیریت از طریق پروفایل
+- **[Hintهای ارائه‌دهنده](../ru/docs/user-guide/provider-hints.md)** — پوسته و رفتار
 
 ### برای توسعه‌دهندگان
-- **[معماری](docs/development/architecture.md)** — لایه‌ها و سرویس‌ها
-- **[محیط اجرا](docs/development/runtime.md)** — پردازش پروفایل و نودهای داخلی
-- **[امنیت](docs/development/security.md)** — سیاست امنیتی
-- **[انتشار](docs/development/release-contract.md)** — انتشار و بازگشت نسخه‌ها
-- **[همگام‌سازی با FlClashX](docs/development/upstream-sync.md)** — به‌روزرسانی پایه
-- **[بررسی بیلد](docs/development/verification.md)** — بررسی‌های محلی و CI
+
+- **[معماری](../ru/docs/development/architecture.md)** — لایه‌ها و سرویس‌ها
+- **[محیط اجرا](../ru/docs/development/runtime.md)** — پردازش پروفایل و نودهای داخلی
+- **[امنیت](../ru/docs/development/security.md)** — سیاست امنیتی
+- **[انتشار](../ru/docs/development/release-contract.md)** — انتشار و بازگشت نسخه‌ها
+- **[همگام‌سازی با FlClashX](../ru/docs/development/upstream-sync.md)** — به‌روزرسانی پایه
+- **[بررسی بیلد](../ru/docs/development/verification.md)** — بررسی‌های محلی و CI
+
+مستندات فنی کامل به زبان روسی نگه‌داری می‌شوند تا قراردادها میان ترجمه‌ها از هم جدا نشوند.
 
 ---
 

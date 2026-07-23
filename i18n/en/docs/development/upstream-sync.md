@@ -1,21 +1,5 @@
-# Upstream sync
+# Upstream synchronization
 
-FlClashM is built on top of FlClashX. Product logic is separated to keep updates cheap.
+This translated page is kept as a stable link, but its technical contract is no longer maintained separately. Use the current Russian source of truth:
 
-## Principle
-
-- Product logic lives in `lib/product/**`
-- Code outside `lib/product/**` accesses it only through integration points
-
-## Update process
-
-1. Pull FlClashX into a separate branch
-2. Resolve conflicts in `lib/product/**`
-3. Outside `lib/product/**`, only touch files from `tool/product_touchpoints.json`
-4. After merging, run checks:
-
-```bash
-dart tool/check_product_boundaries.dart
-dart tool/check_release_continuity.dart
-flutter test test/product
-```
+[Русская документация](../../../ru/docs/development/upstream-sync.md)

@@ -1,192 +1,133 @@
 # FlClashM
 
 <p align="center">
-  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="FlClashM" width="128" height="128">
+  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Иконка FlClashM" width="128" height="128">
 </p>
 
 [![Загрузки](https://img.shields.io/github/downloads/makriq-org/FlClashM/total?style=flat-square&logo=github)](https://github.com/makriq-org/FlClashM/releases/)
-[![Последняя версия](https://img.shields.io/github/release/makriq-org/FlClashM/all.svg?style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
+[![Последний выпуск](https://img.shields.io/github/v/release/makriq-org/FlClashM?include_prereleases&style=flat-square)](https://github.com/makriq-org/FlClashM/releases/)
 [![Лицензия](https://img.shields.io/github/license/makriq-org/FlClashM?style=flat-square)](LICENSE)
-[![На базе FlClashX](https://img.shields.io/badge/based%20on-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
+[![База FlClashX](https://img.shields.io/badge/base-FlClashX-5c6bc0?style=flat-square&logo=github)](https://github.com/pluralplay/FlClashX)
 
-> Android-клиент для `mihomo`, форк [FlClashX](https://github.com/pluralplay/FlClashX), который прячет сложные инструменты обхода блокировок за одной кнопкой.
+FlClashM — Android-клиент для `mihomo` со встроенными узлами NaiveProxy,
+ByeDPI и OlcRTC. Это форк
+[FlClashX](https://github.com/pluralplay/FlClashX), ориентированный на профили,
+в которых провайдер заранее описывает маршрутизацию и дополнительные способы
+доставки трафика.
 
-[English version](i18n/en/README.md) | [中文版](i18n/zh/README.md) | [نسخه فارسی](i18n/fa/README.md)
+[English](i18n/en/README.md) · [中文](i18n/zh/README.md) ·
+[فارسی](i18n/fa/README.md) · [Русская документация](i18n/ru/docs/README.md)
 
----
+## Статус и границы проекта
 
-## Зачем этот клиент
+Поддерживаемая цель выпуска — Android. В репозитории сохраняется часть
+кроссплатформенной базы FlClashX, но сборки Windows, Linux, macOS и iOS не входят
+в продуктовый и релизный контракт FlClashM.
 
-Существует несколько мощных инструментов для обхода блокировок:
+Проект развивается в режиме `maintenance/cheap-upstream`: Android-путь,
+безопасность, обновления и встроенные узлы поддерживаются в продуктовом слое, а
+база синхронизируется с `upstream/dev` с минимальным дрейфом. Предварительные
+выпуски могут менять профильный контракт; перед обновлением провайдерских
+конфигураций проверяйте [CHANGELOG](CHANGELOG.md).
 
-- **[ByeDPI](https://github.com/hufrea/byedpi)** — обход DPI для доступа к ресурсам, заблокированным "изнутри" (например, YouTube или Discord для РФ).
-- **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — обход белых списков маскировкой под WebRTC звонки разрешенных сервисов, таких как Yandex Telemost.
-- **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — обход черных списков маскировкой под трафик браузера Chrome.
+## Возможности
 
-Каждая технология подходит для своей задачи и не было места, котрое объединяло бы все эти решения. Хотелось задать всё в одном месте и просто нажать «подключиться».
+- Android VPN/TUN на встроенном `mihomo` с режимами Rule, Global и Direct.
+- Профили по URL, из файла и QR-кода; обычные профили Mihomo продолжают работать
+  без встроенных узлов.
+- NaiveProxy, ByeDPI и OlcRTC как локальные прокси, объявленные в секции
+  `proxies` YAML-профиля.
+- Автоподбор стратегии ByeDPI с ограниченным foreground-бюджетом, fallback и
+  проверенным кэшем.
+- Спящий резервный режим OlcRTC: узел пробуждается при недоступности основной
+  группы или ручном выборе. Для постоянного запуска доступен
+  `activation: always`.
+- Раздельное туннелирование Android-приложений из профиля: точные package name,
+  маски, регулярные выражения и локальные или удалённые списки.
+- Виджеты, плитка быстрых настроек, always-on восстановление и встроенная панель
+  Zashboard.
+- Встроенное обновление APK через подписанный каталог, проверку SHA-256 и
+  проверку подписи установленного приложения средствами Android.
 
-Поэтому я сделал **FlClashM**. Его задача — стать той самой **одной кнопкой**: провайдер готовит конфигурацию, пользователь нажимает переключатель, и соединение работает в любой сети.
-
-> ⚠️ Проект находится в активной разработке. Некоторые функции ещё дорабатываются, а интерфейс может меняться.
-
----
-
-## Главные преимущества
-
-### Встроенные узлы прямо в профиле
-
-В отличие от обычных клиентов, FlClashM умеет запускать **специальные узлы прямо из YAML-профиля**. Они выглядят как обычные прокси и участвуют в правилах маршрутизации: один сайт можно направить через ByeDPI, другой — через OlcRTC, а всё остальное — напрямую.
-
-Пример для [ByeDPI](https://github.com/hufrea/byedpi). FlClashM автоматически перебирает стратегии из списка ByeByeDPI и кэширует рабочую.
-
-```yaml
-proxies:
-  - name: "dpi-auto"
-    type: byedpi
-```
-
-Пример для [OlcRTC](https://github.com/openlibrecommunity/olcrtc).
-
-```yaml
-proxies:
-  - name: "rtc"
-    type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
-```
-
-Пример для [NaiveProxy](https://github.com/klzgrad/naiveproxy).
-
-```yaml
-proxies:
-  - name: "naive"
-    type: naiveproxy
-    server: example.com
-    port: 443
-    username: user
-    password: pass
-```
-
-[Подробнее о встроенных узлах тут](i18n/ru/docs/user-guide/profiles.md)
-
-## Раздельное туннелирование через профиль
-
-Провайдер может задать правила раздельного туннелирования прямо в профиле — какие приложения должны идти через VPN, а какие нет. Поддерживаются точные имена пакетов, маски и регулярные выражения.
-
-```yaml
-tun:
-  enable: true
-  include-package:
-    - org.telegram.messenger
-    - com.termux
-  exclude-package:
-    - '*.yandex.*'
-    - '!ru.yandex.browser'
-```
-
-Можно загружать списки из файлов или URL. Профиль имеет приоритет над ручными настройками.
-
-[Подробнее о раздельном туннелировании тут](i18n/ru/docs/user-guide/split-tunneling.md)
-
----
-
-## Что еще умеет
-
-- **VPN/TUN-подключение** через `mihomo`.
-- **Профили** по ссылке, из файла, QR-коду и с Android TV.
-- **Режимы работы**: правила, глобальный, прямое соединение.
-- **Виджеты** и **плитка быстрых настроек** для управления VPN.
-- **Встроенное обновление** с проверкой контрольных сумм.
-- **Уведомления** об истечении подписки.
-- **Автозапуск** после перезагрузки устройства.
-- **Оформление** через подсказки провайдера (хедеры).
-
----
+Встроенные узлы не являются самостоятельными VPN-протоколами FlClashM. Клиент
+запускает поставляемые исполняемые файлы на loopback-адресах, проверяет их и
+подменяет профильный узел на локальный SOCKS5 для `mihomo`. Серверную часть,
+комнаты, ключи и учётные данные предоставляет оператор профиля.
 
 ## Скачать
 
-Готовые сборки публикуются в [GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
+Основное хранилище выпусков —
+[SourceForge](https://sourceforge.net/projects/flclashm/files/releases/), зеркало
+и журнал выпусков — [GitHub Releases](https://github.com/makriq-org/FlClashM/releases/).
+Встроенный апдейтер использует подписанные указатели SourceForge и обращается к
+GitHub как к запасному источнику или зеркалу файла при недоступности основного
+канала.
 
-| Файл | Описание |
-|------|----------|
-| `FlClashM-android-universal.apk` | Универсальная сборка |
-| `FlClashM-android-arm64-v8a.apk` | 64-битные ARM |
-| `FlClashM-android-armeabi-v7a.apk` | 32-битные ARM |
-| `FlClashM-android-x86_64.apk` | x86_64 |
-| `FlClashM-android-release.aab` | Android App Bundle |
+| Файл | Для чего |
+| --- | --- |
+| `FlClashM-android-arm64-v8a.apk` | Большинство современных телефонов и планшетов |
+| `FlClashM-android-armeabi-v7a.apk` | Старые 32-битные ARM-устройства |
+| `FlClashM-android-x86_64.apk` | x86_64-эмуляторы и редкие x86_64-устройства |
+| `FlClashM-android-universal.apk` | Универсальная запасная сборка |
+| `FlClashM-android-release.aab` | Публикация через магазин; не устанавливается как APK |
 
-По умолчанию встроенный загрузчик показывает только стабильные версии. Предварительные сборки можно включить в настройках.
+Стабильный канал включён по умолчанию. Предварительные версии можно разрешить в
+настройках обновления. Устанавливайте APK только из указанных выше каналов и не
+обходите предупреждение Android о несовпадении подписи.
 
----
+## Быстрый старт
+
+1. Установите APK для ABI устройства или универсальную сборку.
+2. Добавьте профиль по URL, из файла или QR-кода.
+3. Проверьте профиль до подключения: строгая схема встроенных узлов отклоняет
+   неизвестные и небезопасные поля.
+4. Выберите профиль и включите VPN. Android запросит разрешение на создание
+   VPN-подключения при первом запуске.
+
+Подробности: [начало работы](i18n/ru/docs/user-guide/getting-started.md),
+[встроенные узлы](i18n/ru/docs/user-guide/profiles.md),
+[раздельное туннелирование](i18n/ru/docs/user-guide/split-tunneling.md) и
+[подсказки провайдера](i18n/ru/docs/user-guide/provider-hints.md).
 
 ## Документация
 
-### Для пользователей
-- **[Встроенные узлы](i18n/ru/docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Раздельное туннелирование](i18n/ru/docs/user-guide/split-tunneling.md)** — управление через профиль
-- **[Подсказки провайдера](i18n/ru/docs/user-guide/provider-hints.md)** — оформление и поведение
+- [Обзор документации](i18n/ru/docs/README.md)
+- [Руководство пользователя](i18n/ru/docs/user-guide/README.md)
+- [Архитектура](i18n/ru/docs/development/architecture.md)
+- [Runtime и встроенные узлы](i18n/ru/docs/development/runtime.md)
+- [Политика безопасности](i18n/ru/docs/development/security.md)
+- [Релизный контракт](i18n/ru/docs/development/release-contract.md)
+- [Синхронизация с FlClashX](i18n/ru/docs/development/upstream-sync.md)
+- [Локальные и CI-проверки](i18n/ru/docs/development/verification.md)
 
-### Для разработчиков
-- **[Архитектура](i18n/ru/docs/development/architecture.md)** — слои и сервисы
-- **[Среда выполнения](i18n/ru/docs/development/runtime.md)** — обработка профиля и встроенные узлы
-- **[Безопасность](i18n/ru/docs/development/security.md)** — политика безопасности
-- **[Релизы](i18n/ru/docs/development/release-contract.md)** — публикация и откат версий
-- **[Синхронизация с FlClashX](i18n/ru/docs/development/upstream-sync.md)** — обновление базы
-- **[Проверка сборки](i18n/ru/docs/development/verification.md)** — локальные и CI-проверки
+## Разработка
 
----
-
-## Сборка
-
-Нужны Flutter 3.41.x, JDK 17, Android SDK/NDK и Go 1.26.x.
-
-На NixOS все зависимости и их версии задаёт `flake.nix`. Отладочный пакет для
-arm64 собирается одной командой:
+Версии инструментов закреплены в `flake.nix` и CI: Flutter 3.41.x, JDK 17,
+Go 1.26.x и Android NDK `28.0.13004108`. На NixOS достаточно:
 
 ```bash
 nix develop -c make dev
 ```
 
-Результат: `build/app/outputs/flutter-apk/app-debug.apk`.
-
-Другие локальные задачи запускаются так же:
-
-```bash
-nix develop -c make fetch-upstream check
-nix develop -c make install-dev
-nix develop -c make release
-nix develop -c make clean
-```
-
-Отдельно доступны цели `test`, `analyze`, `boundaries`, `release-contract` и
-`drift`.
-
-Отдельные команды для сборки без Nix:
+Команда собирает arm64 debug APK в
+`build/app/outputs/flutter-apk/app-debug.apk`. Полный локальный набор гейтов:
 
 ```bash
-flutter pub get
-dart setup.dart android --arch arm64 --out core
-flutter test test/product
-flutter build apk --debug
+nix develop -c make check
 ```
 
----
+Без Nix используйте те же закреплённые версии и запускайте команды из
+[инструкции по проверке](i18n/ru/docs/development/verification.md). Для release
+нужны закрытые ключи подписи; обычная разработка и тесты их не требуют.
 
-## Благодарности
+## Происхождение и лицензии
 
-FlClashM построен на базе [FlClashX](https://github.com/pluralplay/FlClashX) — отличного кроссплатформенного клиента для Clash/Mihomo. Огромное спасибо авторам за проделанную работу и открытый код, без которого этот проект был бы невозможен.
+FlClashM основан на [FlClashX](https://github.com/pluralplay/FlClashX) и
+использует [mihomo](https://github.com/MetaCubeX/mihomo),
+[ByeDPI](https://github.com/hufrea/byedpi),
+[ByeByeDPI](https://github.com/romanvht/ByeByeDPI),
+[OlcRTC](https://github.com/openlibrecommunity/olcrtc) и
+[NaiveProxy](https://github.com/klzgrad/naiveproxy).
 
-Отдельная благодарность авторам [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc) и [NaiveProxy](https://github.com/klzgrad/naiveproxy) — без их труда обход блокировок был бы невозможен.
-
----
-
-## Лицензия
-
-Код приложения распространяется по лицензии GPL-3.0. Сторонние ядра и встроенные исполняемые файлы сохраняют свои исходные лицензии.
+Код приложения распространяется по [GPL-3.0](LICENSE). Сторонние исходники и
+исполняемые файлы сохраняют собственные лицензии.

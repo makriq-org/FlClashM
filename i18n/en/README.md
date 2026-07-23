@@ -23,7 +23,8 @@ I was tired of assembling a working solution from dozens of different apps: one 
 
 So I made **FlClashM**. Its goal is to become that **single button**: the provider prepares the configuration, the user flips the switch, and the connection works in any network.
 
-> ⚠️ This project is under active development. Some features are still being refined, and the interface may change.
+> FlClashM releases target Android only. Pre-release builds may change the
+> profile contract; check the changelog before deploying provider profiles.
 
 ---
 
@@ -70,7 +71,7 @@ proxies:
     password: pass
 ```
 
-[More about built-in nodes](docs/user-guide/profiles.md)
+[More about built-in nodes (Russian)](../ru/docs/user-guide/profiles.md)
 
 ### Split tunneling via profile
 
@@ -89,7 +90,7 @@ tun:
 
 Lists can be loaded from files or URLs. Profile settings take priority over manual settings.
 
-[More about split tunneling](docs/user-guide/split-tunneling.md)
+[More about split tunneling (Russian)](../ru/docs/user-guide/split-tunneling.md)
 
 ---
 
@@ -108,7 +109,9 @@ Lists can be loaded from files or URLs. Profile settings take priority over manu
 
 ## Download
 
-Release builds are published in [GitHub Releases](https://github.com/makriq-org/FlClashM/releases).
+Release files are published primarily on
+[SourceForge](https://sourceforge.net/projects/flclashm/files/releases/) and
+mirrored in [GitHub Releases](https://github.com/makriq-org/FlClashM/releases/).
 
 | File | Description |
 |------|-------------|
@@ -125,17 +128,22 @@ By default, the built-in updater shows only stable versions. Pre-releases can be
 ## Documentation
 
 ### For users
-- **[Built-in nodes](docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
-- **[Split tunneling](docs/user-guide/split-tunneling.md)** — management via profile
-- **[Provider hints](docs/user-guide/provider-hints.md)** — customization and behavior
+
+- **[Built-in nodes](../ru/docs/user-guide/profiles.md)** — ByeDPI, OlcRTC, NaiveProxy
+- **[Split tunneling](../ru/docs/user-guide/split-tunneling.md)** — management via profile
+- **[Provider hints](../ru/docs/user-guide/provider-hints.md)** — customization and behavior
 
 ### For developers
-- **[Architecture](docs/development/architecture.md)** — layers and services
-- **[Runtime](docs/development/runtime.md)** — profile processing and built-in nodes
-- **[Security](docs/development/security.md)** — security policy
-- **[Releases](docs/development/release-contract.md)** — version publishing and rollback
-- **[Upstream sync](docs/development/upstream-sync.md)** — base updates
-- **[Build verification](docs/development/verification.md)** — local and CI checks
+
+- **[Architecture](../ru/docs/development/architecture.md)** — layers and services
+- **[Runtime](../ru/docs/development/runtime.md)** — profile processing and built-in nodes
+- **[Security](../ru/docs/development/security.md)** — security policy
+- **[Releases](../ru/docs/development/release-contract.md)** — version publishing and rollback
+- **[Upstream sync](../ru/docs/development/upstream-sync.md)** — base updates
+- **[Build verification](../ru/docs/development/verification.md)** — local and CI checks
+
+Detailed technical documentation is maintained in Russian so its contracts do
+not silently diverge between translations.
 
 ---
 

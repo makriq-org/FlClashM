@@ -1,5 +1,5 @@
 name: flclashx
-description: FlClashM is an Android-only fork of FlClashX, with preserved Android package continuity from makriq.
+description: Android mihomo client with built-in NaiveProxy, ByeDPI and OlcRTC runtime nodes, based on FlClashX.
 publish_to: "none"
 version: 0.10.6+2026071801
 

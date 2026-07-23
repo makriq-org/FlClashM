@@ -1,4 +1,4 @@
 contact_links:
-  - name: Общение / Communication
+  - name: Вопрос или обсуждение / Question or discussion
     url: https://github.com/makriq-org/FlClashM/issues
-    about: Сообщить о проблеме или обсудить поведение клиента / Report an issue or discuss client behavior
+    about: Если шаблоны выше не подходят, создайте обычный issue без профиля и секретов

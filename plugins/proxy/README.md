@@ -1,15 +1,9 @@
 # proxy
 
-A new Flutter plugin project.
+Внутренний legacy-плагин FlClashX для переключения системного proxy на desktop.
+Windows использует MethodChannel, Linux и macOS — платформенные системные
+команды из Dart.
 
-## Getting Started
-
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/developing-packages/),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
-
-For help getting started with Flutter development, view the
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
+Плагин сохраняется для совместимости с апстримной базой и не входит в
+поддерживаемый Android-релиз FlClashM. Это не proxy engine приложения и не
+обёртка над встроенными NaiveProxy, ByeDPI или OlcRTC.

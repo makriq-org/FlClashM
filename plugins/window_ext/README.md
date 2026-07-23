@@ -1,15 +1,8 @@
 # window_ext
 
-A new Flutter plugin project.
+Внутренний legacy-плагин FlClashX для событий desktop-окна через MethodChannel.
+Нативные реализации остаются для Windows и macOS, чтобы не разрывать
+синхронизацию с апстримной базой.
 
-## Getting Started
-
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/developing-packages/),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
-
-For help getting started with Flutter development, view the
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
+Плагин не используется поддерживаемым Android-релизом FlClashM и не считается
+отдельным публичным пакетом.

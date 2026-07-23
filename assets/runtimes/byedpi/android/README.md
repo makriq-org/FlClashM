@@ -1,7 +1,14 @@
-# byedpi Android assets
+# Android-артефакты ByeDPI
 
-`ciadpi` is built from `hufrea/byedpi`.
+`ciadpi` собирается из закреплённого commit
+[hufrea/byedpi](https://github.com/hufrea/byedpi). Список
+`byebyeedpi-strategies.list` берётся из закреплённого commit
+[romanvht/ByeByeDPI](https://github.com/romanvht/ByeByeDPI) по GPL-3.0.
 
-The bundled `byebyeedpi-strategies.list` is copied from
-`romanvht/ByeByeDPI` under GPL-3.0. Each non-empty line is a ByeByeDPI
-strategy: command-line arguments for `ciadpi` without the executable name.
+Источник, commit и отображение ABI зафиксированы в `release.txt`. Каждая
+непустая строка списка — аргументы `ciadpi` без имени executable. Артефакты
+обновляются командой:
+
+```bash
+dart setup.dart android --out runtime-assets
+```

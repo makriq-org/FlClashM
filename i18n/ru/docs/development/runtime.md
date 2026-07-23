@@ -1,12 +1,24 @@
-# Среда выполнения
+# Runtime и встроенные узлы
+
+Поддерживаемый Android runtime состоит из встроенного `mihomo` и трёх внешних
+процессов, упакованных для `armeabi-v7a`, `arm64-v8a` и `x86_64`. Версия
+`mihomo` закреплена в `core/go.mod` и отражена в `lib/core_version.dart`;
+происхождение каждого внешнего артефакта — в
+`assets/runtimes/<name>/android/release.txt`.
 
 ## Цепочка обработки
 
-```
+```text
 RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ```
 
 После этого жизненным циклом управляют `EngineManager` и `EngineAdapter`.
+
+`RuntimePlan` содержит патч конфигурации ядра, декларации процессов и
+connectivity contract. Подготовка нового плана и его применение — одна
+транзакция: при обязательной ошибке новые процессы останавливаются, а старый
+применённый план остаётся рабочим. Android service владеет процессами и
+cold-start manifest; Dart-слой не запускает executable напрямую.
 
 ## Проверка встроенных узлов
 
