@@ -125,4 +125,29 @@ class RuntimeNodeConnectivityCheckerTest {
 
         assertTrue(RuntimeNodeConnectivityChecker.parseDnsAnswers(response, 0x9999).isEmpty())
     }
+
+    @Test
+    fun ignoresRecordsOutsideTheInternetClass() {
+        val response = byteArrayOf(
+            0x12, 0x34,
+            0x81.toByte(), 0x80.toByte(),
+            0x00, 0x01, // QDCOUNT
+            0x00, 0x01, // ANCOUNT
+            0x00, 0x00,
+            0x00, 0x00,
+            0x07, *"youtube".encodeToByteArray(),
+            0x03, *"com".encodeToByteArray(),
+            0x00,
+            0x00, 0x01,
+            0x00, 0x01,
+            0xc0.toByte(), 0x0c,
+            0x00, 0x01, // TYPE=A
+            0x00, 0x03, // CLASS=CH, not IN
+            0x00, 0x00, 0x01, 0x00,
+            0x00, 0x04,
+            142.toByte(), 250.toByte(), 72, 14,
+        )
+
+        assertTrue(RuntimeNodeConnectivityChecker.parseDnsAnswers(response, 0x1234).isEmpty())
+    }
 }

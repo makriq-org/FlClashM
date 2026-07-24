@@ -1,6 +1,7 @@
 package com.follow.clashx.service
 
 import android.os.SystemClock
+import com.follow.clashx.common.GlobalState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -8,10 +9,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import com.follow.clashx.common.GlobalState
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -19,6 +20,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URI
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLSocket
@@ -82,10 +84,16 @@ data class RuntimeNodeConnectivityCheck(
                 else -> if (raw.equals("system", ignoreCase = true)) {
                     null
                 } else {
-                    runCatching { URI(raw) }
-                        .getOrNull()
-                        ?.takeIf { it.scheme?.lowercase() == "https" && !it.host.isNullOrEmpty() }
-                        ?: DEFAULT_DOH_RESOLVER
+                    val uri = runCatching { URI(raw) }.getOrNull()
+                    // Same trust boundary as `urls`: the resolver is dialled
+                    // directly, so reject anything that could point the probe at
+                    // the loopback or the LAN even though Dart already validated.
+                    require(
+                        uri != null &&
+                            uri.scheme?.lowercase() == "https" &&
+                            RuntimeNodeConnectivityChecker.isSafeUri(uri),
+                    ) { "Unsafe connectivity-check resolver: $raw" }
+                    uri
                 }
             }
             return RuntimeNodeConnectivityCheck(
@@ -324,27 +332,49 @@ object RuntimeNodeConnectivityChecker {
         return InetAddress.getByName(candidate)
     }
 
-    // Returns the address string to hand byedpi over SOCKS, or null when a DoH
-    // resolver was configured but produced no usable public address (probe fails).
+    // Returns the address string to hand byedpi over SOCKS, or null when the probe
+    // must be abandoned.
     private fun resolveSocksTarget(host: String, resolver: URI?, timeoutMillis: Long): String? {
         // `system` escape hatch, or an already-literal host: pass it straight
         // through — byedpi resolves the name, or buildSocksConnectRequest guards
         // the literal.
         if (resolver == null || parseLiteralAddress(host) != null) return host
-        val target = dohResolve(resolver, host, timeoutMillis).firstOrNull(::isPublicAddress)
+        val answers = dohResolve(resolver, host, timeoutMillis)
+        if (answers.isEmpty()) {
+            // The resolver is unreachable (commonly: DoH itself is blocked on the
+            // very networks this feature targets) or has no A record for the host.
+            // Falling back to the domain lets byedpi resolve it over SOCKS ATYP
+            // 0x03 — the same path the `system` setting uses — instead of failing
+            // every strategy and leaving auto-selection permanently stuck.
+            GlobalState.log(
+                "byedpi probe: DoH $resolver did not resolve $host, " +
+                    "handing the domain to byedpi instead",
+            )
+            return host
+        }
+        val target = answers.firstOrNull(::isPublicAddress)
         if (target == null) {
-            GlobalState.log("byedpi probe: DoH $resolver returned no usable address for $host")
+            // The resolver answered, but only with loopback/LAN addresses. Handing
+            // the domain over would let byedpi dial them anyway, so refuse.
+            GlobalState.log("byedpi probe: DoH $resolver returned no public address for $host")
         }
         return target?.hostAddress
     }
 
-    // Minimal RFC 8484 DoH client (POST application/dns-message). Runs on a direct
-    // socket which, sharing the app UID, bypasses the tunnel just like byedpi's own
-    // outbound — so it sidesteps mihomo's fake-ip DNS without needing protect().
+    // Minimal RFC 8484 DoH client (POST application/dns-message) on a plain socket.
+    // It is not protect()ed and the app is not necessarily excluded from the tunnel,
+    // so this query may itself travel through mihomo — which is fine, because the
+    // resolver is dialled by literal IP and never hits mihomo's fake-ip DNS. When it
+    // does fail, resolveSocksTarget degrades to byedpi-side resolution.
     private fun dohResolve(resolver: URI, host: String, timeoutMillis: Long): List<InetAddress> {
         val dohHost = resolver.host ?: return emptyList()
         val dohPort = if (resolver.port > 0) resolver.port else 443
-        val timeout = timeoutMillis.toInt().coerceAtLeast(1)
+        val cacheKey = "$resolver|$host"
+        dohCacheGet(cacheKey)?.let { return it }
+        // A full sweep probes every bundled strategy in turn; without a budget of
+        // its own the handshake could eat the caller's whole probe timeout and
+        // starve the SOCKS check that actually decides the strategy.
+        val timeout = (timeoutMillis / 2).coerceIn(1_000L, 3_000L).toInt()
         val (queryId, query) = buildDnsQuery(host)
         val rawSocket = Socket()
         return try {
@@ -376,16 +406,46 @@ object RuntimeNodeConnectivityChecker {
                 write(request)
                 flush()
             }
-            val response = tls.getInputStream().readBytes()
+            val response = tls.getInputStream().readAtMost(MAX_DOH_RESPONSE_BYTES)
             runCatching { tls.close() }
-            val body = httpBody(response) ?: return emptyList()
-            parseDnsAnswers(body, queryId)
+            val body = httpBody(response)
+            val answers =
+                if (body == null) emptyList<InetAddress>() else parseDnsAnswers(body, queryId)
+            dohCachePut(cacheKey, answers)
+            answers
         } catch (error: Throwable) {
             GlobalState.log("byedpi probe: DoH resolve of $host via $resolver failed: ${error.message}")
+            // Negative result too: a blocked resolver would otherwise cost one
+            // timeout per strategy across the whole sweep.
+            dohCachePut(cacheKey, emptyList())
             emptyList()
         } finally {
             runCatching { rawSocket.close() }
         }
+    }
+
+    // Auto-selection walks the whole bundled strategy list, one probe per strategy.
+    // Resolving the same test host for each of them would mean dozens of TLS
+    // handshakes against the resolver, so successful answers are reused briefly.
+    private class DohCacheEntry(val addresses: List<InetAddress>, val expiresAt: Long)
+
+    private val dohCache = ConcurrentHashMap<String, DohCacheEntry>()
+
+    private fun dohCacheGet(key: String): List<InetAddress>? {
+        val entry = dohCache[key] ?: return null
+        if (entry.expiresAt <= SystemClock.elapsedRealtime()) {
+            dohCache.remove(key, entry)
+            return null
+        }
+        return entry.addresses
+    }
+
+    private fun dohCachePut(key: String, addresses: List<InetAddress>) {
+        if (dohCache.size >= MAX_DOH_CACHE_ENTRIES) dohCache.clear()
+        // Failures expire sooner: they must not pin a whole sweep to the fallback
+        // path when the resolver was only briefly unreachable.
+        val ttl = if (addresses.isEmpty()) DOH_CACHE_FAILURE_TTL_MILLIS else DOH_CACHE_TTL_MILLIS
+        dohCache[key] = DohCacheEntry(addresses, SystemClock.elapsedRealtime() + ttl)
     }
 
     internal fun buildDnsQuery(host: String): Pair<Int, ByteArray> {
@@ -422,10 +482,11 @@ object RuntimeNodeConnectivityChecker {
             pos = skipName(msg, pos)
             if (pos + 10 > msg.size) return result
             val type = u16(msg, pos)
+            val klass = u16(msg, pos + 2)
             val rdlength = u16(msg, pos + 8)
             pos += 10
             if (pos + rdlength > msg.size) return result
-            if (type == 1 && rdlength == 4) {
+            if (type == 1 && klass == 1 && rdlength == 4) {
                 result.add(InetAddress.getByAddress(msg.copyOfRange(pos, pos + 4)))
             }
             pos += rdlength
@@ -498,6 +559,24 @@ object RuntimeNodeConnectivityChecker {
 
     private val CRLF = "\r\n".toByteArray(StandardCharsets.US_ASCII)
     private val CRLF_CRLF = "\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
+
+    // A DNS message cannot exceed 64 KiB, so anything past that (plus headers) is
+    // a broken or hostile resolver trying to stream us out of memory.
+    private const val MAX_DOH_RESPONSE_BYTES = 72 * 1024
+    private const val MAX_DOH_CACHE_ENTRIES = 32
+    private const val DOH_CACHE_TTL_MILLIS = 60_000L
+    private const val DOH_CACHE_FAILURE_TTL_MILLIS = 10_000L
+
+    private fun InputStream.readAtMost(limit: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val chunk = ByteArray(4096)
+        while (out.size() < limit) {
+            val count = read(chunk, 0, minOf(chunk.size, limit - out.size()))
+            if (count <= 0) break
+            out.write(chunk, 0, count)
+        }
+        return out.toByteArray()
+    }
 
     private fun BufferedInputStream.readExact(size: Int): ByteArray {
         val result = ByteArray(size)
