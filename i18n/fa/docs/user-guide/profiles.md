@@ -81,6 +81,7 @@ proxies:
 | `strategies` | — | فهرست مرتب دلخواه آرگومان‌ها به‌جای `strategy-list` |
 | `strategy-test.urls` | endpoint داخلی YouTube | آدرس‌های انتخاب |
 | `strategy-test.sni` | — | نام میزبان برای جای‌گذاری `{sni}` |
+| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | حل‌کننده DoH برای نشانی آزمایش (دور زدن fake-ip)؛ `system` از حل‌کننده سیستم استفاده می‌کند |
 | `strategy-test.timeout` | `5` | مهلت هر بررسی، ثانیه |
 | `strategy-test.requests` | `1` | درخواست به‌ازای هر راهبرد |
 | `strategy-test.concurrency` | `4` | درخواست‌های HTTP موازی درون یک نامزد |
