@@ -16,6 +16,13 @@ import 'local_node_controller.dart';
 
 const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
 const _defaultByedpiStrategyTestSni = 'google.com';
+// Strategy probes must not resolve their test host through the system resolver:
+// while mihomo is up its fake-ip DNS answers with a placeholder address that the
+// probe cannot dial. Resolution is delegated to this DoH endpoint instead. The
+// literal IP host avoids a bootstrap chicken-and-egg (no name to resolve first).
+// A node may override it via `strategyTest.resolver`, or set it to `system` to
+// fall back to the platform resolver.
+const _defaultByedpiProbeResolver = 'https://1.1.1.1/dns-query';
 const _byedpiAutoSelectionRevision = 2;
 final _byedpiMonotonicClock = Stopwatch()..start();
 
@@ -119,6 +126,7 @@ class _ByedpiConfig {
     required this.strategyList,
     required this.testUrls,
     required this.testSni,
+    required this.resolver,
     required this.timeout,
     required this.requests,
     required this.concurrency,
@@ -141,6 +149,7 @@ class _ByedpiConfig {
   final String strategyList;
   final List<Uri> testUrls;
   final String testSni;
+  final String resolver;
   final Duration timeout;
   final int requests;
   final int concurrency;
@@ -165,6 +174,7 @@ class _ByedpiConfig {
         strategyList: strategyList,
         testUrls: testUrls,
         testSni: testSni,
+        resolver: resolver,
         timeout: timeout,
         requests: requests,
         concurrency: concurrency,
@@ -761,6 +771,7 @@ class ByedpiNodeController
         'revision': sha256.convert(utf8.encode(strategy)).toString(),
         'connectivityCheck': <String, dynamic>{
           'urls': config.testUrls.map((url) => '$url').toList(),
+          'resolver': config.resolver,
           'required': true,
           'timeout': timeoutSeconds,
           'startup-timeout': timeoutSeconds,
@@ -824,6 +835,10 @@ class ByedpiNodeController
       strategyList: '${value['strategyList'] ?? ''}',
       testUrls: urls,
       testSni: '${test['sni'] ?? _defaultByedpiStrategyTestSni}',
+      resolver: switch ('${test['resolver'] ?? ''}'.trim()) {
+        '' => _defaultByedpiProbeResolver,
+        final value => value,
+      },
       timeout: Duration(seconds: (test['timeout'] as num?)?.toInt() ?? 5),
       requests: (test['requests'] as num?)?.toInt() ?? 1,
       concurrency: (test['concurrency'] as num?)?.toInt() ?? 4,
@@ -929,6 +944,7 @@ class ByedpiNodeController
                 'strategies': strategies,
                 'urls': config.testUrls.map((url) => url.toString()).toList(),
                 'sni': config.testSni,
+                'resolver': config.resolver,
                 'timeout': config.timeout.inSeconds,
                 'requests': config.requests,
                 'concurrency': config.concurrency,

@@ -64,7 +64,7 @@ void main() {
     expect(probe, contains('rawSocket.close()'));
   });
 
-  test('connectivity probes preserve domain targets for SOCKS resolution', () {
+  test('strategy probes resolve the target off the fake-ip system resolver', () {
     final probeStart = connectivityChecker.indexOf('private suspend fun probe');
     final probeEnd = connectivityChecker.indexOf(
       'private fun socksConnect',
@@ -72,8 +72,17 @@ void main() {
     );
     final probe = connectivityChecker.substring(probeStart, probeEnd);
 
-    expect(probe, contains('socksConnect(rawSocket, uri.host, targetPort)'));
+    // The probe never resolves the test host through the system resolver (which
+    // answers with mihomo's fake-ip); it delegates to resolveSocksTarget.
+    expect(
+      probe,
+      contains('resolveSocksTarget(uri.host, resolver, timeoutMillis)'),
+    );
+    expect(probe, contains('socksConnect(rawSocket, socksTarget, targetPort)'));
     expect(probe, isNot(contains('InetAddress.getAllByName(uri.host)')));
+    // Default path resolves via DoH; the `system` escape hatch still hands byedpi
+    // the domain over SOCKS (ATYP 0x03) for underlying-network resolution.
+    expect(connectivityChecker, contains('application/dns-message'));
     expect(connectivityChecker, contains('0x03, host.size.toByte()'));
   });
 

@@ -330,6 +330,12 @@ final builtInProxySchemas = <BuiltInProxyType, BuiltInProxySchema>{
         modes: <String>{'auto'},
       ),
       BuiltInProxyFieldSchema(
+        path: 'byedpi.strategy-test.resolver',
+        type: ConfigValueType.string,
+        modes: <String>{'auto'},
+        defaultValue: ConfigDefaultValue.of('https://1.1.1.1/dns-query'),
+      ),
+      BuiltInProxyFieldSchema(
         path: 'byedpi.strategy-test.timeout',
         type: ConfigValueType.integer,
         modes: <String>{'auto'},
