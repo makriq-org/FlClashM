@@ -81,6 +81,7 @@ proxies:
 | `strategies` | — | 自定义有序参数列表，替代 `strategy-list` |
 | `strategy-test.urls` | 内置 YouTube 端点 | 用于选择的地址 |
 | `strategy-test.sni` | — | 替换 `{sni}` 的主机名 |
+| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | 解析测试地址的 DoH 解析器（绕过 fake-ip）；`system` 使用系统解析器 |
 | `strategy-test.timeout` | `5` | 单次检查超时（秒） |
 | `strategy-test.requests` | `1` | 每条策略的请求数 |
 | `strategy-test.concurrency` | `4` | 单个候选内的并行 HTTP 请求数 |

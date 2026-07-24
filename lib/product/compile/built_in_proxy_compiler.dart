@@ -994,6 +994,7 @@ class BuiltInProxyCompiler {
     const fields = {
       'urls',
       'sni',
+      'resolver',
       'timeout',
       'requests',
       'concurrency',
@@ -1004,6 +1005,7 @@ class BuiltInProxyCompiler {
       throw FormatException(
           'byedpi `strategy-test` has unknown fields: ${unknown.join(', ')}.');
     }
+    _validateStrategyTestResolver(value['resolver']);
     final sni = value['sni'];
     if (sni != null &&
         (sni is! String ||
@@ -1025,6 +1027,21 @@ class BuiltInProxyCompiler {
       connectivityCheckMaxConcurrency,
     );
     _ratio(value['min-success-ratio'], 'strategy-test.min-success-ratio');
+  }
+
+  void _validateStrategyTestResolver(Object? value) {
+    if (value == null) return;
+    if (value is! String || value.trim().isEmpty) {
+      throw const FormatException(
+          'byedpi `strategy-test.resolver` must be a public https DoH URL or `system`.');
+    }
+    final resolver = value.trim();
+    if (resolver.toLowerCase() == 'system') return;
+    final uri = Uri.tryParse(resolver);
+    if (uri == null || uri.scheme != 'https' || !isSafeConnectivityUri(uri)) {
+      throw const FormatException(
+          'byedpi `strategy-test.resolver` must be a public https DoH URL or `system`.');
+    }
   }
 
   void _validateByedpiSelection(Map<String, dynamic> value) {

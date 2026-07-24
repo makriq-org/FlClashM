@@ -64,6 +64,58 @@ void main() {
     expect(probe, contains('rawSocket.close()'));
   });
 
+  test('strategy probes resolve the target off the fake-ip system resolver', () {
+    final probeStart = connectivityChecker.indexOf('private suspend fun probe');
+    final probeEnd = connectivityChecker.indexOf(
+      'private fun socksConnect',
+      probeStart,
+    );
+    final probe = connectivityChecker.substring(probeStart, probeEnd);
+
+    // The probe never resolves the test host through the system resolver (which
+    // answers with mihomo's fake-ip); it delegates to resolveSocksTarget.
+    expect(
+      probe,
+      contains('resolveSocksTarget(uri.host, resolver, timeoutMillis)'),
+    );
+    expect(probe, contains('socksConnect(rawSocket, socksTarget, targetPort)'));
+    expect(probe, isNot(contains('InetAddress.getAllByName(uri.host)')));
+    // Default path resolves via DoH; the `system` escape hatch still hands byedpi
+    // the domain over SOCKS (ATYP 0x03) for underlying-network resolution.
+    expect(connectivityChecker, contains('application/dns-message'));
+    expect(connectivityChecker, contains('0x03, host.size.toByte()'));
+  });
+
+  test('an unreachable DoH resolver degrades instead of failing every probe',
+      () {
+    final start = connectivityChecker.indexOf('private fun resolveSocksTarget');
+    final end = connectivityChecker.indexOf('private fun dohResolve', start);
+    final resolveTarget = connectivityChecker.substring(start, end);
+
+    // DoH is itself blocked on many of the networks this feature targets. An
+    // empty answer must fall back to byedpi-side resolution, otherwise every
+    // strategy fails and auto-selection can never settle.
+    expect(resolveTarget, contains('if (answers.isEmpty()) {'));
+    expect(resolveTarget, contains('return host'));
+    // A resolver that answers only with loopback/LAN addresses is still refused.
+    expect(resolveTarget, contains('firstOrNull(::isPublicAddress)'));
+
+    // The resolver is dialled directly, so it passes the same safety gate as the
+    // check URLs rather than being trusted from the plan JSON.
+    expect(
+      connectivityChecker,
+      contains('Unsafe connectivity-check resolver'),
+    );
+    // DoH gets its own sub-budget and its answers are reused across the sweep.
+    expect(connectivityChecker, contains('DOH_CACHE_TTL_MILLIS'));
+    expect(
+      connectivityChecker,
+      contains('(timeoutMillis / 2).coerceIn(1_000L, 3_000L)'),
+    );
+    // A hostile resolver cannot stream the probe out of memory.
+    expect(connectivityChecker, contains('readAtMost(MAX_DOH_RESPONSE_BYTES)'));
+  });
+
   test('strategy probes are service-owned, serialized and always stopped', () {
     final probe = manager.indexOf('suspend fun probeNode');
     final lock = manager.indexOf('planLock.withLock', probe);
@@ -104,8 +156,7 @@ void main() {
     final transitionBody = manager.substring(transition, transitionEnd);
     final cancellationCheck =
         transitionBody.indexOf('currentCoroutineContext().ensureActive()');
-    final planChange =
-        transitionBody.indexOf('planLock.withLock { block() }');
+    final planChange = transitionBody.indexOf('planLock.withLock { block() }');
 
     expect(batchProbe, contains('activeBatchProbeJobs.add(probeJob)'));
     expect(batchProbe, contains('activeBatchProbeJobs.remove(probeJob)'));

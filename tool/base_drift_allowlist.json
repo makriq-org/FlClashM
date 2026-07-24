@@ -306,6 +306,11 @@
       "reason": "Тест ограниченного параллелизма временных runtime-процессов проверяет Android batch-probe встроенных узлов."
     },
     {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityCheckerTest.kt",
+      "bucket": "budget",
+      "reason": "Тест SOCKS-запроса и DoH-резолва проверочного адреса проверяет Android-проверку доступности встроенных узлов."
+    },
+    {
       "path": "android/service/src/main/res/drawable/ic_notification.xml",
       "bucket": "budget",
       "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."

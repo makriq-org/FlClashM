@@ -81,6 +81,7 @@ proxies:
 | `strategies` | — | Свой упорядоченный список аргументов вместо `strategy-list` |
 | `strategy-test.urls` | встроенный endpoint YouTube | Адреса для подбора |
 | `strategy-test.sni` | — | Имя хоста для подстановки `{sni}` |
+| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | DoH-резолвер адреса проверки (в обход fake-ip); `system` — системный резолвер |
 | `strategy-test.timeout` | `5` | Таймаут одной проверки, секунды |
 | `strategy-test.requests` | `1` | Запросов на стратегию |
 | `strategy-test.concurrency` | `4` | Параллельных HTTP-запросов внутри кандидата |

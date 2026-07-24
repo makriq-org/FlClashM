@@ -197,6 +197,7 @@ void main() {
           'strategy-test': {
             'urls': ['https://example.org/generate_204'],
             'sni': 'example.org',
+            'resolver': 'https://1.1.1.1/dns-query',
             'timeout': 60,
             'requests': 32,
             'concurrency': 16,
@@ -248,6 +249,36 @@ void main() {
         }),
         failsAt('byedpi.strategy-test.min-success-ratio'),
       );
+    });
+
+    test('accepts the `system` resolver but rejects unsafe resolvers', () {
+      expect(
+        () => compile(<String, dynamic>{
+          'name': 'ByeDPI',
+          'type': 'byedpi',
+          'mode': 'auto',
+          'strategies': ['-f-1'],
+          'strategy-test': {'resolver': 'system'},
+        }),
+        returnsNormally,
+      );
+      for (final resolver in const <String>[
+        'http://1.1.1.1/dns-query', // must be https
+        'https://127.0.0.1/dns-query', // must be public
+        'https://user:pass@1.1.1.1/dns-query', // no credentials
+      ]) {
+        expect(
+          () => compile(<String, dynamic>{
+            'name': 'ByeDPI',
+            'type': 'byedpi',
+            'mode': 'auto',
+            'strategies': ['-f-1'],
+            'strategy-test': {'resolver': resolver},
+          }),
+          throwsA(isA<FormatException>()),
+          reason: resolver,
+        );
+      }
     });
   });
 

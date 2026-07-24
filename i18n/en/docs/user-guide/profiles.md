@@ -81,6 +81,7 @@ How it works: candidates are checked in parallel in small groups. If nothing is 
 | `strategies` | — | Your own ordered argument list instead of `strategy-list` |
 | `strategy-test.urls` | built-in YouTube endpoint | Addresses for selection |
 | `strategy-test.sni` | — | Hostname to substitute for `{sni}` |
+| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | DoH resolver for the test address (bypasses fake-ip); `system` uses the platform resolver |
 | `strategy-test.timeout` | `5` | Per-check timeout, seconds |
 | `strategy-test.requests` | `1` | Requests per strategy |
 | `strategy-test.concurrency` | `4` | Parallel HTTP requests inside a candidate |
