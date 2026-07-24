@@ -8,7 +8,7 @@
 
 ### 📥 Скачать
 
-[![Universal APK](https://img.shields.io/badge/Universal_APK-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-universal.apk) [![arm64-v8a](https://img.shields.io/badge/arm64--v8a-1f6feb?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-arm64-v8a.apk) [![armeabi-v7a](https://img.shields.io/badge/armeabi--v7a-e36209?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-armeabi-v7a.apk)
+[![Universal APK](https://img.shields.io/badge/Universal_APK-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-universal.apk) [![arm64-v8a](https://img.shields.io/badge/arm64--v8a-1f6feb?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-arm64-v8a.apk) [![armeabi-v7a](https://img.shields.io/badge/armeabi--v7a-1f6feb?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-armeabi-v7a.apk)
 
 Не уверены — берите **Universal**. Другие варианты (`x86_64`), AAB и файлы `.sha256` — во вложениях ниже.
 
