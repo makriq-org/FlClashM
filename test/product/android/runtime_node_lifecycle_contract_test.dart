@@ -64,6 +64,19 @@ void main() {
     expect(probe, contains('rawSocket.close()'));
   });
 
+  test('connectivity probes preserve domain targets for SOCKS resolution', () {
+    final probeStart = connectivityChecker.indexOf('private suspend fun probe');
+    final probeEnd = connectivityChecker.indexOf(
+      'private fun socksConnect',
+      probeStart,
+    );
+    final probe = connectivityChecker.substring(probeStart, probeEnd);
+
+    expect(probe, contains('socksConnect(rawSocket, uri.host, targetPort)'));
+    expect(probe, isNot(contains('InetAddress.getAllByName(uri.host)')));
+    expect(connectivityChecker, contains('0x03, host.size.toByte()'));
+  });
+
   test('strategy probes are service-owned, serialized and always stopped', () {
     final probe = manager.indexOf('suspend fun probeNode');
     final lock = manager.indexOf('planLock.withLock', probe);
@@ -104,8 +117,7 @@ void main() {
     final transitionBody = manager.substring(transition, transitionEnd);
     final cancellationCheck =
         transitionBody.indexOf('currentCoroutineContext().ensureActive()');
-    final planChange =
-        transitionBody.indexOf('planLock.withLock { block() }');
+    final planChange = transitionBody.indexOf('planLock.withLock { block() }');
 
     expect(batchProbe, contains('activeBatchProbeJobs.add(probeJob)'));
     expect(batchProbe, contains('activeBatchProbeJobs.remove(probeJob)'));

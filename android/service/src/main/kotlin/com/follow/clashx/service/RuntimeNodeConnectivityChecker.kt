@@ -197,8 +197,6 @@ object RuntimeNodeConnectivityChecker {
     ): Boolean = withTimeoutOrNull(timeoutMillis) {
         withContext(Dispatchers.IO) {
             runCatching {
-                val addresses = InetAddress.getAllByName(uri.host)
-                require(addresses.isNotEmpty() && addresses.all(::isPublicAddress))
                 val targetPort = if (uri.port > 0) uri.port else if (uri.scheme == "http") 80 else 443
                 val rawSocket = Socket()
                 var socket: Socket = rawSocket
@@ -210,7 +208,7 @@ object RuntimeNodeConnectivityChecker {
                         )
                         soTimeout = timeoutMillis.toInt()
                     }
-                    socksConnect(rawSocket, addresses.first(), targetPort)
+                    socksConnect(rawSocket, uri.host, targetPort)
                     if (uri.scheme == "https") {
                         val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                             .createSocket(rawSocket, uri.host, targetPort, true) as SSLSocket
@@ -246,7 +244,7 @@ object RuntimeNodeConnectivityChecker {
         }
     } ?: false
 
-    private fun socksConnect(socket: Socket, target: InetAddress, port: Int) {
+    private fun socksConnect(socket: Socket, targetHost: String, port: Int) {
         val input = BufferedInputStream(socket.getInputStream())
         socket.getOutputStream().apply {
             write(byteArrayOf(0x05, 0x01, 0x00))
@@ -254,11 +252,8 @@ object RuntimeNodeConnectivityChecker {
         }
         val greeting = input.readExact(2)
         require(greeting[0] == 0x05.toByte() && greeting[1] == 0x00.toByte())
-        val type = if (target is Inet4Address) 0x01 else 0x04
         socket.getOutputStream().apply {
-            write(byteArrayOf(0x05, 0x01, 0x00, type.toByte()))
-            write(target.address)
-            write(byteArrayOf((port shr 8).toByte(), port.toByte()))
+            write(buildSocksConnectRequest(targetHost, port))
             flush()
         }
         val header = input.readExact(4)
@@ -270,6 +265,34 @@ object RuntimeNodeConnectivityChecker {
             else -> error("Unknown SOCKS address type")
         }
         input.readExact(2)
+    }
+
+    internal fun buildSocksConnectRequest(targetHost: String, port: Int): ByteArray {
+        require(port in 1..65535) { "Invalid SOCKS target port" }
+        val literal = parseLiteralAddress(targetHost)
+        if (literal != null) {
+            require(isPublicAddress(literal)) { "Unsafe SOCKS target address" }
+            val type = if (literal is Inet4Address) 0x01 else 0x04
+            return byteArrayOf(0x05, 0x01, 0x00, type.toByte()) +
+                literal.address +
+                byteArrayOf((port shr 8).toByte(), port.toByte())
+        }
+
+        val host = targetHost.toByteArray(StandardCharsets.UTF_8)
+        require(host.isNotEmpty() && host.size <= 255) {
+            "Invalid SOCKS target host name"
+        }
+        return byteArrayOf(0x05, 0x01, 0x00, 0x03, host.size.toByte()) +
+            host +
+            byteArrayOf((port shr 8).toByte(), port.toByte())
+    }
+
+    private fun parseLiteralAddress(host: String): InetAddress? {
+        val candidate = host.removePrefix("[").removeSuffix("]")
+        val isLiteral = candidate.contains(':') ||
+            candidate.matches(Regex("(?:\\d{1,3}\\.){3}\\d{1,3}"))
+        if (!isLiteral) return null
+        return InetAddress.getByName(candidate)
     }
 
     private fun BufferedInputStream.readExact(size: Int): ByteArray {
