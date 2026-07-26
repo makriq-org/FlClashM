@@ -117,6 +117,7 @@ class BuiltInProxyDescriptor {
     required this.listenPortRangeStart,
     required this.listenPortRangeSize,
     required this.availability,
+    this.defaultStartupTimeout = const Duration(seconds: 30),
   });
 
   final BuiltInProxyType type;
@@ -127,6 +128,7 @@ class BuiltInProxyDescriptor {
   final int listenPortRangeStart;
   final int listenPortRangeSize;
   final BuiltInProxyAvailability availability;
+  final Duration defaultStartupTimeout;
 }
 
 @immutable

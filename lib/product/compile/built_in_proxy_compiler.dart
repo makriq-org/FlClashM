@@ -129,6 +129,7 @@ class BuiltInProxyCompiler {
       final nodeId = '${definition.type.label}-${definition.name.toMd5()}';
       final connectivityCheck = _parseConnectivityCheck(
         definition: definition,
+        descriptor: descriptor,
         config: normalizedConfig,
         globalTestUrl: globalTestUrl,
       );
@@ -290,8 +291,7 @@ class BuiltInProxyCompiler {
       resolverLines: resolverLines,
       domains: settings.domains,
     );
-    final cacheDirectory =
-        '$stormDnsCacheDirectoryName/$fingerprint';
+    final cacheDirectory = '$stormDnsCacheDirectoryName/$fingerprint';
     final config = buildStormDnsToml(
       settings: settings,
       listenHost: localhost,
@@ -312,7 +312,7 @@ class BuiltInProxyCompiler {
       files: {
         'built-in-proxies/stormdns/$nodeId/$stormDnsConfigFileName': config,
         'built-in-proxies/stormdns/$nodeId/'
-            '$stormDnsResolversTemplateFileName':
+                '$stormDnsResolversTemplateFileName':
             '${resolverLines.join('\n')}\n',
       },
       metadata: {
@@ -329,7 +329,8 @@ class BuiltInProxyCompiler {
   ///
   /// The caller resolves these before compiling, since fetching is async and
   /// compilation is not.
-  Map<Uri, Duration> collectStormDnsRemoteLists(Map<String, dynamic> rawConfig) {
+  Map<Uri, Duration> collectStormDnsRemoteLists(
+      Map<String, dynamic> rawConfig) {
     final result = <Uri, Duration>{};
     final proxyEntries = rawConfig['proxies'];
     if (proxyEntries is! List) return result;
@@ -987,6 +988,7 @@ class BuiltInProxyCompiler {
 
   ConnectivityCheckConfig _parseConnectivityCheck({
     required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
     required Map<String, dynamic> config,
     required String globalTestUrl,
   }) {
@@ -1046,7 +1048,7 @@ class BuiltInProxyCompiler {
       startupTimeout: _seconds(
         raw['startup-timeout'],
         'startup-timeout',
-        30,
+        descriptor.defaultStartupTimeout.inSeconds,
         connectivityCheckMaxStartupTimeout,
       ),
       retryInterval: _seconds(

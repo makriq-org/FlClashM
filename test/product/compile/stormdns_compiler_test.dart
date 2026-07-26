@@ -41,9 +41,9 @@ Map<String, dynamic> _node([Map<String, dynamic> extra = const {}]) =>
 String _toml(BuiltInProxyNodePlan plan) => plan
     .files['built-in-proxies/stormdns/${plan.nodeId}/$stormDnsConfigFileName']!;
 
-String _resolvers(BuiltInProxyNodePlan plan) => plan.files[
-    'built-in-proxies/stormdns/${plan.nodeId}/'
-    '$stormDnsResolversTemplateFileName']!;
+String _resolvers(BuiltInProxyNodePlan plan) =>
+    plan.files['built-in-proxies/stormdns/${plan.nodeId}/'
+        '$stormDnsResolversTemplateFileName']!;
 
 void main() {
   group('generated TOML', () {
@@ -252,6 +252,14 @@ void main() {
         const Duration(seconds: 180),
       );
     });
+
+    test('allows a cold MTU scan by default', () {
+      final plan = _compile(_node()).nodes.single;
+      expect(
+        plan.connectivityCheck.startupTimeout,
+        const Duration(minutes: 2),
+      );
+    });
   });
 
   test('the node is rewritten as a plain SOCKS5 proxy entry', () {
@@ -271,6 +279,7 @@ void main() {
         }),
       ],
     });
-    expect(requested, {Uri.parse('https://example.com/r.txt'): const Duration(hours: 6)});
+    expect(requested,
+        {Uri.parse('https://example.com/r.txt'): const Duration(hours: 6)});
   });
 }
