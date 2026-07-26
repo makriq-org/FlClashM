@@ -484,7 +484,9 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
               return;
             }
             if (!alive) {
-              throw StateError('OlcRTC node delay test failed after wake.');
+              throw StateError(
+                '${plan.type.label} node delay test failed after wake.',
+              );
             }
           }
           state
@@ -688,8 +690,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       _currentPlans.where(_isReserve).toList(growable: false);
 
   bool _isReserve(BuiltInProxyNodePlan plan) =>
-      plan.type == BuiltInProxyType.olcrtc &&
-      (plan.activation?.isAuto ?? false);
+      plan.activation?.isAuto ?? false;
 
   bool _watchdogIsCurrent(int watchdogGeneration, int planGeneration) =>
       watchdogGeneration == _watchdogGeneration &&

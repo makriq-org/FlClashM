@@ -93,6 +93,21 @@ void main() {
       );
     });
 
+    test('keeps any auto-activation node asleep until wake', () async {
+      final supervisor = buildSupervisor();
+      final reserve = _byedpiReservePlan();
+      expect(await supervisor.stageRuntimePlan([reserve]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([reserve]);
+
+      expect(await supervisor.start(), isTrue);
+      expect(runtime.appliedPlans.single, isEmpty);
+
+      await supervisor.notifyProxySelected('Reserve', reserve.name);
+
+      expect(runtime.appliedPlans.last.single['type'], 'byedpi');
+      await supervisor.stop();
+    });
+
     test('prepares independent node types concurrently', () async {
       final gate = _ResolveGate(3);
       final supervisor = buildSupervisor(gate: gate);
@@ -739,6 +754,25 @@ BuiltInProxyNodePlan _byedpiPlan() => BuiltInProxyNodePlan(
         }),
       },
     );
+
+BuiltInProxyNodePlan _byedpiReservePlan() {
+  final plan = _byedpiPlan();
+  return BuiltInProxyNodePlan(
+    nodeId: plan.nodeId,
+    name: plan.name,
+    type: plan.type,
+    listenHost: plan.listenHost,
+    listenPort: plan.listenPort,
+    protocol: plan.protocol,
+    udp: plan.udp,
+    activation: NodeActivationConfig(
+      wakeUrls: [Uri.parse('https://example.com')],
+      watchGroup: 'Reserve',
+      containingGroups: const ['Reserve'],
+    ),
+    files: plan.files,
+  );
+}
 
 BuiltInProxyNodePlan _byedpiAutoPlan({
   String nodeId = 'byedpi-auto',

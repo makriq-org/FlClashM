@@ -60,6 +60,11 @@ class BuiltInProxyCompiler {
       }
       final definition = _parseBuiltInProxyNode(proxy);
       if (definition != null) {
+        final descriptor = registry.resolveSupported(definition.type);
+        _rejectUnsupportedActivation(
+          definition: definition,
+          descriptor: descriptor,
+        );
         _validateDefinition(definition);
       }
     }
@@ -118,13 +123,16 @@ class BuiltInProxyCompiler {
         config: normalizedConfig,
         globalTestUrl: globalTestUrl,
       );
-      final activation = definition.type == BuiltInProxyType.olcrtc
+      final activation = descriptor.supportsActivation
           ? _parseActivation(
               definition: definition,
               config: normalizedConfig,
               resolvedWakeUrls: connectivityCheck.urls,
             )
-          : null;
+          : _rejectUnsupportedActivation(
+              definition: definition,
+              descriptor: descriptor,
+            );
       final plan = _buildPlan(
         definition: definition,
         descriptor: descriptor,
@@ -194,6 +202,7 @@ class BuiltInProxyCompiler {
           listenPort: listenPort,
           udp: udp,
           connectivityCheck: connectivityCheck,
+          activation: activation,
         ),
       BuiltInProxyType.olcrtc => _buildOlcRtcPlan(
           definition: definition,
@@ -211,6 +220,7 @@ class BuiltInProxyCompiler {
           listenPort: listenPort,
           udp: udp,
           connectivityCheck: connectivityCheck,
+          activation: activation,
         ),
     };
   }
@@ -243,12 +253,14 @@ class BuiltInProxyCompiler {
     required int listenPort,
     required bool udp,
     required ConnectivityCheckConfig connectivityCheck,
+    required NodeActivationConfig? activation,
   }) {
     final rawConfig = Map<String, dynamic>.from(definition.rawConfig)
       ..remove('name')
       ..remove('type')
       ..remove('udp')
-      ..remove('connectivity-check');
+      ..remove('connectivity-check')
+      ..remove('activation');
     if (rawConfig.containsKey('proxy')) {
       throw const FormatException(
         'naiveproxy `proxy` is not supported. Use separate `server`, `port`, `username`, and `password` fields.',
@@ -362,6 +374,7 @@ class BuiltInProxyCompiler {
       protocol: descriptor.protocol,
       udp: udp,
       connectivityCheck: connectivityCheck,
+      activation: activation,
       files: {
         'built-in-proxies/naiveproxy/$nodeId/config.json':
             json.encode(nativeConfig),
@@ -554,12 +567,14 @@ class BuiltInProxyCompiler {
     required int listenPort,
     required bool udp,
     required ConnectivityCheckConfig connectivityCheck,
+    required NodeActivationConfig? activation,
   }) {
     final rawConfig = copyConfigTree(definition.rawConfig)
       ..remove('name')
       ..remove('type')
       ..remove('udp')
-      ..remove('connectivity-check');
+      ..remove('connectivity-check')
+      ..remove('activation');
     if (rawConfig.containsKey('test')) {
       throw const FormatException(
         'byedpi `test` is no longer supported. Rename it to `strategy-test`; connectivity checks belong in `connectivity-check`.',
@@ -688,6 +703,7 @@ class BuiltInProxyCompiler {
       protocol: descriptor.protocol,
       udp: udp,
       connectivityCheck: connectivityCheck,
+      activation: activation,
       files: {
         'built-in-proxies/byedpi/$nodeId/config.json': json.encode(config),
       },
@@ -699,6 +715,7 @@ class BuiltInProxyCompiler {
     required Map<String, dynamic> config,
     required List<Uri> resolvedWakeUrls,
   }) {
+    final nodeLabel = '${definition.type.label} node `${definition.name}`';
     final rawValue = definition.rawConfig['activation'];
     Map<String, dynamic> raw;
     String modeValue;
@@ -714,7 +731,7 @@ class BuiltInProxyCompiler {
       final unknown = raw.keys.where((key) => !fields.contains(key)).toList();
       if (unknown.isNotEmpty) {
         throw FormatException(
-          'olcrtc node `${definition.name}` has unknown activation fields: '
+          '$nodeLabel has unknown activation fields: '
           '${unknown.join(', ')}.',
         );
       }
@@ -724,7 +741,7 @@ class BuiltInProxyCompiler {
           : _trimmedString(parsedMode)?.toLowerCase() ?? '';
     } else {
       throw FormatException(
-        'olcrtc node `${definition.name}` requires `activation` to be `auto`, '
+        '$nodeLabel requires `activation` to be `auto`, '
         '`always`, or a map.',
       );
     }
@@ -733,7 +750,7 @@ class BuiltInProxyCompiler {
       'auto' => NodeActivationMode.auto,
       'always' => NodeActivationMode.always,
       _ => throw FormatException(
-          'olcrtc node `${definition.name}` supports only '
+          '$nodeLabel supports only '
           '`activation.mode: auto` or `activation.mode: always`.',
         ),
     };
@@ -743,7 +760,7 @@ class BuiltInProxyCompiler {
         wake.keys.where((key) => !wakeFields.contains(key)).toList();
     if (unknownWake.isNotEmpty) {
       throw FormatException(
-        'olcrtc node `${definition.name}` has unknown activation.wake fields: '
+        '$nodeLabel has unknown activation.wake fields: '
         '${unknownWake.join(', ')}.',
       );
     }
@@ -753,7 +770,7 @@ class BuiltInProxyCompiler {
         sleep.keys.where((key) => !sleepFields.contains(key)).toList();
     if (unknownSleep.isNotEmpty) {
       throw FormatException(
-        'olcrtc node `${definition.name}` has unknown activation.sleep fields: '
+        '$nodeLabel has unknown activation.sleep fields: '
         '${unknownSleep.join(', ')}.',
       );
     }
@@ -767,14 +784,14 @@ class BuiltInProxyCompiler {
     final groups = _resolveContainingGroups(config, definition.name);
     if (mode == NodeActivationMode.auto && groups.directGroups.isEmpty) {
       throw FormatException(
-        'olcrtc node `${definition.name}` uses automatic activation but is not '
+        '$nodeLabel uses automatic activation but is not '
         'a direct member of any proxy group. Add it to a group or use '
         '`activation: always`.',
       );
     }
     if (mode == NodeActivationMode.auto && wakeUrls.isEmpty) {
       throw FormatException(
-        'olcrtc node `${definition.name}` uses automatic activation but no wake '
+        '$nodeLabel uses automatic activation but no wake '
         'address was found in activation.wake.urls, connectivity-check, '
         'containing groups, or application settings.',
       );
@@ -810,6 +827,20 @@ class BuiltInProxyCompiler {
       watchGroup: groups.watchGroup,
       containingGroups: List<String>.unmodifiable(groups.directGroups),
     );
+  }
+
+  NodeActivationConfig? _rejectUnsupportedActivation({
+    required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
+  }) {
+    if (descriptor.supportsActivation) return null;
+    if (definition.rawConfig.containsKey('activation')) {
+      throw FormatException(
+        '${definition.type.label} node `${definition.name}` does not support '
+        '`activation`.',
+      );
+    }
+    return null;
   }
 
   ConnectivityCheckConfig _parseConnectivityCheck({

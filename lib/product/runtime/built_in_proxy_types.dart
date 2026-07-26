@@ -111,6 +111,7 @@ class BuiltInProxyDescriptor {
     required this.type,
     required this.protocol,
     required this.supportsUdp,
+    required this.supportsActivation,
     required this.defaultUdp,
     required this.listenPortRangeStart,
     required this.listenPortRangeSize,
@@ -120,6 +121,7 @@ class BuiltInProxyDescriptor {
   final BuiltInProxyType type;
   final BuiltInProxyProtocol protocol;
   final bool supportsUdp;
+  final bool supportsActivation;
   final bool defaultUdp;
   final int listenPortRangeStart;
   final int listenPortRangeSize;
