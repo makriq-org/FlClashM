@@ -185,7 +185,11 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            allOf(contains('.activation'), contains('unknown')),
+            allOf(
+              contains(node['type']),
+              contains('does not support'),
+              contains('activation'),
+            ),
           ),
         ),
       );

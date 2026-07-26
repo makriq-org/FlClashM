@@ -11,6 +11,7 @@ void main() {
       expect(descriptor.type, BuiltInProxyType.naiveproxy);
       expect(descriptor.protocol, BuiltInProxyProtocol.socks5);
       expect(descriptor.supportsUdp, isFalse);
+      expect(descriptor.supportsActivation, isFalse);
       expect(descriptor.defaultUdp, isFalse);
       expect(descriptor.availability.isSupported, isTrue);
     });
@@ -23,6 +24,7 @@ void main() {
       expect(descriptor.type, BuiltInProxyType.byedpi);
       expect(descriptor.protocol, BuiltInProxyProtocol.socks5);
       expect(descriptor.supportsUdp, isTrue);
+      expect(descriptor.supportsActivation, isFalse);
       expect(descriptor.defaultUdp, isTrue);
       expect(descriptor.availability.isSupported, isTrue);
     });
@@ -35,6 +37,7 @@ void main() {
       expect(descriptor.type, BuiltInProxyType.olcrtc);
       expect(descriptor.protocol, BuiltInProxyProtocol.socks5);
       expect(descriptor.supportsUdp, isFalse);
+      expect(descriptor.supportsActivation, isTrue);
       expect(descriptor.defaultUdp, isFalse);
       expect(descriptor.availability.isSupported, isTrue);
     });

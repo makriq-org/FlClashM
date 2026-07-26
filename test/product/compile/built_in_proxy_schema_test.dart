@@ -55,7 +55,14 @@ void main() {
       containsAll(<String>{
         'olcrtc.profiles[].crypto.key',
         'olcrtc.activation',
+        'olcrtc.activation.mode',
+        'olcrtc.activation.wake',
+        'olcrtc.activation.wake.urls',
         'olcrtc.activation.wake.urls[]',
+        'olcrtc.activation.wake.interval',
+        'olcrtc.activation.wake.failures',
+        'olcrtc.activation.wake.retry-after',
+        'olcrtc.activation.sleep',
         'olcrtc.activation.sleep.idle',
       }),
     );
