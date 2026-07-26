@@ -46,7 +46,7 @@ void main() {
       expect(await supervisor.start(), isTrue);
       final applied = runtime.appliedPlans.last;
       expect(applied.single['type'], 'stormdns');
-      expect(applied.single['closeStdin'], isTrue);
+      expect(applied.single.containsKey('closeStdin'), isFalse);
     });
 
     test('a reserve node with auto activation stays out of the process plan',
@@ -77,9 +77,8 @@ void main() {
 
     test('artifacts land on disk only once the plan is staged', () async {
       final plan = _plan(activation: NodeActivationMode.always);
-      final config =
-          File('${layout.nodesDirectoryPath}/${plan.nodeId}/'
-              '$stormDnsConfigFileName');
+      final config = File('${layout.nodesDirectoryPath}/${plan.nodeId}/'
+          '$stormDnsConfigFileName');
       expect(config.existsSync(), isFalse);
 
       await supervisor.stageRuntimePlan([plan]);

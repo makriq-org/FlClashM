@@ -161,9 +161,6 @@ class StormDnsNodeController extends LocalNodeController<
           '-resolvers',
           layout.resolversPath,
         ],
-        // StormDNS blocks on stdin ("Press Enter to exit...") when startup
-        // fails, which would keep a dead process alive forever on Android.
-        'closeStdin': true,
         'resolverFile': <String, dynamic>{
           'template': stormDnsResolversTemplateFileName,
           'path': stormDnsResolversFileName,

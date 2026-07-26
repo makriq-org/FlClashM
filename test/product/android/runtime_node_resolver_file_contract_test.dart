@@ -38,10 +38,8 @@ void main() {
   });
 
   test('the node spec parses the generic launch fields', () {
-    expect(processManager, contains('val closeStdin: Boolean'));
     expect(
         processManager, contains('val resolverFile: RuntimeNodeResolverFile?'));
-    expect(processManager, contains('value.optBoolean("closeStdin", false)'));
     expect(processManager, contains('RuntimeNodeResolverFile.fromJson('));
     expect(resolverFile, contains('value.optString("template", "")'));
     expect(resolverFile, contains('value.optString("path", "")'));
@@ -49,9 +47,9 @@ void main() {
     expect(resolverFile, contains('optJSONArray("resetPaths")'));
   });
 
-  test('stdin is closed for nodes that ask for it', () {
-    expect(processManager, contains('if (spec.closeStdin)'));
-    expect(processManager, contains('process.outputStream.close()'));
+  test('runtime-node stdin stays open for lifetime-controlled clients', () {
+    expect(processManager, isNot(contains('closeStdin')));
+    expect(processManager, isNot(contains('if (spec.closeStdin)')));
   });
 
   test('the resolver file is rendered before the process is launched', () {

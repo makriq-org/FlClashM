@@ -32,9 +32,9 @@ void main() {
 
     File configFile(String nodeId) =>
         File('${layout.nodesDirectoryPath}/$nodeId/$stormDnsConfigFileName');
-    File templateFile(String nodeId) => File(
-        '${layout.nodesDirectoryPath}/$nodeId/'
-        '$stormDnsResolversTemplateFileName');
+    File templateFile(String nodeId) =>
+        File('${layout.nodesDirectoryPath}/$nodeId/'
+            '$stormDnsResolversTemplateFileName');
 
     test('stages both artifacts together', () async {
       final plan = _plan(config: 'A', resolvers: '8.8.8.8\n');
@@ -120,7 +120,8 @@ void main() {
     group('working cache', () {
       test('a new fingerprint leaves the old cache in place until commit',
           () async {
-        final oldPlan = _plan(config: 'A', resolvers: 'a\n', fingerprint: 'old');
+        final oldPlan =
+            _plan(config: 'A', resolvers: 'a\n', fingerprint: 'old');
         await controller
             .stageRuntimePlan(currentPlans: const [], nextPlans: [oldPlan]);
         await controller.commitStagedRuntimePlan();
@@ -146,7 +147,8 @@ void main() {
       });
 
       test('committing a new fingerprint drops superseded caches', () async {
-        final oldPlan = _plan(config: 'A', resolvers: 'a\n', fingerprint: 'old');
+        final oldPlan =
+            _plan(config: 'A', resolvers: 'a\n', fingerprint: 'old');
         await controller
             .stageRuntimePlan(currentPlans: const [], nextPlans: [oldPlan]);
         await controller.commitStagedRuntimePlan();
@@ -170,7 +172,7 @@ void main() {
     });
 
     group('launch contract', () {
-      test('passes both artifact paths and closes stdin', () async {
+      test('passes both artifact paths and keeps stdin open', () async {
         final plan = _plan(config: 'A', resolvers: 'r\n');
         await controller
             .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]);
@@ -184,7 +186,7 @@ void main() {
           '-resolvers',
           '$nodeDir/$stormDnsResolversFileName',
         ]);
-        expect(node['closeStdin'], isTrue);
+        expect(node.containsKey('closeStdin'), isFalse);
       });
 
       test('declares its resolver file and the caches bound to it', () async {
@@ -225,7 +227,8 @@ void main() {
         protocol: BuiltInProxyProtocol.socks5,
         udp: false,
         files: {
-          'built-in-proxies/stormdns/stormdns-node/$stormDnsConfigFileName': 'A',
+          'built-in-proxies/stormdns/stormdns-node/$stormDnsConfigFileName':
+              'A',
         },
       );
       expect(
@@ -277,7 +280,8 @@ class _FakeRuntimeNodeBridge implements RuntimeNodePlatformBridge {
   int applyCalls = 0;
 
   @override
-  Future<RuntimeNodePlanState> applyPlan(List<Map<String, dynamic>> nodes) async {
+  Future<RuntimeNodePlanState> applyPlan(
+      List<Map<String, dynamic>> nodes) async {
     applyCalls++;
     return const RuntimeNodePlanState(
       generation: 1,

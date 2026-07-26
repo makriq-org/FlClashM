@@ -41,7 +41,6 @@ data class RuntimeNodeSpec(
     val arguments: List<String>,
     val revision: String,
     val connectivityCheck: RuntimeNodeConnectivityCheck,
-    val closeStdin: Boolean,
     val resolverFile: RuntimeNodeResolverFile?,
 ) {
     companion object {
@@ -72,7 +71,6 @@ data class RuntimeNodeSpec(
                 connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
                     value.optJSONObject("connectivityCheck"),
                 ),
-                closeStdin = value.optBoolean("closeStdin", false),
                 resolverFile = RuntimeNodeResolverFile.fromJson(
                     value.optJSONObject("resolverFile"),
                 ),
@@ -716,12 +714,6 @@ object RuntimeNodeProcessManager {
                         "Failed to start runtime node `${spec.nodeId}`: ${error.message}",
                     )
                     return@withContext 0L
-                }
-
-                if (spec.closeStdin) {
-                    // Some runtimes block on stdin after a startup failure and
-                    // would otherwise linger forever with no terminal attached.
-                    runCatching { process.outputStream.close() }
                 }
 
                 val startedAt = System.currentTimeMillis()
