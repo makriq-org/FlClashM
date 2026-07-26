@@ -161,6 +161,10 @@ class StormDnsNodeController extends LocalNodeController<
           '-resolvers',
           layout.resolversPath,
         ],
+        'startupFailurePatterns': const <String>[
+          'No valid connections found after MTU testing!',
+          'Client startup failed:',
+        ],
         'resolverFile': <String, dynamic>{
           'template': stormDnsResolversTemplateFileName,
           'path': stormDnsResolversFileName,

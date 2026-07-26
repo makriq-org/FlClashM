@@ -41,6 +41,7 @@ void main() {
     expect(
         processManager, contains('val resolverFile: RuntimeNodeResolverFile?'));
     expect(processManager, contains('RuntimeNodeResolverFile.fromJson('));
+    expect(processManager, contains('optJSONArray("startupFailurePatterns")'));
     expect(resolverFile, contains('value.optString("template", "")'));
     expect(resolverFile, contains('value.optString("path", "")'));
     expect(resolverFile, contains('optBoolean("dependsOnSystemDns", false)'));
@@ -50,6 +51,18 @@ void main() {
   test('runtime-node stdin stays open for lifetime-controlled clients', () {
     expect(processManager, isNot(contains('closeStdin')));
     expect(processManager, isNot(contains('if (spec.closeStdin)')));
+  });
+
+  test('declared native startup failures stop listener waiting early', () {
+    expect(processManager, contains('fun firstLineContaining('));
+    expect(
+      processManager,
+      contains('reported a startup failure:'),
+    );
+    expect(
+      processManager,
+      contains('firstLineContaining(spec.startupFailurePatterns)'),
+    );
   });
 
   test('the resolver file is rendered before the process is launched', () {

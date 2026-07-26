@@ -186,6 +186,10 @@ void main() {
           '-resolvers',
           '$nodeDir/$stormDnsResolversFileName',
         ]);
+        expect(node['startupFailurePatterns'], [
+          'No valid connections found after MTU testing!',
+          'Client startup failed:',
+        ]);
         expect(node.containsKey('closeStdin'), isFalse);
       });
 

@@ -42,8 +42,12 @@ data class RuntimeNodeSpec(
     val revision: String,
     val connectivityCheck: RuntimeNodeConnectivityCheck,
     val resolverFile: RuntimeNodeResolverFile?,
+    val startupFailurePatterns: List<String>,
 ) {
     companion object {
+        private const val MAX_STARTUP_FAILURE_PATTERNS = 16
+        private const val MAX_STARTUP_FAILURE_PATTERN_LENGTH = 256
+
         fun fromJson(value: JSONObject, index: Int): RuntimeNodeSpec {
             fun requiredString(name: String): String =
                 value.optString(name, "").trim().also {
@@ -58,6 +62,23 @@ data class RuntimeNodeSpec(
             }
             val port = value.optInt("port", 0)
             require(port in 1..65535) { "Runtime node $index has invalid port" }
+            val rawStartupFailurePatterns =
+                value.optJSONArray("startupFailurePatterns") ?: JSONArray()
+            require(rawStartupFailurePatterns.length() <= MAX_STARTUP_FAILURE_PATTERNS) {
+                "Runtime node $index has too many startup failure patterns"
+            }
+            val startupFailurePatterns = buildList {
+                for (patternIndex in 0 until rawStartupFailurePatterns.length()) {
+                    val pattern = rawStartupFailurePatterns.getString(patternIndex).trim()
+                    require(
+                        pattern.isNotEmpty() &&
+                            pattern.length <= MAX_STARTUP_FAILURE_PATTERN_LENGTH,
+                    ) {
+                        "Runtime node $index has an invalid startup failure pattern"
+                    }
+                    add(pattern)
+                }
+            }
             return RuntimeNodeSpec(
                 nodeId = requiredString("nodeId"),
                 type = requiredString("type"),
@@ -74,6 +95,7 @@ data class RuntimeNodeSpec(
                 resolverFile = RuntimeNodeResolverFile.fromJson(
                     value.optJSONObject("resolverFile"),
                 ),
+                startupFailurePatterns = startupFailurePatterns,
             )
         }
     }
@@ -151,6 +173,10 @@ object RuntimeNodeProcessManager {
 
         @Synchronized
         fun snapshot(): String = lines.joinToString("\n")
+
+        @Synchronized
+        fun firstLineContaining(patterns: List<String>): String? =
+            lines.firstOrNull { line -> patterns.any(line::contains) }
     }
 
     private data class RunningNode(
@@ -637,6 +663,15 @@ object RuntimeNodeProcessManager {
                     }
                 }.isSuccess
                 if (connected) return@withContext
+                val startupFailure = runningNodes[spec.nodeId]
+                    ?.output
+                    ?.firstLineContaining(spec.startupFailurePatterns)
+                if (startupFailure != null) {
+                    error(
+                        "Runtime node `${spec.nodeId}` reported a startup failure: " +
+                            startupFailure,
+                    )
+                }
                 if (readStartTime(spec.nodeId) <= 0L) {
                     val lastError = readLastError(spec.nodeId)
                     error(
