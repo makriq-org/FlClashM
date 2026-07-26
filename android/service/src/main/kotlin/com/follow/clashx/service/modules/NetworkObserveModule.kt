@@ -9,6 +9,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.service.Module
+import com.follow.clashx.service.RuntimeNodeProcessManager
 import com.google.gson.Gson
 
 class NetworkObserveModule(
@@ -177,6 +178,15 @@ class NetworkObserveModule(
         }.onSuccess {
             lastDnsKey = key
             GlobalState.log("System DNS updated from $network ($reason)")
+            // Runtime nodes that resolve through the physical network keep
+            // their own resolver file; the process manager rewrites it and
+            // restarts only the nodes that depend on it.
+            GlobalState.launch {
+                runCatching { RuntimeNodeProcessManager.updateSystemDns(dns) }
+                    .onFailure {
+                        GlobalState.log("runtime-node DNS update failed: ${it.message}")
+                    }
+            }
         }.onFailure {
             GlobalState.log("updateDns failed: ${it.message}")
         }.isSuccess

@@ -1,0 +1,200 @@
+package com.follow.clashx.service
+
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import com.follow.clashx.common.GlobalState
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/**
+ * Declares that a runtime node reads a generated resolver list.
+ *
+ * The node stages [template]; the platform renders it into [path]. When
+ * [dependsOnSystemDns] is set, the render substitutes the DNS servers of the
+ * physical network for the [SYSTEM_DNS_PLACEHOLDER] line, so the resolver list
+ * survives a DNS change with no Flutter process involved.
+ *
+ * This contract is node-type agnostic: nothing here knows which runtime asked
+ * for it.
+ */
+data class RuntimeNodeResolverFile(
+    val template: String,
+    val path: String,
+    val dependsOnSystemDns: Boolean,
+    val resetPaths: List<String>,
+) {
+    companion object {
+        /**
+         * Marker a node stages where it wants the physical-network DNS servers
+         * inserted. Pinned against the Dart constant by a product contract test.
+         */
+        const val SYSTEM_DNS_PLACEHOLDER = "# @flclashm:system-dns"
+
+        fun fromJson(value: JSONObject?): RuntimeNodeResolverFile? {
+            if (value == null) return null
+            val template = value.optString("template", "").trim()
+            val path = value.optString("path", "").trim()
+            if (template.isEmpty() || path.isEmpty()) return null
+            val rawResetPaths = value.optJSONArray("resetPaths") ?: JSONArray()
+            val resetPaths = buildList {
+                for (index in 0 until rawResetPaths.length()) {
+                    val entry = rawResetPaths.optString(index, "").trim()
+                    if (entry.isNotEmpty()) add(entry)
+                }
+            }
+            return RuntimeNodeResolverFile(
+                template = template,
+                path = path,
+                dependsOnSystemDns = value.optBoolean("dependsOnSystemDns", false),
+                resetPaths = resetPaths,
+            )
+        }
+    }
+}
+
+/**
+ * Renders resolver files and keeps every produced path inside the node working
+ * directory.
+ */
+object RuntimeNodeResolverFileWriter {
+
+    /**
+     * Resolves [relativePath] against [workingDirectory], rejecting anything
+     * that escapes it. A node may only read and write inside its own directory,
+     * so `..` segments and absolute paths are refused rather than sanitised.
+     */
+    fun resolveInside(workingDirectory: File, relativePath: String): File? {
+        if (relativePath.isBlank()) return null
+        // `File(parent, child)` quietly re-roots an absolute child inside the
+        // parent, which would hide a malformed declaration instead of reporting
+        // it. Only genuinely relative paths are accepted.
+        if (File(relativePath).isAbsolute) return null
+        val candidate = File(workingDirectory, relativePath)
+        val root = runCatching { workingDirectory.canonicalFile }.getOrNull() ?: return null
+        val resolved = runCatching { candidate.canonicalFile }.getOrNull() ?: return null
+        val rootPath = root.path
+        val resolvedPath = resolved.path
+        val contained = resolvedPath == rootPath ||
+            resolvedPath.startsWith(rootPath + File.separator)
+        return if (contained) resolved else null
+    }
+
+    /**
+     * Renders the template into the generated file.
+     *
+     * Returns true when the generated content changed, so callers can restart
+     * only the nodes that actually need it.
+     */
+    fun render(
+        workingDirectory: File,
+        spec: RuntimeNodeResolverFile,
+        systemDns: List<String>,
+    ): Boolean {
+        val template = resolveInside(workingDirectory, spec.template) ?: return false
+        val target = resolveInside(workingDirectory, spec.path) ?: return false
+        if (!template.exists()) return false
+
+        val rendered = buildResolverList(template.readText(), systemDns)
+        if (rendered.isEmpty()) return false
+        val previous = if (target.exists()) runCatching { target.readText() }.getOrNull() else null
+        if (previous == rendered) return false
+
+        // Write through a sibling temp file so a reader never observes a partial
+        // list, even if the process is killed mid-write.
+        val temp = File(target.parentFile, "${target.name}.tmp")
+        return runCatching {
+            target.parentFile?.mkdirs()
+            temp.writeText(rendered)
+            if (!temp.renameTo(target)) {
+                target.writeText(rendered)
+                temp.delete()
+            }
+            true
+        }.getOrElse {
+            temp.delete()
+            false
+        }
+    }
+
+    /**
+     * Expands the system-DNS placeholder and de-duplicates by IP, keeping the
+     * first occurrence and its port. Mirrors the upstream resolver-file loader.
+     */
+    fun buildResolverList(template: String, systemDns: List<String>): String {
+        val lines = mutableListOf<String>()
+        for (rawLine in template.lineSequence()) {
+            val line = rawLine.trim()
+            if (line == RuntimeNodeResolverFile.SYSTEM_DNS_PLACEHOLDER) {
+                lines.addAll(systemDns)
+                continue
+            }
+            if (line.isEmpty() || line.startsWith("#")) continue
+            lines.add(line)
+        }
+
+        val seen = mutableSetOf<String>()
+        val result = StringBuilder()
+        for (line in lines) {
+            val entry = line.trim()
+            if (entry.isEmpty()) continue
+            if (!seen.add(resolverKey(entry))) continue
+            result.append(entry).append('\n')
+        }
+        return result.toString()
+    }
+
+    /** De-duplication key: the address without its port. */
+    private fun resolverKey(entry: String): String {
+        if (entry.startsWith("[")) {
+            val end = entry.indexOf(']')
+            if (end > 0) return entry.substring(1, end)
+        }
+        val lastColon = entry.lastIndexOf(':')
+        if (lastColon <= 0) return entry
+        // A bare IPv6 literal has several colons and no port.
+        val head = entry.substring(0, lastColon)
+        if (head.contains(':')) return entry
+        return head
+    }
+}
+
+/**
+ * Reads the DNS servers of the physical network.
+ *
+ * Cold start applies the saved runtime-node plan before any network observer is
+ * installed, so nodes must be able to ask for the current list themselves
+ * rather than waiting to be told.
+ */
+object SystemDnsReader {
+    fun read(): List<String> = runCatching {
+        val manager = GlobalState.application
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networks = buildList {
+            manager.activeNetwork?.let { add(it) }
+            manager.allNetworks.forEach { if (!contains(it)) add(it) }
+        }
+        val candidates = networks.mapNotNull { network ->
+            val capabilities = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
+            // The VPN's own resolvers would loop traffic back into the tunnel.
+            if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                return@mapNotNull null
+            }
+            if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) {
+                return@mapNotNull null
+            }
+            val linkProperties = manager.getLinkProperties(network) ?: return@mapNotNull null
+            val servers = linkProperties.dnsServers
+                .mapNotNull { it.hostAddress }
+                .filter { it.isNotBlank() }
+                .distinct()
+            if (servers.isEmpty()) {
+                null
+            } else {
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) to servers
+            }
+        }
+        (candidates.firstOrNull { it.first } ?: candidates.firstOrNull())?.second.orEmpty()
+    }.getOrElse { emptyList() }
+}

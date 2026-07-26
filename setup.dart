@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flclashx/product/runtime/byedpi_release.dart';
 import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
+import 'package:flclashx/product/runtime/stormdns_release.dart';
 
 const _appName = 'FlClashM';
 const _coreDir = 'core';
@@ -18,6 +19,7 @@ const _ndkVersion = olcRtcPinnedNdkVersion;
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
 const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
+const _stormDnsStampFile = 'assets/runtimes/stormdns/android/release.txt';
 const _androidRuntimeJniRoot = 'android/app/src/main/jniLibs';
 final _projectRoot = File.fromUri(Platform.script).parent.absolute.path;
 
@@ -76,6 +78,7 @@ Future<void> main(List<String> args) async {
   await _syncNaiveProxyAssets();
   await _syncByedpiAssets();
   await _syncOlcRtcAssets();
+  await _syncStormDnsAssets();
   await _syncAndroidRuntimeNativeLibraries();
   if (command.out == 'runtime-assets') {
     return;
@@ -643,6 +646,13 @@ Future<void> _syncAndroidRuntimeNativeLibraries() async {
       fileName: byedpiAndroidNativeLibraryFileName,
     );
   }
+  for (final asset in stormDnsReleaseAssets.values) {
+    await _copyRuntimeNativeLibrary(
+      sourcePath: asset.bundledAssetPath,
+      abi: asset.abi,
+      fileName: stormDnsAndroidNativeLibraryFileName,
+    );
+  }
 }
 
 Future<void> _copyRuntimeNativeLibrary({
@@ -878,6 +888,143 @@ Future<void> _syncOlcRtcAssets() async {
 
   stamp.parent.createSync(recursive: true);
   await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<void> _syncStormDnsAssets() async {
+  final stamp = File(_projectPath(_stormDnsStampFile));
+  final expectedStamp = _buildStormDnsStamp();
+  final assetFilesMatch = await _stormDnsAssetsMatchDigests();
+
+  if (assetFilesMatch &&
+      stamp.existsSync() &&
+      (await stamp.readAsString()).trim() == expectedStamp) {
+    return;
+  }
+
+  final sourceDir = await _prepareStormDnsSource();
+  await _requireGoVersion(stormDnsPinnedGoVersion);
+  final targetRoot = Directory(_projectPath(stormDnsBundledAssetRoot));
+  if (!targetRoot.existsSync()) {
+    targetRoot.createSync(recursive: true);
+  }
+
+  final ndkBin = _resolveNdkBinDir();
+  for (final asset in stormDnsReleaseAssets.values) {
+    final arch = _androidArches[asset.cliArch];
+    if (arch == null) {
+      throw StateError('Unknown stormdns Android arch ${asset.cliArch}');
+    }
+
+    final target = File(_projectPath(asset.bundledAssetPath));
+    target.parent.createSync(recursive: true);
+    if (target.existsSync()) {
+      await target.delete();
+    }
+
+    final env = <String, String>{
+      ...Platform.environment,
+      'GOOS': 'android',
+      'GOARCH': asset.goArch,
+      'CGO_ENABLED': '1',
+      'CC': _join(ndkBin.path, arch.toolchain),
+    };
+    if (asset.goArm != null) {
+      env['GOARM'] = asset.goArm!;
+    }
+
+    await _exec(
+      [
+        'go',
+        'build',
+        '-trimpath',
+        '-ldflags=-s -w',
+        '-o',
+        target.path,
+        './cmd/client',
+      ],
+      environment: env,
+      workingDirectory: sourceDir.path,
+      name: 'build stormdns Android ${asset.abi}',
+    );
+
+    final digest = sha256.convert(await target.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      throw StateError(
+        'stormdns ${asset.abi} digest mismatch: '
+        'expected ${asset.sha256}, got $digest',
+      );
+    }
+  }
+
+  stamp.parent.createSync(recursive: true);
+  await stamp.writeAsString('$expectedStamp\n', flush: true);
+}
+
+Future<bool> _stormDnsAssetsMatchDigests() async {
+  for (final asset in stormDnsReleaseAssets.values) {
+    final file = File(_projectPath(asset.bundledAssetPath));
+    if (!file.existsSync()) {
+      return false;
+    }
+    final digest = sha256.convert(await file.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Future<Directory> _prepareStormDnsSource() async {
+  final override = Platform.environment['STORMDNS_SOURCE_DIR'];
+  if (override != null && override.trim().isNotEmpty) {
+    final sourceDir = Directory(override.trim());
+    if (!sourceDir.existsSync()) {
+      throw StateError('STORMDNS_SOURCE_DIR does not exist: ${sourceDir.path}');
+    }
+    await _exec(
+      ['git', 'checkout', '--detach', stormDnsPinnedCommit],
+      workingDirectory: sourceDir.path,
+      name: 'checkout stormdns pinned commit',
+    );
+    return sourceDir;
+  }
+
+  final cacheDir = Directory(_projectPath('.dart_tool', 'stormdns-source'));
+  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
+    if (cacheDir.existsSync()) {
+      await cacheDir.delete(recursive: true);
+    }
+    await cacheDir.parent.create(recursive: true);
+    await _exec(
+      ['git', 'clone', stormDnsSourceRepository, cacheDir.path],
+      name: 'clone stormdns source',
+    );
+  }
+
+  await _exec(
+    ['git', 'fetch', '--depth', '1', 'origin', stormDnsPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'fetch stormdns pinned commit',
+  );
+  await _exec(
+    ['git', 'checkout', '--detach', stormDnsPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'checkout stormdns pinned commit',
+  );
+  return cacheDir;
+}
+
+String _buildStormDnsStamp() {
+  final lines = <String>[
+    stormDnsPinnedReleaseTag,
+    stormDnsSourceRepository,
+    stormDnsPinnedGoVersion,
+    'ndk-$stormDnsPinnedNdkVersion',
+    ...stormDnsReleaseAssets.values.map(
+      (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
+    ),
+  ];
+  return lines.join('\n');
 }
 
 Future<bool> _olcRtcAssetsMatchDigests() async {

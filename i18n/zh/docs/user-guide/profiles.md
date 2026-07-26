@@ -2,12 +2,13 @@
 
 FlClashM 的超能力：**特殊节点直接写在 YAML 配置里**，并表现得像普通代理。客户端负责启动进程、分配本地端口，并接入 `mihomo` 的路由。在规则里可以随意混用 —— 一个站点走 `byedpi`，另一个走 `olcrtc`，其余直连。
 
-支持三种类型：
+支持四种类型：
 
 | 类型 | 作用 | 何时用得上 |
 |------|------|-----------|
 | 🛡 [`byedpi`](#-byedpi) | 通过数据包操纵绕过 DPI | 被「从内部」封锁的资源：YouTube、Discord 等 |
 | 📞 [`olcrtc`](#-olcrtc) | 伪装成视频通话的 WebRTC 隧道 | 绕过白名单（如经 Yandex Telemost / Jitsi） |
+| 🌩 [`stormdns`](#-stormdns) | 藏在 DNS 查询里的隧道 | 最后的备用线路：慢，但在别的都不通时能通 |
 | 🎭 [`naiveproxy`](#-naiveproxy) | 伪装成 Chrome 流量 | 绕过黑名单、抵抗 TLS 指纹识别 |
 
 > ℹ️ 内置节点**只能**写在 `proxies` 段。本地地址和端口由客户端分配 —— 不能在配置里指定。
@@ -197,6 +198,121 @@ activation:
 
 ---
 
+## 🌩 StormDNS
+
+**类型：** `stormdns` · 不支持 UDP（只能 `udp: false`）
+
+StormDNS 把 TCP 流量藏在普通 DNS 查询里。它比其他节点**明显更慢**，定位是「最后的备用线路」—— 其他都走不通时才用。建议让它保持休眠（`activation: auto`），仅在主组开始失败时唤醒。
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
+    resolvers:
+      - system
+      - 8.8.8.8
+      - 1.1.1.1:5353
+      - 192.168.1.0/30
+      - https://example.com/resolvers.txt
+    preset: messenger
+    startup:
+      mode: cached
+      max-age: 30d
+    activation: auto
+    connectivity-check:
+      timeout: 25
+      startup-timeout: 180
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://example.org/generate_204"
+    proxies: ["DIRECT", "storm"]
+```
+
+### 必填字段
+
+`domains`、`encryption` 和 `encryption-key` **必填且没有默认值**：StormDNS 不做任何协商，这三项必须与服务端完全一致。
+
+| 字段 | 说明 |
+|------|------|
+| `domains` | 委派给 StormDNS 服务端的域名 |
+| `encryption` | `none`、`xor`、`chacha20`、`aes-128-gcm`、`aes-192-gcm`、`aes-256-gcm` |
+| `encryption-key` | 共享密钥；必须与服务端一致 |
+
+> ⚠️ `none` 和 `xor` 模式**不保护内容**，解析器运营方可以看到你的流量。仅在服务端要求时使用。
+
+### 解析器
+
+`resolvers` 是一个统一的来源列表，按顺序处理：
+
+| 条目 | 添加内容 |
+|------|---------|
+| `system` | 物理网络（非 VPN）的 DNS |
+| `8.8.8.8` | 一个使用 53 端口的解析器 |
+| `1.1.1.1:5353` | 一个使用自定端口的解析器 |
+| `192.168.1.0/30` | 按 StormDNS 规则展开的范围 |
+| `https://…` | 来自远程列表的解析器 |
+
+未设置 `resolvers` 时使用 `[system]`。所有来源展开后按 IP 去重：第一次出现的条目连同其端口胜出。若最终列表为空，配置不会被应用。
+
+列表地址只允许 HTTPS，不得带凭据或锚点；禁止 localhost 与本地地址 —— 但列表**内部**的私有 IP 和 CIDR 是允许的。响应上限 1 MiB，超时 15 秒。每个地址单独缓存：地址不可达时即使已超过 `refresh` 也会使用上次保存的副本；若没有副本则跳过该地址，其余来源照常生效。
+
+| `resolver-policy` | 默认值 | 说明 |
+|-------------------|--------|------|
+| `refresh` | `24h` | 远程列表的刷新周期 |
+| `strategy` | `least-loss` | `random`、`round-robin`、`least-loss`、`lowest-latency` |
+| `auto-disable` | `true` | 停用不再应答的解析器 |
+| `recheck` | `true` | 定期重测已停用的解析器 |
+
+`refresh` 在应用配置和启动节点时检查 —— 没有常驻定时器。
+
+### 预设
+
+`preset` 决定数据包复制与压缩。叠加顺序：**StormDNS 默认值 → preset → 显式设置的字段**。
+
+| `preset` | 复制次数（upload / download / upload-setup / download-setup） | 压缩 |
+|----------|--------------------------------------------------------------|------|
+| `messenger`（默认） | 1 / 7 / 3 / 8 | `lz4` |
+| `balanced` | 2 / 5 / 3 / 6 | `lz4` |
+| `bulk` | 3 / 3 / 4 / 4 | `zstd` |
+
+任何字段都可以单独覆盖，无需额外语法：
+
+```yaml
+preset: bulk
+duplication:
+  upload: 2
+compression:
+  upload: zlib
+```
+
+精细调节位于 `duplication`、`compression`、`mtu`、`arq`、`ping` 和 `runtime` 块。在这些块以及 `resolver-policy`/`startup` 中，时长使用字符串（`600ms`、`30s`、`24h`、`30d`）。通用字段 `activation` 和 `connectivity-check` 仍使用整数秒。
+
+> ℹ️ StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错** —— 包括关联约束：`upload-setup` 不低于 `upload`，`download-setup` 不低于 `download`，MTU 最大值不低于最小值。
+
+### 启动
+
+| `startup.mode` | 作用 |
+|----------------|------|
+| `scan` | 完整扫描解析器（启动最慢） |
+| `cached`（默认） | 从缓存启动，不重测 MTU |
+| `verified` | 从缓存启动并重测 MTU |
+
+`startup.max-age`（默认 `30d`）限制可用缓存的最大年龄。
+
+工作缓存与最终解析器列表、`domains` 以及 StormDNS 版本绑定。其中任一变化都会生成新缓存，旧缓存仅在配置成功应用后才删除。若没有合适的缓存，或 StormDNS 判定其无效，它会自行回退到完整扫描 —— 这是正常行为。
+
+日志目录、resolver 文件、本地端口和 SOCKS5 均由应用管理，无法在配置中指定。
+
+### 系统 DNS
+
+当 `resolvers` 含有 `system`（或未设置）时，该节点依赖物理网络的 DNS。DNS 变化时，平台会自行重写 resolver 文件、重置工作缓存，并**仅**重启处于活动状态的依赖节点 —— 包括界面未运行的冷启动场景。无需额外的 bypass：应用自身的包已被排除在 VPN 路由之外。
+
+---
+
 ## 🎭 NaiveProxy
 
 **类型：** `naiveproxy` · 不支持 UDP（仅允许 `udp: false`）
@@ -228,7 +344,7 @@ proxies:
 - 内置节点只能写在 `proxies` 段。
 - 本地地址和端口由客户端管理。
 - 配置不能设置本地 `listen`；NaiveProxy 的 `server` 和 `port` 仅描述远端服务器。
-- UDP：`byedpi` —— 启用（可用 `udp: false` 关闭）；`naiveproxy` 和 `olcrtc` **不**支持 UDP。
+- UDP：`byedpi` —— 启用（可用 `udp: false` 关闭）；`naiveproxy`、`olcrtc` 和 `stormdns` **不**支持 UDP。
 
 ---
 

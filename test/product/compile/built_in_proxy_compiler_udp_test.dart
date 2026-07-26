@@ -124,4 +124,12 @@ Map<String, dynamic> _validNode(BuiltInProxyType type) => switch (type) {
     },
     'net': {'transport': 'datachannel', 'dns': '1.1.1.1:53'},
   },
+  BuiltInProxyType.stormdns => <String, dynamic>{
+    'name': 'StormDNS Local',
+    'type': 'stormdns',
+    'activation': 'always',
+    'domains': ['v.example.com'],
+    'encryption': 'chacha20',
+    'encryption-key': 'storm-secret',
+  },
 };

@@ -4,11 +4,18 @@ import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 
 import 'built_in_proxy_types.dart';
 import 'byedpi_node_controller.dart';
+import 'local_node_controller.dart';
 import 'naiveproxy_node_controller.dart';
 import 'olcrtc_node_controller.dart';
 import 'runtime_health_probe.dart';
+import 'stormdns_node_controller.dart';
 
 final _reserveMonotonicClock = Stopwatch()..start();
+
+/// Any local-node controller, regardless of its layout types. Dart generics are
+/// covariant, so every concrete controller is assignable to this.
+typedef AnyLocalNodeController
+    = LocalNodeController<LocalNodeSharedInstallLayout, LocalNodeLayout>;
 
 class BuiltInProxyRuntimePlanStartResult {
   const BuiltInProxyRuntimePlanStartResult({
@@ -52,6 +59,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     NaiveProxyNodeController? naiveProxy,
     ByedpiNodeController? byedpi,
     OlcRtcNodeController? olcRtc,
+    StormDnsNodeController? stormDns,
     RuntimeNodePlatformBridge? runtime,
     this.healthProbe,
     Duration Function()? monotonicNow,
@@ -59,10 +67,12 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   })  : naiveProxy = naiveProxy ?? NaiveProxyNodeController(),
         byedpi = byedpi ?? ByedpiNodeController(),
         olcRtc = olcRtc ?? OlcRtcNodeController(),
+        stormDns = stormDns ?? StormDnsNodeController(),
         runtime = runtime ??
             naiveProxy?.runtime ??
             byedpi?.runtime ??
             olcRtc?.runtime ??
+            stormDns?.runtime ??
             const AndroidRuntimeNodeBridge(),
         monotonicNow = monotonicNow ?? _readReserveMonotonicClock,
         delay = delay ?? Future<void>.delayed;
@@ -70,6 +80,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   final NaiveProxyNodeController naiveProxy;
   final ByedpiNodeController byedpi;
   final OlcRtcNodeController olcRtc;
+  final StormDnsNodeController stormDns;
   final RuntimeNodePlatformBridge runtime;
   final RuntimeHealthProbe? healthProbe;
   final Duration Function() monotonicNow;
@@ -103,6 +114,16 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     });
   }
 
+  /// Local-node controllers in staging order. Each entry owns exactly one node
+  /// type; adding a runtime node means adding one entry here.
+  List<({BuiltInProxyType type, AnyLocalNodeController controller})>
+      get _controllers => [
+            (type: BuiltInProxyType.naiveproxy, controller: naiveProxy),
+            (type: BuiltInProxyType.byedpi, controller: byedpi),
+            (type: BuiltInProxyType.olcrtc, controller: olcRtc),
+            (type: BuiltInProxyType.stormdns, controller: stormDns),
+          ];
+
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) {
     _planGeneration++;
@@ -110,46 +131,34 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       await _cancelWatchdog();
       await byedpi.cancelBackgroundSelection();
       _rollbackAwakeReserveNodeIds = Set<String>.from(_awakeReserveNodeIds);
-      final naiveMessage = await naiveProxy.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.naiveproxy),
-        nextPlans: _filter(plans, BuiltInProxyType.naiveproxy),
-      );
-      if (naiveMessage.isNotEmpty) {
+
+      final staged = <AnyLocalNodeController>[];
+      for (final entry in _controllers) {
+        final message = await entry.controller.stageRuntimePlan(
+          currentPlans: _filter(_currentPlans, entry.type),
+          nextPlans: _filter(plans, entry.type),
+        );
+        if (message.isEmpty) {
+          staged.add(entry.controller);
+          continue;
+        }
+        // Undo the controllers that already staged, newest first, so disk
+        // state matches the last committed plan again.
+        final rollback = await Future.wait([
+          for (final controller in staged.reversed)
+            controller.rollbackStagedRuntimePlan(),
+        ]);
+        final failures =
+            rollback.where((failure) => failure.isNotEmpty).join(' ');
         _startWatchdog(_planGeneration);
-        return naiveMessage;
+        return failures.isEmpty
+            ? message
+            : '$message Local-node rollback failed: $failures';
       }
 
-      final byedpiMessage = await byedpi.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.byedpi),
-        nextPlans: _filter(plans, BuiltInProxyType.byedpi),
-      );
-      if (byedpiMessage.isNotEmpty) {
-        final rollback = await naiveProxy.rollbackStagedRuntimePlan();
-        _startWatchdog(_planGeneration);
-        return rollback.isEmpty
-            ? byedpiMessage
-            : '$byedpiMessage Local-node rollback failed: $rollback';
-      }
-
-      final olcMessage = await olcRtc.stageRuntimePlan(
-        currentPlans: _filter(_currentPlans, BuiltInProxyType.olcrtc),
-        nextPlans: _filter(plans, BuiltInProxyType.olcrtc),
-      );
-      if (olcMessage.isEmpty) {
-        _awakeReserveNodeIds.clear();
-        _reserveStates.clear();
-        return '';
-      }
-      final rollback = await Future.wait([
-        byedpi.rollbackStagedRuntimePlan(),
-        naiveProxy.rollbackStagedRuntimePlan(),
-      ]);
-      final failures =
-          rollback.where((message) => message.isNotEmpty).join(' ');
-      _startWatchdog(_planGeneration);
-      return failures.isEmpty
-          ? olcMessage
-          : '$olcMessage Local-node rollback failed: $failures';
+      _awakeReserveNodeIds.clear();
+      _reserveStates.clear();
+      return '';
     });
   }
 
@@ -157,9 +166,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   Future<String> rollbackStagedRuntimePlan() =>
       _serializeRuntimeMutation(() async {
         final messages = await Future.wait([
-          olcRtc.rollbackStagedRuntimePlan(),
-          byedpi.rollbackStagedRuntimePlan(),
-          naiveProxy.rollbackStagedRuntimePlan(),
+          for (final entry in _controllers.reversed)
+            entry.controller.rollbackStagedRuntimePlan(),
         ]);
         final failures =
             messages.where((message) => message.isNotEmpty).join(' ');
@@ -178,9 +186,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   Future<void> commitStagedRuntimePlan(List<BuiltInProxyNodePlan> plans) =>
       _serializeRuntimeMutation(() async {
         await Future.wait([
-          naiveProxy.commitStagedRuntimePlan(),
-          byedpi.commitStagedRuntimePlan(),
-          olcRtc.commitStagedRuntimePlan(),
+          for (final entry in _controllers)
+            entry.controller.commitStagedRuntimePlan(),
         ]);
         _currentPlans = List<BuiltInProxyNodePlan>.unmodifiable(plans);
         final generation = _planGeneration;
@@ -289,11 +296,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
         )
         .toList(growable: false);
     final groups = await Future.wait([
-      naiveProxy.buildRuntimeNodes(
-        _filter(activePlans, BuiltInProxyType.naiveproxy),
-      ),
-      byedpi.buildRuntimeNodes(_filter(activePlans, BuiltInProxyType.byedpi)),
-      olcRtc.buildRuntimeNodes(_filter(activePlans, BuiltInProxyType.olcrtc)),
+      for (final entry in _controllers)
+        entry.controller.buildRuntimeNodes(_filter(activePlans, entry.type)),
     ]);
     return [for (final group in groups) ...group];
   }

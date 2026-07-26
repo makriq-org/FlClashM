@@ -41,6 +41,8 @@ data class RuntimeNodeSpec(
     val arguments: List<String>,
     val revision: String,
     val connectivityCheck: RuntimeNodeConnectivityCheck,
+    val closeStdin: Boolean,
+    val resolverFile: RuntimeNodeResolverFile?,
 ) {
     companion object {
         fun fromJson(value: JSONObject, index: Int): RuntimeNodeSpec {
@@ -69,6 +71,10 @@ data class RuntimeNodeSpec(
                 revision = requiredString("revision"),
                 connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
                     value.optJSONObject("connectivityCheck"),
+                ),
+                closeStdin = value.optBoolean("closeStdin", false),
+                resolverFile = RuntimeNodeResolverFile.fromJson(
+                    value.optJSONObject("resolverFile"),
                 ),
             )
         }
@@ -163,6 +169,23 @@ object RuntimeNodeProcessManager {
         val reused: Boolean,
         val message: String = "",
     )
+
+    // Last DNS servers seen on the physical network. Held here, not in Dart,
+    // so cold start and DNS changes work with no Flutter process running.
+    @Volatile private var latestSystemDns: List<String> = emptyList()
+
+    /**
+     * DNS servers to render resolver files with. Falls back to reading the
+     * platform directly, so a cold start that runs before any network observer
+     * is installed still produces a usable resolver list.
+     */
+    private fun currentSystemDns(): List<String> {
+        val cached = latestSystemDns
+        if (cached.isNotEmpty()) return cached
+        val resolved = SystemDnsReader.read()
+        if (resolved.isNotEmpty()) latestSystemDns = resolved
+        return resolved
+    }
 
     private val planLock = Mutex()
     private val planTransitionLock = Mutex()
@@ -326,6 +349,63 @@ object RuntimeNodeProcessManager {
             .put("optionalCheckActive", optionalCheckJob?.isActive == true)
             .toString()
     }.getOrDefault(lastStateJson)
+
+    /**
+     * Applies a new physical-network DNS list.
+     *
+     * Rewrites the resolver file of every node that declared a dependency on
+     * system DNS, drops the working caches those nodes bound to the old list,
+     * and restarts only the ones whose list actually changed.
+     */
+    suspend fun updateSystemDns(dnsServers: List<String>) {
+        val normalized = dnsServers.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (normalized == latestSystemDns) return
+        latestSystemDns = normalized
+
+        val dependents = planLock.withLock {
+            activePlan.values.filter { it.resolverFile?.dependsOnSystemDns == true }
+        }
+        if (dependents.isEmpty()) return
+
+        for (spec in dependents) {
+            val resolverFile = spec.resolverFile ?: continue
+            val runtimeDir = File(spec.workingDirectory)
+            val changed = withContext(Dispatchers.IO) {
+                RuntimeNodeResolverFileWriter.render(
+                    workingDirectory = runtimeDir,
+                    spec = resolverFile,
+                    systemDns = normalized,
+                )
+            }
+            if (!changed) continue
+
+            withContext(Dispatchers.IO) {
+                for (resetPath in resolverFile.resetPaths) {
+                    val target = RuntimeNodeResolverFileWriter.resolveInside(
+                        runtimeDir,
+                        resetPath,
+                    ) ?: continue
+                    runCatching { target.deleteRecursively() }
+                }
+            }
+
+            // Only nodes that are actually running are restarted; a sleeping
+            // reserve node picks the new list up when it is next started.
+            if (readStartTime(spec.nodeId) <= 0L) continue
+            GlobalState.log("Restarting runtime node `${spec.nodeId}` after a system DNS change")
+            stop(spec.nodeId)
+            val outcome = prepareNode(spec)
+            if (outcome.ready) {
+                readyNodeIds.add(spec.nodeId)
+            } else {
+                readyNodeIds.remove(spec.nodeId)
+                GlobalState.log(
+                    "Runtime node `${spec.nodeId}` failed to restart after a DNS change: " +
+                        outcome.message,
+                )
+            }
+        }
+    }
 
     suspend fun stopAll() = withBatchProbesStopped {
         optionalCheckJob?.cancelAndJoin()
@@ -541,6 +621,16 @@ object RuntimeNodeProcessManager {
 
                 val runtimeDir = File(spec.workingDirectory)
                 if (!runtimeDir.exists()) runtimeDir.mkdirs()
+                // The generated resolver list is rebuilt from its template on
+                // every launch so a node started at cold start picks up the
+                // system DNS observed since the plan was written.
+                spec.resolverFile?.let { resolverFile ->
+                    RuntimeNodeResolverFileWriter.render(
+                        workingDirectory = runtimeDir,
+                        spec = resolverFile,
+                        systemDns = currentSystemDns(),
+                    )
+                }
                 val process = try {
                     ProcessBuilder(listOf(spec.executablePath) + spec.arguments)
                         .directory(runtimeDir)
@@ -551,6 +641,12 @@ object RuntimeNodeProcessManager {
                         "Failed to start runtime node `${spec.nodeId}`: ${error.message}",
                     )
                     return@withContext 0L
+                }
+
+                if (spec.closeStdin) {
+                    // Some runtimes block on stdin after a startup failure and
+                    // would otherwise linger forever with no terminal attached.
+                    runCatching { process.outputStream.close() }
                 }
 
                 val startedAt = System.currentTimeMillis()

@@ -5,12 +5,16 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_registry.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/connectivity_check.dart';
+import 'package:flclashx/product/runtime/stormdns_release.dart';
 import 'package:flutter/foundation.dart';
 
 import 'byedpi_config_validator.dart';
 import 'config_tree.dart';
 import 'naiveproxy_config_validator.dart';
 import 'olcrtc_config_validator.dart';
+import 'stormdns_config.dart';
+import 'stormdns_config_validator.dart';
+import 'stormdns_resolver_sources.dart';
 
 @immutable
 class CompiledBuiltInProxyNodes {
@@ -41,12 +45,16 @@ class BuiltInProxyCompiler {
     this.naiveProxyConfigValidator = const NaiveProxyConfigValidator(),
     this.byedpiConfigValidator = const ByedpiConfigValidator(),
     this.olcRtcConfigValidator = const OlcRtcConfigValidator(),
+    this.stormDnsConfigValidator = const StormDnsConfigValidator(),
+    this.stormDnsResolverParser = const StormDnsResolverSourceParser(),
   });
 
   final BuiltInProxyRegistry registry;
   final NaiveProxyConfigValidator naiveProxyConfigValidator;
   final ByedpiConfigValidator byedpiConfigValidator;
   final OlcRtcConfigValidator olcRtcConfigValidator;
+  final StormDnsConfigValidator stormDnsConfigValidator;
+  final StormDnsResolverSourceParser stormDnsResolverParser;
 
   void validateConfig(Map<String, dynamic> rawConfig) {
     _rejectLegacyRuntimeSelection(rawConfig);
@@ -76,6 +84,7 @@ class BuiltInProxyCompiler {
     String globalTestUrl = '',
     bool copyConfig = true,
     bool validate = true,
+    Map<Uri, StormDnsRemoteResolverList> stormDnsRemoteLists = const {},
   }) {
     final normalizedConfig = copyConfig ? copyConfigTree(rawConfig) : rawConfig;
     final proxyEntries = normalizedConfig['proxies'];
@@ -140,6 +149,7 @@ class BuiltInProxyCompiler {
         listenPort: listenPort,
         connectivityCheck: connectivityCheck,
         activation: activation,
+        stormDnsRemoteLists: stormDnsRemoteLists,
       );
       compiledNodes.add(plan);
       proxyEntries[i] = plan.toProxyConfig();
@@ -159,6 +169,8 @@ class BuiltInProxyCompiler {
         byedpiConfigValidator.validate(definition.rawConfig);
       case BuiltInProxyType.olcrtc:
         olcRtcConfigValidator.validateBuiltInNode(definition.rawConfig);
+      case BuiltInProxyType.stormdns:
+        stormDnsConfigValidator.validateBuiltInNode(definition.rawConfig);
     }
   }
 
@@ -192,6 +204,7 @@ class BuiltInProxyCompiler {
     required int listenPort,
     required ConnectivityCheckConfig connectivityCheck,
     required NodeActivationConfig? activation,
+    Map<Uri, StormDnsRemoteResolverList> stormDnsRemoteLists = const {},
   }) {
     final udp = _resolveUdp(definition: definition, descriptor: descriptor);
     return switch (definition.type) {
@@ -222,7 +235,136 @@ class BuiltInProxyCompiler {
           connectivityCheck: connectivityCheck,
           activation: activation,
         ),
+      BuiltInProxyType.stormdns => _buildStormDnsPlan(
+          definition: definition,
+          descriptor: descriptor,
+          nodeId: nodeId,
+          listenPort: listenPort,
+          udp: udp,
+          connectivityCheck: connectivityCheck,
+          activation: activation!,
+          remoteLists: stormDnsRemoteLists,
+        ),
     };
+  }
+
+  BuiltInProxyNodePlan _buildStormDnsPlan({
+    required BuiltInProxyNodeDefinition definition,
+    required BuiltInProxyDescriptor descriptor,
+    required String nodeId,
+    required int listenPort,
+    required bool udp,
+    required ConnectivityCheckConfig connectivityCheck,
+    required NodeActivationConfig activation,
+    required Map<Uri, StormDnsRemoteResolverList> remoteLists,
+  }) {
+    final rawConfig = copyConfigTree(definition.rawConfig)
+      ..remove('name')
+      ..remove('type')
+      ..remove('udp')
+      ..remove('connectivity-check')
+      ..remove('activation');
+    final nodeLabel = 'stormdns node `${definition.name}`';
+
+    final sources = stormDnsResolverParser.parse(
+      rawConfig.remove('resolvers'),
+      label: '$nodeLabel `resolvers`',
+    );
+    final settings = stormDnsConfigValidator.validateEffective(
+      rawConfig,
+      node: nodeLabel,
+    );
+
+    final resolverLines = buildResolverFileLines(
+      sources: sources,
+      remoteLists: remoteLists,
+    );
+    if (resolverLines.isEmpty) {
+      throw FormatException(
+        '$nodeLabel resolved an empty resolver list. Add a reachable entry to '
+        '`resolvers`, or keep `system` so the physical network DNS is used.',
+      );
+    }
+
+    final fingerprint = stormDnsCacheFingerprint(
+      resolverLines: resolverLines,
+      domains: settings.domains,
+    );
+    final cacheDirectory =
+        '$stormDnsCacheDirectoryName/$fingerprint';
+    final config = buildStormDnsToml(
+      settings: settings,
+      listenHost: localhost,
+      listenPort: listenPort,
+      logDirectory: '$cacheDirectory/$stormDnsLogDirectoryName',
+    );
+
+    return BuiltInProxyNodePlan(
+      nodeId: nodeId,
+      name: definition.name,
+      type: definition.type,
+      listenHost: localhost,
+      listenPort: listenPort,
+      protocol: descriptor.protocol,
+      udp: udp,
+      connectivityCheck: connectivityCheck,
+      activation: activation,
+      files: {
+        'built-in-proxies/stormdns/$nodeId/$stormDnsConfigFileName': config,
+        'built-in-proxies/stormdns/$nodeId/'
+            '$stormDnsResolversTemplateFileName':
+            '${resolverLines.join('\n')}\n',
+      },
+      metadata: {
+        'cache-fingerprint': fingerprint,
+        'cache-directory': cacheDirectory,
+        'depends-on-system-dns':
+            '${resolverLines.contains(stormDnsSystemDnsPlaceholder)}',
+      },
+    );
+  }
+
+  /// Remote resolver-list addresses declared across every StormDNS node, with
+  /// the shortest refresh window that applies to each of them.
+  ///
+  /// The caller resolves these before compiling, since fetching is async and
+  /// compilation is not.
+  Map<Uri, Duration> collectStormDnsRemoteLists(Map<String, dynamic> rawConfig) {
+    final result = <Uri, Duration>{};
+    final proxyEntries = rawConfig['proxies'];
+    if (proxyEntries is! List) return result;
+    for (final proxy in proxyEntries) {
+      if (proxy is! Map) continue;
+      final normalized = _asStringKeyedMap(proxy);
+      if (BuiltInProxyTypeLabel.tryParse(_trimmedString(normalized['type'])) !=
+          BuiltInProxyType.stormdns) {
+        continue;
+      }
+      final List<StormDnsResolverSource> sources;
+      try {
+        sources = stormDnsResolverParser.parse(
+          normalized['resolvers'],
+          label: 'stormdns `resolvers`',
+        );
+      } catch (_) {
+        // Malformed lists are reported by the normal validation pass.
+        continue;
+      }
+      final policy = normalized['resolver-policy'];
+      final refreshValue =
+          policy is Map ? _asStringKeyedMap(policy)['refresh'] : null;
+      final refresh = refreshValue is String
+          ? parseStormDnsDuration(refreshValue) ?? const Duration(hours: 24)
+          : const Duration(hours: 24);
+      for (final source in sources) {
+        if (source is! StormDnsRemoteResolverSource) continue;
+        final existing = result[source.url];
+        if (existing == null || refresh < existing) {
+          result[source.url] = refresh;
+        }
+      }
+    }
+    return result;
   }
 
   bool _resolveUdp({

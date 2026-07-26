@@ -2,12 +2,13 @@
 
 FlClashM's superpower: **special nodes are described right in the YAML profile** and behave like ordinary proxies. The client launches the needed processes, hands them local ports, and plugs them into `mihomo`'s routing. In rules you can mix them freely — one site through `byedpi`, another through `olcrtc`, the rest directly.
 
-Three types are supported:
+Four types are supported:
 
 | Type | What it does | When it helps |
 |------|--------------|---------------|
 | 🛡 [`byedpi`](#-byedpi) | DPI circumvention via packet manipulation | Resources blocked "from the inside": YouTube, Discord, etc. |
 | 📞 [`olcrtc`](#-olcrtc) | A tunnel over WebRTC disguised as a video call | Bypassing whitelists (e.g. via Yandex Telemost / Jitsi) |
+| 🌩 [`stormdns`](#-stormdns) | A tunnel inside DNS queries | Last-resort reserve: slow, but gets through where nothing else does |
 | 🎭 [`naiveproxy`](#-naiveproxy) | Parroting of Chrome traffic | Bypassing blocklists, resistance to TLS fingerprinting |
 
 > ℹ️ Built-in nodes are defined **only** in the `proxies` section. Local addresses and ports are assigned by the client — you can't set them in the profile.
@@ -197,6 +198,121 @@ If `profiles` are set, the top-level common fields are inherited by each fallbac
 
 ---
 
+## 🌩 StormDNS
+
+**Type:** `stormdns` · UDP is not supported (only `udp: false` is valid)
+
+StormDNS hides TCP traffic inside ordinary DNS queries. It is **noticeably slower** than the other nodes and is meant as a last-resort reserve for when nothing else gets through. Keep it asleep (`activation: auto`) and let it wake only when the main group starts failing.
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
+    resolvers:
+      - system
+      - 8.8.8.8
+      - 1.1.1.1:5353
+      - 192.168.1.0/30
+      - https://example.com/resolvers.txt
+    preset: messenger
+    startup:
+      mode: cached
+      max-age: 30d
+    activation: auto
+    connectivity-check:
+      timeout: 25
+      startup-timeout: 180
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://example.org/generate_204"
+    proxies: ["DIRECT", "storm"]
+```
+
+### Required fields
+
+`domains`, `encryption`, and `encryption-key` are **required and have no defaults**: StormDNS negotiates nothing, so all three must match the server exactly.
+
+| Field | Description |
+|-------|-------------|
+| `domains` | Domains delegated to the StormDNS server |
+| `encryption` | `none`, `xor`, `chacha20`, `aes-128-gcm`, `aes-192-gcm`, `aes-256-gcm` |
+| `encryption-key` | Shared key; must match the server |
+
+> ⚠️ The `none` and `xor` modes **do not protect the payload** from the resolver operator, who can read your traffic. Use them only when the server requires it.
+
+### Resolvers
+
+`resolvers` is one list of sources, processed in order:
+
+| Entry | What it adds |
+|-------|--------------|
+| `system` | DNS servers of the physical (non-VPN) network |
+| `8.8.8.8` | One resolver on port 53 |
+| `1.1.1.1:5353` | One resolver on its own port |
+| `192.168.1.0/30` | A range, expanded by StormDNS rules |
+| `https://…` | Resolvers from a remote list |
+
+When `resolvers` is absent, `[system]` is used. After every source is expanded, duplicates are dropped by IP: the first occurrence and its port win. If the final list is empty, the profile is not applied.
+
+List addresses must be HTTPS, without credentials or a fragment; localhost and local addresses are refused — but private IPs and CIDRs **inside** a list are fine. Responses are capped at 1 MiB with a 15-second timeout. Each address is cached separately: an unreachable list falls back to its last stored copy even past `refresh`, and a list with no stored copy is skipped so the remaining sources still work.
+
+| `resolver-policy` | Default | Description |
+|-------------------|---------|-------------|
+| `refresh` | `24h` | How often remote lists are refreshed |
+| `strategy` | `least-loss` | `random`, `round-robin`, `least-loss`, `lowest-latency` |
+| `auto-disable` | `true` | Disable resolvers that stop answering |
+| `recheck` | `true` | Periodically re-test disabled resolvers |
+
+`refresh` is checked when the profile is applied and when the node starts — there is no standing timer.
+
+### Presets
+
+`preset` sets packet duplication and compression. Layering order: **StormDNS defaults → preset → explicitly set fields**.
+
+| `preset` | Duplication (upload / download / upload-setup / download-setup) | Compression |
+|----------|------------------------------------------------------------------|-------------|
+| `messenger` (default) | 1 / 7 / 3 / 8 | `lz4` |
+| `balanced` | 2 / 5 / 3 / 6 | `lz4` |
+| `bulk` | 3 / 3 / 4 / 4 | `zstd` |
+
+Any field can be overridden on its own; no separate construct is needed:
+
+```yaml
+preset: bulk
+duplication:
+  upload: 2
+compression:
+  upload: zlib
+```
+
+Fine tuning lives in the `duplication`, `compression`, `mtu`, `arq`, `ping`, and `runtime` blocks. Inside those blocks and in `resolver-policy`/`startup`, durations are strings (`600ms`, `30s`, `24h`, `30d`). The shared `activation` and `connectivity-check` fields still take whole seconds.
+
+> ℹ️ StormDNS silently clamps out-of-range values. FlClashM **reports an error before startup** instead — including the linked bounds: `upload-setup` not below `upload`, `download-setup` not below `download`, and max MTU not below min.
+
+### Startup
+
+| `startup.mode` | What it does |
+|----------------|--------------|
+| `scan` | Full resolver scan (slowest start) |
+| `cached` (default) | Start from cache without re-checking MTU |
+| `verified` | Start from cache and re-check MTU |
+
+`startup.max-age` (default `30d`) limits how old a usable cache may be.
+
+The working cache is bound to the final resolver list, `domains`, and the StormDNS build. Changing any of them creates a new cache, and the old one is only removed once the profile applies successfully. If no suitable cache exists, or StormDNS rejects it, it falls back to a full scan on its own — that is expected.
+
+The log directory, resolver file, local port, and SOCKS5 listener are owned by the app and cannot be set in the profile.
+
+### System DNS
+
+When `resolvers` contains `system` (or is absent), the node depends on the DNS of the physical network. When those change, the platform rewrites the resolver file, resets the working cache, and restarts **only** the active dependent nodes — including at cold start with no UI running. No separate bypass is needed: the app package is already excluded from VPN routing.
+
+---
+
 ## 🎭 NaiveProxy
 
 **Type:** `naiveproxy` · UDP is not supported (only `udp: false` is allowed)
@@ -228,7 +344,7 @@ The client safely builds a URI with escaped credentials, passes it to NaiveProxy
 - Built-in nodes are defined only in the `proxies` section.
 - The client manages local addresses and ports itself.
 - The profile can't set a local `listen`; for NaiveProxy, `server` and `port` describe the remote server only.
-- UDP: `byedpi` — enabled (can be disabled with `udp: false`); `naiveproxy` and `olcrtc` do **not** support UDP.
+- UDP: `byedpi` — enabled (can be disabled with `udp: false`); `naiveproxy`, `olcrtc`, and `stormdns` do **not** support UDP.
 
 ---
 

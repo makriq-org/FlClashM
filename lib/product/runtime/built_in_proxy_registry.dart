@@ -50,6 +50,25 @@ class BuiltInProxyRegistry {
                   'Failed profile apply rolls node configs and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
             ),
           ),
+          // A DNS tunnel is far slower than the other nodes, so profiles are
+          // expected to raise `connectivity-check` well above the shared
+          // defaults. Those numbers are provisional: the timeout is to be
+          // confirmed once measured on a real StormDNS deployment.
+          BuiltInProxyType.stormdns: BuiltInProxyDescriptor(
+            type: BuiltInProxyType.stormdns,
+            protocol: BuiltInProxyProtocol.socks5,
+            supportsUdp: false,
+            supportsActivation: true,
+            defaultUdp: false,
+            listenPortRangeStart: 36200,
+            listenPortRangeSize: 256,
+            availability: BuiltInProxyAvailability.supported(
+              updatePath:
+                  'setup.dart builds the pinned stormdns Android executable from source into bundled Android assets, and Android runs the immutable native library from nativeLibraryDir.',
+              rollbackPath:
+                  'Failed profile apply rolls node configs, resolver files, and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
+            ),
+          ),
         };
 
   final Map<BuiltInProxyType, BuiltInProxyDescriptor> _descriptors;

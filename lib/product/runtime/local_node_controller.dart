@@ -62,11 +62,17 @@ class LocalNodeMutation<TNodeLayout extends LocalNodeLayout> {
     required this.plan,
     required this.layout,
     required this.previousConfig,
+    this.previousArtifacts = const {},
   });
 
   final BuiltInProxyNodePlan plan;
   final TNodeLayout layout;
   final String? previousConfig;
+
+  /// Contents of every extra artifact before staging, keyed by the path
+  /// relative to the node working directory. A `null` value means the file did
+  /// not exist and must be removed again on rollback.
+  final Map<String, String?> previousArtifacts;
 }
 
 @immutable
@@ -105,6 +111,17 @@ abstract class LocalNodeController<
       return '$typeLabel runtime plan stage is already active.';
     }
 
+    if (currentPlans.isEmpty && nextPlans.isEmpty) {
+      // Nothing to stage for this node type. Resolving the shared install
+      // layout would need the bundled binary and device ABI info, so a profile
+      // that never mentions this runtime must not depend on either.
+      _stagedState = const LocalNodeStageState(
+        mutations: [],
+        removedPlans: [],
+      );
+      return '';
+    }
+
     final sharedLayout = await binary.resolveSharedInstallLayout();
     await Directory(sharedLayout.runtimeRootPath).create(recursive: true);
     await Directory(sharedLayout.nodesDirectoryPath).create(recursive: true);
@@ -115,20 +132,39 @@ abstract class LocalNodeController<
       for (final plan in nextPlans) {
         final layout = resolveNodeLayout(sharedLayout, plan.nodeId);
         final config = readConfigArtifact(plan);
+        final extraArtifacts = readAdditionalArtifacts(plan);
         final configFile = File(layout.configPath);
         final previousConfig =
             configFile.existsSync() ? await configFile.readAsString() : null;
-        if (previousConfig == config) continue;
+
+        final previousArtifacts = <String, String?>{};
+        var artifactsChanged = false;
+        for (final entry in extraArtifacts.entries) {
+          final file = File(_artifactPath(layout, entry.key));
+          final previous =
+              file.existsSync() ? await file.readAsString() : null;
+          previousArtifacts[entry.key] = previous;
+          if (previous != entry.value) artifactsChanged = true;
+        }
+        if (previousConfig == config && !artifactsChanged) continue;
 
         mutations.add(
           LocalNodeMutation<TNodeLayout>(
             plan: plan,
             layout: layout,
             previousConfig: previousConfig,
+            previousArtifacts: previousArtifacts,
           ),
         );
         await Directory(layout.workingDirectoryPath).create(recursive: true);
+        // Every artifact of one node is staged together so a mid-write failure
+        // rolls the whole node back rather than leaving a mixed set on disk.
         await configFile.writeAsString(config, flush: true);
+        for (final entry in extraArtifacts.entries) {
+          final file = File(_artifactPath(layout, entry.key));
+          await file.parent.create(recursive: true);
+          await file.writeAsString(entry.value, flush: true);
+        }
       }
     } catch (error) {
       return rollbackStageFailure(
@@ -162,6 +198,9 @@ abstract class LocalNodeController<
     final stagedState = _stagedState;
     if (stagedState == null) return;
     _stagedState = null;
+    if (stagedState.mutations.isEmpty && stagedState.removedPlans.isEmpty) {
+      return;
+    }
     try {
       final sharedLayout = await binary.resolveSharedInstallLayout();
       await Future.wait([
@@ -172,6 +211,8 @@ abstract class LocalNodeController<
                   .workingDirectoryPath,
             ),
           ),
+        for (final mutation in stagedState.mutations)
+          commitNode(mutation.plan, sharedLayout, mutation.layout),
       ]);
     } catch (error) {
       commonPrint.log(
@@ -215,6 +256,28 @@ abstract class LocalNodeController<
   @protected
   String readConfigArtifact(BuiltInProxyNodePlan plan);
 
+  /// Extra artifacts a node needs next to its config, keyed by the path
+  /// relative to the node working directory.
+  ///
+  /// Controllers that only stage a config file keep the default empty map and
+  /// behave exactly as before.
+  @protected
+  Map<String, String> readAdditionalArtifacts(BuiltInProxyNodePlan plan) =>
+      const {};
+
+  /// Runs after the runtime plan commits, once the node is known to be the
+  /// active one. Used to drop state the previous plan still needed.
+  @protected
+  Future<void> commitNode(
+    BuiltInProxyNodePlan plan,
+    TSharedLayout sharedLayout,
+    TNodeLayout layout,
+  ) async {}
+
+  String _artifactPath(TNodeLayout layout, String relativePath) =>
+      '${layout.workingDirectoryPath}${Platform.pathSeparator}'
+      '${relativePath.replaceAll('/', Platform.pathSeparator)}';
+
   @protected
   Future<LocalNodeLaunchExtras> buildLaunchExtras(
     BuiltInProxyNodePlan plan,
@@ -237,8 +300,19 @@ abstract class LocalNodeController<
           await deleteDirectoryIfExists(
             Directory(mutation.layout.workingDirectoryPath),
           );
-        } else {
-          await configFile.writeAsString(mutation.previousConfig!, flush: true);
+          continue;
+        }
+        await configFile.writeAsString(mutation.previousConfig!, flush: true);
+        // Restore the extra artifacts to the exact state the previously
+        // committed plan left behind, including files that did not exist.
+        for (final entry in mutation.previousArtifacts.entries) {
+          final file = File(_artifactPath(mutation.layout, entry.key));
+          if (entry.value == null) {
+            await deleteFileWithRetry(file);
+            continue;
+          }
+          await file.parent.create(recursive: true);
+          await file.writeAsString(entry.value!, flush: true);
         }
       } catch (error) {
         rollbackError ??= error;
@@ -275,11 +349,15 @@ abstract class LocalNodeController<
     final layout = resolveNodeLayout(sharedLayout, plan.nodeId);
     final extras = await buildLaunchExtras(plan, sharedLayout, layout);
     if (!extras.includeNode) return null;
+    final extraArtifacts = readAdditionalArtifacts(plan);
     final revisionSource = json.encode(<String, dynamic>{
       'type': plan.type.label,
       'config': readConfigArtifact(plan),
       'connectivityCheck': plan.connectivityCheck.toJson(),
       'extra': extras.fields,
+      // Only emitted for multi-artifact nodes, so single-artifact revisions
+      // stay byte-identical to what earlier releases produced.
+      if (extraArtifacts.isNotEmpty) 'artifacts': extraArtifacts,
     });
     return <String, dynamic>{
       'nodeId': plan.nodeId,
