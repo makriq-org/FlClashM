@@ -334,10 +334,15 @@ class StormDnsResolverSourceParser {
     final doubleColon = text.indexOf('::');
     if (doubleColon != text.lastIndexOf('::')) return null;
 
-    List<int>? groupsToBytes(List<String> groups) {
+    List<int>? groupsToBytes(
+      List<String> groups, {
+      required bool allowTrailingIpv4,
+    }) {
       final bytes = <int>[];
-      for (final group in groups) {
+      for (var index = 0; index < groups.length; index++) {
+        final group = groups[index];
         if (group.contains('.')) {
+          if (!allowTrailingIpv4 || index != groups.length - 1) return null;
           final embedded = _parseIpv4(group);
           if (embedded == null) return null;
           bytes.addAll(embedded);
@@ -355,7 +360,7 @@ class StormDnsResolverSourceParser {
 
     if (doubleColon < 0) {
       final groups = text.split(':');
-      final bytes = groupsToBytes(groups);
+      final bytes = groupsToBytes(groups, allowTrailingIpv4: true);
       return bytes != null && bytes.length == 16 ? bytes : null;
     }
 
@@ -363,16 +368,24 @@ class StormDnsResolverSourceParser {
     final tailText = text.substring(doubleColon + 2);
     final head = headText.isEmpty ? <String>[] : headText.split(':');
     final tail = tailText.isEmpty ? <String>[] : tailText.split(':');
-    final headBytes = groupsToBytes(head);
-    final tailBytes = groupsToBytes(tail);
+    final headBytes = groupsToBytes(head, allowTrailingIpv4: false);
+    final tailBytes = groupsToBytes(tail, allowTrailingIpv4: true);
     if (headBytes == null || tailBytes == null) return null;
     final fill = 16 - headBytes.length - tailBytes.length;
-    if (fill < 0) return null;
+    // `::` must compress at least one complete 16-bit group.
+    if (fill < 2) return null;
     return [...headBytes, ...List<int>.filled(fill, 0), ...tailBytes];
   }
 
   String _formatAddress(List<int> bytes) {
     if (bytes.length == 4) return bytes.join('.');
+    // StormDNS calls netip.Addr.Unmap() before de-duplication.
+    if (bytes.length == 16 &&
+        bytes.take(10).every((byte) => byte == 0) &&
+        bytes[10] == 0xFF &&
+        bytes[11] == 0xFF) {
+      return bytes.sublist(12).join('.');
+    }
     final groups = <int>[
       for (var i = 0; i < 16; i += 2) (bytes[i] << 8) | bytes[i + 1],
     ];
@@ -439,7 +452,7 @@ bool isSafeResolverListUrl(Uri uri) {
 }
 
 bool isPrivateResolverListHost(String host) {
-  final normalized = host.toLowerCase();
+  final normalized = host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
   if (normalized == 'localhost' || normalized.endsWith('.localhost')) {
     return true;
   }
@@ -449,6 +462,10 @@ bool isPrivateResolverListHost(String host) {
         : normalized,
   );
   if (address == null) return false;
+  return isPrivateResolverListAddress(address);
+}
+
+bool isPrivateResolverListAddress(InternetAddress address) {
   if (address.isLoopback || address.isLinkLocal || address.isMulticast) {
     return true;
   }
@@ -461,6 +478,15 @@ bool isPrivateResolverListHost(String host) {
     if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) return true;
     if (bytes[0] == 0 || bytes[0] >= 240) return true;
     return false;
+  }
+  // IPv4-mapped IPv6 follows the IPv4 rules too.
+  if (bytes.length == 16 &&
+      bytes.take(10).every((byte) => byte == 0) &&
+      bytes[10] == 0xFF &&
+      bytes[11] == 0xFF) {
+    return isPrivateResolverListAddress(
+      InternetAddress.fromRawAddress(bytes.sublist(12)),
+    );
   }
   if (bytes[0] == 0xFC || bytes[0] == 0xFD) return true;
   if (bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80) return true;
@@ -606,11 +632,12 @@ List<StormDnsResolverEntry> parseResolverListBody(
 }
 
 Future<String?> _downloadResolverList(Uri url) async {
-  final client = HttpClient()..connectionTimeout = stormDnsRemoteListTimeout;
+  final client = HttpClient()
+    ..connectionTimeout = stormDnsRemoteListTimeout
+    ..findProxy = ((_) => 'DIRECT')
+    ..connectionFactory = _connectPublicResolverListSocket;
   try {
-    final request = await client
-        .getUrl(url)
-        .timeout(stormDnsRemoteListTimeout);
+    final request = await client.getUrl(url).timeout(stormDnsRemoteListTimeout);
     request.followRedirects = false;
     final response = await request.close().timeout(stormDnsRemoteListTimeout);
     if (response.statusCode != HttpStatus.ok) {
@@ -631,6 +658,75 @@ Future<String?> _downloadResolverList(Uri url) async {
   } finally {
     client.close(force: true);
   }
+}
+
+Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
+  Uri url,
+  String? proxyHost,
+  int? proxyPort,
+) async {
+  if (proxyHost != null || proxyPort != null) {
+    throw const SocketException(
+      'Proxy connections are not allowed for resolver lists.',
+    );
+  }
+
+  var cancelled = false;
+  ConnectionTask<Socket>? currentTask;
+  Socket? connectedSocket;
+  final socket = () async {
+    final addresses = await InternetAddress.lookup(url.host)
+        .timeout(stormDnsRemoteListTimeout);
+    final publicAddresses = addresses
+        .where((address) => !isPrivateResolverListAddress(address))
+        .toList(growable: false);
+    if (publicAddresses.isEmpty) {
+      throw SocketException(
+        'Resolver-list host `${url.host}` has no public address.',
+      );
+    }
+
+    Object? lastError;
+    for (final address in publicAddresses) {
+      if (cancelled) {
+        throw const SocketException('Resolver-list connection was cancelled.');
+      }
+      try {
+        currentTask = await Socket.startConnect(address, url.port);
+        final candidate =
+            await currentTask!.socket.timeout(stormDnsRemoteListTimeout);
+        connectedSocket = candidate;
+        if (cancelled) {
+          candidate.destroy();
+          throw const SocketException(
+            'Resolver-list connection was cancelled.',
+          );
+        }
+        final secure = await SecureSocket.secure(
+          candidate,
+          host: url.host,
+          supportedProtocols: const ['http/1.1'],
+        ).timeout(stormDnsRemoteListTimeout);
+        connectedSocket = secure;
+        return secure;
+      } catch (error) {
+        currentTask?.cancel();
+        connectedSocket?.destroy();
+        connectedSocket = null;
+        lastError = error;
+      }
+    }
+    throw SocketException(
+      'Could not connect to public resolver-list host `${url.host}`: '
+      '$lastError',
+    );
+  }();
+
+  return ConnectionTask.fromSocket<Socket>(socket, () {
+    cancelled = true;
+    currentTask?.cancel();
+    connectedSocket?.destroy();
+  });
 }
 
 /// Flattens ordered sources into resolver-file lines.

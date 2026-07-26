@@ -132,21 +132,70 @@ class RuntimeNodeResolverFileTest {
             )
             File(root, spec.template).writeText("$placeholder\n1.1.1.1\n")
 
-            assertTrue(
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.CHANGED,
                 RuntimeNodeResolverFileWriter.render(root, spec, listOf("8.8.8.8")),
-                "the first render creates the file",
             )
             assertEquals("8.8.8.8\n1.1.1.1\n", File(root, spec.path).readText())
 
-            assertFalse(
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.UNCHANGED,
                 RuntimeNodeResolverFileWriter.render(root, spec, listOf("8.8.8.8")),
-                "an unchanged list must not ask for a restart",
             )
-            assertTrue(
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.CHANGED,
                 RuntimeNodeResolverFileWriter.render(root, spec, listOf("9.9.9.9")),
-                "a changed list must ask for a restart",
             )
             assertEquals("9.9.9.9\n1.1.1.1\n", File(root, spec.path).readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `render fails instead of keeping a stale list`() {
+        val root = Files.createTempDirectory("runtime-node-render-failure").toFile()
+        try {
+            val spec = RuntimeNodeResolverFile(
+                template = "client_resolvers.template",
+                path = "client_resolvers.txt",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+            )
+            File(root, spec.path).writeText("stale\n")
+            File(root, spec.template).writeText("$placeholder\n")
+
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.FAILED,
+                RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
+            )
+            assertEquals("stale\n", File(root, spec.path).readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `resolver-dependent state is reset only inside the node directory`() {
+        val root = Files.createTempDirectory("runtime-node-reset").toFile()
+        try {
+            val cache = File(root, "cache/fp1").apply { mkdirs() }
+            File(cache, "resolver.log").writeText("old")
+            val spec = RuntimeNodeResolverFile(
+                template = "client_resolvers.template",
+                path = "client_resolvers.txt",
+                dependsOnSystemDns = true,
+                resetPaths = listOf("cache/fp1"),
+            )
+
+            assertTrue(RuntimeNodeResolverFileWriter.resetDeclaredPaths(root, spec))
+            assertFalse(cache.exists())
+            assertFalse(
+                RuntimeNodeResolverFileWriter.resetDeclaredPaths(
+                    root,
+                    spec.copy(resetPaths = listOf(".")),
+                ),
+            )
         } finally {
             root.deleteRecursively()
         }

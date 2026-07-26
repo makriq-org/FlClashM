@@ -57,11 +57,29 @@ void main() {
         '8.8.8.8:0',
         '8.8.8.8:70000',
         '256.1.1.1',
+        '1:2:3:4:5:6:7:8::',
+        '1:2:3:4:5:6:7::8',
+        '192.0.2.1::',
         '',
       ]) {
         expect(parser.expandLiteral(token), anyOf(isNull, isEmpty),
             reason: token);
       }
+    });
+
+    test('mapped IPv4 is canonicalized before de-duplication', () {
+      expect(
+        parser.expandLiteral('[::ffff:8.8.8.8]:5353')!.single.line,
+        '8.8.8.8:5353',
+      );
+      final lines = buildResolverFileLines(
+        sources: parser.parse(
+          ['[::ffff:8.8.8.8]:5353', '8.8.8.8'],
+          label: 'r',
+        ),
+        remoteLists: const {},
+      );
+      expect(lines, ['8.8.8.8:5353']);
     });
   });
 
@@ -110,6 +128,8 @@ void main() {
         'https://10.1.2.3/r.txt',
         'https://192.168.0.1/r.txt',
         'https://[::1]/r.txt',
+        'https://[::ffff:127.0.0.1]/r.txt',
+        'https://localhost./r.txt',
       ]) {
         expect(
           () => parser.parse([url], label: 'r'),
@@ -220,7 +240,8 @@ void main() {
       expect(downloads, 1);
 
       now = DateTime(2026, 1, 1, 12);
-      final second = await store.resolve([url], refresh: const Duration(hours: 24));
+      final second =
+          await store.resolve([url], refresh: const Duration(hours: 24));
       expect(downloads, 1, reason: 'still fresh');
       expect(second[url]!.entries.single.ip, '8.8.8.8');
     });
@@ -240,7 +261,8 @@ void main() {
 
       now = DateTime(2026, 1, 5);
       failing = true;
-      final stale = await store.resolve([url], refresh: const Duration(hours: 1));
+      final stale =
+          await store.resolve([url], refresh: const Duration(hours: 1));
       expect(stale[url]!.entries.single.ip, '8.8.8.8',
           reason: 'stale copy is better than dropping the source');
 
@@ -260,8 +282,8 @@ void main() {
         now: () => DateTime(2026),
       );
 
-      final result =
-          await store.resolve([first, second], refresh: const Duration(hours: 1));
+      final result = await store
+          .resolve([first, second], refresh: const Duration(hours: 1));
       expect(result[first]!.entries.single.ip, '8.8.8.8');
       expect(result[second]!.entries.single.ip, '9.9.9.9');
       expect(tempDir.listSync().length, 2);

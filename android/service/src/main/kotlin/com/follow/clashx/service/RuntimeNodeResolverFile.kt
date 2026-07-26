@@ -54,6 +54,12 @@ data class RuntimeNodeResolverFile(
     }
 }
 
+enum class RuntimeNodeResolverFileRenderResult {
+    CHANGED,
+    UNCHANGED,
+    FAILED,
+}
+
 /**
  * Renders resolver files and keeps every produced path inside the node working
  * directory.
@@ -84,22 +90,26 @@ object RuntimeNodeResolverFileWriter {
     /**
      * Renders the template into the generated file.
      *
-     * Returns true when the generated content changed, so callers can restart
-     * only the nodes that actually need it.
+     * Reports whether the generated content changed or rendering failed, so
+     * callers can restart only the nodes that need it and fail closed.
      */
     fun render(
         workingDirectory: File,
         spec: RuntimeNodeResolverFile,
         systemDns: List<String>,
-    ): Boolean {
-        val template = resolveInside(workingDirectory, spec.template) ?: return false
-        val target = resolveInside(workingDirectory, spec.path) ?: return false
-        if (!template.exists()) return false
+    ): RuntimeNodeResolverFileRenderResult {
+        val template = resolveInside(workingDirectory, spec.template)
+            ?: return RuntimeNodeResolverFileRenderResult.FAILED
+        val target = resolveInside(workingDirectory, spec.path)
+            ?: return RuntimeNodeResolverFileRenderResult.FAILED
+        if (!template.isFile) return RuntimeNodeResolverFileRenderResult.FAILED
 
-        val rendered = buildResolverList(template.readText(), systemDns)
-        if (rendered.isEmpty()) return false
+        val rendered = runCatching {
+            buildResolverList(template.readText(), systemDns)
+        }.getOrNull() ?: return RuntimeNodeResolverFileRenderResult.FAILED
+        if (rendered.isEmpty()) return RuntimeNodeResolverFileRenderResult.FAILED
         val previous = if (target.exists()) runCatching { target.readText() }.getOrNull() else null
-        if (previous == rendered) return false
+        if (previous == rendered) return RuntimeNodeResolverFileRenderResult.UNCHANGED
 
         // Write through a sibling temp file so a reader never observes a partial
         // list, even if the process is killed mid-write.
@@ -107,15 +117,33 @@ object RuntimeNodeResolverFileWriter {
         return runCatching {
             target.parentFile?.mkdirs()
             temp.writeText(rendered)
-            if (!temp.renameTo(target)) {
-                target.writeText(rendered)
-                temp.delete()
+            check(temp.renameTo(target)) {
+                "Could not atomically replace ${target.path}"
             }
-            true
+            RuntimeNodeResolverFileRenderResult.CHANGED
         }.getOrElse {
             temp.delete()
-            false
+            RuntimeNodeResolverFileRenderResult.FAILED
         }
+    }
+
+    /**
+     * Deletes runtime-owned paths whose contents depend on the generated list.
+     *
+     * A failed or escaping declaration is a hard failure: starting with stale
+     * resolver state is less predictable than refusing to start the node.
+     */
+    fun resetDeclaredPaths(
+        workingDirectory: File,
+        spec: RuntimeNodeResolverFile,
+    ): Boolean {
+        val root = runCatching { workingDirectory.canonicalFile }.getOrNull() ?: return false
+        for (resetPath in spec.resetPaths) {
+            val target = resolveInside(workingDirectory, resetPath) ?: return false
+            if (target == root) return false
+            if (target.exists() && !target.deleteRecursively()) return false
+        }
+        return true
     }
 
     /**

@@ -173,6 +173,7 @@ object RuntimeNodeProcessManager {
     // Last DNS servers seen on the physical network. Held here, not in Dart,
     // so cold start and DNS changes work with no Flutter process running.
     @Volatile private var latestSystemDns: List<String> = emptyList()
+    @Volatile private var lastAppliedSystemDns: List<String>? = null
 
     /**
      * DNS servers to render resolver files with. Falls back to reading the
@@ -357,53 +358,109 @@ object RuntimeNodeProcessManager {
      * system DNS, drops the working caches those nodes bound to the old list,
      * and restarts only the ones whose list actually changed.
      */
-    suspend fun updateSystemDns(dnsServers: List<String>) {
+    suspend fun updateSystemDns(dnsServers: List<String>) = withBatchProbesStopped {
         val normalized = dnsServers.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-        if (normalized == latestSystemDns) return
         latestSystemDns = normalized
+        if (normalized == lastAppliedSystemDns) return@withBatchProbesStopped
 
-        val dependents = planLock.withLock {
-            activePlan.values.filter { it.resolverFile?.dependsOnSystemDns == true }
+        val dependents = activePlan.values.filter {
+            it.resolverFile?.dependsOnSystemDns == true
         }
-        if (dependents.isEmpty()) return
+        if (dependents.isEmpty()) {
+            lastAppliedSystemDns = normalized
+            return@withBatchProbesStopped
+        }
+        generation += 1L
+        val currentGeneration = generation
+        optionalCheckJob?.cancelAndJoin()
+        optionalCheckJob = null
+        val restartedNodeIds = mutableSetOf<String>()
+        val failures = mutableMapOf<String, String>()
 
         for (spec in dependents) {
             val resolverFile = spec.resolverFile ?: continue
             val runtimeDir = File(spec.workingDirectory)
-            val changed = withContext(Dispatchers.IO) {
+            val renderResult = withContext(Dispatchers.IO) {
                 RuntimeNodeResolverFileWriter.render(
                     workingDirectory = runtimeDir,
                     spec = resolverFile,
                     systemDns = normalized,
                 )
             }
-            if (!changed) continue
+            if (renderResult == RuntimeNodeResolverFileRenderResult.UNCHANGED) continue
+            if (renderResult == RuntimeNodeResolverFileRenderResult.FAILED) {
+                GlobalState.log(
+                    "Could not render resolver file for runtime node `${spec.nodeId}`",
+                )
+                stop(spec.nodeId)
+                readyNodeIds.remove(spec.nodeId)
+                failures[spec.nodeId] = "Could not render the resolver file"
+                continue
+            }
+            restartedNodeIds.add(spec.nodeId)
+            val wasRunning = readStartTime(spec.nodeId) > 0L
+            if (wasRunning) {
+                stop(spec.nodeId)
+                readyNodeIds.remove(spec.nodeId)
+            }
 
-            withContext(Dispatchers.IO) {
-                for (resetPath in resolverFile.resetPaths) {
-                    val target = RuntimeNodeResolverFileWriter.resolveInside(
-                        runtimeDir,
-                        resetPath,
-                    ) ?: continue
-                    runCatching { target.deleteRecursively() }
-                }
+            val reset = withContext(Dispatchers.IO) {
+                RuntimeNodeResolverFileWriter.resetDeclaredPaths(runtimeDir, resolverFile)
+            }
+            if (!reset) {
+                GlobalState.log(
+                    "Could not reset resolver-dependent state for runtime node `${spec.nodeId}`",
+                )
+                failures[spec.nodeId] = "Could not reset resolver-dependent state"
+                continue
             }
 
             // Only nodes that are actually running are restarted; a sleeping
             // reserve node picks the new list up when it is next started.
-            if (readStartTime(spec.nodeId) <= 0L) continue
+            if (!wasRunning) continue
             GlobalState.log("Restarting runtime node `${spec.nodeId}` after a system DNS change")
-            stop(spec.nodeId)
             val outcome = prepareNode(spec)
             if (outcome.ready) {
                 readyNodeIds.add(spec.nodeId)
             } else {
                 readyNodeIds.remove(spec.nodeId)
+                failures[spec.nodeId] = outcome.message
                 GlobalState.log(
                     "Runtime node `${spec.nodeId}` failed to restart after a DNS change: " +
                         outcome.message,
                 )
             }
+        }
+
+        val outcomes = activePlan.values.map { spec ->
+            val ready = spec.nodeId in readyNodeIds && readStartTime(spec.nodeId) > 0L
+            val message = failures[spec.nodeId]
+                ?: if (ready) {
+                    ""
+                } else {
+                    readLastError(spec.nodeId).ifBlank {
+                        "Runtime node `${spec.nodeId}` is not running"
+                    }
+                }
+            NodeOutcome(
+                spec = spec,
+                ready = ready,
+                reused = ready && spec.nodeId !in restartedNodeIds,
+                message = message,
+            )
+        }
+        val failure = outcomes.firstOrNull { !it.ready }
+        lastStateJson = stateJson(
+            currentGeneration,
+            if (failure == null) "ready" else "failed",
+            outcomes,
+            failure?.message.orEmpty(),
+        )
+        if (failures.isEmpty()) {
+            lastAppliedSystemDns = normalized
+        }
+        if (failure == null) {
+            launchOptionalChecks(currentGeneration, activePlan.values.toList())
         }
     }
 
@@ -625,11 +682,29 @@ object RuntimeNodeProcessManager {
                 // every launch so a node started at cold start picks up the
                 // system DNS observed since the plan was written.
                 spec.resolverFile?.let { resolverFile ->
-                    RuntimeNodeResolverFileWriter.render(
+                    val renderResult = RuntimeNodeResolverFileWriter.render(
                         workingDirectory = runtimeDir,
                         spec = resolverFile,
                         systemDns = currentSystemDns(),
                     )
+                    if (renderResult == RuntimeNodeResolverFileRenderResult.FAILED) {
+                        GlobalState.log(
+                            "Could not render resolver file for runtime node `${spec.nodeId}`",
+                        )
+                        return@withContext 0L
+                    }
+                    if (
+                        renderResult == RuntimeNodeResolverFileRenderResult.CHANGED &&
+                        !RuntimeNodeResolverFileWriter.resetDeclaredPaths(
+                            runtimeDir,
+                            resolverFile,
+                        )
+                    ) {
+                        GlobalState.log(
+                            "Could not reset resolver-dependent state for runtime node `${spec.nodeId}`",
+                        )
+                        return@withContext 0L
+                    }
                 }
                 val process = try {
                     ProcessBuilder(listOf(spec.executablePath) + spec.arguments)

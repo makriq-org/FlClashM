@@ -336,6 +336,18 @@ void main() {
       _rejects({
         'runtime': {'workers': 8, 'process-workers': 4},
       });
+      _rejects(
+        {
+          'runtime': {'workers': 8},
+        },
+        because: 'the default process worker count is 4',
+      );
+      _rejects(
+        {
+          'runtime': {'process-workers': 2},
+        },
+        because: 'the default RX/TX worker count is 4',
+      );
       _rejects({
         'runtime': {'session-retry-base': '30s', 'session-retry-max': '5s'},
       });
@@ -379,6 +391,21 @@ void main() {
       for (final value in const ['', '10', 'abc', '10s junk', '1x2s']) {
         expect(parseStormDnsDuration(value), isNull, reason: value);
       }
+    });
+
+    test('startup max-age is an exact integer day count', () {
+      expect(
+        _resolve({
+          'startup': {'max-age': '48h'},
+        }).startupMaxAge,
+        const Duration(days: 2),
+      );
+      _rejects({
+        'startup': {'max-age': '36h'},
+      });
+      _rejects({
+        'startup': {'max-age': '1.5d'},
+      });
     });
   });
 

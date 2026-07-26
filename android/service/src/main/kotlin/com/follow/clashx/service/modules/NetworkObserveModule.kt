@@ -170,7 +170,12 @@ class NetworkObserveModule(
         if (dns.isEmpty()) return false
 
         val key = dns.joinToString(",")
-        if (key == lastDnsKey) return true
+        if (key == lastDnsKey) {
+            // The core already accepted this list. Let the runtime manager
+            // cheaply de-duplicate a successful update or retry a failed one.
+            updateRuntimeNodeDns(dns)
+            return true
+        }
         val dnsJson = gson.toJson(dns)
 
         return runCatching {
@@ -178,18 +183,22 @@ class NetworkObserveModule(
         }.onSuccess {
             lastDnsKey = key
             GlobalState.log("System DNS updated from $network ($reason)")
-            // Runtime nodes that resolve through the physical network keep
-            // their own resolver file; the process manager rewrites it and
-            // restarts only the nodes that depend on it.
-            GlobalState.launch {
-                runCatching { RuntimeNodeProcessManager.updateSystemDns(dns) }
-                    .onFailure {
-                        GlobalState.log("runtime-node DNS update failed: ${it.message}")
-                    }
-            }
+            updateRuntimeNodeDns(dns)
         }.onFailure {
             GlobalState.log("updateDns failed: ${it.message}")
         }.isSuccess
+    }
+
+    private fun updateRuntimeNodeDns(dns: List<String>) {
+        // Runtime nodes that resolve through the physical network keep their
+        // own resolver file; the process manager rewrites it and restarts only
+        // the nodes that depend on it.
+        GlobalState.launch {
+            runCatching { RuntimeNodeProcessManager.updateSystemDns(dns) }
+                .onFailure {
+                    GlobalState.log("runtime-node DNS update failed: ${it.message}")
+                }
+        }
     }
 
     private fun seedDns(cm: ConnectivityManager) {

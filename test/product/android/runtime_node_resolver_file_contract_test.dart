@@ -39,7 +39,8 @@ void main() {
 
   test('the node spec parses the generic launch fields', () {
     expect(processManager, contains('val closeStdin: Boolean'));
-    expect(processManager, contains('val resolverFile: RuntimeNodeResolverFile?'));
+    expect(
+        processManager, contains('val resolverFile: RuntimeNodeResolverFile?'));
     expect(processManager, contains('value.optBoolean("closeStdin", false)'));
     expect(processManager, contains('RuntimeNodeResolverFile.fromJson('));
     expect(resolverFile, contains('value.optString("template", "")'));
@@ -74,7 +75,7 @@ void main() {
       resolverFile,
       contains('resolvedPath.startsWith(rootPath + File.separator)'),
     );
-    expect(processManager, contains('RuntimeNodeResolverFileWriter.resolveInside('));
+    expect(resolverFile, contains('resetDeclaredPaths('));
   });
 
   test('an absolute declared path is refused, not re-rooted', () {
@@ -91,6 +92,7 @@ void main() {
   test('the resolver file is written atomically', () {
     expect(resolverFile, contains('.tmp'));
     expect(resolverFile, contains('renameTo(target)'));
+    expect(resolverFile, isNot(contains('target.writeText(rendered)')));
   });
 
   test('a DNS change rewrites, resets caches, and restarts only dependents',
@@ -98,25 +100,68 @@ void main() {
     expect(processManager, contains('suspend fun updateSystemDns('));
     expect(
       processManager,
+      contains('withBatchProbesStopped'),
+      reason: 'DNS updates must not race a runtime-plan transition',
+    );
+    expect(
+      processManager,
       contains('it.resolverFile?.dependsOnSystemDns == true'),
       reason: 'only nodes that declared the dependency are touched',
     );
-    expect(processManager, contains('resolverFile.resetPaths'));
-    expect(processManager, contains('deleteRecursively()'));
+    expect(processManager, contains('resetDeclaredPaths'));
+    expect(resolverFile, contains('deleteRecursively()'));
     expect(
       processManager,
-      contains('if (readStartTime(spec.nodeId) <= 0L) continue'),
+      contains('val wasRunning = readStartTime(spec.nodeId) > 0L'),
       reason: 'a sleeping reserve node must not be started by a DNS change',
     );
+    expect(processManager, contains('if (!wasRunning) continue'));
     expect(processManager, contains('stop(spec.nodeId)'));
     expect(processManager, contains('prepareNode(spec)'));
+    expect(
+      processManager,
+      contains('lastStateJson = stateJson('),
+      reason: 'a failed DNS-triggered restart must be visible to plan readers',
+    );
+    expect(
+      processManager,
+      contains('if (normalized == lastAppliedSystemDns)'),
+      reason: 'a failed update must remain eligible for retry',
+    );
+    expect(
+      networkObserve,
+      contains('if (key == lastDnsKey)'),
+      reason: 'duplicate network callbacks retry failed runtime-node updates',
+    );
+    expect(networkObserve, contains('updateRuntimeNodeDns(dns)'));
   });
 
   test('an unchanged resolver list does not restart the node', () {
-    expect(processManager, contains('if (!changed) continue'));
+    expect(
+      processManager,
+      contains('RuntimeNodeResolverFileRenderResult.UNCHANGED) continue'),
+    );
     expect(
       resolverFile,
-      contains('if (previous == rendered) return false'),
+      contains('RuntimeNodeResolverFileRenderResult.UNCHANGED'),
+    );
+  });
+
+  test('cold start invalidates caches when the generated list changes', () {
+    final renderIndex = processManager.lastIndexOf(
+      'RuntimeNodeResolverFileWriter.render(',
+    );
+    final resetIndex = processManager.lastIndexOf(
+      'RuntimeNodeResolverFileWriter.resetDeclaredPaths(',
+    );
+    final launchIndex = processManager.indexOf('ProcessBuilder(');
+    expect(renderIndex, greaterThan(0));
+    expect(resetIndex, greaterThan(renderIndex));
+    expect(launchIndex, greaterThan(resetIndex));
+    expect(
+      processManager,
+      contains('RuntimeNodeResolverFileRenderResult.FAILED'),
+      reason: 'a node must not start against an old or missing resolver file',
     );
   });
 
@@ -139,7 +184,8 @@ void main() {
   });
 
   test('de-duplication keeps the first entry for an address', () {
-    expect(resolverFile, contains('if (!seen.add(resolverKey(entry))) continue'));
+    expect(
+        resolverFile, contains('if (!seen.add(resolverKey(entry))) continue'));
     expect(resolverFile, contains('private fun resolverKey('));
   });
 }

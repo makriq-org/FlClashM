@@ -267,7 +267,7 @@ List addresses must be HTTPS, without credentials or a fragment; localhost and l
 | `auto-disable` | `true` | Disable resolvers that stop answering |
 | `recheck` | `true` | Periodically re-test disabled resolvers |
 
-`refresh` is checked when the profile is applied and when the node starts — there is no standing timer.
+`refresh` is checked when the profile is applied — there is no standing timer.
 
 ### Presets
 
@@ -301,9 +301,9 @@ Fine tuning lives in the `duplication`, `compression`, `mtu`, `arq`, `ping`, and
 | `cached` (default) | Start from cache without re-checking MTU |
 | `verified` | Start from cache and re-check MTU |
 
-`startup.max-age` (default `30d`) limits how old a usable cache may be.
+`startup.max-age` (default `30d`) limits how old a usable cache may be and must resolve to a whole number of days.
 
-The working cache is bound to the final resolver list, `domains`, and the StormDNS build. Changing any of them creates a new cache, and the old one is only removed once the profile applies successfully. If no suitable cache exists, or StormDNS rejects it, it falls back to a full scan on its own — that is expected.
+The working cache is bound to the final resolver list, `domains`, and the StormDNS build. Changing profile sources, `domains`, or the build creates a new cache, and the old one is only removed once the profile applies successfully. A physical-network DNS change clears the current cache before restarting the node. If no suitable cache exists, or StormDNS rejects it, it falls back to a full scan on its own — that is expected.
 
 The log directory, resolver file, local port, and SOCKS5 listener are owned by the app and cannot be set in the profile.
 

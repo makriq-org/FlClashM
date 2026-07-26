@@ -160,7 +160,8 @@ const _runtimeIntKeys = <String, String>{
 class StormDnsSettingsResolver {
   const StormDnsSettingsResolver();
 
-  StormDnsSettings resolve(Map<String, dynamic> config, {required String node}) {
+  StormDnsSettings resolve(Map<String, dynamic> config,
+      {required String node}) {
     final presetName = _string(config['preset']) ?? 'messenger';
     final preset = stormDnsPresets[presetName];
     if (preset == null) {
@@ -345,6 +346,19 @@ class StormDnsSettingsResolver {
       60.0,
     );
     _requireWorkerOrder(runtime, node);
+    final startupMaxAge = _requireDuration(
+      startup['max-age'],
+      node: node,
+      path: 'startup.max-age',
+      fallback: const Duration(days: 30),
+    )!;
+    if (startupMaxAge.inMicroseconds % const Duration(days: 1).inMicroseconds !=
+        0) {
+      throw FormatException(
+        '$node `startup.max-age` must be a whole number of days because '
+        'StormDNS stores this setting as an integer day count.',
+      );
+    }
 
     return StormDnsSettings(
       domains: _requireDomains(config['domains'], node),
@@ -354,8 +368,7 @@ class StormDnsSettingsResolver {
       downloadDuplication: downloadDuplication,
       uploadSetupDuplication: uploadSetupDuplication,
       downloadSetupDuplication: downloadSetupDuplication,
-      uploadCompression:
-          _string(compression['upload']) ?? preset.compression,
+      uploadCompression: _string(compression['upload']) ?? preset.compression,
       downloadCompression:
           _string(compression['download']) ?? preset.compression,
       compressionMinSize: _optionalInt(
@@ -376,12 +389,7 @@ class StormDnsSettingsResolver {
       resolverAutoDisable: _bool(policy['auto-disable']) ?? true,
       resolverRecheck: _bool(policy['recheck']) ?? true,
       startupMode: startupModeName,
-      startupMaxAge: _requireDuration(
-        startup['max-age'],
-        node: node,
-        path: 'startup.max-age',
-        fallback: const Duration(days: 30),
-      )!,
+      startupMaxAge: startupMaxAge,
       arq: arq,
       ping: ping,
       runtime: runtime,
@@ -495,9 +503,8 @@ class StormDnsSettingsResolver {
   }
 
   void _requireWorkerOrder(Map<String, Object> runtime, String node) {
-    final workers = runtime['workers'] as int?;
-    final processWorkers = runtime['process-workers'] as int?;
-    if (workers == null || processWorkers == null) return;
+    final workers = (runtime['workers'] as int?) ?? 4;
+    final processWorkers = (runtime['process-workers'] as int?) ?? 4;
     if (processWorkers < workers) {
       throw FormatException(
         '$node `runtime.process-workers` ($processWorkers) must not be lower '
@@ -656,12 +663,15 @@ String buildStormDnsToml({
     'STARTUP_MODE = ${_tomlString(startup.mode)}',
     'LOG_BASED_MTU_VERIFY = ${startup.verifyMtu}',
     'LOG_SCAN_MAX_DAYS = ${settings.startupMaxAge.inDays}',
-    for (final entry in _blockLines(settings.arq, _arqIntKeys,
-        _arqDurationKeys)) entry,
-    for (final entry in _blockLines(settings.ping, const <String, String>{},
-        _pingDurationKeys)) entry,
-    for (final entry in _blockLines(settings.runtime, _runtimeIntKeys,
-        _runtimeDurationKeys)) entry,
+    for (final entry
+        in _blockLines(settings.arq, _arqIntKeys, _arqDurationKeys))
+      entry,
+    for (final entry in _blockLines(
+        settings.ping, const <String, String>{}, _pingDurationKeys))
+      entry,
+    for (final entry
+        in _blockLines(settings.runtime, _runtimeIntKeys, _runtimeDurationKeys))
+      entry,
     if (settings.runtime['base-encode'] case final bool value)
       'BASE_ENCODE_DATA = $value',
     '',
