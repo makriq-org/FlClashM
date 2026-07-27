@@ -8,7 +8,7 @@ FlClashM 的超能力：**特殊节点直接写在 YAML 配置里**，并表现�
 |------|------|-----------|
 | 🛡 [`byedpi`](#-byedpi) | 通过数据包操纵绕过 DPI | 被「从内部」封锁的资源：YouTube、Discord 等 |
 | 📞 [`olcrtc`](#-olcrtc) | 伪装成视频通话的 WebRTC 隧道 | 绕过白名单（如经 Yandex Telemost / Jitsi） |
-| 🌩 [`stormdns`](#-stormdns) | 藏在 DNS 查询里的隧道 | 最后的备用线路：慢，但在别的都不通时能通 |
+| 🌩 [`stormdns`](#-stormdns) | 藏在 DNS 查询里的隧道 | 在只放行 DNS 的场景绕过白名单 |
 | 🎭 [`naiveproxy`](#-naiveproxy) | 伪装成 Chrome 流量 | 绕过黑名单、抵抗 TLS 指纹识别 |
 
 > ℹ️ 内置节点**只能**写在 `proxies` 段。本地地址和端口由客户端分配 —— 不能在配置里指定。
@@ -17,7 +17,7 @@ FlClashM 的超能力：**特殊节点直接写在 YAML 配置里**，并表现�
 
 ## 🔍 启动检查
 
-在认定节点就绪之前，FlClashM 始终验证两件事：**存活的进程**和**打开的本地 SOCKS 端口**。这适用于 NaiveProxy、OlcRTC 和 ByeDPI。
+在认定节点就绪之前，FlClashM 始终验证两件事：**存活的进程**和**打开的本地 SOCKS 端口**。这适用于 NaiveProxy、OlcRTC、ByeDPI 和 StormDNS。
 
 在此之上还可开启**端到端检查** —— 一个严格经由该节点 SOCKS 端口的真实 HTTP(S) 请求：
 
@@ -152,7 +152,7 @@ proxy-groups:
 
 ### 😴 激活（休眠备用）
 
-默认情况下 OlcRTC 作为**备用节点**：配置提前就绪，但进程处于休眠，直到主分组开始失败或用户手动选择 OlcRTC。
+默认情况下 OlcRTC 与 StormDNS 作为**备用节点**：配置提前就绪，但进程处于休眠，直到主分组开始失败或用户手动选择该节点。
 
 ```yaml
 activation: auto
@@ -185,7 +185,7 @@ activation:
 **关于 `auto` 需要知道的：**
 - 节点必须直接属于至少一个 proxy group。
 - 检查地址须能从 `wake.urls`、节点的 `connectivity-check`、最近的分组或应用的全局测试 URL 解析出来。
-- 唤醒后客户端会立即检查 OlcRTC 本身。若没有任何包含分组选中它，且在 `sleep.idle` 内没有活动连接 —— 进程重新休眠。
+- 唤醒后客户端会立即检查该节点本身。若没有任何包含分组选中它，且在 `sleep.idle` 内没有活动连接 —— 进程重新休眠。
 - **手动选择会立即唤醒节点。**
 
 > ℹ️ 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
@@ -202,7 +202,9 @@ activation:
 
 **类型：** `stormdns` · 不支持 UDP（只能 `udp: false`）
 
-StormDNS 把 TCP 流量藏在普通 DNS 查询里。它比其他节点**明显更慢**，定位是「最后的备用线路」—— 其他都走不通时才用。建议让它保持休眠（`activation: auto`），仅在主组开始失败时唤醒。
+StormDNS 把 TCP 封装进发往允许解析器的普通 DNS 查询 —— 于是连接得以穿过白名单。目标与 OlcRTC 相同，但载体不同：适用于只放行 DNS 的场景。它比其他节点**明显更慢**。
+
+休眠备用的配置方式与 OlcRTC 完全一致 —— 参见上面的「激活（休眠备用）」一节。
 
 ```yaml
 proxies:
@@ -211,20 +213,6 @@ proxies:
     domains: ["v.example.com"]
     encryption: chacha20
     encryption-key: "<key>"
-    resolvers:
-      - system
-      - 8.8.8.8
-      - 1.1.1.1:5353
-      - 192.168.1.0/30
-      - https://example.com/resolvers.txt
-    preset: messenger
-    startup:
-      mode: cached
-      max-age: 30d
-    activation: auto
-    connectivity-check:
-      timeout: 25
-      startup-timeout: 180
 proxy-groups:
   - name: "main"
     type: fallback

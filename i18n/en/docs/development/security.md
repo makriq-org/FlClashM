@@ -18,9 +18,9 @@ The fork's key invariant: **appearance and provider hints cannot weaken runtime 
 - 📞 `olcrtc` works only in CNC mode.
 - 🧱 In `olcrtc profiles[]`, `socks.host`, `socks.port`, and `crypto.key_file` are recursively forbidden; the rest is passed to OlcRTC transparently.
 - 🛡 `byedpi` only checks the specified URLs.
-- 🌪 For `stormdns`, the fields the app owns are forbidden: the listener (`listen`, `listen-ip`, `listen-port`, `server`, `port`, `protocol`), SOCKS5 authentication, the whole `local-dns-*` block, the log directory and file name, `config-version`, and `startup.mode: ask`.
+- 🌩 For `stormdns`, the fields the app owns are forbidden: the listener (`listen`, `listen-ip`, `listen-port`, `server`, `port`, `protocol`), SOCKS5 authentication, the whole `local-dns-*` block, the log directory and file name, `config-version`, and `startup.mode: ask`.
 
-## 🌪 StormDNS resolver list
+## 🌩 StormDNS resolver list
 
 `stormdns` is the only node whose profile hands over a list of network addresses, so it is validated separately.
 

@@ -8,7 +8,7 @@ Four types are supported:
 |------|--------------|---------------|
 | 🛡 [`byedpi`](#-byedpi) | DPI circumvention via packet manipulation | Resources blocked "from the inside": YouTube, Discord, etc. |
 | 📞 [`olcrtc`](#-olcrtc) | A tunnel over WebRTC disguised as a video call | Bypassing whitelists (e.g. via Yandex Telemost / Jitsi) |
-| 🌩 [`stormdns`](#-stormdns) | A tunnel inside DNS queries | Last-resort reserve: slow, but gets through where nothing else does |
+| 🌩 [`stormdns`](#-stormdns) | A tunnel inside DNS queries | Bypassing whitelists where only DNS is let through |
 | 🎭 [`naiveproxy`](#-naiveproxy) | Parroting of Chrome traffic | Bypassing blocklists, resistance to TLS fingerprinting |
 
 > ℹ️ Built-in nodes are defined **only** in the `proxies` section. Local addresses and ports are assigned by the client — you can't set them in the profile.
@@ -17,7 +17,7 @@ Four types are supported:
 
 ## 🔍 Startup check
 
-Before considering a node ready, FlClashM always verifies two things: a **live process** and an **open local SOCKS port**. This applies to NaiveProxy, OlcRTC, and ByeDPI.
+Before considering a node ready, FlClashM always verifies two things: a **live process** and an **open local SOCKS port**. This applies to NaiveProxy, OlcRTC, ByeDPI, and StormDNS.
 
 On top of that you can enable an **end-to-end check** — a real HTTP(S) request that goes strictly through the node's SOCKS port:
 
@@ -152,7 +152,7 @@ proxy-groups:
 
 ### 😴 Activation (sleeping reserve)
 
-By default OlcRTC acts as a **fallback node**: the configuration is prepared in advance, but the process sleeps until the primary group starts failing or the user selects OlcRTC manually.
+By default OlcRTC and StormDNS act as **fallback nodes**: the configuration is prepared in advance, but the process sleeps until the primary group starts failing or the user selects the node manually.
 
 ```yaml
 activation: auto
@@ -185,7 +185,7 @@ activation:
 **What matters about `auto`:**
 - The node must directly belong to at least one proxy group.
 - Check addresses must resolve from `wake.urls`, the node's `connectivity-check`, the nearest group, or the app's global test URL.
-- After waking, the client immediately checks OlcRTC itself. If no containing group selected it and there are no active connections for `sleep.idle` — the process goes back to sleep.
+- After waking, the client immediately checks the node itself. If no containing group selected it and there are no active connections for `sleep.idle` — the process goes back to sleep.
 - **Manual selection wakes the node immediately.**
 
 > ℹ️ `auto` is now used **even without an `activation` field**. To fully restore the previous behavior, set `activation: always` explicitly.
@@ -202,7 +202,9 @@ If `profiles` are set, the top-level common fields are inherited by each fallbac
 
 **Type:** `stormdns` · UDP is not supported (only `udp: false` is valid)
 
-StormDNS hides TCP traffic inside ordinary DNS queries. It is **noticeably slower** than the other nodes and is meant as a last-resort reserve for when nothing else gets through. Keep it asleep (`activation: auto`) and let it wake only when the main group starts failing.
+StormDNS wraps TCP into ordinary DNS queries to an allowed resolver — so the connection slips through whitelists. Same goal as OlcRTC, but over a different carrier: where only DNS is let through. It is **noticeably slower** than the other nodes.
+
+The sleeping reserve is configured exactly as for OlcRTC — see the “Activation (sleeping reserve)” section above.
 
 ```yaml
 proxies:
@@ -211,20 +213,6 @@ proxies:
     domains: ["v.example.com"]
     encryption: chacha20
     encryption-key: "<key>"
-    resolvers:
-      - system
-      - 8.8.8.8
-      - 1.1.1.1:5353
-      - 192.168.1.0/30
-      - https://example.com/resolvers.txt
-    preset: messenger
-    startup:
-      mode: cached
-      max-age: 30d
-    activation: auto
-    connectivity-check:
-      timeout: 25
-      startup-timeout: 180
 proxy-groups:
   - name: "main"
     type: fallback

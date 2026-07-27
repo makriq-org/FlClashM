@@ -18,9 +18,9 @@
 - 📞 `olcrtc` فقط در حالت CNC کار می‌کند.
 - 🧱 در `olcrtc profiles[]`، مقادیر `socks.host`، `socks.port` و `crypto.key_file` به‌صورت بازگشتی ممنوع‌اند؛ بقیهٔ فیلدها شفاف به OlcRTC داده می‌شوند.
 - 🛡 `byedpi` فقط URLهای مشخص‌شده را بررسی می‌کند.
-- 🌪 در `stormdns` فیلدهایی که در اختیار برنامه‌اند ممنوع‌اند: شنونده (`listen`، `listen-ip`، `listen-port`، `server`، `port`، `protocol`)، احراز هویت SOCKS5، کل بلوک `local-dns-*`، پوشه و نام فایل گزارش، `config-version` و `startup.mode: ask`.
+- 🌩 در `stormdns` فیلدهایی که در اختیار برنامه‌اند ممنوع‌اند: شنونده (`listen`، `listen-ip`، `listen-port`، `server`، `port`، `protocol`)، احراز هویت SOCKS5، کل بلوک `local-dns-*`، پوشه و نام فایل گزارش، `config-version` و `startup.mode: ask`.
 
-## 🌪 فهرست رزالورهای StormDNS
+## 🌩 فهرست رزالورهای StormDNS
 
 `stormdns` تنها نودی است که پروفایل فهرستی از نشانی‌های شبکه را به آن می‌دهد، بنابراین جداگانه بررسی می‌شود.
 

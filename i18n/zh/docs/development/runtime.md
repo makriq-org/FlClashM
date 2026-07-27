@@ -66,32 +66,19 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 </details>
 
-**`auto` 激活。** supervisor 提前暂存 OlcRTC 产物，但不把休眠节点纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含 OlcRTC 的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
+**`auto` 激活。** 该机制由带 `supportsActivation` 的节点共用 —— 即 OlcRTC 与 StormDNS。supervisor 提前暂存这类节点的产物，但不把休眠节点纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含该节点的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
 
 对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
 
 集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
 
-### 🛡 byedpi
-
-- **类型：** `byedpi`
-- **`manual` 模式：** 接受 `args` 字符串
-- **`auto` 模式：** 遍历 ByeByeDPI 策略并缓存可用的一条
-- 无 `mode` 时，有 `args` 选手动，无 `args` 选自动
-- auto 模式下 `strategy-list` 默认为 `byebyeedpi`；无 `strategy-test.urls` 时使用内置 YouTube 测试端点
-- 支持 `{sni}` 替换
-- 默认启用 UDP 并传给本地 `mihomo` 节点；`udp: false` 将其关闭，而 ByeDPI 进程本身不接收单独的 UDP 参数
-
-
-### 🌪 stormdns
+### 🌩 stormdns
 
 - **类型：** `stormdns`
 - **必填字段：** `name`、`type`、`domains`、`encryption`、`encryption-key`
-- 最后的兜底手段：把 TCP 藏进 DNS 查询，在其他节点都无法通行时仍能通行
 - 必填字段没有默认值：StormDNS 不做协议协商，取值必须与服务端一致
 - 不支持 UDP；生成的本地 `mihomo` 节点会得到 `udp: false`
 - 本地 SOCKS5 端口从 36200 起的范围内分配
-- 默认 `activation: auto` —— 节点处于休眠状态，不会进入 Android 进程计划（与 OlcRTC 相同的机制）
 - 预设 `messenger` / `balanced` / `bulk` 设定复制与压缩；叠加顺序为 **StormDNS 默认值 → preset → 显式字段**
 - 模式取值范围取自 StormDNS 的 `finalizeClientConfig`：上游会静默截断的取值一律在启动前拒绝，包括相互关联的边界（`upload-setup` ≥ `upload`、`download-setup` ≥ `download`、max MTU ≥ min、`nack-max-gap` ≤ `window/4`、RTO 与 ping 间隔的顺序）
 - 源码固定在提交 `87348df5b11f9e490262a713ca268734007af44f`
@@ -110,6 +97,17 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 **多产物事务。** `LocalNodeController` 通过 stage → rollback → commit 为单个节点管理多个文件。单文件节点的修订逻辑逐字节保持不变，因此 NaiveProxy、OlcRTC 与 ByeDPI 的行为没有变化。工作缓存以最终解析器列表、`domains` 与 StormDNS 版本的 fingerprint 为键；旧目录只在 commit 成功**之后**才删除，回滚会恢复上一份计划的状态。
 
 **有意偏离上游之处。** StormDNS 的 `usableHostCount` 对 IPv4 `/1` 返回 2，随后却遍历 2³¹ 个地址。FlClashM 计算实际展开规模，并按文档中的 65536 上限截断 —— 否则这样的配置会让应用卡死。
+
+### 🛡 byedpi
+
+- **类型：** `byedpi`
+- **`manual` 模式：** 接受 `args` 字符串
+- **`auto` 模式：** 遍历 ByeByeDPI 策略并缓存可用的一条
+- 无 `mode` 时，有 `args` 选手动，无 `args` 选自动
+- auto 模式下 `strategy-list` 默认为 `byebyeedpi`；无 `strategy-test.urls` 时使用内置 YouTube 测试端点
+- 支持 `{sni}` 替换
+- 默认启用 UDP 并传给本地 `mihomo` 节点；`udp: false` 将其关闭，而 ByeDPI 进程本身不接收单独的 UDP 参数
+
 
 ---
 

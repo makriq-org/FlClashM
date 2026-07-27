@@ -18,9 +18,9 @@
 - 📞 `olcrtc` работает только в режиме CNC.
 - 🧱 В `olcrtc profiles[]` рекурсивно запрещены `socks.host`, `socks.port` и `crypto.key_file`; остальные поля прозрачно передаются OlcRTC.
 - 🛡 `byedpi` проверяет только указанные URL.
-- 🌪 У `stormdns` запрещены поля, которыми владеет приложение: слушатель (`listen`, `listen-ip`, `listen-port`, `server`, `port`, `protocol`), SOCKS5-аутентификация, весь блок `local-dns-*`, каталог и имя файла журнала, `config-version` и `startup.mode: ask`.
+- 🌩 У `stormdns` запрещены поля, которыми владеет приложение: слушатель (`listen`, `listen-ip`, `listen-port`, `server`, `port`, `protocol`), SOCKS5-аутентификация, весь блок `local-dns-*`, каталог и имя файла журнала, `config-version` и `startup.mode: ask`.
 
-## 🌪 Список резольверов StormDNS
+## 🌩 Список резольверов StormDNS
 
 `stormdns` — единственный узел, которому профиль передаёт список сетевых адресов, поэтому он проверяется отдельно.
 

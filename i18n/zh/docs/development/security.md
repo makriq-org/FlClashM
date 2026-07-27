@@ -18,9 +18,9 @@
 - 📞 `olcrtc` 仅在 CNC 模式工作。
 - 🧱 在 `olcrtc profiles[]` 中递归禁止 `socks.host`、`socks.port` 和 `crypto.key_file`；其余字段透明传给 OlcRTC。
 - 🛡 `byedpi` 只检查指定的 URL。
-- 🌪 `stormdns` 禁止使用由应用掌管的字段：监听器（`listen`、`listen-ip`、`listen-port`、`server`、`port`、`protocol`）、SOCKS5 认证、整个 `local-dns-*` 块、日志目录与文件名、`config-version` 以及 `startup.mode: ask`。
+- 🌩 `stormdns` 禁止使用由应用掌管的字段：监听器（`listen`、`listen-ip`、`listen-port`、`server`、`port`、`protocol`）、SOCKS5 认证、整个 `local-dns-*` 块、日志目录与文件名、`config-version` 以及 `startup.mode: ask`。
 
-## 🌪 StormDNS 解析器列表
+## 🌩 StormDNS 解析器列表
 
 `stormdns` 是唯一由配置传入网络地址列表的节点，因此单独校验。
 

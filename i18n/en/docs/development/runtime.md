@@ -66,32 +66,19 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 
 </details>
 
-**`auto` activation.** The supervisor stages the OlcRTC artifacts in advance but doesn't include the sleeping node in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without OlcRTC and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
+**`auto` activation.** The mechanism is shared by the nodes with `supportsActivation` — OlcRTC and StormDNS. The supervisor stages such a node's artifacts in advance but doesn't include the sleeping node in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without it and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
 
 Access to `mihomo` and network state is isolated behind the `RuntimeHealthProbe` interface: the product layer sees only the delay test, the chains of active connections, the current group `now`, and network presence. The implementation lives in the app layer on top of `clashCore` and `connectivity_plus`. Without an injected probe the automatic watchdog is idle, but staging, stop, and manual wake remain safe. The `always` mode doesn't use this path and keeps the previous startup transaction.
 
 The integration updates together with the app's Dart part and doesn't change the Android bridge; the live rollback is `activation: always`, and a version rollback needs no state migration.
 
-### 🛡 byedpi
-
-- **Type:** `byedpi`
-- **`manual` mode:** takes an `args` string
-- **`auto` mode:** cycles through ByeByeDPI strategies and caches the working one
-- Without `mode`, the presence of `args` picks manual, and their absence picks automatic
-- `strategy-list` in auto mode defaults to `byebyeedpi`; without `strategy-test.urls` the built-in YouTube test endpoint is used
-- `{sni}` substitution is supported
-- UDP is enabled by default and passed to the local `mihomo` node; `udp: false` disables it, and the ByeDPI process itself gets no separate UDP parameter
-
-
-### 🌪 stormdns
+### 🌩 stormdns
 
 - **Type:** `stormdns`
 - **Required fields:** `name`, `type`, `domains`, `encryption`, `encryption-key`
-- A last-resort fallback: TCP hides inside DNS queries and gets through where the other nodes cannot
 - The required fields have no defaults: StormDNS performs no protocol negotiation, so the values must match the server
 - UDP is not supported; the resulting local `mihomo` node gets `udp: false`
 - The local SOCKS5 port is allocated from the range starting at 36200
-- `activation: auto` by default — the node sleeps and stays out of the Android process plan (the same mechanism OlcRTC uses)
 - The `messenger` / `balanced` / `bulk` presets set duplication and compression; the layering order is **StormDNS defaults → preset → explicit fields**
 - Schema ranges are taken from StormDNS `finalizeClientConfig`: anything upstream would silently clamp is rejected before launch, including linked bounds (`upload-setup` ≥ `upload`, `download-setup` ≥ `download`, max MTU ≥ min, `nack-max-gap` ≤ `window/4`, RTO and ping interval ordering)
 - Sources are pinned to commit `87348df5b11f9e490262a713ca268734007af44f`
@@ -110,6 +97,17 @@ The integration updates together with the app's Dart part and doesn't change the
 **Multi-artifact transactions.** `LocalNodeController` serves several files per node through stage → rollback → commit. The revision of single-file nodes stayed byte-for-byte identical, so NaiveProxy, OlcRTC, and ByeDPI behaviour is unchanged. The working cache is keyed by a fingerprint of the final resolver list, `domains`, and the StormDNS version; the old directory is removed only **after** a successful commit, and a rollback restores the previous plan's state.
 
 **A deliberate deviation from upstream.** StormDNS `usableHostCount` returns 2 for an IPv4 `/1` and then iterates 2³¹ addresses. FlClashM computes the actual expansion size and caps it at the documented 65536 limit — otherwise such a profile would hang the app.
+
+### 🛡 byedpi
+
+- **Type:** `byedpi`
+- **`manual` mode:** takes an `args` string
+- **`auto` mode:** cycles through ByeByeDPI strategies and caches the working one
+- Without `mode`, the presence of `args` picks manual, and their absence picks automatic
+- `strategy-list` in auto mode defaults to `byebyeedpi`; without `strategy-test.urls` the built-in YouTube test endpoint is used
+- `{sni}` substitution is supported
+- UDP is enabled by default and passed to the local `mihomo` node; `udp: false` disables it, and the ByeDPI process itself gets no separate UDP parameter
+
 
 ---
 

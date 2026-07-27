@@ -40,8 +40,8 @@
 
 - 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** —— 通过数据包操纵绕过 DPI，访问被「从内部」封锁的资源（如 YouTube、Discord）。
 - 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** —— 把流量伪装成允许服务（如 Yandex Telemost）的 WebRTC 通话，绕过白名单。
+- 🌩 **[StormDNS](https://github.com/nullroute1970/StormDNS)** —— 把流量伪装成发往允许解析器的普通 DNS 查询，绕过白名单。
 - 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** —— 把流量伪装成 Chrome 浏览器流量，绕过黑名单。
-- 🌪 **[StormDNS](https://github.com/nullroute1970/StormDNS)** —— 最后的兜底手段：把 TCP 藏进 DNS 查询，在其他手段全部失效时仍能通行。
 
 每种技术各有所长，却没有一个地方能把它们统一起来。我希望在一个地方配置好一切，然后只按一下「连接」。
 
@@ -89,6 +89,20 @@ proxies:
 </td></tr>
 <tr><td>
 
+🌩 **StormDNS** —— 藏在普通 DNS 查询里的隧道。
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
+```
+
+</td></tr>
+<tr><td>
+
 🎭 **NaiveProxy** —— 伪装成 Chrome 流量。
 
 ```yaml
@@ -99,22 +113,6 @@ proxies:
     port: 443
     username: user
     password: pass
-```
-
-</td></tr>
-<tr><td>
-
-🌪 **StormDNS** —— 把 TCP 藏进 DNS 查询，需要时才唤醒。
-
-```yaml
-proxies:
-  - name: "storm"
-    type: stormdns
-    domains: ["v.example.com"]
-    encryption: chacha20
-    encryption-key: "<key>"
-    preset: messenger
-    activation: auto
 ```
 
 </td></tr>
@@ -175,7 +173,7 @@ tun:
 完整参考请见 **[文档中心](docs/README.md)**。
 
 **🚀 面向用户**
-- 🧩 [内置节点](docs/user-guide/profiles.md) —— ByeDPI、OlcRTC、NaiveProxy、StormDNS
+- 🧩 [内置节点](docs/user-guide/profiles.md) —— ByeDPI、OlcRTC、StormDNS、NaiveProxy
 - 🎯 [分流](docs/user-guide/split-tunneling.md) —— 通过配置管理
 - 🎨 [提供商提示](docs/user-guide/provider-hints.md) —— 外观与行为
 
@@ -227,7 +225,7 @@ flutter build apk --debug
 
 FlClashM 构建于 [FlClashX](https://github.com/pluralplay/FlClashX) 之上 —— 一款出色的 Clash/Mihomo 跨平台客户端。非常感谢作者们的工作与开源代码，没有它们本项目无从谈起。
 
-特别感谢 [ByeDPI](https://github.com/hufrea/byedpi)、[OlcRTC](https://github.com/openlibrecommunity/olcrtc) 、[NaiveProxy](https://github.com/klzgrad/naiveproxy) 和 [StormDNS](https://github.com/nullroute1970/StormDNS) 的作者 —— 没有他们的工具，翻墙将无从实现。
+特别感谢 [ByeDPI](https://github.com/hufrea/byedpi)、[OlcRTC](https://github.com/openlibrecommunity/olcrtc)、[StormDNS](https://github.com/nullroute1970/StormDNS) 和 [NaiveProxy](https://github.com/klzgrad/naiveproxy) 的作者 —— 没有他们的工具，翻墙将无从实现。
 
 ---
 
