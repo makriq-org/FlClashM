@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flclashx/product/runtime/byedpi_release.dart';
 import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
+import 'package:flclashx/product/runtime/stormdns_release.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -23,12 +24,14 @@ void main() {
     expect(naiveProxyReleaseAssets.keys, expectedAbis);
     expect(byedpiReleaseAssets.keys, expectedAbis);
     expect(olcRtcReleaseAssets.keys, expectedAbis);
+    expect(stormDnsReleaseAssets.keys, expectedAbis);
 
     final setupSource = File('setup.dart').readAsStringSync();
     for (final releaseMapName in const [
       'naiveProxyReleaseAssets',
       'byedpiReleaseAssets',
       'olcRtcReleaseAssets',
+      'stormDnsReleaseAssets',
     ]) {
       expect(
         setupSource,
@@ -68,6 +71,13 @@ void main() {
           source: asset.bundledAssetPath,
           target: olcRtcAndroidNativeLibraryFileName,
           targetReference: 'olcRtcAndroidNativeLibraryFileName',
+        ),
+      for (final asset in stormDnsReleaseAssets.values)
+        (
+          abi: asset.abi,
+          source: asset.bundledAssetPath,
+          target: stormDnsAndroidNativeLibraryFileName,
+          targetReference: 'stormDnsAndroidNativeLibraryFileName',
         ),
     ];
 
