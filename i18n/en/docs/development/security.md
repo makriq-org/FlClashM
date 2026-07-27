@@ -18,7 +18,8 @@ The fork's key invariant: **appearance and provider hints cannot weaken runtime 
 - 📞 `olcrtc` works only in CNC mode.
 - 🧱 In `olcrtc profiles[]`, `socks.host`, `socks.port`, and `crypto.key_file` are recursively forbidden; the rest is passed to OlcRTC transparently.
 - 🛡 `byedpi` only checks the specified URLs.
-- 🌩 For `stormdns`, the fields the app owns are forbidden: the listener (`listen`, `listen-ip`, `listen-port`, `server`, `port`, `protocol`), SOCKS5 authentication, the whole `local-dns-*` block, the log directory and file name, `config-version`, and `startup.mode: ask`.
+- 🌩 `stormdns` additionally rejects SOCKS5 authentication, the `local-dns-*` block, the log directory, `config-version`, and the interactive `startup.mode: ask`.
+- ⚠️ `stormdns` allows `encryption: none` and `xor` per the upstream contract — they do not hide payload contents from the resolver operator.
 
 ## 🌩 StormDNS resolver list
 
@@ -29,7 +30,6 @@ The fork's key invariant: **appearance and provider hints cannot weaken runtime 
 - 💾 The remote-list cache is kept per link. When a source is unreachable, the last copy is used — even after `refresh` expires; without a copy the link is simply skipped instead of failing the profile apply.
 - 🧮 CIDR expansion is capped at 65536 addresses: on wide ranges upstream iterates all of them, which would hang the app.
 - 🔁 The final list is deduplicated by IP — the first occurrence wins, along with its port.
-- ⚠️ The `encryption: none` and `xor` modes are allowed because they are part of the upstream contract and do occur on servers. They **do not hide payload contents from the resolver operator**; the app does not flag them, and this is stated in the [built-in nodes guide](../user-guide/profiles.md).
 
 ## 🌐 Connectivity-check addresses
 

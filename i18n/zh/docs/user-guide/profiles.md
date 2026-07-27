@@ -150,46 +150,6 @@ proxy-groups:
 | `net.transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |
 | `net.dns` | 必填 DNS 服务器，格式 `地址:端口` |
 
-### 😴 激活（休眠备用）
-
-默认情况下 OlcRTC 与 StormDNS 作为**备用节点**：配置提前就绪，但进程处于休眠，直到主分组开始失败或用户手动选择该节点。
-
-```yaml
-activation: auto
-# activation: always  # 旧模式：与 VPN 一同启动
-```
-
-完整形式可控制唤醒与休眠：
-
-```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30
-    failures: 2
-    retry-after: 300
-  sleep:
-    idle: 900
-```
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `mode` | `auto` | `auto` 让备用节点休眠；`always` 为旧的常驻启动 |
-| `wake.urls` | `connectivity-check` 链 | 用于探测被观察分组的公网 HTTP(S) 地址 |
-| `wake.interval` | `30` | 休眠期间的探测间隔（秒） |
-| `wake.failures` | `2` | 唤醒前连续失败的轮数 |
-| `wake.retry-after` | `300` | 启动失败后的暂停（秒） |
-| `sleep.idle` | `900` | 无连接与无选择直至休眠的时长；`0` 表示 VPN 重启前不休眠 |
-
-**关于 `auto` 需要知道的：**
-- 节点必须直接属于至少一个 proxy group。
-- 检查地址须能从 `wake.urls`、节点的 `connectivity-check`、最近的分组或应用的全局测试 URL 解析出来。
-- 唤醒后客户端会立即检查该节点本身。若没有任何包含分组选中它，且在 `sleep.idle` 内没有活动连接 —— 进程重新休眠。
-- **手动选择会立即唤醒节点。**
-
-> ℹ️ 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
-
 > 💡 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。可选的 `vp8.fps` 和 `vp8.batch_size` 默认为 `30` 和 `64`。
 
 若设置了 `profiles`，顶层公共字段会被每个备用 profile 继承，FlClashM 会在启动前校验每个 profile 的最终配置。本地地址、SOCKS5 端口、CNC 模式和数据目录由客户端分配 —— 不能在配置里覆盖。
@@ -202,9 +162,7 @@ activation:
 
 **类型：** `stormdns` · 不支持 UDP（只能 `udp: false`）
 
-StormDNS 把 TCP 封装进发往允许解析器的普通 DNS 查询 —— 于是连接得以穿过白名单。目标与 OlcRTC 相同，但载体不同：适用于只放行 DNS 的场景。它比其他节点**明显更慢**。
-
-休眠备用的配置方式与 OlcRTC 完全一致 —— 参见上面的「激活（休眠备用）」一节。
+StormDNS 把 TCP 封装进发往允许解析器的普通 DNS 查询 —— 于是连接得以穿过白名单。目标与 OlcRTC 相同，载体不同：适用于只放行 DNS 的网络。该节点比其他节点**明显更慢**。
 
 ```yaml
 proxies:
@@ -298,6 +256,48 @@ compression:
 ### 系统 DNS
 
 当 `resolvers` 含有 `system`（或未设置）时，该节点依赖物理网络的 DNS。DNS 变化时，平台会自行重写 resolver 文件、重置工作缓存，并**仅**重启处于活动状态的依赖节点 —— 包括界面未运行的冷启动场景。无需额外的 bypass：应用自身的包已被排除在 VPN 路由之外。
+
+---
+
+## 😴 激活：休眠备用（OlcRTC 与 StormDNS）
+
+默认情况下 OlcRTC 与 StormDNS 作为**备用节点**：配置提前就绪，但进程处于休眠，直到主分组开始失败或用户手动选择该节点。
+
+```yaml
+activation: auto
+# activation: always  # 旧模式：与 VPN 一同启动
+```
+
+完整形式可控制唤醒与休眠：
+
+```yaml
+activation:
+  mode: auto
+  wake:
+    urls: ["https://example.org/generate_204"]
+    interval: 30
+    failures: 2
+    retry-after: 300
+  sleep:
+    idle: 900
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `mode` | `auto` | `auto` 让备用节点休眠；`always` 为旧的常驻启动 |
+| `wake.urls` | `connectivity-check` 链 | 用于探测被观察分组的公网 HTTP(S) 地址 |
+| `wake.interval` | `30` | 休眠期间的探测间隔（秒） |
+| `wake.failures` | `2` | 唤醒前连续失败的轮数 |
+| `wake.retry-after` | `300` | 启动失败后的暂停（秒） |
+| `sleep.idle` | `900` | 无连接与无选择直至休眠的时长；`0` 表示 VPN 重启前不休眠 |
+
+**关于 `auto` 需要知道的：**
+- 节点必须直接属于至少一个 proxy group。
+- 检查地址须能从 `wake.urls`、节点的 `connectivity-check`、最近的分组或应用的全局测试 URL 解析出来。
+- 唤醒后客户端会立即检查该节点本身。若没有任何包含分组选中它，且在 `sleep.idle` 内没有活动连接 —— 进程重新休眠。
+- **手动选择会立即唤醒节点。**
+
+> ℹ️ 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
 
 ---
 

@@ -66,12 +66,6 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 </details>
 
-**`auto` 激活。** 该机制由带 `supportsActivation` 的节点共用 —— 即 OlcRTC 与 StormDNS。supervisor 提前暂存这类节点的产物，但不把休眠节点纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含该节点的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
-
-对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
-
-集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
-
 ### 🌩 stormdns
 
 - **类型：** `stormdns`
@@ -97,6 +91,14 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 **多产物事务。** `LocalNodeController` 通过 stage → rollback → commit 为单个节点管理多个文件。单文件节点的修订逻辑逐字节保持不变，因此 NaiveProxy、OlcRTC 与 ByeDPI 的行为没有变化。工作缓存以最终解析器列表、`domains` 与 StormDNS 版本的 fingerprint 为键；旧目录只在 commit 成功**之后**才删除，回滚会恢复上一份计划的状态。
 
 **有意偏离上游之处。** StormDNS 的 `usableHostCount` 对 IPv4 `/1` 返回 2，随后却遍历 2³¹ 个地址。FlClashM 计算实际展开规模，并按文档中的 65536 上限截断 —— 否则这样的配置会让应用卡死。
+
+### 😴 `auto` 激活（olcrtc 与 stormdns）
+
+supervisor 提前暂存休眠节点的产物，但不把它纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含该节点的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
+
+对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
+
+集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
 
 ### 🛡 byedpi
 

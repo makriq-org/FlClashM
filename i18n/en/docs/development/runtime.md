@@ -66,12 +66,6 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 
 </details>
 
-**`auto` activation.** The mechanism is shared by the nodes with `supportsActivation` — OlcRTC and StormDNS. The supervisor stages such a node's artifacts in advance but doesn't include the sleeping node in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without it and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
-
-Access to `mihomo` and network state is isolated behind the `RuntimeHealthProbe` interface: the product layer sees only the delay test, the chains of active connections, the current group `now`, and network presence. The implementation lives in the app layer on top of `clashCore` and `connectivity_plus`. Without an injected probe the automatic watchdog is idle, but staging, stop, and manual wake remain safe. The `always` mode doesn't use this path and keeps the previous startup transaction.
-
-The integration updates together with the app's Dart part and doesn't change the Android bridge; the live rollback is `activation: always`, and a version rollback needs no state migration.
-
 ### 🌩 stormdns
 
 - **Type:** `stormdns`
@@ -97,6 +91,14 @@ The integration updates together with the app's Dart part and doesn't change the
 **Multi-artifact transactions.** `LocalNodeController` serves several files per node through stage → rollback → commit. The revision of single-file nodes stayed byte-for-byte identical, so NaiveProxy, OlcRTC, and ByeDPI behaviour is unchanged. The working cache is keyed by a fingerprint of the final resolver list, `domains`, and the StormDNS version; the old directory is removed only **after** a successful commit, and a rollback restores the previous plan's state.
 
 **A deliberate deviation from upstream.** StormDNS `usableHostCount` returns 2 for an IPv4 `/1` and then iterates 2³¹ addresses. FlClashM computes the actual expansion size and caps it at the documented 65536 limit — otherwise such a profile would hang the app.
+
+### 😴 `auto` activation (olcrtc and stormdns)
+
+The supervisor stages a sleeping node's artifacts in advance but doesn't include it in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without it and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
+
+Access to `mihomo` and network state is isolated behind the `RuntimeHealthProbe` interface: the product layer sees only the delay test, the chains of active connections, the current group `now`, and network presence. The implementation lives in the app layer on top of `clashCore` and `connectivity_plus`. Without an injected probe the automatic watchdog is idle, but staging, stop, and manual wake remain safe. The `always` mode doesn't use this path and keeps the previous startup transaction.
+
+The integration updates together with the app's Dart part and doesn't change the Android bridge; the live rollback is `activation: always`, and a version rollback needs no state migration.
 
 ### 🛡 byedpi
 

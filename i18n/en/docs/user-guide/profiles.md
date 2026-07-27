@@ -150,46 +150,6 @@ proxy-groups:
 | `net.transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
 | `net.dns` | Mandatory DNS server as `address:port` |
 
-### 😴 Activation (sleeping reserve)
-
-By default OlcRTC and StormDNS act as **fallback nodes**: the configuration is prepared in advance, but the process sleeps until the primary group starts failing or the user selects the node manually.
-
-```yaml
-activation: auto
-# activation: always  # legacy mode: start together with the VPN
-```
-
-The full form gives control over waking and sleeping:
-
-```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30
-    failures: 2
-    retry-after: 300
-  sleep:
-    idle: 900
-```
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `mode` | `auto` | `auto` puts the reserve to sleep; `always` — the legacy always-on startup |
-| `wake.urls` | `connectivity-check` chain | Public HTTP(S) addresses to probe the watched group |
-| `wake.interval` | `30` | Probe interval while sleeping, seconds |
-| `wake.failures` | `2` | Consecutive failed rounds before waking |
-| `wake.retry-after` | `300` | Pause after a failed start, seconds |
-| `sleep.idle` | `900` | Time without connections and selection before sleep; `0` — never sleep until VPN restart |
-
-**What matters about `auto`:**
-- The node must directly belong to at least one proxy group.
-- Check addresses must resolve from `wake.urls`, the node's `connectivity-check`, the nearest group, or the app's global test URL.
-- After waking, the client immediately checks the node itself. If no containing group selected it and there are no active connections for `sleep.idle` — the process goes back to sleep.
-- **Manual selection wakes the node immediately.**
-
-> ℹ️ `auto` is now used **even without an `activation` field**. To fully restore the previous behavior, set `activation: always` explicitly.
-
 > 💡 For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. The optional `vp8.fps` and `vp8.batch_size` default to `30` and `64`.
 
 If `profiles` are set, the top-level common fields are inherited by each fallback profile, and FlClashM validates the resulting configuration of each before startup. The local address, SOCKS5 port, CNC mode, and data directory are assigned by the client — they can't be overridden in the profile.
@@ -202,9 +162,7 @@ If `profiles` are set, the top-level common fields are inherited by each fallbac
 
 **Type:** `stormdns` · UDP is not supported (only `udp: false` is valid)
 
-StormDNS wraps TCP into ordinary DNS queries to an allowed resolver — so the connection slips through whitelists. Same goal as OlcRTC, but over a different carrier: where only DNS is let through. It is **noticeably slower** than the other nodes.
-
-The sleeping reserve is configured exactly as for OlcRTC — see the “Activation (sleeping reserve)” section above.
+StormDNS wraps TCP into ordinary DNS queries to an allowed resolver — so the connection slips through whitelists. The goal is the same as OlcRTC's, but the carrier differs: a network that lets only DNS through. The node is **noticeably slower** than the others.
 
 ```yaml
 proxies:
@@ -298,6 +256,48 @@ The log directory, resolver file, local port, and SOCKS5 listener are owned by t
 ### System DNS
 
 When `resolvers` contains `system` (or is absent), the node depends on the DNS of the physical network. When those change, the platform rewrites the resolver file, resets the working cache, and restarts **only** the active dependent nodes — including at cold start with no UI running. No separate bypass is needed: the app package is already excluded from VPN routing.
+
+---
+
+## 😴 Activation: the sleeping reserve (OlcRTC and StormDNS)
+
+By default OlcRTC and StormDNS act as **fallback nodes**: the configuration is prepared in advance, but the process sleeps until the primary group starts failing or the user selects the node manually.
+
+```yaml
+activation: auto
+# activation: always  # legacy mode: start together with the VPN
+```
+
+The full form gives control over waking and sleeping:
+
+```yaml
+activation:
+  mode: auto
+  wake:
+    urls: ["https://example.org/generate_204"]
+    interval: 30
+    failures: 2
+    retry-after: 300
+  sleep:
+    idle: 900
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `mode` | `auto` | `auto` puts the reserve to sleep; `always` — the legacy always-on startup |
+| `wake.urls` | `connectivity-check` chain | Public HTTP(S) addresses to probe the watched group |
+| `wake.interval` | `30` | Probe interval while sleeping, seconds |
+| `wake.failures` | `2` | Consecutive failed rounds before waking |
+| `wake.retry-after` | `300` | Pause after a failed start, seconds |
+| `sleep.idle` | `900` | Time without connections and selection before sleep; `0` — never sleep until VPN restart |
+
+**What matters about `auto`:**
+- The node must directly belong to at least one proxy group.
+- Check addresses must resolve from `wake.urls`, the node's `connectivity-check`, the nearest group, or the app's global test URL.
+- After waking, the client immediately checks the node itself. If no containing group selected it and there are no active connections for `sleep.idle` — the process goes back to sleep.
+- **Manual selection wakes the node immediately.**
+
+> ℹ️ `auto` is now used **even without an `activation` field**. To fully restore the previous behavior, set `activation: always` explicitly.
 
 ---
 
