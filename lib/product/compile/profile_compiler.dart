@@ -229,11 +229,16 @@ class ProfileCompiler {
     for (final entry in requested.entries) {
       byRefresh.putIfAbsent(entry.value, () => <Uri>[]).add(entry.key);
     }
-    final resolved = <Uri, StormDnsRemoteResolverList>{};
-    for (final group in byRefresh.entries) {
-      resolved.addAll(await store.resolve(group.value, refresh: group.key));
-    }
-    return resolved;
+    // The groups are resolved together, not one after another: they exist only
+    // because the refresh windows differ, and running them in sequence would
+    // add up their download budgets while the user waits for the profile.
+    final groups = await Future.wait(
+      byRefresh.entries
+          .map((group) => store.resolve(group.value, refresh: group.key)),
+    );
+    return <Uri, StormDnsRemoteResolverList>{
+      for (final group in groups) ...group,
+    };
   }
 
   Future<ResolvedProfileSplitTunneling> _resolveProfileSplitTunnelingOverride({

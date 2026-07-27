@@ -23,9 +23,16 @@ const stormDnsSystemDnsReservedHosts = 16;
 
 const stormDnsDefaultResolverPort = 53;
 
-/// Response cap and timeout for remote resolver lists.
+/// Response cap and per-stage timeout for one remote resolver list.
 const stormDnsRemoteListMaxBytes = 1024 * 1024;
 const stormDnsRemoteListTimeout = Duration(seconds: 15);
+
+/// Budget for fetching *every* remote resolver list of one profile apply.
+///
+/// The lists are fetched while the user waits for the profile to be applied,
+/// so the cost has to be bounded by the batch rather than by the address: a
+/// per-address timeout turns three unreachable lists into three times the wait.
+const stormDnsRemoteListBatchTimeout = Duration(seconds: 20);
 
 @immutable
 class StormDnsResolverEntry {
@@ -512,6 +519,15 @@ class StormDnsRemoteResolverList {
   final DateTime fetchedAt;
 }
 
+/// Fetches the body of one remote resolver list.
+///
+/// [timeout] is what is left of the whole-batch budget: an implementation must
+/// treat it as a hard ceiling for every stage it performs, not per stage.
+typedef StormDnsResolverListDownloader = Future<String?> Function(
+  Uri url, {
+  required Duration timeout,
+});
+
 abstract interface class StormDnsRemoteResolverListStore {
   /// Resolves every [urls] entry, honouring [refresh].
   ///
@@ -530,15 +546,20 @@ class DefaultStormDnsRemoteResolverListStore
   DefaultStormDnsRemoteResolverListStore({
     required this.cacheDirectoryPath,
     this.parser = const StormDnsResolverSourceParser(),
-    Future<String?> Function(Uri url)? download,
+    StormDnsResolverListDownloader? download,
     DateTime Function()? now,
+    this.batchTimeout = stormDnsRemoteListBatchTimeout,
   })  : download = download ?? _downloadResolverList,
         now = now ?? DateTime.now;
 
   final String cacheDirectoryPath;
   final StormDnsResolverSourceParser parser;
-  final Future<String?> Function(Uri url) download;
+  final StormDnsResolverListDownloader download;
   final DateTime Function() now;
+
+  /// Whole-batch budget. Overridable so tests can exercise the deadline
+  /// without waiting for the production value.
+  final Duration batchTimeout;
 
   @override
   Future<Map<Uri, StormDnsRemoteResolverList>> resolve(
@@ -546,30 +567,60 @@ class DefaultStormDnsRemoteResolverListStore
     required Duration refresh,
   }) async {
     final result = <Uri, StormDnsRemoteResolverList>{};
+    // Cached copy of every address that still has to be fetched, in first-seen
+    // order. Building it first keeps the de-duplication and the per-address
+    // cache exactly as they were before the fetches were parallelised.
+    final stale = <Uri, StormDnsRemoteResolverList?>{};
     for (final url in urls) {
-      if (result.containsKey(url)) continue;
+      if (result.containsKey(url) || stale.containsKey(url)) continue;
       final cached = await _readCache(url);
       final isFresh =
           cached != null && now().difference(cached.fetchedAt) < refresh;
       if (isFresh) {
         result[url] = cached;
-        continue;
+      } else {
+        stale[url] = cached;
       }
+    }
+    if (stale.isEmpty) return result;
 
-      String? body;
-      try {
-        body = await download(url);
-      } catch (_) {
-        body = null;
-      }
+    // One deadline for the whole batch, and the downloads run in parallel, so
+    // the profile waits for the slowest address instead of for their sum. Each
+    // download is handed the remaining budget so it can cut a slow DNS lookup
+    // or a slow response body itself, and is additionally raced against that
+    // budget in case it does not.
+    final elapsed = Stopwatch()..start();
+    Duration remaining() {
+      final left = batchTimeout - elapsed.elapsed;
+      return left.isNegative ? Duration.zero : left;
+    }
+
+    final pending = stale.keys.toList(growable: false);
+    final bodies = await Future.wait(
+      pending.map((url) async {
+        final budget = remaining();
+        if (budget == Duration.zero) return null;
+        try {
+          return await download(url, timeout: budget).timeout(budget);
+        } catch (_) {
+          return null;
+        }
+      }),
+      // A single failure must not discard the lists that did arrive.
+      eagerError: false,
+    );
+
+    for (var index = 0; index < pending.length; index++) {
+      final url = pending[index];
+      final body = bodies[index];
       if (body == null) {
         // Unreachable list: keep serving the last stored copy even when stale.
+        final cached = stale[url];
         if (cached != null) result[url] = cached;
         continue;
       }
-      final entries = parseResolverListBody(body, parser: parser);
       final fetched = StormDnsRemoteResolverList(
-        entries: entries,
+        entries: parseResolverListBody(body, parser: parser),
         fetchedAt: now(),
       );
       await _writeCache(url, body, fetched.fetchedAt);
@@ -638,15 +689,30 @@ List<StormDnsResolverEntry> parseResolverListBody(
   return entries;
 }
 
-Future<String?> _downloadResolverList(Uri url) async {
+Future<String?> _downloadResolverList(
+  Uri url, {
+  required Duration timeout,
+}) async {
+  final elapsed = Stopwatch()..start();
+  // Every stage — DNS lookup, connect, TLS, response headers, response body —
+  // is clamped to what is left of [timeout]. Giving each stage its own full
+  // timeout is what made a single unreachable address cost several times the
+  // nominal one.
+  Duration remaining() {
+    final left = timeout - elapsed.elapsed;
+    if (left.isNegative) return Duration.zero;
+    return left < stormDnsRemoteListTimeout ? left : stormDnsRemoteListTimeout;
+  }
+
   final client = HttpClient()
-    ..connectionTimeout = stormDnsRemoteListTimeout
+    ..connectionTimeout = remaining()
     ..findProxy = ((_) => 'DIRECT')
-    ..connectionFactory = _connectPublicResolverListSocket;
+    ..connectionFactory = (uri, proxyHost, proxyPort) =>
+        _connectPublicResolverListSocket(uri, proxyHost, proxyPort, remaining);
   try {
-    final request = await client.getUrl(url).timeout(stormDnsRemoteListTimeout);
+    final request = await client.getUrl(url).timeout(remaining());
     request.followRedirects = false;
-    final response = await request.close().timeout(stormDnsRemoteListTimeout);
+    final response = await request.close().timeout(remaining());
     if (response.statusCode != HttpStatus.ok) {
       // Redirects are not followed: a redirect target is not what the profile
       // author reviewed, and it can point back at the local network.
@@ -655,9 +721,13 @@ Future<String?> _downloadResolverList(Uri url) async {
     if (response.contentLength > stormDnsRemoteListMaxBytes) return null;
 
     final buffer = <int>[];
-    await for (final chunk in response.timeout(stormDnsRemoteListTimeout)) {
+    // `Stream.timeout` only bounds the gap between chunks, so the total body
+    // time is checked here as well: a trickle of bytes must not outlive the
+    // batch budget.
+    await for (final chunk in response.timeout(remaining())) {
       buffer.addAll(chunk);
       if (buffer.length > stormDnsRemoteListMaxBytes) return null;
+      if (remaining() == Duration.zero) return null;
     }
     return utf8.decode(buffer, allowMalformed: true);
   } catch (_) {
@@ -671,6 +741,7 @@ Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
   Uri url,
   String? proxyHost,
   int? proxyPort,
+  Duration Function() remaining,
 ) async {
   if (proxyHost != null || proxyPort != null) {
     throw const SocketException(
@@ -682,8 +753,8 @@ Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
   ConnectionTask<Socket>? currentTask;
   Socket? connectedSocket;
   final socket = () async {
-    final addresses = await InternetAddress.lookup(url.host)
-        .timeout(stormDnsRemoteListTimeout);
+    final addresses =
+        await InternetAddress.lookup(url.host).timeout(remaining());
     final publicAddresses = addresses
         .where((address) => !isPrivateResolverListAddress(address))
         .toList(growable: false);
@@ -700,8 +771,7 @@ Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
       }
       try {
         currentTask = await Socket.startConnect(address, url.port);
-        final candidate =
-            await currentTask!.socket.timeout(stormDnsRemoteListTimeout);
+        final candidate = await currentTask!.socket.timeout(remaining());
         connectedSocket = candidate;
         if (cancelled) {
           candidate.destroy();
@@ -713,7 +783,7 @@ Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
           candidate,
           host: url.host,
           supportedProtocols: const ['http/1.1'],
-        ).timeout(stormDnsRemoteListTimeout);
+        ).timeout(remaining());
         connectedSocket = secure;
         return secure;
       } catch (error) {

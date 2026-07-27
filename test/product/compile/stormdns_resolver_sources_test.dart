@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flclashx/product/compile/stormdns_resolver_sources.dart';
@@ -213,7 +214,7 @@ void main() {
         () async {
       final store = DefaultStormDnsRemoteResolverListStore(
         cacheDirectoryPath: tempDir.path,
-        download: (_) async => null,
+        download: (_, {required timeout}) async => null,
       );
       final result = await store.resolve(
         [Uri.parse('https://example.com/r.txt')],
@@ -229,7 +230,7 @@ void main() {
       var now = DateTime(2026, 1, 1);
       final store = DefaultStormDnsRemoteResolverListStore(
         cacheDirectoryPath: tempDir.path,
-        download: (_) async {
+        download: (_, {required timeout}) async {
           downloads++;
           return '8.8.8.8\n';
         },
@@ -253,7 +254,7 @@ void main() {
       var failing = false;
       final store = DefaultStormDnsRemoteResolverListStore(
         cacheDirectoryPath: tempDir.path,
-        download: (_) async => failing ? null : body,
+        download: (_, {required timeout}) async => failing ? null : body,
         now: () => now,
       );
 
@@ -278,7 +279,8 @@ void main() {
       final second = Uri.parse('https://b.example.com/r.txt');
       final store = DefaultStormDnsRemoteResolverListStore(
         cacheDirectoryPath: tempDir.path,
-        download: (url) async => url == first ? '8.8.8.8\n' : '9.9.9.9\n',
+        download: (url, {required timeout}) async =>
+            url == first ? '8.8.8.8\n' : '9.9.9.9\n',
         now: () => DateTime(2026),
       );
 
@@ -294,6 +296,98 @@ void main() {
         '# comment\n\n8.8.8.8\nnonsense\n1.1.1.1:5353\n',
       );
       expect(entries.map((e) => e.line), ['8.8.8.8', '1.1.1.1:5353']);
+    });
+
+    test('lists are fetched in parallel, so delays do not add up', () async {
+      const delay = Duration(milliseconds: 300);
+      final urls = [
+        for (var index = 0; index < 4; index++)
+          Uri.parse('https://host$index.example.com/r.txt'),
+      ];
+      var concurrent = 0;
+      var peak = 0;
+      final store = DefaultStormDnsRemoteResolverListStore(
+        cacheDirectoryPath: tempDir.path,
+        now: () => DateTime(2026),
+        download: (url, {required timeout}) async {
+          concurrent += 1;
+          if (concurrent > peak) peak = concurrent;
+          await Future<void>.delayed(delay);
+          concurrent -= 1;
+          return '8.8.8.${urls.indexOf(url)}\n';
+        },
+      );
+
+      final elapsed = Stopwatch()..start();
+      final result =
+          await store.resolve(urls, refresh: const Duration(hours: 1));
+      elapsed.stop();
+
+      expect(result.length, urls.length);
+      expect(peak, urls.length, reason: 'every address is fetched at once');
+      expect(
+        elapsed.elapsed,
+        lessThan(delay * urls.length),
+        reason: 'four 300ms addresses must not cost 1200ms',
+      );
+    });
+
+    test('the whole batch shares one deadline', () async {
+      final url = Uri.parse('https://slow.example.com/r.txt');
+      final blocked = Completer<String?>();
+      final store = DefaultStormDnsRemoteResolverListStore(
+        cacheDirectoryPath: tempDir.path,
+        now: () => DateTime(2026),
+        batchTimeout: const Duration(milliseconds: 200),
+        download: (_, {required timeout}) => blocked.future,
+      );
+
+      final elapsed = Stopwatch()..start();
+      final result =
+          await store.resolve([url], refresh: const Duration(hours: 1));
+      elapsed.stop();
+
+      expect(result, isEmpty, reason: 'no cached copy to fall back to');
+      expect(elapsed.elapsed, lessThan(const Duration(seconds: 2)));
+      blocked.complete(null);
+    });
+
+    test('the deadline keeps the lists that did arrive', () async {
+      final fast = Uri.parse('https://fast.example.com/r.txt');
+      final slow = Uri.parse('https://slow.example.com/r.txt');
+      final cached = Uri.parse('https://cached.example.com/r.txt');
+      final blocked = Completer<String?>();
+      var stall = false;
+      final store = DefaultStormDnsRemoteResolverListStore(
+        cacheDirectoryPath: tempDir.path,
+        now: () => DateTime(2026),
+        batchTimeout: const Duration(milliseconds: 200),
+        download: (url, {required timeout}) async {
+          if (url == slow) return blocked.future;
+          if (url == cached) {
+            if (stall) return blocked.future;
+            return '7.7.7.7\n';
+          }
+          return '8.8.8.8\n';
+        },
+      );
+
+      // Seed a copy for `cached` so the fallback path is exercised too.
+      await store.resolve([cached], refresh: const Duration(hours: 1));
+      stall = true;
+
+      final result = await store.resolve(
+        [fast, slow, cached],
+        // Zero refresh forces every address to be re-fetched.
+        refresh: Duration.zero,
+      );
+
+      expect(result[fast]!.entries.single.ip, '8.8.8.8',
+          reason: 'a list that arrived before the deadline is kept');
+      expect(result[cached]!.entries.single.ip, '7.7.7.7',
+          reason: 'a stalled address still falls back to its stored copy');
+      expect(result.containsKey(slow), isFalse);
+      blocked.complete(null);
     });
   });
 
