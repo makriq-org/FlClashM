@@ -5,6 +5,7 @@ enum RuntimeId {
   olcrtc,
   naiveproxy,
   byedpi,
+  stormdns,
 }
 
 extension RuntimeIdLabel on RuntimeId {
@@ -13,6 +14,7 @@ extension RuntimeIdLabel on RuntimeId {
         RuntimeId.olcrtc => 'olcrtc',
         RuntimeId.naiveproxy => 'naiveproxy',
         RuntimeId.byedpi => 'byedpi',
+        RuntimeId.stormdns => 'stormdns',
       };
 }
 
