@@ -165,11 +165,116 @@ class RuntimeNodeResolverFileTest {
             File(root, spec.path).writeText("stale\n")
             File(root, spec.template).writeText("$placeholder\n")
 
+            // An empty system DNS list is reported apart from a broken
+            // declaration, but it is still a refusal: the old list must survive
+            // untouched either way.
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE,
+                RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
+            )
+            assertEquals("stale\n", File(root, spec.path).readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `missing system dns is reported apart from a broken declaration`() {
+        val root = Files.createTempDirectory("runtime-node-render-cause").toFile()
+        try {
+            val spec = RuntimeNodeResolverFile(
+                template = "client_resolvers.template",
+                path = "client_resolvers.txt",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+            )
+
+            // No template at all: a declaration problem, not a network one.
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.FAILED,
+                RuntimeNodeResolverFileWriter.render(root, spec, listOf("8.8.8.8")),
+            )
+
+            // A template that escapes the working directory is also a
+            // declaration problem, whatever the system DNS looks like.
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.FAILED,
+                RuntimeNodeResolverFileWriter.render(
+                    root,
+                    spec.copy(template = "../escape.template"),
+                    emptyList(),
+                ),
+            )
+
+            File(root, spec.template).writeText("$placeholder\n")
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE,
+                RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
+            )
+
+            // A template that yields nothing *without* asking for system DNS is
+            // a broken declaration, not an unavailable network.
+            File(root, spec.template).writeText("# only a comment\n")
             assertEquals(
                 RuntimeNodeResolverFileRenderResult.FAILED,
                 RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
             )
-            assertEquals("stale\n", File(root, spec.path).readText())
+
+            // The node still comes up when it declares resolvers of its own.
+            File(root, spec.template).writeText("$placeholder\n1.1.1.1\n")
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.CHANGED,
+                RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
+            )
+            assertEquals("1.1.1.1\n", File(root, spec.path).readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a system resolver carrying an ipv6 zone is dropped`() {
+        // Java hands back link-local addresses as `fe80::1%wlan0`. The zone is
+        // not part of the resolver-file contract on either side, and the bare
+        // address is unroutable, so the entry must not reach the file.
+        assertEquals(
+            listOf("8.8.8.8", "2001:db8::1"),
+            SystemDnsReader.sanitize(
+                listOf("8.8.8.8", "fe80::1%wlan0", "2001:db8::1", "fe80::abcd%rmnet0"),
+            ),
+        )
+        assertEquals(emptyList(), SystemDnsReader.sanitize(listOf("fe80::1%wlan0")))
+    }
+
+    @Test
+    fun `system dns entries are trimmed, de-duplicated and never blank`() {
+        assertEquals(
+            listOf("8.8.8.8", "1.1.1.1"),
+            SystemDnsReader.sanitize(listOf(" 8.8.8.8 ", "", "1.1.1.1", "8.8.8.8", "   ")),
+        )
+    }
+
+    @Test
+    fun `a zoned system resolver never reaches the rendered list`() {
+        val root = Files.createTempDirectory("runtime-node-zone").toFile()
+        try {
+            val spec = RuntimeNodeResolverFile(
+                template = "client_resolvers.template",
+                path = "client_resolvers.txt",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+            )
+            File(root, spec.template).writeText("$placeholder\n")
+
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.CHANGED,
+                RuntimeNodeResolverFileWriter.render(
+                    root,
+                    spec,
+                    SystemDnsReader.sanitize(listOf("fe80::1%wlan0", "8.8.8.8")),
+                ),
+            )
+            assertEquals("8.8.8.8\n", File(root, spec.path).readText())
         } finally {
             root.deleteRecursively()
         }

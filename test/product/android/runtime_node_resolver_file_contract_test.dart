@@ -123,12 +123,12 @@ void main() {
     expect(resolverFile, contains('deleteRecursively()'));
     expect(
       processManager,
-      contains('val wasRunning = readStartTime(spec.nodeId) > 0L'),
+      contains('readStartTime(spec.nodeId) > 0L'),
       reason: 'a sleeping reserve node must not be started by a DNS change',
     );
     expect(processManager, contains('if (!wasRunning) continue'));
     expect(processManager, contains('stop(spec.nodeId)'));
-    expect(processManager, contains('prepareNode(spec)'));
+    expect(processManager, contains('prepareNode('));
     expect(
       processManager,
       contains('lastStateJson = stateJson('),
@@ -136,7 +136,7 @@ void main() {
     );
     expect(
       processManager,
-      contains('if (normalized == lastAppliedSystemDns)'),
+      contains('if (normalized == lastAppliedSystemDns'),
       reason: 'a failed update must remain eligible for retry',
     );
     expect(
@@ -147,11 +147,135 @@ void main() {
     expect(networkObserve, contains('updateRuntimeNodeDns(dns)'));
   });
 
-  test('an unchanged resolver list does not restart the node', () {
+  test('a DNS change never makes a profile apply wait for a node restart', () {
+    // A DNS pass runs under the plan lock, so `applyPlan` can only be prompt if
+    // it preempts the pass first.
+    final cancelIndex = processManager.indexOf('cancelSystemDnsWork()');
+    final applyIndex = processManager.indexOf('applyPlanLocked(planJson)');
+    expect(cancelIndex, greaterThan(0));
+    expect(
+      applyIndex,
+      greaterThan(cancelIndex),
+      reason: 'the running DNS pass is cancelled before the lock is taken',
+    );
     expect(
       processManager,
-      contains('RuntimeNodeResolverFileRenderResult.UNCHANGED) continue'),
+      contains('systemDnsPassJobs.forEach { it.cancel() }'),
+      reason: 'cancel, never join: the pass may hold the lock we want',
     );
+    expect(
+      processManager,
+      isNot(contains('systemDnsPassJobs.forEach { it.cancelAndJoin() }')),
+    );
+    expect(
+      processManager,
+      contains('if (error is CancellationException) throw error'),
+      reason: 'a preempted restart must unwind, not be reported as a failure',
+    );
+    expect(
+      processManager,
+      contains('DNS_UPDATE_BUDGET_MILLIS'),
+      reason: 'no pass may hold the plan lock without a ceiling',
+    );
+    expect(
+      processManager,
+      contains('startupTimeoutMillis: Long = spec.connectivityCheck'),
+      reason: 'the restart budget is a parameter, not a mutated spec',
+    );
+  });
+
+  test('a failed DNS update retries without a new network callback', () {
+    expect(processManager, contains('private fun scheduleSystemDnsRetry('));
+    expect(processManager, contains('MAX_SYSTEM_DNS_RETRIES'));
+    expect(
+      processManager,
+      contains('pendingSystemDnsRestarts'),
+      reason: 'a later pass renders the same bytes, so the restart is tracked',
+    );
+    expect(
+      processManager,
+      contains('if (latestSystemDns != target) return@launch'),
+      reason: 'a retry for a superseded list must abandon itself',
+    );
+    expect(
+      processManager,
+      contains('if (!restartPending) continue'),
+      reason: 'an UNCHANGED render must not strand a node the retry owes',
+    );
+  });
+
+  test('one unrelated node does not fail the whole DNS update', () {
+    expect(
+      processManager,
+      contains('val failure = touched.values.firstOrNull { !it.ready }'),
+      reason: 'plan status follows the nodes this pass actually touched',
+    );
+    expect(
+      processManager,
+      isNot(contains('val failure = outcomes.firstOrNull { !it.ready }\n'
+          '        lastStateJson')),
+      reason: 'status must not be derived from every node in the plan',
+    );
+    expect(
+      processManager,
+      contains('touched[spec.nodeId] ?: untouchedOutcome(spec)'),
+      reason: 'an untouched failure stays visible instead of being masked',
+    );
+  });
+
+  test('an unusable resolver file says which of the two causes it was', () {
+    expect(
+      resolverFile,
+      contains('SYSTEM_DNS_UNAVAILABLE'),
+      reason: 'an auto-activated node wakes up exactly when DNS is missing',
+    );
+    expect(
+      resolverFile,
+      contains('wantsSystemDns && systemDns.isEmpty()'),
+    );
+    expect(
+      processManager,
+      contains('private fun resolverRenderFailureMessage('),
+    );
+    expect(
+      processManager,
+      contains('startFailures.remove(spec.nodeId)'),
+      reason: 'the reason must reach the plan state, not just the log',
+    );
+    expect(
+      processManager,
+      contains('private fun failStart('),
+    );
+  });
+
+  test('a system resolver with an IPv6 zone never reaches the file', () {
+    expect(resolverFile, contains('fun sanitize('));
+    expect(resolverFile, contains("!it.contains('%')"));
+    expect(
+      processManager,
+      contains('SystemDnsReader.sanitize(dnsServers)'),
+      reason: 'the platform callback path goes through the same filter',
+    );
+    expect(
+      resolverFile,
+      contains('sanitize(linkProperties.dnsServers.mapNotNull { it.hostAddress })'),
+      reason: 'the cold-start reader uses it too',
+    );
+  });
+
+  test('an unchanged resolver list does not restart the node', () {
+    // The only way past an UNCHANGED render is a restart a previous pass
+    // already owed for this node; a healthy node is skipped outright.
+    final unchangedIndex = processManager.indexOf(
+      'RuntimeNodeResolverFileRenderResult.UNCHANGED -> {',
+    );
+    final guardIndex = processManager.indexOf('if (!restartPending) continue');
+    final changedIndex = processManager.indexOf(
+      'RuntimeNodeResolverFileRenderResult.CHANGED -> Unit',
+    );
+    expect(unchangedIndex, greaterThan(0));
+    expect(guardIndex, greaterThan(unchangedIndex));
+    expect(changedIndex, greaterThan(guardIndex));
     expect(
       resolverFile,
       contains('RuntimeNodeResolverFileRenderResult.UNCHANGED'),

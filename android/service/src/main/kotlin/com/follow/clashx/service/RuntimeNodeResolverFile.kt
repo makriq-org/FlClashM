@@ -58,6 +58,17 @@ enum class RuntimeNodeResolverFileRenderResult {
     CHANGED,
     UNCHANGED,
     FAILED,
+
+    /**
+     * The node has nothing but the system-DNS marker to build its list from and
+     * the physical network is not advertising any resolvers.
+     *
+     * Kept apart from [FAILED] because it is not a defect in the declaration:
+     * a node with `activation: auto` wakes up precisely when connectivity is
+     * poor, so this is the ordinary case rather than a corner one, and the
+     * message the user sees has to say which of the two happened.
+     */
+    SYSTEM_DNS_UNAVAILABLE,
 }
 
 /**
@@ -104,10 +115,24 @@ object RuntimeNodeResolverFileWriter {
             ?: return RuntimeNodeResolverFileRenderResult.FAILED
         if (!template.isFile) return RuntimeNodeResolverFileRenderResult.FAILED
 
+        val templateText = runCatching { template.readText() }.getOrNull()
+            ?: return RuntimeNodeResolverFileRenderResult.FAILED
         val rendered = runCatching {
-            buildResolverList(template.readText(), systemDns)
+            buildResolverList(templateText, systemDns)
         }.getOrNull() ?: return RuntimeNodeResolverFileRenderResult.FAILED
-        if (rendered.isEmpty()) return RuntimeNodeResolverFileRenderResult.FAILED
+        if (rendered.isEmpty()) {
+            // An empty list has two very different causes. Report them apart so
+            // the caller can say "the network is not handing out DNS yet"
+            // instead of the generic "could not render the resolver file".
+            val wantsSystemDns = templateText.lineSequence().any {
+                it.trim() == RuntimeNodeResolverFile.SYSTEM_DNS_PLACEHOLDER
+            }
+            return if (wantsSystemDns && systemDns.isEmpty()) {
+                RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE
+            } else {
+                RuntimeNodeResolverFileRenderResult.FAILED
+            }
+        }
         val previous = if (target.exists()) runCatching { target.readText() }.getOrNull() else null
         if (previous == rendered) return RuntimeNodeResolverFileRenderResult.UNCHANGED
 
@@ -196,6 +221,24 @@ object RuntimeNodeResolverFileWriter {
  * rather than waiting to be told.
  */
 object SystemDnsReader {
+    /**
+     * Normalises a DNS list before it is staged into a resolver file.
+     *
+     * `InetAddress.getHostAddress()` returns a link-local IPv6 address with its
+     * zone attached (`fe80::1%wlan0`). Such an entry is dropped rather than
+     * stripped: the resolver-file contract is bare addresses on both sides —
+     * the Dart parser refuses `%` outright and the de-duplication key here
+     * assumes no zone — and a zone-less `fe80::` address is not routable, so
+     * keeping one would occupy a resolver slot and lengthen the MTU scan for an
+     * address that can never answer. When this empties the list, the render
+     * reports [RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE],
+     * which is a far more useful outcome than a resolver that never replies.
+     */
+    fun sanitize(servers: List<String>): List<String> = servers
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.contains('%') }
+        .distinct()
+
     fun read(): List<String> = runCatching {
         val manager = GlobalState.application
             .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -213,10 +256,7 @@ object SystemDnsReader {
                 return@mapNotNull null
             }
             val linkProperties = manager.getLinkProperties(network) ?: return@mapNotNull null
-            val servers = linkProperties.dnsServers
-                .mapNotNull { it.hostAddress }
-                .filter { it.isNotBlank() }
-                .distinct()
+            val servers = sanitize(linkProperties.dnsServers.mapNotNull { it.hostAddress })
             if (servers.isEmpty()) {
                 null
             } else {
