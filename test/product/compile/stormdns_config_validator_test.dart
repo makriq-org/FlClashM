@@ -429,4 +429,134 @@ void main() {
       );
     });
   });
+
+  group('unknown enum values never reach the generated TOML', () {
+    // The apply path compiles with `validate: false`, so the schema pass that
+    // knows these value sets is skipped and only the resolver stands between a
+    // profile and the TOML writer.
+    test('the resolver rejects them without the schema pass', () {
+      _rejects({
+        'resolver-policy': {'strategy': 'fastest'},
+      });
+      _rejects({
+        'compression': {'upload': 'brotli'},
+      });
+      _rejects({
+        'compression': {'download': 'brotli'},
+      });
+    });
+
+    test('the rejection names the values that are allowed', () {
+      expect(
+        () => _resolve({
+          'compression': {'upload': 'brotli'},
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('compression.upload'), contains('zstd')),
+          ),
+        ),
+      );
+    });
+
+    test('every documented value still resolves', () {
+      for (final type in const ['none', 'zstd', 'lz4', 'zlib']) {
+        expect(_resolve({'compression': {'upload': type}}).uploadCompression,
+            type,
+            reason: type);
+        expect(
+            _resolve({'compression': {'download': type}}).downloadCompression,
+            type,
+            reason: type);
+      }
+      for (final strategy in const [
+        'random',
+        'round-robin',
+        'least-loss',
+        'lowest-latency',
+      ]) {
+        expect(
+          _resolve({
+            'resolver-policy': {'strategy': strategy},
+          }).resolverStrategy,
+          strategy,
+          reason: strategy,
+        );
+      }
+    });
+
+    test('the TOML writer refuses an unmapped value instead of writing null',
+        () {
+      final settings = _resolve();
+      for (final broken in <StormDnsSettings>[
+        _copyWith(settings, resolverStrategy: 'fastest'),
+        _copyWith(settings, uploadCompression: 'brotli'),
+        _copyWith(settings, downloadCompression: 'brotli'),
+        _copyWith(settings, encryption: 'rot13'),
+        _copyWith(settings, startupMode: 'ask'),
+      ]) {
+        expect(
+          () => buildStormDnsToml(
+            settings: broken,
+            listenHost: '127.0.0.1',
+            listenPort: 7890,
+            logDirectory: 'logs',
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
+    test('a valid settings object writes no null anywhere', () {
+      final toml = buildStormDnsToml(
+        settings: _resolve(),
+        listenHost: '127.0.0.1',
+        listenPort: 7890,
+        logDirectory: 'logs',
+      );
+      expect(toml, isNot(contains('null')));
+      // `least-loss` and the `messenger` preset's `lz4`, as StormDNS codes.
+      expect(toml, contains('RESOLVER_BALANCING_STRATEGY = 3'));
+      expect(toml, contains('UPLOAD_COMPRESSION_TYPE = 2'));
+      expect(toml, contains('DOWNLOAD_COMPRESSION_TYPE = 2'));
+    });
+  });
 }
+
+/// Rebuilds [settings] with one field replaced, so the TOML writer can be
+/// handed a value that validation would never have produced.
+StormDnsSettings _copyWith(
+  StormDnsSettings settings, {
+  String? resolverStrategy,
+  String? uploadCompression,
+  String? downloadCompression,
+  String? encryption,
+  String? startupMode,
+}) =>
+    StormDnsSettings(
+      domains: settings.domains,
+      encryption: encryption ?? settings.encryption,
+      encryptionKey: settings.encryptionKey,
+      uploadDuplication: settings.uploadDuplication,
+      downloadDuplication: settings.downloadDuplication,
+      uploadSetupDuplication: settings.uploadSetupDuplication,
+      downloadSetupDuplication: settings.downloadSetupDuplication,
+      uploadCompression: uploadCompression ?? settings.uploadCompression,
+      downloadCompression: downloadCompression ?? settings.downloadCompression,
+      compressionMinSize: settings.compressionMinSize,
+      minUploadMtu: settings.minUploadMtu,
+      maxUploadMtu: settings.maxUploadMtu,
+      minDownloadMtu: settings.minDownloadMtu,
+      maxDownloadMtu: settings.maxDownloadMtu,
+      resolverStrategy: resolverStrategy ?? settings.resolverStrategy,
+      resolverRefresh: settings.resolverRefresh,
+      resolverAutoDisable: settings.resolverAutoDisable,
+      resolverRecheck: settings.resolverRecheck,
+      startupMode: startupMode ?? settings.startupMode,
+      startupMaxAge: settings.startupMaxAge,
+      arq: settings.arq,
+      ping: settings.ping,
+      runtime: settings.runtime,
+    );
