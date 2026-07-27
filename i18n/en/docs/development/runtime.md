@@ -72,9 +72,9 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - **Required fields:** `name`, `type`, `domains`, `encryption`, `encryption-key`
 - The required fields have no defaults: StormDNS performs no protocol negotiation, so the values must match the server
 - UDP is not supported; the resulting local `mihomo` node gets `udp: false`
-- The local SOCKS5 port is allocated from the range starting at 36200
 - The `messenger` / `balanced` / `bulk` presets set duplication and compression; the layering order is **StormDNS defaults → preset → explicit fields**
-- Schema ranges are taken from StormDNS `finalizeClientConfig`: anything upstream would silently clamp is rejected before launch, including linked bounds (`upload-setup` ≥ `upload`, `download-setup` ≥ `download`, max MTU ≥ min, `nack-max-gap` ≤ `window/4`, RTO and ping interval ordering)
+- Schema ranges are taken from StormDNS `finalizeClientConfig`: anything upstream would silently clamp is rejected before launch. Linked bounds are checked in full — `upload-setup` ≥ `upload`, `download-setup` ≥ `download`, `mtu.*.max` ≥ `min`, `nack-max-gap` ≤ `window/4`, `process-workers` ≥ `workers`, and the ordering of RTO values, ping intervals, ping thresholds and `session-retry-base` ≤ `session-retry-max`
+- Declares startup-failure marker lines; the service stops waiting for the port as soon as one matches, instead of sitting out the 120 s budget
 - Sources are pinned to commit `87348df5b11f9e490262a713ca268734007af44f`
 - The SHA-256 of every binary is pinned next to the commit; asset preparation and tests reject stale or modified files even when the stamp matches
 
@@ -90,15 +90,7 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 
 **Multi-artifact transactions.** `LocalNodeController` serves several files per node through stage → rollback → commit. The revision of single-file nodes stayed byte-for-byte identical, so NaiveProxy, OlcRTC, and ByeDPI behaviour is unchanged. The working cache is keyed by a fingerprint of the final resolver list, `domains`, and the StormDNS version; the old directory is removed only **after** a successful commit, and a rollback restores the previous plan's state.
 
-**A deliberate deviation from upstream.** StormDNS `usableHostCount` returns 2 for an IPv4 `/1` and then iterates 2³¹ addresses. FlClashM computes the actual expansion size and caps it at the documented 65536 limit — otherwise such a profile would hang the app.
-
-### 😴 `auto` activation (olcrtc and stormdns)
-
-The supervisor stages a sleeping node's artifacts in advance but doesn't include it in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without it and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
-
-Access to `mihomo` and network state is isolated behind the `RuntimeHealthProbe` interface: the product layer sees only the delay test, the chains of active connections, the current group `now`, and network presence. The implementation lives in the app layer on top of `clashCore` and `connectivity_plus`. Without an injected probe the automatic watchdog is idle, but staging, stop, and manual wake remain safe. The `always` mode doesn't use this path and keeps the previous startup transaction.
-
-The integration updates together with the app's Dart part and doesn't change the Android bridge; the live rollback is `activation: always`, and a version rollback needs no state migration.
+**A deliberate deviation from upstream.** StormDNS `usableHostCount` returns 2 for an IPv4 `/1` and then iterates 2³¹−2 addresses. FlClashM computes the actual expansion size and checks it against the documented 65536 limit: a CIDR from the profile that doesn't fit is rejected before launch, while a list fetched over a link is truncated to the limit. Otherwise such a profile would hang the app.
 
 ### 🛡 byedpi
 
@@ -110,6 +102,13 @@ The integration updates together with the app's Dart part and doesn't change the
 - `{sni}` substitution is supported
 - UDP is enabled by default and passed to the local `mihomo` node; `udp: false` disables it, and the ByeDPI process itself gets no separate UDP parameter
 
+### 😴 `auto` activation (olcrtc and stormdns)
+
+The supervisor stages a sleeping node's artifacts in advance but doesn't include it in the live or cold-start manifest, so its mandatory end-to-end check is no longer part of the VPN startup transaction. The watchdog probes the watched group, wakes the reserve after a set number of failures, atomically applies the full plan, and force-refreshes the node's own delay. After a period without connections and selection in all direct containing groups, the plan is applied without it and the process goes back to sleep. A profile change or stop cancels transitions via a generation token; sleep state isn't persisted and starts over after a reboot.
+
+Access to `mihomo` and network state is isolated behind the `RuntimeHealthProbe` interface: the product layer sees only the delay test, the chains of active connections, the current group `now`, and network presence. The implementation lives in the app layer on top of `clashCore` and `connectivity_plus`. Without an injected probe the automatic watchdog is idle, but staging, stop, and manual wake remain safe. The `always` mode doesn't use this path and keeps the previous startup transaction.
+
+The integration updates together with the app's Dart part and doesn't change the Android bridge; the live rollback is `activation: always`, and a version rollback needs no state migration.
 
 ---
 

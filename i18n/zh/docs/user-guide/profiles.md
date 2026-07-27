@@ -39,7 +39,7 @@ connectivity-check:
 | `urls` | — | 要检查的地址（公网 HTTP(S)，不含凭据或片段） |
 | `required` | `false` | 该检查是否为启动所必需 |
 | `timeout` | `5` | 单次请求超时（秒） |
-| `startup-timeout` | `30` | 启动时的总检查预算（秒） |
+| `startup-timeout` | `30`（`stormdns` 为 `120`） | 启动时的总检查预算（秒） |
 | `retry-interval` | `1` | 重试间隔（秒） |
 | `requests` | `1` | 请求次数 |
 | `concurrency` | `1` | 并行请求数 |
@@ -162,7 +162,7 @@ proxy-groups:
 
 **类型：** `stormdns` · 不支持 UDP（只能 `udp: false`）
 
-StormDNS 把 TCP 封装进发往允许解析器的普通 DNS 查询 —— 于是连接得以穿过白名单。目标与 OlcRTC 相同，载体不同：适用于只放行 DNS 的网络。该节点比其他节点**明显更慢**。
+StormDNS 把 TCP 封装进发往允许解析器的普通 DNS 查询 —— 于是连接得以穿过白名单。目标与 OlcRTC 相同，载体不同 —— DNS：该节点面向只放行 DNS 查询的网络。它比其他节点**明显更慢**。
 
 ```yaml
 proxies:
@@ -178,7 +178,7 @@ proxy-groups:
     proxies: ["DIRECT", "storm"]
 ```
 
-### 必填字段
+### 🔑 必填字段
 
 `domains`、`encryption` 和 `encryption-key` **必填且没有默认值**：StormDNS 不做任何协商，这三项必须与服务端完全一致。
 
@@ -190,7 +190,7 @@ proxy-groups:
 
 > ⚠️ `none` 和 `xor` 模式**不保护内容**，解析器运营方可以看到你的流量。仅在服务端要求时使用。
 
-### 解析器
+### 📍 解析器
 
 `resolvers` 是一个统一的来源列表，按顺序处理：
 
@@ -199,10 +199,10 @@ proxy-groups:
 | `system` | 物理网络（非 VPN）的 DNS |
 | `8.8.8.8` | 一个使用 53 端口的解析器 |
 | `1.1.1.1:5353` | 一个使用自定端口的解析器 |
-| `192.168.1.0/30` | 按 StormDNS 规则展开的范围 |
+| `192.168.1.0/30` | CIDR：IPv4 会跳过网络地址与广播地址；超过 65536 个地址的范围会被拒绝 |
 | `https://…` | 来自远程列表的解析器 |
 
-未设置 `resolvers` 时使用 `[system]`。所有来源展开后按 IP 去重：第一次出现的条目连同其端口胜出。若最终列表为空，配置不会被应用。
+未设置或为空的 `resolvers` 一律使用 `[system]`。所有来源展开后按 IP 去重：第一次出现的条目连同其端口胜出。若最终列表为空，配置不会被应用。
 
 列表地址只允许 HTTPS，不得带凭据或锚点；禁止 localhost 与本地地址 —— 但列表**内部**的私有 IP 和 CIDR 是允许的。响应上限 1 MiB，超时 15 秒。每个地址单独缓存：地址不可达时即使已超过 `refresh` 也会使用上次保存的副本；若没有副本则跳过该地址，其余来源照常生效。
 
@@ -215,7 +215,7 @@ proxy-groups:
 
 `refresh` 在应用配置时检查 —— 没有常驻定时器。
 
-### 预设
+### 🎚 预设
 
 `preset` 决定数据包复制与压缩。叠加顺序：**StormDNS 默认值 → preset → 显式设置的字段**。
 
@@ -237,9 +237,36 @@ compression:
 
 精细调节位于 `duplication`、`compression`、`mtu`、`arq`、`ping` 和 `runtime` 块。在这些块以及 `resolver-policy`/`startup` 中，时长使用字符串（`600ms`、`30s`、`24h`、`30d`）。通用字段 `activation` 和 `connectivity-check` 仍使用整数秒。
 
-> ℹ️ StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错** —— 包括关联约束：`upload-setup` 不低于 `upload`，`download-setup` 不低于 `download`，MTU 最大值不低于最小值。
+> ℹ️ StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错**。
 
-### 启动
+<details>
+<summary>📐 精细调节的取值范围</summary>
+
+| 块 | 字段与范围 |
+|----|-----------|
+| `duplication` | `upload`、`download`、`upload-setup`、`download-setup` —— 1…8 |
+| `compression` | `upload`、`download` —— `none`、`zstd`、`lz4`、`zlib`；`min-size` —— 100…65535 |
+| `mtu.upload`、`mtu.download` | `min` —— 1…65535；`max` —— 0…65535，其中 `0` 表示不设上限 |
+| `arq` | `window` 1…6000、`nack-max-gap` 0…1500、`max-control-retries` 5…5000、`max-data-retries` 60…100000；其余字段为时长 |
+| `ping` | 仅时长：`aggressive`/`lazy`/`cooldown`/`cold` 间隔与 `warm`/`cool`/`cold` 阈值 |
+| `runtime` | `workers` 与 `process-workers` 1…64、队列与池大小、重试时长；`base-encode` 为布尔标志 |
+
+关联约束会被完整校验：
+
+- `duplication.upload-setup` ≥ `upload`、`download-setup` ≥ `download`
+- `mtu.<方向>.max` ≥ `min`
+- `arq.initial-rto` ≤ `max-rto`、`arq.control-initial-rto` ≤ `control-max-rto`
+- `arq.nack-max-gap` ≤ `arq.window / 4`
+- `ping.aggressive-interval` ≤ `lazy-interval` ≤ `cooldown-interval` ≤ `cold-interval`
+- `ping.warm-threshold` ≤ `cool-threshold` ≤ `cold-threshold`
+- `runtime.process-workers` ≥ `runtime.workers`
+- `runtime.session-retry-base` ≤ `session-retry-max`
+
+字段名与 StormDNS 配置一致。
+
+</details>
+
+### 🚀 启动
 
 | `startup.mode` | 作用 |
 |----------------|------|
@@ -249,13 +276,41 @@ compression:
 
 `startup.max-age`（默认 `30d`）限制可用缓存的最大年龄，并且必须是整数天。
 
+> ⏳ 首次启动要经过解析器扫描，可能耗时长达两分钟 —— 检查预算已为此预留。
+
 工作缓存与最终解析器列表、`domains` 以及 StormDNS 版本绑定。配置中的来源、`domains` 或版本发生变化时会生成新缓存，旧缓存仅在配置成功应用后才删除。物理网络 DNS 变化时，会在重启节点前清除当前缓存。若没有合适的缓存，或 StormDNS 判定其无效，它会自行回退到完整扫描 —— 这是正常行为。
 
 日志目录、resolver 文件、本地端口和 SOCKS5 均由应用管理，无法在配置中指定。
 
-### 系统 DNS
+### 📶 系统 DNS
 
 当 `resolvers` 含有 `system`（或未设置）时，该节点依赖物理网络的 DNS。DNS 变化时，平台会自行重写 resolver 文件、重置工作缓存，并**仅**重启处于活动状态的依赖节点 —— 包括界面未运行的冷启动场景。无需额外的 bypass：应用自身的包已被排除在 VPN 路由之外。
+
+---
+
+## 🎭 NaiveProxy
+
+**类型：** `naiveproxy` · 不支持 UDP（仅允许 `udp: false`）
+
+NaiveProxy 利用 Chromium 的网络栈把流量伪装成普通 Chrome 请求 —— 这对 TLS 指纹识别与主动探测都有抵抗力。
+
+```yaml
+proxies:
+  - name: "naive"
+    type: naiveproxy
+    server: example.com
+    port: 443
+    username: user
+    password: pass
+```
+
+- **必填字段：** `name`、`type`、`server`、`port`、`username`、`password`。
+- `transport` 默认为 `https`；也允许 `quic`。
+- 可选：`insecure-concurrency`（1–4）、`tunnel-timeout`、`idle-timeout`、`post-quantum`、`headers` 映射、`host-resolver-rules` 以及共享的 `connectivity-check`。
+
+客户端会安全地构造带转义凭据的 URI，交给 NaiveProxy，并把用于 `mihomo` 的节点替换为本地 SOCKS5。
+
+> 🚫 旧的 `proxy` 字段不再支持。`listen`、诊断文件、代理链以及任何未知字段都会在配置校验时被**拒绝**。
 
 ---
 
@@ -298,32 +353,6 @@ activation:
 - **手动选择会立即唤醒节点。**
 
 > ℹ️ 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
-
----
-
-## 🎭 NaiveProxy
-
-**类型：** `naiveproxy` · 不支持 UDP（仅允许 `udp: false`）
-
-NaiveProxy 利用 Chromium 的网络栈把流量伪装成普通 Chrome 请求 —— 这对 TLS 指纹识别与主动探测都有抵抗力。
-
-```yaml
-proxies:
-  - name: "naive"
-    type: naiveproxy
-    server: example.com
-    port: 443
-    username: user
-    password: pass
-```
-
-- **必填字段：** `name`、`type`、`server`、`port`、`username`、`password`。
-- `transport` 默认为 `https`；也允许 `quic`。
-- 可选：`insecure-concurrency`（1–4）、`tunnel-timeout`、`idle-timeout`、`post-quantum`、`headers` 映射、`host-resolver-rules` 以及共享的 `connectivity-check`。
-
-客户端会安全地构造带转义凭据的 URI，交给 NaiveProxy，并把用于 `mihomo` 的节点替换为本地 SOCKS5。
-
-> 🚫 旧的 `proxy` 字段不再支持。`listen`、诊断文件、代理链以及任何未知字段都会在配置校验时被**拒绝**。
 
 ---
 
