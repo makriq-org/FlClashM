@@ -11,8 +11,15 @@ import 'package:flutter/foundation.dart';
 const stormDnsSystemDnsPlaceholder = '# @flclashm:system-dns';
 
 /// Upstream `maxResolverHosts`: a single CIDR never expands past this many
-/// addresses.
+/// addresses, and neither does the whole generated file.
 const stormDnsMaxResolverHosts = 65536;
+
+/// Slots held back for the system-DNS marker, which the platform expands after
+/// this file is written. The app never learns how many resolvers the physical
+/// network advertises, so a fixed reserve is what keeps the *rendered* file
+/// inside [stormDnsMaxResolverHosts]. A handful of servers is the norm; 16 is
+/// well past anything Android reports.
+const stormDnsSystemDnsReservedHosts = 16;
 
 const stormDnsDefaultResolverPort = 53;
 
@@ -734,12 +741,41 @@ Future<ConnectionTask<Socket>> _connectPublicResolverListSocket(
 /// De-duplication is by IP with the first occurrence winning, exactly like
 /// upstream `addResolver`. The system placeholder is emitted in place so the
 /// platform can expand it later without changing the order.
+///
+/// The whole file is capped at [stormDnsMaxResolverHosts] addresses, not just
+/// each source: the MTU scan is linear in the resolver count, so a profile with
+/// a dozen CIDRs would otherwise stage a list that takes minutes to work
+/// through. Overflow **truncates** rather than failing the profile, for two
+/// reasons. A total can be pushed over the limit by a fetched list whose
+/// contents the profile author does not control, and refusing to apply a
+/// profile because a third-party file grew is worse than serving its first
+/// 65536 entries — which is also exactly what [parseResolverListBody] already
+/// does to a single oversized list. Note the asymmetry with a single
+/// oversized CIDR: that one *is* a profile error, because it is declared
+/// literally and the author can fix it.
 List<String> buildResolverFileLines({
   required List<StormDnsResolverSource> sources,
   required Map<Uri, StormDnsRemoteResolverList> remoteLists,
 }) {
+  // The marker costs one line here but expands into the physical network's
+  // resolvers on the platform side, so its share of the ceiling is held back.
+  final limit =
+      sources.any((source) => source is StormDnsSystemResolverSource)
+          ? stormDnsMaxResolverHosts - stormDnsSystemDnsReservedHosts
+          : stormDnsMaxResolverHosts;
   final lines = <String>[];
   final seen = <String>{};
+  var addresses = 0;
+
+  bool addEntry(StormDnsResolverEntry entry) {
+    if (addresses >= limit) return false;
+    if (seen.add(entry.ip)) {
+      lines.add(entry.line);
+      addresses += 1;
+    }
+    return true;
+  }
+
   for (final source in sources) {
     switch (source) {
       case StormDnsSystemResolverSource():
@@ -748,13 +784,13 @@ List<String> buildResolverFileLines({
         }
       case StormDnsLiteralResolverSource(:final entries):
         for (final entry in entries) {
-          if (seen.add(entry.ip)) lines.add(entry.line);
+          if (!addEntry(entry)) break;
         }
       case StormDnsRemoteResolverSource(:final url):
         final list = remoteLists[url];
         if (list == null) continue;
         for (final entry in list.entries) {
-          if (seen.add(entry.ip)) lines.add(entry.line);
+          if (!addEntry(entry)) break;
         }
     }
   }

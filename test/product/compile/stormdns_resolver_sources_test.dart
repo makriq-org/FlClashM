@@ -296,4 +296,61 @@ void main() {
       expect(entries.map((e) => e.line), ['8.8.8.8', '1.1.1.1:5353']);
     });
   });
+
+  group('whole-file address ceiling', () {
+    test('the total is capped, not just each source', () {
+      // Two /16 ranges expand to 131068 addresses between them; every single
+      // source is inside the per-source limit.
+      final sources = parser.parse(['10.0.0.0/16', '10.1.0.0/16'], label: 'r');
+      expect(
+        (sources[0] as StormDnsLiteralResolverSource).entries.length,
+        lessThanOrEqualTo(stormDnsMaxResolverHosts),
+      );
+
+      final lines = buildResolverFileLines(
+        sources: sources,
+        remoteLists: const {},
+      );
+      expect(lines.length, stormDnsMaxResolverHosts);
+      expect(lines.first, '10.0.0.1', reason: 'declaration order still wins');
+    });
+
+    test('the system marker reserves room for its later expansion', () {
+      final lines = buildResolverFileLines(
+        sources: parser.parse(
+          ['10.0.0.0/16', 'system', '10.1.0.0/16'],
+          label: 'r',
+        ),
+        remoteLists: const {},
+      );
+      expect(lines, contains(stormDnsSystemDnsPlaceholder));
+      expect(
+        lines.length - 1,
+        stormDnsMaxResolverHosts - stormDnsSystemDnsReservedHosts,
+        reason: 'the platform expands the marker after this file is written',
+      );
+    });
+
+    test('a remote list cannot push the total past the ceiling', () {
+      final url = Uri.parse('https://example.com/r.txt');
+      final lines = buildResolverFileLines(
+        sources: parser.parse(['10.0.0.0/16', url.toString()], label: 'r'),
+        remoteLists: {
+          url: StormDnsRemoteResolverList(
+            entries: [
+              for (var index = 0; index < 20000; index++)
+                StormDnsResolverEntry(
+                  ip: '172.16.${index ~/ 256}.${index % 256}',
+                  port: 53,
+                ),
+            ],
+            fetchedAt: DateTime(2026),
+          ),
+        },
+      );
+      expect(lines.length, stormDnsMaxResolverHosts);
+      expect(lines.last.startsWith('172.16.'), isTrue,
+          reason: 'the remote list is truncated, not dropped');
+    });
+  });
 }
