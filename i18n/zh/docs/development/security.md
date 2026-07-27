@@ -18,6 +18,18 @@
 - 📞 `olcrtc` 仅在 CNC 模式工作。
 - 🧱 在 `olcrtc profiles[]` 中递归禁止 `socks.host`、`socks.port` 和 `crypto.key_file`；其余字段透明传给 OlcRTC。
 - 🛡 `byedpi` 只检查指定的 URL。
+- 🌪 `stormdns` 禁止使用由应用掌管的字段：监听器（`listen`、`listen-ip`、`listen-port`、`server`、`port`、`protocol`）、SOCKS5 认证、整个 `local-dns-*` 块、日志目录与文件名、`config-version` 以及 `startup.mode: ask`。
+
+## 🌪 StormDNS 解析器列表
+
+`stormdns` 是唯一由配置传入网络地址列表的节点，因此单独校验。
+
+- ✅ `resolvers` 中允许的来源：`system`、IP、`IP:port`、CIDR 范围，以及指向列表的 `https://` 链接。
+- 🔗 列表链接**仅接受 HTTPS**，不得包含 userinfo 与 fragment，不得为 `localhost` 或本地地址；响应上限为 **1 MiB** 与 **15 秒**。
+- 💾 远程列表按链接分别缓存。来源不可达时使用最后一份副本 —— 即使 `refresh` 已过期；没有副本时该链接直接跳过，而不会让配置应用失败。
+- 🧮 CIDR 展开上限为 65536 个地址：上游在大范围上会逐个遍历，那会让应用卡死。
+- 🔁 最终列表按 IP 去重 —— 第一次出现者连同其端口胜出。
+- ⚠️ 允许 `encryption: none` 与 `xor`，因为它们属于上游契约且服务端确实这样配置。它们**不会对解析器运营方隐藏载荷内容**；应用不作特别标记，这一点已在[内置节点指南](../user-guide/profiles.md)中说明。
 
 ## 🌐 连通性检查地址
 

@@ -21,7 +21,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 1. 🎛 **FlClashX base** — UI, navigation, the base runtime path.
 2. 📦 **Product layer** (`lib/product/**`) — profile compilation, security, updates, fork-only pages.
-3. ⚙️ **Runtime layer** — `mihomo` (baseline) and the built-in nodes `naiveproxy`, `olcrtc`, `byedpi`.
+3. ⚙️ **Runtime layer** — `mihomo` (baseline) and the built-in nodes `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
 4. 📱 **Platform layer** — Android VPN, foreground service, installer, notifications.
 
 ## 🚧 The base/product boundary

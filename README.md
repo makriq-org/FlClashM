@@ -41,6 +41,7 @@ Android-клиент для `mihomo`, форк [FlClashX](https://github.com/plu
 - 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** — обход DPI для доступа к ресурсам, заблокированным «изнутри» (например, YouTube или Discord для РФ).
 - 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — обход белых списков маскировкой под WebRTC-звонки разрешённых сервисов, таких как Yandex Telemost.
 - 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — обход чёрных списков маскировкой под трафик браузера Chrome.
+- 🌪 **[StormDNS](https://github.com/nullroute1970/StormDNS)** — резерв последней надежды: TCP прячется внутри DNS-запросов и проходит там, где не проходит ничего.
 
 Каждая технология хороша для своей задачи, но не было места, которое объединяло бы их все. Хотелось задать всё в одном месте и просто нажать «подключиться».
 
@@ -101,6 +102,22 @@ proxies:
 ```
 
 </td></tr>
+<tr><td>
+
+🌪 **StormDNS** — TCP внутри DNS-запросов, спит до тех пор, пока нужен.
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
+    preset: messenger
+    activation: auto
+```
+
+</td></tr>
 </table>
 
 📖 [Подробнее о встроенных узлах →](i18n/ru/docs/user-guide/profiles.md)
@@ -158,7 +175,7 @@ tun:
 Полный справочник — в **[центре документации](i18n/ru/docs/README.md)**.
 
 **🚀 Для пользователей**
-- 🧩 [Встроенные узлы](i18n/ru/docs/user-guide/profiles.md) — ByeDPI, OlcRTC, NaiveProxy
+- 🧩 [Встроенные узлы](i18n/ru/docs/user-guide/profiles.md) — ByeDPI, OlcRTC, NaiveProxy, StormDNS
 - 🎯 [Раздельное туннелирование](i18n/ru/docs/user-guide/split-tunneling.md) — управление через профиль
 - 🎨 [Подсказки провайдера](i18n/ru/docs/user-guide/provider-hints.md) — оформление и поведение
 
@@ -210,7 +227,7 @@ flutter build apk --debug
 
 FlClashM построен на базе [FlClashX](https://github.com/pluralplay/FlClashX) — отличного кроссплатформенного клиента для Clash/Mihomo. Огромное спасибо авторам за проделанную работу и открытый код, без которого этот проект был бы невозможен.
 
-Отдельная благодарность авторам [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc) и [NaiveProxy](https://github.com/klzgrad/naiveproxy) — без их труда обход блокировок был бы невозможен.
+Отдельная благодарность авторам [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [NaiveProxy](https://github.com/klzgrad/naiveproxy) и [StormDNS](https://github.com/nullroute1970/StormDNS) — без их труда обход блокировок был бы невозможен.
 
 ---
 

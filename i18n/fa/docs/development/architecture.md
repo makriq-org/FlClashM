@@ -21,7 +21,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 1. 🎛 **پایهٔ FlClashX** — UI، ناوبری، مسیر پایهٔ runtime.
 2. 📦 **لایهٔ محصول** (`lib/product/**`) — کامپایل پروفایل، امنیت، به‌روزرسانی، صفحات مخصوص fork.
-3. ⚙️ **لایهٔ محیط اجرا** — `mihomo` (پایه) و نودهای داخلی `naiveproxy`، `olcrtc`، `byedpi`.
+3. ⚙️ **لایهٔ محیط اجرا** — `mihomo` (پایه) و نودهای داخلی `naiveproxy`، `olcrtc`، `byedpi`، `stormdns`.
 4. 📱 **لایهٔ سکو** — VPN اندروید، سرویس پیش‌زمینه، نصب‌کننده، اعلان‌ها.
 
 ## 🚧 مرز base/product
