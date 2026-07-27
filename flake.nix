@@ -18,8 +18,8 @@
       };
       goPkgs = import nixpkgsGo { inherit system; };
       android = pkgs.androidenv.composeAndroidPackages {
-        platformVersions = [ "36" ];
-        buildToolsVersions = [ "36.0.0" ];
+        platformVersions = [ "34" "35" "36" ];
+        buildToolsVersions = [ "35.0.0" "36.0.0" ];
         cmakeVersions = [ "3.22.1" ];
         includeNDK = true;
         ndkVersions = [ "28.0.13004108" ];
