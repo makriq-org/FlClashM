@@ -73,7 +73,7 @@
     {
       "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/SelfUpdateInstallerTest.kt",
       "bucket": "budget",
-      "reason": "Тесты выбора бесшовной установки и интерактивного fallback фиксируют контракт Android bridge-слоя."
+      "reason": "Нативные CI-тесты фиксируют single-flight сессий и foreground-aware подтверждение самообновления."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
@@ -293,7 +293,7 @@
     {
       "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
       "bucket": "budget",
-      "reason": "Тест обобщённого resolver-файла закрепляет правила дедупликации и запрет выхода за рабочую директорию; CI Kotlin-тесты не запускает, инварианты дополнительно закреплены product-тестом на Dart."
+      "reason": "Нативный CI-тест закрепляет дедупликацию и запрет выхода resolver-файла за рабочую директорию."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",

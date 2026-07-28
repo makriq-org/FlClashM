@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="self_update_confirmation_channel">App updates</string>
+    <string name="self_update_confirmation_channel_description">Confirmation required to finish installing an app update</string>
+    <string name="self_update_confirmation_title">Finish updating FlClashM</string>
+    <string name="self_update_confirmation_text">Tap to confirm installation</string>
     <string name="fl_clashm">FlClashM</string>
     <string name="widget_description">FlClashM Mode &amp; Tunnel</string>
     <string name="widget_mode_rule">Rule</string>

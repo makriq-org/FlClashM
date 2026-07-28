@@ -9,6 +9,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
 import com.follow.clashx.plugins.AppPlugin
+import com.follow.clashx.plugins.SelfUpdateContinuationController
+import com.follow.clashx.plugins.SelfUpdateForegroundActivity
 import com.follow.clashx.plugins.ServicePlugin
 import com.follow.clashx.plugins.TilePlugin
 import io.flutter.embedding.android.FlutterActivity
@@ -57,6 +59,17 @@ class MainActivity : FlutterActivity() {
         GlobalState.getCurrentAppPlugin()?.requestNotificationsPermission()
         maybeRequestBatteryExemption()
         GlobalState.syncStatus()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        SelfUpdateForegroundActivity.onResumed(this)
+        SelfUpdateContinuationController.resumePending(this)
+    }
+
+    override fun onPause() {
+        SelfUpdateForegroundActivity.onPaused(this)
+        super.onPause()
     }
 
     // Prompt once (ever) to whitelist from battery optimization. No-op if already
