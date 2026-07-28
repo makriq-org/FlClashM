@@ -21,7 +21,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 1. 🎛 **FlClashX 基线** —— UI、导航、基础运行时路径。
 2. 📦 **产品层**（`lib/product/**`）—— 配置编译、安全、更新、仅分支页面。
-3. ⚙️ **运行时层** —— `mihomo`（基准）及内置节点 `naiveproxy`、`olcrtc`、`byedpi`。
+3. ⚙️ **运行时层** —— `mihomo`（基准）及内置节点 `naiveproxy`、`olcrtc`、`byedpi`、`stormdns`。
 4. 📱 **平台层** —— Android VPN、前台服务、安装器、通知。
 
 ## 🚧 base/product 边界

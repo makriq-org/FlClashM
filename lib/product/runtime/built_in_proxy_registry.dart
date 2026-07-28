@@ -50,6 +50,24 @@ class BuiltInProxyRegistry {
                   'Failed profile apply rolls node configs and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
             ),
           ),
+          BuiltInProxyType.stormdns: BuiltInProxyDescriptor(
+            type: BuiltInProxyType.stormdns,
+            protocol: BuiltInProxyProtocol.socks5,
+            supportsUdp: false,
+            supportsActivation: true,
+            defaultUdp: false,
+            listenPortRangeStart: 36200,
+            listenPortRangeSize: 256,
+            // A cold start performs an MTU scan before opening the listener.
+            // It took 28 seconds with three resolvers on a real Android device.
+            defaultStartupTimeout: Duration(minutes: 2),
+            availability: BuiltInProxyAvailability.supported(
+              updatePath:
+                  'setup.dart builds the pinned stormdns Android executable from source into bundled Android assets, and Android runs the immutable native library from nativeLibraryDir.',
+              rollbackPath:
+                  'Failed profile apply rolls node configs, resolver files, and processes back to the last committed runtime plan; the bundled Android native library itself is not swapped at runtime.',
+            ),
+          ),
         };
 
   final Map<BuiltInProxyType, BuiltInProxyDescriptor> _descriptors;

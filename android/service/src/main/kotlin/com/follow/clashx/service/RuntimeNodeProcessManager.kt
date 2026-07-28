@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -41,8 +42,13 @@ data class RuntimeNodeSpec(
     val arguments: List<String>,
     val revision: String,
     val connectivityCheck: RuntimeNodeConnectivityCheck,
+    val resolverFile: RuntimeNodeResolverFile?,
+    val startupFailurePatterns: List<String>,
 ) {
     companion object {
+        private const val MAX_STARTUP_FAILURE_PATTERNS = 16
+        private const val MAX_STARTUP_FAILURE_PATTERN_LENGTH = 256
+
         fun fromJson(value: JSONObject, index: Int): RuntimeNodeSpec {
             fun requiredString(name: String): String =
                 value.optString(name, "").trim().also {
@@ -57,6 +63,23 @@ data class RuntimeNodeSpec(
             }
             val port = value.optInt("port", 0)
             require(port in 1..65535) { "Runtime node $index has invalid port" }
+            val rawStartupFailurePatterns =
+                value.optJSONArray("startupFailurePatterns") ?: JSONArray()
+            require(rawStartupFailurePatterns.length() <= MAX_STARTUP_FAILURE_PATTERNS) {
+                "Runtime node $index has too many startup failure patterns"
+            }
+            val startupFailurePatterns = buildList {
+                for (patternIndex in 0 until rawStartupFailurePatterns.length()) {
+                    val pattern = rawStartupFailurePatterns.getString(patternIndex).trim()
+                    require(
+                        pattern.isNotEmpty() &&
+                            pattern.length <= MAX_STARTUP_FAILURE_PATTERN_LENGTH,
+                    ) {
+                        "Runtime node $index has an invalid startup failure pattern"
+                    }
+                    add(pattern)
+                }
+            }
             return RuntimeNodeSpec(
                 nodeId = requiredString("nodeId"),
                 type = requiredString("type"),
@@ -70,6 +93,10 @@ data class RuntimeNodeSpec(
                 connectivityCheck = RuntimeNodeConnectivityCheck.fromJson(
                     value.optJSONObject("connectivityCheck"),
                 ),
+                resolverFile = RuntimeNodeResolverFile.fromJson(
+                    value.optJSONObject("resolverFile"),
+                ),
+                startupFailurePatterns = startupFailurePatterns,
             )
         }
     }
@@ -147,6 +174,10 @@ object RuntimeNodeProcessManager {
 
         @Synchronized
         fun snapshot(): String = lines.joinToString("\n")
+
+        @Synchronized
+        fun firstLineContaining(patterns: List<String>): String? =
+            lines.firstOrNull { line -> patterns.any(line::contains) }
     }
 
     private data class RunningNode(
@@ -164,19 +195,91 @@ object RuntimeNodeProcessManager {
         val message: String = "",
     )
 
+    private data class SystemDnsPassResult(
+        val incomplete: Boolean,
+        val epoch: Long,
+    )
+
+    // Last DNS servers seen on the physical network. Held here, not in Dart,
+    // so cold start and DNS changes work with no Flutter process running.
+    @Volatile private var latestSystemDns: List<String>? = null
+    @Volatile private var lastAppliedSystemDns: List<String>? = null
+
+    /**
+     * DNS servers to render resolver files with. Falls back to reading the
+     * platform directly, so a cold start that runs before any network observer
+     * is installed still produces a usable resolver list.
+     */
+    private fun currentSystemDns(): List<String> {
+        val cached = latestSystemDns
+        if (cached != null) return cached
+        val resolved = SystemDnsReader.read()
+        latestSystemDns = resolved
+        return resolved
+    }
+
     private val planLock = Mutex()
     private val planTransitionLock = Mutex()
     private val nodeLocks = ConcurrentHashMap<String, Mutex>()
     private val runningNodes = ConcurrentHashMap<String, RunningNode>()
     private val activeBatchProbeJobs = mutableSetOf<Job>()
     private val readyNodeIds = ConcurrentHashMap.newKeySet<String>()
+
+    // Why a node refused to launch, keyed by node id. `start` only reports a
+    // long, so without this the reason ("the network advertises no DNS", "the
+    // binary is missing") stayed in the log and the user was shown the generic
+    // "did not start".
+    private val startFailures = ConcurrentHashMap<String, String>()
+
+    // DNS passes currently running, so a plan transition can preempt them
+    // instead of queueing behind a node restart.
+    private val systemDnsPassJobs = ConcurrentHashMap.newKeySet<Job>()
+
+    // Nodes this manager stopped for a DNS change that have not come back yet.
+    // A later pass renders their resolver file to the same bytes and would skip
+    // them as UNCHANGED, so the outstanding work has to be remembered here for
+    // the retry to mean anything.
+    private val pendingSystemDnsRestarts = ConcurrentHashMap.newKeySet<String>()
+
+    // Reset failures have to survive independently of restart failures. A
+    // sleeping reserve node is not restarted, but an UNCHANGED render on the
+    // next pass must still retry the cache reset it previously failed.
+    private val pendingSystemDnsResets = ConcurrentHashMap.newKeySet<String>()
+
+    // One retry loop per DNS list. Duplicate Android callbacks may all observe
+    // the same incomplete update; keeping every loop reachable avoids both
+    // duplicate work and jobs that a plan transition can no longer cancel.
+    private val systemDnsRetryJobs = ConcurrentHashMap<List<String>, Job>()
+    @Volatile private var systemDnsWorkEpoch = 0L
     private var activePlan = linkedMapOf<String, RuntimeNodeSpec>()
+        set(value) {
+            field = value
+            // Kept in lockstep with the plan itself so `updateSystemDns` can
+            // tell "nothing here cares about system DNS" without the plan lock.
+            hasSystemDnsDependents = value.values.any {
+                it.resolverFile?.dependsOnSystemDns == true
+            }
+        }
+
+    // Mirror of the plan above, readable without a lock. Written only under
+    // `planLock`, by the setter.
+    @Volatile private var hasSystemDnsDependents = false
     private var acceptingBatchProbes = true
     @Volatile private var generation = 0L
     private var optionalCheckJob: Job? = null
     @Volatile private var lastStateJson = stateJson(0L, "idle", emptyList())
 
-    suspend fun applyPlan(planJson: String): String =
+    suspend fun applyPlan(planJson: String): String {
+        // A DNS-triggered pass holds the plan lock for as long as the nodes it
+        // restarts need. Applying a profile is a direct user action and must
+        // not queue behind an environment event, so the pass is preempted here:
+        // it stops whatever it was bringing up and re-schedules itself, and the
+        // plan below starts those nodes anyway.
+        cancelSystemDnsWork()
+        return applyPlanLocked(planJson)
+    }
+
+    private suspend fun applyPlanLocked(planJson: String): String =
         withBatchProbesStopped {
         val target = parsePlan(planJson)
         val previousPlan = activePlan
@@ -184,6 +287,8 @@ object RuntimeNodeProcessManager {
         val reusable = target.filter { (nodeId, spec) ->
             previousPlan[nodeId] == spec &&
                 nodeId in previousReady &&
+                nodeId !in pendingSystemDnsRestarts &&
+                nodeId !in pendingSystemDnsResets &&
                 readStartTime(nodeId) > 0L
         }.keys
 
@@ -224,6 +329,8 @@ object RuntimeNodeProcessManager {
             stopAllProcesses()
             activePlan = linkedMapOf()
             readyNodeIds.clear()
+            pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
             lastStateJson = stateJson(
                 currentGeneration,
                 "failed",
@@ -236,6 +343,9 @@ object RuntimeNodeProcessManager {
         activePlan = LinkedHashMap(target)
         readyNodeIds.clear()
         readyNodeIds.addAll(target.keys)
+        // This transition supersedes anything a DNS pass left unfinished.
+        pendingSystemDnsRestarts.clear()
+        pendingSystemDnsResets.clear()
         lastStateJson = stateJson(
             currentGeneration,
             if (target.isEmpty()) "idle" else "ready",
@@ -327,14 +437,361 @@ object RuntimeNodeProcessManager {
             .toString()
     }.getOrDefault(lastStateJson)
 
-    suspend fun stopAll() = withBatchProbesStopped {
+    /**
+     * Applies a new physical-network DNS list.
+     *
+     * Rewrites the resolver file of every node that declared a dependency on
+     * system DNS, drops the working caches those nodes bound to the old list,
+     * and restarts only the ones whose list actually changed.
+     *
+     * Two properties of this path are deliberate.
+     *
+     * *It never makes a profile apply wait.* The work runs under the plan lock,
+     * because rendering, cache resets and restarts have to be serialised
+     * against [applyPlan] — anything looser races. Rather than shrink the
+     * restart budget until holding the lock is cheap (which would make a slow
+     * but legitimate restart impossible), the pass is preemptible: [applyPlan]
+     * and [stopAll] cancel it before they queue for the lock, a cancelled
+     * restart stops the node it was bringing up, and the transition that
+     * preempted it starts that node itself. [DNS_UPDATE_BUDGET_MILLIS] bounds
+     * the pass for every caller that does not preempt.
+     *
+     * *Its failure semantics differ from [applyPlan], on purpose.* `applyPlan`
+     * owns the plan: a node that cannot start there means the profile the user
+     * just asked for is not runnable, so every process is stopped and the plan
+     * is cleared. A DNS change is an environment event arriving at a plan that
+     * is already running; tearing down healthy nodes because one dependent
+     * failed to come back would turn a transient network hiccup into a full
+     * outage. The plan therefore stays active, the failing node is reported
+     * through the plan state, and [scheduleSystemDnsRetry] gives it further
+     * attempts without waiting for the OS to send another callback.
+     */
+    suspend fun updateSystemDns(dnsServers: List<String>) {
+        val normalized = SystemDnsReader.sanitize(dnsServers)
+        latestSystemDns = normalized
+
+        // Callbacks that change nothing are answered from volatile state alone.
+        // `runSystemDnsPass` takes the plan transition lock and cancels every
+        // batch probe in flight *before* `applySystemDns` gets to make the same
+        // check, so a redundant DNS event used to abort a running auto-probe.
+        // The authoritative checks stay where they were: this is an
+        // optimisation, and losing the race only costs one needless pass.
+        if (
+            normalized == lastAppliedSystemDns &&
+            pendingSystemDnsRestarts.isEmpty() &&
+            pendingSystemDnsResets.isEmpty()
+        ) {
+            return
+        }
+        if (!hasSystemDnsDependents) {
+            lastAppliedSystemDns = normalized
+            pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
+            return
+        }
+
+        val pass = try {
+            runSystemDnsPass(normalized)
+        } catch (cancellation: CancellationException) {
+            // A plan transition preempted this pass and now owns every node it
+            // left behind. It also invalidated the pass epoch, so no old work may
+            // be re-created after cancelSystemDnsWork returned.
+            throw cancellation
+        }
+        if (pass.incomplete) scheduleSystemDnsRetry(normalized, pass.epoch)
+    }
+
+    private suspend fun runSystemDnsPass(normalized: List<String>): SystemDnsPassResult {
+        val job = currentCoroutineContext()[Job]
+        if (job != null) systemDnsPassJobs.add(job)
+        return try {
+            withBatchProbesStopped {
+                SystemDnsPassResult(
+                    incomplete = applySystemDns(normalized),
+                    // Read under the plan-transition lock. A pass that queued
+                    // behind a completed transition belongs to the new epoch;
+                    // one that finished before it must not schedule stale work.
+                    epoch = systemDnsWorkEpoch,
+                )
+            }
+        } finally {
+            if (job != null) systemDnsPassJobs.remove(job)
+        }
+    }
+
+    /** Returns whether work is left over and a retry is worth scheduling. */
+    private suspend fun applySystemDns(normalized: List<String>): Boolean {
+        if (
+            normalized == lastAppliedSystemDns &&
+            pendingSystemDnsRestarts.isEmpty() &&
+            pendingSystemDnsResets.isEmpty()
+        ) {
+            return false
+        }
+
+        val dependents = activePlan.values.filter {
+            it.resolverFile?.dependsOnSystemDns == true
+        }
+        if (dependents.isEmpty()) {
+            lastAppliedSystemDns = normalized
+            pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
+            return false
+        }
+        generation += 1L
+        val currentGeneration = generation
         optionalCheckJob?.cancelAndJoin()
         optionalCheckJob = null
-        stopAllProcesses()
-        activePlan = linkedMapOf()
-        readyNodeIds.clear()
-        generation += 1L
-        lastStateJson = stateJson(generation, "idle", emptyList())
+
+        // Only the nodes this pass actually worked on decide its status.
+        val touched = linkedMapOf<String, NodeOutcome>()
+        val deadline = SystemClock.elapsedRealtime() + DNS_UPDATE_BUDGET_MILLIS
+
+        for (spec in dependents) {
+            val resolverFile = spec.resolverFile ?: continue
+            val runtimeDir = File(spec.workingDirectory)
+            val restartPending = pendingSystemDnsRestarts.contains(spec.nodeId)
+            val resetPending = pendingSystemDnsResets.contains(spec.nodeId)
+            val wasRunning = restartPending || readStartTime(spec.nodeId) > 0L
+            val renderResult = withContext(Dispatchers.IO) {
+                RuntimeNodeResolverFileWriter.render(
+                    workingDirectory = runtimeDir,
+                    spec = resolverFile,
+                    systemDns = normalized,
+                )
+            }
+            when (renderResult) {
+                RuntimeNodeResolverFileRenderResult.UNCHANGED -> {
+                    // Nothing to write. Fall through only when an earlier pass
+                    // left this node down: then the outstanding work is the
+                    // restart or reset, and no later render will ever report
+                    // CHANGED.
+                    if (!restartPending && !resetPending) continue
+                }
+
+                RuntimeNodeResolverFileRenderResult.CHANGED -> {
+                    pendingSystemDnsResets.add(spec.nodeId)
+                }
+
+                else -> {
+                    val message = resolverRenderFailureMessage(renderResult, spec.nodeId)
+                    GlobalState.log(message)
+                    stop(spec.nodeId)
+                    readyNodeIds.remove(spec.nodeId)
+                    if (wasRunning) pendingSystemDnsRestarts.add(spec.nodeId)
+                    touched[spec.nodeId] = NodeOutcome(
+                        spec = spec,
+                        ready = false,
+                        reused = false,
+                        message = message,
+                    )
+                    continue
+                }
+            }
+
+            if (wasRunning) {
+                stop(spec.nodeId)
+                readyNodeIds.remove(spec.nodeId)
+                pendingSystemDnsRestarts.add(spec.nodeId)
+            }
+
+            val reset = withContext(Dispatchers.IO) {
+                RuntimeNodeResolverFileWriter.resetDeclaredPaths(runtimeDir, resolverFile)
+            }
+            if (!reset) {
+                val message =
+                    "Could not reset resolver-dependent state for runtime node `${spec.nodeId}`"
+                GlobalState.log(message)
+                touched[spec.nodeId] = NodeOutcome(
+                    spec = spec,
+                    ready = false,
+                    reused = false,
+                    message = message,
+                )
+                continue
+            }
+            pendingSystemDnsResets.remove(spec.nodeId)
+
+            // Only nodes that are actually running are restarted; a sleeping
+            // reserve node picks the new list up when it is next started.
+            if (!wasRunning) continue
+
+            val budget = deadline - SystemClock.elapsedRealtime()
+            if (budget < DNS_RESTART_MIN_BUDGET_MILLIS) {
+                // Out of budget rather than broken: hand the rest to the retry
+                // instead of holding the plan lock for another startup timeout.
+                val message = "Runtime node `${spec.nodeId}` was not restarted after a " +
+                    "DNS change: this update ran out of its time budget"
+                GlobalState.log(message)
+                touched[spec.nodeId] = NodeOutcome(
+                    spec = spec,
+                    ready = false,
+                    reused = false,
+                    message = message,
+                )
+                continue
+            }
+
+            GlobalState.log("Restarting runtime node `${spec.nodeId}` after a system DNS change")
+            val outcome = try {
+                prepareNode(
+                    spec,
+                    startupTimeoutMillis =
+                        minOf(spec.connectivityCheck.startupTimeoutMillis, budget),
+                )
+            } catch (cancellation: CancellationException) {
+                // Preempted mid-restart: leave nothing half-started behind. The
+                // node stays in pendingSystemDnsRestarts, and the transition
+                // that preempted this pass owns it now.
+                withContext(NonCancellable) {
+                    stop(spec.nodeId)
+                    readyNodeIds.remove(spec.nodeId)
+                }
+                throw cancellation
+            }
+            if (outcome.ready) {
+                readyNodeIds.add(spec.nodeId)
+                pendingSystemDnsRestarts.remove(spec.nodeId)
+            } else {
+                readyNodeIds.remove(spec.nodeId)
+                GlobalState.log(
+                    "Runtime node `${spec.nodeId}` failed to restart after a DNS change: " +
+                        outcome.message,
+                )
+            }
+            touched[spec.nodeId] = outcome
+        }
+
+        // The reported node list still covers the whole plan, so a node that was
+        // already down stays visible as such. The plan *status*, however, is
+        // decided by the nodes this pass touched: an unrelated failure must not
+        // turn a successful DNS update into a failed plan, nor keep the optional
+        // checks of the nodes that did come back from running.
+        val outcomes = activePlan.values.map { spec ->
+            touched[spec.nodeId] ?: untouchedOutcome(spec)
+        }
+        val failure = touched.values.firstOrNull { !it.ready }
+        lastStateJson = stateJson(
+            currentGeneration,
+            if (failure == null) "ready" else "failed",
+            outcomes,
+            failure?.message.orEmpty(),
+        )
+        if (failure == null) {
+            lastAppliedSystemDns = normalized
+            launchOptionalChecks(currentGeneration, activePlan.values.toList())
+        }
+        return failure != null
+    }
+
+    /** Plan entry for a node this DNS pass did not have to touch. */
+    private fun untouchedOutcome(spec: RuntimeNodeSpec): NodeOutcome {
+        val ready = spec.nodeId in readyNodeIds && readStartTime(spec.nodeId) > 0L
+        return NodeOutcome(
+            spec = spec,
+            ready = ready,
+            reused = ready,
+            message = if (ready) {
+                ""
+            } else {
+                readLastError(spec.nodeId).ifBlank {
+                    "Runtime node `${spec.nodeId}` is not running"
+                }
+            },
+        )
+    }
+
+    private fun resolverRenderFailureMessage(
+        result: RuntimeNodeResolverFileRenderResult,
+        nodeId: String,
+    ): String = when (result) {
+        RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE ->
+            "Runtime node `$nodeId` has no DNS servers to work with: the current " +
+                "network advertises none and the node declares no others"
+
+        else -> "Could not render the resolver file for runtime node `$nodeId`"
+    }
+
+    /**
+     * Finishes an incomplete DNS update without waiting for the OS to send
+     * another network callback.
+     *
+     * A sleeping attempt is never cancelled by a newer list — it notices the
+     * mismatch itself and exits — because cancelling one that had already
+     * started its pass is the only way this could interfere with a plan
+     * transition.
+     */
+    @Synchronized
+    private fun scheduleSystemDnsRetry(target: List<String>, expectedEpoch: Long) {
+        if (expectedEpoch != systemDnsWorkEpoch) return
+        val retryTarget = target.toList()
+        if (systemDnsRetryJobs[retryTarget]?.isActive == true) return
+
+        val retryJob = GlobalState.scope.launch(start = CoroutineStart.LAZY) {
+            var attempt = 1
+            while (attempt <= MAX_SYSTEM_DNS_RETRIES) {
+                delay(SYSTEM_DNS_RETRY_DELAY_MILLIS * attempt)
+                // A newer list has a pass and a retry of its own.
+                if (
+                    systemDnsWorkEpoch != expectedEpoch ||
+                    latestSystemDns != retryTarget
+                ) {
+                    return@launch
+                }
+                GlobalState.log(
+                    "Retrying the runtime-node DNS update (attempt $attempt of " +
+                        "$MAX_SYSTEM_DNS_RETRIES)",
+                )
+                val pass = try {
+                    runSystemDnsPass(retryTarget)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Throwable) {
+                    GlobalState.log("runtime-node DNS retry failed: ${error.message}")
+                    SystemDnsPassResult(incomplete = true, epoch = expectedEpoch)
+                }
+                if (pass.epoch != expectedEpoch) return@launch
+                if (!pass.incomplete) return@launch
+                attempt += 1
+            }
+            GlobalState.log(
+                "Gave up on the runtime-node DNS update after $MAX_SYSTEM_DNS_RETRIES retries",
+            )
+        }
+        systemDnsRetryJobs[retryTarget] = retryJob
+        retryJob.invokeOnCompletion {
+            systemDnsRetryJobs.remove(retryTarget, retryJob)
+        }
+        retryJob.start()
+    }
+
+    /**
+     * Stops DNS work before a plan transition takes the lock.
+     *
+     * Cancel only, never join: the caller is about to take the very lock a pass
+     * may be holding, so waiting for it here would deadlock.
+     */
+    @Synchronized
+    private fun cancelSystemDnsWork() {
+        systemDnsWorkEpoch += 1L
+        systemDnsRetryJobs.values.forEach { it.cancel() }
+        systemDnsRetryJobs.clear()
+        systemDnsPassJobs.forEach { it.cancel() }
+    }
+
+    suspend fun stopAll() {
+        cancelSystemDnsWork()
+        withBatchProbesStopped {
+            optionalCheckJob?.cancelAndJoin()
+            optionalCheckJob = null
+            stopAllProcesses()
+            activePlan = linkedMapOf()
+            readyNodeIds.clear()
+            pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
+            generation += 1L
+            lastStateJson = stateJson(generation, "idle", emptyList())
+        }
     }
 
     private suspend fun <T> withBatchProbesStopped(block: suspend () -> T): T =
@@ -398,12 +855,25 @@ object RuntimeNodeProcessManager {
         return result
     }
 
-    private suspend fun prepareNode(spec: RuntimeNodeSpec): NodeOutcome {
+    /**
+     * Starts [spec] and waits until it is usable.
+     *
+     * [startupTimeoutMillis] defaults to what the node declared; callers that
+     * hold a shared lock pass a smaller budget instead of copying the spec,
+     * because a copied spec would no longer match the running process and would
+     * cost the node a pointless restart on the next plan.
+     */
+    private suspend fun prepareNode(
+        spec: RuntimeNodeSpec,
+        startupTimeoutMillis: Long = spec.connectivityCheck.startupTimeoutMillis,
+    ): NodeOutcome {
         return runCatching {
             val startedAt = start(spec)
-            check(startedAt > 0L) { "Runtime node `${spec.nodeId}` did not start" }
-            val deadline =
-                SystemClock.elapsedRealtime() + spec.connectivityCheck.startupTimeoutMillis
+            check(startedAt > 0L) {
+                startFailures.remove(spec.nodeId)
+                    ?: "Runtime node `${spec.nodeId}` did not start"
+            }
+            val deadline = SystemClock.elapsedRealtime() + startupTimeoutMillis
             waitForListener(spec, deadline)
             check(readStartTime(spec.nodeId) > 0L) {
                 "Runtime node `${spec.nodeId}` exited after opening its local listener"
@@ -426,6 +896,9 @@ object RuntimeNodeProcessManager {
             }
             NodeOutcome(spec, ready = true, reused = false)
         }.getOrElse { error ->
+            // Cancellation is not a node failure: something with a stronger
+            // claim on the plan lock preempted us and has to be able to unwind.
+            if (error is CancellationException) throw error
             NodeOutcome(
                 spec,
                 ready = false,
@@ -488,6 +961,12 @@ object RuntimeNodeProcessManager {
 
     private suspend fun waitForListener(spec: RuntimeNodeSpec, deadline: Long) {
         withContext(Dispatchers.IO) {
+            // Most nodes open their port within a few tens of milliseconds, and
+            // a fixed interval made every one of them look that much slower.
+            // The poll starts tight and backs off to the old fixed interval, so
+            // a node that legitimately takes minutes still costs the same few
+            // probes per second it did before.
+            var retryMillis = LISTENER_MIN_RETRY_MILLIS
             while (true) {
                 val remaining = deadline - SystemClock.elapsedRealtime()
                 check(remaining > 0L) {
@@ -502,6 +981,15 @@ object RuntimeNodeProcessManager {
                     }
                 }.isSuccess
                 if (connected) return@withContext
+                val startupFailure = runningNodes[spec.nodeId]
+                    ?.output
+                    ?.firstLineContaining(spec.startupFailurePatterns)
+                if (startupFailure != null) {
+                    error(
+                        "Runtime node `${spec.nodeId}` reported a startup failure: " +
+                            startupFailure,
+                    )
+                }
                 if (readStartTime(spec.nodeId) <= 0L) {
                     val lastError = readLastError(spec.nodeId)
                     error(
@@ -512,45 +1000,100 @@ object RuntimeNodeProcessManager {
                         },
                     )
                 }
-                delay(minOf(LISTENER_RETRY_MILLIS, remaining))
+                delay(minOf(retryMillis, remaining))
+                retryMillis = minOf(retryMillis * 2, LISTENER_MAX_RETRY_MILLIS)
             }
         }
+    }
+
+    /** Records why a node refused to launch and reports "did not start". */
+    private fun failStart(nodeId: String, message: String): Long {
+        startFailures[nodeId] = message
+        GlobalState.log(message)
+        return 0L
     }
 
     private suspend fun start(spec: RuntimeNodeSpec): Long {
         val lock = nodeLocks.getOrPut(spec.nodeId) { Mutex() }
         return lock.withLock {
             withContext(Dispatchers.IO) {
+                startFailures.remove(spec.nodeId)
                 val running = runningNodes[spec.nodeId]
-                if (running?.process?.isAlive == true && running.spec == spec) {
+                if (
+                    running?.process?.isAlive == true &&
+                    running.spec == spec &&
+                    spec.nodeId !in pendingSystemDnsRestarts &&
+                    spec.nodeId !in pendingSystemDnsResets
+                ) {
                     return@withContext running.startTimeMillis
                 }
                 if (running != null) stopInternal(spec.nodeId)
 
                 val executable = File(spec.executablePath)
                 if (!executable.exists()) {
-                    GlobalState.log("runtime node binary is missing: ${spec.executablePath}")
-                    return@withContext 0L
+                    return@withContext failStart(
+                        spec.nodeId,
+                        "runtime node binary is missing: ${spec.executablePath}",
+                    )
                 }
                 if (executable.canWrite()) {
                     executable.setExecutable(true, true)
                 } else if (!executable.canExecute()) {
-                    GlobalState.log("runtime node binary is not executable: ${spec.executablePath}")
-                    return@withContext 0L
+                    return@withContext failStart(
+                        spec.nodeId,
+                        "runtime node binary is not executable: ${spec.executablePath}",
+                    )
                 }
 
                 val runtimeDir = File(spec.workingDirectory)
                 if (!runtimeDir.exists()) runtimeDir.mkdirs()
+                // The generated resolver list is rebuilt from its template on
+                // every launch so a node started at cold start picks up the
+                // system DNS observed since the plan was written.
+                spec.resolverFile?.let { resolverFile ->
+                    val renderResult = RuntimeNodeResolverFileWriter.render(
+                        workingDirectory = runtimeDir,
+                        spec = resolverFile,
+                        systemDns = currentSystemDns(),
+                    )
+                    if (
+                        renderResult == RuntimeNodeResolverFileRenderResult.FAILED ||
+                        renderResult ==
+                        RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE
+                    ) {
+                        return@withContext failStart(
+                            spec.nodeId,
+                            resolverRenderFailureMessage(renderResult, spec.nodeId),
+                        )
+                    }
+                    if (
+                        (
+                            renderResult == RuntimeNodeResolverFileRenderResult.CHANGED ||
+                                pendingSystemDnsResets.contains(spec.nodeId)
+                        ) &&
+                        !RuntimeNodeResolverFileWriter.resetDeclaredPaths(
+                            runtimeDir,
+                            resolverFile,
+                        )
+                    ) {
+                        return@withContext failStart(
+                            spec.nodeId,
+                            "Could not reset resolver-dependent state for runtime node " +
+                                "`${spec.nodeId}`",
+                        )
+                    }
+                    pendingSystemDnsResets.remove(spec.nodeId)
+                }
                 val process = try {
                     ProcessBuilder(listOf(spec.executablePath) + spec.arguments)
                         .directory(runtimeDir)
                         .redirectErrorStream(true)
                         .start()
                 } catch (error: Exception) {
-                    GlobalState.log(
+                    return@withContext failStart(
+                        spec.nodeId,
                         "Failed to start runtime node `${spec.nodeId}`: ${error.message}",
                     )
-                    return@withContext 0L
                 }
 
                 val startedAt = System.currentTimeMillis()
@@ -691,7 +1234,8 @@ object RuntimeNodeProcessManager {
         .toString()
 
     private const val LISTENER_CONNECT_TIMEOUT_MILLIS = 200L
-    private const val LISTENER_RETRY_MILLIS = 100L
+    private const val LISTENER_MIN_RETRY_MILLIS = 20L
+    private const val LISTENER_MAX_RETRY_MILLIS = 100L
     private const val SOFT_STOP_MILLIS = 500L
     private const val FORCE_STOP_MILLIS = 500L
     private const val EMERGENCY_WAIT_MILLIS = 500L
@@ -699,4 +1243,17 @@ object RuntimeNodeProcessManager {
     private const val MAX_OUTPUT_LENGTH = 4096
     private const val MAX_PROBE_CONCURRENCY = 16
     private const val MAX_PROBE_NODES = 64
+
+    // Ceiling for one system-DNS pass. Plan transitions preempt it outright,
+    // but nothing else does, so no single pass may hold the plan lock for
+    // `startup timeout x dependent nodes`; whatever is left over is finished by
+    // the scheduled retry rather than by a longer lock hold.
+    private const val DNS_UPDATE_BUDGET_MILLIS = 60_000L
+
+    // Below this there is no point starting another node: it would fail on the
+    // timeout and burn the restart for nothing.
+    private const val DNS_RESTART_MIN_BUDGET_MILLIS = 5_000L
+
+    private const val SYSTEM_DNS_RETRY_DELAY_MILLIS = 5_000L
+    private const val MAX_SYSTEM_DNS_RETRIES = 3
 }

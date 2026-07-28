@@ -40,6 +40,7 @@
 
 - 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** — عبور از DPI با دستکاری بسته‌ها برای دسترسی به منابعی که «از داخل» مسدود شده‌اند (مانند YouTube یا Discord).
 - 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — عبور از لیست‌های سفید با استتار ترافیک به‌صورت تماس WebRTC یک سرویس مجاز مانند Yandex Telemost.
+- 🌩 **[StormDNS](https://github.com/nullroute1970/StormDNS)** — عبور از لیست‌های سفید با تقلید از پرس‌وجوهای معمولی DNS به یک رزالور مجاز.
 - 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — عبور از لیست‌های سیاه با تقلید از ترافیک مرورگر Chrome.
 
 هر فناوری برای کار خودش عالی است، اما جایی نبود که همهٔ آن‌ها را کنار هم بیاورد. می‌خواستم همه‌چیز را در یک‌جا تنظیم کنم و فقط «اتصال» را بزنم.
@@ -83,6 +84,20 @@ proxies:
     net:
       transport: datachannel
       dns: "1.1.1.1:53"
+```
+
+</td></tr>
+<tr><td>
+
+🌩 **StormDNS** — تونلی درون پرس‌وجوهای معمولی DNS.
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
 ```
 
 </td></tr>
@@ -158,7 +173,7 @@ tun:
 مرجع کامل — در **[مرکز مستندات](docs/README.md)**.
 
 **🚀 برای کاربران**
-- 🧩 [نودهای داخلی](docs/user-guide/profiles.md) — ByeDPI، OlcRTC، NaiveProxy
+- 🧩 [نودهای داخلی](docs/user-guide/profiles.md) — ByeDPI، OlcRTC، StormDNS، NaiveProxy
 - 🎯 [تونل‌زنی جداگانه](docs/user-guide/split-tunneling.md) — مدیریت از طریق پروفایل
 - 🎨 [hintهای ارائه‌دهنده](docs/user-guide/provider-hints.md) — ظاهر و رفتار
 
@@ -210,7 +225,7 @@ flutter build apk --debug
 
 FlClashM بر پایهٔ [FlClashX](https://github.com/pluralplay/FlClashX) ساخته شده — یک کلاینت چندسکویی عالی برای Clash/Mihomo. سپاس فراوان از نویسندگان برای کار و کد متن‌بازشان که بدون آن این پروژه ممکن نبود.
 
-سپاس ویژه از نویسندگان [ByeDPI](https://github.com/hufrea/byedpi)، [OlcRTC](https://github.com/openlibrecommunity/olcrtc) و [NaiveProxy](https://github.com/klzgrad/naiveproxy) — که بدون ابزارهایشان عبور از سانسور ممکن نبود.
+سپاس ویژه از نویسندگان [ByeDPI](https://github.com/hufrea/byedpi)، [OlcRTC](https://github.com/openlibrecommunity/olcrtc)، [StormDNS](https://github.com/nullroute1970/StormDNS) و [NaiveProxy](https://github.com/klzgrad/naiveproxy) — که بدون ابزارهایشان عبور از سانسور ممکن نبود.
 
 ---
 

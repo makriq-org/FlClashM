@@ -18,6 +18,20 @@ The fork's key invariant: **appearance and provider hints cannot weaken runtime 
 - 📞 `olcrtc` works only in CNC mode.
 - 🧱 In `olcrtc profiles[]`, `socks.host`, `socks.port`, and `crypto.key_file` are recursively forbidden; the rest is passed to OlcRTC transparently.
 - 🛡 `byedpi` only checks the specified URLs.
+- 🌩 `stormdns` additionally rejects SOCKS5 authentication, the `local-dns-*` block, the log directory, `config-version`, and the interactive `startup.mode: ask`.
+
+## 🌩 StormDNS
+
+⚠️ `encryption: none` and `xor` are allowed per the upstream contract: they **do not hide payload contents** from the resolver operator.
+
+`resolvers` is the only case where a profile hands a node a list of network addresses, so the sources are validated separately:
+
+- ✅ Allowed sources in `resolvers`: `system`, an IP, `IP:port`, a CIDR range, and an `https://` link to a list.
+- 🔗 A list link is accepted **over HTTPS only**, with no userinfo or fragment, no `localhost` and no local addresses; the response is capped at **1 MiB** and **15 s**.
+- 🚫 The fetch does not go through a proxy, does not follow redirects, accepts only a `200` response, and connects only to an already-validated public address.
+- 💾 The remote-list cache is kept per link. When a source is unreachable, the last copy is used — even after `refresh` expires; without a copy the link is simply skipped instead of failing the profile apply.
+- 🧮 CIDR expansion is capped at 65536 addresses: on wide ranges upstream iterates all of them, which would hang the app.
+- 🔁 The final list is deduplicated by IP — the first occurrence wins, along with its port.
 
 ## 🌐 Connectivity-check addresses
 

@@ -14,4 +14,6 @@ export 'olcrtc_release.dart';
 export 'runtime_health_probe.dart';
 export 'runtime_registry.dart';
 export 'runtime_types.dart';
+export 'stormdns_node_controller.dart';
+export 'stormdns_release.dart';
 export 'vpn_access_control.dart';

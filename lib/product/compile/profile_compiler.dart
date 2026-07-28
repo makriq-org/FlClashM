@@ -11,6 +11,7 @@ import 'config_tree.dart';
 import 'profile_split_tunneling.dart';
 import 'raw_profile.dart';
 import 'runtime_plan.dart';
+import 'stormdns_resolver_sources.dart';
 
 typedef ProviderAssetPathResolver = Future<String> Function(
     String profileId, String type, String url);
@@ -54,9 +55,14 @@ class RuntimePlanBuildContext {
 class ProfileCompiler {
   const ProfileCompiler({
     this.builtInProxyCompiler = const BuiltInProxyCompiler(),
+    this.stormDnsRemoteResolverListStore,
   });
 
   final BuiltInProxyCompiler builtInProxyCompiler;
+
+  /// Resolves remote StormDNS resolver lists. Injected so tests and the
+  /// non-Android build can compile profiles without touching the network.
+  final StormDnsRemoteResolverListStore? stormDnsRemoteResolverListStore;
 
   CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
@@ -130,12 +136,17 @@ class ProfileCompiler {
                 config: rawConfig,
                 accessControl: null,
               );
+    final stormDnsRemoteLists = await _resolveStormDnsRemoteLists(
+      rawConfig: resolvedProfileSplitTunneling.config,
+      homeDirPath: context.homeDirPath,
+    );
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
       globalTestUrl: testUrl,
       copyConfig: false,
       validate: false,
+      stormDnsRemoteLists: stormDnsRemoteLists,
     );
     rawConfig = compiledBuiltInProxyNodes.config;
 
@@ -186,6 +197,48 @@ class ProfileCompiler {
       metadata: metadata,
       profileAccessControl: resolvedProfileSplitTunneling.accessControl,
     );
+  }
+
+  /// Fetches every remote resolver list a StormDNS node references.
+  ///
+  /// `refresh` is checked here, at profile apply, rather than on a standing
+  /// timer. An unreachable list falls back to its last stored copy; a list with
+  /// no stored copy is omitted so the node keeps its remaining sources.
+  Future<Map<Uri, StormDnsRemoteResolverList>> _resolveStormDnsRemoteLists({
+    required Map<String, dynamic> rawConfig,
+    required String? homeDirPath,
+  }) async {
+    final requested = builtInProxyCompiler.collectStormDnsRemoteLists(rawConfig);
+    if (requested.isEmpty) return const {};
+    final store = stormDnsRemoteResolverListStore ??
+        (homeDirPath == null
+            ? null
+            : DefaultStormDnsRemoteResolverListStore(
+                cacheDirectoryPath: path.join(
+                  homeDirPath,
+                  'runtimes',
+                  'stormdns',
+                  'resolver-lists',
+                ),
+              ));
+    if (store == null) return const {};
+
+    // Each address keeps its own refresh window, so a short window on one node
+    // does not force every other list to be re-fetched.
+    final byRefresh = <Duration, List<Uri>>{};
+    for (final entry in requested.entries) {
+      byRefresh.putIfAbsent(entry.value, () => <Uri>[]).add(entry.key);
+    }
+    // The groups are resolved together, not one after another: they exist only
+    // because the refresh windows differ, and running them in sequence would
+    // add up their download budgets while the user waits for the profile.
+    final groups = await Future.wait(
+      byRefresh.entries
+          .map((group) => store.resolve(group.value, refresh: group.key)),
+    );
+    return <Uri, StormDnsRemoteResolverList>{
+      for (final group in groups) ...group,
+    };
   }
 
   Future<ResolvedProfileSplitTunneling> _resolveProfileSplitTunnelingOverride({

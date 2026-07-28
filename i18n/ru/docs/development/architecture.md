@@ -21,7 +21,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 1. 🎛 **База FlClashX** — UI, навигация, базовый runtime-путь.
 2. 📦 **Продуктовый слой** (`lib/product/**`) — компиляция профиля, безопасность, обновления, fork-only страницы.
-3. ⚙️ **Слой среды выполнения** — `mihomo` (baseline) и встроенные узлы `naiveproxy`, `olcrtc`, `byedpi`.
+3. ⚙️ **Слой среды выполнения** — `mihomo` (baseline) и встроенные узлы `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
 4. 📱 **Слой платформы** — Android VPN, foreground-служба, установщик, уведомления.
 
 ## 🚧 Граница между базой и продуктом

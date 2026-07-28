@@ -281,6 +281,16 @@
       "reason": "Супервизор встроенных runtime-узлов относится к Android runtime-слою и остаётся в бюджете."
     },
     {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
+      "bucket": "budget",
+      "reason": "Тест обобщённого resolver-файла закрепляет правила дедупликации и запрет выхода за рабочую директорию; CI Kotlin-тесты не запускает, инварианты дополнительно закреплены product-тестом на Dart."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",
+      "bucket": "budget",
+      "reason": "Обобщённый контракт resolver-файла runtime-узлов принадлежит Android runtime-слою: перегенерация при смене системных DNS обязана работать без Flutter-процесса."
+    },
+    {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityChecker.kt",
       "bucket": "budget",
       "reason": "Проверка доступности встроенных узлов при холодном запуске относится к Android runtime-слою и зеркалит контракт product layer."

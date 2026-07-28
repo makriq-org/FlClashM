@@ -12,7 +12,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 ## 🔍 内置节点验证
 
-启动 NaiveProxy、OlcRTC 和 ByeDPI 分**两个阶段**：
+启动 NaiveProxy、OlcRTC、ByeDPI 和 StormDNS 分**两个阶段**：
 
 1. ✅ 确认存活的进程与本地 SOCKS 端口；
 2. 🌐 严格经该 SOCKS 端口发起端到端 HTTP(S) 请求。
@@ -66,11 +66,31 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 </details>
 
-**`auto` 激活。** supervisor 提前暂存 OlcRTC 产物，但不把休眠节点纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含 OlcRTC 的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
+### 🌩 stormdns
 
-对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
+- **类型：** `stormdns`
+- **必填字段：** `name`、`type`、`domains`、`encryption`、`encryption-key`
+- 必填字段没有默认值：StormDNS 不做协议协商，取值必须与服务端一致
+- 不支持 UDP；生成的本地 `mihomo` 节点会得到 `udp: false`
+- 预设 `messenger` / `balanced` / `bulk` 设定复制与压缩；叠加顺序为 **StormDNS 默认值 → preset → 显式字段**
+- 模式取值范围取自 StormDNS 的 `finalizeClientConfig`：上游会静默截断的取值一律在启动前拒绝。相互关联的边界会被完整校验 —— `upload-setup` ≥ `upload`、`download-setup` ≥ `download`、`mtu.*.max` ≥ `min`、`nack-max-gap` ≤ `window/4`、`process-workers` ≥ `workers`，以及 RTO、ping 间隔、ping 阈值的顺序和 `session-retry-base` ≤ `session-retry-max`
+- 声明启动失败的标记行；一旦匹配，服务立即停止等待端口，而不会耗满 120 秒预算
+- 源码固定在提交 `87348df5b11f9e490262a713ca268734007af44f`
+- 每个二进制文件的 SHA-256 与提交一并固定；即使标记一致，资源准备与测试也会拒绝过期或被修改的文件
 
-集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
+<details>
+<summary>🔧 stormdns 的升级与回滚</summary>
+
+- **升级：** 更换固定提交，使用固定的 Go 1.26.4 与 NDK 28.0.13004108 执行 `dart setup.dart android --out runtime-assets` 重新构建三个 Android ABI，按产出文件更新固定的 SHA-256，然后重新执行该命令与测试。
+- **回滚：** 该节点为首次内置，没有上一个固定提交。版本回滚即恢复提交并以同样方式重新构建；对用户而言的应急回滚是把该节点从配置中移除。无需数据迁移：工作缓存按 fingerprint 归属，会自动重建。
+
+</details>
+
+**解析器文件。** Android 启动契约以**通用方式扩展，不做节点类型判断**：节点声明 `resolverFile`，包含 `template`、`path`、`dependsOnSystemDns` 与 `resetPaths`。配置只投放模板（`client_resolvers.template`），进程真正读取的文件（`client_resolvers.txt`）由平台生成 —— 因此平台的重写不会被当作配置变更，也不会在每次应用配置时重启节点。系统 DNS 变化时，`RuntimeNodeResolverFile` 原子地重新生成该文件，重置 `resetPaths` 中的路径，并**只重启处于活动状态的依赖**节点。`SystemDnsReader` 自行读取系统 DNS，因为冷启动会在 `NetworkObserveModule` 安装之前就应用计划。
+
+**多产物事务。** `LocalNodeController` 通过 stage → rollback → commit 为单个节点管理多个文件。单文件节点的修订逻辑逐字节保持不变，因此 NaiveProxy、OlcRTC 与 ByeDPI 的行为没有变化。工作缓存以最终解析器列表、`domains` 与 StormDNS 版本的 fingerprint 为键；旧目录只在 commit 成功**之后**才删除，回滚会恢复上一份计划的状态。
+
+**有意偏离上游之处。** StormDNS 的 `usableHostCount` 对 IPv4 `/1` 返回 2，随后却遍历 2³¹−2 个地址。FlClashM 计算实际展开规模，并与文档中的 65536 上限比对：配置里超限的 CIDR 在启动前即被拒绝，而通过链接取回的列表则截断到该上限。否则这样的配置会让应用卡死。
 
 ### 🛡 byedpi
 
@@ -82,6 +102,14 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 支持 `{sni}` 替换
 - 默认启用 UDP 并传给本地 `mihomo` 节点；`udp: false` 将其关闭，而 ByeDPI 进程本身不接收单独的 UDP 参数
 
+### 😴 `auto` 激活（olcrtc 与 stormdns）
+
+supervisor 提前暂存休眠节点的产物，但不把它纳入 live 或冷启动清单，因此其必需的端到端检查不再属于 VPN 启动事务。watchdog 探测被观察分组，在设定的失败次数后唤醒备用节点，原子地应用完整方案，并强制刷新该节点自身的 delay。在所有直接包含分组均无连接与无选择一段时间后，方案会在不含该节点的情况下应用，进程重新休眠。配置变更或停止会通过 generation token 取消迁移；休眠状态不持久化，重启后重新开始。
+
+对 `mihomo` 与网络状态的访问由 `RuntimeHealthProbe` 接口隔离：产品层只看到 delay 测试、活动连接链、分组当前的 `now` 以及网络存在与否。实现位于 app 层，构建在 `clashCore` 与 `connectivity_plus` 之上。没有注入 probe 时自动 watchdog 空转，但暂存、停止与手动唤醒仍然安全。`always` 模式不走此路径，保持旧的启动事务。
+
+集成随应用的 Dart 部分一起更新，不改动 Android 桥；即时回滚为 `activation: always`，版本回退无需状态迁移。
+
 ---
 
 ## 🚧 限制
@@ -89,6 +117,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 内置节点只能在 `proxies` 段工作
 - 本地地址和端口由客户端决定
 - `auto` 模式下的 ByeDPI 检查 `strategy-test.urls` 里的 URL 或内置 YouTube 端点
+- StormDNS 天生较慢：冷启动包含对解析器的 MTU 扫描（真机上三个解析器耗时 28 秒），因此其默认 `startup-timeout` 提高到 120 秒
 
 ---
 

@@ -40,6 +40,7 @@ There are several powerful circumvention tools, and each lives in its own silo:
 
 - 🛡 **[ByeDPI](https://github.com/hufrea/byedpi)** — DPI circumvention for resources blocked "from the inside" (e.g. YouTube or Discord in some regions).
 - 📞 **[OlcRTC](https://github.com/openlibrecommunity/olcrtc)** — bypasses whitelists by disguising traffic as a WebRTC call of an allowed service such as Yandex Telemost.
+- 🌩 **[StormDNS](https://github.com/nullroute1970/StormDNS)** — bypasses whitelists by disguising traffic as ordinary DNS queries to an allowed resolver.
 - 🎭 **[NaiveProxy](https://github.com/klzgrad/naiveproxy)** — bypasses blocklists by parroting Chrome browser traffic.
 
 Each technology is great for its own job, but there was no single place that brought them all together. I wanted to configure everything in one spot and just press "connect".
@@ -83,6 +84,20 @@ proxies:
     net:
       transport: datachannel
       dns: "1.1.1.1:53"
+```
+
+</td></tr>
+<tr><td>
+
+🌩 **StormDNS** — a tunnel inside ordinary DNS queries.
+
+```yaml
+proxies:
+  - name: "storm"
+    type: stormdns
+    domains: ["v.example.com"]
+    encryption: chacha20
+    encryption-key: "<key>"
 ```
 
 </td></tr>
@@ -158,7 +173,7 @@ Release builds are published in [GitHub Releases](https://github.com/makriq-org/
 Full reference — in the **[documentation hub](docs/README.md)**.
 
 **🚀 For users**
-- 🧩 [Built-in nodes](docs/user-guide/profiles.md) — ByeDPI, OlcRTC, NaiveProxy
+- 🧩 [Built-in nodes](docs/user-guide/profiles.md) — ByeDPI, OlcRTC, StormDNS, NaiveProxy
 - 🎯 [Split tunneling](docs/user-guide/split-tunneling.md) — management via profile
 - 🎨 [Provider hints](docs/user-guide/provider-hints.md) — customization and behavior
 
@@ -210,7 +225,7 @@ flutter build apk --debug
 
 FlClashM is built on top of [FlClashX](https://github.com/pluralplay/FlClashX) — an excellent cross-platform client for Clash/Mihomo. Huge thanks to the authors for their work and open-source code, without which this project would not have been possible.
 
-Special thanks to the authors of [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), and [NaiveProxy](https://github.com/klzgrad/naiveproxy) — without their tools, censorship circumvention would not be possible.
+Special thanks to the authors of [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), and [NaiveProxy](https://github.com/klzgrad/naiveproxy) — without their tools, censorship circumvention would not be possible.
 
 ---
 

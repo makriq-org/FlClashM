@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import 'connectivity_check.dart';
 
-enum BuiltInProxyType { naiveproxy, byedpi, olcrtc }
+enum BuiltInProxyType { naiveproxy, byedpi, olcrtc, stormdns }
 
 extension BuiltInProxyTypeLabel on BuiltInProxyType {
   String get label => switch (this) {
         BuiltInProxyType.naiveproxy => 'naiveproxy',
         BuiltInProxyType.byedpi => 'byedpi',
         BuiltInProxyType.olcrtc => 'olcrtc',
+        BuiltInProxyType.stormdns => 'stormdns',
       };
 
   static BuiltInProxyType? tryParse(String? value) {
@@ -116,6 +117,7 @@ class BuiltInProxyDescriptor {
     required this.listenPortRangeStart,
     required this.listenPortRangeSize,
     required this.availability,
+    this.defaultStartupTimeout = const Duration(seconds: 30),
   });
 
   final BuiltInProxyType type;
@@ -126,6 +128,7 @@ class BuiltInProxyDescriptor {
   final int listenPortRangeStart;
   final int listenPortRangeSize;
   final BuiltInProxyAvailability availability;
+  final Duration defaultStartupTimeout;
 }
 
 @immutable
@@ -154,6 +157,7 @@ class BuiltInProxyNodePlan {
     this.connectivityCheck = const ConnectivityCheckConfig(),
     this.activation,
     this.files = const {},
+    this.metadata = const {},
   });
 
   final String nodeId;
@@ -166,6 +170,10 @@ class BuiltInProxyNodePlan {
   final ConnectivityCheckConfig connectivityCheck;
   final NodeActivationConfig? activation;
   final Map<String, String> files;
+
+  /// Node-type specific values the controller needs at launch time but that
+  /// are not artifacts, such as the StormDNS working-cache fingerprint.
+  final Map<String, String> metadata;
 
   Map<String, dynamic> toProxyConfig() => <String, dynamic>{
         'name': name,

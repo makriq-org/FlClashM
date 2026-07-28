@@ -51,6 +51,22 @@ void main() {
     expect(required, greaterThan(alive));
   });
 
+  test('the listener poll starts tight and backs off to a ceiling', () {
+    final start = manager.indexOf('private suspend fun waitForListener');
+    final end = manager.indexOf('private fun failStart', start);
+    final wait = manager.substring(start, end);
+
+    expect(start, greaterThan(0));
+    expect(wait, contains('var retryMillis = LISTENER_MIN_RETRY_MILLIS'));
+    expect(wait, contains('delay(minOf(retryMillis, remaining))'));
+    expect(
+      wait,
+      contains('retryMillis = minOf(retryMillis * 2, LISTENER_MAX_RETRY_MILLIS)'),
+    );
+    expect(manager, contains('LISTENER_MIN_RETRY_MILLIS = 20L'));
+    expect(manager, contains('LISTENER_MAX_RETRY_MILLIS = 100L'));
+  });
+
   test('connectivity probes close sockets on every exit path', () {
     final probeStart = connectivityChecker.indexOf('private suspend fun probe');
     final probeEnd = connectivityChecker.indexOf(
@@ -166,13 +182,26 @@ void main() {
     expect(manager, contains('jobs.joinAll()'));
     expect(cancellationCheck, greaterThan(0));
     expect(planChange, greaterThan(cancellationCheck));
+    // Every plan transition still runs inside withBatchProbesStopped. The
+    // entry points wrap it rather than being it, so the check follows the call
+    // chain instead of one exact signature line.
+    final stopAllIndex = manager.indexOf('suspend fun stopAll() {');
+    expect(stopAllIndex, greaterThan(0));
     expect(
-      manager,
-      contains('suspend fun stopAll() = withBatchProbesStopped'),
+      manager.indexOf('withBatchProbesStopped {', stopAllIndex),
+      greaterThan(stopAllIndex),
+    );
+    final applyIndex = manager.indexOf(
+      'suspend fun applyPlan(planJson: String): String {',
+    );
+    expect(applyIndex, greaterThan(0));
+    expect(
+      manager.indexOf('return applyPlanLocked(planJson)', applyIndex),
+      greaterThan(applyIndex),
     );
     expect(
       manager,
-      contains('suspend fun applyPlan(planJson: String): String =\n'
+      contains('private suspend fun applyPlanLocked(planJson: String): String =\n'
           '        withBatchProbesStopped'),
     );
   });

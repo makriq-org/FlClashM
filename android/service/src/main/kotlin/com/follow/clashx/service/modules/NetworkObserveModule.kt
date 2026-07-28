@@ -9,6 +9,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.service.Module
+import com.follow.clashx.service.RuntimeNodeProcessManager
+import com.follow.clashx.service.SystemDnsReader
 import com.google.gson.Gson
 
 class NetworkObserveModule(
@@ -123,10 +125,9 @@ class NetworkObserveModule(
     }
 
     private fun dnsServers(linkProperties: LinkProperties): List<String> {
-        return linkProperties.dnsServers
-            .mapNotNull { it.hostAddress }
-            .filter { it.isNotBlank() }
-            .distinct()
+        return SystemDnsReader.sanitize(
+            linkProperties.dnsServers.mapNotNull { it.hostAddress },
+        )
     }
 
     private fun selectDnsSource(cm: ConnectivityManager): DnsSource? {
@@ -166,10 +167,20 @@ class NetworkObserveModule(
         reason: String,
     ): Boolean {
         val dns = dnsServers(linkProperties)
-        if (dns.isEmpty()) return false
+        if (dns.isEmpty()) {
+            // The core cannot use an empty list, but dependent runtime nodes
+            // must stop serving against the previous physical-network DNS.
+            updateRuntimeNodeDns(dns)
+            return false
+        }
 
         val key = dns.joinToString(",")
-        if (key == lastDnsKey) return true
+        if (key == lastDnsKey) {
+            // The core already accepted this list. Let the runtime manager
+            // cheaply de-duplicate a successful update or retry a failed one.
+            updateRuntimeNodeDns(dns)
+            return true
+        }
         val dnsJson = gson.toJson(dns)
 
         return runCatching {
@@ -177,9 +188,22 @@ class NetworkObserveModule(
         }.onSuccess {
             lastDnsKey = key
             GlobalState.log("System DNS updated from $network ($reason)")
+            updateRuntimeNodeDns(dns)
         }.onFailure {
             GlobalState.log("updateDns failed: ${it.message}")
         }.isSuccess
+    }
+
+    private fun updateRuntimeNodeDns(dns: List<String>) {
+        // Runtime nodes that resolve through the physical network keep their
+        // own resolver file; the process manager rewrites it and restarts only
+        // the nodes that depend on it.
+        GlobalState.launch {
+            runCatching { RuntimeNodeProcessManager.updateSystemDns(dns) }
+                .onFailure {
+                    GlobalState.log("runtime-node DNS update failed: ${it.message}")
+                }
+        }
     }
 
     private fun seedDns(cm: ConnectivityManager) {

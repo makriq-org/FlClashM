@@ -3,22 +3,28 @@ import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/byedpi_release.dart';
 import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
+import 'package:flclashx/product/runtime/stormdns_release.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('schema registry is pinned to every bundled runtime release', () {
-    expect(
-      builtInProxySchemas[BuiltInProxyType.naiveproxy]!.runtimeVersion,
-      naiveProxyPinnedReleaseTag,
-    );
-    expect(
-      builtInProxySchemas[BuiltInProxyType.byedpi]!.runtimeVersion,
-      byedpiPinnedReleaseTag,
-    );
-    expect(
-      builtInProxySchemas[BuiltInProxyType.olcrtc]!.runtimeVersion,
-      olcRtcPinnedReleaseTag,
-    );
+    const pinnedReleaseTags = <BuiltInProxyType, String>{
+      BuiltInProxyType.naiveproxy: naiveProxyPinnedReleaseTag,
+      BuiltInProxyType.byedpi: byedpiPinnedReleaseTag,
+      BuiltInProxyType.olcrtc: olcRtcPinnedReleaseTag,
+      BuiltInProxyType.stormdns: stormDnsPinnedReleaseTag,
+    };
+
+    // Every registered schema must be listed here, so a new node cannot ship
+    // with a runtimeVersion that drifted away from its pinned binary.
+    expect(pinnedReleaseTags.keys, containsAll(builtInProxySchemas.keys));
+    for (final entry in pinnedReleaseTags.entries) {
+      expect(
+        builtInProxySchemas[entry.key]!.runtimeVersion,
+        entry.value,
+        reason: entry.key.label,
+      );
+    }
   });
 
   test('every schema field carries the complete contract metadata', () {
