@@ -39,7 +39,8 @@ void main() {
           coreVersion: 'v1.19.28',
           androidApi: 35,
           androidAbis: const ['arm64-v8a'],
-          androidFlushComplete: true,
+          localFlushComplete: true,
+          remoteFlushRequested: true,
           runtime: const {
             'vpnRunning': true,
             'coreInitialized': true,
@@ -65,7 +66,8 @@ void main() {
         expect(allText, isNot(contains(secret)), reason: secret);
       }
       expect(allText, contains('"profilesAndConfigsIncluded": false'));
-      expect(allText, contains('"flushComplete": true'));
+      expect(allText, contains('"localFlushComplete": true'));
+      expect(allText, contains('"remoteFlushRequested": true'));
       expect(allText, contains('<older content omitted'));
     },
   );
@@ -114,10 +116,7 @@ void main() {
     await writes;
     for (final bytes in archives) {
       final archive = ZipDecoder().decodeBytes(bytes);
-      expect(
-        archive.files.map((file) => file.name),
-        contains('manifest.json'),
-      );
+      expect(archive.files.map((file) => file.name), contains('manifest.json'));
     }
   });
 }

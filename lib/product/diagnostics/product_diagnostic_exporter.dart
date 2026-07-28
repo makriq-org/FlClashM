@@ -81,7 +81,8 @@ final class ProductDiagnosticExporter {
         androidApi: platform['api'] as int?,
         androidAbis: abis,
         runtime: context.runtime,
-        androidFlushComplete: platform['flushComplete'] as bool?,
+        localFlushComplete: platform['localFlushComplete'] as bool?,
+        remoteFlushRequested: platform['remoteFlushRequested'] as bool?,
       ),
     );
   }

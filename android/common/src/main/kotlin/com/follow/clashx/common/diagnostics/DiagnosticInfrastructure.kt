@@ -3,12 +3,11 @@ package com.follow.clashx.common.diagnostics
 import java.io.Closeable
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
-import java.util.ArrayDeque
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
 import java.util.Collections
 import java.util.IdentityHashMap
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 const val MAX_DIAGNOSTIC_ENTRY_BYTES = 16 * 1024
 
@@ -63,154 +62,62 @@ internal object DiagnosticTextLimiter {
 }
 
 internal object DiagnosticThrowableRenderer {
-    private const val MAX_THROWABLES = 8
-    private const val MAX_FRAMES_PER_THROWABLE = 64
+    private const val MAX_CAUSES = 8
+    private const val MAX_FRAMES = 64
+    private const val TRUNCATED = "…<truncated>"
 
-    fun render(
-        context: String,
-        error: Throwable,
-        maxBytes: Int = MAX_DIAGNOSTIC_ENTRY_BYTES,
-    ): String {
-        val output = BoundedUtf8Appender(maxBytes)
-        output.append(context)
-        output.append("\n")
-        val visited = Collections.newSetFromMap(
-            IdentityHashMap<Throwable, Boolean>(),
-        )
-        renderThrowable(
-            output = output,
-            error = error,
-            caption = "",
-            visited = visited,
-            depth = 0,
-        )
-        return output.value()
-    }
-
-    private fun renderThrowable(
-        output: BoundedUtf8Appender,
-        error: Throwable,
-        caption: String,
-        visited: MutableSet<Throwable>,
-        depth: Int,
-    ) {
-        if (output.isTruncated || depth >= MAX_THROWABLES) return
-        if (!visited.add(error)) {
-            output.append("$caption<circular throwable>\n")
-            return
+    fun render(context: String, error: Throwable, maxBytes: Int = MAX_DIAGNOSTIC_ENTRY_BYTES): String {
+        require(maxBytes > DiagnosticTextLimiter.utf8Length(TRUNCATED)) {
+            "Throwable limit must leave room for the truncation marker"
         }
-        output.append(caption)
-        output.append(error.javaClass.name)
-        val message = runCatching { error.message }.getOrNull()
-        if (!message.isNullOrEmpty()) {
-            output.append(": ")
-            output.append(message)
-        }
-        output.append("\n")
-
-        val frames = runCatching { error.stackTrace }.getOrDefault(emptyArray())
-        var frameCount = 0
-        for (frame in frames) {
-            if (frameCount >= MAX_FRAMES_PER_THROWABLE || output.isTruncated) break
-            output.append("\tat ")
-            output.append(frame.toString())
-            output.append("\n")
-            frameCount++
-        }
-        if (frames.size > frameCount && !output.isTruncated) {
-            output.append("\t… ${frames.size - frameCount} frames omitted\n")
-        }
-
-        val suppressed = runCatching { error.suppressed }.getOrDefault(emptyArray())
-        for (suppressedError in suppressed) {
-            if (output.isTruncated || visited.size >= MAX_THROWABLES) break
-            renderThrowable(
-                output = output,
-                error = suppressedError,
-                caption = "Suppressed: ",
-                visited = visited,
-                depth = depth + 1,
-            )
-        }
-        val cause = runCatching { error.cause }.getOrNull()
-        if (
-            cause != null &&
-            !output.isTruncated &&
-            visited.size < MAX_THROWABLES
-        ) {
-            renderThrowable(
-                output = output,
-                error = cause,
-                caption = "Caused by: ",
-                visited = visited,
-                depth = depth + 1,
-            )
-        }
-    }
-
-    private class BoundedUtf8Appender(
-        private val maxBytes: Int,
-    ) {
-        private val suffix = "…<truncated>"
-        private val suffixBytes = DiagnosticTextLimiter.utf8Length(suffix)
-        private val builder = StringBuilder(minOf(maxBytes, 1024))
-        private var bytes = 0
-        var isTruncated = false
-            private set
-
-        init {
-            require(maxBytes > suffixBytes) {
-                "Throwable limit must leave room for the truncation marker"
-            }
-        }
-
-        fun append(value: String) {
-            if (value.isEmpty() || isTruncated) return
-            val remaining = maxBytes - bytes
-            val bounded = DiagnosticTextLimiter.truncateUtf8(
-                value,
-                remaining,
-                suffix = "",
-            )
-            builder.append(bounded)
+        val output = StringBuilder(minOf(maxBytes, 1024))
+        var bytes = 0
+        var truncated = false
+        fun append(value: String): Boolean {
+            if (value.isEmpty() || truncated) return false
+            val bounded = DiagnosticTextLimiter.truncateUtf8(value, maxBytes - bytes, suffix = "")
+            output.append(bounded)
             bytes += DiagnosticTextLimiter.utf8Length(bounded)
-            if (bounded.length != value.length) markTruncated()
+            if (bounded.length != value.length) truncated = true
+            return !truncated
         }
 
-        fun value(): String = builder.toString()
-
-        private fun markTruncated() {
+        append(context)
+        append("\n")
+        val visited = Collections.newSetFromMap(IdentityHashMap<Throwable, Boolean>())
+        var current: Throwable? = error
+        var depth = 0
+        while (current != null && depth < MAX_CAUSES && !truncated) {
+            val throwable = current
+            if (!visited.add(throwable)) {
+                append("<circular throwable>\n")
+                break
+            }
+            if (depth > 0) append("Caused by: ")
+            append(throwable.javaClass.name)
+            runCatching { throwable.message }.getOrNull()?.takeIf(String::isNotEmpty)?.let {
+                append(": ")
+                append(it)
+            }
+            append("\n")
+            val frames = runCatching { throwable.stackTrace }.getOrDefault(emptyArray())
+            for (index in 0 until minOf(frames.size, MAX_FRAMES)) {
+                append("\tat ${frames[index]}\n")
+                if (truncated) break
+            }
+            if (frames.size > MAX_FRAMES && !truncated) append("\t… frames omitted\n")
+            current = runCatching { throwable.cause }.getOrNull()
+            depth++
+        }
+        if (truncated) {
             val content = DiagnosticTextLimiter.truncateUtf8(
-                builder.toString(),
-                maxBytes - suffixBytes,
+                output.toString(),
+                maxBytes - DiagnosticTextLimiter.utf8Length(TRUNCATED),
                 suffix = "",
             )
-            builder.clear()
-            builder.append(content)
-            builder.append(suffix)
-            bytes = maxBytes
-            isTruncated = true
+            return content + TRUNCATED
         }
-    }
-}
-
-internal class DiagnosticPersistenceHealth(
-    private val onFailure: (Exception) -> Unit = {},
-) {
-    private val failed = AtomicBoolean(false)
-
-    val isHealthy: Boolean
-        get() = !failed.get()
-
-    fun run(action: () -> Unit): Boolean {
-        return try {
-            action()
-            true
-        } catch (error: Exception) {
-            failed.set(true)
-            runCatching { onFailure(error) }
-            false
-        }
+        return output.toString()
     }
 }
 
@@ -321,21 +228,15 @@ class BoundedUtf8LineReader(
 internal class DiagnosticWriteQueue(
     private val capacity: Int,
     private val writeBatch: (List<String>) -> Unit,
-    threadFactory: (Runnable) -> Thread = { task ->
-        Thread(task, "diagnostic-log-writer").apply { isDaemon = true }
-    },
     private val onDropped: (Int) -> Unit = {},
 ) {
-    private data class Pending(
-        val line: String? = null,
-        val flush: CountDownLatch? = null,
-    )
+    private sealed interface Command {
+        data class Line(val value: String) : Command
+        data class Flush(val result: CompletableFuture<Boolean>) : Command
+    }
 
-    private val monitor = Object()
-    private val pending = ArrayDeque<Pending>()
-    private var pendingLines = 0
-    private var running = true
-    private val worker = threadFactory(Runnable(::runLoop))
+    private val queue = ArrayBlockingQueue<Command>(capacity)
+    private val worker = Thread(::runLoop, "diagnostic-log-writer").apply { isDaemon = true }
 
     init {
         require(capacity > 0) { "Diagnostic queue must retain entries" }
@@ -343,52 +244,23 @@ internal class DiagnosticWriteQueue(
     }
 
     fun offer(line: String) {
-        synchronized(monitor) {
-            if (!running) {
-                notifyDropped(1)
-                return
-            }
-            if (pendingLines >= capacity) {
-                val iterator = pending.iterator()
-                while (iterator.hasNext()) {
-                    if (iterator.next().line != null) {
-                        iterator.remove()
-                        pendingLines--
-                        notifyDropped(1)
-                        break
-                    }
-                }
-            }
-            pending.addLast(Pending(line = line))
-            pendingLines++
-            monitor.notifyAll()
-        }
+        if (!queue.offer(Command.Line(line))) notifyDropped(1)
     }
 
     fun flush(timeoutMillis: Long): Boolean {
         require(timeoutMillis >= 0L)
-        val completed = CountDownLatch(1)
-        synchronized(monitor) {
-            if (!running) return false
-            pending.addLast(Pending(flush = completed))
-            monitor.notifyAll()
-        }
+        val result = CompletableFuture<Boolean>()
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
         return try {
-            completed.await(timeoutMillis, TimeUnit.MILLISECONDS)
+            if (!queue.offer(Command.Flush(result), timeoutMillis, TimeUnit.MILLISECONDS)) return false
+            val remaining = deadline - System.nanoTime()
+            if (remaining <= 0L) return result.isDone && result.getNow(false)
+            result.get(remaining, TimeUnit.NANOSECONDS)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
-        }
-    }
-
-    fun shutdownNow() {
-        synchronized(monitor) {
-            running = false
-            if (pendingLines > 0) notifyDropped(pendingLines)
-            pending.forEach { it.flush?.countDown() }
-            pending.clear()
-            pendingLines = 0
-            monitor.notifyAll()
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -397,37 +269,28 @@ internal class DiagnosticWriteQueue(
     }
 
     private fun runLoop() {
+        var failed = false
         while (true) {
-            val task = synchronized(monitor) {
-                while (running && pending.isEmpty()) {
-                    monitor.wait()
+            when (val command = queue.take()) {
+                is Command.Flush -> {
+                    command.result.complete(!failed)
+                    failed = false
                 }
-                if (!running && pending.isEmpty()) return
-                pending.removeFirst().also {
-                    if (it.line != null) pendingLines--
+                is Command.Line -> {
+                    val lines = ArrayList<String>(MAX_BATCH_ENTRIES)
+                    lines.add(command.value)
+                    while (lines.size < MAX_BATCH_ENTRIES) {
+                        val next = queue.peek() as? Command.Line ?: break
+                        queue.poll()
+                        lines.add(next.value)
+                    }
+                    try {
+                        writeBatch(lines)
+                    } catch (_: Throwable) {
+                        failed = true
+                        // Diagnostic persistence must never reach the process crash handler.
+                    }
                 }
-            }
-
-            if (task.flush != null) {
-                task.flush.countDown()
-                continue
-            }
-
-            val lines = ArrayList<String>(MAX_BATCH_ENTRIES)
-            task.line?.let(lines::add)
-            synchronized(monitor) {
-                while (lines.size < MAX_BATCH_ENTRIES) {
-                    val next = pending.peekFirst() ?: break
-                    val line = next.line ?: break
-                    pending.removeFirst()
-                    pendingLines--
-                    lines.add(line)
-                }
-            }
-            try {
-                writeBatch(lines)
-            } catch (_: Throwable) {
-                // Diagnostic persistence must never reach the process crash handler.
             }
         }
     }

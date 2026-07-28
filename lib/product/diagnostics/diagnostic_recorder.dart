@@ -78,35 +78,23 @@ final class ProductDiagnosticRecorder {
   }
 
   void recordCritical(String message, [StackTrace? stackTrace]) {
-    var text = truncateDiagnosticUtf8(message, maxBytes: maxEntryBytes);
+    var text = message;
     if (stackTrace != null) {
-      final messageBudget = maxEntryBytes ~/ 2;
       final boundedMessage = truncateDiagnosticUtf8(
         message,
-        maxBytes: messageBudget,
+        maxBytes: maxEntryBytes ~/ 2,
         suffix: '',
       );
-      final messageWasTruncated = boundedMessage.length != message.length;
       final messageBytes = diagnosticUtf8Length(boundedMessage);
       final stackBudget = maxEntryBytes - messageBytes - 1;
-      final stack = stackTrace.toString();
       final boundedStack = truncateDiagnosticUtf8(
-        stack,
-        maxBytes: stackBudget,
+        stackTrace.toString(),
+        maxBytes: stackBudget.clamp(0, maxEntryBytes),
         suffix: '',
       );
-      final stackWasTruncated = boundedStack.length != stack.length;
       text = '$boundedMessage\n$boundedStack';
-      if (messageWasTruncated || stackWasTruncated) {
-        final markerBytes = diagnosticUtf8Length(diagnosticTruncationMarker);
-        final content = truncateDiagnosticUtf8(
-          text,
-          maxBytes: maxEntryBytes - markerBytes,
-          suffix: '',
-        );
-        text = '$content$diagnosticTruncationMarker';
-      }
     }
+    text = truncateDiagnosticUtf8(text, maxBytes: maxEntryBytes);
     final line = _format(text);
     try {
       _criticalWriter?.appendLineSync(line);
@@ -157,17 +145,17 @@ final class ProductDiagnosticRecorder {
 
   Future<void> _drain(DiagnosticFileWriter writer) async {
     final lines = <String>[];
-    var characters = 0;
+    var bytes = 0;
     if (_droppedEntries > 0) {
       lines.add(
         _format('diagnostic queue dropped $_droppedEntries oldest entries'),
       );
       _droppedEntries = 0;
     }
-    while (_pending.isNotEmpty && characters < 64 * 1024) {
+    while (_pending.isNotEmpty && bytes < 64 * 1024) {
       final line = _pending.removeFirst();
       lines.add(line);
-      characters += line.length;
+      bytes += diagnosticUtf8Length(line);
     }
     try {
       await writer.appendLines(lines);

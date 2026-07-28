@@ -17,7 +17,8 @@ final class DiagnosticArchiveManifest {
     required this.androidApi,
     required this.androidAbis,
     required this.runtime,
-    this.androidFlushComplete,
+    this.localFlushComplete,
+    this.remoteFlushRequested,
   });
 
   final DateTime createdAt;
@@ -28,31 +29,29 @@ final class DiagnosticArchiveManifest {
   final int? androidApi;
   final List<String> androidAbis;
   final Map<String, Object?> runtime;
-  final bool? androidFlushComplete;
+  final bool? localFlushComplete;
+  final bool? remoteFlushRequested;
 
   Map<String, Object?> toJson({required List<Map<String, Object?>> files}) => {
-        'schemaVersion': 1,
-        'createdAt': createdAt.toUtc().toIso8601String(),
-        'application': {
-          'version': appVersion,
-          'build': buildNumber,
-          'tag': appTag
-        },
-        'core': {'version': coreVersion},
-        'platform': {
-          'name': 'android',
-          'api': androidApi,
-          'abis': androidAbis,
-          'flushComplete': androidFlushComplete,
-        },
-        'runtime': runtime,
-        'files': files,
-        'privacy': {
-          'redactedBeforeWrite': true,
-          'redactedAgainOnExport': true,
-          'profilesAndConfigsIncluded': false,
-        },
-      };
+    'schemaVersion': 1,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    'application': {'version': appVersion, 'build': buildNumber, 'tag': appTag},
+    'core': {'version': coreVersion},
+    'platform': {
+      'name': 'android',
+      'api': androidApi,
+      'abis': androidAbis,
+      'localFlushComplete': localFlushComplete,
+      'remoteFlushRequested': remoteFlushRequested,
+    },
+    'runtime': runtime,
+    'files': files,
+    'privacy': {
+      'redactedBeforeWrite': true,
+      'redactedAgainOnExport': true,
+      'profilesAndConfigsIncluded': false,
+    },
+  };
 }
 
 final class DiagnosticArchiveBuilder {
@@ -78,8 +77,9 @@ final class DiagnosticArchiveBuilder {
 
     for (final candidate in candidates) {
       if (remaining <= 0) break;
-      final readLimit =
-          maxBytesPerFile < remaining ? maxBytesPerFile : remaining;
+      final readLimit = maxBytesPerFile < remaining
+          ? maxBytesPerFile
+          : remaining;
       if (readLimit <= 0) continue;
 
       final tail = await _readTail(candidate.file, readLimit);
@@ -152,30 +152,17 @@ final class DiagnosticArchiveBuilder {
           // A writer may rotate this path between listing and stat.
           continue;
         }
-        result.add(
-          _DiagnosticCandidate(
-            file: entity,
-            modifiedAt: stat.modified,
-            sourceKey: _sourceKey(directory, entity),
-            safeName: _safeFileName(
-              '${path.basename(directory.path)}-${path.basename(entity.path)}',
-            ),
+        result.add((
+          file: entity,
+          modifiedAt: stat.modified,
+          safeName: _safeFileName(
+            '${path.basename(directory.path)}-${path.basename(entity.path)}',
           ),
-        );
+        ));
       }
     }
     result.sort((a, b) => b.modifiedAt.compareTo(a.modifiedAt));
-    final primary = <_DiagnosticCandidate>[];
-    final rotations = <_DiagnosticCandidate>[];
-    final seenSources = <String>{};
-    for (final candidate in result) {
-      if (seenSources.add(candidate.sourceKey)) {
-        primary.add(candidate);
-      } else {
-        rotations.add(candidate);
-      }
-    }
-    return [...primary, ...rotations];
+    return result;
   }
 
   Future<_DiagnosticTail?> _readTail(File file, int limit) async {
@@ -189,10 +176,7 @@ final class DiagnosticArchiveBuilder {
       if (length > readLength) {
         await input.setPosition(length - readLength);
       }
-      return _DiagnosticTail(
-        sourceLength: length,
-        bytes: await input.read(readLength),
-      );
+      return (sourceLength: length, bytes: await input.read(readLength));
     } on FileSystemException {
       // Rotation can remove the path before it is opened; another retained
       // generation still carries the source and export must remain usable.
@@ -210,36 +194,12 @@ final class DiagnosticArchiveBuilder {
     final safe = value.replaceAll(RegExp('[^a-zA-Z0-9._-]'), '_');
     return safe.isEmpty ? 'diagnostic.log' : safe;
   }
-
-  String _sourceKey(Directory directory, File file) {
-    final name = path.basename(file.path);
-    final source = name.startsWith('FlClashM_')
-        ? 'legacy-flutter'
-        : name.replaceFirst(RegExp(r'\.\d+\.log$'), '');
-    return '${path.basename(directory.path)}:$source';
-  }
 }
 
-final class _DiagnosticCandidate {
-  const _DiagnosticCandidate({
-    required this.file,
-    required this.modifiedAt,
-    required this.sourceKey,
-    required this.safeName,
-  });
+typedef _DiagnosticCandidate = ({
+  File file,
+  DateTime modifiedAt,
+  String safeName,
+});
 
-  final File file;
-  final DateTime modifiedAt;
-  final String sourceKey;
-  final String safeName;
-}
-
-final class _DiagnosticTail {
-  const _DiagnosticTail({
-    required this.sourceLength,
-    required this.bytes,
-  });
-
-  final int sourceLength;
-  final List<int> bytes;
-}
+typedef _DiagnosticTail = ({int sourceLength, List<int> bytes});

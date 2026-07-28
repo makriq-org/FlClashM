@@ -1,13 +1,11 @@
 package com.follow.clashx.common.diagnostics
 
-import android.app.Activity
 import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.io.File
@@ -22,12 +20,6 @@ object DiagnosticLog {
     private const val FLUSH_SENDER_PID = "senderPid"
 
     private val droppedEntries = AtomicInteger(0)
-    private val persistenceHealth = DiagnosticPersistenceHealth { error ->
-        Log.e(
-            DEFAULT_TAG,
-            "diagnostic persistence failed: ${error.javaClass.simpleName}",
-        )
-    }
     private val handlingCrash = AtomicBoolean(false)
     private val initialized = AtomicBoolean(false)
 
@@ -58,23 +50,16 @@ object DiagnosticLog {
             IntentFilter(FLUSH_ACTION),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
-        application.registerActivityLifecycleCallbacks(ActivityLifecycleLogger)
         lifecycle(DEFAULT_TAG, "process created: $processSource")
     }
 
-    fun requestAllProcessesFlush(
-        context: Context,
-        timeoutMillis: Long = 5_000L,
-    ): Boolean {
-        runCatching {
+    fun requestOtherProcessesFlush(context: Context): Boolean = runCatching {
             context.sendBroadcast(
                 Intent(FLUSH_ACTION)
                     .setPackage(context.packageName)
                     .putExtra(FLUSH_SENDER_PID, android.os.Process.myPid()),
             )
-        }
-        return flushBlocking(timeoutMillis)
-    }
+    }.isSuccess
 
     fun d(tag: String, message: String) = record(processSource, Log.DEBUG, tag, message)
 
@@ -129,8 +114,7 @@ object DiagnosticLog {
 
     fun flushBlocking(timeoutMillis: Long = 2_000L): Boolean {
         if (!initialized.get()) return true
-        val drained = runCatching { writer.flush(timeoutMillis) }.getOrDefault(false)
-        return drained && persistenceHealth.isHealthy
+        return runCatching { writer.flush(timeoutMillis) }.getOrDefault(false)
     }
 
     private fun record(
@@ -181,12 +165,12 @@ object DiagnosticLog {
                     processSource,
                     Log.WARN,
                     DEFAULT_TAG,
-                    "diagnostic queue dropped $dropped oldest entries",
+                    "diagnostic queue dropped $dropped newest entries",
                 ),
             )
         }
         output.addAll(lines)
-        persistenceHealth.run { store?.appendLines(output) }
+        store?.appendLines(output)
     }
 
     private fun format(source: String, priority: Int, tag: String, message: String): String {
@@ -237,34 +221,6 @@ object DiagnosticLog {
                 ?.processName
                 .orEmpty()
         }
-
-    private object ActivityLifecycleLogger : Application.ActivityLifecycleCallbacks {
-        override fun onActivityCreated(activity: Activity, state: Bundle?) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: created")
-        }
-
-        override fun onActivityStarted(activity: Activity) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: started")
-        }
-
-        override fun onActivityResumed(activity: Activity) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: resumed")
-        }
-
-        override fun onActivityPaused(activity: Activity) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: paused")
-        }
-
-        override fun onActivityStopped(activity: Activity) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: stopped")
-        }
-
-        override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
-
-        override fun onActivityDestroyed(activity: Activity) {
-            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: destroyed")
-        }
-    }
 
     private object FlushReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
