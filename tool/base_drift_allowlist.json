@@ -73,7 +73,7 @@
     {
       "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/SelfUpdateInstallerTest.kt",
       "bucket": "budget",
-      "reason": "Нативные CI-тесты фиксируют single-flight сессий и foreground-aware подтверждение самообновления."
+      "reason": "Нативные CI-тесты фиксируют single-flight сессий и обработку статусов самообновления."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",

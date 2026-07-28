@@ -275,10 +275,29 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     return
                 }
                 scope.launch(Dispatchers.IO) {
-                    val accepted = SelfUpdateInstaller(
-                        FlClashApplication.getAppContext(),
-                    ).install(path)
-                    result.successOnMain(accepted)
+                    when (
+                        SelfUpdateInstaller(FlClashApplication.getAppContext()).install(path)
+                    ) {
+                        SelfUpdateInstallResult.ACCEPTED -> result.successOnMain(true)
+                        SelfUpdateInstallResult.REJECTED -> result.successOnMain(false)
+                        SelfUpdateInstallResult.INTERACTIVE_FALLBACK -> {
+                            Handler(Looper.getMainLooper()).post {
+                                val activity = activityRef?.get()
+                                if (activity == null) {
+                                    runCatching { result.success(false) }
+                                    return@post
+                                }
+                                runCatching {
+                                    result.success(
+                                        SelfUpdateInstaller(activity).installInteractively(
+                                            activity,
+                                            path,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
