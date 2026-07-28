@@ -423,11 +423,11 @@ class RemoteService : Service() {
         runCatching { Core.getRunTime() }
             .onFailure { GlobalState.log("RemoteService: native library load failed: ${it.message}") }
         deleteStaleChannels()
-        GlobalState.log("RemoteService created")
+        GlobalState.lifecycle("RemoteService created")
     }
 
     override fun onDestroy() {
-        GlobalState.log("RemoteService destroying")
+        GlobalState.lifecycle("RemoteService destroying")
         synchronized(eventLock) {
             val ev = eventListener.getAndSet(null)
             eventDeathRecipient.getAndSet(null)?.let { r ->

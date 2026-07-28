@@ -1,38 +1,47 @@
 package com.follow.clashx.common.diagnostics
 
+import com.google.gson.JsonParser
+import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 class DiagnosticRedactorTest {
     @Test
-    fun redactsSecretsBeforePersistence() {
-        val input = listOf(
-            """password: "hunter2" token=abc123""",
-            "Authorization: Bearer very-secret-token",
-            "subscription_url=https://user:pass@example.com/sub/private?token=abc",
-            "profile `My private profile` failed",
-            """raw config={"proxies":[{"password":"inside-config"}]}""",
-            """name: "Node from JSON"""",
-            "ipc payload={\n  \"password\": \"second-line-secret\"\n}",
-        ).joinToString("\n")
-
-        val redacted = DiagnosticRedactor.redact(input)
-
-        listOf(
-            "hunter2",
-            "abc123",
-            "very-secret-token",
-            "user:pass",
-            "/sub/private",
-            "My private profile",
-            "Node from JSON",
-            "\"proxies\"",
-            "inside-config",
-            "second-line-secret",
-        ).forEach { secret ->
-            assertFalse(redacted.contains(secret), "Leaked $secret in $redacted")
+    fun redactsSharedVectorsBeforePersistence() {
+        val vectors = JsonParser
+            .parseString(vectorsFile().readText())
+            .asJsonArray
+        vectors.forEach { element ->
+            val vector = element.asJsonObject
+            assertEquals(
+                vector["expected"].asString,
+                DiagnosticRedactor.redact(vector["input"].asString),
+                vector["id"].asString,
+            )
         }
-        assertTrue(redacted.contains(DiagnosticRedactor.REPLACEMENT))
+    }
+
+    @Test
+    fun redactsProfileLabelCutByTheUtf8Boundary() {
+        val redacted = DiagnosticRedactor.redactBounded(
+            "profile `${"private label ".repeat(100)}`",
+            maxBytes = 128,
+        )
+
+        assertEquals(
+            "profile ${DiagnosticRedactor.REPLACEMENT}" +
+                DiagnosticTextLimiter.TRUNCATED_SUFFIX,
+            redacted,
+        )
+    }
+
+    private fun vectorsFile(): File {
+        val relative = "lib/product/diagnostics/diagnostic_redaction_vectors.json"
+        val workingDirectory = requireNotNull(System.getProperty("user.dir"))
+        return generateSequence(File(workingDirectory).absoluteFile) {
+            it.parentFile
+        }.map { File(it, relative) }
+            .firstOrNull(File::isFile)
+            ?: error("Could not locate $relative from $workingDirectory")
     }
 }

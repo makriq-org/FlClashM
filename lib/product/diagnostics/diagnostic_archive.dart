@@ -17,6 +17,7 @@ final class DiagnosticArchiveManifest {
     required this.androidApi,
     required this.androidAbis,
     required this.runtime,
+    this.androidFlushComplete,
   });
 
   final DateTime createdAt;
@@ -27,6 +28,7 @@ final class DiagnosticArchiveManifest {
   final int? androidApi;
   final List<String> androidAbis;
   final Map<String, Object?> runtime;
+  final bool? androidFlushComplete;
 
   Map<String, Object?> toJson({required List<Map<String, Object?>> files}) => {
         'schemaVersion': 1,
@@ -37,7 +39,12 @@ final class DiagnosticArchiveManifest {
           'tag': appTag
         },
         'core': {'version': coreVersion},
-        'platform': {'name': 'android', 'api': androidApi, 'abis': androidAbis},
+        'platform': {
+          'name': 'android',
+          'api': androidApi,
+          'abis': androidAbis,
+          'flushComplete': androidFlushComplete,
+        },
         'runtime': runtime,
         'files': files,
         'privacy': {
@@ -71,15 +78,14 @@ final class DiagnosticArchiveBuilder {
 
     for (final candidate in candidates) {
       if (remaining <= 0) break;
-      final fileLength = await candidate.file.length();
-      final readLimit = [
-        fileLength,
-        maxBytesPerFile,
-        remaining,
-      ].reduce((a, b) => a < b ? a : b);
+      final readLimit =
+          maxBytesPerFile < remaining ? maxBytesPerFile : remaining;
       if (readLimit <= 0) continue;
 
-      var bytes = await _readTail(candidate.file, readLimit);
+      final tail = await _readTail(candidate.file, readLimit);
+      if (tail == null) continue;
+      final fileLength = tail.sourceLength;
+      var bytes = tail.bytes;
       final truncated = fileLength > bytes.length;
       if (truncated) {
         final firstCompleteLine = bytes.indexOf(0x0a);
@@ -137,9 +143,15 @@ final class DiagnosticArchiveBuilder {
         if (entity is! File || !entity.path.endsWith('.log')) continue;
         final canonical = entity.absolute.path;
         if (!seenPaths.add(canonical)) continue;
-        // Export is initiated on the UI isolate; keep metadata access async.
-        // ignore: avoid_slow_async_io
-        final stat = await entity.stat();
+        final FileStat stat;
+        try {
+          // Export is initiated on the UI isolate; keep metadata access async.
+          // ignore: avoid_slow_async_io
+          stat = await entity.stat();
+        } on FileSystemException {
+          // A writer may rotate this path between listing and stat.
+          continue;
+        }
         result.add(
           _DiagnosticCandidate(
             file: entity,
@@ -166,14 +178,31 @@ final class DiagnosticArchiveBuilder {
     return [...primary, ...rotations];
   }
 
-  Future<List<int>> _readTail(File file, int limit) async {
-    final length = await file.length();
-    final input = await file.open();
+  Future<_DiagnosticTail?> _readTail(File file, int limit) async {
+    RandomAccessFile? input;
     try {
-      if (length > limit) await input.setPosition(length - limit);
-      return await input.read(limit);
+      // Export is initiated on the UI isolate; keep file access async.
+      // ignore: avoid_slow_async_io
+      input = await file.open();
+      final length = await input.length();
+      final readLength = length < limit ? length : limit;
+      if (length > readLength) {
+        await input.setPosition(length - readLength);
+      }
+      return _DiagnosticTail(
+        sourceLength: length,
+        bytes: await input.read(readLength),
+      );
+    } on FileSystemException {
+      // Rotation can remove the path before it is opened; another retained
+      // generation still carries the source and export must remain usable.
+      return null;
     } finally {
-      await input.close();
+      try {
+        await input?.close();
+      } on FileSystemException {
+        // A rotated descriptor can already be invalidated by the writer.
+      }
     }
   }
 
@@ -203,4 +232,14 @@ final class _DiagnosticCandidate {
   final DateTime modifiedAt;
   final String sourceKey;
   final String safeName;
+}
+
+final class _DiagnosticTail {
+  const _DiagnosticTail({
+    required this.sourceLength,
+    required this.bytes,
+  });
+
+  final int sourceLength;
+  final List<int> bytes;
 }

@@ -29,4 +29,26 @@ class DiagnosticFileStoreTest {
             temporary.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun boundsMultibyteEntriesByUtf8Bytes() {
+        val temporary = Files.createTempDirectory("diagnostic-store-utf8")
+        try {
+            val store = DiagnosticFileStore(
+                directory = temporary.toFile(),
+                source = "android-main",
+                maxFileBytes = 10,
+                maxFiles = 2,
+            )
+
+            store.append("界".repeat(20))
+
+            val file = store.files().single()
+            assertTrue(file.length() <= 10)
+            assertEquals("界界界", file.readText())
+            assertTrue(!file.readText().contains('\uFFFD'))
+        } finally {
+            temporary.toFile().deleteRecursively()
+        }
+    }
 }

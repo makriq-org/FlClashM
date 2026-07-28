@@ -1,3 +1,5 @@
+import 'diagnostic_text_limiter.dart';
+
 final class DiagnosticRedactor {
   const DiagnosticRedactor._();
 
@@ -13,15 +15,15 @@ final class DiagnosticRedactor {
     caseSensitive: false,
   );
   static final RegExp _sensitivePair = RegExp(
-    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|name|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}\]]+)''',
+    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|auth|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|username|user|name|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;}\]]+)''',
     caseSensitive: false,
   );
   static final RegExp _sensitiveArgument = RegExp(
-    r'''(--(?:password|passwd|token|secret|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url)(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s]+)''',
+    r'''(--(?:password|passwd|token|secret|auth|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url|username|user)(?:=|\s+))(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s]+)''',
     caseSensitive: false,
   );
   static final RegExp _profileLabel = RegExp(
-    r'''(\b(?:profile|node)\s+(?:name\s+)?)(?:`[^`]*`|"[^"]*"|'[^']*')''',
+    r'''(\b(?:profile|node)\s+(?:name\s+)?)(?:`[^`]*(?:`|$)|"[^"]*(?:"|$)|'[^']*(?:'|$))''',
     caseSensitive: false,
   );
   static final RegExp _rawPayload = RegExp(
@@ -51,5 +53,46 @@ final class DiagnosticRedactor {
       (match) => '${match.group(1)}$replacement',
     );
     return result;
+  }
+
+  static String redactBounded(
+    String value, {
+    String prefix = '',
+    int maxUtf8Bytes = diagnosticEntryByteLimit,
+  }) {
+    final boundedPrefix = truncateDiagnosticUtf8(
+      prefix,
+      maxBytes: maxUtf8Bytes,
+      suffix: '',
+    );
+    final prefixBytes = diagnosticUtf8Length(boundedPrefix);
+    final boundedValue = truncateDiagnosticUtf8(
+      value,
+      maxBytes: maxUtf8Bytes - prefixBytes,
+    );
+    final wasTruncated = boundedPrefix.length != prefix.length ||
+        boundedValue.length != value.length ||
+        boundedValue.endsWith(diagnosticTruncationMarker);
+    final redacted = redact('$boundedPrefix$boundedValue');
+    if (!wasTruncated) {
+      return truncateDiagnosticUtf8(redacted, maxBytes: maxUtf8Bytes);
+    }
+    if (redacted.endsWith(diagnosticTruncationMarker)) {
+      return truncateDiagnosticUtf8(redacted, maxBytes: maxUtf8Bytes);
+    }
+    final markerBytes = diagnosticUtf8Length(diagnosticTruncationMarker);
+    if (markerBytes > maxUtf8Bytes) {
+      return truncateDiagnosticUtf8(
+        redacted,
+        maxBytes: maxUtf8Bytes,
+        suffix: '',
+      );
+    }
+    final content = truncateDiagnosticUtf8(
+      redacted,
+      maxBytes: maxUtf8Bytes - markerBytes,
+      suffix: '',
+    );
+    return '$content$diagnosticTruncationMarker';
   }
 }

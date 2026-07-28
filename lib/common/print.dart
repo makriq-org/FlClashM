@@ -6,7 +6,6 @@ import 'package:flclashx/state.dart';
 import 'package:flutter/cupertino.dart';
 
 class CommonPrint {
-
   factory CommonPrint() {
     _instance ??= CommonPrint._internal();
     return _instance!;
@@ -25,7 +24,10 @@ class CommonPrint {
   };
 
   void log(String? text) {
-    final payload = DiagnosticRedactor.redact("[FlClashM] $text");
+    final payload = DiagnosticRedactor.redactBounded(
+      text ?? 'null',
+      prefix: '[FlClashM] ',
+    );
     debugPrint(payload);
 
     fileLogger.log(payload);
@@ -34,11 +36,14 @@ class CommonPrint {
       return;
     }
     final configuredLevel = globalState.effectiveLogLevel.value;
-    final threshold = LogLevel.values.where(
-      (l) => l.name == configuredLevel,
-    ).firstOrNull;
+    final threshold = LogLevel.values
+        .where(
+          (l) => l.name == configuredLevel,
+        )
+        .firstOrNull;
     if (threshold != null &&
-        (_levelPriority[LogLevel.app] ?? 0) < (_levelPriority[threshold] ?? 0)) {
+        (_levelPriority[LogLevel.app] ?? 0) <
+            (_levelPriority[threshold] ?? 0)) {
       return;
     }
     globalState.appController.addLog(

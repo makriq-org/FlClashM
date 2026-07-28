@@ -7,15 +7,16 @@ import 'package:path/path.dart' as path;
 
 import 'diagnostic_file_writer.dart';
 import 'diagnostic_redactor.dart';
+import 'diagnostic_text_limiter.dart';
 
 final class ProductDiagnosticRecorder {
   ProductDiagnosticRecorder({
     this.maxPendingEntries = 256,
-    this.maxEntryCharacters = 16 * 1024,
-  });
+    this.maxEntryBytes = diagnosticEntryByteLimit,
+  }) : assert(maxEntryBytes >= 32, 'Diagnostic entry limit is too small.');
 
   final int maxPendingEntries;
-  final int maxEntryCharacters;
+  final int maxEntryBytes;
   final ListQueue<String> _pending = ListQueue<String>();
 
   DiagnosticFileWriter? _writer;
@@ -77,7 +78,35 @@ final class ProductDiagnosticRecorder {
   }
 
   void recordCritical(String message, [StackTrace? stackTrace]) {
-    final text = stackTrace == null ? message : '$message\n$stackTrace';
+    var text = truncateDiagnosticUtf8(message, maxBytes: maxEntryBytes);
+    if (stackTrace != null) {
+      final messageBudget = maxEntryBytes ~/ 2;
+      final boundedMessage = truncateDiagnosticUtf8(
+        message,
+        maxBytes: messageBudget,
+        suffix: '',
+      );
+      final messageWasTruncated = boundedMessage.length != message.length;
+      final messageBytes = diagnosticUtf8Length(boundedMessage);
+      final stackBudget = maxEntryBytes - messageBytes - 1;
+      final stack = stackTrace.toString();
+      final boundedStack = truncateDiagnosticUtf8(
+        stack,
+        maxBytes: stackBudget,
+        suffix: '',
+      );
+      final stackWasTruncated = boundedStack.length != stack.length;
+      text = '$boundedMessage\n$boundedStack';
+      if (messageWasTruncated || stackWasTruncated) {
+        final markerBytes = diagnosticUtf8Length(diagnosticTruncationMarker);
+        final content = truncateDiagnosticUtf8(
+          text,
+          maxBytes: maxEntryBytes - markerBytes,
+          suffix: '',
+        );
+        text = '$content$diagnosticTruncationMarker';
+      }
+    }
     final line = _format(text);
     try {
       _criticalWriter?.appendLineSync(line);
@@ -101,10 +130,10 @@ final class ProductDiagnosticRecorder {
   }
 
   String _format(String message) {
-    final redacted = DiagnosticRedactor.redact(message);
-    final bounded = redacted.length <= maxEntryCharacters
-        ? redacted
-        : '${redacted.substring(0, maxEntryCharacters)}…<truncated>';
+    final bounded = DiagnosticRedactor.redactBounded(
+      message,
+      maxUtf8Bytes: maxEntryBytes,
+    );
     return '[${DateTime.now().toUtc().toIso8601String()}] $bounded\n';
   }
 

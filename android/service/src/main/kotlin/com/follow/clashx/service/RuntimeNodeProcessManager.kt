@@ -2,6 +2,7 @@ package com.follow.clashx.service
 
 import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
+import com.follow.clashx.common.diagnostics.BoundedUtf8LineReader
 import com.follow.clashx.common.diagnostics.DiagnosticLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
@@ -1101,8 +1102,8 @@ object RuntimeNodeProcessManager {
                 val output = OutputBuffer()
                 val logJob = GlobalState.scope.launch(Dispatchers.IO) {
                     runCatching {
-                        process.inputStream.bufferedReader().useLines { lines ->
-                            lines.forEach { line ->
+                        BoundedUtf8LineReader(process.inputStream).use { reader ->
+                            reader.forEachLine { line ->
                                 if (line.isNotBlank()) {
                                     output.add(line)
                                     DiagnosticLog.runtimeNode(spec.type, line)

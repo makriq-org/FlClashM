@@ -2,6 +2,7 @@ package com.follow.clashx.common
 
 import android.app.Application
 import android.system.Os
+import com.follow.clashx.common.diagnostics.BoundedUtf8LineReader
 import com.follow.clashx.common.diagnostics.DiagnosticLog
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -9,9 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
 import java.io.FileInputStream
-import java.io.InputStreamReader
 
 object GlobalState {
     private const val TAG = "FlClashM"
@@ -42,6 +41,10 @@ object GlobalState {
         DiagnosticLog.d(TAG, message)
     }
 
+    fun lifecycle(message: String) {
+        DiagnosticLog.lifecycle(TAG, message)
+    }
+
     /**
      * Redirect this process's stderr (fd 2) into local logcat. The Go core prints
      * fatal reasons and panic details straight to stderr, bypassing other loggers.
@@ -57,8 +60,8 @@ object GlobalState {
             Os.dup2(writeFd, 2)
             Thread {
                 runCatching {
-                    BufferedReader(InputStreamReader(FileInputStream(readFd))).useLines { lines ->
-                        lines.forEach { line ->
+                    BoundedUtf8LineReader(FileInputStream(readFd)).use { reader ->
+                        reader.forEachLine { line ->
                             DiagnosticLog.nativeCore(line)
                         }
                     }

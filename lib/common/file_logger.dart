@@ -25,6 +25,10 @@ class FileLogger {
 
   Future<void> flush() => productDiagnosticRecorder.flush();
 
+  void logCritical(String message, [StackTrace? stackTrace]) {
+    productDiagnosticRecorder.recordCritical(message, stackTrace);
+  }
+
   Future<void> dispose() => productDiagnosticRecorder.dispose();
 }
 

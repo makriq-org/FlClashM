@@ -12,10 +12,8 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import java.io.File
 import java.time.Instant
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,20 +21,24 @@ import java.util.concurrent.atomic.AtomicInteger
 object DiagnosticLog {
     private const val DEFAULT_TAG = "FlClashM"
     private const val QUEUE_CAPACITY = 256
+    private const val PROTECTED_QUEUE_RESERVE = 64
     private const val MAX_SOURCES_PER_PROCESS = 10
     private const val FLUSH_ACTION = "com.makriq.flclash.DIAGNOSTICS_FLUSH"
 
     private val stores = ConcurrentHashMap<String, DiagnosticFileStore>()
     private val droppedEntries = AtomicInteger(0)
+    private val persistenceHealth = DiagnosticPersistenceHealth { error ->
+        Log.e(
+            DEFAULT_TAG,
+            "diagnostic persistence failed: ${error.javaClass.simpleName}",
+        )
+    }
     private val handlingCrash = AtomicBoolean(false)
     private val initialized = AtomicBoolean(false)
-    private val executor = ThreadPoolExecutor(
-        1,
-        1,
-        0L,
-        TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(QUEUE_CAPACITY),
-        { task -> Thread(task, "diagnostic-log-writer").apply { isDaemon = true } },
+    private val executor = DiagnosticTaskQueue(
+        capacity = QUEUE_CAPACITY,
+        protectedReserve = PROTECTED_QUEUE_RESERVE,
+        onDropped = droppedEntries::addAndGet,
     )
 
     @Volatile private var directory: File? = null
@@ -52,7 +54,6 @@ object DiagnosticLog {
         } else {
             "android-remote"
         }
-        executor.prestartCoreThread()
         installCrashHandler()
         ContextCompat.registerReceiver(
             application,
@@ -61,27 +62,70 @@ object DiagnosticLog {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         application.registerActivityLifecycleCallbacks(ActivityLifecycleLogger)
-        i(DEFAULT_TAG, "process created: $processSource")
+        lifecycle(DEFAULT_TAG, "process created: $processSource")
     }
 
-    fun requestAllProcessesFlush(context: Context) {
-        context.sendBroadcast(
-            Intent(FLUSH_ACTION).setPackage(context.packageName),
-        )
+    fun requestAllProcessesFlush(
+        context: Context,
+        timeoutMillis: Long = 5_000L,
+    ): Boolean {
+        val acknowledged = CountDownLatch(1)
+        val flushComplete = AtomicBoolean(false)
+        val completion = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                flushComplete.set(resultCode == Activity.RESULT_OK)
+                acknowledged.countDown()
+            }
+        }
+        val sent = runCatching {
+            context.sendOrderedBroadcast(
+                Intent(FLUSH_ACTION).setPackage(context.packageName),
+                null,
+                completion,
+                null,
+                Activity.RESULT_OK,
+                null,
+                null,
+            )
+            true
+        }.getOrDefault(false)
+        if (!sent) return false
+        val completed = runCatching {
+            acknowledged.await(timeoutMillis, TimeUnit.MILLISECONDS)
+        }.getOrDefault(false)
+        return completed && flushComplete.get()
     }
 
     fun d(tag: String, message: String) = record(processSource, Log.DEBUG, tag, message)
 
     fun i(tag: String, message: String) = record(processSource, Log.INFO, tag, message)
 
-    fun w(tag: String, message: String) = record(processSource, Log.WARN, tag, message)
+    fun w(tag: String, message: String) = record(
+        processSource,
+        Log.WARN,
+        tag,
+        message,
+        protected = true,
+        synchronous = true,
+    )
 
     fun e(tag: String, message: String, error: Throwable? = null) {
         if (error == null) {
-            record(processSource, Log.ERROR, tag, message)
+            record(
+                processSource,
+                Log.ERROR,
+                tag,
+                message,
+                protected = true,
+                synchronous = true,
+            )
         } else {
             critical(processSource, tag, message, error)
         }
+    }
+
+    fun lifecycle(tag: String, message: String) {
+        record(processSource, Log.INFO, tag, message, protected = true)
     }
 
     fun runtimeNode(type: String, line: String) {
@@ -89,56 +133,107 @@ object DiagnosticLog {
             "naiveproxy", "byedpi", "olcrtc", "stormdns" -> "runtime-${type.lowercase()}"
             else -> "runtime-other"
         }
-        record(source, Log.INFO, "FlClashM-runtime", line)
+        record(source, Log.DEBUG, "FlClashM-runtime", line)
     }
 
     fun nativeCore(line: String) {
-        record("mihomo-core", Log.INFO, "FlClashM-native", line)
+        val bounded = DiagnosticTextLimiter.truncateUtf8(
+            line,
+            MAX_DIAGNOSTIC_ENTRY_BYTES,
+        )
+        val normalized = bounded.lowercase()
+        val bestEffort = normalized.startsWith("[mihomo][debug]") ||
+            normalized.startsWith("[mihomo][info]")
+        record(
+            "mihomo-core",
+            if (bestEffort) Log.DEBUG else Log.WARN,
+            "FlClashM-native",
+            bounded,
+            protected = !bestEffort,
+            synchronous = !bestEffort,
+        )
     }
 
     fun coroutineFailure(error: Throwable) {
         critical(
             processSource,
             DEFAULT_TAG,
-            "uncaught coroutine exception: ${error.message}",
+            "uncaught coroutine exception",
             error,
         )
     }
 
     fun flushBlocking(timeoutMillis: Long = 2_000L): Boolean {
         if (!initialized.get()) return true
-        val latch = CountDownLatch(1)
-        enqueue(Runnable { latch.countDown() })
-        return runCatching {
-            latch.await(timeoutMillis, TimeUnit.MILLISECONDS)
+        val startedAt = System.nanoTime()
+        val drained = runCatching {
+            executor.flush(timeoutMillis)
         }.getOrDefault(false)
-    }
-
-    private fun record(source: String, priority: Int, tag: String, message: String) {
-        val redacted = DiagnosticRedactor.redact(message)
-        Log.println(priority, tag, redacted)
-        enqueue(
+        if (!drained) return false
+        val markerId = executor.offerControl(
             Runnable {
-                writeDroppedMarkerIfNeeded()
-                store(source)?.append(format(priority, tag, redacted))
+                safePersistence { writeDroppedMarkerIfNeeded() }
             },
         )
+            ?: return false
+        val elapsed = System.nanoTime() - startedAt
+        val remaining = TimeUnit.MILLISECONDS.toNanos(timeoutMillis) - elapsed
+        if (remaining <= 0L) return false
+        val markerCompleted = runCatching {
+            executor.awaitCompletion(markerId, remaining)
+        }.getOrDefault(false)
+        return markerCompleted && persistenceHealth.isHealthy
     }
 
-    private fun critical(source: String, tag: String, message: String, error: Throwable) {
-        val redacted = DiagnosticRedactor.redact("$message\n${error.stackTraceToString()}")
-        Log.e(tag, redacted)
-        runCatching {
-            store("$source-critical")?.append(format(Log.ERROR, tag, redacted))
+    private fun record(
+        source: String,
+        priority: Int,
+        tag: String,
+        message: String,
+        protected: Boolean = false,
+        synchronous: Boolean = false,
+    ) {
+        val redacted = DiagnosticRedactor.redactBounded(message)
+        Log.println(priority, tag, redacted)
+        if (!initialized.get()) return
+        val line = format(priority, tag, redacted)
+        if (synchronous) {
+            executor.runSynchronously(Runnable { persist(source, line) })
+        } else {
+            enqueue(Runnable { persist(source, line) }, protected)
         }
     }
 
-    private fun enqueue(task: Runnable) {
+    private fun critical(source: String, tag: String, message: String, error: Throwable) {
+        val bounded = DiagnosticThrowableRenderer.render(
+            message,
+            error,
+            MAX_DIAGNOSTIC_ENTRY_BYTES,
+        )
+        val redacted = DiagnosticRedactor.redactBounded(bounded)
+        Log.e(tag, redacted)
+        val persistence = Runnable {
+            safePersistence {
+                store("$source-critical")?.append(format(Log.ERROR, tag, redacted))
+            }
+        }
+        if (!initialized.get() || !executor.runSynchronously(persistence)) {
+            persistence.run()
+        }
+    }
+
+    private fun enqueue(task: Runnable, protected: Boolean) {
         if (!initialized.get()) return
-        if (executor.queue.offer(task)) return
-        executor.queue.poll()
-        droppedEntries.incrementAndGet()
-        executor.queue.offer(task)
+        executor.offer(task, protected)
+    }
+
+    private fun persist(source: String, line: String) {
+        safePersistence { writeDroppedMarkerIfNeeded() }
+        safePersistence { store(source)?.append(line) }
+    }
+
+    private fun safePersistence(block: () -> Unit) {
+        persistenceHealth.run(block)
     }
 
     private fun writeDroppedMarkerIfNeeded() {
@@ -185,7 +280,12 @@ object DiagnosticLog {
                     critical(
                         processSource,
                         DEFAULT_TAG,
-                        "uncaught thread exception on ${thread.name}: ${error.message}",
+                        "uncaught thread exception on ${
+                            DiagnosticTextLimiter.truncateUtf8(
+                                thread.name,
+                                256,
+                            )
+                        }",
                         error,
                     )
                     flushBlocking(500L)
@@ -215,40 +315,52 @@ object DiagnosticLog {
 
     private object ActivityLifecycleLogger : Application.ActivityLifecycleCallbacks {
         override fun onActivityCreated(activity: Activity, state: Bundle?) {
-            d(DEFAULT_TAG, "${activity.javaClass.simpleName}: created")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: created")
         }
 
         override fun onActivityStarted(activity: Activity) {
-            d(DEFAULT_TAG, "${activity.javaClass.simpleName}: started")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: started")
         }
 
         override fun onActivityResumed(activity: Activity) {
-            i(DEFAULT_TAG, "${activity.javaClass.simpleName}: resumed")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: resumed")
         }
 
         override fun onActivityPaused(activity: Activity) {
-            i(DEFAULT_TAG, "${activity.javaClass.simpleName}: paused")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: paused")
         }
 
         override fun onActivityStopped(activity: Activity) {
-            d(DEFAULT_TAG, "${activity.javaClass.simpleName}: stopped")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: stopped")
         }
 
         override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
 
         override fun onActivityDestroyed(activity: Activity) {
-            d(DEFAULT_TAG, "${activity.javaClass.simpleName}: destroyed")
+            lifecycle(DEFAULT_TAG, "${activity.javaClass.simpleName}: destroyed")
         }
     }
 
     private object FlushReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            Thread {
-                flushBlocking()
-            }.apply {
-                isDaemon = true
-                name = "diagnostic-flush"
-            }.start()
+            val pendingResult = goAsync()
+            try {
+                Thread {
+                    try {
+                        if (!flushBlocking()) {
+                            pendingResult.setResultCode(Activity.RESULT_CANCELED)
+                        }
+                    } finally {
+                        pendingResult.finish()
+                    }
+                }.apply {
+                    isDaemon = true
+                    name = "diagnostic-flush"
+                }.start()
+            } catch (_: Exception) {
+                pendingResult.setResultCode(Activity.RESULT_CANCELED)
+                pendingResult.finish()
+            }
         }
     }
 }

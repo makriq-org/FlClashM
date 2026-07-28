@@ -1142,13 +1142,11 @@ class AppController {
       globalState.config = const Config(themeProps: defaultThemeProps);
 
       commonPrint.log("handleClear completed");
-
-      // Close file logger to release file handles (MUST be last step)
-      await fileLogger.dispose();
     } catch (e) {
       commonPrint.log("handleClear error: $e");
-      await fileLogger.dispose();
       rethrow;
+    } finally {
+      await fileLogger.flush();
     }
   }
 

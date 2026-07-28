@@ -37,7 +37,7 @@ class FlClashApplication : Application() {
     }
 
     override fun onTerminate() {
-        DiagnosticLog.i("FlClashApplication", "application terminating")
+        DiagnosticLog.lifecycle("FlClashApplication", "application terminating")
         DiagnosticLog.flushBlocking()
         super.onTerminate()
     }

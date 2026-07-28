@@ -152,6 +152,10 @@ jobs:
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch arm64 --out core
 
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew :common:testDebugUnitTest :service:testDebugUnitTest
+
       - name: Build Android arm64 release smoke APK
         shell: bash
         run: |

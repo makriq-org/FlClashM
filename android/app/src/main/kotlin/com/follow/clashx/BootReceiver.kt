@@ -30,18 +30,18 @@ class BootReceiver : BroadcastReceiver() {
 
         val vpnActive = SavedParams.isVpnActive()
         val hasProfile = GlobalState.hasActiveProfile()
-        CommonGlobalState.log("BOOT_COMPLETED: vpnActive=$vpnActive hasProfile=$hasProfile")
+        CommonGlobalState.lifecycle("BOOT_COMPLETED: vpnActive=$vpnActive hasProfile=$hasProfile")
 
         if (!vpnActive || !hasProfile) return
 
         if (isVpnAlreadyActive(context)) {
-            CommonGlobalState.log("VPN already active (system Always-On), skipping")
+            CommonGlobalState.lifecycle("VPN already active (system Always-On), skipping")
             return
         }
 
         val vpnPrepare = VpnService.prepare(context)
         if (vpnPrepare != null) {
-            CommonGlobalState.log("VPN permission not granted, clearing active state")
+            CommonGlobalState.lifecycle("VPN permission not granted, clearing active state")
             SavedParams.setVpnActive(false)
             return
         }
@@ -51,7 +51,7 @@ class BootReceiver : BroadcastReceiver() {
         try {
             val serviceIntent = Intent(context, com.follow.clashx.service.FlVpnService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
-            CommonGlobalState.log("FlVpnService started")
+            CommonGlobalState.lifecycle("FlVpnService started")
         } catch (e: Exception) {
             com.follow.clashx.common.diagnostics.DiagnosticLog.e(
                 TAG,

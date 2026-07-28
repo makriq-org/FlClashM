@@ -24,7 +24,11 @@ class DiagnosticFileStore(
     @Synchronized
     fun append(line: String) {
         directory.mkdirs()
-        val bounded = line.take((maxFileBytes / 2L).coerceAtLeast(1L).toInt())
+        val bounded = DiagnosticTextLimiter.truncateUtf8(
+            line,
+            maxFileBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            suffix = "",
+        )
         val bytes = bounded.toByteArray(StandardCharsets.UTF_8)
         val current = file(0)
         if (current.exists() && current.length() + bytes.size > maxFileBytes) {

@@ -256,6 +256,11 @@
       "reason": "Fork-owned multi-process журнал сохраняет lifecycle и Kotlin/native ошибки без внешней телеметрии."
     },
     {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructure.kt",
+      "bucket": "budget",
+      "reason": "Общая bounded UTF-8 очередь защищает Android-журнал от огромных строк, I/O-сбоев и вытеснения обязательных событий."
+    },
+    {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
       "bucket": "budget",
       "reason": "Единая Android-политика удаляет секреты до app-private файла и logcat."
@@ -264,6 +269,11 @@
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStoreTest.kt",
       "bucket": "budget",
       "reason": "Контрактный Android-тест фиксирует лимиты и ротацию локальных журналов."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructureTest.kt",
+      "bucket": "budget",
+      "reason": "Тесты проверяют приоритет обязательных событий, bounded UTF-8 reader и изоляцию ошибок файловой очереди."
     },
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactorTest.kt",
@@ -404,6 +414,11 @@
       "path": "lib/clash/lib.dart",
       "bucket": "budget",
       "reason": "Канал связи с Android service и quick-start остаётся базовым runtime-мостом."
+    },
+    {
+      "path": "lib/clash/service.dart",
+      "bucket": "budget",
+      "reason": "Guarded desktop core-server передаёт полную ошибку со stack trace в аварийный локальный журнал."
     },
     {
       "path": "lib/common/android.dart",
