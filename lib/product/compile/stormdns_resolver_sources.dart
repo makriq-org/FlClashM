@@ -166,6 +166,34 @@ class StormDnsResolverSourceParser {
     return List<StormDnsResolverSource>.unmodifiable(sources);
   }
 
+  /// Lists the remote resolver-list addresses of a `resolvers` value.
+  ///
+  /// Same recognition and safety rules as [parse], but literal entries are left
+  /// alone instead of being expanded: the caller only needs the addresses to
+  /// fetch, and a single `/16` costs tens of thousands of entries that are
+  /// built, discarded, and then built again by the compile pass.
+  ///
+  /// A literal that [parse] would reject is skipped here rather than reported;
+  /// the profile still fails on the normal validation pass.
+  List<Uri> parseRemoteListUrls(Object? value, {required String label}) {
+    if (value is! List) {
+      if (value == null) return const [];
+      throw FormatException('$label must be a list.');
+    }
+    final urls = <Uri>[];
+    for (final item in value) {
+      if (item is! String || item.trim().isEmpty) {
+        throw FormatException('$label must contain non-empty strings.');
+      }
+      final text = item.trim();
+      if (text.toLowerCase() == 'system') continue;
+      if (text.contains('://') || text.toLowerCase().startsWith('http')) {
+        urls.add(_requireListUrl(text, label));
+      }
+    }
+    return List<Uri>.unmodifiable(urls);
+  }
+
   Uri _requireListUrl(String text, String label) {
     final uri = Uri.tryParse(text);
     if (uri == null || !isSafeResolverListUrl(uri)) {

@@ -341,9 +341,9 @@ class BuiltInProxyCompiler {
           BuiltInProxyType.stormdns) {
         continue;
       }
-      final List<StormDnsResolverSource> sources;
+      final List<Uri> urls;
       try {
-        sources = stormDnsResolverParser.parse(
+        urls = stormDnsResolverParser.parseRemoteListUrls(
           normalized['resolvers'],
           label: 'stormdns `resolvers`',
         );
@@ -357,11 +357,10 @@ class BuiltInProxyCompiler {
       final refresh = refreshValue is String
           ? parseStormDnsDuration(refreshValue) ?? const Duration(hours: 24)
           : const Duration(hours: 24);
-      for (final source in sources) {
-        if (source is! StormDnsRemoteResolverSource) continue;
-        final existing = result[source.url];
+      for (final url in urls) {
+        final existing = result[url];
         if (existing == null || refresh < existing) {
-          result[source.url] = refresh;
+          result[url] = refresh;
         }
       }
     }

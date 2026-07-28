@@ -118,6 +118,74 @@ void main() {
     });
   });
 
+  group('remote list addresses without expansion', () {
+    test('the same addresses as a full parse, in declaration order', () {
+      const value = [
+        'system',
+        '8.8.8.8',
+        'https://a.example.com/r.txt',
+        '192.168.1.0/30',
+        'https://b.example.com/r.txt',
+      ];
+      expect(
+        parser.parseRemoteListUrls(value, label: 'r'),
+        parser
+            .parse(value, label: 'r')
+            .whereType<StormDnsRemoteResolverSource>()
+            .map((source) => source.url)
+            .toList(),
+      );
+    });
+
+    test('an absent or empty list has no addresses', () {
+      expect(parser.parseRemoteListUrls(null, label: 'r'), isEmpty);
+      expect(parser.parseRemoteListUrls(<String>[], label: 'r'), isEmpty);
+    });
+
+    test('a literal is never expanded, however wide it is', () {
+      // The full parse would materialise 65534 entries here only to discard
+      // them; this pass has to stay cheap because it runs before every apply.
+      final elapsed = Stopwatch()..start();
+      expect(
+        parser.parseRemoteListUrls(
+          ['10.0.0.0/16', 'https://a.example.com/r.txt'],
+          label: 'r',
+        ).single,
+        Uri.parse('https://a.example.com/r.txt'),
+      );
+      expect(elapsed.elapsed, lessThan(const Duration(milliseconds: 20)));
+    });
+
+    test('a malformed literal is left to the validation pass', () {
+      expect(
+        parser.parseRemoteListUrls(
+          ['nonsense', 'https://a.example.com/r.txt'],
+          label: 'r',
+        ),
+        [Uri.parse('https://a.example.com/r.txt')],
+      );
+      expect(() => parser.parse(['nonsense'], label: 'r'),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('an unsafe list address is still refused', () {
+      expect(
+        () => parser.parseRemoteListUrls(
+          ['http://example.com/r.txt'],
+          label: 'r',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => parser.parseRemoteListUrls(
+          ['https://127.0.0.1/r.txt'],
+          label: 'r',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+  });
+
   group('list address safety', () {
     test('only public https addresses are accepted', () {
       for (final url in const [
