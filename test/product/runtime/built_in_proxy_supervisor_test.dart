@@ -112,16 +112,16 @@ void main() {
       final gate = _ResolveGate(3);
       final supervisor = buildSupervisor(gate: gate);
       final plans = [_naivePlan(), _byedpiPlan(), _olcPlan()];
-      expect(await supervisor.stageRuntimePlan(plans), isEmpty);
-      await supervisor.commitStagedRuntimePlan(plans);
+      // The install layout is resolved once per node type, so the gate is armed
+      // before the very first resolution.
       gate.enabled = true;
 
-      final starting = supervisor.start();
+      final starting = supervisor.startRuntimePlan(plans);
       await gate.allEntered.future.timeout(const Duration(seconds: 1));
       expect(runtime.appliedPlans, isEmpty);
 
       gate.release.complete();
-      expect(await starting, isTrue);
+      expect((await starting).isSuccess, isTrue);
       expect(runtime.appliedPlans.single, hasLength(3));
     });
 
@@ -948,7 +948,13 @@ class _FakeByedpiBinaryBridge implements ByedpiBinaryBridge {
   String get bundledReleaseTag => byedpiPinnedReleaseTag;
 
   @override
-  Future<String> loadBundledStrategyList(String assetPath) async => strategies;
+  Future<String> loadBundledStrategyList(String assetPath) async {
+    // Gated as well as the install layout: the layout is memoized after the
+    // first resolution, so this is the seam a test can still hold a rebuilt
+    // ByeDPI node on.
+    await gate?.enter();
+    return strategies;
+  }
 
   @override
   Future<ByedpiSharedInstallLayout> resolveSharedInstallLayout() async {

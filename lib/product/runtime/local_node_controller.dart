@@ -102,6 +102,34 @@ abstract class LocalNodeController<
   final RuntimeNodePlatformBridge runtime;
 
   LocalNodeStageState<TNodeLayout>? _stagedState;
+  Future<TSharedLayout>? _sharedInstallLayout;
+
+  /// The device ABI and the bundled binary path behind the shared layout cannot
+  /// change while the process lives, yet resolving them costs several platform
+  /// round-trips — and one plan application asks for the layout three times per
+  /// node type. The answer is therefore memoized.
+  ///
+  /// Only a successful resolution is kept. A missing ABI or a missing binary
+  /// must stay reportable on the next attempt, and callers racing on the first
+  /// resolution share one in-flight future instead of starting a second one.
+  @protected
+  Future<TSharedLayout> resolveSharedInstallLayout() {
+    final cached = _sharedInstallLayout;
+    if (cached != null) return cached;
+    late final Future<TSharedLayout> pending;
+    pending = Future<TSharedLayout>.microtask(() async {
+      try {
+        return await binary.resolveSharedInstallLayout();
+      } catch (_) {
+        if (identical(_sharedInstallLayout, pending)) {
+          _sharedInstallLayout = null;
+        }
+        rethrow;
+      }
+    });
+    _sharedInstallLayout = pending;
+    return pending;
+  }
 
   Future<String> stageRuntimePlan({
     required List<BuiltInProxyNodePlan> currentPlans,
@@ -122,7 +150,7 @@ abstract class LocalNodeController<
       return '';
     }
 
-    final sharedLayout = await binary.resolveSharedInstallLayout();
+    final sharedLayout = await resolveSharedInstallLayout();
     await Directory(sharedLayout.runtimeRootPath).create(recursive: true);
     await Directory(sharedLayout.nodesDirectoryPath).create(recursive: true);
     final nextIds = nextPlans.map((plan) => plan.nodeId).toSet();
@@ -202,7 +230,7 @@ abstract class LocalNodeController<
       return;
     }
     try {
-      final sharedLayout = await binary.resolveSharedInstallLayout();
+      final sharedLayout = await resolveSharedInstallLayout();
       await Future.wait([
         for (final removedPlan in stagedState.removedPlans)
           deleteDirectoryIfExists(
@@ -226,7 +254,7 @@ abstract class LocalNodeController<
     List<BuiltInProxyNodePlan> plans,
   ) async {
     if (plans.isEmpty) return const [];
-    final sharedLayout = await binary.resolveSharedInstallLayout();
+    final sharedLayout = await resolveSharedInstallLayout();
     return Future.wait([
       for (final plan in plans)
         _buildRuntimeNode(sharedLayout: sharedLayout, plan: plan),

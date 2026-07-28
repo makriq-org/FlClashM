@@ -106,6 +106,40 @@ void main() {
       await expectLater(controller.commitStagedRuntimePlan(), completes);
     });
 
+    test('resolves the shared install layout once per plan application',
+        () async {
+      final plan = _plan('https://example.com');
+
+      expect(
+        await controller
+            .stageRuntimePlan(currentPlans: const [], nextPlans: [plan]),
+        isEmpty,
+      );
+      await controller.commitStagedRuntimePlan();
+      final nodes = await Future.wait([
+        controller.buildRuntimeNodes([plan]),
+        controller.buildRuntimeNodes([plan]),
+      ]);
+
+      expect(nodes.first.single['executablePath'], layout.executablePath);
+      expect(binary.resolveCalls, 1);
+    });
+
+    test('does not cache a failed layout resolution', () async {
+      final plan = _plan('https://example.com');
+      binary.failResolve = true;
+
+      await expectLater(
+        controller.buildRuntimeNodes([plan]),
+        throwsA(isA<FileSystemException>()),
+      );
+      binary.failResolve = false;
+
+      expect((await controller.buildRuntimeNodes([plan])).single['nodeId'],
+          'node-a');
+      expect(binary.resolveCalls, 2);
+    });
+
     test('persists and clears the cold-start manifest', () async {
       final plan = _plan('https://example.com');
       await controller.persistColdStart([plan]);
@@ -138,9 +172,11 @@ class _FakeBinaryBridge implements NaiveProxyBinaryBridge {
   _FakeBinaryBridge(this.layout);
   final NaiveProxySharedInstallLayout layout;
   bool failResolve = false;
+  int resolveCalls = 0;
 
   @override
   Future<NaiveProxySharedInstallLayout> resolveSharedInstallLayout() async {
+    resolveCalls++;
     if (failResolve) throw const FileSystemException('cleanup failed');
     return layout;
   }
