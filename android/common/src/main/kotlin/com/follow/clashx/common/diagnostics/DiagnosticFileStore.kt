@@ -1,5 +1,6 @@
 package com.follow.clashx.common.diagnostics
 
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
@@ -22,23 +23,39 @@ class DiagnosticFileStore(
     }
 
     @Synchronized
-    fun append(line: String) {
+    fun appendLines(lines: List<String>) {
+        if (lines.isEmpty()) return
         directory.mkdirs()
-        val bounded = DiagnosticTextLimiter.truncateUtf8(
-            line,
-            maxFileBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-            suffix = "",
-        )
-        val bytes = bounded.toByteArray(StandardCharsets.UTF_8)
-        val current = file(0)
-        if (current.exists() && current.length() + bytes.size > maxFileBytes) {
-            rotate()
-        }
-        FileOutputStream(current, true).buffered().use { output ->
-            output.write(bytes)
-            output.flush()
+        var output: BufferedOutputStream? = null
+        var length = file(0).takeIf(File::exists)?.length() ?: 0L
+        try {
+            for (line in lines) {
+                val bounded = DiagnosticTextLimiter.truncateUtf8(
+                    line,
+                    maxFileBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                    suffix = "",
+                )
+                val bytes = bounded.toByteArray(StandardCharsets.UTF_8)
+                if (length > 0L && length + bytes.size > maxFileBytes) {
+                    output?.flush()
+                    output?.close()
+                    output = null
+                    rotate()
+                    length = 0L
+                }
+                if (output == null) {
+                    output = BufferedOutputStream(FileOutputStream(file(0), true))
+                }
+                output.write(bytes)
+                length += bytes.size
+            }
+            output?.flush()
+        } finally {
+            output?.close()
         }
     }
+
+    fun appendCrash(line: String) = appendLines(listOf(line))
 
     fun files(): List<File> =
         (0 until maxFiles).map(::file).filter(File::exists)

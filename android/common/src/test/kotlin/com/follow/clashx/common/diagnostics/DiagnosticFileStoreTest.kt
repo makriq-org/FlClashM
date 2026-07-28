@@ -17,9 +17,9 @@ class DiagnosticFileStoreTest {
                 maxFiles = 3,
             )
 
-            repeat(12) { index ->
-                store.append("entry-$index-${"x".repeat(28)}\n")
-            }
+            store.appendLines(
+                List(12) { index -> "entry-$index-${"x".repeat(28)}\n" },
+            )
 
             val files = store.files()
             assertEquals(3, files.size)
@@ -41,7 +41,7 @@ class DiagnosticFileStoreTest {
                 maxFiles = 2,
             )
 
-            store.append("界".repeat(20))
+            store.appendLines(listOf("界".repeat(20)))
 
             val file = store.files().single()
             assertTrue(file.length() <= 10)

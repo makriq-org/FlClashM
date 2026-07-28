@@ -3,8 +3,10 @@ package com.follow.clashx.common.diagnostics
 import java.io.Closeable
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
+import java.util.ArrayDeque
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -316,138 +318,63 @@ class BoundedUtf8LineReader(
     }
 }
 
-internal class DiagnosticTaskQueue(
+internal class DiagnosticWriteQueue(
     private val capacity: Int,
-    private val protectedReserve: Int,
+    private val writeBatch: (List<String>) -> Unit,
     threadFactory: (Runnable) -> Thread = { task ->
         Thread(task, "diagnostic-log-writer").apply { isDaemon = true }
     },
     private val onDropped: (Int) -> Unit = {},
 ) {
-    private data class PendingTask(
-        val id: Long,
-        val action: Runnable,
+    private data class Pending(
+        val line: String? = null,
+        val flush: CountDownLatch? = null,
     )
 
     private val monitor = Object()
-    private val controlTasks = ArrayDeque<PendingTask>()
-    private val protectedTasks = ArrayDeque<PendingTask>()
-    private val bestEffortTasks = ArrayDeque<PendingTask>()
-    private val pendingIds = mutableSetOf<Long>()
-    private var nextId = 0L
+    private val pending = ArrayDeque<Pending>()
+    private var pendingLines = 0
     private var running = true
-    private var protectedBurst = 0
     private val worker = threadFactory(Runnable(::runLoop))
 
     init {
-        require(capacity > 1) { "Diagnostic queue must retain multiple entries" }
-        require(protectedReserve in 1 until capacity) {
-            "Protected reserve must fit inside the diagnostic queue"
-        }
+        require(capacity > 0) { "Diagnostic queue must retain entries" }
         worker.start()
     }
 
-    fun offer(action: Runnable, protected: Boolean) {
+    fun offer(line: String) {
         synchronized(monitor) {
             if (!running) {
                 notifyDropped(1)
                 return
             }
-            val total = protectedTasks.size + bestEffortTasks.size
-            if (protected) {
-                if (total >= capacity) {
-                    val dropped = if (bestEffortTasks.isNotEmpty()) {
-                        bestEffortTasks.removeFirst()
-                    } else if (protectedTasks.isNotEmpty()) {
-                        protectedTasks.removeFirst()
-                    } else {
+            if (pendingLines >= capacity) {
+                val iterator = pending.iterator()
+                while (iterator.hasNext()) {
+                    if (iterator.next().line != null) {
+                        iterator.remove()
+                        pendingLines--
                         notifyDropped(1)
-                        return
+                        break
                     }
-                    pendingIds.remove(dropped.id)
-                    notifyDropped(1)
                 }
-                add(protectedTasks, action)
-            } else {
-                val bestEffortCapacity = capacity - protectedReserve
-                if (
-                    bestEffortTasks.size >= bestEffortCapacity ||
-                    total >= capacity
-                ) {
-                    if (bestEffortTasks.isEmpty()) {
-                        notifyDropped(1)
-                        return
-                    }
-                    val dropped = bestEffortTasks.removeFirst()
-                    pendingIds.remove(dropped.id)
-                    notifyDropped(1)
-                }
-                add(bestEffortTasks, action)
             }
+            pending.addLast(Pending(line = line))
+            pendingLines++
             monitor.notifyAll()
-        }
-    }
-
-    fun offerControl(action: Runnable): Long? {
-        synchronized(monitor) {
-            if (!running) return null
-            val id = add(controlTasks, action)
-            monitor.notifyAll()
-            return id
-        }
-    }
-
-    fun runSynchronously(action: Runnable): Boolean {
-        val task = synchronized(monitor) {
-            if (!running) return false
-            PendingTask(nextId++, action).also { pendingIds.add(it.id) }
-        }
-        return try {
-            task.action.run()
-            true
-        } finally {
-            synchronized(monitor) {
-                pendingIds.remove(task.id)
-                monitor.notifyAll()
-            }
         }
     }
 
     fun flush(timeoutMillis: Long): Boolean {
         require(timeoutMillis >= 0L)
-        return flushNanos(TimeUnit.MILLISECONDS.toNanos(timeoutMillis))
-    }
-
-    fun awaitCompletion(id: Long, timeoutNanos: Long): Boolean {
-        require(timeoutNanos >= 0L)
-        val deadline = System.nanoTime() + timeoutNanos
-        return try {
-            synchronized(monitor) {
-                while (pendingIds.contains(id)) {
-                    val remaining = deadline - System.nanoTime()
-                    if (remaining <= 0L) return false
-                    TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
-                }
-                true
-            }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
+        val completed = CountDownLatch(1)
+        synchronized(monitor) {
+            if (!running) return false
+            pending.addLast(Pending(flush = completed))
+            monitor.notifyAll()
         }
-    }
-
-    private fun flushNanos(timeoutNanos: Long): Boolean {
-        val deadline = System.nanoTime() + timeoutNanos
         return try {
-            synchronized(monitor) {
-                val targetId = nextId - 1L
-                while (pendingIds.any { it <= targetId }) {
-                    val remaining = deadline - System.nanoTime()
-                    if (remaining <= 0L) return false
-                    TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
-                }
-                true
-            }
+            completed.await(timeoutMillis, TimeUnit.MILLISECONDS)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
@@ -457,24 +384,12 @@ internal class DiagnosticTaskQueue(
     fun shutdownNow() {
         synchronized(monitor) {
             running = false
-            val dropped =
-                controlTasks.size + protectedTasks.size + bestEffortTasks.size
-            controlTasks.forEach { pendingIds.remove(it.id) }
-            protectedTasks.forEach { pendingIds.remove(it.id) }
-            bestEffortTasks.forEach { pendingIds.remove(it.id) }
-            controlTasks.clear()
-            protectedTasks.clear()
-            bestEffortTasks.clear()
-            if (dropped > 0) notifyDropped(dropped)
+            if (pendingLines > 0) notifyDropped(pendingLines)
+            pending.forEach { it.flush?.countDown() }
+            pending.clear()
+            pendingLines = 0
             monitor.notifyAll()
         }
-    }
-
-    private fun add(queue: ArrayDeque<PendingTask>, action: Runnable): Long {
-        val task = PendingTask(nextId++, action)
-        queue.addLast(task)
-        pendingIds.add(task.id)
-        return task.id
     }
 
     private fun notifyDropped(count: Int) {
@@ -484,49 +399,40 @@ internal class DiagnosticTaskQueue(
     private fun runLoop() {
         while (true) {
             val task = synchronized(monitor) {
-                while (
-                    running &&
-                    controlTasks.isEmpty() &&
-                    protectedTasks.isEmpty() &&
-                    bestEffortTasks.isEmpty()
-                ) {
+                while (running && pending.isEmpty()) {
                     monitor.wait()
                 }
-                if (
-                    !running &&
-                    controlTasks.isEmpty() &&
-                    protectedTasks.isEmpty() &&
-                    bestEffortTasks.isEmpty()
-                ) {
-                    return
+                if (!running && pending.isEmpty()) return
+                pending.removeFirst().also {
+                    if (it.line != null) pendingLines--
                 }
-                if (controlTasks.isNotEmpty()) {
-                    controlTasks.removeFirst()
-                } else if (
-                    protectedTasks.isNotEmpty() &&
-                    (bestEffortTasks.isEmpty() || protectedBurst < MAX_PROTECTED_BURST)
-                ) {
-                    protectedBurst++
-                    protectedTasks.removeFirst()
-                } else {
-                    protectedBurst = 0
-                    bestEffortTasks.removeFirst()
+            }
+
+            if (task.flush != null) {
+                task.flush.countDown()
+                continue
+            }
+
+            val lines = ArrayList<String>(MAX_BATCH_ENTRIES)
+            task.line?.let(lines::add)
+            synchronized(monitor) {
+                while (lines.size < MAX_BATCH_ENTRIES) {
+                    val next = pending.peekFirst() ?: break
+                    val line = next.line ?: break
+                    pending.removeFirst()
+                    pendingLines--
+                    lines.add(line)
                 }
             }
             try {
-                task.action.run()
+                writeBatch(lines)
             } catch (_: Throwable) {
                 // Diagnostic persistence must never reach the process crash handler.
-            } finally {
-                synchronized(monitor) {
-                    pendingIds.remove(task.id)
-                    monitor.notifyAll()
-                }
             }
         }
     }
 
     private companion object {
-        const val MAX_PROTECTED_BURST = 8
+        const val MAX_BATCH_ENTRIES = 64
     }
 }

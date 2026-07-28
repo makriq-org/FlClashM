@@ -15,11 +15,11 @@ final class DiagnosticRedactor {
     caseSensitive: false,
   );
   static final RegExp _sensitivePair = RegExp(
-    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|auth|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|username|user|name|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;}\]]+)''',
+    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|auth|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|username|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;}\]]+)''',
     caseSensitive: false,
   );
   static final RegExp _sensitiveArgument = RegExp(
-    r'''(--(?:password|passwd|token|secret|auth|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url|username|user)(?:=|\s+))(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s]+)''',
+    r'''(--(?:password|passwd|token|secret|auth|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url|username)(?:=|\s+))(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s]+)''',
     caseSensitive: false,
   );
   static final RegExp _profileLabel = RegExp(
@@ -27,7 +27,7 @@ final class DiagnosticRedactor {
     caseSensitive: false,
   );
   static final RegExp _rawPayload = RegExp(
-    r'''(\b(?:raw(?:[_-]?(?:config|data|payload))?|config|data|payload|params|ipc[_-]?payload|quickstart[_-]?params|profile[_-]?yaml|subscription[_-]?content)\s*[:=]\s*)(?:\{.*|\[.*|.+)$''',
+    r'''(\b(?:raw(?:[\s_-]?(?:config|data|payload))?|ipc[\s_-]?payload|quickstart[\s_-]?params|profile[\s_-]?yaml|subscription[\s_-]?content)\s*[:=]\s*)(?:\{.*|\[.*|.+)$''',
     caseSensitive: false,
     dotAll: true,
   );
@@ -70,7 +70,8 @@ final class DiagnosticRedactor {
       value,
       maxBytes: maxUtf8Bytes - prefixBytes,
     );
-    final wasTruncated = boundedPrefix.length != prefix.length ||
+    final wasTruncated =
+        boundedPrefix.length != prefix.length ||
         boundedValue.length != value.length ||
         boundedValue.endsWith(diagnosticTruncationMarker);
     final redacted = redact('$boundedPrefix$boundedValue');

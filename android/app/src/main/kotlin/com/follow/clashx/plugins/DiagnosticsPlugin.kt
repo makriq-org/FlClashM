@@ -56,7 +56,6 @@ class DiagnosticsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val outcome = runCatching {
                     val context = currentBinding.applicationContext
                     val flushComplete = DiagnosticLog.requestAllProcessesFlush(context)
-                    if (!flushComplete) DiagnosticLog.flushBlocking()
                     mapOf(
                         "directory" to
                             File(context.filesDir, "diagnostics").absolutePath,

@@ -26,19 +26,9 @@
       "reason": "Android JNI-регистрация один раз запускает независимый фоновый журнал mihomo."
     },
     {
-      "path": "core/diagnostics.go",
-      "bucket": "budget",
-      "reason": "Fork-owned Go-политика удаляет секреты из событий mihomo до передачи в Android stderr."
-    },
-    {
       "path": "core/diagnostics_android.go",
       "bucket": "budget",
       "reason": "Фоновый подписчик mihomo сохраняет события через Android stderr даже без подключённого UI."
-    },
-    {
-      "path": "core/diagnostics_test.go",
-      "bucket": "budget",
-      "reason": "Go-тест запрещает утечки credentials, URL, конфигов и пользовательских названий."
     },
     {
       "path": "android/app/build.gradle.kts",
@@ -248,7 +238,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStore.kt",
       "bucket": "budget",
-      "reason": "Fork-owned Android-хранилище ограничивает и ротирует отдельные журналы каждого процесса и runtime-источника."
+      "reason": "Fork-owned Android-хранилище пакетно записывает и ротирует один ограниченный журнал каждого процесса."
     },
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticLog.kt",
@@ -258,7 +248,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructure.kt",
       "bucket": "budget",
-      "reason": "Общая bounded UTF-8 очередь защищает Android-журнал от огромных строк, I/O-сбоев и вытеснения обязательных событий."
+      "reason": "Bounded UTF-8 reader и одна FIFO-очередь защищают Android-журнал от огромных строк и I/O-сбоев."
     },
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
@@ -273,7 +263,7 @@
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructureTest.kt",
       "bucket": "budget",
-      "reason": "Тесты проверяют приоритет обязательных событий, bounded UTF-8 reader и изоляцию ошибок файловой очереди."
+      "reason": "Тесты проверяют bounded UTF-8 reader, пакетную FIFO-запись и изоляцию ошибок файловой очереди."
     },
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactorTest.kt",
@@ -343,7 +333,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
       "bucket": "budget",
-      "reason": "Супервизор пишет stdout каждой встроенной ноды в отдельный ограниченный журнал."
+      "reason": "Супервизор передаёт bounded stdout встроенных нод в общий журнал удалённого процесса."
     },
     {
       "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",

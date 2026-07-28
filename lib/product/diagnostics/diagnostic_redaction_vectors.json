@@ -2,12 +2,12 @@
   {
     "id": "credential-pairs",
     "input": "auth=local-secret user=alice username=bob password=hunter2",
-    "expected": "auth=<redacted> user=<redacted> username=<redacted> password=<redacted>"
+    "expected": "auth=<redacted> user=alice username=<redacted> password=<redacted>"
   },
   {
     "id": "cli-spaced-arguments",
     "input": "runtime stdout: --auth local-secret --user alice --username bob --password hunter2",
-    "expected": "runtime stdout: --auth <redacted> --user <redacted> --username <redacted> --password <redacted>"
+    "expected": "runtime stdout: --auth <redacted> --user alice --username <redacted> --password <redacted>"
   },
   {
     "id": "cli-equals-arguments",
@@ -17,7 +17,7 @@
   {
     "id": "json-credentials",
     "input": "{\"auth\":\"json-auth\",\"user\":\"json-user\",\"username\":\"json-name\"}",
-    "expected": "{\"auth\":<redacted>,\"user\":<redacted>,\"username\":<redacted>}"
+    "expected": "{\"auth\":<redacted>,\"user\":\"json-user\",\"username\":<redacted>}"
   },
   {
     "id": "authorization-header",
@@ -36,8 +36,8 @@
   },
   {
     "id": "json-node-name",
-    "input": "name: \"Node from JSON\"",
-    "expected": "name: <redacted>"
+    "input": "node_name: \"Node from JSON\"",
+    "expected": "node_name: <redacted>"
   },
   {
     "id": "raw-config",
@@ -58,5 +58,10 @@
     "id": "unterminated-profile-label",
     "input": "profile `private label without closing backtick",
     "expected": "profile <redacted>"
+  },
+  {
+    "id": "useful-generic-fields",
+    "input": "name=resolver user=system data=cache-hit params=2",
+    "expected": "name=resolver user=system data=cache-hit params=2"
   }
 ]

@@ -61,38 +61,38 @@ class DiagnosticInfrastructureTest {
     }
 
     @Test
-    fun protectedTasksDisplaceBestEffortTasksFirst() {
+    fun writerKeepsRecentEntriesInFifoOrderAndBatchesThem() {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val completed = Collections.synchronizedList(mutableListOf<String>())
+        val written = Collections.synchronizedList(mutableListOf<String>())
+        val batchSizes = Collections.synchronizedList(mutableListOf<Int>())
         val dropped = AtomicInteger(0)
-        val queue = DiagnosticTaskQueue(
-            capacity = 4,
-            protectedReserve = 2,
+        val queue = DiagnosticWriteQueue(
+            capacity = 3,
+            writeBatch = { lines ->
+                if (lines.first() == "active") {
+                    started.countDown()
+                    release.await(2, TimeUnit.SECONDS)
+                }
+                batchSizes.add(lines.size)
+                written.addAll(lines)
+            },
             onDropped = dropped::addAndGet,
         )
         try {
-            queue.offer(
-                Runnable {
-                    started.countDown()
-                    release.await(2, TimeUnit.SECONDS)
-                    completed.add("active")
-                },
-                protected = false,
-            )
+            queue.offer("active")
             assertTrue(started.await(2, TimeUnit.SECONDS))
-            queue.offer(Runnable { completed.add("old-noisy") }, protected = false)
-            queue.offer(Runnable { completed.add("new-noisy") }, protected = false)
-            queue.offer(Runnable { completed.add("warning") }, protected = true)
-            queue.offer(Runnable { completed.add("lifecycle-1") }, protected = true)
-            queue.offer(Runnable { completed.add("lifecycle-2") }, protected = true)
+            queue.offer("oldest")
+            queue.offer("newer")
+            queue.offer("newest")
+            queue.offer("latest")
 
             release.countDown()
             assertTrue(queue.flush(2_000L))
 
             assertEquals(1, dropped.get())
-            assertFalse(completed.contains("old-noisy"))
-            assertTrue(completed.containsAll(listOf("warning", "lifecycle-1", "lifecycle-2")))
+            assertEquals(listOf("active", "newer", "newest", "latest"), written)
+            assertEquals(listOf(1, 3), batchSizes)
         } finally {
             release.countDown()
             queue.shutdownNow()
@@ -100,135 +100,48 @@ class DiagnosticInfrastructureTest {
     }
 
     @Test
-    fun failedWriteDoesNotKillQueueWorker() {
-        val uncaught = AtomicInteger(0)
-        val completed = AtomicInteger(0)
-        val queue = DiagnosticTaskQueue(
+    fun failedBatchDoesNotKillWriter() {
+        val attempts = AtomicInteger(0)
+        val written = Collections.synchronizedList(mutableListOf<String>())
+        val queue = DiagnosticWriteQueue(
             capacity = 4,
-            protectedReserve = 1,
-            threadFactory = { task ->
-                Thread(task, "diagnostic-test-writer").apply {
-                    uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, _ ->
-                        uncaught.incrementAndGet()
-                    }
-                }
+            writeBatch = { lines ->
+                if (attempts.incrementAndGet() == 1) throw IOException("disk full")
+                written.addAll(lines)
             },
         )
         try {
-            queue.offer(
-                Runnable { throw IOException("disk full") },
-                protected = false,
-            )
-            queue.offer(
-                Runnable { completed.incrementAndGet() },
-                protected = true,
-            )
-
+            queue.offer("fails")
             assertTrue(queue.flush(2_000L))
-            assertEquals(1, completed.get())
-            assertEquals(0, uncaught.get())
-        } finally {
-            queue.shutdownNow()
-        }
-    }
-
-    @Test
-    fun persistenceFailureRemainsVisibleToLaterFlushes() {
-        val reported = AtomicInteger(0)
-        val health = DiagnosticPersistenceHealth {
-            reported.incrementAndGet()
-        }
-
-        assertFalse(health.run { throw IOException("disk full") })
-        assertTrue(health.run { Unit })
-
-        assertFalse(health.isHealthy)
-        assertEquals(1, reported.get())
-    }
-
-    @Test
-    fun flushWaitsForAcceptedSynchronousWrites() {
-        val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val queue = DiagnosticTaskQueue(
-            capacity = 4,
-            protectedReserve = 1,
-        )
-        val writer = Thread {
-            queue.runSynchronously(
-                Runnable {
-                    started.countDown()
-                    release.await(2, TimeUnit.SECONDS)
-                },
-            )
-        }
-        try {
-            writer.start()
-            assertTrue(started.await(2, TimeUnit.SECONDS))
-            assertFalse(queue.flush(50L))
-
-            release.countDown()
-            writer.join(2_000L)
+            queue.offer("survives")
             assertTrue(queue.flush(2_000L))
+
+            assertEquals(listOf("survives"), written)
         } finally {
-            release.countDown()
-            writer.join(2_000L)
             queue.shutdownNow()
         }
     }
 
     @Test
-    fun controlTaskTimeoutDoesNotWaitForStalledPersistence() {
+    fun interruptedFlushRestoresTheInterruptFlag() {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val queue = DiagnosticTaskQueue(
+        val queue = DiagnosticWriteQueue(
             capacity = 4,
-            protectedReserve = 1,
+            writeBatch = {
+                started.countDown()
+                release.await(2, TimeUnit.SECONDS)
+            },
         )
         try {
-            val id = requireNotNull(
-                queue.offerControl(
-                    Runnable {
-                        started.countDown()
-                        release.await(2, TimeUnit.SECONDS)
-                    },
-                ),
-            )
+            queue.offer("blocked")
             assertTrue(started.await(2, TimeUnit.SECONDS))
-            assertFalse(queue.awaitCompletion(id, TimeUnit.MILLISECONDS.toNanos(50)))
-
-            release.countDown()
-            assertTrue(
-                queue.awaitCompletion(id, TimeUnit.SECONDS.toNanos(2)),
-            )
-        } finally {
-            release.countDown()
-            queue.shutdownNow()
-        }
-    }
-
-    @Test
-    fun interruptedQueueWaitRestoresTheInterruptFlag() {
-        val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val queue = DiagnosticTaskQueue(
-            capacity = 4,
-            protectedReserve = 1,
-        )
-        try {
-            queue.offer(
-                Runnable {
-                    started.countDown()
-                    release.await(2, TimeUnit.SECONDS)
-                },
-                protected = false,
-            )
-            assertTrue(started.await(2, TimeUnit.SECONDS))
-            val id = requireNotNull(queue.offerControl(Runnable {}))
-
             Thread.currentThread().interrupt()
-            assertFalse(queue.awaitCompletion(id, TimeUnit.SECONDS.toNanos(2)))
+            assertFalse(queue.flush(2_000L))
             assertTrue(Thread.interrupted())
+
+            release.countDown()
+            assertTrue(queue.flush(2_000L))
         } finally {
             Thread.interrupted()
             release.countDown()

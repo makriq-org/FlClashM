@@ -26,12 +26,11 @@ func startDiagnosticLog() {
 				if strings.Contains(event.Payload, "http: Server closed") {
 					continue
 				}
-				payload := redactDiagnosticMessage(event.Payload)
 				_, _ = fmt.Fprintf(
 					os.Stderr,
 					"[mihomo][%v] %s\n",
 					event.LogLevel,
-					payload,
+					event.Payload,
 				)
 			}
 		}()
