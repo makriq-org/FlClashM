@@ -162,8 +162,13 @@ class StormDnsSettingsResolver {
 
   StormDnsSettings resolve(Map<String, dynamic> config,
       {required String node}) {
-    final presetName = _string(_field(config, 'preset', node)) ?? 'messenger';
-    final preset = stormDnsPresets[presetName];
+    final presetValue = _field(config, 'preset', node);
+    // A value of the wrong type is refused, not quietly replaced by the
+    // default: `_string` returns null for a number just as it does for an
+    // absent key, and the two must not mean the same thing.
+    final presetName =
+        presetValue == null ? 'messenger' : _string(presetValue);
+    final preset = presetName == null ? null : stormDnsPresets[presetName];
     if (preset == null) {
       throw FormatException(
         '$node `preset` must be one of: ${stormDnsPresets.keys.join(', ')}.',
@@ -237,15 +242,17 @@ class StormDnsSettingsResolver {
       direction: 'download',
     );
 
+    final startupModeValue = _field(startup, 'startup.mode', node);
     final startupModeName =
-        _string(_field(startup, 'startup.mode', node)) ?? 'cached';
+        startupModeValue == null ? 'cached' : _string(startupModeValue);
     if (startupModeName == 'ask') {
       throw FormatException(
         '$node `startup.mode: ask` is not supported: StormDNS would wait for '
         'terminal input that no Android runtime node can provide.',
       );
     }
-    if (!stormDnsStartupModes.containsKey(startupModeName)) {
+    if (startupModeName == null ||
+        !stormDnsStartupModes.containsKey(startupModeName)) {
       throw FormatException(
         '$node `startup.mode` must be one of: '
         '${stormDnsStartupModes.keys.join(', ')}.',
@@ -397,9 +404,10 @@ class StormDnsSettingsResolver {
         fallback: const Duration(hours: 24),
       )!,
       resolverAutoDisable:
-          _bool(_field(policy, 'resolver-policy.auto-disable', node)) ?? true,
+          _optionalBool(policy, 'resolver-policy.auto-disable', node: node) ??
+              true,
       resolverRecheck:
-          _bool(_field(policy, 'resolver-policy.recheck', node)) ?? true,
+          _optionalBool(policy, 'resolver-policy.recheck', node: node) ?? true,
       startupMode: startupModeName,
       startupMaxAge: startupMaxAge,
       arq: arq,
@@ -438,11 +446,8 @@ class StormDnsSettingsResolver {
         continue;
       }
       if (boolKeys.contains(key)) {
-        final value = _bool(entry.value);
-        if (value == null) {
-          throw FormatException('$node `$block.$key` must be a boolean.');
-        }
-        result[key] = value;
+        result[key] =
+            _requireBool(entry.value, node: node, path: '$block.$key');
         continue;
       }
       throw FormatException('$node `$block.$key` is not a supported field.');
@@ -591,6 +596,10 @@ class StormDnsSettingsResolver {
   /// The apply path compiles with `validate: false`, so the schema pass that
   /// also knows these value sets is skipped. Without this check an unknown name
   /// reached the TOML writer, which had no table entry for it.
+  ///
+  /// A value of the wrong type is reported the same way as an unknown name: it
+  /// is just as much a value StormDNS has no counterpart for, and falling back
+  /// to the default would hide it.
   String _requireChoice(
     Map<String, dynamic> block, {
     required String fallback,
@@ -598,8 +607,9 @@ class StormDnsSettingsResolver {
     required String node,
     required String path,
   }) {
-    final name = _string(_field(block, path, node)) ?? fallback;
-    if (!allowed.containsKey(name)) {
+    final value = _field(block, path, node);
+    final name = value == null ? fallback : _string(value);
+    if (name == null || !allowed.containsKey(name)) {
       throw FormatException(
         '$node `$path` must be one of: ${allowed.keys.join(', ')}.',
       );
@@ -703,7 +713,31 @@ class StormDnsSettingsResolver {
         '$node `$path` has no value; remove the key to use the default.',
       );
 
-  bool? _bool(Object? value) => value is bool ? value : null;
+  bool? _optionalBool(
+    Map<String, dynamic> block,
+    String path, {
+    required String node,
+  }) {
+    final value = _field(block, path, node);
+    if (value == null) return null;
+    return _requireBool(value, node: node, path: path);
+  }
+
+  /// A non-boolean is refused instead of being read as the default.
+  ///
+  /// `auto-disable: "yes"` is a string, and treating it as "not a boolean, so
+  /// take the default" ran the node with the opposite of what the profile
+  /// meant to say.
+  bool _requireBool(
+    Object? value, {
+    required String node,
+    required String path,
+  }) {
+    if (value is! bool) {
+      throw FormatException('$node `$path` must be a boolean.');
+    }
+    return value;
+  }
 
   String? _string(Object? value) {
     if (value is! String) return null;

@@ -563,6 +563,97 @@ void main() {
     });
   });
 
+  group('a value of the wrong type is not a default', () {
+    test('a non-boolean is refused instead of being read as the default', () {
+      // `"yes"` is a string, and taking the default for it ran the node with
+      // the opposite of what the profile says.
+      for (final value in const <Object>['yes', 'true', 1, 0]) {
+        _rejectsWithoutSchema(
+          {
+            'resolver-policy': {'auto-disable': value},
+          },
+          because: '$value',
+        );
+        _rejectsWithoutSchema(
+          {
+            'resolver-policy': {'recheck': value},
+          },
+          because: '$value',
+        );
+        _rejectsWithoutSchema(
+          {
+            'runtime': {'base-encode': value},
+          },
+          because: '$value',
+        );
+      }
+    });
+
+    test('every boolean field reports the same way', () {
+      for (final extra in const <Map<String, dynamic>>[
+        {
+          'resolver-policy': {'auto-disable': 'yes'},
+        },
+        {
+          'runtime': {'base-encode': 'yes'},
+        },
+      ]) {
+        expect(
+          () => _resolveWithoutSchema(extra),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains('must be a boolean'),
+            ),
+          ),
+          reason: extra.toString(),
+        );
+      }
+    });
+
+    test('a non-string enum value is refused, not replaced by the default', () {
+      _rejectsWithoutSchema({'preset': 42});
+      _rejectsWithoutSchema({'preset': ''});
+      _rejectsWithoutSchema({
+        'startup': {'mode': 5},
+      });
+      _rejectsWithoutSchema({
+        'compression': {'upload': 5},
+      });
+      _rejectsWithoutSchema({
+        'compression': {'download': '  '},
+      });
+      _rejectsWithoutSchema({
+        'resolver-policy': {'strategy': <String>[]},
+      });
+    });
+
+    test('the rejection still names the values that are allowed', () {
+      expect(
+        () => _resolveWithoutSchema({
+          'compression': {'upload': 5},
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('compression.upload'), contains('zstd')),
+          ),
+        ),
+      );
+    });
+
+    test('a boolean and an enum still take their default when absent', () {
+      final settings = _resolveWithoutSchema();
+      expect(settings.resolverAutoDisable, isTrue);
+      expect(settings.resolverRecheck, isTrue);
+      expect(settings.startupMode, 'cached');
+      expect(settings.uploadCompression, 'lz4');
+      expect(settings.runtime['base-encode'], isNull);
+    });
+  });
+
   group('unknown enum values never reach the generated TOML', () {
     // The apply path compiles with `validate: false`, so the schema pass that
     // knows these value sets is skipped and only the resolver stands between a
