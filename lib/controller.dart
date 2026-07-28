@@ -20,6 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'common/common.dart';
 import 'models/models.dart';
 import 'product/compile/product_compile.dart';
+import 'product/diagnostics/product_diagnostics.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/services/product_services.dart';
 import 'product/subscription/product_subscription.dart';
@@ -1196,9 +1197,6 @@ class AppController {
       );
 
   Future<void> init() async {
-    FlutterError.onError = (details) {
-      commonPrint.log(details.stack.toString());
-    };
     updateTray(true);
     // Desktop only (clashService is null on Android): on an unexpected core-
     // process death, respawn it AND re-init/re-apply (and re-start the tunnel
@@ -1613,13 +1611,24 @@ class AppController {
   }
 
   Future<bool> exportLogs() async {
-    final logsRaw = _ref.read(logsProvider).list.map((item) => item.toString());
-    final data = await Isolate.run<List<int>>(() async {
-      final logsRawString = logsRaw.join("\n");
-      return utf8.encode(logsRawString);
-    });
-    return await picker.saveFile(utils.logFile, Uint8List.fromList(data)) !=
-        null;
+    await fileLogger.flush();
+    final data = await productDiagnosticExporter.buildArchive(
+      DiagnosticExportContext(
+        homeDirectory: await appPath.homeDirPath,
+        appVersion: globalState.packageInfo.version,
+        buildNumber: globalState.packageInfo.buildNumber,
+        appTag: globalState.appVersionTag,
+        coreVersion: globalState.coreVersion ?? '',
+        runtime: {
+          'vpnRunning': globalState.appState.isStart,
+          'coreInitialized': await clashCore.isInit,
+          'logLevel': globalState.effectiveLogLevel.value,
+          'uiAttached': true,
+        },
+      ),
+    );
+    final fileName = utils.logFile.replaceFirst(RegExp(r'\.log$'), '.zip');
+    return await picker.saveFile(fileName, data) != null;
   }
 
   Future<List<int>> backupData() async {

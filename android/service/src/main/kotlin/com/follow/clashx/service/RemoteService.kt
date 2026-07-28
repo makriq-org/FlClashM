@@ -427,6 +427,7 @@ class RemoteService : Service() {
     }
 
     override fun onDestroy() {
+        GlobalState.log("RemoteService destroying")
         synchronized(eventLock) {
             val ev = eventListener.getAndSet(null)
             eventDeathRecipient.getAndSet(null)?.let { r ->

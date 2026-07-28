@@ -2,7 +2,7 @@ package com.follow.clashx.common
 
 import android.app.Application
 import android.system.Os
-import android.util.Log
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +26,7 @@ object GlobalState {
     private var stderrCaptured = false
 
     private val exceptionHandler = CoroutineExceptionHandler { _, e ->
-        log("uncaught coroutine exception: ${e.message}")
+        DiagnosticLog.coroutineFailure(e)
     }
 
     val scope: CoroutineScope =
@@ -39,7 +39,7 @@ object GlobalState {
     fun launch(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
 
     fun log(message: String) {
-        Log.d(TAG, message)
+        DiagnosticLog.d(TAG, message)
     }
 
     /**
@@ -59,7 +59,7 @@ object GlobalState {
                 runCatching {
                     BufferedReader(InputStreamReader(FileInputStream(readFd))).useLines { lines ->
                         lines.forEach { line ->
-                            Log.i("$TAG-native", line)
+                            DiagnosticLog.nativeCore(line)
                         }
                     }
                 }

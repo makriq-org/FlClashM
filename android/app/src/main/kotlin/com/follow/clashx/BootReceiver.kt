@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.VpnService
-import android.util.Log
+import com.follow.clashx.common.GlobalState as CommonGlobalState
 import com.follow.clashx.common.SavedParams
 
 class BootReceiver : BroadcastReceiver() {
@@ -30,18 +30,18 @@ class BootReceiver : BroadcastReceiver() {
 
         val vpnActive = SavedParams.isVpnActive()
         val hasProfile = GlobalState.hasActiveProfile()
-        Log.d(TAG, "BOOT_COMPLETED: vpnActive=$vpnActive hasProfile=$hasProfile")
+        CommonGlobalState.log("BOOT_COMPLETED: vpnActive=$vpnActive hasProfile=$hasProfile")
 
         if (!vpnActive || !hasProfile) return
 
         if (isVpnAlreadyActive(context)) {
-            Log.d(TAG, "VPN already active (system Always-On), skipping")
+            CommonGlobalState.log("VPN already active (system Always-On), skipping")
             return
         }
 
         val vpnPrepare = VpnService.prepare(context)
         if (vpnPrepare != null) {
-            Log.d(TAG, "VPN permission not granted, clearing active state")
+            CommonGlobalState.log("VPN permission not granted, clearing active state")
             SavedParams.setVpnActive(false)
             return
         }
@@ -51,9 +51,13 @@ class BootReceiver : BroadcastReceiver() {
         try {
             val serviceIntent = Intent(context, com.follow.clashx.service.FlVpnService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
-            Log.d(TAG, "FlVpnService started")
+            CommonGlobalState.log("FlVpnService started")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start FlVpnService: ${e.message}")
+            com.follow.clashx.common.diagnostics.DiagnosticLog.e(
+                TAG,
+                "Failed to start FlVpnService: ${e.message}",
+                e,
+            )
             GlobalState.runStateFlow.tryEmit(RunState.STOP)
         }
     }
