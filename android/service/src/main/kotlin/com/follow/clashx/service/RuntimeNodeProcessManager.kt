@@ -899,6 +899,12 @@ object RuntimeNodeProcessManager {
 
     private suspend fun waitForListener(spec: RuntimeNodeSpec, deadline: Long) {
         withContext(Dispatchers.IO) {
+            // Most nodes open their port within a few tens of milliseconds, and
+            // a fixed interval made every one of them look that much slower.
+            // The poll starts tight and backs off to the old fixed interval, so
+            // a node that legitimately takes minutes still costs the same few
+            // probes per second it did before.
+            var retryMillis = LISTENER_MIN_RETRY_MILLIS
             while (true) {
                 val remaining = deadline - SystemClock.elapsedRealtime()
                 check(remaining > 0L) {
@@ -932,7 +938,8 @@ object RuntimeNodeProcessManager {
                         },
                     )
                 }
-                delay(minOf(LISTENER_RETRY_MILLIS, remaining))
+                delay(minOf(retryMillis, remaining))
+                retryMillis = minOf(retryMillis * 2, LISTENER_MAX_RETRY_MILLIS)
             }
         }
     }
@@ -1156,7 +1163,8 @@ object RuntimeNodeProcessManager {
         .toString()
 
     private const val LISTENER_CONNECT_TIMEOUT_MILLIS = 200L
-    private const val LISTENER_RETRY_MILLIS = 100L
+    private const val LISTENER_MIN_RETRY_MILLIS = 20L
+    private const val LISTENER_MAX_RETRY_MILLIS = 100L
     private const val SOFT_STOP_MILLIS = 500L
     private const val FORCE_STOP_MILLIS = 500L
     private const val EMERGENCY_WAIT_MILLIS = 500L

@@ -51,6 +51,22 @@ void main() {
     expect(required, greaterThan(alive));
   });
 
+  test('the listener poll starts tight and backs off to a ceiling', () {
+    final start = manager.indexOf('private suspend fun waitForListener');
+    final end = manager.indexOf('private fun failStart', start);
+    final wait = manager.substring(start, end);
+
+    expect(start, greaterThan(0));
+    expect(wait, contains('var retryMillis = LISTENER_MIN_RETRY_MILLIS'));
+    expect(wait, contains('delay(minOf(retryMillis, remaining))'));
+    expect(
+      wait,
+      contains('retryMillis = minOf(retryMillis * 2, LISTENER_MAX_RETRY_MILLIS)'),
+    );
+    expect(manager, contains('LISTENER_MIN_RETRY_MILLIS = 20L'));
+    expect(manager, contains('LISTENER_MAX_RETRY_MILLIS = 100L'));
+  });
+
   test('connectivity probes close sockets on every exit path', () {
     final probeStart = connectivityChecker.indexOf('private suspend fun probe');
     final probeEnd = connectivityChecker.indexOf(
