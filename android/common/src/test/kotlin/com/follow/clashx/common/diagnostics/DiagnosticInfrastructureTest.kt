@@ -34,6 +34,19 @@ class DiagnosticInfrastructureTest {
     }
 
     @Test
+    fun boundedReaderTreatsCarriageReturnAsALineTerminator() {
+        val lines = mutableListOf<String>()
+
+        BoundedUtf8LineReader(
+            ByteArrayInputStream("first\rsecond\r\nthird\n".toByteArray()),
+        ).use { reader ->
+            reader.forEachLine(lines::add)
+        }
+
+        assertEquals(listOf("first", "second", "third"), lines)
+    }
+
+    @Test
     fun throwableRendererBoundsHugeMessagesBeforeRenderingStack() {
         val rendered = DiagnosticThrowableRenderer.render(
             context = "uncaught test exception",
@@ -189,6 +202,35 @@ class DiagnosticInfrastructureTest {
                 queue.awaitCompletion(id, TimeUnit.SECONDS.toNanos(2)),
             )
         } finally {
+            release.countDown()
+            queue.shutdownNow()
+        }
+    }
+
+    @Test
+    fun interruptedQueueWaitRestoresTheInterruptFlag() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val queue = DiagnosticTaskQueue(
+            capacity = 4,
+            protectedReserve = 1,
+        )
+        try {
+            queue.offer(
+                Runnable {
+                    started.countDown()
+                    release.await(2, TimeUnit.SECONDS)
+                },
+                protected = false,
+            )
+            assertTrue(started.await(2, TimeUnit.SECONDS))
+            val id = requireNotNull(queue.offerControl(Runnable {}))
+
+            Thread.currentThread().interrupt()
+            assertFalse(queue.awaitCompletion(id, TimeUnit.SECONDS.toNanos(2)))
+            assertTrue(Thread.interrupted())
+        } finally {
+            Thread.interrupted()
             release.countDown()
             queue.shutdownNow()
         }

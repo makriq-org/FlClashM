@@ -90,9 +90,12 @@ object DiagnosticLog {
             true
         }.getOrDefault(false)
         if (!sent) return false
-        val completed = runCatching {
+        val completed = try {
             acknowledged.await(timeoutMillis, TimeUnit.MILLISECONDS)
-        }.getOrDefault(false)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
         return completed && flushComplete.get()
     }
 

@@ -231,17 +231,14 @@ class BoundedUtf8LineReader(
         var length = 0
         var truncated = false
         var hasInput = false
+        var skipFollowingLineFeed = false
 
         fun emit() {
-            var storedLength = length
-            if (!truncated && storedLength > 0 && line[storedLength - 1] == '\r'.code.toByte()) {
-                storedLength--
-            }
             val decoded = if (truncated) {
                 val contentLimit = maxLineBytes - suffixBytes
                 val prefixLength = completeUtf8PrefixLength(
                     line,
-                    minOf(storedLength, contentLimit),
+                    minOf(length, contentLimit),
                 )
                 val prefix = String(
                     line,
@@ -255,7 +252,7 @@ class BoundedUtf8LineReader(
                     suffix = "",
                 ) + truncatedSuffix
             } else {
-                String(line, 0, storedLength, StandardCharsets.UTF_8)
+                String(line, 0, length, StandardCharsets.UTF_8)
             }
             action(decoded)
             length = 0
@@ -269,9 +266,19 @@ class BoundedUtf8LineReader(
             for (index in 0 until read) {
                 val byte = chunk[index]
                 if (byte == '\n'.code.toByte()) {
+                    if (skipFollowingLineFeed) {
+                        skipFollowingLineFeed = false
+                        continue
+                    }
                     emit()
                     continue
                 }
+                if (byte == '\r'.code.toByte()) {
+                    emit()
+                    skipFollowingLineFeed = true
+                    continue
+                }
+                skipFollowingLineFeed = false
                 hasInput = true
                 if (length < line.size) {
                     line[length++] = byte
@@ -414,26 +421,36 @@ internal class DiagnosticTaskQueue(
     fun awaitCompletion(id: Long, timeoutNanos: Long): Boolean {
         require(timeoutNanos >= 0L)
         val deadline = System.nanoTime() + timeoutNanos
-        synchronized(monitor) {
-            while (pendingIds.contains(id)) {
-                val remaining = deadline - System.nanoTime()
-                if (remaining <= 0L) return false
-                TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
+        return try {
+            synchronized(monitor) {
+                while (pendingIds.contains(id)) {
+                    val remaining = deadline - System.nanoTime()
+                    if (remaining <= 0L) return false
+                    TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
+                }
+                true
             }
-            return true
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
         }
     }
 
     private fun flushNanos(timeoutNanos: Long): Boolean {
         val deadline = System.nanoTime() + timeoutNanos
-        synchronized(monitor) {
-            val targetId = nextId - 1L
-            while (pendingIds.any { it <= targetId }) {
-                val remaining = deadline - System.nanoTime()
-                if (remaining <= 0L) return false
-                TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
+        return try {
+            synchronized(monitor) {
+                val targetId = nextId - 1L
+                while (pendingIds.any { it <= targetId }) {
+                    val remaining = deadline - System.nanoTime()
+                    if (remaining <= 0L) return false
+                    TimeUnit.NANOSECONDS.timedWait(monitor, remaining)
+                }
+                true
             }
-            return true
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
         }
     }
 
