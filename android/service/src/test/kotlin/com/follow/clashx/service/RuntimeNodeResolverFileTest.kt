@@ -255,6 +255,16 @@ class RuntimeNodeResolverFileTest {
     }
 
     @Test
+    fun `system dns entries cannot consume more than their reserved slots`() {
+        val servers = (1..32).map { "192.0.2.$it" }
+
+        assertEquals(
+            servers.take(SystemDnsReader.MAX_SYSTEM_DNS_SERVERS),
+            SystemDnsReader.sanitize(servers),
+        )
+    }
+
+    @Test
     fun `a zoned system resolver never reaches the rendered list`() {
         val root = Files.createTempDirectory("runtime-node-zone").toFile()
         try {

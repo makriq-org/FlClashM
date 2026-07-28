@@ -400,6 +400,33 @@ void main() {
       );
     });
 
+    test('remote-list fanout stays bounded', () async {
+      var active = 0;
+      var peak = 0;
+      final urls = [
+        for (var index = 0; index < stormDnsRemoteListConcurrency * 3; index++)
+          Uri.parse('https://$index.example.com/r.txt'),
+      ];
+      final store = DefaultStormDnsRemoteResolverListStore(
+        cacheDirectoryPath: tempDir.path,
+        download: (url, {required timeout}) async {
+          active += 1;
+          if (active > peak) peak = active;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          active -= 1;
+          return '8.8.8.8\n';
+        },
+      );
+
+      final result = await store.resolve(
+        urls,
+        refresh: const Duration(hours: 1),
+      );
+
+      expect(result, hasLength(urls.length));
+      expect(peak, stormDnsRemoteListConcurrency);
+    });
+
     test('the whole batch shares one deadline', () async {
       final url = Uri.parse('https://slow.example.com/r.txt');
       final blocked = Completer<String?>();
@@ -460,6 +487,19 @@ void main() {
   });
 
   group('whole-file address ceiling', () {
+    test('literal CIDRs stay lazy until the global ceiling is applied', () {
+      final source = parser.parse(
+        ['10.0.0.0/16'],
+        label: 'r',
+      ).single as StormDnsLiteralResolverSource;
+
+      expect(source.entries, isNot(isA<List<StormDnsResolverEntry>>()));
+      expect(source.entries.take(2).map((entry) => entry.ip), [
+        '10.0.0.1',
+        '10.0.0.2',
+      ]);
+    });
+
     test('the total is capped, not just each source', () {
       // Two /16 ranges expand to 131068 addresses between them; every single
       // source is inside the per-source limit.

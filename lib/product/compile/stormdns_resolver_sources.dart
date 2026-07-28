@@ -34,6 +34,12 @@ const stormDnsRemoteListTimeout = Duration(seconds: 15);
 /// per-address timeout turns three unreachable lists into three times the wait.
 const stormDnsRemoteListBatchTimeout = Duration(seconds: 20);
 
+/// Maximum simultaneous remote-list downloads in one refresh group.
+const stormDnsRemoteListConcurrency = 8;
+
+/// Maximum distinct remote resolver lists fetched for one profile.
+const stormDnsMaxRemoteResolverLists = 32;
+
 @immutable
 class StormDnsResolverEntry {
   const StormDnsResolverEntry({required this.ip, required this.port});
@@ -68,7 +74,10 @@ class StormDnsSystemResolverSource extends StormDnsResolverSource {
 class StormDnsLiteralResolverSource extends StormDnsResolverSource {
   const StormDnsLiteralResolverSource(this.entries);
 
-  final List<StormDnsResolverEntry> entries;
+  /// Re-iterable but lazy: the final file has a global ceiling, so allocating
+  /// every address of every CIDR before that ceiling is applied is wasted work
+  /// and lets a profile exhaust memory with many individually valid ranges.
+  final Iterable<StormDnsResolverEntry> entries;
 }
 
 class StormDnsRemoteResolverSource extends StormDnsResolverSource {
@@ -148,7 +157,7 @@ class StormDnsResolverSourceParser {
         sources.add(StormDnsRemoteResolverSource(_requireListUrl(text, label)));
         continue;
       }
-      final entries = expandLiteral(text);
+      final entries = _expandLiteral(text);
       if (entries == null) {
         throw FormatException(
           '$label entry `$text` is not `system`, an IP address, an '
@@ -209,7 +218,10 @@ class StormDnsResolverSourceParser {
   ///
   /// Returns `null` when the token cannot be parsed and an empty list when a
   /// CIDR is syntactically valid but expands past [stormDnsMaxResolverHosts].
-  List<StormDnsResolverEntry>? expandLiteral(String text) {
+  List<StormDnsResolverEntry>? expandLiteral(String text) =>
+      _expandLiteral(text)?.toList(growable: false);
+
+  Iterable<StormDnsResolverEntry>? _expandLiteral(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
@@ -237,26 +249,26 @@ class StormDnsResolverSourceParser {
     return address == null ? null : _ResolverTarget.address(address);
   }
 
-  List<StormDnsResolverEntry>? _expandTarget(_ResolverTarget target, int port) {
+  Iterable<StormDnsResolverEntry> _expandTarget(
+    _ResolverTarget target,
+    int port,
+  ) sync* {
     if (target.address case final address?) {
-      return [StormDnsResolverEntry(ip: _formatAddress(address), port: port)];
+      yield StormDnsResolverEntry(ip: _formatAddress(address), port: port);
+      return;
     }
     final prefix = target.prefixValue!;
     final range = _hostRange(prefix);
     final count = _expansionSize(prefix);
     if (count == null || count > stormDnsMaxResolverHosts) {
-      return const [];
+      return;
     }
-    final entries = <StormDnsResolverEntry>[];
     var current = range.first;
     while (true) {
-      entries.add(
-        StormDnsResolverEntry(ip: _formatAddress(current), port: port),
-      );
+      yield StormDnsResolverEntry(ip: _formatAddress(current), port: port);
       if (_compare(current, range.last) >= 0) break;
       current = _next(current);
     }
-    return entries;
   }
 
   /// Number of addresses `appendPrefixResolvers` would emit upstream.
@@ -624,18 +636,32 @@ class DefaultStormDnsRemoteResolverListStore
     }
 
     final pending = stale.keys.toList(growable: false);
-    final bodies = await Future.wait(
-      pending.map((url) async {
+    final bodies = List<String?>.filled(pending.length, null);
+    var nextIndex = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        final index = nextIndex;
+        nextIndex += 1;
+        if (index >= pending.length) return;
         final budget = remaining();
-        if (budget == Duration.zero) return null;
+        if (budget == Duration.zero) return;
         try {
-          return await download(url, timeout: budget).timeout(budget);
+          bodies[index] =
+              await download(pending[index], timeout: budget).timeout(budget);
         } catch (_) {
-          return null;
+          bodies[index] = null;
         }
-      }),
-      // A single failure must not discard the lists that did arrive.
-      eagerError: false,
+      }
+    }
+
+    await Future.wait(
+      List.generate(
+        pending.length < stormDnsRemoteListConcurrency
+            ? pending.length
+            : stormDnsRemoteListConcurrency,
+        (_) => worker(),
+      ),
     );
 
     for (var index = 0; index < pending.length; index++) {

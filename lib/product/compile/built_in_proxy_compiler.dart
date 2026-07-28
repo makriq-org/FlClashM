@@ -359,6 +359,13 @@ class BuiltInProxyCompiler {
           : const Duration(hours: 24);
       for (final url in urls) {
         final existing = result[url];
+        if (existing == null &&
+            result.length >= stormDnsMaxRemoteResolverLists) {
+          throw const FormatException(
+            'A profile may reference at most '
+            '$stormDnsMaxRemoteResolverLists distinct StormDNS resolver lists.',
+          );
+        }
         if (existing == null || refresh < existing) {
           result[url] = refresh;
         }

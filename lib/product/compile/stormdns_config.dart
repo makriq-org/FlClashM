@@ -30,9 +30,14 @@ Duration? parseStormDnsDuration(String value) {
   if (matches.map((match) => match.group(0)).join() != text) return null;
   var seconds = 0.0;
   for (final match in matches) {
-    seconds += double.parse(match.group(1)!) * factors[match.group(2)]!;
+    final amount = double.tryParse(match.group(1)!);
+    if (amount == null || !amount.isFinite) return null;
+    seconds += amount * factors[match.group(2)]!;
+    if (!seconds.isFinite) return null;
   }
-  return Duration(microseconds: (seconds * 1000000).round());
+  final microseconds = seconds * Duration.microsecondsPerSecond;
+  if (!microseconds.isFinite) return null;
+  return Duration(microseconds: microseconds.round());
 }
 
 double _asSeconds(Duration value) => value.inMicroseconds / 1000000;

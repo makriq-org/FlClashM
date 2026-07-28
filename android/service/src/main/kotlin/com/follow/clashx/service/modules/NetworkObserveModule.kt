@@ -10,6 +10,7 @@ import android.net.NetworkRequest
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.service.Module
 import com.follow.clashx.service.RuntimeNodeProcessManager
+import com.follow.clashx.service.SystemDnsReader
 import com.google.gson.Gson
 
 class NetworkObserveModule(
@@ -124,10 +125,9 @@ class NetworkObserveModule(
     }
 
     private fun dnsServers(linkProperties: LinkProperties): List<String> {
-        return linkProperties.dnsServers
-            .mapNotNull { it.hostAddress }
-            .filter { it.isNotBlank() }
-            .distinct()
+        return SystemDnsReader.sanitize(
+            linkProperties.dnsServers.mapNotNull { it.hostAddress },
+        )
     }
 
     private fun selectDnsSource(cm: ConnectivityManager): DnsSource? {
@@ -167,7 +167,12 @@ class NetworkObserveModule(
         reason: String,
     ): Boolean {
         val dns = dnsServers(linkProperties)
-        if (dns.isEmpty()) return false
+        if (dns.isEmpty()) {
+            // The core cannot use an empty list, but dependent runtime nodes
+            // must stop serving against the previous physical-network DNS.
+            updateRuntimeNodeDns(dns)
+            return false
+        }
 
         val key = dns.joinToString(",")
         if (key == lastDnsKey) {

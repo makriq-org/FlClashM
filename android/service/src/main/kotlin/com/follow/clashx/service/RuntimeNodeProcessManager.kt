@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -194,9 +195,14 @@ object RuntimeNodeProcessManager {
         val message: String = "",
     )
 
+    private data class SystemDnsPassResult(
+        val incomplete: Boolean,
+        val epoch: Long,
+    )
+
     // Last DNS servers seen on the physical network. Held here, not in Dart,
     // so cold start and DNS changes work with no Flutter process running.
-    @Volatile private var latestSystemDns: List<String> = emptyList()
+    @Volatile private var latestSystemDns: List<String>? = null
     @Volatile private var lastAppliedSystemDns: List<String>? = null
 
     /**
@@ -206,9 +212,9 @@ object RuntimeNodeProcessManager {
      */
     private fun currentSystemDns(): List<String> {
         val cached = latestSystemDns
-        if (cached.isNotEmpty()) return cached
+        if (cached != null) return cached
         val resolved = SystemDnsReader.read()
-        if (resolved.isNotEmpty()) latestSystemDns = resolved
+        latestSystemDns = resolved
         return resolved
     }
 
@@ -234,7 +240,17 @@ object RuntimeNodeProcessManager {
     // them as UNCHANGED, so the outstanding work has to be remembered here for
     // the retry to mean anything.
     private val pendingSystemDnsRestarts = ConcurrentHashMap.newKeySet<String>()
-    @Volatile private var systemDnsRetryJob: Job? = null
+
+    // Reset failures have to survive independently of restart failures. A
+    // sleeping reserve node is not restarted, but an UNCHANGED render on the
+    // next pass must still retry the cache reset it previously failed.
+    private val pendingSystemDnsResets = ConcurrentHashMap.newKeySet<String>()
+
+    // One retry loop per DNS list. Duplicate Android callbacks may all observe
+    // the same incomplete update; keeping every loop reachable avoids both
+    // duplicate work and jobs that a plan transition can no longer cancel.
+    private val systemDnsRetryJobs = ConcurrentHashMap<List<String>, Job>()
+    @Volatile private var systemDnsWorkEpoch = 0L
     private var activePlan = linkedMapOf<String, RuntimeNodeSpec>()
         set(value) {
             field = value
@@ -271,6 +287,8 @@ object RuntimeNodeProcessManager {
         val reusable = target.filter { (nodeId, spec) ->
             previousPlan[nodeId] == spec &&
                 nodeId in previousReady &&
+                nodeId !in pendingSystemDnsRestarts &&
+                nodeId !in pendingSystemDnsResets &&
                 readStartTime(nodeId) > 0L
         }.keys
 
@@ -312,6 +330,7 @@ object RuntimeNodeProcessManager {
             activePlan = linkedMapOf()
             readyNodeIds.clear()
             pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
             lastStateJson = stateJson(
                 currentGeneration,
                 "failed",
@@ -326,6 +345,7 @@ object RuntimeNodeProcessManager {
         readyNodeIds.addAll(target.keys)
         // This transition supersedes anything a DNS pass left unfinished.
         pendingSystemDnsRestarts.clear()
+        pendingSystemDnsResets.clear()
         lastStateJson = stateJson(
             currentGeneration,
             if (target.isEmpty()) "idle" else "ready",
@@ -456,31 +476,44 @@ object RuntimeNodeProcessManager {
         // check, so a redundant DNS event used to abort a running auto-probe.
         // The authoritative checks stay where they were: this is an
         // optimisation, and losing the race only costs one needless pass.
-        if (normalized == lastAppliedSystemDns && pendingSystemDnsRestarts.isEmpty()) {
+        if (
+            normalized == lastAppliedSystemDns &&
+            pendingSystemDnsRestarts.isEmpty() &&
+            pendingSystemDnsResets.isEmpty()
+        ) {
             return
         }
         if (!hasSystemDnsDependents) {
             lastAppliedSystemDns = normalized
             pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
             return
         }
 
-        val incomplete = try {
+        val pass = try {
             runSystemDnsPass(normalized)
         } catch (cancellation: CancellationException) {
-            // Preempted by a plan transition. The retry runs on GlobalState's
-            // scope, so scheduling it from a cancelled coroutine is still safe.
-            scheduleSystemDnsRetry(normalized)
+            // A plan transition preempted this pass and now owns every node it
+            // left behind. It also invalidated the pass epoch, so no old work may
+            // be re-created after cancelSystemDnsWork returned.
             throw cancellation
         }
-        if (incomplete) scheduleSystemDnsRetry(normalized)
+        if (pass.incomplete) scheduleSystemDnsRetry(normalized, pass.epoch)
     }
 
-    private suspend fun runSystemDnsPass(normalized: List<String>): Boolean {
+    private suspend fun runSystemDnsPass(normalized: List<String>): SystemDnsPassResult {
         val job = currentCoroutineContext()[Job]
         if (job != null) systemDnsPassJobs.add(job)
         return try {
-            withBatchProbesStopped { applySystemDns(normalized) }
+            withBatchProbesStopped {
+                SystemDnsPassResult(
+                    incomplete = applySystemDns(normalized),
+                    // Read under the plan-transition lock. A pass that queued
+                    // behind a completed transition belongs to the new epoch;
+                    // one that finished before it must not schedule stale work.
+                    epoch = systemDnsWorkEpoch,
+                )
+            }
         } finally {
             if (job != null) systemDnsPassJobs.remove(job)
         }
@@ -488,7 +521,11 @@ object RuntimeNodeProcessManager {
 
     /** Returns whether work is left over and a retry is worth scheduling. */
     private suspend fun applySystemDns(normalized: List<String>): Boolean {
-        if (normalized == lastAppliedSystemDns && pendingSystemDnsRestarts.isEmpty()) {
+        if (
+            normalized == lastAppliedSystemDns &&
+            pendingSystemDnsRestarts.isEmpty() &&
+            pendingSystemDnsResets.isEmpty()
+        ) {
             return false
         }
 
@@ -498,6 +535,7 @@ object RuntimeNodeProcessManager {
         if (dependents.isEmpty()) {
             lastAppliedSystemDns = normalized
             pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
             return false
         }
         generation += 1L
@@ -513,6 +551,7 @@ object RuntimeNodeProcessManager {
             val resolverFile = spec.resolverFile ?: continue
             val runtimeDir = File(spec.workingDirectory)
             val restartPending = pendingSystemDnsRestarts.contains(spec.nodeId)
+            val resetPending = pendingSystemDnsResets.contains(spec.nodeId)
             val wasRunning = restartPending || readStartTime(spec.nodeId) > 0L
             val renderResult = withContext(Dispatchers.IO) {
                 RuntimeNodeResolverFileWriter.render(
@@ -525,11 +564,14 @@ object RuntimeNodeProcessManager {
                 RuntimeNodeResolverFileRenderResult.UNCHANGED -> {
                     // Nothing to write. Fall through only when an earlier pass
                     // left this node down: then the outstanding work is the
-                    // restart, and no later render will ever report CHANGED.
-                    if (!restartPending) continue
+                    // restart or reset, and no later render will ever report
+                    // CHANGED.
+                    if (!restartPending && !resetPending) continue
                 }
 
-                RuntimeNodeResolverFileRenderResult.CHANGED -> Unit
+                RuntimeNodeResolverFileRenderResult.CHANGED -> {
+                    pendingSystemDnsResets.add(spec.nodeId)
+                }
 
                 else -> {
                     val message = resolverRenderFailureMessage(renderResult, spec.nodeId)
@@ -568,6 +610,7 @@ object RuntimeNodeProcessManager {
                 )
                 continue
             }
+            pendingSystemDnsResets.remove(spec.nodeId)
 
             // Only nodes that are actually running are restarted; a sleeping
             // reserve node picks the new list up when it is next started.
@@ -678,32 +721,48 @@ object RuntimeNodeProcessManager {
      * started its pass is the only way this could interfere with a plan
      * transition.
      */
-    private fun scheduleSystemDnsRetry(target: List<String>) {
-        systemDnsRetryJob = GlobalState.scope.launch {
+    @Synchronized
+    private fun scheduleSystemDnsRetry(target: List<String>, expectedEpoch: Long) {
+        if (expectedEpoch != systemDnsWorkEpoch) return
+        val retryTarget = target.toList()
+        if (systemDnsRetryJobs[retryTarget]?.isActive == true) return
+
+        val retryJob = GlobalState.scope.launch(start = CoroutineStart.LAZY) {
             var attempt = 1
             while (attempt <= MAX_SYSTEM_DNS_RETRIES) {
                 delay(SYSTEM_DNS_RETRY_DELAY_MILLIS * attempt)
                 // A newer list has a pass and a retry of its own.
-                if (latestSystemDns != target) return@launch
+                if (
+                    systemDnsWorkEpoch != expectedEpoch ||
+                    latestSystemDns != retryTarget
+                ) {
+                    return@launch
+                }
                 GlobalState.log(
                     "Retrying the runtime-node DNS update (attempt $attempt of " +
                         "$MAX_SYSTEM_DNS_RETRIES)",
                 )
-                val incomplete = try {
-                    runSystemDnsPass(target)
+                val pass = try {
+                    runSystemDnsPass(retryTarget)
                 } catch (cancellation: CancellationException) {
                     throw cancellation
                 } catch (error: Throwable) {
                     GlobalState.log("runtime-node DNS retry failed: ${error.message}")
-                    true
+                    SystemDnsPassResult(incomplete = true, epoch = expectedEpoch)
                 }
-                if (!incomplete) return@launch
+                if (pass.epoch != expectedEpoch) return@launch
+                if (!pass.incomplete) return@launch
                 attempt += 1
             }
             GlobalState.log(
                 "Gave up on the runtime-node DNS update after $MAX_SYSTEM_DNS_RETRIES retries",
             )
         }
+        systemDnsRetryJobs[retryTarget] = retryJob
+        retryJob.invokeOnCompletion {
+            systemDnsRetryJobs.remove(retryTarget, retryJob)
+        }
+        retryJob.start()
     }
 
     /**
@@ -712,9 +771,11 @@ object RuntimeNodeProcessManager {
      * Cancel only, never join: the caller is about to take the very lock a pass
      * may be holding, so waiting for it here would deadlock.
      */
+    @Synchronized
     private fun cancelSystemDnsWork() {
-        systemDnsRetryJob?.cancel()
-        systemDnsRetryJob = null
+        systemDnsWorkEpoch += 1L
+        systemDnsRetryJobs.values.forEach { it.cancel() }
+        systemDnsRetryJobs.clear()
         systemDnsPassJobs.forEach { it.cancel() }
     }
 
@@ -727,6 +788,7 @@ object RuntimeNodeProcessManager {
             activePlan = linkedMapOf()
             readyNodeIds.clear()
             pendingSystemDnsRestarts.clear()
+            pendingSystemDnsResets.clear()
             generation += 1L
             lastStateJson = stateJson(generation, "idle", emptyList())
         }
@@ -957,7 +1019,12 @@ object RuntimeNodeProcessManager {
             withContext(Dispatchers.IO) {
                 startFailures.remove(spec.nodeId)
                 val running = runningNodes[spec.nodeId]
-                if (running?.process?.isAlive == true && running.spec == spec) {
+                if (
+                    running?.process?.isAlive == true &&
+                    running.spec == spec &&
+                    spec.nodeId !in pendingSystemDnsRestarts &&
+                    spec.nodeId !in pendingSystemDnsResets
+                ) {
                     return@withContext running.startTimeMillis
                 }
                 if (running != null) stopInternal(spec.nodeId)
@@ -1000,7 +1067,10 @@ object RuntimeNodeProcessManager {
                         )
                     }
                     if (
-                        renderResult == RuntimeNodeResolverFileRenderResult.CHANGED &&
+                        (
+                            renderResult == RuntimeNodeResolverFileRenderResult.CHANGED ||
+                                pendingSystemDnsResets.contains(spec.nodeId)
+                        ) &&
                         !RuntimeNodeResolverFileWriter.resetDeclaredPaths(
                             runtimeDir,
                             resolverFile,
@@ -1012,6 +1082,7 @@ object RuntimeNodeProcessManager {
                                 "`${spec.nodeId}`",
                         )
                     }
+                    pendingSystemDnsResets.remove(spec.nodeId)
                 }
                 val process = try {
                     ProcessBuilder(listOf(spec.executablePath) + spec.arguments)

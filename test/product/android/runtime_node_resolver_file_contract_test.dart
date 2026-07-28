@@ -136,7 +136,7 @@ void main() {
     );
     expect(
       processManager,
-      contains('if (normalized == lastAppliedSystemDns'),
+      contains('normalized == lastAppliedSystemDns'),
       reason: 'a failed update must remain eligible for retry',
     );
     expect(
@@ -190,8 +190,9 @@ void main() {
     // changed, so a redundant callback used to abort a running auto-probe.
     final updateIndex = processManager.indexOf('suspend fun updateSystemDns(');
     final unchangedIndex = processManager.indexOf(
-      'if (normalized == lastAppliedSystemDns && '
-      'pendingSystemDnsRestarts.isEmpty()) {',
+      'normalized == lastAppliedSystemDns &&\n'
+      '            pendingSystemDnsRestarts.isEmpty() &&\n'
+      '            pendingSystemDnsResets.isEmpty()',
     );
     final dependentsIndex =
         processManager.indexOf('if (!hasSystemDnsDependents) {');
@@ -205,7 +206,7 @@ void main() {
       reason: 'the cheap check must come before the lock is taken',
     );
     expect(
-      'if (normalized == lastAppliedSystemDns'.allMatches(processManager).length,
+      'normalized == lastAppliedSystemDns'.allMatches(processManager).length,
       2,
       reason: 'the fast path is an optimisation; the authoritative check stays',
     );
@@ -246,13 +247,34 @@ void main() {
     );
     expect(
       processManager,
-      contains('if (latestSystemDns != target) return@launch'),
+      contains('pendingSystemDnsResets'),
+      reason: 'a sleeping node must retry a failed cache reset too',
+    );
+    expect(
+      processManager,
+      contains('systemDnsRetryJobs[retryTarget]?.isActive == true'),
+      reason: 'duplicate callbacks must share one retry loop',
+    );
+    expect(
+      processManager,
+      contains('systemDnsRetryJobs.values.forEach { it.cancel() }'),
+      reason: 'a plan transition must retain and cancel every retry loop',
+    );
+    expect(
+      processManager,
+      contains('systemDnsWorkEpoch != expectedEpoch'),
       reason: 'a retry for a superseded list must abandon itself',
     );
     expect(
       processManager,
-      contains('if (!restartPending) continue'),
-      reason: 'an UNCHANGED render must not strand a node the retry owes',
+      contains('if (!restartPending && !resetPending) continue'),
+      reason: 'an UNCHANGED render must not strand work the retry owes',
+    );
+    expect(
+      processManager,
+      contains('nodeId !in pendingSystemDnsResets'),
+      reason:
+          'a plan transition must finish a cache reset before reusing a node',
     );
   });
 
@@ -310,7 +332,8 @@ void main() {
     );
     expect(
       resolverFile,
-      contains('sanitize(linkProperties.dnsServers.mapNotNull { it.hostAddress })'),
+      contains(
+          'sanitize(linkProperties.dnsServers.mapNotNull { it.hostAddress })'),
       reason: 'the cold-start reader uses it too',
     );
   });
@@ -321,9 +344,10 @@ void main() {
     final unchangedIndex = processManager.indexOf(
       'RuntimeNodeResolverFileRenderResult.UNCHANGED -> {',
     );
-    final guardIndex = processManager.indexOf('if (!restartPending) continue');
+    final guardIndex = processManager
+        .indexOf('if (!restartPending && !resetPending) continue');
     final changedIndex = processManager.indexOf(
-      'RuntimeNodeResolverFileRenderResult.CHANGED -> Unit',
+      'RuntimeNodeResolverFileRenderResult.CHANGED -> {',
     );
     expect(unchangedIndex, greaterThan(0));
     expect(guardIndex, greaterThan(unchangedIndex));
@@ -356,6 +380,39 @@ void main() {
     expect(
       networkObserve,
       contains('RuntimeNodeProcessManager.updateSystemDns(dns)'),
+    );
+    final emptyIndex = networkObserve.indexOf('if (dns.isEmpty()) {');
+    final forwardIndex =
+        networkObserve.indexOf('updateRuntimeNodeDns(dns)', emptyIndex);
+    final returnIndex = networkObserve.indexOf('return false', emptyIndex);
+    expect(emptyIndex, greaterThan(0));
+    expect(forwardIndex, greaterThan(emptyIndex));
+    expect(
+      returnIndex,
+      greaterThan(forwardIndex),
+      reason: 'an empty list must invalidate stale runtime-node DNS',
+    );
+    expect(
+      processManager,
+      contains('@Volatile private var latestSystemDns: List<String>? = null'),
+      reason: 'known-empty DNS must not be mistaken for an unseeded cache',
+    );
+    expect(processManager, contains('if (cached != null) return cached'));
+  });
+
+  test('Android keeps the system-DNS expansion inside the Dart reserve', () {
+    expect(
+      resolverFile,
+      contains(
+        'const val MAX_SYSTEM_DNS_SERVERS = '
+        '$stormDnsSystemDnsReservedHosts',
+      ),
+    );
+    expect(resolverFile, contains('.take(MAX_SYSTEM_DNS_SERVERS)'));
+    expect(
+      networkObserve,
+      contains('SystemDnsReader.sanitize('),
+      reason: 'live callbacks and cold start must apply the same ceiling',
     );
   });
 

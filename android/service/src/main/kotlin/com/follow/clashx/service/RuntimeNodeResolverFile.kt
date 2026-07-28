@@ -221,6 +221,8 @@ object RuntimeNodeResolverFileWriter {
  * rather than waiting to be told.
  */
 object SystemDnsReader {
+    const val MAX_SYSTEM_DNS_SERVERS = 16
+
     /**
      * Normalises a DNS list before it is staged into a resolver file.
      *
@@ -238,6 +240,7 @@ object SystemDnsReader {
         .map { it.trim() }
         .filter { it.isNotEmpty() && !it.contains('%') }
         .distinct()
+        .take(MAX_SYSTEM_DNS_SERVERS)
 
     fun read(): List<String> = runCatching {
         val manager = GlobalState.application

@@ -204,7 +204,7 @@ proxy-groups:
 
 When `resolvers` is absent or empty, `[system]` is used. After every source is expanded, duplicates are dropped by IP: the first occurrence and its port win. If the final list is empty, the profile is not applied.
 
-List addresses must be HTTPS, without credentials or a fragment; localhost and local addresses are refused — but private IPs and CIDRs **inside** a list are fine. Responses are capped at 1 MiB with a 15-second timeout. Each address is cached separately: an unreachable list falls back to its last stored copy even past `refresh`, and a list with no stored copy is skipped so the remaining sources still work.
+List addresses must be HTTPS, without credentials or a fragment; localhost and local addresses are refused — but private IPs and CIDRs **inside** a list are fine. A profile may reference at most 32 distinct list addresses. Responses are capped at 1 MiB with a 15-second timeout. Each address is cached separately: an unreachable list falls back to its last stored copy even past `refresh`, and a list with no stored copy is skipped so the remaining sources still work.
 
 | `resolver-policy` | Default | Description |
 |-------------------|---------|-------------|

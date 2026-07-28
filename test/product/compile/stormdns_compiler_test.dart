@@ -282,4 +282,22 @@ void main() {
     expect(requested,
         {Uri.parse('https://example.com/r.txt'): const Duration(hours: 6)});
   });
+
+  test('remote list fanout is bounded across the whole profile', () {
+    expect(
+      () => _compiler.collectStormDnsRemoteLists(<String, dynamic>{
+        'proxies': [
+          _node({
+            'resolvers': [
+              for (var index = 0;
+                  index < stormDnsMaxRemoteResolverLists + 1;
+                  index++)
+                'https://$index.example.com/r.txt',
+            ],
+          }),
+        ],
+      }),
+      throwsFormatException,
+    );
+  });
 }

@@ -434,6 +434,16 @@ void main() {
       }
     });
 
+    test('a numeric overflow is rejected instead of throwing', () {
+      for (final digits in const [307, 400]) {
+        expect(
+          parseStormDnsDuration('${List.filled(digits, '9').join()}s'),
+          isNull,
+          reason: '$digits digits',
+        );
+      }
+    });
+
     test('startup max-age is an exact integer day count', () {
       expect(
         _resolve({
