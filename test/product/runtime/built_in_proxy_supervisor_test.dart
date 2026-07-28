@@ -649,7 +649,7 @@ void main() {
     });
 
     test(
-      'stage and stop cancel a wake without persisting stale cold start',
+      'stage and stop preempt a wake instead of queueing behind it',
       () async {
         for (final cancelWithStop in [false, true]) {
           final clock = _FakeWatchdogClock();
@@ -670,22 +670,68 @@ void main() {
           clock.elapse(const Duration(seconds: 1));
           await _waitUntil(() => runtime.activeApplyCalls == 1);
 
+          // The wake is still blocked inside its platform call: a user action
+          // has to complete anyway instead of waiting for it.
           final cancelling = cancelWithStop
               ? supervisor.stop()
               : supervisor.stageRuntimePlan(const []);
-          await Future<void>.delayed(Duration.zero);
-          runtime.applyGate!.complete();
-          await cancelling;
-
-          expect(runtime.savedManifest, isNull);
-          expect(runtime.appliedPlans.last, isEmpty);
+          await cancelling.timeout(const Duration(seconds: 1));
+          expect(runtime.activeApplyCalls, 1);
           expect(runtime.stopPlanCalls, cancelWithStop ? 1 : 0);
+
+          runtime.applyGate!.complete();
+          await _waitUntil(() => runtime.activeApplyCalls == 0);
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+
+          // The abandoned wake reapplies no plan and persists no cold start.
+          expect(runtime.appliedPlans, hasLength(1));
+          expect(runtime.savedManifest, isNull);
           runtime
             ..applyGate = null
+            ..stopPlanCalls = 0
             ..appliedPlans.clear();
         }
       },
     );
+
+    test('a preempted wake leaves the reserve asleep in the next plan',
+        () async {
+      final clock = _FakeWatchdogClock();
+      final probe = _FakeRuntimeHealthProbe()..delayResults.add(false);
+      final supervisor = buildSupervisor(
+        healthProbe: probe,
+        monotonicNow: clock.now,
+        delay: clock.delay,
+      );
+      final reserve = _olcReservePlan(failures: 1);
+      expect(await supervisor.stageRuntimePlan([reserve]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([reserve]);
+      expect(await supervisor.start(), isTrue);
+      runtime.appliedPlans.clear();
+      runtime.applyGate = Completer<void>();
+      await _waitUntil(() => clock.pendingTimers == 1);
+      clock.elapse(const Duration(seconds: 1));
+      await _waitUntil(() => runtime.activeApplyCalls == 1);
+
+      final next = [_naivePlan(), reserve];
+      expect(
+        await supervisor.stageRuntimePlan(next).timeout(
+              const Duration(seconds: 1),
+            ),
+        isEmpty,
+      );
+      runtime.applyGate!.complete();
+      await _waitUntil(() => runtime.activeApplyCalls == 0);
+      expect((await supervisor.startRuntimePlan(next)).isSuccess, isTrue);
+      await supervisor.commitStagedRuntimePlan(next);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+
+      expect(
+        runtime.appliedPlans.last.map((node) => node['type']),
+        ['naiveproxy'],
+      );
+      await supervisor.stop();
+    });
 
     test(
       'without a probe the watchdog is idle and manual wake still works',

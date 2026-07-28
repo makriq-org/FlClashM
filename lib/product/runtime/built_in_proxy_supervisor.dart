@@ -90,6 +90,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   Set<String> _awakeReserveNodeIds = <String>{};
   Set<String> _rollbackAwakeReserveNodeIds = <String>{};
   final Map<String, _ReserveNodeState> _reserveStates = {};
+  final Set<_WakeAttempt> _pendingWakes = {};
   int _planGeneration = 0;
   int _watchdogGeneration = 0;
   Future<void>? _watchdogWorker;
@@ -109,6 +110,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> prepareForRestart() {
     _planGeneration++;
+    _preemptPendingWakes();
     return _serializeRuntimeMutation(() async {
       await _pauseAutoActivationLocked(cancelBackgroundSelection: true);
     });
@@ -127,6 +129,7 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) {
     _planGeneration++;
+    _preemptPendingWakes();
     return _serializeRuntimeMutation(() async {
       await _cancelWatchdog();
       await byedpi.cancelBackgroundSelection();
@@ -239,12 +242,14 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   @override
   Future<void> pauseAutoActivation() {
     _planGeneration++;
+    _preemptPendingWakes();
     return _serializeRuntimeMutation(_pauseAutoActivationLocked);
   }
 
   @override
   Future<void> stop() {
     _planGeneration++;
+    _preemptPendingWakes();
     return _serializeRuntimeMutation(() async {
       _autoActivationRunning = false;
       await _cancelWatchdog();
@@ -437,6 +442,18 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     }
   }
 
+  /// Brings a sleeping reserve node up.
+  ///
+  /// A wake can take as long as the node needs to become usable — minutes for
+  /// a cold StormDNS scan — and it holds the mutation queue while it waits.
+  /// Applying a profile, stopping the VPN or pausing auto-activation are direct
+  /// user actions and must not queue behind an environment event, so they
+  /// preempt the wake instead: the attempt is marked, the mutation slot is
+  /// released at once, and the preempting action runs without waiting for the
+  /// platform call still in flight. The abandoned pass then touches neither the
+  /// awake set nor the runtime — the action that preempted it owns both, and
+  /// applies (or stops) the plan itself. Same contract as `updateSystemDns`
+  /// versus `applyPlan` on the Android side.
   Future<void> _wakeNode(
     BuiltInProxyNodePlan plan,
     _ReserveNodeState state,
@@ -444,9 +461,20 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
   ) async {
     if (state.transitioning || generation != _planGeneration) return;
     state.transitioning = true;
-    try {
-      await _serializeRuntimeMutation(() async {
-        if (generation != _planGeneration ||
+    final attempt = _WakeAttempt();
+    _pendingWakes.add(attempt);
+
+    // Skips both the runtime and the awake set once the attempt is preempted.
+    Future<void> abandon({required bool applyPlan}) async {
+      if (attempt.isPreempted) return;
+      await _restoreSleepingReserve(plan.nodeId, applyPlan: applyPlan);
+    }
+
+    bool isStale() => attempt.isPreempted || generation != _planGeneration;
+
+    final pass = _serializeRuntimeMutation(
+      () async {
+        if (isStale() ||
             !_currentPlans.any(
               (candidate) => candidate.nodeId == plan.nodeId,
             )) {
@@ -456,14 +484,14 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
         _awakeReserveNodeIds.add(plan.nodeId);
         try {
           final nodes = await _buildRuntimeNodes(_currentPlans);
-          if (generation != _planGeneration) {
-            await _restoreSleepingReserve(plan.nodeId, applyPlan: false);
+          if (isStale()) {
+            await abandon(applyPlan: false);
             return;
           }
           attemptedAwakePlan = true;
           final result = await runtime.applyPlan(nodes);
-          if (generation != _planGeneration) {
-            await _restoreSleepingReserve(plan.nodeId);
+          if (isStale()) {
+            await abandon(applyPlan: true);
             return;
           }
           if (!result.isReady) throw StateError(result.message);
@@ -473,8 +501,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             // Live activation succeeded; the next persistence point retries
             // the cold-start snapshot without tearing the node back down.
           }
-          if (generation != _planGeneration) {
-            await _restoreSleepingReserve(plan.nodeId);
+          if (isStale()) {
+            await abandon(applyPlan: true);
             return;
           }
           final probe = healthProbe;
@@ -483,8 +511,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
               proxyName: plan.name,
               urls: plan.activation!.wakeUrls,
             );
-            if (generation != _planGeneration) {
-              await _restoreSleepingReserve(plan.nodeId);
+            if (isStale()) {
+              await abandon(applyPlan: true);
               return;
             }
             if (!alive) {
@@ -499,11 +527,8 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             ..idleSince = monotonicNow()
             ..nextCheck = monotonicNow() + plan.activation!.wakeInterval;
         } catch (_) {
-          if (generation != _planGeneration) {
-            await _restoreSleepingReserve(
-              plan.nodeId,
-              applyPlan: attemptedAwakePlan,
-            );
+          if (isStale()) {
+            await abandon(applyPlan: attemptedAwakePlan);
             return;
           }
           _awakeReserveNodeIds.remove(plan.nodeId);
@@ -514,16 +539,16 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             ..nextCheck = monotonicNow() + plan.activation!.wakeRetryAfter;
           if (attemptedAwakePlan) {
             final sleepingNodes = await _buildRuntimeNodes(_currentPlans);
-            if (generation != _planGeneration) {
-              await _restoreSleepingReserve(plan.nodeId);
+            if (isStale()) {
+              await abandon(applyPlan: true);
               return;
             }
             RuntimeNodePlanState? rollback;
             try {
               rollback = await runtime.applyPlan(sleepingNodes);
             } catch (_) {}
-            if (generation != _planGeneration) {
-              await _restoreSleepingReserve(plan.nodeId);
+            if (isStale()) {
+              await abandon(applyPlan: true);
               return;
             }
             if (!(rollback?.isReady ?? false)) {
@@ -537,10 +562,19 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
             } catch (_) {}
           }
         }
-      });
-    } finally {
+      },
+      wake: attempt,
+    ).whenComplete(() {
+      _pendingWakes.remove(attempt);
       state.transitioning = false;
-    }
+    });
+
+    // A preempted pass keeps running until the platform call it is blocked in
+    // returns, but nothing may wait for it: the watchdog round has to end so a
+    // stop can join it, and a manual selection has to return to the caller.
+    // Whoever preempted it is already applying its own plan.
+    unawaited(pass.catchError((_) {}));
+    await Future.any([pass, attempt.preemption]);
   }
 
   Future<void> _checkSleep(
@@ -676,7 +710,10 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
     } catch (_) {}
   }
 
-  Future<T> _serializeRuntimeMutation<T>(Future<T> Function() action) async {
+  Future<T> _serializeRuntimeMutation<T>(
+    Future<T> Function() action, {
+    _WakeAttempt? wake,
+  }) async {
     final previous = _runtimeMutation;
     final done = Completer<void>();
     _runtimeMutation = done.future;
@@ -684,9 +721,20 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
       try {
         await previous;
       } catch (_) {}
+      wake?.attach(done);
       return await action();
     } finally {
-      done.complete();
+      if (!done.isCompleted) done.complete();
+    }
+  }
+
+  /// Lets a user action cut in front of every wake pass in flight.
+  ///
+  /// Mark only, never join: the wake may be blocked in a platform call, and
+  /// waiting for it here is exactly what this avoids.
+  void _preemptPendingWakes() {
+    for (final wake in _pendingWakes.toList(growable: false)) {
+      wake.preempt();
     }
   }
 
@@ -702,6 +750,37 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
 
   static Duration _readReserveMonotonicClock() =>
       _reserveMonotonicClock.elapsed;
+}
+
+/// One wake pass through the mutation queue, and the handle a user action uses
+/// to cut in front of it.
+class _WakeAttempt {
+  final Completer<void> _preemption = Completer<void>();
+  Completer<void>? _slot;
+  bool _preempted = false;
+
+  bool get isPreempted => _preempted;
+
+  /// Completes as soon as the pass is preempted, so callers stop waiting for it.
+  Future<void> get preemption => _preemption.future;
+
+  /// Binds the pass to the mutation slot it holds.
+  void attach(Completer<void> slot) {
+    _slot = slot;
+    if (_preempted) _release();
+  }
+
+  void preempt() {
+    if (_preempted) return;
+    _preempted = true;
+    if (!_preemption.isCompleted) _preemption.complete();
+    _release();
+  }
+
+  void _release() {
+    final slot = _slot;
+    if (slot != null && !slot.isCompleted) slot.complete();
+  }
 }
 
 class _ReserveNodeState {
