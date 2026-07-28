@@ -1,3 +1,4 @@
+import 'package:flclashx/product/compile/built_in_proxy_schema.dart';
 import 'package:flclashx/product/compile/stormdns_config.dart';
 import 'package:flclashx/product/compile/stormdns_config_validator.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,46 @@ void _rejects(Map<String, dynamic> extra, {String? because}) {
     () => _resolve(extra),
     throwsA(isA<FormatException>()),
     reason: because ?? extra.toString(),
+  );
+}
+
+/// Resolves the way the apply path does: `validate: false`, so
+/// [StormDnsConfigValidator.validateBuiltInNode] never runs.
+StormDnsSettings _resolveWithoutSchema([
+  Map<String, dynamic> extra = const {},
+]) {
+  final node = _node(extra)
+    ..remove('name')
+    ..remove('type');
+  return const StormDnsSettingsResolver()
+      .resolve(node, node: 'stormdns node `Storm`');
+}
+
+void _rejectsWithoutSchema(Map<String, dynamic> extra, {String? because}) {
+  expect(
+    () => _resolveWithoutSchema(extra),
+    throwsA(isA<FormatException>()),
+    reason: because ?? extra.toString(),
+  );
+}
+
+/// Asserts the resolver alone refuses [value] for [path].
+void _rejectsRange(String path, int value) {
+  final segments = path.split('.');
+  var nested = <String, dynamic>{segments.last: value};
+  for (final segment in segments.reversed.skip(1)) {
+    nested = <String, dynamic>{segment: nested};
+  }
+  expect(
+    () => _resolveWithoutSchema(nested),
+    throwsA(
+      isA<FormatException>().having(
+        (error) => error.message,
+        'message',
+        allOf(contains(path), contains('clamp')),
+      ),
+    ),
+    reason: '$path = $value',
   );
 }
 
@@ -427,6 +468,40 @@ void main() {
         })),
         throwsA(isA<FormatException>()),
       );
+    });
+  });
+
+  group('numeric ranges never reach the generated TOML', () {
+    // Same hole as the enum group below: the apply path compiles with
+    // `validate: false`, so the schema pass that owns these bounds is skipped
+    // and only the resolver stands between a profile and the TOML writer.
+    test('every schema range is enforced without the schema pass', () {
+      expect(stormDnsIntegerRanges, isNotEmpty);
+      for (final entry in stormDnsIntegerRanges.entries) {
+        final path = entry.key;
+        final minimum = entry.value.minimum;
+        final maximum = entry.value.maximum;
+        expect(
+          minimum != null || maximum != null,
+          isTrue,
+          reason: '$path is listed without bounds',
+        );
+        if (minimum != null) {
+          _rejectsRange(path, minimum.toInt() - 1);
+        }
+        if (maximum != null) {
+          _rejectsRange(path, maximum.toInt() + 1);
+        }
+      }
+    });
+
+    test('an out-of-range value is refused instead of being clamped', () {
+      _rejectsWithoutSchema({
+        'duplication': {'upload': 99, 'upload-setup': 99},
+      });
+      _rejectsWithoutSchema({
+        'arq': {'window': -5},
+      });
     });
   });
 

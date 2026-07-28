@@ -162,7 +162,7 @@ class StormDnsSettingsResolver {
 
   StormDnsSettings resolve(Map<String, dynamic> config,
       {required String node}) {
-    final presetName = _string(config['preset']) ?? 'messenger';
+    final presetName = _string(_field(config, 'preset', node)) ?? 'messenger';
     final preset = stormDnsPresets[presetName];
     if (preset == null) {
       throw FormatException(
@@ -170,33 +170,37 @@ class StormDnsSettingsResolver {
       );
     }
 
-    final duplication = _map(config['duplication'], '$node `duplication`');
-    final compression = _map(config['compression'], '$node `compression`');
-    final mtu = _map(config['mtu'], '$node `mtu`');
-    final mtuUpload = _map(mtu['upload'], '$node `mtu.upload`');
-    final mtuDownload = _map(mtu['download'], '$node `mtu.download`');
-    final policy = _map(config['resolver-policy'], '$node `resolver-policy`');
-    final startup = _map(config['startup'], '$node `startup`');
+    final duplication = _block(config, 'duplication', node);
+    final compression = _block(config, 'compression', node);
+    final mtu = _block(config, 'mtu', node);
+    final mtuUpload = _block(mtu, 'mtu.upload', node);
+    final mtuDownload = _block(mtu, 'mtu.download', node);
+    final policy = _block(config, 'resolver-policy', node);
+    final startup = _block(config, 'startup', node);
 
     final uploadDuplication = _int(
-      duplication['upload'],
-      '$node `duplication.upload`',
-      preset.duplication.upload,
+      duplication,
+      'duplication.upload',
+      node: node,
+      fallback: preset.duplication.upload,
     );
     final downloadDuplication = _int(
-      duplication['download'],
-      '$node `duplication.download`',
-      preset.duplication.download,
+      duplication,
+      'duplication.download',
+      node: node,
+      fallback: preset.duplication.download,
     );
     final uploadSetupDuplication = _int(
-      duplication['upload-setup'],
-      '$node `duplication.upload-setup`',
-      preset.duplication.uploadSetup,
+      duplication,
+      'duplication.upload-setup',
+      node: node,
+      fallback: preset.duplication.uploadSetup,
     );
     final downloadSetupDuplication = _int(
-      duplication['download-setup'],
-      '$node `duplication.download-setup`',
-      preset.duplication.downloadSetup,
+      duplication,
+      'duplication.download-setup',
+      node: node,
+      fallback: preset.duplication.downloadSetup,
     );
 
     // StormDNS raises setup duplication to the data duplication of the same
@@ -214,22 +218,12 @@ class StormDnsSettingsResolver {
       );
     }
 
-    final minUploadMtu = _optionalInt(
-      mtuUpload['min'],
-      '$node `mtu.upload.min`',
-    );
-    final maxUploadMtu = _optionalInt(
-      mtuUpload['max'],
-      '$node `mtu.upload.max`',
-    );
-    final minDownloadMtu = _optionalInt(
-      mtuDownload['min'],
-      '$node `mtu.download.min`',
-    );
-    final maxDownloadMtu = _optionalInt(
-      mtuDownload['max'],
-      '$node `mtu.download.max`',
-    );
+    final minUploadMtu = _optionalInt(mtuUpload, 'mtu.upload.min', node: node);
+    final maxUploadMtu = _optionalInt(mtuUpload, 'mtu.upload.max', node: node);
+    final minDownloadMtu =
+        _optionalInt(mtuDownload, 'mtu.download.min', node: node);
+    final maxDownloadMtu =
+        _optionalInt(mtuDownload, 'mtu.download.max', node: node);
     _requireMtuOrder(
       min: minUploadMtu ?? 100,
       max: maxUploadMtu ?? 200,
@@ -243,7 +237,8 @@ class StormDnsSettingsResolver {
       direction: 'download',
     );
 
-    final startupModeName = _string(startup['mode']) ?? 'cached';
+    final startupModeName =
+        _string(_field(startup, 'startup.mode', node)) ?? 'cached';
     if (startupModeName == 'ask') {
       throw FormatException(
         '$node `startup.mode: ask` is not supported: StormDNS would wait for '
@@ -258,21 +253,21 @@ class StormDnsSettingsResolver {
     }
 
     final arq = _resolveBlock(
-      _map(config['arq'], '$node `arq`'),
+      _block(config, 'arq', node),
       node: node,
       block: 'arq',
       durationKeys: _arqDurationKeys.keys.toSet(),
       intKeys: _arqIntKeys.keys.toSet(),
     );
     final ping = _resolveBlock(
-      _map(config['ping'], '$node `ping`'),
+      _block(config, 'ping', node),
       node: node,
       block: 'ping',
       durationKeys: _pingDurationKeys.keys.toSet(),
       intKeys: const <String>{},
     );
     final runtime = _resolveBlock(
-      _map(config['runtime'], '$node `runtime`'),
+      _block(config, 'runtime', node),
       node: node,
       block: 'runtime',
       durationKeys: _runtimeDurationKeys.keys.toSet(),
@@ -347,7 +342,7 @@ class StormDnsSettingsResolver {
     );
     _requireWorkerOrder(runtime, node);
     final startupMaxAge = _requireDuration(
-      startup['max-age'],
+      _field(startup, 'startup.max-age', node),
       node: node,
       path: 'startup.max-age',
       fallback: const Duration(days: 30),
@@ -369,42 +364,42 @@ class StormDnsSettingsResolver {
       uploadSetupDuplication: uploadSetupDuplication,
       downloadSetupDuplication: downloadSetupDuplication,
       uploadCompression: _requireChoice(
-        compression['upload'],
+        compression,
         fallback: preset.compression,
         allowed: stormDnsCompressionTypes,
         node: node,
         path: 'compression.upload',
       ),
       downloadCompression: _requireChoice(
-        compression['download'],
+        compression,
         fallback: preset.compression,
         allowed: stormDnsCompressionTypes,
         node: node,
         path: 'compression.download',
       ),
-      compressionMinSize: _optionalInt(
-        compression['min-size'],
-        '$node `compression.min-size`',
-      ),
+      compressionMinSize:
+          _optionalInt(compression, 'compression.min-size', node: node),
       minUploadMtu: minUploadMtu,
       maxUploadMtu: maxUploadMtu,
       minDownloadMtu: minDownloadMtu,
       maxDownloadMtu: maxDownloadMtu,
       resolverStrategy: _requireChoice(
-        policy['strategy'],
+        policy,
         fallback: 'least-loss',
         allowed: stormDnsResolverStrategies,
         node: node,
         path: 'resolver-policy.strategy',
       ),
       resolverRefresh: _requireDuration(
-        policy['refresh'],
+        _field(policy, 'resolver-policy.refresh', node),
         node: node,
         path: 'resolver-policy.refresh',
         fallback: const Duration(hours: 24),
       )!,
-      resolverAutoDisable: _bool(policy['auto-disable']) ?? true,
-      resolverRecheck: _bool(policy['recheck']) ?? true,
+      resolverAutoDisable:
+          _bool(_field(policy, 'resolver-policy.auto-disable', node)) ?? true,
+      resolverRecheck:
+          _bool(_field(policy, 'resolver-policy.recheck', node)) ?? true,
       startupMode: startupModeName,
       startupMaxAge: startupMaxAge,
       arq: arq,
@@ -434,7 +429,7 @@ class StormDnsSettingsResolver {
         continue;
       }
       if (intKeys.contains(key)) {
-        result[key] = _int(entry.value, '$node `$block.$key`', 0);
+        result[key] = _requireInt(entry.value, node: node, path: '$block.$key');
         continue;
       }
       if (boolKeys.contains(key)) {
@@ -592,13 +587,13 @@ class StormDnsSettingsResolver {
   /// also knows these value sets is skipped. Without this check an unknown name
   /// reached the TOML writer, which had no table entry for it.
   String _requireChoice(
-    Object? value, {
+    Map<String, dynamic> block, {
     required String fallback,
     required Map<String, Object?> allowed,
     required String node,
     required String path,
   }) {
-    final name = _string(value) ?? fallback;
+    final name = _string(_field(block, path, node)) ?? fallback;
     if (!allowed.containsKey(name)) {
       throw FormatException(
         '$node `$path` must be one of: ${allowed.keys.join(', ')}.',
@@ -616,22 +611,77 @@ class StormDnsSettingsResolver {
     return value.trim();
   }
 
-  Map<String, dynamic> _map(Object? value, String label) {
+  /// Reads one field of [block] by the last segment of its profile [path].
+  ///
+  /// Every read goes through the full path so the declared bounds of that path
+  /// can be applied without restating them at the call site.
+  Object? _field(Map<String, dynamic> block, String path, String node) =>
+      block[path.substring(path.lastIndexOf('.') + 1)];
+
+  Map<String, dynamic> _block(
+    Map<String, dynamic> parent,
+    String path,
+    String node,
+  ) {
+    final value = _field(parent, path, node);
     if (value == null) return <String, dynamic>{};
-    if (value is! Map) throw FormatException('$label must be a map.');
+    if (value is! Map) throw FormatException('$node `$path` must be a map.');
     return value.map((key, item) => MapEntry(key.toString(), item));
   }
 
-  int _int(Object? value, String label, int fallback) {
+  int _int(
+    Map<String, dynamic> block,
+    String path, {
+    required String node,
+    required int fallback,
+  }) {
+    final value = _field(block, path, node);
     if (value == null) return fallback;
-    if (value is! int) throw FormatException('$label must be an integer.');
-    return value;
+    return _requireInt(value, node: node, path: path);
   }
 
-  int? _optionalInt(Object? value, String label) {
+  int? _optionalInt(
+    Map<String, dynamic> block,
+    String path, {
+    required String node,
+  }) {
+    final value = _field(block, path, node);
     if (value == null) return null;
-    if (value is! int) throw FormatException('$label must be an integer.');
-    return value;
+    return _requireInt(value, node: node, path: path);
+  }
+
+  /// Checks one integer against the bounds the schema declares for [path].
+  ///
+  /// Same reason as `_requireChoice`: the apply path compiles with
+  /// `validate: false`, so `StrictConfigSchemaValidator` never runs and an
+  /// out-of-range number reached the TOML writer, where StormDNS would clamp
+  /// it to something the profile never asked for.
+  int _requireInt(
+    Object? value, {
+    required String node,
+    required String path,
+  }) {
+    if (value is! int) {
+      throw FormatException('$node `$path` must be an integer.');
+    }
+    final range = stormDnsIntegerRanges[path];
+    if (range == null) return value;
+    final minimum = range.minimum;
+    final maximum = range.maximum;
+    final belowMinimum = minimum != null &&
+        (value < minimum || range.exclusiveMinimum && value == minimum);
+    if (!belowMinimum && !(maximum != null && value > maximum)) {
+      return value;
+    }
+    final bounds = <String>[
+      if (minimum != null)
+        range.exclusiveMinimum ? 'above $minimum' : 'at least $minimum',
+      if (maximum != null) 'at most $maximum',
+    ];
+    throw FormatException(
+      '$node `$path` must be ${bounds.join(' and ')}; StormDNS would silently '
+      'clamp `$value`.',
+    );
   }
 
   bool? _bool(Object? value) => value is bool ? value : null;

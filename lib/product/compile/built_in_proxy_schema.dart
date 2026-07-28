@@ -1009,6 +1009,21 @@ const stormDnsDurationRanges = <String, ({String min, String max})>{
   'startup.max-age': (min: '0s', max: '365d'),
 };
 
+/// Integer bounds of the StormDNS node block, keyed by profile path.
+///
+/// Derived from the schema instead of restated, so the resolver — which also
+/// runs on the apply path, where `validate: false` skips
+/// `StrictConfigSchemaValidator` — enforces exactly the bounds declared above.
+/// `activation.*` is left out: those fields belong to every built-in node and
+/// are resolved by the activation compiler, not by `StormDnsSettingsResolver`.
+final stormDnsIntegerRanges = <String, ConfigValueRange>{
+  for (final field in _stormDnsFields)
+    if (field.type == ConfigValueType.integer &&
+        !field.path.startsWith('stormdns.activation.') &&
+        (field.range.minimum != null || field.range.maximum != null))
+      field.path.substring('stormdns.'.length): field.range,
+};
+
 BuiltInProxyFieldSchema _duration(String path) => BuiltInProxyFieldSchema(
       path: 'stormdns.$path',
       type: ConfigValueType.string,
