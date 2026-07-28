@@ -269,6 +269,19 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 result.success(openFile(path))
             }
 
+            "installPackage" -> {
+                val path = call.argument<String>("path") ?: run {
+                    result.success(false)
+                    return
+                }
+                scope.launch(Dispatchers.IO) {
+                    val accepted = SelfUpdateInstaller(
+                        FlClashApplication.getAppContext(),
+                    ).install(path)
+                    result.successOnMain(accepted)
+                }
+            }
+
             "isIgnoringBatteryOptimizations" -> {
                 result.success(isIgnoringBatteryOptimizations())
             }

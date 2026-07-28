@@ -66,6 +66,16 @@
       "reason": "Нативный мост пакетов, файлов и установки apk относится к Android bridge-слою."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/SelfUpdateInstaller.kt",
+      "bucket": "budget",
+      "reason": "Нативная установка проверенного обновления приложения относится к Android bridge-слою."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/SelfUpdateInstallerTest.kt",
+      "bucket": "budget",
+      "reason": "Тесты выбора бесшовной установки и интерактивного fallback фиксируют контракт Android bridge-слоя."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
       "reason": "Сервисный мост quick-start, runtime-node и notification action принят в бюджет."
