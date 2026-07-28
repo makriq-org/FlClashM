@@ -130,11 +130,15 @@ final class DiagnosticArchiveBuilder {
     final result = <_DiagnosticCandidate>[];
     final seenPaths = <String>{};
     for (final directory in directories) {
+      // Export is initiated on the UI isolate; keep directory access async.
+      // ignore: avoid_slow_async_io
       if (!await directory.exists()) continue;
       await for (final entity in directory.list(followLinks: false)) {
         if (entity is! File || !entity.path.endsWith('.log')) continue;
         final canonical = entity.absolute.path;
         if (!seenPaths.add(canonical)) continue;
+        // Export is initiated on the UI isolate; keep metadata access async.
+        // ignore: avoid_slow_async_io
         final stat = await entity.stat();
         result.add(
           _DiagnosticCandidate(

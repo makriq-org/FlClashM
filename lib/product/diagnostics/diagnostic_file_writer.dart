@@ -54,8 +54,9 @@ final class DiagnosticFileWriter {
     }
     final output = _file(0).openSync(mode: FileMode.append);
     try {
-      output.writeFromSync(bytes);
-      output.flushSync();
+      output
+        ..writeFromSync(bytes)
+        ..flushSync();
     } finally {
       output.closeSync();
     }
@@ -63,16 +64,24 @@ final class DiagnosticFileWriter {
 
   Future<int> _currentLength() async {
     final current = _file(0);
+    // Normal log draining runs on the UI isolate; keep file access async.
+    // ignore: avoid_slow_async_io
     return await current.exists() ? current.length() : 0;
   }
 
   Future<void> _rotate() async {
     final oldest = _file(maxFiles - 1);
+    // Normal log draining runs on the UI isolate; keep file access async.
+    // ignore: avoid_slow_async_io
     if (await oldest.exists()) await oldest.delete();
     for (var index = maxFiles - 2; index >= 0; index--) {
       final from = _file(index);
+      // Normal log draining runs on the UI isolate; keep file access async.
+      // ignore: avoid_slow_async_io
       if (!await from.exists()) continue;
       final to = _file(index + 1);
+      // Normal log draining runs on the UI isolate; keep file access async.
+      // ignore: avoid_slow_async_io
       if (await to.exists()) await to.delete();
       await from.rename(to.path);
     }

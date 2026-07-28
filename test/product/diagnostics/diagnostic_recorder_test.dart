@@ -11,11 +11,10 @@ void main() {
         'diagnostic-recorder',
       );
       addTearDown(() => temporary.delete(recursive: true));
-      final recorder = ProductDiagnosticRecorder(maxPendingEntries: 2);
-
-      recorder.record('oldest-entry');
-      recorder.record('newer-entry');
-      recorder.record('newest-entry');
+      final recorder = ProductDiagnosticRecorder(maxPendingEntries: 2)
+        ..record('oldest-entry')
+        ..record('newer-entry')
+        ..record('newest-entry');
       await recorder.initialize(temporary.path);
       await recorder.flush();
 
