@@ -236,6 +236,18 @@ object RuntimeNodeProcessManager {
     private val pendingSystemDnsRestarts = ConcurrentHashMap.newKeySet<String>()
     @Volatile private var systemDnsRetryJob: Job? = null
     private var activePlan = linkedMapOf<String, RuntimeNodeSpec>()
+        set(value) {
+            field = value
+            // Kept in lockstep with the plan itself so `updateSystemDns` can
+            // tell "nothing here cares about system DNS" without the plan lock.
+            hasSystemDnsDependents = value.values.any {
+                it.resolverFile?.dependsOnSystemDns == true
+            }
+        }
+
+    // Mirror of the plan above, readable without a lock. Written only under
+    // `planLock`, by the setter.
+    @Volatile private var hasSystemDnsDependents = false
     private var acceptingBatchProbes = true
     @Volatile private var generation = 0L
     private var optionalCheckJob: Job? = null
@@ -437,6 +449,22 @@ object RuntimeNodeProcessManager {
     suspend fun updateSystemDns(dnsServers: List<String>) {
         val normalized = SystemDnsReader.sanitize(dnsServers)
         latestSystemDns = normalized
+
+        // Callbacks that change nothing are answered from volatile state alone.
+        // `runSystemDnsPass` takes the plan transition lock and cancels every
+        // batch probe in flight *before* `applySystemDns` gets to make the same
+        // check, so a redundant DNS event used to abort a running auto-probe.
+        // The authoritative checks stay where they were: this is an
+        // optimisation, and losing the race only costs one needless pass.
+        if (normalized == lastAppliedSystemDns && pendingSystemDnsRestarts.isEmpty()) {
+            return
+        }
+        if (!hasSystemDnsDependents) {
+            lastAppliedSystemDns = normalized
+            pendingSystemDnsRestarts.clear()
+            return
+        }
+
         val incomplete = try {
             runSystemDnsPass(normalized)
         } catch (cancellation: CancellationException) {

@@ -184,6 +184,58 @@ void main() {
     );
   });
 
+  test('a DNS callback that changes nothing never takes the plan lock', () {
+    // `runSystemDnsPass` takes the plan transition lock and cancels every batch
+    // probe in flight before `applySystemDns` gets to notice that nothing
+    // changed, so a redundant callback used to abort a running auto-probe.
+    final updateIndex = processManager.indexOf('suspend fun updateSystemDns(');
+    final unchangedIndex = processManager.indexOf(
+      'if (normalized == lastAppliedSystemDns && '
+      'pendingSystemDnsRestarts.isEmpty()) {',
+    );
+    final dependentsIndex =
+        processManager.indexOf('if (!hasSystemDnsDependents) {');
+    final passIndex = processManager.indexOf('runSystemDnsPass(normalized)');
+    expect(updateIndex, greaterThan(0));
+    expect(unchangedIndex, greaterThan(updateIndex));
+    expect(dependentsIndex, greaterThan(unchangedIndex));
+    expect(
+      passIndex,
+      greaterThan(dependentsIndex),
+      reason: 'the cheap check must come before the lock is taken',
+    );
+    expect(
+      'if (normalized == lastAppliedSystemDns'.allMatches(processManager).length,
+      2,
+      reason: 'the fast path is an optimisation; the authoritative check stays',
+    );
+  });
+
+  test('the system-DNS dependency flag cannot drift from the plan', () {
+    expect(
+      processManager,
+      contains('@Volatile private var hasSystemDnsDependents'),
+      reason: 'the fast path reads it without holding the plan lock',
+    );
+    expect(
+      RegExp(r'(?<!var )hasSystemDnsDependents =')
+          .allMatches(processManager)
+          .length,
+      1,
+      reason: 'only the `activePlan` setter may write it',
+    );
+    final setterIndex = processManager.indexOf('private var activePlan =');
+    final writeIndex = processManager.indexOf('hasSystemDnsDependents =');
+    final applyIndex = processManager.indexOf('activePlan = LinkedHashMap(');
+    expect(setterIndex, greaterThan(0));
+    expect(writeIndex, greaterThan(setterIndex));
+    expect(
+      applyIndex,
+      greaterThan(writeIndex),
+      reason: 'every plan assignment goes through the setter that maintains it',
+    );
+  });
+
   test('a failed DNS update retries without a new network callback', () {
     expect(processManager, contains('private fun scheduleSystemDnsRetry('));
     expect(processManager, contains('MAX_SYSTEM_DNS_RETRIES'));
