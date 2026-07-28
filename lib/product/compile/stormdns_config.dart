@@ -419,6 +419,11 @@ class StormDnsSettingsResolver {
     final result = <String, Object>{};
     for (final entry in raw.entries) {
       final key = entry.key;
+      // The key is present by construction here, so an empty value is an
+      // authoring mistake rather than a setting left at its default.
+      if (entry.value == null) {
+        throw _emptyValue(node, '$block.$key');
+      }
       if (durationKeys.contains(key)) {
         result[key] = _requireDuration(
           entry.value,
@@ -615,8 +620,18 @@ class StormDnsSettingsResolver {
   ///
   /// Every read goes through the full path so the declared bounds of that path
   /// can be applied without restating them at the call site.
-  Object? _field(Map<String, dynamic> block, String path, String node) =>
-      block[path.substring(path.lastIndexOf('.') + 1)];
+  ///
+  /// A key written without a value (`window:` in YAML) arrives as the same
+  /// `null` an absent key does, so the two are told apart here: an absent key
+  /// takes the documented default, while an empty one is refused instead of
+  /// falling through to a value the profile never declared.
+  Object? _field(Map<String, dynamic> block, String path, String node) {
+    final key = path.substring(path.lastIndexOf('.') + 1);
+    if (!block.containsKey(key)) return null;
+    final value = block[key];
+    if (value == null) throw _emptyValue(node, path);
+    return value;
+  }
 
   Map<String, dynamic> _block(
     Map<String, dynamic> parent,
@@ -683,6 +698,10 @@ class StormDnsSettingsResolver {
       'clamp `$value`.',
     );
   }
+
+  FormatException _emptyValue(String node, String path) => FormatException(
+        '$node `$path` has no value; remove the key to use the default.',
+      );
 
   bool? _bool(Object? value) => value is bool ? value : null;
 

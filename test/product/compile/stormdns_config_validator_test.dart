@@ -505,6 +505,64 @@ void main() {
     });
   });
 
+  group('an empty value is not an absent one', () {
+    test('an empty duration is reported instead of crashing', () {
+      _rejectsWithoutSchema({
+        'arq': {'initial-rto': null},
+      });
+      _rejectsWithoutSchema({
+        'resolver-policy': {'refresh': null},
+      });
+      _rejectsWithoutSchema({
+        'startup': {'max-age': null},
+      });
+    });
+
+    test('an empty integer does not become zero', () {
+      _rejectsWithoutSchema({
+        'arq': {'window': null},
+      });
+      _rejectsWithoutSchema({
+        'duplication': {'upload': null},
+      });
+      _rejectsWithoutSchema({
+        'mtu': {
+          'upload': {'min': null},
+        },
+      });
+    });
+
+    test('an empty enum or boolean does not fall back to a default', () {
+      _rejectsWithoutSchema({
+        'compression': {'upload': null},
+      });
+      _rejectsWithoutSchema({
+        'resolver-policy': {'auto-disable': null},
+      });
+      _rejectsWithoutSchema({'preset': null});
+      _rejectsWithoutSchema({
+        'startup': {'mode': null},
+      });
+    });
+
+    test('an absent key still takes its preset or documented default', () {
+      final settings = _resolveWithoutSchema({
+        'duplication': <String, dynamic>{},
+        'compression': <String, dynamic>{},
+        'resolver-policy': <String, dynamic>{},
+        'startup': <String, dynamic>{},
+        'mtu': {'upload': <String, dynamic>{}},
+      });
+      // The `messenger` preset, untouched by the empty blocks.
+      expect(settings.uploadDuplication, 1);
+      expect(settings.uploadCompression, 'lz4');
+      expect(settings.resolverAutoDisable, isTrue);
+      expect(settings.startupMode, 'cached');
+      expect(settings.startupMaxAge, const Duration(days: 30));
+      expect(settings.minUploadMtu, isNull);
+    });
+  });
+
   group('unknown enum values never reach the generated TOML', () {
     // The apply path compiles with `validate: false`, so the schema pass that
     // knows these value sets is skipped and only the resolver stands between a
