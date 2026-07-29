@@ -45,7 +45,9 @@ void main() {
   test('registry exposes recursive and mode-specific fields', () {
     final byedpi = builtInProxySchemas[BuiltInProxyType.byedpi]!;
     expect(
-      byedpi.fields.singleWhere((field) => field.path == 'byedpi.args').modes,
+      byedpi.fields
+          .singleWhere((field) => field.path == 'byedpi.strategy')
+          .modes,
       {'manual'},
     );
     expect(
@@ -59,7 +61,10 @@ void main() {
     expect(
       olcrtc.fields.map((field) => field.path),
       containsAll(<String>{
-        'olcrtc.profiles[].crypto.key',
+        'olcrtc.provider',
+        'olcrtc.encryption-key',
+        'olcrtc.transport',
+        'olcrtc.transport-options',
         'olcrtc.activation',
         'olcrtc.activation.mode',
         'olcrtc.activation.wake',
@@ -86,7 +91,7 @@ void main() {
           )
           .defaultValue
           .value,
-      30,
+      '30s',
     );
     expect(
       olcrtc.fields
@@ -95,7 +100,7 @@ void main() {
           )
           .defaultValue
           .value,
-      900,
+      '15m',
     );
   });
 
@@ -127,8 +132,8 @@ void main() {
     for (final entry in const <String, ConfigValueType>{
       'naiveproxy.transport': ConfigValueType.string,
       'naiveproxy.insecure-concurrency': ConfigValueType.integer,
-      'naiveproxy.tunnel-timeout': ConfigValueType.integer,
-      'naiveproxy.idle-timeout': ConfigValueType.integer,
+      'naiveproxy.tunnel-timeout': ConfigValueType.string,
+      'naiveproxy.idle-timeout': ConfigValueType.string,
       'naiveproxy.post-quantum': ConfigValueType.boolean,
       'naiveproxy.headers': ConfigValueType.object,
       'naiveproxy.host-resolver-rules': ConfigValueType.string,
@@ -152,13 +157,14 @@ void main() {
     }
   });
 
-  test('registry exposes pinned effective OlcRTC defaults', () {
+  test('registry exposes canonical OlcRTC defaults', () {
     final fields = {
       for (final field in builtInProxySchemas[BuiltInProxyType.olcrtc]!.fields)
         field.path: field,
     };
-    expect(fields['olcrtc.failover.retry_delay']!.defaultValue.value, '2s');
-    expect(fields['olcrtc.video.qr_size']!.defaultValue.value, 256);
+    expect(fields, isNot(contains('olcrtc.profiles')));
+    expect(fields, isNot(contains('olcrtc.failover')));
+    expect(fields, isNot(contains('olcrtc.video.hw')));
     expect(fields['olcrtc.liveness.interval']!.defaultValue.value, '10s');
     expect(fields['olcrtc.liveness.timeout']!.defaultValue.value, '15s');
     expect(fields['olcrtc.liveness.failures']!.defaultValue.value, 4);

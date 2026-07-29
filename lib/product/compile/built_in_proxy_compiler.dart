@@ -8,13 +8,21 @@ import 'package:flclashx/product/runtime/connectivity_check.dart';
 import 'package:flclashx/product/runtime/stormdns_release.dart';
 import 'package:flutter/foundation.dart';
 
+import 'built_in_proxy_normalizer.dart';
 import 'byedpi_config_validator.dart';
+import 'byedpi_strategy_sources.dart';
 import 'config_tree.dart';
 import 'naiveproxy_config_validator.dart';
 import 'olcrtc_config_validator.dart';
+import 'public_config_duration.dart';
 import 'stormdns_config.dart';
 import 'stormdns_config_validator.dart';
 import 'stormdns_resolver_sources.dart';
+
+part 'node_compilers/byedpi_compiler.dart';
+part 'node_compilers/naiveproxy_compiler.dart';
+part 'node_compilers/olcrtc_compiler.dart';
+part 'node_compilers/stormdns_compiler.dart';
 
 @immutable
 class CompiledBuiltInProxyNodes {
@@ -47,6 +55,8 @@ class BuiltInProxyCompiler {
     this.olcRtcConfigValidator = const OlcRtcConfigValidator(),
     this.stormDnsConfigValidator = const StormDnsConfigValidator(),
     this.stormDnsResolverParser = const StormDnsResolverSourceParser(),
+    this.normalizer = const BuiltInProxyNormalizer(),
+    this.byedpiStrategySourceParser = const ByedpiStrategySourceParser(),
   });
 
   final BuiltInProxyRegistry registry;
@@ -55,10 +65,14 @@ class BuiltInProxyCompiler {
   final OlcRtcConfigValidator olcRtcConfigValidator;
   final StormDnsConfigValidator stormDnsConfigValidator;
   final StormDnsResolverSourceParser stormDnsResolverParser;
+  final BuiltInProxyNormalizer normalizer;
+  final ByedpiStrategySourceParser byedpiStrategySourceParser;
 
   void validateConfig(Map<String, dynamic> rawConfig) {
     _rejectLegacyRuntimeSelection(rawConfig);
-    final proxyEntries = rawConfig['proxies'];
+    final normalized = copyConfigTree(rawConfig);
+    _normalizeBuiltInProxyEntries(normalized);
+    final proxyEntries = normalized['proxies'];
     if (proxyEntries is! List) {
       return;
     }
@@ -85,8 +99,10 @@ class BuiltInProxyCompiler {
     bool copyConfig = true,
     bool validate = true,
     Map<Uri, StormDnsRemoteResolverList> stormDnsRemoteLists = const {},
+    Map<Uri, ByedpiRemoteStrategyList> byedpiRemoteLists = const {},
   }) {
     final normalizedConfig = copyConfig ? copyConfigTree(rawConfig) : rawConfig;
+    _normalizeBuiltInProxyEntries(normalizedConfig);
     final proxyEntries = normalizedConfig['proxies'];
     if (proxyEntries is! List) {
       if (validate) {
@@ -151,6 +167,7 @@ class BuiltInProxyCompiler {
         connectivityCheck: connectivityCheck,
         activation: activation,
         stormDnsRemoteLists: stormDnsRemoteLists,
+        byedpiRemoteLists: byedpiRemoteLists,
       );
       compiledNodes.add(plan);
       proxyEntries[i] = plan.toProxyConfig();
@@ -160,6 +177,19 @@ class BuiltInProxyCompiler {
       config: normalizedConfig,
       nodes: compiledNodes,
     );
+  }
+
+  void _normalizeBuiltInProxyEntries(Map<String, dynamic> config) {
+    final proxies = config['proxies'];
+    if (proxies is! List) return;
+    for (var index = 0; index < proxies.length; index++) {
+      final proxy = proxies[index];
+      if (proxy is! Map) continue;
+      final type = BuiltInProxyTypeLabel.tryParse(
+        _trimmedString(proxy['type']),
+      );
+      if (type != null) proxies[index] = normalizer.normalize(proxy);
+    }
   }
 
   void _validateDefinition(BuiltInProxyNodeDefinition definition) {
@@ -206,6 +236,7 @@ class BuiltInProxyCompiler {
     required ConnectivityCheckConfig connectivityCheck,
     required NodeActivationConfig? activation,
     Map<Uri, StormDnsRemoteResolverList> stormDnsRemoteLists = const {},
+    Map<Uri, ByedpiRemoteStrategyList> byedpiRemoteLists = const {},
   }) {
     final udp = _resolveUdp(definition: definition, descriptor: descriptor);
     return switch (definition.type) {
@@ -235,6 +266,7 @@ class BuiltInProxyCompiler {
           udp: udp,
           connectivityCheck: connectivityCheck,
           activation: activation,
+          remoteLists: byedpiRemoteLists,
         ),
       BuiltInProxyType.stormdns => _buildStormDnsPlan(
           definition: definition,
@@ -249,98 +281,19 @@ class BuiltInProxyCompiler {
     };
   }
 
-  BuiltInProxyNodePlan _buildStormDnsPlan({
-    required BuiltInProxyNodeDefinition definition,
-    required BuiltInProxyDescriptor descriptor,
-    required String nodeId,
-    required int listenPort,
-    required bool udp,
-    required ConnectivityCheckConfig connectivityCheck,
-    required NodeActivationConfig activation,
-    required Map<Uri, StormDnsRemoteResolverList> remoteLists,
-  }) {
-    final rawConfig = copyConfigTree(definition.rawConfig)
-      ..remove('name')
-      ..remove('type')
-      ..remove('udp')
-      ..remove('connectivity-check')
-      ..remove('activation');
-    final nodeLabel = 'stormdns node `${definition.name}`';
-
-    final sources = stormDnsResolverParser.parse(
-      rawConfig.remove('resolvers'),
-      label: '$nodeLabel `resolvers`',
-    );
-    final settings = stormDnsConfigValidator.validateEffective(
-      rawConfig,
-      node: nodeLabel,
-    );
-
-    final resolverLines = buildResolverFileLines(
-      sources: sources,
-      remoteLists: remoteLists,
-    );
-    if (resolverLines.isEmpty) {
-      throw FormatException(
-        '$nodeLabel resolved an empty resolver list. Add a reachable entry to '
-        '`resolvers`, or keep `system` so the physical network DNS is used.',
-      );
-    }
-
-    final fingerprint = stormDnsCacheFingerprint(
-      resolverLines: resolverLines,
-      domains: settings.domains,
-    );
-    final cacheDirectory = '$stormDnsCacheDirectoryName/$fingerprint';
-    final config = buildStormDnsToml(
-      settings: settings,
-      listenHost: localhost,
-      listenPort: listenPort,
-      logDirectory: '$cacheDirectory/$stormDnsLogDirectoryName',
-    );
-
-    return BuiltInProxyNodePlan(
-      nodeId: nodeId,
-      name: definition.name,
-      type: definition.type,
-      listenHost: localhost,
-      listenPort: listenPort,
-      protocol: descriptor.protocol,
-      udp: udp,
-      connectivityCheck: connectivityCheck,
-      activation: activation,
-      files: {
-        'built-in-proxies/stormdns/$nodeId/$stormDnsConfigFileName': config,
-        'built-in-proxies/stormdns/$nodeId/'
-                '$stormDnsResolversTemplateFileName':
-            '${resolverLines.join('\n')}\n',
-      },
-      metadata: {
-        'cache-fingerprint': fingerprint,
-        'cache-directory': cacheDirectory,
-        'depends-on-system-dns':
-            '${resolverLines.contains(stormDnsSystemDnsPlaceholder)}',
-      },
-    );
-  }
-
-  /// Remote resolver-list addresses declared across every StormDNS node, with
-  /// the shortest refresh window that applies to each of them.
-  ///
-  /// The caller resolves these before compiling, since fetching is async and
-  /// compilation is not.
   Map<Uri, Duration> collectStormDnsRemoteLists(
-      Map<String, dynamic> rawConfig) {
+    Map<String, dynamic> rawConfig,
+  ) {
     final result = <Uri, Duration>{};
     final proxyEntries = rawConfig['proxies'];
     if (proxyEntries is! List) return result;
     for (final proxy in proxyEntries) {
       if (proxy is! Map) continue;
-      final normalized = _asStringKeyedMap(proxy);
-      if (BuiltInProxyTypeLabel.tryParse(_trimmedString(normalized['type'])) !=
+      if (BuiltInProxyTypeLabel.tryParse(_trimmedString(proxy['type'])) !=
           BuiltInProxyType.stormdns) {
         continue;
       }
+      final normalized = normalizer.normalize(proxy);
       final List<Uri> urls;
       try {
         urls = stormDnsResolverParser.parseRemoteListUrls(
@@ -374,6 +327,36 @@ class BuiltInProxyCompiler {
     return result;
   }
 
+  Map<Uri, Duration> collectByedpiRemoteLists(Map<String, dynamic> rawConfig) {
+    final result = <Uri, Duration>{};
+    final proxies = rawConfig['proxies'];
+    if (proxies is! List) return result;
+    for (final proxy in proxies) {
+      if (proxy is! Map) continue;
+      if (BuiltInProxyTypeLabel.tryParse(_trimmedString(proxy['type'])) !=
+          BuiltInProxyType.byedpi) {
+        continue;
+      }
+      final normalized = normalizer.normalize(proxy);
+      final mode = _trimmedString(normalized['mode']) ??
+          (normalized.containsKey('strategy') ? 'manual' : 'auto');
+      if (mode != 'auto') continue;
+      for (final url in byedpiStrategySourceParser.remoteUrls(
+        normalized['strategies'],
+      )) {
+        if (!result.containsKey(url) &&
+            result.length >= byedpiMaxRemoteStrategyLists) {
+          throw const FormatException(
+            'A profile may reference at most '
+            '$byedpiMaxRemoteStrategyLists ByeDPI strategy lists.',
+          );
+        }
+        result[url] = const Duration(days: 1);
+      }
+    }
+    return result;
+  }
+
   bool _resolveUdp({
     required BuiltInProxyNodeDefinition definition,
     required BuiltInProxyDescriptor descriptor,
@@ -393,470 +376,6 @@ class BuiltInProxyCompiler {
       );
     }
     return udp;
-  }
-
-  BuiltInProxyNodePlan _buildNaiveProxyPlan({
-    required BuiltInProxyNodeDefinition definition,
-    required BuiltInProxyDescriptor descriptor,
-    required String nodeId,
-    required int listenPort,
-    required bool udp,
-    required ConnectivityCheckConfig connectivityCheck,
-    required NodeActivationConfig? activation,
-  }) {
-    final rawConfig = Map<String, dynamic>.from(definition.rawConfig)
-      ..remove('name')
-      ..remove('type')
-      ..remove('udp')
-      ..remove('connectivity-check')
-      ..remove('activation');
-    if (rawConfig.containsKey('proxy')) {
-      throw const FormatException(
-        'naiveproxy `proxy` is not supported. Use separate `server`, `port`, `username`, and `password` fields.',
-      );
-    }
-    const fields = {
-      'server',
-      'port',
-      'username',
-      'password',
-      'transport',
-      'insecure-concurrency',
-      'tunnel-timeout',
-      'idle-timeout',
-      'post-quantum',
-      'headers',
-      'host-resolver-rules',
-    };
-    final unknown =
-        rawConfig.keys.where((key) => !fields.contains(key)).toList();
-    if (unknown.isNotEmpty) {
-      throw FormatException(
-        'naiveproxy node `${definition.name}` has unknown or forbidden fields: '
-        '${unknown.join(', ')}.',
-      );
-    }
-
-    final transportValue = rawConfig['transport'];
-    final transport =
-        transportValue == null && !rawConfig.containsKey('transport')
-            ? 'https'
-            : _trimmedString(transportValue)?.toLowerCase();
-    if (transport != 'https' && transport != 'quic') {
-      throw const FormatException(
-        'naiveproxy `transport` must be `https` or `quic`.',
-      );
-    }
-    final server = _requiredNaiveProxyServer(rawConfig['server']);
-    final port = _requiredPort(rawConfig['port'], 'naiveproxy `port`');
-    final username = _requiredCredential(
-      rawConfig['username'],
-      'naiveproxy `username`',
-    );
-    final password = _requiredCredential(
-      rawConfig['password'],
-      'naiveproxy `password`',
-    );
-    final proxy = Uri(
-      scheme: transport,
-      userInfo:
-          '${Uri.encodeComponent(username)}:${Uri.encodeComponent(password)}',
-      host: server,
-      port: port,
-    ).toString();
-    final nativeConfig = <String, dynamic>{
-      'listen': 'socks://127.0.0.1:$listenPort',
-      'proxy': proxy,
-    };
-    if (rawConfig.containsKey('insecure-concurrency')) {
-      final insecureConcurrency = rawConfig['insecure-concurrency'];
-      if (insecureConcurrency == null) {
-        throw const FormatException(
-          'naiveproxy `insecure-concurrency` must be an integer from 1 to 4.',
-        );
-      }
-      nativeConfig['insecure-concurrency'] = _boundedInt(
-        insecureConcurrency,
-        'naiveproxy `insecure-concurrency`',
-        1,
-        4,
-      );
-    }
-    for (final field in const [
-      'tunnel-timeout',
-      'idle-timeout',
-    ]) {
-      if (!rawConfig.containsKey(field)) continue;
-      nativeConfig[field] = _requiredPositiveInt(
-        rawConfig[field],
-        'naiveproxy `$field`',
-      );
-    }
-    final postQuantum = rawConfig['post-quantum'];
-    if (rawConfig.containsKey('post-quantum') && postQuantum is! bool) {
-      throw const FormatException(
-        'naiveproxy `post-quantum` must be a boolean.',
-      );
-    }
-    if (postQuantum == false) nativeConfig['no-post-quantum'] = true;
-    if (rawConfig.containsKey('headers')) {
-      final extraHeaders = _encodeNaiveProxyHeaders(rawConfig['headers']);
-      if (extraHeaders != null) nativeConfig['extra-headers'] = extraHeaders;
-    }
-    if (rawConfig.containsKey('host-resolver-rules')) {
-      final hostResolverRules = rawConfig['host-resolver-rules'];
-      final rules = _trimmedString(hostResolverRules);
-      if (rules == null || rules.contains(RegExp(r'[\x00-\x1F\x7F]'))) {
-        throw const FormatException(
-          'naiveproxy `host-resolver-rules` must be a non-empty single-line string.',
-        );
-      }
-      nativeConfig['host-resolver-rules'] = rules;
-    }
-
-    return BuiltInProxyNodePlan(
-      nodeId: nodeId,
-      name: definition.name,
-      type: definition.type,
-      listenHost: localhost,
-      listenPort: listenPort,
-      protocol: descriptor.protocol,
-      udp: udp,
-      connectivityCheck: connectivityCheck,
-      activation: activation,
-      files: {
-        'built-in-proxies/naiveproxy/$nodeId/config.json':
-            json.encode(nativeConfig),
-      },
-    );
-  }
-
-  String _requiredNaiveProxyServer(Object? value) {
-    final server = _trimmedString(value);
-    if (server == null) {
-      throw const FormatException(
-        'naiveproxy built-in nodes require a non-empty `server` field.',
-      );
-    }
-    if (server.contains(RegExp(r'[,/@?#\\\s]'))) {
-      throw const FormatException(
-        'naiveproxy `server` must be a host name or IP address, not a URI or proxy chain.',
-      );
-    }
-    return server;
-  }
-
-  int _requiredPort(Object? value, String field) {
-    if (value is! num ||
-        !value.isFinite ||
-        value.toInt() != value ||
-        value.toInt() < 1 ||
-        value.toInt() > 65535) {
-      throw FormatException('$field must be an integer from 1 to 65535.');
-    }
-    return value.toInt();
-  }
-
-  String _requiredCredential(Object? value, String field) {
-    if (value is! String || value.trim().isEmpty) {
-      throw FormatException('$field must be a non-empty string.');
-    }
-    return value;
-  }
-
-  int _requiredPositiveInt(Object? value, String field) {
-    if (value is! num ||
-        !value.isFinite ||
-        value.toInt() != value ||
-        value.toInt() < 1 ||
-        value.toInt() > 2147483647) {
-      throw FormatException('$field must be a positive integer.');
-    }
-    return value.toInt();
-  }
-
-  String? _encodeNaiveProxyHeaders(Object? value) {
-    if (value is! Map) {
-      throw const FormatException('naiveproxy `headers` must be a map.');
-    }
-    final result = <String>[];
-    for (final entry in value.entries) {
-      final name = entry.key;
-      final headerValue = entry.value;
-      if (name is! String ||
-          !RegExp(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$").hasMatch(name)) {
-        throw const FormatException(
-          'naiveproxy `headers` contains an invalid header name.',
-        );
-      }
-      if (headerValue is! String ||
-          headerValue.contains(RegExp(r'[\x00-\x1F\x7F]'))) {
-        throw FormatException(
-          'naiveproxy header `$name` must have a string value without control characters.',
-        );
-      }
-      result.add('$name: $headerValue');
-    }
-    return result.isEmpty ? null : result.join('\r\n');
-  }
-
-  BuiltInProxyNodePlan _buildOlcRtcPlan({
-    required BuiltInProxyNodeDefinition definition,
-    required BuiltInProxyDescriptor descriptor,
-    required String nodeId,
-    required int listenPort,
-    required bool udp,
-    required ConnectivityCheckConfig connectivityCheck,
-    required NodeActivationConfig activation,
-  }) {
-    final rawConfig = copyConfigTree(definition.rawConfig)
-      ..remove('name')
-      ..remove('type')
-      ..remove('udp')
-      ..remove('connectivity-check')
-      ..remove('activation');
-    if (rawConfig.containsKey('listen') ||
-        rawConfig.containsKey('server') ||
-        rawConfig.containsKey('port') ||
-        rawConfig.containsKey('data')) {
-      throw const FormatException(
-        'olcrtc built-in nodes must not override `listen`, `server`, `port`, or `data`; those are owned by the client local-node contract.',
-      );
-    }
-    rawConfig['data'] = 'data';
-
-    final mode = _trimmedString(rawConfig['mode']);
-    if (mode != null && mode.toLowerCase() != 'cnc') {
-      throw const FormatException(
-        'olcrtc built-in nodes support only client `mode: cnc` in FlClashM.',
-      );
-    }
-    rawConfig['mode'] = 'cnc';
-
-    final socks = _asStringKeyedMap(rawConfig['socks']);
-    if (socks.containsKey('host') || socks.containsKey('port')) {
-      throw const FormatException(
-        'olcrtc built-in nodes must not override `socks.host` or `socks.port`; local bind is owned by the client.',
-      );
-    }
-    socks['host'] = localhost;
-    socks['port'] = listenPort;
-    rawConfig['socks'] = socks;
-
-    final crypto = _asStringKeyedMap(rawConfig['crypto']);
-    if (crypto.containsKey('key_file')) {
-      throw const FormatException(
-        'olcrtc built-in nodes do not support `crypto.key_file` in v1.',
-      );
-    }
-
-    _rejectUnsafeOlcRtcProfileOverrides(rawConfig['profiles']);
-    olcRtcConfigValidator.validate(rawConfig);
-
-    return BuiltInProxyNodePlan(
-      nodeId: nodeId,
-      name: definition.name,
-      type: definition.type,
-      listenHost: localhost,
-      listenPort: listenPort,
-      protocol: descriptor.protocol,
-      udp: udp,
-      connectivityCheck: connectivityCheck,
-      activation: activation,
-      files: {
-        'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(rawConfig),
-      },
-    );
-  }
-
-  void _rejectUnsafeOlcRtcProfileOverrides(dynamic profiles) {
-    if (profiles == null) {
-      return;
-    }
-    if (profiles is! List) {
-      throw const FormatException('olcrtc `profiles` must be a list.');
-    }
-
-    void visit(dynamic value) {
-      if (value is List) {
-        value.forEach(visit);
-        return;
-      }
-      if (value is! Map) {
-        return;
-      }
-
-      final map = _asStringKeyedMap(value);
-      final socks = map['socks'];
-      if (socks is Map) {
-        final socksMap = _asStringKeyedMap(socks);
-        if (socksMap.containsKey('host') || socksMap.containsKey('port')) {
-          throw const FormatException(
-            'olcrtc profiles must not override `socks.host` or `socks.port`; local bind is owned by the client.',
-          );
-        }
-      }
-      final crypto = map['crypto'];
-      if (crypto is Map && _asStringKeyedMap(crypto).containsKey('key_file')) {
-        throw const FormatException(
-          'olcrtc profiles must not use `crypto.key_file`.',
-        );
-      }
-
-      map.values.forEach(visit);
-    }
-
-    visit(profiles);
-  }
-
-  BuiltInProxyNodePlan _buildByedpiPlan({
-    required BuiltInProxyNodeDefinition definition,
-    required BuiltInProxyDescriptor descriptor,
-    required String nodeId,
-    required int listenPort,
-    required bool udp,
-    required ConnectivityCheckConfig connectivityCheck,
-    required NodeActivationConfig? activation,
-  }) {
-    final rawConfig = copyConfigTree(definition.rawConfig)
-      ..remove('name')
-      ..remove('type')
-      ..remove('udp')
-      ..remove('connectivity-check')
-      ..remove('activation');
-    if (rawConfig.containsKey('test')) {
-      throw const FormatException(
-        'byedpi `test` is no longer supported. Rename it to `strategy-test`; connectivity checks belong in `connectivity-check`.',
-      );
-    }
-    if (rawConfig.containsKey('listen') ||
-        rawConfig.containsKey('server') ||
-        rawConfig.containsKey('port') ||
-        rawConfig.containsKey('ip')) {
-      throw const FormatException(
-        'byedpi built-in nodes must not override `listen`, `server`, `ip`, or `port`; those are owned by the client local-node contract.',
-      );
-    }
-
-    final modeValue = rawConfig.remove('mode');
-    final mode = modeValue == null
-        ? (rawConfig.containsKey('args') ? 'manual' : 'auto')
-        : _trimmedString(modeValue)?.toLowerCase();
-    if (mode != 'manual' && mode != 'auto') {
-      throw const FormatException(
-        'byedpi built-in nodes support only `mode: manual` or `mode: auto`.',
-      );
-    }
-
-    final config = <String, dynamic>{
-      'mode': mode,
-      'listenHost': localhost,
-      'listenPort': listenPort,
-    };
-
-    if (mode == 'manual') {
-      if (rawConfig.containsKey('strategy-test')) {
-        throw const FormatException(
-          'byedpi `strategy-test` is allowed only for `mode: auto`.',
-        );
-      }
-      final args = _trimmedString(rawConfig.remove('args'));
-      if (args == null) {
-        throw const FormatException(
-          'byedpi manual nodes require a non-empty `args` field.',
-        );
-      }
-      config['args'] = args;
-    } else {
-      final strategies = _strictStringList(
-        rawConfig.remove('strategies'),
-        'byedpi `strategies`',
-      );
-      final strategyListValue = rawConfig.remove('strategy-list');
-      final strategyList = strategyListValue == null
-          ? 'byebyeedpi'
-          : _trimmedString(strategyListValue)?.toLowerCase();
-      if (strategyList == null) {
-        throw const FormatException(
-          'byedpi `strategy-list` must be a non-empty string.',
-        );
-      }
-      if (strategies.isNotEmpty && strategyListValue != null) {
-        throw const FormatException(
-          'byedpi auto nodes must use either `strategies` or `strategy-list`, not both.',
-        );
-      }
-      if (strategies.isEmpty && strategyList != 'byebyeedpi') {
-        throw const FormatException(
-          'byedpi auto nodes require `strategies` or `strategy-list: byebyeedpi`.',
-        );
-      }
-      final strategyTest = _optionalMap(
-        rawConfig.remove('strategy-test'),
-        'byedpi `strategy-test`',
-      );
-      var urls = _parseSafeUrls(
-        strategyTest['urls'],
-        label: 'byedpi `strategy-test.urls`',
-        required: false,
-      );
-      if (urls.isEmpty) {
-        urls = _parseSafeUrls(
-          [_defaultByedpiStrategyTestUrl],
-          label: 'bundled byedpi strategy test address',
-          required: true,
-        );
-      }
-      _validateStrategyTest(strategyTest);
-      final selection = _optionalMap(
-        rawConfig.remove('selection'),
-        'byedpi `selection`',
-      );
-      _validateByedpiSelection(selection);
-      final cache = _optionalMap(
-        rawConfig.remove('cache'),
-        'byedpi `cache`',
-      );
-      _validateByedpiCache(cache);
-      final fallbackValue = rawConfig.remove('fallback-args');
-      final fallbackArgs = _trimmedString(fallbackValue);
-      if (fallbackValue != null && fallbackArgs == null) {
-        throw const FormatException(
-          'byedpi `fallback-args` must be a non-empty string.',
-        );
-      }
-      config['strategies'] = strategies;
-      config['strategyList'] = strategies.isEmpty ? strategyList : null;
-      config['strategyTest'] = <String, dynamic>{
-        ...strategyTest,
-        'urls': urls.map((url) => url.toString()).toList(growable: false),
-      };
-      config['selection'] = selection;
-      config['cache'] = cache;
-      if (fallbackArgs != null) config['fallbackArgs'] = fallbackArgs;
-    }
-
-    if (rawConfig.isNotEmpty) {
-      throw FormatException(
-        'byedpi node `${definition.name}` has unknown or mode-incompatible fields: '
-        '${rawConfig.keys.join(', ')}.',
-      );
-    }
-
-    return BuiltInProxyNodePlan(
-      nodeId: nodeId,
-      name: definition.name,
-      type: definition.type,
-      listenHost: localhost,
-      listenPort: listenPort,
-      protocol: descriptor.protocol,
-      udp: udp,
-      connectivityCheck: connectivityCheck,
-      activation: activation,
-      files: {
-        'built-in-proxies/byedpi/$nodeId/config.json': json.encode(config),
-      },
-    );
   }
 
   NodeActivationConfig _parseActivation({
@@ -1024,7 +543,8 @@ class BuiltInProxyCompiler {
     final requiredValue = raw['required'] ?? false;
     if (requiredValue is! bool) {
       throw const FormatException(
-          '`connectivity-check.required` must be a boolean.');
+        '`connectivity-check.required` must be a boolean.',
+      );
     }
     var urls = _parseSafeUrls(
       raw['urls'],
@@ -1049,8 +569,12 @@ class BuiltInProxyCompiler {
     return ConnectivityCheckConfig(
       urls: urls,
       required: requiredValue,
-      timeout:
-          _seconds(raw['timeout'], 'timeout', 5, connectivityCheckMaxTimeout),
+      timeout: _seconds(
+        raw['timeout'],
+        'timeout',
+        5,
+        connectivityCheckMaxTimeout,
+      ),
       startupTimeout: _seconds(
         raw['startup-timeout'],
         'startup-timeout',
@@ -1064,7 +588,11 @@ class BuiltInProxyCompiler {
         connectivityCheckMaxStartupTimeout,
       ),
       requests: _boundedInt(
-          raw['requests'], 'requests', 1, connectivityCheckMaxRequests),
+        raw['requests'],
+        'requests',
+        1,
+        connectivityCheckMaxRequests,
+      ),
       concurrency: _boundedInt(
         raw['concurrency'],
         'concurrency',
@@ -1153,7 +681,8 @@ class BuiltInProxyCompiler {
     if (value is! List) throw FormatException('$label must be a list.');
     if (value.length > connectivityCheckMaxUrls) {
       throw FormatException(
-          '$label supports at most $connectivityCheckMaxUrls addresses.');
+        '$label supports at most $connectivityCheckMaxUrls addresses.',
+      );
     }
     final result = <Uri>[];
     for (final item in value) {
@@ -1171,162 +700,28 @@ class BuiltInProxyCompiler {
     return List<Uri>.unmodifiable(result);
   }
 
-  void _validateStrategyTest(Map<String, dynamic> value) {
-    const fields = {
-      'urls',
-      'sni',
-      'resolver',
-      'timeout',
-      'requests',
-      'concurrency',
-      'min-success-ratio',
-    };
-    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
-    if (unknown.isNotEmpty) {
-      throw FormatException(
-          'byedpi `strategy-test` has unknown fields: ${unknown.join(', ')}.');
-    }
-    _validateStrategyTestResolver(value['resolver']);
-    final sni = value['sni'];
-    if (sni != null &&
-        (sni is! String ||
-            sni.trim().isEmpty ||
-            sni.contains('/') ||
-            sni.contains('@') ||
-            sni.contains(':'))) {
-      throw const FormatException(
-          'byedpi `strategy-test.sni` must be a host name.');
-    }
-    _seconds(value['timeout'], 'strategy-test.timeout', 5,
-        connectivityCheckMaxTimeout);
-    _boundedInt(value['requests'], 'strategy-test.requests', 1,
-        connectivityCheckMaxRequests);
-    _boundedInt(
-      value['concurrency'],
-      'strategy-test.concurrency',
-      4,
-      connectivityCheckMaxConcurrency,
-    );
-    _ratio(value['min-success-ratio'], 'strategy-test.min-success-ratio');
-  }
-
-  void _validateStrategyTestResolver(Object? value) {
-    if (value == null) return;
-    if (value is! String || value.trim().isEmpty) {
-      throw const FormatException(
-          'byedpi `strategy-test.resolver` must be a public https DoH URL or `system`.');
-    }
-    final resolver = value.trim();
-    if (resolver.toLowerCase() == 'system') return;
-    final uri = Uri.tryParse(resolver);
-    if (uri == null || uri.scheme != 'https' || !isSafeConnectivityUri(uri)) {
-      throw const FormatException(
-          'byedpi `strategy-test.resolver` must be a public https DoH URL or `system`.');
-    }
-  }
-
-  void _validateByedpiSelection(Map<String, dynamic> value) {
-    const fields = {'concurrency', 'foreground-timeout', 'background'};
-    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
-    if (unknown.isNotEmpty) {
-      throw FormatException(
-        'byedpi `selection` has unknown fields: ${unknown.join(', ')}.',
-      );
-    }
-    _boundedInt(
-      value['concurrency'],
-      'selection.concurrency',
-      4,
-      connectivityCheckMaxConcurrency,
-    );
-    _seconds(
-      value['foreground-timeout'],
-      'selection.foreground-timeout',
-      15,
-      const Duration(minutes: 1),
-    );
-    final background = value['background'];
-    if (background != null && background is! bool) {
-      throw const FormatException(
-        '`selection.background` must be a boolean.',
-      );
-    }
-  }
-
-  void _validateByedpiCache(Map<String, dynamic> value) {
-    const fields = {
-      'ttl',
-      'recheck-after',
-      'failure-threshold',
-      'retry-after',
-    };
-    final unknown = value.keys.where((key) => !fields.contains(key)).toList();
-    if (unknown.isNotEmpty) {
-      throw FormatException(
-        'byedpi `cache` has unknown fields: ${unknown.join(', ')}.',
-      );
-    }
-    const maximum = Duration(days: 365);
-    final ttl = _seconds(value['ttl'], 'cache.ttl', 604800, maximum);
-    final recheckAfter = _seconds(
-      value['recheck-after'],
-      'cache.recheck-after',
-      86400,
-      maximum,
-    );
-    _seconds(
-      value['retry-after'],
-      'cache.retry-after',
-      300,
-      maximum,
-    );
-    _boundedInt(
-      value['failure-threshold'],
-      'cache.failure-threshold',
-      2,
-      32,
-    );
-    if (recheckAfter > ttl) {
-      throw const FormatException(
-        '`cache.recheck-after` must not exceed `cache.ttl`.',
-      );
-    }
-  }
-
   Map<String, dynamic> _optionalMap(Object? value, String label) {
     if (value == null) return <String, dynamic>{};
     if (value is! Map) throw FormatException('$label must be a map.');
     return _asStringKeyedMap(value);
   }
 
-  List<String> _strictStringList(Object? value, String label) {
-    if (value == null) return const [];
-    if (value is! List) throw FormatException('$label must be a list.');
-    final result = <String>[];
-    for (final item in value) {
-      final normalized = _trimmedString(item);
-      if (normalized == null) {
-        throw FormatException('$label must contain non-empty strings.');
-      }
-      result.add(normalized);
-    }
-    return List<String>.unmodifiable(result);
-  }
-
   Duration _seconds(
-      Object? value, String field, int fallback, Duration maximum) {
-    final seconds = value ?? fallback;
-    if (seconds is! num ||
-        !seconds.isFinite ||
-        seconds.toInt() != seconds ||
-        seconds <= 0) {
-      throw FormatException('`$field` must be a positive integer.');
+    Object? value,
+    String field,
+    int fallback,
+    Duration maximum,
+  ) {
+    final duration = parsePublicConfigDuration(
+      value,
+      path: field,
+      fallback: Duration(seconds: fallback),
+      maximum: maximum,
+    );
+    if (duration.inMicroseconds % Duration.microsecondsPerSecond != 0) {
+      throw FormatException('`$field` must resolve to whole seconds.');
     }
-    final result = Duration(seconds: seconds.toInt());
-    if (result > maximum) {
-      throw FormatException('`$field` exceeds the supported limit.');
-    }
-    return result;
+    return duration;
   }
 
   Duration _nonNegativeSeconds(
@@ -1335,15 +730,17 @@ class BuiltInProxyCompiler {
     int fallback,
     Duration maximum,
   ) {
-    final seconds = value ?? fallback;
-    if (seconds is! num || seconds.toInt() != seconds || seconds < 0) {
-      throw FormatException('`$field` must be a non-negative integer.');
+    final duration = parsePublicConfigDuration(
+      value,
+      path: field,
+      fallback: Duration(seconds: fallback),
+      maximum: maximum,
+      allowZero: true,
+    );
+    if (duration.inMicroseconds % Duration.microsecondsPerSecond != 0) {
+      throw FormatException('`$field` must resolve to whole seconds.');
     }
-    final result = Duration(seconds: seconds.toInt());
-    if (result > maximum) {
-      throw FormatException('`$field` exceeds the supported limit.');
-    }
-    return result;
+    return duration;
   }
 
   int _boundedInt(Object? value, String field, int fallback, int maximum) {
@@ -1362,7 +759,8 @@ class BuiltInProxyCompiler {
     if (value == null) return null;
     if (value is! num || !value.isFinite || value <= 0 || value > 1) {
       throw FormatException(
-          '`$field` must be greater than 0 and no greater than 1.');
+        '`$field` must be greater than 0 and no greater than 1.',
+      );
     }
     return value.toDouble();
   }

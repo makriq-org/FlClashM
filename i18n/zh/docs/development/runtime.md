@@ -35,6 +35,8 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 > 📎 面向用户的一侧（YAML、参数）见[内置节点指南](../user-guide/profiles.md)。
 
+`BuiltInProxyCompiler` 只负责协调：规范化旧别名、分配本地端口，并把规范节点交给 NaiveProxy、ByeDPI、OlcRTC 或 StormDNS 编译器。各编译器独立生成对应的 JSON、YAML 或 TOML。
+
 ### 🎭 naiveproxy
 
 - **类型：** `naiveproxy`
@@ -48,10 +50,10 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### 📞 olcrtc
 
 - **类型：** `olcrtc`
-- **必填字段：** `name`、`auth.provider`、`room.id`（`none` 除外）、`crypto.key`、`net.transport`、`net.dns`
+- **必填字段：** `name`、`provider`、`room`（`none` 除外）、`encryption-key`、`transport`、`dns-server`
 - 仅在 CNC（客户端）模式工作
 - 不支持 UDP；最终的本地 `mihomo` 节点得到 `udp: false`
-- 启动前 FlClashM 校验必填字段、允许的提供者与传输、密钥、DNS 以及每个最终备用 profile
+- 启动前 FlClashM 校验 provider/engine 规则、传输专属参数、密钥和 DNS
 - Android 服务保留有限的进程输出尾部；若 OlcRTC 在打开 SOCKS5 端口前退出，原因会立即回传给 Dart 并显示给用户
 - 通过稳定的 `config.yaml` 契约以独立进程运行；不使用移动库
 - 源码固定在提交 `ad5758513335cda54362a64621c29e9d9fe759b4`
@@ -95,10 +97,10 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### 🛡 byedpi
 
 - **类型：** `byedpi`
-- **`manual` 模式：** 接受 `args` 字符串
+- **`manual` 模式：** 接受 `strategy` 字符串
 - **`auto` 模式：** 遍历 ByeByeDPI 策略并缓存可用的一条
-- 无 `mode` 时，有 `args` 选手动，无 `args` 选自动
-- auto 模式下 `strategy-list` 默认为 `byebyeedpi`；无 `strategy-test.urls` 时使用内置 YouTube 测试端点
+- 无 `mode` 时，有 `strategy` 选手动，无 `strategy` 选自动
+- `strategies` 可按顺序组合 `builtin:byebyeedpi`、内联策略和公网 HTTPS 列表；省略时使用内置列表
 - 支持 `{sni}` 替换
 - 默认启用 UDP 并传给本地 `mihomo` 节点；`udp: false` 将其关闭，而 ByeDPI 进程本身不接收单独的 UDP 参数
 

@@ -26,9 +26,9 @@ connectivity-check:
   urls:
     - "https://example.org/generate_204"
   required: true
-  timeout: 5
-  startup-timeout: 30
-  retry-interval: 1
+  timeout: 5s
+  startup-timeout: 30s
+  retry-interval: 1s
   requests: 1
   concurrency: 1
   min-success-ratio: 1.0
@@ -38,9 +38,9 @@ connectivity-check:
 |-------|---------|--------------|
 | `urls` | — | Addresses to check (public HTTP(S), no credentials or fragments) |
 | `required` | `false` | Whether the check is mandatory for startup |
-| `timeout` | `5` | Per-request timeout, seconds |
-| `startup-timeout` | `30` (`120` for `stormdns`) | Overall check budget at startup, seconds |
-| `retry-interval` | `1` | Pause between attempts, seconds |
+| `timeout` | `5s` | Per-request timeout |
+| `startup-timeout` | `30s` (`2m` for `stormdns`) | Overall check budget at startup |
+| `retry-interval` | `1s` | Pause between attempts |
 | `requests` | `1` | How many requests to make |
 | `concurrency` | `1` | How many requests in parallel |
 | `min-success-ratio` | — | Minimum fraction of successful responses (without it, one is enough) |
@@ -69,6 +69,10 @@ The client cycles through strategies from the ByeByeDPI list, finds a working on
 proxies:
   - name: "dpi-auto"
     type: byedpi
+    strategies:
+      - builtin:byebyeedpi
+      - "--disorder 1"
+      - "https://example.org/byedpi-strategies.txt"
 ```
 
 How it works: candidates are checked in parallel in small groups. If nothing is found within the allotted budget, the node starts with a temporary (fallback) strategy while the rest of the list is checked in the background. The working strategy found is atomically switched into the plan and saved.
@@ -78,25 +82,28 @@ How it works: candidates are checked in parallel in small groups. If nothing is 
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `strategy-list` | `byebyeedpi` | Strategy list name |
-| `strategies` | — | Your own ordered argument list instead of `strategy-list` |
+| `strategies` | `[builtin:byebyeedpi]` | Built-ins, inline strategies, and public HTTPS lists in one order |
 | `strategy-test.urls` | built-in YouTube endpoint | Addresses for selection |
 | `strategy-test.sni` | — | Hostname to substitute for `{sni}` |
-| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | DoH resolver for the test address (bypasses fake-ip); `system` uses the platform resolver |
-| `strategy-test.timeout` | `5` | Per-check timeout, seconds |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | DoH resolver for the test address (bypasses fake-ip); `system` uses the platform resolver |
+| `strategy-test.timeout` | `5s` | Per-check timeout |
 | `strategy-test.requests` | `1` | Requests per strategy |
-| `strategy-test.concurrency` | `4` | Parallel HTTP requests inside a candidate |
+| `strategy-test.request-concurrency` | `4` | Parallel HTTP requests inside a candidate |
 | `strategy-test.min-success-ratio` | `1.0` | Minimum fraction of successful requests |
-| `selection.concurrency` | `4` | Strategies checked at once |
-| `selection.foreground-timeout` | `15` | Selection budget before the node starts, seconds |
-| `selection.background` | `true` | Keep checking the list in the background after fallback |
-| `fallback-args` | — | Temporary-strategy arguments if foreground didn't finish in time |
-| `cache.ttl` | 7 days | Cache lifetime, seconds |
-| `cache.recheck-after` | 1 day | Re-check interval, seconds |
-| `cache.retry-after` | 5 minutes | Pause before a new selection after fallback, seconds |
-| `cache.failure-threshold` | `2` | Errors before the cache is reset |
+| `strategy-selection.strategy-concurrency` | `4` | Strategies checked at once |
+| `strategy-selection.startup-timeout` | `15s` | Selection budget before the node starts |
+| `strategy-selection.continue-in-background` | `true` | Keep checking the list in the background after fallback |
+| `strategy-selection.fallback-strategy` | — | Temporary-strategy arguments if foreground didn't finish in time |
+| `strategy-selection.cache.ttl` | `7d` | Cache lifetime |
+| `strategy-selection.cache.recheck-after` | `1d` | Re-check interval |
+| `strategy-selection.retry-after` | `5m` | Pause before a new selection after fallback |
+| `strategy-selection.cache.failure-threshold` | `2` | Errors before the cache is reset |
 
 </details>
+
+An HTTPS file contains one strategy per line; blank lines and lines beginning
+with `#` are ignored. Links use the same public-HTTPS, size, timeout, and stale
+cache limits as StormDNS lists.
 
 > ℹ️ `strategy-test` is used **only** during auto-selection and overrides the built-in test endpoint — it does not replace `connectivity-check`. The verified result and the temporary fallback are cached **separately**: fallback doesn't block later selection attempts for the normal TTL. Any HTTP check counts as success, including `4xx` and `5xx`.
 >
@@ -109,10 +116,10 @@ proxies:
   - name: "dpi-fixed"
     type: byedpi
     mode: manual
-    args: "--disorder 1 --auto=torst --tlsrec 1+s"
+    strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 If `mode` is omitted: the presence of `args` enables **manual** mode, and their absence enables **automatic** mode.
+> 💡 New profiles set `mode` explicitly; omitting it selects automatic mode.
 
 ---
 
@@ -126,15 +133,11 @@ OlcRTC wraps traffic in WebRTC and passes it off as a regular video call through
 proxies:
   - name: "rtc"
     type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
+    provider: jitsi
+    room: "https://meet.example.org/room"
+    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    transport: datachannel
+    dns-server: "1.1.1.1:53"
 proxy-groups:
   - name: "main"
     type: fallback
@@ -144,15 +147,30 @@ proxy-groups:
 
 | Parameter | Description |
 |-----------|-------------|
-| `auth.provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `none` |
-| `room.id` | Video-call room identifier |
-| `crypto.key` | 256-bit encryption key — **exactly 64 hex characters** |
-| `net.transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
-| `net.dns` | Mandatory DNS server as `address:port` |
+| `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `none` |
+| `room` | Video-call room identifier |
+| `encryption-key` | 256-bit encryption key — **exactly 64 hex characters** |
+| `transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
+| `dns-server` | Mandatory DNS server as `address:port` |
+| `transport-options` | Options of the selected transport; forbidden for `datachannel` |
 
-> 💡 For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. The optional `vp8.fps` and `vp8.batch_size` default to `30` and `64`.
+Options depend on the transport: `vp8channel` accepts `fps` and `batch-size`;
+`seichannel` also accepts `fragment-size` and a duration-string `ack-timeout`;
+`videochannel` accepts `codec`, `width`, `height`, `fps`, `bitrate`,
+`fragment-size`, `qr-recovery`, `tile-module`, and `tile-rs`.
 
-If `profiles` are set, the top-level common fields are inherited by each fallback profile, and FlClashM validates the resulting configuration of each before startup. The local address, SOCKS5 port, CNC mode, and data directory are assigned by the client — they can't be overridden in the profile.
+```yaml
+transport: seichannel
+transport-options:
+  fps: 30
+  batch-size: 64
+  fragment-size: 900
+  ack-timeout: 2s
+```
+
+> 💡 For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. `transport-options.fps` and `transport-options.batch-size` are required.
+
+`profiles`, `failover`, and `video.hw` are removed from the public contract. Define separate OlcRTC nodes and combine them with a Mihomo group. `provider: none` requires `engine`, `engine-url`, and `engine-token`; other providers forbid them.
 
 > ⚠️ Errors in required fields show up already during profile validation. If the OlcRTC process dies later, the client shows the **exit code and the last lines of output** instead of waiting for a port timeout.
 
@@ -235,7 +253,7 @@ compression:
   upload: zlib
 ```
 
-Fine tuning lives in the `duplication`, `compression`, `mtu`, `arq`, `ping`, and `runtime` blocks. Inside those blocks and in `resolver-policy`/`startup`, durations are strings (`600ms`, `30s`, `24h`, `30d`). The shared `activation` and `connectivity-check` fields still take whole seconds.
+Fine tuning lives in the `duplication`, `compression`, `mtu`, `arq`, `ping`, and `runtime` blocks. Every duration, including shared `activation` and `connectivity-check` fields, is a string with a unit (`600ms`, `30s`, `24h`, `30d`).
 
 > ℹ️ StormDNS silently clamps out-of-range values. FlClashM **reports an error before startup** instead.
 
@@ -330,21 +348,21 @@ activation:
   mode: auto
   wake:
     urls: ["https://example.org/generate_204"]
-    interval: 30
+    interval: 30s
     failures: 2
-    retry-after: 300
+    retry-after: 5m
   sleep:
-    idle: 900
+    idle: 15m
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `mode` | `auto` | `auto` puts the reserve to sleep; `always` — the legacy always-on startup |
 | `wake.urls` | `connectivity-check` chain | Public HTTP(S) addresses to probe the watched group |
-| `wake.interval` | `30` | Probe interval while sleeping, seconds |
+| `wake.interval` | `30s` | Probe interval while sleeping |
 | `wake.failures` | `2` | Consecutive failed rounds before waking |
-| `wake.retry-after` | `300` | Pause after a failed start, seconds |
-| `sleep.idle` | `900` | Time without connections and selection before sleep; `0` — never sleep until VPN restart |
+| `wake.retry-after` | `5m` | Pause after a failed start |
+| `sleep.idle` | `15m` | Time without connections and selection before sleep; `0s` — never sleep until VPN restart |
 
 **What matters about `auto`:**
 - The node must directly belong to at least one proxy group.

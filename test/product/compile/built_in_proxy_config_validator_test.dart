@@ -238,7 +238,7 @@ void main() {
           'mode': 'auto',
           'strategy-test': {'concurency': 2},
         }),
-        failsAt('byedpi.strategy-test.concurency', 'concurrency'),
+        failsAt('byedpi.strategy-test.concurency'),
       );
       expect(
         () => compile(<String, dynamic>{
@@ -283,7 +283,7 @@ void main() {
   });
 
   group('OlcRTC strict config', () {
-    test('accepts maximal recursive base and profile configs', () {
+    test('accepts the maximal canonical config', () {
       expect(() => compile(_maximalOlcRtc), returnsNormally);
     });
 
@@ -339,66 +339,56 @@ void main() {
       );
     });
 
-    test('rejects unknown fields recursively with indexed paths', () {
+    test('rejects removed profiles, failover and video hardware settings', () {
+      for (final entry in <String, Object?>{
+        'profiles': <Object>[],
+        'failover': <String, Object>{},
+      }.entries) {
+        expect(
+          () => compile(<String, dynamic>{
+            ..._minimalOlcRtc,
+            entry.key: entry.value,
+          }),
+          failsAt('olcrtc.${entry.key}'),
+        );
+      }
       expect(
         () => compile(<String, dynamic>{
           ..._minimalOlcRtc,
-          'profiles': [
-            <String, dynamic>{},
-            {
-              'crypto': {'kee': _key},
-            },
-          ],
+          'transport': 'videochannel',
+          'transport-options': {'codec': 'qrcode', 'hw': 'none'},
         }),
-        failsAt('olcrtc.profiles[1].crypto.kee', 'key'),
+        failsAt('olcrtc.transport-options.hw'),
       );
     });
 
-    test('reports indexed paths for profile cross-field failures', () {
+    test('reports cross-field transport failures', () {
       expect(
         () => compile(<String, dynamic>{
           ..._minimalOlcRtc,
-          'profiles': [
-            {'name': 'first'},
-            {
-              'name': 'second',
-              'traffic': {'min_delay': '2s', 'max_delay': '1s'},
-            },
-          ],
+          'transport': 'datachannel',
+          'transport-options': {'fps': 30},
         }),
-        failsAt('olcrtc.profiles[1].traffic.max_delay'),
+        throwsA(isA<FormatException>()),
       );
     });
 
-    test(
-        'rejects client-owned and unsupported mode fields in base and profiles',
-        () {
+    test('rejects client-owned and unsupported runtime fields', () {
       for (final invalid in <String, Object?>{
         'mode': 'srv',
         'data': '/tmp/user-data',
         'socks': {'host': '0.0.0.0'},
-        'crypto': {'key': _key, 'key_file': 'secret.key'},
+        'gen': <String, Object>{},
       }.entries) {
         expect(
           () => compile(<String, dynamic>{
             ..._minimalOlcRtc,
             invalid.key: invalid.value,
           }),
-          failsAt('olcrtc.${invalid.key}'),
+          throwsA(isA<FormatException>()),
           reason: invalid.key,
         );
       }
-      expect(
-        () => compile(<String, dynamic>{
-          ..._minimalOlcRtc,
-          'profiles': [
-            {
-              'socks': {'port': 9000},
-            },
-          ],
-        }),
-        failsAt('olcrtc.profiles[0].socks.port', 'owned'),
-      );
     });
   });
 
@@ -447,11 +437,11 @@ const _minimalOlcRtc = <String, dynamic>{
   'name': 'OlcRTC',
   'type': 'olcrtc',
   'activation': 'always',
-  'mode': 'cnc',
-  'auth': {'provider': 'jitsi'},
-  'room': {'id': 'https://meet.example.org/room'},
-  'crypto': {'key': _key},
-  'net': {'transport': 'datachannel', 'dns': '1.1.1.1:53'},
+  'provider': 'jitsi',
+  'room': 'https://meet.example.org/room',
+  'encryption-key': _key,
+  'transport': 'datachannel',
+  'dns-server': '1.1.1.1:53',
 };
 
 final _maximalOlcRtc = <String, dynamic>{
@@ -461,109 +451,36 @@ final _maximalOlcRtc = <String, dynamic>{
     'mode': 'always',
     'wake': {
       'urls': ['https://example.org/generate_204'],
-      'interval': 3600,
+      'interval': '1h',
       'failures': 10,
-      'retry-after': 86400,
+      'retry-after': '1d',
     },
-    'sleep': {'idle': 0},
+    'sleep': {'idle': '0s'},
   },
-  'mode': 'cnc',
   'udp': false,
-  'auth': {'provider': 'jitsi', 'token': 'account-token'},
-  'room': {
-    'id': 'https://meet.example.org/room',
-    'channel': 'channel-id',
-  },
-  'crypto': {'key': _key},
-  'net': {'transport': 'videochannel', 'dns': '[2606:4700:4700::1111]:53'},
-  'socks': {
-    'user': 'local-user',
-    'pass': 'local-pass',
-    'proxy_addr': '127.0.0.1',
-    'proxy_port': 65535,
-    'proxy_user': 'upstream-user',
-    'proxy_pass': 'upstream-pass',
-  },
-  'engine': {
-    'name': 'jitsi',
-    'url': 'https://meet.example.org',
-    'token': 'engine-token',
-  },
-  'video': {
+  'provider': 'jitsi',
+  'provider-token': 'account-token',
+  'room': 'https://meet.example.org/room',
+  'room-channel': 'channel-id',
+  'encryption-key': _key,
+  'transport': 'videochannel',
+  'dns-server': '[2606:4700:4700::1111]:53',
+  'transport-options': {
     'width': 1080,
     'height': 1080,
     'fps': 30,
     'bitrate': '2M',
-    'hw': 'none',
-    'qr_size': 256,
-    'qr_recovery': 'low',
     'codec': 'tile',
-    'tile_module': 4,
-    'tile_rs': 20,
-  },
-  'vp8': {'fps': 30, 'batch_size': 64},
-  'sei': {
-    'fps': 30,
-    'batch_size': 64,
-    'fragment_size': 900,
-    'ack_timeout_ms': 2000,
+    'tile-module': 4,
+    'tile-rs': 20,
   },
   'liveness': {'interval': '10s', 'timeout': '5s', 'failures': 3},
-  'lifecycle': {'max_session_duration': '6h'},
+  'lifecycle': {'max-session-duration': '6h'},
   'traffic': {
-    'max_payload_size': 4096,
-    'min_delay': '5ms',
-    'max_delay': '30ms',
+    'max-payload-size': 4096,
+    'min-delay': '5ms',
+    'max-delay': '30ms',
   },
-  'profiles': [
-    {
-      'name': 'fallback',
-      'auth': {'provider': 'wbstream', 'token': 'fallback-token'},
-      'room': {'id': 'fallback-room', 'channel': 'fallback-channel'},
-      'crypto': {'key': _key},
-      'net': {'transport': 'vp8channel', 'dns': '8.8.8.8:53'},
-      'socks': {
-        'user': 'fallback-user',
-        'pass': 'fallback-pass',
-        'proxy_addr': '127.0.0.1',
-        'proxy_port': 1080,
-        'proxy_user': 'proxy-user',
-        'proxy_pass': 'proxy-pass',
-      },
-      'engine': {
-        'name': 'jitsi',
-        'url': 'https://fallback.example.org',
-        'token': 'fallback-engine-token',
-      },
-      'video': {
-        'width': 1920,
-        'height': 1080,
-        'fps': 30,
-        'bitrate': '2M',
-        'hw': 'none',
-        'qr_size': 256,
-        'qr_recovery': 'high',
-        'codec': 'qrcode',
-        'tile_module': 4,
-        'tile_rs': 20,
-      },
-      'vp8': {'fps': 30, 'batch_size': 64},
-      'sei': {
-        'fps': 30,
-        'batch_size': 64,
-        'fragment_size': 900,
-        'ack_timeout_ms': 2000,
-      },
-      'liveness': {'interval': '10s', 'timeout': '5s', 'failures': 3},
-      'lifecycle': {'max_session_duration': '6h'},
-      'traffic': {
-        'max_payload_size': 4096,
-        'min_delay': '5ms',
-        'max_delay': '30ms',
-      },
-    },
-  ],
-  'failover': {'retry_delay': '2s', 'max_cycles': 2},
   'debug': false,
   'connectivity-check': {
     'urls': ['https://example.org/generate_204'],
