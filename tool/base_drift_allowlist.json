@@ -116,6 +116,11 @@
       "reason": "Имена widget/tile-компонентов привязаны к Android-оболочке форка и остаются в бюджете."
     },
     {
+      "path": "android/app/src/main/ic_launcher-playstore.png",
+      "bucket": "budget",
+      "reason": "Удалена неиспользуемая иконка магазина с устаревшим брендингом апстрима."
+    },
+    {
       "path": "android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png",
       "bucket": "budget",
       "reason": "Брендинг форка, названия каналов и Android-ресурсы осознанно отличаются от апстрима."
