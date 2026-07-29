@@ -66,6 +66,16 @@
       "reason": "Нативный мост пакетов, файлов и установки apk относится к Android bridge-слою."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/SelfUpdateInstaller.kt",
+      "bucket": "budget",
+      "reason": "Нативная установка проверенного обновления приложения относится к Android bridge-слою."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/SelfUpdateInstallerTest.kt",
+      "bucket": "budget",
+      "reason": "Нативные CI-тесты фиксируют single-flight сессий и обработку статусов самообновления."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
       "reason": "Сервисный мост quick-start, runtime-node и notification action принят в бюджет."
@@ -283,7 +293,7 @@
     {
       "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
       "bucket": "budget",
-      "reason": "Тест обобщённого resolver-файла закрепляет правила дедупликации и запрет выхода за рабочую директорию; CI Kotlin-тесты не запускает, инварианты дополнительно закреплены product-тестом на Dart."
+      "reason": "Нативный CI-тест закрепляет дедупликацию и запрет выхода resolver-файла за рабочую директорию."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",
