@@ -92,44 +92,46 @@ void main() {
 CompiledBuiltInProxyNodes _compile(
   BuiltInProxyCompiler compiler,
   Map<String, dynamic> node,
-) => compiler.compile(
-  rawConfig: <String, dynamic>{
-    'proxies': [node],
-  },
-  patchConfig: const ClashConfig(),
-);
+) =>
+    compiler.compile(
+      rawConfig: <String, dynamic>{
+        'proxies': [node],
+      },
+      patchConfig: const ClashConfig(),
+    );
 
 Map<String, dynamic> _validNode(BuiltInProxyType type) => switch (type) {
-  BuiltInProxyType.byedpi => <String, dynamic>{
-    'name': 'ByeDPI Local',
-    'type': 'byedpi',
-    'mode': 'manual',
-    'args': '--disorder 1 --auto=torst --tlsrec 1+s',
-  },
-  BuiltInProxyType.naiveproxy => <String, dynamic>{
-    'name': 'NaiveProxy Local',
-    'type': 'naiveproxy',
-    'server': 'example.com',
-    'port': 443,
-    'username': 'user',
-    'password': 'pass',
-  },
-  BuiltInProxyType.olcrtc => <String, dynamic>{
-    'name': 'OlcRTC Local',
-    'type': 'olcrtc',
-    'activation': 'always',
-    'auth': {'provider': 'none'},
-    'crypto': {
-      'key': '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-    },
-    'net': {'transport': 'datachannel', 'dns': '1.1.1.1:53'},
-  },
-  BuiltInProxyType.stormdns => <String, dynamic>{
-    'name': 'StormDNS Local',
-    'type': 'stormdns',
-    'activation': 'always',
-    'domains': ['v.example.com'],
-    'encryption': 'chacha20',
-    'encryption-key': 'storm-secret',
-  },
-};
+      BuiltInProxyType.byedpi => <String, dynamic>{
+          'name': 'ByeDPI Local',
+          'type': 'byedpi',
+          'mode': 'manual',
+          'args': '--disorder 1 --auto=torst --tlsrec 1+s',
+        },
+      BuiltInProxyType.naiveproxy => <String, dynamic>{
+          'name': 'NaiveProxy Local',
+          'type': 'naiveproxy',
+          'server': 'example.com',
+          'port': 443,
+          'username': 'user',
+          'password': 'pass',
+        },
+      BuiltInProxyType.olcrtc => <String, dynamic>{
+          'name': 'OlcRTC Local',
+          'type': 'olcrtc',
+          'activation': 'always',
+          'provider': 'jitsi',
+          'room': 'room',
+          'encryption-key':
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          'transport': 'datachannel',
+          'dns-server': '1.1.1.1:53',
+        },
+      BuiltInProxyType.stormdns => <String, dynamic>{
+          'name': 'StormDNS Local',
+          'type': 'stormdns',
+          'activation': 'always',
+          'domains': ['v.example.com'],
+          'encryption': 'chacha20',
+          'encryption-key': 'storm-secret',
+        },
+    };

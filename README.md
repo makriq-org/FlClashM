@@ -64,6 +64,9 @@ Android-клиент для `mihomo`, форк [FlClashX](https://github.com/plu
 proxies:
   - name: "dpi-auto"
     type: byedpi
+    strategies:
+      - builtin:byebyeedpi
+      - "--disorder 1"
 ```
 
 </td></tr>
@@ -75,15 +78,11 @@ proxies:
 proxies:
   - name: "rtc"
     type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
+    provider: jitsi
+    room: "https://meet.example.org/room"
+    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    transport: datachannel
+    dns-server: "1.1.1.1:53"
 ```
 
 </td></tr>

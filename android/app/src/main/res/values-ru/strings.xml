@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="self_update_confirmation_channel">Обновления приложения</string>
+    <string name="self_update_confirmation_channel_description">Подтверждение завершения установки обновления</string>
+    <string name="self_update_confirmation_title">Завершите обновление FlClashM</string>
+    <string name="self_update_confirmation_text">Нажмите, чтобы подтвердить установку</string>
     <string name="widget_description">FlClashM режим и туннель</string>
     <string name="widget_mode_rule">Правила</string>
     <string name="widget_mode_global">Глобал</string>

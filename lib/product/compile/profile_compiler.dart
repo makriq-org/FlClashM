@@ -7,9 +7,11 @@ import 'package:path/path.dart' as path;
 import '../runtime/runtime_types.dart';
 import '../security/product_security.dart';
 import 'built_in_proxy_compiler.dart';
+import 'byedpi_strategy_sources.dart';
 import 'config_tree.dart';
 import 'profile_split_tunneling.dart';
 import 'raw_profile.dart';
+import 'remote_text_list_store.dart';
 import 'runtime_plan.dart';
 import 'stormdns_resolver_sources.dart';
 
@@ -56,6 +58,7 @@ class ProfileCompiler {
   const ProfileCompiler({
     this.builtInProxyCompiler = const BuiltInProxyCompiler(),
     this.stormDnsRemoteResolverListStore,
+    this.byedpiRemoteStrategyListStore,
   });
 
   final BuiltInProxyCompiler builtInProxyCompiler;
@@ -63,6 +66,7 @@ class ProfileCompiler {
   /// Resolves remote StormDNS resolver lists. Injected so tests and the
   /// non-Android build can compile profiles without touching the network.
   final StormDnsRemoteResolverListStore? stormDnsRemoteResolverListStore;
+  final RemoteTextListStore? byedpiRemoteStrategyListStore;
 
   CompiledProfilePatch compileProfilePatch({
     required RawProfile? rawProfile,
@@ -140,6 +144,10 @@ class ProfileCompiler {
       rawConfig: resolvedProfileSplitTunneling.config,
       homeDirPath: context.homeDirPath,
     );
+    final byedpiRemoteLists = await _resolveByedpiRemoteLists(
+      rawConfig: resolvedProfileSplitTunneling.config,
+      homeDirPath: context.homeDirPath,
+    );
     final compiledBuiltInProxyNodes = builtInProxyCompiler.compile(
       rawConfig: resolvedProfileSplitTunneling.config,
       patchConfig: patchConfig,
@@ -147,6 +155,7 @@ class ProfileCompiler {
       copyConfig: false,
       validate: false,
       stormDnsRemoteLists: stormDnsRemoteLists,
+      byedpiRemoteLists: byedpiRemoteLists,
     );
     rawConfig = compiledBuiltInProxyNodes.config;
 
@@ -197,6 +206,54 @@ class ProfileCompiler {
       metadata: metadata,
       profileAccessControl: resolvedProfileSplitTunneling.accessControl,
     );
+  }
+
+  Future<Map<Uri, ByedpiRemoteStrategyList>> _resolveByedpiRemoteLists({
+    required Map<String, dynamic> rawConfig,
+    required String? homeDirPath,
+  }) async {
+    final requested = builtInProxyCompiler.collectByedpiRemoteLists(rawConfig);
+    if (requested.isEmpty) return const {};
+    final parser = builtInProxyCompiler.byedpiStrategySourceParser;
+    final store = byedpiRemoteStrategyListStore ??
+        (homeDirPath == null
+            ? null
+            : RemoteTextListStore(
+                cacheDirectoryPath: path.join(
+                  homeDirPath,
+                  'runtimes',
+                  'byedpi',
+                  'strategy-lists',
+                ),
+                download: (url, {required timeout}) async {
+                  final body = await downloadPublicRemoteList(
+                    url,
+                    timeout: timeout,
+                  );
+                  if (body != null) parser.parseRemoteBody(body, url);
+                  return body;
+                },
+              ));
+    if (store == null) return const {};
+    final result = <Uri, ByedpiRemoteStrategyList>{};
+    final byRefresh = <Duration, List<Uri>>{};
+    for (final entry in requested.entries) {
+      byRefresh.putIfAbsent(entry.value, () => []).add(entry.key);
+    }
+    final groups = await Future.wait(
+      byRefresh.entries.map(
+        (entry) => store.resolve(entry.value, refresh: entry.key),
+      ),
+    );
+    for (final group in groups) {
+      for (final entry in group.entries) {
+        result[entry.key] = ByedpiRemoteStrategyList(
+          strategies: parser.parseRemoteBody(entry.value.body, entry.key),
+          fetchedAt: entry.value.fetchedAt,
+        );
+      }
+    }
+    return result;
   }
 
   /// Fetches every remote resolver list a StormDNS node references.

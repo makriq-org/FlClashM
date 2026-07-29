@@ -142,6 +142,35 @@ void main() {
       expect(cache['verified'], isTrue);
     });
 
+    test('expands builtin markers in place and keeps first occurrence',
+        () async {
+      runtime.batchResults.add(0);
+      final plan = _plan(
+        mode: 'auto',
+        args: '',
+        strategies: const [
+          'builtin:byebyeedpi',
+          '--split 1',
+          '--fake 1',
+        ],
+      );
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+
+      await controller.buildRuntimeNodes([plan]);
+
+      expect(
+        runtime.batchCalls.single.nodes.map((node) => node['arguments']),
+        [
+          containsAllInOrder(['--fake', '1']),
+          containsAllInOrder(['--disorder', '1']),
+          containsAllInOrder(['--split', '1']),
+        ],
+      );
+    });
+
     test('reselects in foreground after the verified cache TTL expires',
         () async {
       var wallClock = DateTime.utc(2026, 1, 1);
@@ -503,6 +532,7 @@ BuiltInProxyNodePlan _plan({
   int failureThreshold = 2,
   int cacheTtl = 604800,
   int recheckAfter = 86400,
+  List<String>? strategies,
 }) =>
     BuiltInProxyNodePlan(
       nodeId: 'node-a',
@@ -518,7 +548,8 @@ BuiltInProxyNodePlan _plan({
           'listenPort': 35110,
           'args': args,
           'mode': mode,
-          'strategyList': 'byebyeedpi',
+          if (strategies == null) 'strategyList': 'byebyeedpi',
+          if (strategies != null) 'strategies': strategies,
           'strategyTest': {
             'urls': ['https://example.com'],
             'timeout': timeout,

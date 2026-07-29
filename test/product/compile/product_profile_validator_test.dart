@@ -7,8 +7,7 @@ void main() {
   group('ProductProfileValidator', () {
     test('normalizes built-in proxy nodes into core-compatible local proxies',
         () {
-      final normalized = validator.normalizeForValidation(
-        '''
+      final normalized = validator.normalizeForValidation('''
 proxies:
   - name: NaiveProxy Local
     type: naiveproxy
@@ -36,7 +35,8 @@ rules:
     });
 
     test('normalizes olcrtc nodes into core-compatible local proxies', () {
-      final normalized = validator.normalizeForValidation('''
+      final normalized = validator.normalizeForValidation(
+        '''
 proxies:
   - name: OLC Local
     type: olcrtc
@@ -82,7 +82,7 @@ proxies:
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('olcrtc.net.dns'),
+            contains('olcrtc.dns-server'),
           ),
         ),
       );

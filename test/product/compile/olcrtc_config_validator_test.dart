@@ -12,48 +12,62 @@ void main() {
     Object? dns = '1.1.1.1:53',
   }) =>
       {
-        'auth': {'provider': provider},
-        'room': {'id': 'room-id'},
-        'crypto': {'key': key},
-        'net': {
-          'transport': transport,
-          if (dns != null) 'dns': dns,
+        'provider': provider,
+        if (provider != 'none') 'room': 'room-id',
+        if (provider == 'none') ...{
+          'engine': 'jitsi',
+          'engine-url': 'https://meet.example.org',
+          'engine-token': 'token',
         },
-        'vp8': {'fps': 30, 'batch_size': 64},
+        'encryption-key': key,
+        'transport': transport,
+        if (dns != null) 'dns-server': dns,
+        if (transport != 'datachannel')
+          'transport-options': switch (transport) {
+            'vp8channel' => {'fps': 30, 'batch-size': 64},
+            'seichannel' => {
+                'fps': 30,
+                'batch-size': 64,
+                'fragment-size': 900,
+                'ack-timeout': '2s',
+              },
+            'videochannel' => {
+                'width': 1920,
+                'height': 1080,
+                'fps': 30,
+                'bitrate': '2M',
+              },
+            _ => <String, dynamic>{},
+          },
       };
 
   test('accepts every provider and transport supported by pinned OlcRTC', () {
     for (final provider in OlcRtcConfigValidator.supportedProviders) {
       for (final transport in OlcRtcConfigValidator.supportedTransports) {
         final value = config(provider: provider, transport: transport);
-        if (provider == 'none') {
-          value['room'] = <String, dynamic>{};
-        }
-        expect(() => validator.validate(value), returnsNormally,
-            reason: '$provider/$transport');
+        expect(() => validator.validate(value), returnsNormally);
       }
     }
   });
 
-  test('rejects a missing DNS server before starting OlcRTC', () {
+  test('rejects missing and malformed DNS endpoints', () {
     expect(
       () => validator.validate(config(dns: null)),
-      throwsA(
-        isA<FormatException>().having(
-          (error) => error.message,
-          'message',
-          contains('olcrtc.net.dns'),
-        ),
-      ),
+      throwsA(isA<FormatException>()),
     );
-  });
-
-  test('rejects malformed DNS endpoints', () {
-    for (final dns in ['1.1.1.1', '1.1.1.1:0', '1.1.1.1:65536', ':53']) {
+    for (final dns in [
+      '1.1.1.1',
+      '1.1.1.1:0',
+      '1.1.1.1:65536',
+      ':53',
+      'user@1.1.1.1:53',
+      '1.1.1.1:53/path',
+      '1.1.1.1:53?query',
+      '1.1.1.1:53#fragment',
+    ]) {
       expect(
         () => validator.validate(config(dns: dns)),
         throwsA(isA<FormatException>()),
-        reason: dns,
       );
     }
     expect(
@@ -62,84 +76,48 @@ void main() {
     );
   });
 
-  test('rejects malformed keys and unsupported selections', () {
-    final badKey = config()..['crypto'] = {'key': 'not-a-key'};
-    final badProvider = config(provider: 'unknown');
-    final badTransport = config(transport: 'unknown');
-    final paddedKey = config()..['crypto'] = {'key': ' $key'};
-    final uppercaseProvider = config(provider: 'WBSTREAM');
-
-    expect(() => validator.validate(badKey), throwsA(isA<FormatException>()));
+  test('rejects malformed keys and provider-engine mismatches', () {
     expect(
-        () => validator.validate(badProvider), throwsA(isA<FormatException>()));
-    expect(() => validator.validate(badTransport),
-        throwsA(isA<FormatException>()));
-    expect(
-        () => validator.validate(paddedKey), throwsA(isA<FormatException>()));
-    expect(() => validator.validate(uppercaseProvider),
-        throwsA(isA<FormatException>()));
-  });
-
-  test('validates effective failover profiles with inherited defaults', () {
-    final value = config()
-      ..['profiles'] = [
-        {
-          'name': 'wb-vp8',
-          'room': {'id': 'wb-room'},
-          'vp8': {'fps': 0, 'batch_size': 0},
-        },
-        {
-          'name': 'jitsi-dc',
-          'auth': {'provider': 'jitsi'},
-          'room': {'id': 'https://meet.example.org/room'},
-          'net': {'transport': 'datachannel'},
-        },
-      ];
-
-    expect(() => validator.validate(value), returnsNormally);
-  });
-
-  test('rejects invalid section types and profile entries', () {
-    expect(
-      () => validator.validate(config()..['net'] = 'vp8channel'),
+      () => validator.validate(config()..['encryption-key'] = 'not-a-key'),
       throwsA(isA<FormatException>()),
     );
     expect(
-      () => validator.validate(config()..['profiles'] = ['invalid']),
+      () => validator.validate(config()..['engine'] = 'jitsi'),
+      throwsA(isA<FormatException>()),
+    );
+    final direct = config(provider: 'none')..remove('engine-token');
+    expect(
+      () => validator.validate(direct),
       throwsA(isA<FormatException>()),
     );
   });
 
-  test('rejects invalid transport parameters and durations', () {
+  test('rejects irrelevant transport fields and invalid durations', () {
     expect(
-      () => validator.validate(config()..['vp8'] = {'fps': 0}),
-      throwsA(isA<FormatException>()),
-    );
-    expect(
-      () => validator.validate(config()..['liveness'] = {'interval': '-1s'}),
+      () => validator.validate(
+        config(transport: 'datachannel')..['transport-options'] = {'fps': 30},
+      ),
       throwsA(isA<FormatException>()),
     );
     expect(
       () => validator.validate(
-        config()
-          ..['net'] = {
-            'transport': 'videochannel',
-            'dns': '1.1.1.1:53',
-          }
-          ..['video'] = {
-            'codec': 'tile',
-            'width': 1920,
-            'height': 1080,
+        config(transport: 'seichannel')
+          ..['transport-options'] = {
+            'fps': 30,
+            'batch-size': 64,
+            'fragment-size': 900,
+            'ack-timeout': '-1s',
           },
       ),
       throwsA(isA<FormatException>()),
     );
     expect(
       () => validator.validate(
-        config()
-          ..['traffic'] = {
-            'min_delay': '30ms',
-            'max_delay': '5ms',
+        config(transport: 'videochannel')
+          ..['transport-options'] = {
+            'codec': 'tile',
+            'width': 1920,
+            'height': 1080,
           },
       ),
       throwsA(isA<FormatException>()),

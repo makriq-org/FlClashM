@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
 import com.follow.clashx.plugins.AppPlugin
+import com.follow.clashx.plugins.DiagnosticsPlugin
 import com.follow.clashx.plugins.ServicePlugin
 import com.follow.clashx.plugins.TilePlugin
 import io.flutter.embedding.android.FlutterActivity
@@ -49,6 +50,7 @@ class MainActivity : FlutterActivity() {
             }
 
         flutterEngine.plugins.add(AppPlugin())
+        flutterEngine.plugins.add(DiagnosticsPlugin())
         flutterEngine.plugins.add(ServicePlugin())
         flutterEngine.plugins.add(TilePlugin())
         boundEngine = flutterEngine

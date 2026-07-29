@@ -153,6 +153,7 @@ func registerCallbacks(
 	globalCallbacks.resolveProcessFunc = resolveProcessFunc
 	globalCallbacks.releaseObjectFunc = releaseObjectFunc
 	callbacksMu.Unlock()
+	startDiagnosticLog()
 }
 
 // hasEventListener lets sendMessage skip the JSON marshal entirely when nobody

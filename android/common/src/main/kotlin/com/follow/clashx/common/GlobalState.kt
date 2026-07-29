@@ -2,16 +2,15 @@ package com.follow.clashx.common
 
 import android.app.Application
 import android.system.Os
-import android.util.Log
+import com.follow.clashx.common.diagnostics.BoundedUtf8LineReader
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
 import java.io.FileInputStream
-import java.io.InputStreamReader
 
 object GlobalState {
     private const val TAG = "FlClashM"
@@ -26,7 +25,7 @@ object GlobalState {
     private var stderrCaptured = false
 
     private val exceptionHandler = CoroutineExceptionHandler { _, e ->
-        log("uncaught coroutine exception: ${e.message}")
+        DiagnosticLog.coroutineFailure(e)
     }
 
     val scope: CoroutineScope =
@@ -39,7 +38,11 @@ object GlobalState {
     fun launch(block: suspend CoroutineScope.() -> Unit): Job = scope.launch(block = block)
 
     fun log(message: String) {
-        Log.d(TAG, message)
+        DiagnosticLog.d(TAG, message)
+    }
+
+    fun lifecycle(message: String) {
+        DiagnosticLog.lifecycle(TAG, message)
     }
 
     /**
@@ -57,9 +60,9 @@ object GlobalState {
             Os.dup2(writeFd, 2)
             Thread {
                 runCatching {
-                    BufferedReader(InputStreamReader(FileInputStream(readFd))).useLines { lines ->
-                        lines.forEach { line ->
-                            Log.i("$TAG-native", line)
+                    BoundedUtf8LineReader(FileInputStream(readFd)).use { reader ->
+                        reader.forEachLine { line ->
+                            DiagnosticLog.nativeCore(line)
                         }
                     }
                 }

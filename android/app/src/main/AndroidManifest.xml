@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Lets the app prompt the user to whitelist itself from battery optimization,
          the single most effective lever against MIUI/Samsung killing the VPN's
@@ -133,6 +134,10 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".plugins.SelfUpdateInstallReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".widgets.ModeWidgetProvider"

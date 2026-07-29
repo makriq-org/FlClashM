@@ -149,6 +149,23 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Run Android unit tests
+        working-directory: android
+        run: |
+          gradle \
+            --no-daemon \
+            --project-cache-dir="$RUNNER_TEMP/flclashm-gradle-project-cache" \
+            -Pkotlin.project.persistent.dir="$RUNNER_TEMP/flclashm-kotlin-cache" \
+            -Ptarget-platform=android-arm64 \
+            -Ptarget=lib/main.dart \
+            :app:testDebugUnitTest \
+            :service:testDebugUnitTest
+
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch arm64 --out core
 
@@ -162,6 +179,10 @@ jobs:
             --target-platform android-arm64 \
             --dart-define=APP_ENV=pre \
             --dart-define=CORE_VERSION="$core_version"
+
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew :common:testDebugUnitTest :service:testDebugUnitTest
 
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk

@@ -199,6 +199,8 @@ void main() {
         'https://[::1]/r.txt',
         'https://[::ffff:127.0.0.1]/r.txt',
         'https://localhost./r.txt',
+        'https://example.com:0/r.txt',
+        'https://example.com:65536/r.txt',
       ]) {
         expect(
           () => parser.parse([url], label: 'r'),

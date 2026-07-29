@@ -106,6 +106,7 @@ class FlVpnService : VpnService(), IBaseService {
 
     override fun onCreate() {
         super.onCreate()
+        GlobalState.lifecycle("FlVpnService created")
         startForegroundCompat()
         handleCreate()
     }
@@ -131,6 +132,9 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        GlobalState.lifecycle(
+            "FlVpnService start-command: action=${intent?.action ?: "sticky-restart"}",
+        )
         // startForegroundService() imposes a ~5s deadline to call startForeground()
         // on EVERY delivery — including a stop delivered this way (GlobalState /
         // RemoteService send the stop via startForegroundService), and any start
@@ -337,6 +341,7 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override fun onRevoke() {
+        GlobalState.lifecycle("FlVpnService revoked by Android")
         // onRevoke runs on the main thread; runBlocking here parks it on the
         // contended State.runLock (held by in-flight start/stop for up to ~15s),
         // which is well past the ANR threshold. Tear down asynchronously instead —
@@ -358,6 +363,9 @@ class FlVpnService : VpnService(), IBaseService {
     }
 
     override fun onDestroy() {
+        GlobalState.lifecycle(
+            "FlVpnService destroying: tunActive=$tunActive runTimeSet=${State.runTime != 0L}",
+        )
         // tunActive=false BEFORE releaseWakeLock (mirrors handleStop): SuspendModule's
         // receiver is unregistered only inside loader.stop() below, so until then a
         // SCREEN_ON/DEVICE_IDLE broadcast → setAwake(true) would otherwise see

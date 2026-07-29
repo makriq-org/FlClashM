@@ -26,9 +26,9 @@ connectivity-check:
   urls:
     - "https://example.org/generate_204"
   required: true
-  timeout: 5
-  startup-timeout: 30
-  retry-interval: 1
+  timeout: 5s
+  startup-timeout: 30s
+  retry-interval: 1s
   requests: 1
   concurrency: 1
   min-success-ratio: 1.0
@@ -38,9 +38,9 @@ connectivity-check:
 |------|---------|-----------------|
 | `urls` | — | آدرس‌های بررسی (HTTP(S) عمومی، بدون اعتبارنامه یا fragment) |
 | `required` | `false` | آیا بررسی برای راه‌اندازی الزامی است |
-| `timeout` | `5` | مهلت هر درخواست، ثانیه |
-| `startup-timeout` | `30` (برای `stormdns`: `120`) | بودجهٔ کل بررسی در راه‌اندازی، ثانیه |
-| `retry-interval` | `1` | مکث بین تلاش‌ها، ثانیه |
+| `timeout` | `5s` | مهلت هر درخواست |
+| `startup-timeout` | `30s` (برای `stormdns`: `2m`) | بودجهٔ کل بررسی در راه‌اندازی |
+| `retry-interval` | `1s` | مکث بین تلاش‌ها |
 | `requests` | `1` | چند درخواست |
 | `concurrency` | `1` | چند درخواست هم‌زمان |
 | `min-success-ratio` | — | کمترین نسبت پاسخ‌های موفق (بدون آن، یک موفقیت کافی است) |
@@ -69,6 +69,10 @@ ByeDPI با «خراب‌کردن» بسته‌ها به‌گونه‌ای که 
 proxies:
   - name: "dpi-auto"
     type: byedpi
+    strategies:
+      - builtin:byebyeedpi
+      - "--disorder 1"
+      - "https://example.org/byedpi-strategies.txt"
 ```
 
 نحوهٔ کار: نامزدها در گروه‌های کوچک به‌موازات بررسی می‌شوند. اگر در بودجهٔ تعیین‌شده چیزی یافت نشد، نود با یک راهبرد موقت (fallback) شروع می‌شود و باقی فهرست در پس‌زمینه بررسی می‌گردد. راهبرد کارآمدِ یافته‌شده به‌صورت اتمی وارد نقشه و ذخیره می‌شود.
@@ -78,25 +82,28 @@ proxies:
 
 | پارامتر | پیش‌فرض | توضیح |
 |---------|---------|-------|
-| `strategy-list` | `byebyeedpi` | نام فهرست راهبردها |
-| `strategies` | — | فهرست مرتب دلخواه آرگومان‌ها به‌جای `strategy-list` |
+| `strategies` | `[builtin:byebyeedpi]` | ترکیب مرتب فهرست داخلی، راهبردهای inline و فهرست عمومی HTTPS |
 | `strategy-test.urls` | endpoint داخلی YouTube | آدرس‌های انتخاب |
 | `strategy-test.sni` | — | نام میزبان برای جای‌گذاری `{sni}` |
-| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | حل‌کننده DoH برای نشانی آزمایش (دور زدن fake-ip)؛ `system` از حل‌کننده سیستم استفاده می‌کند |
-| `strategy-test.timeout` | `5` | مهلت هر بررسی، ثانیه |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | حل‌کننده DoH برای نشانی آزمایش (دور زدن fake-ip)؛ `system` از حل‌کننده سیستم استفاده می‌کند |
+| `strategy-test.timeout` | `5s` | مهلت هر بررسی |
 | `strategy-test.requests` | `1` | درخواست به‌ازای هر راهبرد |
-| `strategy-test.concurrency` | `4` | درخواست‌های HTTP موازی درون یک نامزد |
+| `strategy-test.request-concurrency` | `4` | درخواست‌های HTTP موازی درون یک نامزد |
 | `strategy-test.min-success-ratio` | `1.0` | کمترین نسبت درخواست‌های موفق |
-| `selection.concurrency` | `4` | راهبردهای هم‌زمان بررسی‌شونده |
-| `selection.foreground-timeout` | `15` | بودجهٔ انتخاب پیش از شروع نود، ثانیه |
-| `selection.background` | `true` | ادامهٔ فهرست در پس‌زمینه پس از fallback |
-| `fallback-args` | — | آرگومان راهبرد موقت اگر foreground به‌موقع تمام نشد |
-| `cache.ttl` | ۷ روز | عمر کش، ثانیه |
-| `cache.recheck-after` | ۱ روز | فاصلهٔ بررسی مجدد، ثانیه |
-| `cache.retry-after` | ۵ دقیقه | مکث پیش از انتخاب تازه پس از fallback، ثانیه |
-| `cache.failure-threshold` | `2` | تعداد خطا تا بازنشانی کش |
+| `strategy-selection.strategy-concurrency` | `4` | راهبردهای هم‌زمان بررسی‌شونده |
+| `strategy-selection.startup-timeout` | `15s` | بودجهٔ انتخاب پیش از شروع نود |
+| `strategy-selection.continue-in-background` | `true` | ادامهٔ فهرست در پس‌زمینه پس از fallback |
+| `strategy-selection.fallback-strategy` | — | آرگومان راهبرد موقت اگر foreground به‌موقع تمام نشد |
+| `strategy-selection.cache.ttl` | `7d` | عمر کش |
+| `strategy-selection.cache.recheck-after` | `1d` | فاصلهٔ بررسی مجدد |
+| `strategy-selection.retry-after` | `5m` | مکث پیش از انتخاب تازه پس از fallback |
+| `strategy-selection.cache.failure-threshold` | `2` | تعداد خطا تا بازنشانی کش |
 
 </details>
+
+فایل HTTPS در هر خط یک راهبرد دارد؛ خط‌های خالی و خط‌هایی که با `#` آغاز
+می‌شوند نادیده گرفته می‌شوند. محدودیت‌های HTTPS عمومی، اندازه، timeout و
+stale-cache همان محدودیت‌های فهرست StormDNS است.
 
 > ℹ️ `strategy-test` **فقط** هنگام انتخاب خودکار به کار می‌رود و endpoint آزمایشی داخلی را بازنویسی می‌کند — جایگزین `connectivity-check` نیست. نتیجهٔ تأییدشده و fallback موقت **جداگانه** کش می‌شوند: fallback تلاش‌های بعدی انتخاب را در مدت TTL معمول مسدود نمی‌کند. هر بررسی HTTP موفق شمرده می‌شود، از جمله `4xx` و `5xx`.
 >
@@ -109,10 +116,10 @@ proxies:
   - name: "dpi-fixed"
     type: byedpi
     mode: manual
-    args: "--disorder 1 --auto=torst --tlsrec 1+s"
+    strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 اگر `mode` نیامده باشد: وجود `args` حالت **دستی** و نبودِ آن حالت **خودکار** را فعال می‌کند.
+> 💡 در پروفایل‌های تازه `mode` را صریح بنویسید؛ نبود آن حالت خودکار را انتخاب می‌کند.
 
 ---
 
@@ -126,15 +133,11 @@ OlcRTC ترافیک را در WebRTC می‌پیچد و آن را به‌شکل 
 proxies:
   - name: "rtc"
     type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
+    provider: jitsi
+    room: "https://meet.example.org/room"
+    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    transport: datachannel
+    dns-server: "1.1.1.1:53"
 proxy-groups:
   - name: "main"
     type: fallback
@@ -144,15 +147,31 @@ proxy-groups:
 
 | پارامتر | توضیح |
 |---------|-------|
-| `auth.provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `none` |
-| `room.id` | شناسهٔ اتاق تماس تصویری |
-| `crypto.key` | کلید رمزنگاری ۲۵۶بیتی — **دقیقاً ۶۴ کاراکتر هگز** |
-| `net.transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |
-| `net.dns` | سرور DNS الزامی به‌شکل `آدرس:پورت` |
+| `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `none` |
+| `room` | شناسهٔ اتاق تماس تصویری |
+| `encryption-key` | کلید رمزنگاری ۲۵۶بیتی — **دقیقاً ۶۴ کاراکتر هگز** |
+| `transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |
+| `dns-server` | سرور DNS الزامی به‌شکل `آدرس:پورت` |
+| `transport-options` | گزینه‌های transport انتخاب‌شده؛ برای `datachannel` ممنوع است |
 
-> 💡 برای `wbstream`، `vp8channel` توصیه می‌شود: حالت مهمانِ این ارائه‌دهنده اجازهٔ انتشار کانال داده را نمی‌دهد. مقادیر اختیاری `vp8.fps` و `vp8.batch_size` پیش‌فرض `30` و `64` هستند.
+گزینه‌ها به transport وابسته‌اند: `vp8channel` فیلدهای `fps` و `batch-size` را
+می‌پذیرد؛ `seichannel` علاوه بر آن‌ها `fragment-size` و `ack-timeout` با مقدار
+duration رشته‌ای را می‌پذیرد؛ `videochannel` فیلدهای `codec`، `width`، `height`،
+`fps`، `bitrate`، `fragment-size`، `qr-recovery`، `tile-module` و `tile-rs` را
+می‌پذیرد.
 
-اگر `profiles` تعیین شود، فیلدهای مشترک سطح‌بالا را هر پروفایل پشتیبان به ارث می‌برد و FlClashM پیکربندی نهایی هرکدام را پیش از راه‌اندازی اعتبارسنجی می‌کند. آدرس محلی، پورت SOCKS5، حالت CNC و پوشهٔ داده را کلاینت تعیین می‌کند — در پروفایل قابل بازنویسی نیستند.
+```yaml
+transport: seichannel
+transport-options:
+  fps: 30
+  batch-size: 64
+  fragment-size: 900
+  ack-timeout: 2s
+```
+
+> 💡 برای `wbstream`، `vp8channel` توصیه می‌شود: حالت مهمانِ این ارائه‌دهنده اجازهٔ انتشار کانال داده را نمی‌دهد. فیلدهای `transport-options.fps` و `transport-options.batch-size` اجباری‌اند.
+
+`profiles`، `failover` و `video.hw` از قرارداد عمومی حذف شده‌اند. چند حالت OlcRTC را به‌صورت نودهای جدا و در یک گروه Mihomo تعریف کنید. `provider: none` به `engine`، `engine-url` و `engine-token` نیاز دارد و providerهای دیگر این فیلدها را نمی‌پذیرند.
 
 > ⚠️ خطای فیلدهای الزامی همان هنگام اعتبارسنجی پروفایل دیده می‌شود. اگر فرایند OlcRTC بعداً از کار بیفتد، کلاینت **کد خروج و آخرین خطوط خروجی** را نشان می‌دهد نه اینکه منتظر timeout پورت بماند.
 
@@ -235,7 +254,7 @@ compression:
   upload: zlib
 ```
 
-تنظیم دقیق در بلوک‌های `duplication`، `compression`، `mtu`، `arq`، `ping` و `runtime` قرار دارد. درون این بلوک‌ها و نیز در `resolver-policy`/`startup`، مدت‌زمان‌ها رشته‌اند (`600ms`، `30s`، `24h`، `30d`). فیلدهای مشترک `activation` و `connectivity-check` همچنان ثانیهٔ صحیح می‌گیرند.
+تنظیم دقیق در بلوک‌های `duplication`، `compression`، `mtu`، `arq`، `ping` و `runtime` قرار دارد. همهٔ مدت‌زمان‌ها، از جمله فیلدهای مشترک `activation` و `connectivity-check`، رشته‌ای همراه واحد هستند (`600ms`، `30s`، `24h`، `30d`).
 
 > ℹ️ StormDNS مقادیر خارج از محدوده را بی‌صدا می‌بُرد. FlClashM به‌جای آن **پیش از اجرا خطا می‌دهد**.
 
@@ -330,21 +349,21 @@ activation:
   mode: auto
   wake:
     urls: ["https://example.org/generate_204"]
-    interval: 30
+    interval: 30s
     failures: 2
-    retry-after: 300
+    retry-after: 5m
   sleep:
-    idle: 900
+    idle: 15m
 ```
 
 | پارامتر | پیش‌فرض | توضیح |
 |---------|---------|-------|
 | `mode` | `auto` | `auto` پشتیبان را می‌خواباند؛ `always` راه‌اندازی همیشگی قدیمی |
 | `wake.urls` | زنجیرهٔ `connectivity-check` | آدرس‌های HTTP(S) عمومی برای وارسی گروه زیرنظر |
-| `wake.interval` | `30` | فاصلهٔ وارسی هنگام خواب، ثانیه |
+| `wake.interval` | `30s` | فاصلهٔ وارسی هنگام خواب |
 | `wake.failures` | `2` | دورهای ناموفق پیاپی تا بیدارشدن |
-| `wake.retry-after` | `300` | مکث پس از راه‌اندازی ناموفق، ثانیه |
-| `sleep.idle` | `900` | مدت بدون اتصال و انتخاب تا خواب؛ `0` یعنی تا راه‌اندازی مجدد VPN نخوابد |
+| `wake.retry-after` | `5m` | مکث پس از راه‌اندازی ناموفق |
+| `sleep.idle` | `15m` | مدت بدون اتصال و انتخاب تا خواب؛ `0s` یعنی تا راه‌اندازی مجدد VPN نخوابد |
 
 **آنچه دربارهٔ `auto` مهم است:**
 - نود باید مستقیماً عضو دست‌کم یک proxy group باشد.

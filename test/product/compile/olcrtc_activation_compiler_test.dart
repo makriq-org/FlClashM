@@ -285,11 +285,12 @@ void main() {
 const _olcrtc = <String, dynamic>{
   'name': 'RTC',
   'type': 'olcrtc',
-  'auth': {'provider': 'none'},
-  'crypto': {
-    'key': '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  },
-  'net': {'transport': 'datachannel', 'dns': '1.1.1.1:53'},
+  'provider': 'jitsi',
+  'room': 'room',
+  'encryption-key':
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  'transport': 'datachannel',
+  'dns-server': '1.1.1.1:53',
 };
 
 Map<String, dynamic> _group(String name, List<String> proxies, {String? url}) =>

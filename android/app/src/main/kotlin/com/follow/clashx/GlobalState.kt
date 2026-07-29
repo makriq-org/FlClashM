@@ -2,8 +2,8 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import com.follow.clashx.common.GlobalState as CommonGlobalState
 import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.plugins.AppPlugin
@@ -138,7 +138,7 @@ object GlobalState {
             // :remote unreachable (bind warming up / wedged): fall back to the
             // persisted intent flag. A failed probe must not flip a live tunnel's
             // UI to off — the flag-holder recovers via sticky/boot cold-start.
-            Log.w(TAG, "syncState: remote unreachable, deriving from intent flag")
+            DiagnosticLog.w(TAG, "syncState: remote unreachable, deriving from intent flag")
             if (com.follow.clashx.common.SavedParams.isVpnActive()) {
                 if (runTime == 0L) {
                     runTime = com.follow.clashx.common.SavedParams.getStartTime()
@@ -177,7 +177,7 @@ object GlobalState {
             val currentProfileId = org.json.JSONObject(configJson).optString("currentProfileId", null)
             !currentProfileId.isNullOrEmpty()
         } catch (e: Exception) {
-            Log.e(TAG, "hasActiveProfile parse error: ${e.message}")
+            DiagnosticLog.e(TAG, "hasActiveProfile parse error: ${e.message}", e)
             false
         }
     }
@@ -210,7 +210,7 @@ object GlobalState {
     }
 
     fun handleChangeMode(mode: String) {
-        Log.d(TAG, "handleChangeMode: $mode")
+        DiagnosticLog.d(TAG, "handleChangeMode: $mode")
         currentMode.postValue(mode)
         // Headless limitation: the clash mode lives in ClashConfig and only reaches the
         // core through setupConfig/updateConfig (a full Dart-built config patch), NOT
@@ -229,7 +229,7 @@ object GlobalState {
         pendingTimeoutJob = CommonGlobalState.launch {
             delay(15_000L)
             if (runStateFlow.value != RunState.PENDING) return@launch
-            Log.w(TAG, "PENDING timeout: Dart-delegated start unconfirmed")
+            DiagnosticLog.w(TAG, "PENDING timeout: Dart-delegated start unconfirmed")
             // The Dart side never confirmed the start (engine busy/mid-teardown/
             // lost channel). Instead of only re-syncing (which leaves the tile stuck
             // then reverting to OFF), fall back to a headless start from saved params
@@ -253,7 +253,7 @@ object GlobalState {
         val ctx = CommonGlobalState.application
         val vpnPrepare = android.net.VpnService.prepare(ctx)
         if (vpnPrepare != null) {
-            Log.d(TAG, "startHeadlessFromSaved: VPN permission needed")
+            DiagnosticLog.d(TAG, "startHeadlessFromSaved: VPN permission needed")
             runStateFlow.tryEmit(RunState.STOP)
             TilePlugin.setPendingAction(TilePlugin.PendingAction.START)
             launchMainActivity()
@@ -265,7 +265,7 @@ object GlobalState {
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
             runStateFlow.tryEmit(RunState.START)
         }.onFailure {
-            Log.w(TAG, "startHeadlessFromSaved: start failed: ${it.message}")
+            DiagnosticLog.e(TAG, "startHeadlessFromSaved: start failed: ${it.message}", it)
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             runStateFlow.tryEmit(RunState.STOP)
         }
@@ -293,7 +293,7 @@ object GlobalState {
         val ctx = CommonGlobalState.application
         val vpnPrepare = android.net.VpnService.prepare(ctx)
         if (vpnPrepare != null) {
-            Log.d(TAG, "triggerStart: VPN permission needed, launching TempActivity")
+            DiagnosticLog.d(TAG, "triggerStart: VPN permission needed, launching TempActivity")
             runCatching {
                 val tempIntent = ctx.getActionIntent("START")
                 ctx.startActivity(tempIntent)
@@ -307,7 +307,7 @@ object GlobalState {
             androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
             runStateFlow.tryEmit(RunState.START)
         }.onFailure {
-            Log.w(TAG, "Direct VPN start failed: ${it.message}")
+            DiagnosticLog.e(TAG, "Direct VPN start failed: ${it.message}", it)
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             runStateFlow.tryEmit(RunState.STOP)
             TilePlugin.setPendingAction(TilePlugin.PendingAction.START)

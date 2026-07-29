@@ -35,6 +35,8 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 > 📎 سمتِ کاربر (YAML، پارامترها) در [راهنمای نودهای داخلی](../user-guide/profiles.md) شرح داده شده.
 
+`BuiltInProxyCompiler` فقط هماهنگ‌کننده است: aliasهای قدیمی را نرمال می‌کند، پورت محلی می‌دهد و نود canonical را به کامپایلر NaiveProxy، ByeDPI، OlcRTC یا StormDNS می‌سپارد. هر کامپایلر فایل JSON، YAML یا TOML مخصوص runtime خود را می‌سازد.
+
 ### 🎭 naiveproxy
 
 - **نوع:** `naiveproxy`
@@ -48,10 +50,10 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### 📞 olcrtc
 
 - **نوع:** `olcrtc`
-- **فیلدهای الزامی:** `name`، `auth.provider`، `room.id` (جز `none`)، `crypto.key`، `net.transport`، `net.dns`
+- **فیلدهای الزامی:** `name`، `provider`، `room` (جز `none`)، `encryption-key`، `transport`، `dns-server`
 - فقط در حالت CNC (کلاینت) کار می‌کند
 - UDP پشتیبانی نمی‌شود؛ نود محلی نهایی `mihomo` مقدار `udp: false` می‌گیرد
-- پیش از راه‌اندازی، FlClashM فیلدهای الزامی، ارائه‌دهندگان و ترابری‌های مجاز، کلید، DNS و هر پروفایل پشتیبان نهایی را اعتبارسنجی می‌کند
+- پیش از راه‌اندازی، FlClashM قواعد provider/engine، گزینه‌های transport، کلید و DNS را اعتبارسنجی می‌کند
 - سرویس اندروید دنبالهٔ محدودی از خروجی فرایند را نگه می‌دارد؛ اگر OlcRTC پیش از بازکردن پورت SOCKS5 خارج شود، دلیل بی‌درنگ به Dart بازمی‌گردد و به کاربر نشان داده می‌شود
 - به‌شکل فرایندی جدا از طریق قرارداد پایدار `config.yaml` اجرا می‌شود؛ کتابخانهٔ موبایل استفاده نمی‌شود
 - منابع روی کامیت `ad5758513335cda54362a64621c29e9d9fe759b4` تثبیت شده‌اند
@@ -95,10 +97,10 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 ### 🛡 byedpi
 
 - **نوع:** `byedpi`
-- **حالت `manual`:** رشتهٔ `args` می‌گیرد
+- **حالت `manual`:** رشتهٔ `strategy` می‌گیرد
 - **حالت `auto`:** راهبردهای ByeByeDPI را می‌پیماید و کارآمد را کش می‌کند
-- بدون `mode`، وجود `args` دستی و نبودِ آن خودکار را برمی‌گزیند
-- `strategy-list` در حالت auto پیش‌فرض `byebyeedpi` است؛ بدون `strategy-test.urls` از endpoint آزمایشی داخلی YouTube استفاده می‌شود
+- بدون `mode`، وجود `strategy` دستی و نبودِ آن خودکار را برمی‌گزیند
+- `strategies` مقدار `builtin:byebyeedpi`، راهبردهای inline و فهرست‌های HTTPS عمومی را ترکیب می‌کند؛ در نبود آن فهرست داخلی استفاده می‌شود
 - جای‌گذاری `{sni}` پشتیبانی می‌شود
 - UDP به‌طور پیش‌فرض فعال است و به نود محلی `mihomo` داده می‌شود؛ `udp: false` آن را خاموش می‌کند و خودِ فرایند ByeDPI پارامتر UDP جداگانه نمی‌گیرد
 

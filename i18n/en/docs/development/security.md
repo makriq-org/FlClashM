@@ -16,8 +16,9 @@ The fork's key invariant: **appearance and provider hints cannot weaken runtime 
 - 🧾 The APK signature is additionally verified by the Android installer against the signature of the already-installed app.
 - 🚫 Built-in nodes can't set local addresses and ports.
 - 📞 `olcrtc` works only in CNC mode.
-- 🧱 In `olcrtc profiles[]`, `socks.host`, `socks.port`, and `crypto.key_file` are recursively forbidden; the rest is passed to OlcRTC transparently.
+- 🧱 OlcRTC rejects `profiles`, `failover`, `video.hw`, local listeners, and file-backed keys.
 - 🛡 `byedpi` only checks the specified URLs.
+- 🔗 Remote ByeDPI strategies use the same bounded public-HTTPS and stale-cache policy as StormDNS lists.
 - 🌩 `stormdns` additionally rejects SOCKS5 authentication, the `local-dns-*` block, the log directory, `config-version`, and the interactive `startup.mode: ask`.
 
 ## 🌩 StormDNS
