@@ -148,10 +148,8 @@ class AppController {
       commonPrint.log("updateStatus failed: $e\n$stackTrace");
       await StatusBarManager.updateIcon(isConnected: false);
       if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
-        await globalState.showMessage(
-          title: appLocalizations.tip,
-          message: TextSpan(text: e.toString()),
-        );
+        // Отчёт, а не вопрос: ответа не ждём, текст дублируется в логи.
+        globalState.showNotifier(e.toString());
       }
     } finally {
       if (identical(_updateStatusFuture, task)) {
@@ -448,11 +446,7 @@ class AppController {
   }
 
   void _showHwidNotSupportedNotice() {
-    globalState.showMessage(
-      title: 'HWID',
-      message: TextSpan(text: appLocalizations.hwidNotSupported),
-      cancelable: false,
-    );
+    globalState.showNotifier(appLocalizations.hwidNotSupported);
   }
 
   void _showProductNotices(Profile profile) {
@@ -770,10 +764,8 @@ class AppController {
     } catch (e) {
       commonPrint.log("preloadClashConfig failed: $e");
       if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
-        await globalState.showMessage(
-          title: appLocalizations.tip,
-          message: TextSpan(text: e.toString()),
-        );
+        // Отчёт, а не вопрос: ответа не ждём, текст дублируется в логи.
+        globalState.showNotifier(e.toString());
       }
       return false;
     }
@@ -1397,9 +1389,7 @@ class AppController {
       }
     } catch (err) {
       commonPrint.log('Add Profile Failed: $err');
-      unawaited(
-        globalState.showMessage(message: TextSpan(text: err.toString())),
-      );
+      globalState.showNotifier(err.toString());
     }
   }
 

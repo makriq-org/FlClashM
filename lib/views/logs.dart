@@ -101,10 +101,7 @@ class _LogsViewState extends ConsumerState<LogsView> with PageMixin {
       title: appLocalizations.exportLogs,
     );
     if (res != true) return;
-    globalState.showMessage(
-      title: appLocalizations.tip,
-      message: TextSpan(text: appLocalizations.exportSuccess),
-    );
+    globalState.showNotifier(appLocalizations.exportSuccess);
   }
 
   double _getItemHeight(Log log) {
