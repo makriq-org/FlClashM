@@ -8,13 +8,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../clash/clash.dart';
 import '../../common/common.dart';
-import '../../plugins/app.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
 import '../services/app_update_manifest.dart';
 import '../services/app_update_manifest_release.dart';
 import '../services/app_update_manifest_rollback.dart';
 import '../services/app_update_release.dart';
+import 'android_package_installer.dart';
 
 final Dio _appUpdateDio = Dio(
   BaseOptions(
@@ -161,11 +161,13 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     this.rollbackGuard =
         const SharedPreferencesAppUpdateManifestRollbackGuard(),
     this.httpClient = const DioAppUpdateHttpClient(),
+    this.packageInstaller = const MethodChannelAndroidPackageInstaller(),
   });
 
   final AppUpdateManifestVerifier manifestVerifier;
   final AppUpdateManifestRollbackGuard rollbackGuard;
   final AppUpdateHttpClient httpClient;
+  final AndroidPackageInstaller packageInstaller;
 
   @override
   String get latestReleaseUrl => '$sourceForgeProjectUrl/files/releases/';
@@ -492,7 +494,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
 
   @override
   Future<bool> installPackage(String path) async =>
-      await app?.openFile(path) ?? false;
+      packageInstaller.install(path);
 }
 
 class _UpdateDownloadProgressDialog extends StatelessWidget {
