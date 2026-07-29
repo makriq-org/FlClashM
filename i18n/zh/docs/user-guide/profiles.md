@@ -26,9 +26,9 @@ connectivity-check:
   urls:
     - "https://example.org/generate_204"
   required: true
-  timeout: 5
-  startup-timeout: 30
-  retry-interval: 1
+  timeout: 5s
+  startup-timeout: 30s
+  retry-interval: 1s
   requests: 1
   concurrency: 1
   min-success-ratio: 1.0
@@ -38,9 +38,9 @@ connectivity-check:
 |------|--------|------|
 | `urls` | — | 要检查的地址（公网 HTTP(S)，不含凭据或片段） |
 | `required` | `false` | 该检查是否为启动所必需 |
-| `timeout` | `5` | 单次请求超时（秒） |
-| `startup-timeout` | `30`（`stormdns` 为 `120`） | 启动时的总检查预算（秒） |
-| `retry-interval` | `1` | 重试间隔（秒） |
+| `timeout` | `5s` | 单次请求超时（秒） |
+| `startup-timeout` | `30s`（`stormdns` 为 `2m`） | 启动时的总检查预算（秒） |
+| `retry-interval` | `1s` | 重试间隔（秒） |
 | `requests` | `1` | 请求次数 |
 | `concurrency` | `1` | 并行请求数 |
 | `min-success-ratio` | — | 成功响应的最小比例（不设则一次成功即可） |
@@ -69,6 +69,10 @@ ByeDPI 通过「破坏」数据包让过滤器无法识别连接，从而绕过 
 proxies:
   - name: "dpi-auto"
     type: byedpi
+    strategies:
+      - builtin:byebyeedpi
+      - "--disorder 1"
+      - "https://example.org/byedpi-strategies.txt"
 ```
 
 工作方式：候选以小组并行检查。若在预算内未找到，节点先以临时（fallback）策略启动，其余列表在后台继续检查。找到的可用策略会原子地切入方案并保存。
@@ -78,25 +82,27 @@ proxies:
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `strategy-list` | `byebyeedpi` | 策略列表名 |
-| `strategies` | — | 自定义有序参数列表，替代 `strategy-list` |
+| `strategies` | `[builtin:byebyeedpi]` | 按顺序组合内置集、内联策略和公开 HTTPS 列表 |
 | `strategy-test.urls` | 内置 YouTube 端点 | 用于选择的地址 |
 | `strategy-test.sni` | — | 替换 `{sni}` 的主机名 |
-| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | 解析测试地址的 DoH 解析器（绕过 fake-ip）；`system` 使用系统解析器 |
-| `strategy-test.timeout` | `5` | 单次检查超时（秒） |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | 解析测试地址的 DoH 解析器（绕过 fake-ip）；`system` 使用系统解析器 |
+| `strategy-test.timeout` | `5s` | 单次检查超时 |
 | `strategy-test.requests` | `1` | 每条策略的请求数 |
-| `strategy-test.concurrency` | `4` | 单个候选内的并行 HTTP 请求数 |
+| `strategy-test.request-concurrency` | `4` | 单个候选内的并行 HTTP 请求数 |
 | `strategy-test.min-success-ratio` | `1.0` | 成功请求的最小比例 |
-| `selection.concurrency` | `4` | 同时检查的策略数 |
-| `selection.foreground-timeout` | `15` | 节点启动前的选择预算（秒） |
-| `selection.background` | `true` | fallback 后是否在后台继续检查列表 |
-| `fallback-args` | — | 前台未及时完成时的临时策略参数 |
-| `cache.ttl` | 7 天 | 缓存生存期（秒） |
-| `cache.recheck-after` | 1 天 | 重新检查间隔（秒） |
-| `cache.retry-after` | 5 分钟 | fallback 后再次选择前的暂停（秒） |
-| `cache.failure-threshold` | `2` | 重置缓存前的错误次数 |
+| `strategy-selection.strategy-concurrency` | `4` | 同时检查的策略数 |
+| `strategy-selection.startup-timeout` | `15s` | 节点启动前的选择预算 |
+| `strategy-selection.continue-in-background` | `true` | fallback 后是否在后台继续检查列表 |
+| `strategy-selection.fallback-strategy` | — | 前台未及时完成时的临时策略参数 |
+| `strategy-selection.cache.ttl` | `7d` | 缓存生存期 |
+| `strategy-selection.cache.recheck-after` | `1d` | 重新检查间隔 |
+| `strategy-selection.retry-after` | `5m` | fallback 后再次选择前的暂停 |
+| `strategy-selection.cache.failure-threshold` | `2` | 重置缓存前的错误次数 |
 
 </details>
+
+HTTPS 文件每行包含一条策略；空行和以 `#` 开头的行会被忽略。链接与
+StormDNS 列表共用公网 HTTPS、大小、超时和 stale-cache 限制。
 
 > ℹ️ `strategy-test` **仅**用于自动选择，并覆盖内置测试端点 —— 它不替代 `connectivity-check`。已验证结果与临时 fallback **分开**缓存：fallback 不会在正常 TTL 内阻断后续选择尝试。任何 HTTP 检查都算成功，包括 `4xx` 和 `5xx`。
 >
@@ -109,10 +115,10 @@ proxies:
   - name: "dpi-fixed"
     type: byedpi
     mode: manual
-    args: "--disorder 1 --auto=torst --tlsrec 1+s"
+    strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 若省略 `mode`：有 `args` 走**手动**模式，无 `args` 走**自动**模式。
+> 💡 新配置应显式设置 `mode`；省略时使用自动模式。
 
 ---
 
@@ -126,15 +132,11 @@ OlcRTC 把流量封装进 WebRTC，伪装成经由某个允许服务的普通视
 proxies:
   - name: "rtc"
     type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
+    provider: jitsi
+    room: "https://meet.example.org/room"
+    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    transport: datachannel
+    dns-server: "1.1.1.1:53"
 proxy-groups:
   - name: "main"
     type: fallback
@@ -144,15 +146,30 @@ proxy-groups:
 
 | 参数 | 说明 |
 |------|------|
-| `auth.provider` | 连接提供者：`jitsi`、`telemost`、`wbstream`、`none` |
-| `room.id` | 视频通话房间标识 |
-| `crypto.key` | 256 位加密密钥 —— **恰好 64 个十六进制字符** |
-| `net.transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |
-| `net.dns` | 必填 DNS 服务器，格式 `地址:端口` |
+| `provider` | 连接提供者：`jitsi`、`telemost`、`wbstream`、`none` |
+| `room` | 视频通话房间标识 |
+| `encryption-key` | 256 位加密密钥 —— **恰好 64 个十六进制字符** |
+| `transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |
+| `dns-server` | 必填 DNS 服务器，格式 `地址:端口` |
+| `transport-options` | 当前传输的参数；`datachannel` 禁止此段 |
 
-> 💡 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。可选的 `vp8.fps` 和 `vp8.batch_size` 默认为 `30` 和 `64`。
+参数取决于传输：`vp8channel` 接受 `fps` 和 `batch-size`；`seichannel`
+还接受 `fragment-size` 和字符串时长 `ack-timeout`；`videochannel` 接受
+`codec`、`width`、`height`、`fps`、`bitrate`、`fragment-size`、
+`qr-recovery`、`tile-module` 和 `tile-rs`。
 
-若设置了 `profiles`，顶层公共字段会被每个备用 profile 继承，FlClashM 会在启动前校验每个 profile 的最终配置。本地地址、SOCKS5 端口、CNC 模式和数据目录由客户端分配 —— 不能在配置里覆盖。
+```yaml
+transport: seichannel
+transport-options:
+  fps: 30
+  batch-size: 64
+  fragment-size: 900
+  ack-timeout: 2s
+```
+
+> 💡 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。`transport-options.fps` 和 `transport-options.batch-size` 是必填项。
+
+公共配置不再支持多 `profiles`、`failover` 和 `video.hw`。多个 OlcRTC 方案应写成独立节点并放入 Mihomo 组。`provider: none` 必须同时提供 `engine`、`engine-url` 和 `engine-token`，其他 provider 禁止这些字段。
 
 > ⚠️ 必填字段的错误在配置校验阶段即可发现。若 OlcRTC 进程稍后退出，客户端会显示**退出码和输出的最后几行**，而不是干等端口超时。
 
@@ -235,7 +252,7 @@ compression:
   upload: zlib
 ```
 
-精细调节位于 `duplication`、`compression`、`mtu`、`arq`、`ping` 和 `runtime` 块。在这些块以及 `resolver-policy`/`startup` 中，时长使用字符串（`600ms`、`30s`、`24h`、`30d`）。通用字段 `activation` 和 `connectivity-check` 仍使用整数秒。
+精细调节位于 `duplication`、`compression`、`mtu`、`arq`、`ping` 和 `runtime` 块。所有时长（包括通用的 `activation` 和 `connectivity-check`）都使用带单位的字符串（`600ms`、`30s`、`24h`、`30d`）。
 
 > ℹ️ StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错**。
 
@@ -330,21 +347,21 @@ activation:
   mode: auto
   wake:
     urls: ["https://example.org/generate_204"]
-    interval: 30
+    interval: 30s
     failures: 2
-    retry-after: 300
+    retry-after: 5m
   sleep:
-    idle: 900
+    idle: 15m
 ```
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `mode` | `auto` | `auto` 让备用节点休眠；`always` 为旧的常驻启动 |
 | `wake.urls` | `connectivity-check` 链 | 用于探测被观察分组的公网 HTTP(S) 地址 |
-| `wake.interval` | `30` | 休眠期间的探测间隔（秒） |
+| `wake.interval` | `30s` | 休眠期间的探测间隔 |
 | `wake.failures` | `2` | 唤醒前连续失败的轮数 |
-| `wake.retry-after` | `300` | 启动失败后的暂停（秒） |
-| `sleep.idle` | `900` | 无连接与无选择直至休眠的时长；`0` 表示 VPN 重启前不休眠 |
+| `wake.retry-after` | `5m` | 启动失败后的暂停 |
+| `sleep.idle` | `15m` | 无连接与无选择直至休眠的时长；`0s` 表示 VPN 重启前不休眠 |
 
 **关于 `auto` 需要知道的：**
 - 节点必须直接属于至少一个 proxy group。

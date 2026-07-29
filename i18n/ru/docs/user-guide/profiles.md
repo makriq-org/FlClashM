@@ -26,9 +26,9 @@ connectivity-check:
   urls:
     - "https://example.org/generate_204"
   required: true
-  timeout: 5
-  startup-timeout: 30
-  retry-interval: 1
+  timeout: 5s
+  startup-timeout: 30s
+  retry-interval: 1s
   requests: 1
   concurrency: 1
   min-success-ratio: 1.0
@@ -38,9 +38,9 @@ connectivity-check:
 |------|--------------|-----------|
 | `urls` | — | Адреса для проверки (публичные HTTP(S), без учётных данных и фрагментов) |
 | `required` | `false` | Обязательна ли проверка для запуска |
-| `timeout` | `5` | Таймаут одного запроса, секунды |
-| `startup-timeout` | `30` (у `stormdns` — `120`) | Общий бюджет проверки при запуске, секунды |
-| `retry-interval` | `1` | Пауза между попытками, секунды |
+| `timeout` | `5s` | Таймаут одного запроса, секунды |
+| `startup-timeout` | `30s` (у `stormdns` — `2m`) | Общий бюджет проверки при запуске, секунды |
+| `retry-interval` | `1s` | Пауза между попытками, секунды |
 | `requests` | `1` | Сколько запросов сделать |
 | `concurrency` | `1` | Сколько запросов параллельно |
 | `min-success-ratio` | — | Минимальная доля успешных ответов (без неё достаточно одного) |
@@ -69,6 +69,10 @@ ByeDPI обходит DPI, «портя» пакеты так, чтобы фил
 proxies:
   - name: "dpi-auto"
     type: byedpi
+    strategies:
+      - builtin:byebyeedpi
+      - "--disorder 1"
+      - "https://example.org/byedpi-strategies.txt"
 ```
 
 Как это работает: кандидаты проверяются параллельно небольшими группами. Если за отведённый бюджет ничего не нашлось — узел стартует с временной (fallback) стратегией, а остаток списка проверяется в фоне. Найденная рабочая стратегия атомарно переключается в план и сохраняется.
@@ -78,25 +82,28 @@ proxies:
 
 | Параметр | По умолчанию | Описание |
 |----------|--------------|----------|
-| `strategy-list` | `byebyeedpi` | Имя списка стратегий |
-| `strategies` | — | Свой упорядоченный список аргументов вместо `strategy-list` |
+| `strategies` | `[builtin:byebyeedpi]` | Встроенные наборы, inline-стратегии и публичные HTTPS-списки в общем порядке |
 | `strategy-test.urls` | встроенный endpoint YouTube | Адреса для подбора |
 | `strategy-test.sni` | — | Имя хоста для подстановки `{sni}` |
-| `strategy-test.resolver` | `https://1.1.1.1/dns-query` | DoH-резолвер адреса проверки (в обход fake-ip); `system` — системный резолвер |
-| `strategy-test.timeout` | `5` | Таймаут одной проверки, секунды |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | DoH-резолвер адреса проверки; `system` — системный резолвер |
+| `strategy-test.timeout` | `5s` | Таймаут одной проверки |
 | `strategy-test.requests` | `1` | Запросов на стратегию |
-| `strategy-test.concurrency` | `4` | Параллельных HTTP-запросов внутри кандидата |
+| `strategy-test.request-concurrency` | `4` | Параллельных HTTP-запросов внутри кандидата |
 | `strategy-test.min-success-ratio` | `1.0` | Минимальная доля успешных запросов |
-| `selection.concurrency` | `4` | Одновременно проверяемых стратегий |
-| `selection.foreground-timeout` | `15` | Бюджет подбора до запуска узла, секунды |
-| `selection.background` | `true` | Продолжать список в фоне после fallback |
-| `fallback-args` | — | Аргументы временной стратегии, если foreground не успел |
-| `cache.ttl` | 7 дней | Время жизни кэша, секунды |
-| `cache.recheck-after` | 1 день | Интервал повторной проверки, секунды |
-| `cache.retry-after` | 5 минут | Пауза перед новым подбором после fallback, секунды |
-| `cache.failure-threshold` | `2` | Число ошибок до сброса кэша |
+| `strategy-selection.strategy-concurrency` | `4` | Одновременно проверяемых стратегий |
+| `strategy-selection.startup-timeout` | `15s` | Бюджет подбора до запуска узла |
+| `strategy-selection.continue-in-background` | `true` | Продолжать список в фоне после fallback |
+| `strategy-selection.fallback-strategy` | — | Временная стратегия, если подбор не успел |
+| `strategy-selection.retry-after` | `5m` | Пауза перед новым подбором после fallback |
+| `strategy-selection.cache.ttl` | `7d` | Время жизни кэша |
+| `strategy-selection.cache.recheck-after` | `1d` | Интервал повторной проверки |
+| `strategy-selection.cache.failure-threshold` | `2` | Число ошибок до сброса кэша |
 
 </details>
+
+HTTPS-файл содержит по одной стратегии в строке; пустые и начинающиеся с `#`
+строки игнорируются. Для ссылок действуют те же ограничения публичного HTTPS,
+размера, таймаута и stale-кэша, что и для списков StormDNS.
 
 > ℹ️ `strategy-test` используется **только** при автоподборе и переопределяет встроенный тестовый endpoint — он не заменяет `connectivity-check`. Проверенный результат и временный fallback хранятся в кэше **раздельно**: fallback не блокирует последующие попытки подбора на время обычного TTL. Успешной считается любая HTTP-проверка, включая `4xx` и `5xx`.
 >
@@ -109,10 +116,10 @@ proxies:
   - name: "dpi-fixed"
     type: byedpi
     mode: manual
-    args: "--disorder 1 --auto=torst --tlsrec 1+s"
+    strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 Если `mode` не указан: наличие `args` включает **ручной** режим, а их отсутствие — **автоматический**.
+> 💡 В новых профилях `mode` задаётся явно; если его нет, используется автоматический режим.
 
 ---
 
@@ -126,15 +133,11 @@ OlcRTC заворачивает трафик в WebRTC и выдаёт его з
 proxies:
   - name: "rtc"
     type: olcrtc
-    auth:
-      provider: jitsi
-    room:
-      id: "https://meet.example.org/room"
-    crypto:
-      key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    net:
-      transport: datachannel
-      dns: "1.1.1.1:53"
+    provider: jitsi
+    room: "https://meet.example.org/room"
+    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    transport: datachannel
+    dns-server: "1.1.1.1:53"
 proxy-groups:
   - name: "main"
     type: fallback
@@ -144,15 +147,30 @@ proxy-groups:
 
 | Параметр | Описание |
 |----------|----------|
-| `auth.provider` | Поставщик соединения: `jitsi`, `telemost`, `wbstream`, `none` |
-| `room.id` | Идентификатор комнаты видеозвонка |
-| `crypto.key` | 256-битный ключ шифрования — **ровно 64 hex-символа** |
-| `net.transport` | Транспорт: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
-| `net.dns` | Обязательный DNS-сервер в формате `адрес:порт` |
+| `provider` | Поставщик соединения: `jitsi`, `telemost`, `wbstream`, `none` |
+| `room` | URL или идентификатор комнаты |
+| `encryption-key` | 256-битный ключ — **ровно 64 hex-символа** |
+| `transport` | `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
+| `dns-server` | Обязательный DNS-сервер в формате `адрес:порт` |
+| `transport-options` | Параметры выбранного транспорта; для `datachannel` секция запрещена |
 
-> 💡 Для `wbstream` рекомендуется `vp8channel`: гостевой режим этого поставщика не даёт права публиковать канал данных. Необязательные `vp8.fps` и `vp8.batch_size` по умолчанию `30` и `64`.
+Параметры зависят от транспорта: `vp8channel` принимает `fps` и `batch-size`;
+`seichannel` — ещё `fragment-size` и строковый `ack-timeout`; `videochannel` —
+`codec`, `width`, `height`, `fps`, `bitrate`, `fragment-size`, `qr-recovery`,
+`tile-module` и `tile-rs`.
 
-Если заданы `profiles`, общие поля верхнего уровня наследуются каждым запасным профилем, и FlClashM проверяет итоговую конфигурацию каждого из них до запуска. Локальный адрес, порт SOCKS5, режим CNC и каталог данных назначает клиент — переопределять их в профиле нельзя.
+```yaml
+transport: seichannel
+transport-options:
+  fps: 30
+  batch-size: 64
+  fragment-size: 900
+  ack-timeout: 2s
+```
+
+> 💡 Для `wbstream` рекомендуется `vp8channel`. Для него обязательны `transport-options.fps` и `transport-options.batch-size`.
+
+`profiles`, `failover` и `video.hw` удалены из публичного контракта. Несколько вариантов OlcRTC задаются отдельными узлами и объединяются обычной группой Mihomo. Для `provider: none` обязательны `engine`, `engine-url` и `engine-token`; с другими провайдерами эти поля запрещены.
 
 > ⚠️ Ошибки обязательных полей видны уже при проверке профиля. Если процесс OlcRTC упадёт позже, клиент покажет **код завершения и последние строки вывода** вместо ожидания тайм-аута порта.
 
@@ -235,7 +253,7 @@ compression:
   upload: zlib
 ```
 
-Тонкая настройка живёт в блоках `duplication`, `compression`, `mtu`, `arq`, `ping` и `runtime`. Внутри этих блоков и в `resolver-policy`/`startup` длительности задаются строками (`600ms`, `30s`, `24h`, `30d`). Общие поля `activation` и `connectivity-check` по-прежнему принимают целые секунды.
+Тонкая настройка живёт в блоках `duplication`, `compression`, `mtu`, `arq`, `ping` и `runtime`. Все длительности, включая общие `activation` и `connectivity-check`, задаются строками с единицей (`600ms`, `30s`, `24h`, `30d`).
 
 > ℹ️ StormDNS молча подрезает выходящие за границы значения. FlClashM вместо этого **выдаёт ошибку до запуска**.
 
@@ -330,21 +348,21 @@ activation:
   mode: auto
   wake:
     urls: ["https://example.org/generate_204"]
-    interval: 30
+    interval: 30s
     failures: 2
-    retry-after: 300
+    retry-after: 5m
   sleep:
-    idle: 900
+    idle: 15m
 ```
 
 | Параметр | По умолчанию | Описание |
 |----------|--------------|----------|
 | `mode` | `auto` | `auto` усыпляет резерв; `always` — прежний постоянный запуск |
 | `wake.urls` | цепочка `connectivity-check` | Публичные HTTP(S)-адреса для проверки наблюдаемой группы |
-| `wake.interval` | `30` | Интервал проверки во сне, секунды |
+| `wake.interval` | `30s` | Интервал проверки во сне |
 | `wake.failures` | `2` | Неудачных раундов подряд до пробуждения |
-| `wake.retry-after` | `300` | Пауза после неудачного запуска, секунды |
-| `sleep.idle` | `900` | Время без соединений и выбора до сна; `0` — не засыпать до перезапуска VPN |
+| `wake.retry-after` | `5m` | Пауза после неудачного запуска |
+| `sleep.idle` | `15m` | Время без соединений и выбора до сна; `0s` — не засыпать до перезапуска VPN |
 
 **Что важно знать про `auto`:**
 - Узел должен напрямую входить хотя бы в одну proxy group.

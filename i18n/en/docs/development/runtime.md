@@ -35,6 +35,8 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 
 > 📎 The user-facing side (YAML, parameters) is described in the [built-in nodes guide](../user-guide/profiles.md).
 
+`BuiltInProxyCompiler` is only the coordinator: it normalizes legacy aliases, allocates local ports, and dispatches the canonical node to the NaiveProxy, ByeDPI, OlcRTC, or StormDNS compiler. Each compiler alone translates the public fields into its native JSON, YAML, or TOML artifact.
+
 ### 🎭 naiveproxy
 
 - **Type:** `naiveproxy`
@@ -48,10 +50,10 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 ### 📞 olcrtc
 
 - **Type:** `olcrtc`
-- **Required fields:** `name`, `auth.provider`, `room.id` (except `none`), `crypto.key`, `net.transport`, `net.dns`
+- **Required fields:** `name`, `provider`, `room` (except `none`), `encryption-key`, `transport`, `dns-server`
 - Works only in CNC (client) mode
 - UDP is not supported; the resulting local `mihomo` node gets `udp: false`
-- Before startup FlClashM validates the required fields, allowed providers and transports, the key, DNS, and each resulting fallback profile
+- Before startup FlClashM validates provider/direct-engine rules, transport-specific options, the key, and DNS
 - The Android service keeps a limited tail of the process output; if OlcRTC exits before opening the SOCKS5 port, the reason is returned to Dart immediately and shown to the user
 - Runs as a separate process via the stable `config.yaml` contract; the mobile library is not used
 - The sources are pinned to commit `ad5758513335cda54362a64621c29e9d9fe759b4`
@@ -95,10 +97,10 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 ### 🛡 byedpi
 
 - **Type:** `byedpi`
-- **`manual` mode:** takes an `args` string
+- **`manual` mode:** takes a `strategy` string
 - **`auto` mode:** cycles through ByeByeDPI strategies and caches the working one
-- Without `mode`, the presence of `args` picks manual, and their absence picks automatic
-- `strategy-list` in auto mode defaults to `byebyeedpi`; without `strategy-test.urls` the built-in YouTube test endpoint is used
+- Without `mode`, `strategy` selects manual mode and its absence selects automatic mode
+- `strategies` combines `builtin:byebyeedpi`, inline strategies, and public HTTPS lists; without it the built-in list is used
 - `{sni}` substitution is supported
 - UDP is enabled by default and passed to the local `mihomo` node; `udp: false` disables it, and the ByeDPI process itself gets no separate UDP parameter
 

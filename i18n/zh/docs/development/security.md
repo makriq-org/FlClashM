@@ -16,8 +16,9 @@
 - 🧾 APK 签名还会由 Android 安装器针对已安装应用的签名额外验证。
 - 🚫 内置节点不能设置本地地址与端口。
 - 📞 `olcrtc` 仅在 CNC 模式工作。
-- 🧱 在 `olcrtc profiles[]` 中递归禁止 `socks.host`、`socks.port` 和 `crypto.key_file`；其余字段透明传给 OlcRTC。
+- 🧱 OlcRTC 拒绝 `profiles`、`failover`、`video.hw`、本地监听和文件密钥。
 - 🛡 `byedpi` 只检查指定的 URL。
+- 🔗 ByeDPI 远程策略与 StormDNS 列表共用受限公开 HTTPS 和 stale cache 规则。
 - 🌩 `stormdns` 另外不接受 SOCKS5 认证、`local-dns-*` 块、日志目录、`config-version` 以及交互式的 `startup.mode: ask`。
 
 ## 🌩 StormDNS

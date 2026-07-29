@@ -1049,12 +1049,6 @@ void main() {
                 'dns': '8.8.8.8:53',
               },
               'debug': true,
-              'profiles': [
-                {
-                  'name': 'fallback',
-                  'auth': {'provider': 'telemost'},
-                },
-              ],
             },
           ],
         },
@@ -1109,7 +1103,7 @@ void main() {
       expect(runtimeConfig['socks']['host'], '127.0.0.1');
       expect(runtimeConfig['socks']['port'], builtInNode.listenPort);
       expect(runtimeConfig['debug'], isTrue);
-      expect(runtimeConfig['profiles'][0]['name'], 'fallback');
+      expect(runtimeConfig, isNot(contains('profiles')));
     });
 
     test('rejects unsafe olcrtc local bind overrides before security', () {
@@ -1143,7 +1137,7 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('olcrtc.socks.host'),
+            contains('olcrtc.socks'),
           ),
         ),
       );

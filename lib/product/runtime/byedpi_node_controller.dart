@@ -791,17 +791,25 @@ class ByedpiNodeController
       ];
 
   Future<List<String>> _resolveStrategies(_ByedpiConfig config) async {
-    final values = config.strategies.isNotEmpty
+    final sources = config.strategies.isNotEmpty
         ? config.strategies
         : config.strategyList == 'byebyeedpi'
-            ? (await binary.loadBundledStrategyList(
-                byedpiStrategyListAssetPath,
-              ))
-                .split('\n')
-                .map((line) => line.trim())
-                .where((line) => line.isNotEmpty && !line.startsWith('#'))
+            ? const ['builtin:byebyeedpi']
             : const <String>[];
-    return List<String>.unmodifiable(values.toSet());
+    final values = <String>[];
+    final seen = <String>{};
+    for (final source in sources) {
+      final expanded = source == 'builtin:byebyeedpi'
+          ? (await binary.loadBundledStrategyList(byedpiStrategyListAssetPath))
+              .split('\n')
+              .map((line) => line.trim())
+              .where((line) => line.isNotEmpty && !line.startsWith('#'))
+          : <String>[source];
+      for (final strategy in expanded) {
+        if (seen.add(strategy)) values.add(strategy);
+      }
+    }
+    return List<String>.unmodifiable(values);
   }
 
   Future<_ByedpiConfig> _readNodeConfig(

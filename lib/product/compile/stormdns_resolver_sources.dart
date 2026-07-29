@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+
+import 'remote_text_list_store.dart';
 
 /// Marker line staged into the generated resolver file wherever the profile
 /// asked for `system`. The platform replaces it with the DNS servers of the
@@ -589,7 +590,7 @@ class DefaultStormDnsRemoteResolverListStore
     StormDnsResolverListDownloader? download,
     DateTime Function()? now,
     this.batchTimeout = stormDnsRemoteListBatchTimeout,
-  })  : download = download ?? _downloadResolverList,
+  })  : download = download ?? downloadPublicRemoteList,
         now = now ?? DateTime.now;
 
   final String cacheDirectoryPath;
@@ -606,120 +607,20 @@ class DefaultStormDnsRemoteResolverListStore
     List<Uri> urls, {
     required Duration refresh,
   }) async {
-    final result = <Uri, StormDnsRemoteResolverList>{};
-    // Cached copy of every address that still has to be fetched, in first-seen
-    // order. Building it first keeps the de-duplication and the per-address
-    // cache exactly as they were before the fetches were parallelised.
-    final stale = <Uri, StormDnsRemoteResolverList?>{};
-    for (final url in urls) {
-      if (result.containsKey(url) || stale.containsKey(url)) continue;
-      final cached = await _readCache(url);
-      final isFresh =
-          cached != null && now().difference(cached.fetchedAt) < refresh;
-      if (isFresh) {
-        result[url] = cached;
-      } else {
-        stale[url] = cached;
-      }
-    }
-    if (stale.isEmpty) return result;
-
-    // One deadline for the whole batch, and the downloads run in parallel, so
-    // the profile waits for the slowest address instead of for their sum. Each
-    // download is handed the remaining budget so it can cut a slow DNS lookup
-    // or a slow response body itself, and is additionally raced against that
-    // budget in case it does not.
-    final elapsed = Stopwatch()..start();
-    Duration remaining() {
-      final left = batchTimeout - elapsed.elapsed;
-      return left.isNegative ? Duration.zero : left;
-    }
-
-    final pending = stale.keys.toList(growable: false);
-    final bodies = List<String?>.filled(pending.length, null);
-    var nextIndex = 0;
-
-    Future<void> worker() async {
-      while (true) {
-        final index = nextIndex;
-        nextIndex += 1;
-        if (index >= pending.length) return;
-        final budget = remaining();
-        if (budget == Duration.zero) return;
-        try {
-          bodies[index] =
-              await download(pending[index], timeout: budget).timeout(budget);
-        } catch (_) {
-          bodies[index] = null;
-        }
-      }
-    }
-
-    await Future.wait(
-      List.generate(
-        pending.length < stormDnsRemoteListConcurrency
-            ? pending.length
-            : stormDnsRemoteListConcurrency,
-        (_) => worker(),
-      ),
-    );
-
-    for (var index = 0; index < pending.length; index++) {
-      final url = pending[index];
-      final body = bodies[index];
-      if (body == null) {
-        // Unreachable list: keep serving the last stored copy even when stale.
-        final cached = stale[url];
-        if (cached != null) result[url] = cached;
-        continue;
-      }
-      final fetched = StormDnsRemoteResolverList(
-        entries: parseResolverListBody(body, parser: parser),
-        fetchedAt: now(),
-      );
-      await _writeCache(url, body, fetched.fetchedAt);
-      result[url] = fetched;
-    }
-    return result;
-  }
-
-  File _cacheFile(Uri url) {
-    final key = sha256.convert(utf8.encode(url.toString())).toString();
-    return File('$cacheDirectoryPath${Platform.pathSeparator}$key.json');
-  }
-
-  Future<StormDnsRemoteResolverList?> _readCache(Uri url) async {
-    final file = _cacheFile(url);
-    if (!file.existsSync()) return null;
-    try {
-      final value = json.decode(await file.readAsString());
-      if (value is! Map) return null;
-      final fetchedAt = DateTime.tryParse('${value['fetchedAt']}');
-      final body = value['body'];
-      if (fetchedAt == null || body is! String) return null;
-      return StormDnsRemoteResolverList(
-        entries: parseResolverListBody(body, parser: parser),
-        fetchedAt: fetchedAt,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _writeCache(Uri url, String body, DateTime fetchedAt) async {
-    try {
-      await Directory(cacheDirectoryPath).create(recursive: true);
-      await _cacheFile(url).writeAsString(
-        json.encode(<String, dynamic>{
-          'url': url.toString(),
-          'fetchedAt': fetchedAt.toIso8601String(),
-          'body': body,
-        }),
-        flush: true,
-      );
-    } catch (_) {
-      // A cache write failure must not fail the profile; the list was fetched.
-    }
+    final lists = await RemoteTextListStore(
+      cacheDirectoryPath: cacheDirectoryPath,
+      download: download,
+      batchTimeout: batchTimeout,
+      concurrency: stormDnsRemoteListConcurrency,
+      now: now,
+    ).resolve(urls, refresh: refresh);
+    return {
+      for (final MapEntry(key: url, value: list) in lists.entries)
+        url: StormDnsRemoteResolverList(
+          entries: parseResolverListBody(list.body, parser: parser),
+          fetchedAt: list.fetchedAt,
+        ),
+    };
   }
 }
 
@@ -743,7 +644,7 @@ List<StormDnsResolverEntry> parseResolverListBody(
   return entries;
 }
 
-Future<String?> _downloadResolverList(
+Future<String?> downloadPublicRemoteList(
   Uri url, {
   required Duration timeout,
 }) async {
@@ -883,10 +784,9 @@ List<String> buildResolverFileLines({
 }) {
   // The marker costs one line here but expands into the physical network's
   // resolvers on the platform side, so its share of the ceiling is held back.
-  final limit =
-      sources.any((source) => source is StormDnsSystemResolverSource)
-          ? stormDnsMaxResolverHosts - stormDnsSystemDnsReservedHosts
-          : stormDnsMaxResolverHosts;
+  final limit = sources.any((source) => source is StormDnsSystemResolverSource)
+      ? stormDnsMaxResolverHosts - stormDnsSystemDnsReservedHosts
+      : stormDnsMaxResolverHosts;
   final lines = <String>[];
   final seen = <String>{};
   var addresses = 0;
