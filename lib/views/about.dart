@@ -346,6 +346,10 @@ class Avatar extends StatelessWidget {
     final fontSize = size * 0.25; // 14.0 for 56px
     final avatarFontSize = size * 0.46; // 26.0 for 56px
 
+    // Ячейка одной ширины для всех: иначе ширину задаёт длина ника, и
+    // промежутки между аватарами получаются разными.
+    final cellWidth = avatarSize + 24;
+
     final avatarWidget = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -375,11 +379,18 @@ class Avatar extends StatelessWidget {
         const SizedBox(
           height: 4,
         ),
-        Text(
-          contributor.name,
-          style: TextStyle(
-            fontFamily: 'Unbounded',
-            fontSize: fontSize,
+        // Длинный ник ужимается, а не растягивает ячейку и не обрезается.
+        SizedBox(
+          width: cellWidth,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              contributor.name,
+              style: TextStyle(
+                fontFamily: 'Unbounded',
+                fontSize: fontSize,
+              ),
+            ),
           ),
         )
       ],
