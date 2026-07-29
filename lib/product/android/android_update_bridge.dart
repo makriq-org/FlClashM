@@ -339,10 +339,8 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   @visibleForTesting
   @override
   Future<void> showUpdateCheckError() async {
-    await globalState.showMessage(
-      title: appLocalizations.checkUpdate,
-      message: TextSpan(text: appLocalizations.checkUpdateError),
-    );
+    // Отчёт без выбора: окно с «Отменой» тут ничего не спрашивает.
+    globalState.showNotifier(appLocalizations.checkUpdateError);
   }
 
   @visibleForTesting
