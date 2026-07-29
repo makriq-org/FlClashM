@@ -8,7 +8,6 @@ import 'package:flclashx/models/core.dart';
 import 'package:flclashx/state.dart';
 
 class ClashService extends ClashHandlerInterface {
-
   factory ClashService() {
     _instance ??= ClashService._internal();
     return _instance!;
@@ -97,11 +96,12 @@ class ClashService extends ClashHandlerInterface {
       }
     }, (error, stack) {
       commonPrint.log(error.toString());
+      fileLogger.logCritical('uncaught core server error: $error', stack);
       // A failed ServerSocket.bind here never completes serverCompleter, so
       // preload()/reStart()/destroy() would await it forever (app stuck at
       // launch). Surface the failure to those awaiters so they degrade instead.
       if (!serverCompleter.isCompleted) {
-        serverCompleter.completeError(error);
+        serverCompleter.completeError(error, stack);
       }
       if (error is SocketException) {
         globalState.showNotifier(error.toString());

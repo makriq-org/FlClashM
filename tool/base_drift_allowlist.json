@@ -21,6 +21,16 @@
       "reason": "Хеши обновлённых Go-зависимостей фиксируют security-патч runtime-модуля."
     },
     {
+      "path": "core/android_bride.go",
+      "bucket": "budget",
+      "reason": "Android JNI-регистрация один раз запускает независимый фоновый журнал mihomo."
+    },
+    {
+      "path": "core/diagnostics_android.go",
+      "bucket": "budget",
+      "reason": "Фоновый подписчик mihomo сохраняет события через Android stderr даже без подключённого UI."
+    },
+    {
       "path": "android/app/build.gradle.kts",
       "bucket": "budget",
       "reason": "applicationId, keystore-логика и dev-suffix принадлежат форковому Android-слою."
@@ -36,19 +46,24 @@
       "reason": "Права, deep-link схема форка и имена Android-компонентов нельзя вынести из base."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/BootReceiver.kt",
+      "bucket": "budget",
+      "reason": "Холодный запуск VPN после перезагрузки фиксируется локально до появления Flutter UI."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/FlClashApplication.kt",
       "bucket": "budget",
-      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+      "reason": "Точка входа каждого Android-процесса устанавливает локальный crash/lifecycle журнал до запуска runtime."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/GlobalState.kt",
       "bucket": "budget",
-      "reason": "Исправления фактического VPN и каналов уведомлений относятся к жизненному циклу Android."
+      "reason": "Жизненный цикл main-процесса и ошибки headless VPN сохраняются через общий безопасный журнал."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/MainActivity.kt",
       "bucket": "budget",
-      "reason": "Точка входа Android-процесса и регистрация мостов форка относятся к платформенному бюджету."
+      "reason": "MainActivity регистрирует тонкий мост безопасного диагностического экспорта."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/Service.kt",
@@ -66,9 +81,24 @@
       "reason": "Нативный мост пакетов, файлов и установки apk относится к Android bridge-слою."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/DiagnosticsPlugin.kt",
+      "bucket": "budget",
+      "reason": "Тонкий Android-мост отдаёт Flutter только app-private путь журналов и безопасные сведения о платформе."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/SelfUpdateInstaller.kt",
+      "bucket": "budget",
+      "reason": "Нативная установка проверенного обновления приложения относится к Android bridge-слою."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/SelfUpdateInstallerTest.kt",
+      "bucket": "budget",
+      "reason": "Нативные CI-тесты фиксируют single-flight сессий и обработку статусов самообновления."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
-      "reason": "Сервисный мост quick-start, runtime-node и notification action принят в бюджет."
+      "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки со stack trace через общий безопасный журнал."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/services/FlClashMTileService.kt",
@@ -213,7 +243,42 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt",
       "bucket": "budget",
-      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+      "reason": "Общее состояние Android-процессов сохраняет coroutine ошибки и перехваченный native stderr."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStore.kt",
+      "bucket": "budget",
+      "reason": "Fork-owned Android-хранилище пакетно записывает и ротирует один ограниченный журнал каждого процесса."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticLog.kt",
+      "bucket": "budget",
+      "reason": "Fork-owned multi-process журнал сохраняет lifecycle и Kotlin/native ошибки без внешней телеметрии."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructure.kt",
+      "bucket": "budget",
+      "reason": "Bounded UTF-8 reader и одна FIFO-очередь защищают Android-журнал от огромных строк и I/O-сбоев."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
+      "bucket": "budget",
+      "reason": "Единая Android-политика удаляет секреты до app-private файла и logcat."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStoreTest.kt",
+      "bucket": "budget",
+      "reason": "Контрактный Android-тест фиксирует лимиты и ротацию локальных журналов."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticInfrastructureTest.kt",
+      "bucket": "budget",
+      "reason": "Тесты проверяют bounded UTF-8 reader, пакетную FIFO-запись и изоляцию ошибок файловой очереди."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactorTest.kt",
+      "bucket": "budget",
+      "reason": "Контрактный Android-тест запрещает запись credentials, URL и пользовательских названий."
     },
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/SavedParams.kt",
@@ -258,7 +323,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/CommonService.kt",
       "bucket": "budget",
-      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+      "reason": "Lifecycle proxy-only foreground service сохраняется без зависимости от Flutter UI."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/FilesProvider.kt",
@@ -268,22 +333,22 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/FlVpnService.kt",
       "bucket": "budget",
-      "reason": "Жизненный цикл VPN, always-on и runtime-узлы остаются платформенным бюджетным дрейфом."
+      "reason": "Lifecycle VPN, always-on, revoke и cold-start сохраняется без зависимости от Flutter UI."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt",
       "bucket": "budget",
-      "reason": "Сервисный контракт и платформенная обвязка runtime-узлов и уведомлений приняты в бюджет."
+      "reason": "Lifecycle удалённого процесса mihomo сохраняется без зависимости от Flutter UI."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
       "bucket": "budget",
-      "reason": "Супервизор встроенных runtime-узлов относится к Android runtime-слою и остаётся в бюджете."
+      "reason": "Супервизор передаёт bounded stdout встроенных нод в общий журнал удалённого процесса."
     },
     {
       "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
       "bucket": "budget",
-      "reason": "Тест обобщённого resolver-файла закрепляет правила дедупликации и запрет выхода за рабочую директорию; CI Kotlin-тесты не запускает, инварианты дополнительно закреплены product-тестом на Dart."
+      "reason": "Нативный CI-тест закрепляет дедупликацию и запрет выхода resolver-файла за рабочую директорию."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",
@@ -351,6 +416,11 @@
       "reason": "Канал связи с Android service и quick-start остаётся базовым runtime-мостом."
     },
     {
+      "path": "lib/clash/service.dart",
+      "bucket": "budget",
+      "reason": "Guarded desktop core-server передаёт полную ошибку со stack trace в аварийный локальный журнал."
+    },
+    {
       "path": "lib/common/android.dart",
       "bucket": "budget",
       "reason": "Выходной хук перенесён в product service, чтобы base не зависел от desktop app-plugin."
@@ -363,7 +433,7 @@
     {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
-      "reason": "Имена логов синхронизированы с идентичностью FlClashM."
+      "reason": "Base-фасад логгера делегирует ограниченную очередь, ротацию и pre-write redaction product-слою."
     },
     {
       "path": "lib/common/http.dart",
@@ -383,7 +453,7 @@
     {
       "path": "lib/common/print.dart",
       "bucket": "budget",
-      "reason": "Префикс логов синхронизирован с идентичностью FlClashM."
+      "reason": "Общий print-фасад удаляет секреты до logcat, файла и in-app журнала."
     },
     {
       "path": "lib/common/request.dart",
@@ -408,7 +478,7 @@
     {
       "path": "lib/controller.dart",
       "bucket": "budget",
-      "reason": "Базовый оркестратор runtime и состояния; это осознанный якорь форка."
+      "reason": "Существующее действие экспорта остаётся тонким делегатом безопасного product ZIP-builder."
     },
     {
       "path": "lib/main.dart",

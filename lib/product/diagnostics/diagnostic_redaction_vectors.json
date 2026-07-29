@@ -1,0 +1,67 @@
+[
+  {
+    "id": "credential-pairs",
+    "input": "auth=local-secret user=alice username=bob password=hunter2",
+    "expected": "auth=<redacted> user=alice username=<redacted> password=<redacted>"
+  },
+  {
+    "id": "cli-spaced-arguments",
+    "input": "runtime stdout: --auth local-secret --user alice --username bob --password hunter2",
+    "expected": "runtime stdout: --auth <redacted> --user alice --username <redacted> --password <redacted>"
+  },
+  {
+    "id": "cli-equals-arguments",
+    "input": "runtime node argv: --auth=runtime-secret --username=runtime-user",
+    "expected": "runtime node argv: --auth=<redacted> --username=<redacted>"
+  },
+  {
+    "id": "json-credentials",
+    "input": "{\"auth\":\"json-auth\",\"user\":\"json-user\",\"username\":\"json-name\"}",
+    "expected": "{\"auth\":<redacted>,\"user\":\"json-user\",\"username\":<redacted>}"
+  },
+  {
+    "id": "authorization-header",
+    "input": "Authorization: Bearer very-secret-token",
+    "expected": "Authorization: <redacted>"
+  },
+  {
+    "id": "subscription-url",
+    "input": "subscription_url=https://user:pass@example.com/sub/private?token=abc",
+    "expected": "subscription_url=<redacted>"
+  },
+  {
+    "id": "profile-label",
+    "input": "profile `My private profile` failed",
+    "expected": "profile <redacted> failed"
+  },
+  {
+    "id": "json-node-name",
+    "input": "node_name: \"Node from JSON\"",
+    "expected": "node_name: <redacted>"
+  },
+  {
+    "id": "raw-config",
+    "input": "raw config={\"proxies\":[{\"password\":\"inside-config\"}]}",
+    "expected": "raw config=<redacted>"
+  },
+  {
+    "id": "multiline-ipc-payload",
+    "input": "ipc payload={\n  \"password\": \"second-line-secret\"\n}",
+    "expected": "ipc payload=<redacted>"
+  },
+  {
+    "id": "unterminated-quoted-password",
+    "input": "password=\"private phrase without closing quote",
+    "expected": "password=<redacted>"
+  },
+  {
+    "id": "unterminated-profile-label",
+    "input": "profile `private label without closing backtick",
+    "expected": "profile <redacted>"
+  },
+  {
+    "id": "useful-generic-fields",
+    "input": "name=resolver user=system data=cache-hit params=2",
+    "expected": "name=resolver user=system data=cache-hit params=2"
+  }
+]

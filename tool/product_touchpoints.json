@@ -17,6 +17,22 @@
       ]
     },
     {
+      "path": "lib/common/file_logger.dart",
+      "boundary": "local-diagnostics",
+      "reason": "The upstream logger remains a stable facade while the product layer owns bounded, pre-write-redacted diagnostic persistence.",
+      "targets": [
+        "lib/product/diagnostics/diagnostic_recorder.dart"
+      ]
+    },
+    {
+      "path": "lib/common/print.dart",
+      "boundary": "local-diagnostics",
+      "reason": "The shared print facade applies the product redaction policy before logcat, file and in-app log consumers see a message.",
+      "targets": [
+        "lib/product/diagnostics/diagnostic_redactor.dart"
+      ]
+    },
+    {
       "path": "lib/common/system.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "System helpers stay a thin base delegate for Android task-back behavior.",
@@ -27,9 +43,10 @@
     {
       "path": "lib/controller.dart",
       "boundary": "runtime-orchestration",
-      "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts.",
+      "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts, including the existing log-export action.",
       "targets": [
         "lib/product/compile/product_compile.dart",
+        "lib/product/diagnostics/product_diagnostics.dart",
         "lib/product/runtime/product_runtime.dart",
         "lib/product/services/product_services.dart",
         "lib/product/subscription/product_subscription.dart"

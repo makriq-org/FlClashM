@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.follow.clashx.GlobalState
 import com.follow.clashx.RunState
@@ -17,6 +16,7 @@ import com.follow.clashx.Service
 import com.follow.clashx.common.Components
 import com.follow.clashx.common.GlobalState as CommonGlobalState
 import com.follow.clashx.common.SavedParams
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import com.follow.clashx.service.models.NotificationParams
 import com.follow.clashx.service.models.VpnOptions
 import com.follow.clashx.service.models.gsonSanitized
@@ -165,7 +165,7 @@ class ServicePlugin :
 
     private fun handleInit(result: MethodChannel.Result) {
         runCatching { Service.bind() }.onFailure {
-            Log.w("ServicePlugin", "Service.bind() failed: ${it.message}")
+            DiagnosticLog.e("ServicePlugin", "Service.bind() failed: ${it.message}", it)
         }
         Service.onServiceDisconnected = ::onServiceDisconnected
         launch {
@@ -173,16 +173,21 @@ class ServicePlugin :
                 Service.attachRuntimeNodeClient()
                     .onSuccess { runtimeClientAttached = true }
                     .onFailure {
-                        Log.w(
+                        DiagnosticLog.e(
                             "ServicePlugin",
                             "attachRuntimeNodeClient failed: ${it.message}",
+                            it,
                         )
                     }
             }
             Service.setEventListener({ value -> dispatchEvent(value) }, owner = this@ServicePlugin)
                 .onSuccess { result.successOnMain("") }
                 .onFailure {
-                    Log.w("ServicePlugin", "setEventListener failed: ${it.message}")
+                    DiagnosticLog.e(
+                        "ServicePlugin",
+                        "setEventListener failed: ${it.message}",
+                        it,
+                    )
                     // Report the failure to Dart instead of swallowing it. A false
                     // "init succeeded" leaves Dart's _initSucceeded=true with NO live
                     // event pipe (empty Logs/Connections/Traffic), and reconnectIfNeeded()
@@ -215,7 +220,7 @@ class ServicePlugin :
 
     private fun onServiceDisconnected(message: String) {
         runtimeClientAttached = false
-        Log.w("ServicePlugin", "remote service disconnected: $message")
+        DiagnosticLog.w("ServicePlugin", "remote service disconnected: $message")
         // A RemoteService binder drop means the IPC bridge (the :remote process) was
         // recycled — NOT that the tunnel died. FlVpnService is START_STICKY + foreground
         // and recovers itself via coldStart as long as the persistent isVpnActive flag
@@ -238,7 +243,13 @@ class ServicePlugin :
             // Service.invokeAction completes the callback exactly once (real result /
             // registration failure / watchdog), so don't also complete here.
             Service.invokeAction(data) { payload -> result.successOnMain(payload) }
-                .onFailure { Log.w("ServicePlugin", "invokeAction failed: ${it.message}") }
+                .onFailure {
+                    DiagnosticLog.e(
+                        "ServicePlugin",
+                        "invokeAction failed: ${it.message}",
+                        it,
+                    )
+                }
         }
     }
 
@@ -256,7 +267,13 @@ class ServicePlugin :
                 state,
                 onStarted = { invokeOnMain("onStarted", null) },
                 onResult = { payload -> result.successOnMain(payload) },
-            ).onFailure { Log.w("ServicePlugin", "quickStart failed: ${it.message}") }
+            ).onFailure {
+                DiagnosticLog.e(
+                    "ServicePlugin",
+                    "quickStart failed: ${it.message}",
+                    it,
+                )
+            }
         }
     }
 
@@ -265,7 +282,11 @@ class ServicePlugin :
         val options = try {
             if (json.isNullOrBlank()) VpnOptions() else gson.fromJson(json, VpnOptions::class.java).gsonSanitized()
         } catch (e: Exception) {
-            Log.w("ServicePlugin", "VpnOptions parse failed, using defaults: ${e.message}")
+            DiagnosticLog.e(
+                "ServicePlugin",
+                "VpnOptions parse failed, using defaults: ${e.message}",
+                e,
+            )
             VpnOptions()
         }
         if (options.enable && GlobalState.runStateFlow.value != RunState.START) {
@@ -305,7 +326,13 @@ class ServicePlugin :
     private fun handleStop(result: MethodChannel.Result) {
         launch {
             runCatching { Service.stopService() }
-                .onFailure { Log.w("ServicePlugin", "stopService failed: ${it.message}") }
+                .onFailure {
+                    DiagnosticLog.e(
+                        "ServicePlugin",
+                        "stopService failed: ${it.message}",
+                        it,
+                    )
+                }
             GlobalState.runTime = 0L
             com.follow.clashx.common.SavedParams.setVpnActive(false)
             GlobalState.runStateFlow.tryEmit(RunState.STOP)
@@ -331,7 +358,13 @@ class ServicePlugin :
         CommonGlobalState.log("updateNotificationParams: titleLen=${params.title?.length ?: 0}")
         launch {
             runCatching { Service.updateNotificationParams(params) }
-                .onFailure { Log.w("ServicePlugin", "updateNotificationParams failed: ${it.message}") }
+                .onFailure {
+                    DiagnosticLog.e(
+                        "ServicePlugin",
+                        "updateNotificationParams failed: ${it.message}",
+                        it,
+                    )
+                }
             result.successOnMain(true)
         }
     }
@@ -392,7 +425,11 @@ class ServicePlugin :
         }.onSuccess {
             result.successOnMain(true)
         }.onFailure {
-            Log.w("ServicePlugin", "showSubscriptionNotification failed: ${it.message}")
+            DiagnosticLog.e(
+                "ServicePlugin",
+                "showSubscriptionNotification failed: ${it.message}",
+                it,
+            )
             result.errorOnMain("subscription_notification_failed", it.message, null)
         }
     }
