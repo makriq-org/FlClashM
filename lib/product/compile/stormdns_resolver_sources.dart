@@ -499,6 +499,11 @@ class StormDnsResolverSourceParser {
 /// Private addresses are perfectly valid *inside* a list; this only rejects a
 /// list URL that would make the app fetch from the local device or network.
 bool isSafeResolverListUrl(Uri uri) {
+  try {
+    if (uri.hasPort && (uri.port < 1 || uri.port > 65535)) return false;
+  } on FormatException {
+    return false;
+  }
   if (uri.scheme != 'https') return false;
   if (uri.userInfo.isNotEmpty) return false;
   if (uri.hasFragment) return false;

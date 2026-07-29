@@ -38,9 +38,9 @@ connectivity-check:
 |-------|---------|--------------|
 | `urls` | — | Addresses to check (public HTTP(S), no credentials or fragments) |
 | `required` | `false` | Whether the check is mandatory for startup |
-| `timeout` | `5s` | Per-request timeout, seconds |
-| `startup-timeout` | `30s` (`2m` for `stormdns`) | Overall check budget at startup, seconds |
-| `retry-interval` | `1s` | Pause between attempts, seconds |
+| `timeout` | `5s` | Per-request timeout |
+| `startup-timeout` | `30s` (`2m` for `stormdns`) | Overall check budget at startup |
+| `retry-interval` | `1s` | Pause between attempts |
 | `requests` | `1` | How many requests to make |
 | `concurrency` | `1` | How many requests in parallel |
 | `min-success-ratio` | — | Minimum fraction of successful responses (without it, one is enough) |

@@ -38,9 +38,9 @@ connectivity-check:
 |------|--------|------|
 | `urls` | — | 要检查的地址（公网 HTTP(S)，不含凭据或片段） |
 | `required` | `false` | 该检查是否为启动所必需 |
-| `timeout` | `5s` | 单次请求超时（秒） |
-| `startup-timeout` | `30s`（`stormdns` 为 `2m`） | 启动时的总检查预算（秒） |
-| `retry-interval` | `1s` | 重试间隔（秒） |
+| `timeout` | `5s` | 单次请求超时 |
+| `startup-timeout` | `30s`（`stormdns` 为 `2m`） | 启动时的总检查预算 |
+| `retry-interval` | `1s` | 重试间隔 |
 | `requests` | `1` | 请求次数 |
 | `concurrency` | `1` | 并行请求数 |
 | `min-success-ratio` | — | 成功响应的最小比例（不设则一次成功即可） |

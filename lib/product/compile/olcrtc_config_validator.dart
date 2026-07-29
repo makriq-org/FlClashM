@@ -241,6 +241,10 @@ class OlcRtcConfigValidator {
         uri.host.isNotEmpty &&
         uri.hasPort &&
         uri.port >= 1 &&
-        uri.port <= 65535;
+        uri.port <= 65535 &&
+        uri.userInfo.isEmpty &&
+        uri.path.isEmpty &&
+        uri.query.isEmpty &&
+        uri.fragment.isEmpty;
   }
 }

@@ -55,7 +55,16 @@ void main() {
       () => validator.validate(config(dns: null)),
       throwsA(isA<FormatException>()),
     );
-    for (final dns in ['1.1.1.1', '1.1.1.1:0', '1.1.1.1:65536', ':53']) {
+    for (final dns in [
+      '1.1.1.1',
+      '1.1.1.1:0',
+      '1.1.1.1:65536',
+      ':53',
+      'user@1.1.1.1:53',
+      '1.1.1.1:53/path',
+      '1.1.1.1:53?query',
+      '1.1.1.1:53#fragment',
+    ]) {
       expect(
         () => validator.validate(config(dns: dns)),
         throwsA(isA<FormatException>()),
