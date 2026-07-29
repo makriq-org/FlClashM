@@ -96,6 +96,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     String targetPath, {
     required String expectedSha256,
     void Function(int received, int total)? onReceiveProgress,
+    AppUpdateDownloadCancellation? cancellation,
   }) async {
     downloadedAssets.add(asset.browserDownloadUrl);
     final bytes = assetBytesByUrl[asset.browserDownloadUrl];
@@ -120,10 +121,11 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     required ReleaseAsset asset,
     required Future<T> Function(
       void Function(int received, int total) onReceiveProgress,
+      AppUpdateDownloadCancellation cancellation,
     ) downloadTask,
   }) async {
     downloadProgressCalls++;
-    return downloadTask((received, total) {});
+    return downloadTask((received, total) {}, AppUpdateDownloadCancellation());
   }
 
   @override
@@ -160,6 +162,7 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
     String url,
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
+    AppUpdateDownloadCancellation? cancellation,
   }) async {
     downloadCalls.add(url);
     if (failedDownloadUrls.contains(url)) {

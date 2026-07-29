@@ -84,6 +84,8 @@ class AppUpdateService {
       if (action == AppUpdatePromptAction.download) {
         try {
           await _downloadAndInstallRelease(release);
+        } on AppUpdateDownloadCancelledException {
+          // Пользователь сам прервал загрузку — это не ошибка.
         } catch (error) {
           await platform.showUpdateInstallError(
             message: '$error',
@@ -142,16 +144,26 @@ class AppUpdateService {
       tempFile.deleteSync();
     }
 
-    final actualSha256 = await platform.showDownloadProgress<String>(
-      release: release,
-      asset: androidAsset.apkAsset,
-      downloadTask: (onReceiveProgress) => platform.downloadReleaseAsset(
-        androidAsset.apkAsset,
-        tempFile.path,
-        expectedSha256: expectedSha256,
-        onReceiveProgress: onReceiveProgress,
-      ),
-    );
+    final String actualSha256;
+    try {
+      actualSha256 = await platform.showDownloadProgress<String>(
+        release: release,
+        asset: androidAsset.apkAsset,
+        downloadTask: (onReceiveProgress, cancellation) =>
+            platform.downloadReleaseAsset(
+          androidAsset.apkAsset,
+          tempFile.path,
+          expectedSha256: expectedSha256,
+          onReceiveProgress: onReceiveProgress,
+          cancellation: cancellation,
+        ),
+      );
+    } on AppUpdateDownloadCancelledException {
+      if (tempFile.existsSync()) {
+        tempFile.deleteSync();
+      }
+      rethrow;
+    }
 
     if (actualSha256 != expectedSha256) {
       await tempFile.delete();

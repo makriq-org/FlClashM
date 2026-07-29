@@ -714,6 +714,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Pre-release`
+  String get preReleaseLabel {
+    return Intl.message(
+      'Pre-release',
+      name: 'preReleaseLabel',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `AccessControl`
   String get accessControl {
     return Intl.message(
@@ -1532,6 +1542,11 @@ class AppLocalizations {
       desc: '',
       args: [],
     );
+  }
+
+  /// `Preparing…`
+  String get preparing {
+    return Intl.message('Preparing…', name: 'preparing', desc: '', args: []);
   }
 
   /// `Discover the new version`
