@@ -111,6 +111,14 @@
       ]
     },
     {
+      "path": "lib/views/application_setting.dart",
+      "boundary": "ui-product-services",
+      "reason": "Settings items ask the product layer which switches the subscription provider actually manages, instead of hardcoding the lock in base UI.",
+      "targets": [
+        "lib/product/subscription/provider_managed_app_settings.dart"
+      ]
+    },
+    {
       "path": "lib/views/profiles/profiles.dart",
       "boundary": "ui-product-advisory",
       "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",

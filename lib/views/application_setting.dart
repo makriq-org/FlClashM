@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/subscription/provider_managed_app_settings.dart';
 import 'package:flclashx/providers/config.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -89,6 +90,11 @@ class OverrideProviderSettingsItem extends ConsumerWidget {
     final overrideProviderSettings = ref.watch(
       appSettingProvider.select((state) => state.overrideProviderSettings),
     );
+    // Без провайдерских настроек переопределять нечего, и плашка про
+    // управление провайдером на свежей установке просто вводит в заблуждение.
+    final managedByProvider = ref.watch(
+      productProviderManagesAppSettingsProvider,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -106,7 +112,7 @@ class OverrideProviderSettingsItem extends ConsumerWidget {
             },
           ),
         ),
-        if (!overrideProviderSettings)
+        if (managedByProvider && !overrideProviderSettings)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Theme.of(context)
@@ -147,27 +153,19 @@ class CloseConnectionsItem extends ConsumerWidget {
     final closeConnections = ref.watch(
       appSettingProvider.select((state) => state.closeConnections),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
-    );
-    final isEnabled = overrideProviderSettings;
-    return Opacity(
-      opacity: isEnabled ? 1.0 : 0.5,
-      child: ListItem.switchItem(
-        title: Text(appLocalizations.autoCloseConnections),
-        subtitle: Text(appLocalizations.autoCloseConnectionsDesc),
-        delegate: SwitchDelegate(
-          value: closeConnections,
-          onChanged: isEnabled
-              ? (value) async {
-                  ref.read(appSettingProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          closeConnections: value,
-                        ),
-                      );
-                }
-              : null,
-        ),
+    // Провайдер этой настройкой не управляет — запирать её нечем.
+    return ListItem.switchItem(
+      title: Text(appLocalizations.autoCloseConnections),
+      subtitle: Text(appLocalizations.autoCloseConnectionsDesc),
+      delegate: SwitchDelegate(
+        value: closeConnections,
+        onChanged: (value) async {
+          ref.read(appSettingProvider.notifier).updateState(
+                (state) => state.copyWith(
+                  closeConnections: value,
+                ),
+              );
+        },
       ),
     );
   }
@@ -206,10 +204,11 @@ class MinimizeItem extends ConsumerWidget {
     final minimizeOnExit = ref.watch(
       appSettingProvider.select((state) => state.minimizeOnExit),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
+    final isEnabled = !ref.watch(
+      productAppSettingLockedProvider(
+        ProductManagedAppSetting.minimizeOnExit,
+      ),
     );
-    final isEnabled = overrideProviderSettings;
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: ListItem.switchItem(
@@ -240,10 +239,11 @@ class AutoLaunchItem extends ConsumerWidget {
     final autoLaunch = ref.watch(
       appSettingProvider.select((state) => state.autoLaunch),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
+    final isEnabled = !ref.watch(
+      productAppSettingLockedProvider(
+        ProductManagedAppSetting.autoLaunch,
+      ),
     );
-    final isEnabled = overrideProviderSettings;
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: ListItem.switchItem(
@@ -274,10 +274,11 @@ class SilentLaunchItem extends ConsumerWidget {
     final silentLaunch = ref.watch(
       appSettingProvider.select((state) => state.silentLaunch),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
+    final isEnabled = !ref.watch(
+      productAppSettingLockedProvider(
+        ProductManagedAppSetting.silentLaunch,
+      ),
     );
-    final isEnabled = overrideProviderSettings;
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: ListItem.switchItem(
@@ -308,10 +309,11 @@ class AutoRunItem extends ConsumerWidget {
     final autoRun = ref.watch(
       appSettingProvider.select((state) => state.autoRun),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
+    final isEnabled = !ref.watch(
+      productAppSettingLockedProvider(
+        ProductManagedAppSetting.autoRun,
+      ),
     );
-    final isEnabled = overrideProviderSettings;
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: ListItem.switchItem(
@@ -498,10 +500,11 @@ class AutoCheckUpdateItem extends ConsumerWidget {
     final autoCheckUpdate = ref.watch(
       appSettingProvider.select((state) => state.autoCheckUpdate),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
+    final isEnabled = !ref.watch(
+      productAppSettingLockedProvider(
+        ProductManagedAppSetting.autoCheckUpdate,
+      ),
     );
-    final isEnabled = overrideProviderSettings;
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.5,
       child: ListItem.switchItem(
@@ -532,28 +535,20 @@ class IncludePrereleaseUpdatesItem extends ConsumerWidget {
     final includePrereleaseUpdates = ref.watch(
       appSettingProvider.select((state) => state.includePrereleaseUpdates),
     );
-    final overrideProviderSettings = ref.watch(
-      appSettingProvider.select((state) => state.overrideProviderSettings),
-    );
-    final isEnabled = overrideProviderSettings;
-    return Opacity(
-      opacity: isEnabled ? 1.0 : 0.5,
-      child: ListItem.switchItem(
-        title: Text(appLocalizations.includePrereleaseUpdates),
-        subtitle: Text(appLocalizations.includePrereleaseUpdatesDesc),
-        delegate: SwitchDelegate(
-          value: includePrereleaseUpdates,
-          onChanged: isEnabled
-              ? (value) {
-                  ref.read(appSettingProvider.notifier).updateState(
-                        (state) => state.copyWith(
-                          includePrereleaseUpdates: value,
-                          skippedAppUpdateTagName: "",
-                        ),
-                      );
-                }
-              : null,
-        ),
+    // Провайдер этой настройкой не управляет — запирать её нечем.
+    return ListItem.switchItem(
+      title: Text(appLocalizations.includePrereleaseUpdates),
+      subtitle: Text(appLocalizations.includePrereleaseUpdatesDesc),
+      delegate: SwitchDelegate(
+        value: includePrereleaseUpdates,
+        onChanged: (value) {
+          ref.read(appSettingProvider.notifier).updateState(
+                (state) => state.copyWith(
+                  includePrereleaseUpdates: value,
+                  skippedAppUpdateTagName: "",
+                ),
+              );
+        },
       ),
     );
   }
