@@ -28,6 +28,7 @@ class CommonService : Service(), IBaseService {
 
     override fun onCreate() {
         super.onCreate()
+        GlobalState.lifecycle("CommonService created")
         startForegroundCompat()
         handleCreate()
     }
@@ -67,6 +68,7 @@ class CommonService : Service(), IBaseService {
     }
 
     override fun onDestroy() {
+        GlobalState.lifecycle("CommonService destroying")
         runCatching { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(3000L) { loader.stop() } } }
         handleDestroy()
         super.onDestroy()

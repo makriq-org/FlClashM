@@ -180,6 +180,10 @@ jobs:
             --dart-define=APP_ENV=pre \
             --dart-define=CORE_VERSION="$core_version"
 
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew :common:testDebugUnitTest :service:testDebugUnitTest
+
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk
 

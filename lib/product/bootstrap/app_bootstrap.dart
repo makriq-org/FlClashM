@@ -7,9 +7,11 @@ import '../../application.dart';
 import '../../clash/core.dart';
 import '../../common/android.dart';
 import '../../common/http.dart';
+import '../../common/path.dart';
 import '../../common/system.dart';
 import '../../state.dart';
 import '../android/android_entrypoint.dart';
+import '../diagnostics/diagnostic_recorder.dart';
 import '../platform/platform_profile.dart';
 
 class AppBootstrap {
@@ -17,7 +19,13 @@ class AppBootstrap {
 
   static Future<void> run() async {
     WidgetsFlutterBinding.ensureInitialized();
+    await productDiagnosticRecorder.initialize(await appPath.homeDirPath);
+    productDiagnosticRecorder.installErrorHandlers();
 
+    await _runInitialized();
+  }
+
+  static Future<void> _runInitialized() async {
     if (!productPlatform.supported) {
       throw UnsupportedError(
         'FlClashM is Android-only. Host platform: ${productPlatform.hostPlatform.name}',
