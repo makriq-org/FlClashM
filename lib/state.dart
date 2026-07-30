@@ -500,6 +500,12 @@ class GlobalState {
     activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
     _applyRuntimeConfigState(runtimePlan.config);
+    for (final diagnostic in runtimePlan.diagnostics) {
+      commonPrint.log(diagnostic);
+      if (config.appSetting.openLogs) {
+        showNotifier(diagnostic);
+      }
+    }
   }
 
   Future<InitParams> _buildInitParams() async => InitParams(
@@ -515,6 +521,7 @@ class GlobalState {
 
   SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
         isAndroid: Platform.isAndroid,
+        androidSecure: profileRequestsAndroidSecure(config.currentProfile),
       );
 
   RuntimePlanBuildContext _buildRuntimePlanContext({
@@ -594,7 +601,7 @@ class GlobalState {
           parsedProxyGroupOrder.add(name);
         }
         if (name == GroupName.GLOBAL.name) {
-          parsedGlobalOverride = group["flclashx-override"] == true;
+          parsedGlobalOverride = resolveGlobalGroupOverride(group);
         }
       }
     }

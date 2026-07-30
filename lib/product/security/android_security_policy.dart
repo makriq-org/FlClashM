@@ -11,34 +11,30 @@ class AndroidSecurityPolicy implements SecurityPolicy {
     required ClashConfig patchConfig,
     required SecurityPolicyContext context,
   }) =>
-      context.isAndroid ? patchConfig.copyWith.tun(enable: true) : patchConfig;
+      context.isAndroid && context.androidSecure
+          ? patchConfig.copyWith(mixedPort: 0)
+          : patchConfig;
 
   @override
   UpdateParams secureRuntimeUpdate({
     required UpdateParams updateParams,
     required SecurityPolicyContext context,
-  }) => context.isAndroid
-      ? updateParams.copyWith(tun: updateParams.tun.copyWith(enable: true))
-      : updateParams;
+  }) =>
+      context.isAndroid && context.androidSecure
+          ? updateParams.copyWith(mixedPort: 0)
+          : updateParams;
 
   @override
   SecuredProfilePatch secureProfile({
     required CompiledProfilePatch compiledProfile,
     required SecurityPolicyContext context,
-  }) {
-    if (!context.isAndroid) {
-      return SecuredProfilePatch(
-        patchConfig: compiledProfile.patchConfig,
+  }) =>
+      SecuredProfilePatch(
+        patchConfig: context.isAndroid && context.androidSecure
+            ? compiledProfile.patchConfig.copyWith(mixedPort: 0)
+            : compiledProfile.patchConfig,
         metadata: compiledProfile.metadata,
       );
-    }
-
-    return SecuredProfilePatch(
-      patchConfig: compiledProfile.patchConfig.copyWith.tun(enable: true),
-      metadata: compiledProfile.metadata,
-      runtimeConstraints: const RuntimeSecurityConstraints(enforceTun: true),
-    );
-  }
 }
 
 const androidSecurityPolicy = AndroidSecurityPolicy();

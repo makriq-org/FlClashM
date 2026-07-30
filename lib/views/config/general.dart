@@ -257,17 +257,13 @@ class PortItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // flclashx-androidsecure header forces mixed-port=0 on Android. The port
+    // The provider androidsecure header forces mixed-port=0 on Android. The port
     // field becomes meaningless in that case, so hide it entirely rather than
     // showing a disabled "0" row the user can't do anything about.
     if (Platform.isAndroid) {
       final secure = ref.watch(
-        currentProfileProvider.select(
-          (p) =>
-              p?.providerHeaders['flclashx-androidsecure']
-                  ?.trim()
-                  .toLowerCase() ==
-              'true',
+        currentProductAdvisoryProvider.select(
+          (advisory) => advisory.behavior.androidSecure,
         ),
       );
       if (secure) {

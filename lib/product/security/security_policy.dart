@@ -5,9 +5,13 @@ import '../compile/runtime_plan.dart';
 
 @immutable
 class SecurityPolicyContext {
-  const SecurityPolicyContext({required this.isAndroid});
+  const SecurityPolicyContext({
+    required this.isAndroid,
+    this.androidSecure = false,
+  });
 
   final bool isAndroid;
+  final bool androidSecure;
 }
 
 @immutable

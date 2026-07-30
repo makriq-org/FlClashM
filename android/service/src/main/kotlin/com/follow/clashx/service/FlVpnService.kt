@@ -3,8 +3,10 @@ package com.follow.clashx.service
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
@@ -464,6 +466,20 @@ class FlVpnService : VpnService(), IBaseService {
         }
 
         if (options.allowBypass) builder.allowBypass()
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            options.systemProxy &&
+            options.port in 1..65535
+        ) {
+            builder.setHttpProxy(
+                ProxyInfo.buildDirectProxy(
+                    "127.0.0.1",
+                    options.port,
+                    options.bypassDomain,
+                ),
+            )
+        }
 
         builder.setBlocking(false)
 

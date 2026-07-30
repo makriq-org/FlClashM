@@ -62,6 +62,7 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
   required String profileId,
   List<String> installedPackageNames = const [],
   ReadProfileSplitTunnelingRemoteSource? readRemoteSource,
+  void Function(String diagnostic)? onIgnoredLocalPath,
 }) async {
   if (!isAndroid) {
     return ResolvedProfileSplitTunneling(
@@ -79,23 +80,43 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
     tun['exclude-package'],
     fieldName: 'tun.exclude-package',
   );
-  final includePackageSources = _asPackageListSources(
+  final includePackageFileSources = _asPackageListSources(
     tun['include-package-file'],
     fieldName: 'tun.include-package-file',
   );
-  final excludePackageSources = _asPackageListSources(
+  final excludePackageFileSources = _asPackageListSources(
     tun['exclude-package-file'],
     fieldName: 'tun.exclude-package-file',
   );
-  final includePackageUrls = _asPackageListSources(
+  final rawIncludePackageUrls = _asPackageListSources(
     tun['include-package-url'],
     fieldName: 'tun.include-package-url',
     preferUrl: true,
   );
-  final excludePackageUrls = _asPackageListSources(
+  final rawExcludePackageUrls = _asPackageListSources(
     tun['exclude-package-url'],
     fieldName: 'tun.exclude-package-url',
     preferUrl: true,
+  );
+  final includePackageSources = _remotePackageListSources(
+    includePackageFileSources,
+    fieldName: 'tun.include-package-file',
+    onIgnoredLocalPath: onIgnoredLocalPath,
+  );
+  final excludePackageSources = _remotePackageListSources(
+    excludePackageFileSources,
+    fieldName: 'tun.exclude-package-file',
+    onIgnoredLocalPath: onIgnoredLocalPath,
+  );
+  final includePackageUrls = _remotePackageListSources(
+    rawIncludePackageUrls,
+    fieldName: 'tun.include-package-url',
+    onIgnoredLocalPath: onIgnoredLocalPath,
+  );
+  final excludePackageUrls = _remotePackageListSources(
+    rawExcludePackageUrls,
+    fieldName: 'tun.exclude-package-url',
+    onIgnoredLocalPath: onIgnoredLocalPath,
   );
   final mergedIncludeSources = [
     ...includePackageSources,
@@ -110,6 +131,16 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
       inlineExcludeSelectors.isEmpty &&
       mergedIncludeSources.isEmpty &&
       mergedExcludeSources.isEmpty) {
+    if (includePackageFileSources.any((source) => source.path != null) ||
+        excludePackageFileSources.any((source) => source.path != null)) {
+      final normalizedTun = Map<String, dynamic>.from(tun)
+        ..remove('include-package-file')
+        ..remove('exclude-package-file');
+      return ResolvedProfileSplitTunneling(
+        config: Map<String, dynamic>.from(rawConfig)..['tun'] = normalizedTun,
+        accessControl: null,
+      );
+    }
     return ResolvedProfileSplitTunneling(
       config: rawConfig,
       accessControl: null,
@@ -215,6 +246,29 @@ Future<ResolvedProfileSplitTunneling> resolveAndroidProfileSplitTunneling({
       excludePackages: excludePackages,
     ),
   );
+}
+
+List<_PackageListSource> _remotePackageListSources(
+  List<_PackageListSource> sources, {
+  required String fieldName,
+  void Function(String diagnostic)? onIgnoredLocalPath,
+}) {
+  var ignoredLocalPath = false;
+  final remoteSources = <_PackageListSource>[];
+  for (final source in sources) {
+    if (source.path != null) {
+      ignoredLocalPath = true;
+    }
+    if (source.url != null) {
+      remoteSources.add(_PackageListSource(url: source.url));
+    }
+  }
+  if (ignoredLocalPath) {
+    onIgnoredLocalPath?.call(
+      'Android ignored unsupported local profile path `$fieldName`.',
+    );
+  }
+  return remoteSources;
 }
 
 AccessControl? _buildAccessControlOverride({
@@ -400,19 +454,13 @@ Future<List<String>> _readPackageLists(
   Future<List<String>> readSource(_PackageListSource source) async {
     final sourceFieldName =
         source.url != null ? fieldName.replaceAll('-file', '-url') : fieldName;
-    final readResult = source.url != null
-        ? await _readPackageListFromRemoteSource(
-            source,
-            profilesPath: profilesPath,
-            profileId: profileId,
-            fieldName: sourceFieldName,
-            readRemoteSource: readRemoteSource,
-          )
-        : await _readPackageListFromLocalSource(
-            source,
-            profilesPath: profilesPath,
-            fieldName: sourceFieldName,
-          );
+    final readResult = await _readPackageListFromRemoteSource(
+      source,
+      profilesPath: profilesPath,
+      profileId: profileId,
+      fieldName: sourceFieldName,
+      readRemoteSource: readRemoteSource,
+    );
     final selectors = _parsePackageListFileContent(
       readResult.content,
       fieldName: sourceFieldName,
@@ -439,33 +487,6 @@ Future<List<String>> _readPackageLists(
     results.forEach(packages.addAll);
   }
   return packages;
-}
-
-Future<_PackageListReadResult> _readPackageListFromLocalSource(
-  _PackageListSource source, {
-  required String profilesPath,
-  required String fieldName,
-}) async {
-  final rawPath = source.path;
-  if (rawPath == null || rawPath.isEmpty) {
-    throw FormatException(
-      'Package list file for `$fieldName` is missing a valid local path.',
-    );
-  }
-  final resolvedPath = _resolvePackageListPath(
-    rawPath,
-    profilesPath,
-    fieldName: fieldName,
-  );
-  final file = File(resolvedPath);
-  if (!file.existsSync()) {
-    throw FormatException(
-      'Package list file for `$fieldName` was not found: $resolvedPath',
-    );
-  }
-  return _PackageListReadResult(
-    content: await file.readAsString(),
-  );
 }
 
 Future<_PackageListReadResult> _readPackageListFromRemoteSource(
@@ -575,79 +596,6 @@ Future<String> _defaultReadRemoteSource(String url) async {
   return response.data?.toString() ?? '';
 }
 
-String _resolvePackageListPath(
-  String rawPath,
-  String profilesPath, {
-  required String fieldName,
-}) {
-  final normalizedProfilesPath = path.normalize(path.absolute(profilesPath));
-  final normalizedRawPath = rawPath.trim();
-  final resolvedPath = path.normalize(
-    path.isAbsolute(normalizedRawPath)
-        ? normalizedRawPath
-        : path.join(normalizedProfilesPath, normalizedRawPath),
-  );
-  if (!_isPathWithinDirectory(resolvedPath, normalizedProfilesPath)) {
-    throw FormatException(
-      'Package list path for `$fieldName` must stay within the profiles '
-      'directory: $rawPath',
-    );
-  }
-  final canonicalProfilesPath =
-      _tryResolveCanonicalPath(normalizedProfilesPath) ??
-          normalizedProfilesPath;
-  final canonicalResolvedPath = _resolvePathAgainstExistingAncestor(
-    resolvedPath,
-  );
-  if (!_isPathWithinDirectory(canonicalResolvedPath, canonicalProfilesPath)) {
-    throw FormatException(
-      'Package list path for `$fieldName` must stay within the profiles '
-      'directory: $rawPath',
-    );
-  }
-  return resolvedPath;
-}
-
-bool _isPathWithinDirectory(String pathValue, String directoryPath) =>
-    pathValue == directoryPath || path.isWithin(directoryPath, pathValue);
-
-String _resolvePathAgainstExistingAncestor(String resolvedPath) {
-  final existingAncestor = _findExistingAncestor(resolvedPath);
-  if (existingAncestor == null) {
-    return resolvedPath;
-  }
-  final canonicalAncestor =
-      _tryResolveCanonicalPath(existingAncestor) ?? existingAncestor;
-  final relativeSuffix = path.relative(resolvedPath, from: existingAncestor);
-  return path.normalize(path.join(canonicalAncestor, relativeSuffix));
-}
-
-String? _findExistingAncestor(String pathValue) {
-  var current = path.normalize(pathValue);
-  while (true) {
-    if (FileSystemEntity.typeSync(current) != FileSystemEntityType.notFound) {
-      return current;
-    }
-    final parent = path.dirname(current);
-    if (parent == current) {
-      return null;
-    }
-    current = parent;
-  }
-}
-
-String? _tryResolveCanonicalPath(String pathValue) {
-  try {
-    return File(pathValue).resolveSymbolicLinksSync();
-  } catch (_) {
-    try {
-      return Directory(pathValue).resolveSymbolicLinksSync();
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
 String _resolvePackageListCachePath(
   _PackageListSource source, {
   required String profilesPath,
@@ -659,10 +607,6 @@ String _resolvePackageListCachePath(
     throw FormatException(
       'Package list URL for `$fieldName` is missing a cacheable source.',
     );
-  }
-  final rawPath = source.path?.trim();
-  if (rawPath != null && rawPath.isNotEmpty) {
-    return _resolvePackageListPath(rawPath, profilesPath, fieldName: fieldName);
   }
   return path.join(
     profilesPath,
