@@ -8,6 +8,10 @@
 | **Предварительный** | `v<versionName>-<suffix>` |
 | **`applicationId`** | `com.makriq.flclash` |
 
+При синхронизации с FlClashX изменения апстрима тоже учитываются при выборе уровня повышения версии по
+их эффекту для пользователей FlClashM. Версию FlClashX в `versionName` форка не
+переносим.
+
 ## 📂 Состав релиза
 
 - `FlClashM-android-universal.apk`
