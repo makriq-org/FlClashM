@@ -21,13 +21,9 @@ void main() {
       }
     });
 
-    test('expands local package lists into an access-control override',
+    test('ignores local package lists without rejecting the Android profile',
         () async {
-      final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
-        ..createSync(recursive: true);
-      File(path.join(profilesDir.path, 'lists', 'exclude.txt'))
-        ..createSync(recursive: true)
-        ..writeAsStringSync('org.telegram.messenger\ncom.android.chrome\n');
+      final diagnostics = <String>[];
 
       final resolved = await resolveAndroidProfileSplitTunneling(
         rawConfig: {
@@ -36,26 +32,19 @@ void main() {
           },
         },
         isAndroid: true,
-        profilesPath: profilesDir.path,
+        profilesPath: tempDir.path,
         profileId: 'profile-1',
-        installedPackageNames: const [
-          'org.telegram.messenger',
-          'com.android.chrome',
-        ],
+        onIgnoredLocalPath: diagnostics.add,
       );
 
       expect(
-        resolved.config['tun']['exclude-package'],
-        ['org.telegram.messenger', 'com.android.chrome'],
-      );
-      expect(
           resolved.config['tun'].containsKey('exclude-package-file'), isFalse);
+      expect(resolved.accessControl, isNull);
       expect(
-        resolved.accessControl,
-        const AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: ['org.telegram.messenger', 'com.android.chrome'],
+        diagnostics,
+        contains(
+          'Android ignored unsupported local profile path '
+          '`tun.exclude-package-file`.',
         ),
       );
     });
@@ -366,33 +355,39 @@ void main() {
       );
     });
 
-    test('rejects cache paths outside the profiles directory', () async {
+    test('ignores user-selected cache paths for remote package lists',
+        () async {
       final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
         ..createSync(recursive: true);
+      final diagnostics = <String>[];
 
-      await expectLater(
-        () => resolveAndroidProfileSplitTunneling(
-          rawConfig: {
-            'tun': {
-              'include-package-url': [
-                {
-                  'url': 'https://example.com/include.txt',
-                  'path': '../outside.txt',
-                },
-              ],
-            },
+      final resolved = await resolveAndroidProfileSplitTunneling(
+        rawConfig: {
+          'tun': {
+            'include-package-url': [
+              {
+                'url': 'https://example.com/include.txt',
+                'path': '../outside.txt',
+              },
+            ],
           },
-          isAndroid: true,
-          profilesPath: profilesDir.path,
-          profileId: 'profile-6',
-          readRemoteSource: (_) async => 'com.termux\n',
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('must stay within the profiles directory'),
-          ),
+        },
+        isAndroid: true,
+        profilesPath: profilesDir.path,
+        profileId: 'profile-6',
+        installedPackageNames: const ['com.termux'],
+        readRemoteSource: (_) async => 'com.termux\n',
+        onIgnoredLocalPath: diagnostics.add,
+      );
+
+      expect(resolved.config['tun']['include-package'], ['com.termux']);
+      expect(
+          File(path.join(tempDir.path, 'outside.txt')).existsSync(), isFalse);
+      expect(
+        diagnostics,
+        contains(
+          'Android ignored unsupported local profile path '
+          '`tun.include-package-url`.',
         ),
       );
     });

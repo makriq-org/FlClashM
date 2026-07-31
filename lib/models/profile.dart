@@ -19,6 +19,21 @@ typedef ValidateProfileConfigCallback = Future<String> Function(
   String configText,
 );
 
+bool isFlClashProviderHeader(String name) {
+  final normalized = name.toLowerCase();
+  return normalized.startsWith('flclashm-') ||
+      normalized.startsWith('flclashx-');
+}
+
+String? resolveFlClashProviderHeader(
+  Map<String, String> headers,
+  String suffix,
+) {
+  final normalizedSuffix = suffix.trim().toLowerCase();
+  return headers['flclashm-$normalizedSuffix'] ??
+      headers['flclashx-$normalizedSuffix'];
+}
+
 @freezed
 class SubscriptionInfo with _$SubscriptionInfo {
   const factory SubscriptionInfo({
@@ -219,7 +234,7 @@ extension ProfileExtension on Profile {
     }
 
     response.headers.forEach((name, values) {
-      if (name.toLowerCase().startsWith('flclashm-') && values.isNotEmpty) {
+      if (isFlClashProviderHeader(name) && values.isNotEmpty) {
         providerHeaders[name.toLowerCase()] = values.first;
       }
     });
@@ -234,7 +249,8 @@ extension ProfileExtension on Profile {
     }
 
     String updatedUrl = url;
-    final newDomain = providerHeaders['flclashm-newdomain'];
+    final newDomain =
+        resolveFlClashProviderHeader(providerHeaders, 'newdomain');
     if (newDomain != null && newDomain.isNotEmpty) {
       final currentUri = Uri.tryParse(url);
       if (currentUri != null && currentUri.host != newDomain) {

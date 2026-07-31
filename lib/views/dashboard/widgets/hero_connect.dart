@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -124,29 +123,6 @@ String _daysWord(int days) {
   }
 }
 
-String? _decodeAnnounce(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return null;
-  final decoded = _decodeBase64(trimmed);
-  if (decoded == null || decoded.trim().isEmpty) return null;
-  return decoded.trim();
-}
-
-String? _decodeBase64(String? value) {
-  if (value == null || value.trim().isEmpty) return null;
-  var text = value.trim();
-  if (text.startsWith('base64:')) text = text.substring(7).trim();
-  if (text.isEmpty) return null;
-  try {
-    final normalized = base64.normalize(text);
-    final decoded = utf8.decode(base64.decode(normalized)).trim();
-    return decoded.isEmpty ? null : decoded;
-  } catch (_) {
-    return value.trim().isEmpty ? null : value.trim();
-  }
-}
-
 // ----------------------------------------------------------------------------
 // Focusable tap wrapper — makes a tappable area reachable by a D-pad/remote
 // (Android TV). The hero board's controls were bare GestureDetectors, which
@@ -231,10 +207,11 @@ class HeroConnect extends ConsumerWidget {
 
     final isReady = state.isInit;
     final profile = ref.watch(currentProfileProvider);
-    final headers = profile?.providerHeaders ?? {};
-    final serviceName = _decodeBase64(headers['flclashx-servicename']) ?? appName;
-    final logoUrl = _decodeBase64(headers['flclashx-servicelogo']);
-    final announce = _decodeAnnounce(headers['announce']);
+    final display = ref.watch(currentProductDisplayHintsProvider);
+    final serviceName =
+        display.serviceName.isEmpty ? appName : display.serviceName;
+    final logoUrl = display.serviceLogoUrl;
+    final announce = display.announcement;
     final sub = profile?.subscriptionInfo;
     // Only show the traffic card when there's something to show — a data limit or an
     // expiry. Unlimited + no expiry => hide it entirely.
@@ -244,17 +221,17 @@ class HeroConnect extends ConsumerWidget {
     // card) only appear when the matching condition is met:
     //   buyplan    -> less than 3 days left (expired included), time-limited plans
     //   buytraffic -> less than 10% of the limit remaining, capped plans
-    final buyPlanUrl = headers['flclashx-buyplan'];
-    final buyTrafficUrl = headers['flclashx-buytraffic'];
+    final buyPlanUrl = display.buyPlanUrl;
+    final buyTrafficUrl = display.buyTrafficUrl;
     var showBuyPlan = false;
     var showBuyTraffic = false;
     if (sub != null) {
-      if (buyPlanUrl != null && buyPlanUrl.isNotEmpty && sub.expire > 0) {
+      if (buyPlanUrl.isNotEmpty && sub.expire > 0) {
         showBuyPlan = DateTime.fromMillisecondsSinceEpoch(sub.expire * 1000)
                 .difference(DateTime.now()) <
             const Duration(days: 3);
       }
-      if (buyTrafficUrl != null && buyTrafficUrl.isNotEmpty && sub.total > 0) {
+      if (buyTrafficUrl.isNotEmpty && sub.total > 0) {
         final used = sub.upload + sub.download;
         showBuyTraffic = (sub.total - used) < sub.total * 0.1;
       }
@@ -269,9 +246,9 @@ class HeroConnect extends ConsumerWidget {
     // `flclashx-serverinfo` header: its selected leaf host (the real location),
     // or the sub-group's own name when the pick is itself a group (see
     // resolveToDisplayName). Fall back to the first group with a live selection.
-    final serverInfoHeader = headers['flclashx-serverinfo'];
-    if (serverInfoHeader != null && serverInfoHeader.isNotEmpty) {
-      final groupName = _decodeBase64(serverInfoHeader) ?? serverInfoHeader.trim();
+    final serverInfoHeader = display.serverInfoGroupName;
+    if (serverInfoHeader.isNotEmpty) {
+      final groupName = serverInfoHeader;
       final group = groups.getGroup(groupName);
       if (group != null) {
         activeGroup = group;
@@ -323,7 +300,7 @@ class HeroConnect extends ConsumerWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (announce != null && announce.isNotEmpty) ...[
+                if (announce.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   _AnnounceBanner(text: announce),
                 ],
@@ -333,7 +310,7 @@ class HeroConnect extends ConsumerWidget {
                   onUpdate: profile == null
                       ? null
                       : () => globalState.appController.updateProfile(profile),
-                  supportUrl: headers['support-url'],
+                  supportUrl: display.supportUrl,
                 ),
                 const SizedBox(height: 18),
                 if (hasSub) ...[

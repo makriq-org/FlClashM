@@ -38,6 +38,44 @@ void main() {
       expect(advisory.notices.hwidNotSupported, isTrue);
     });
 
+    test('accepts upstream headers and prefers the FlClashM prefix', () {
+      final advisory = ProductProviderAdvisory.fromHeaders({
+        'flclashx-servicename': base64.encode(utf8.encode('Upstream')),
+        'flclashm-servicename': base64.encode(utf8.encode('FlClashM')),
+        'flclashx-buyplan': 'https://upstream.example/renew',
+        'flclashm-buyplan': 'https://flclashm.example/renew',
+        'flclashx-buytraffic': 'https://example.com/traffic',
+        'flclashx-androidsecure': 'true',
+      });
+
+      expect(advisory.display.serviceName, 'FlClashM');
+      expect(
+        advisory.display.buyPlanUrl,
+        'https://flclashm.example/renew',
+      );
+      expect(
+        advisory.display.buyTrafficUrl,
+        'https://example.com/traffic',
+      );
+      expect(advisory.behavior.androidSecure, isTrue);
+    });
+
+    test('recognizes both provider header namespaces', () {
+      expect(isFlClashProviderHeader('FlClashM-Widgets'), isTrue);
+      expect(isFlClashProviderHeader('flclashx-view'), isTrue);
+      expect(isFlClashProviderHeader('subscription-userinfo'), isFalse);
+      expect(
+        resolveFlClashProviderHeader(
+          const {
+            'flclashx-newdomain': 'upstream.example',
+            'flclashm-newdomain': 'fork.example',
+          },
+          'newdomain',
+        ),
+        'fork.example',
+      );
+    });
+
     test('merges refresh headers while clearing volatile notice fields', () {
       final merged = ProductProviderAdvisory.mergeForRefresh(
         previous: {
@@ -58,6 +96,20 @@ void main() {
       expect(merged.containsKey('x-hwid-not-supported'), isFalse);
       expect(merged['flclashm-servicename'], 'service');
       expect(merged['flclashm-background'], 'https://example.com/bg.webp');
+    });
+
+    test('refresh replaces a stale equivalent from the other prefix', () {
+      final merged = ProductProviderAdvisory.mergeForRefresh(
+        previous: const {
+          'flclashm-servicename': 'old',
+        },
+        incoming: const {
+          'flclashx-servicename': 'new',
+        },
+      );
+
+      expect(merged.containsKey('flclashm-servicename'), isFalse);
+      expect(merged['flclashx-servicename'], 'new');
     });
 
     test('builds customization patch for add flow', () {

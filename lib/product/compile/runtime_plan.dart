@@ -47,6 +47,7 @@ class RuntimePlan {
     this.builtInProxyNodes = const [],
     required this.metadata,
     this.profileAccessControl,
+    this.diagnostics = const [],
   });
 
   const RuntimePlan.empty({
@@ -56,6 +57,7 @@ class RuntimePlan {
     this.files = const {},
     this.builtInProxyNodes = const [],
     this.profileAccessControl,
+    this.diagnostics = const [],
   })  : config = const <String, dynamic>{},
         metadata = null;
 
@@ -67,6 +69,7 @@ class RuntimePlan {
   final List<BuiltInProxyNodePlan> builtInProxyNodes;
   final CompiledProfileMetadata? metadata;
   final AccessControl? profileAccessControl;
+  final List<String> diagnostics;
 
   SetupParams toSetupParams() => SetupParams(
         config: config,

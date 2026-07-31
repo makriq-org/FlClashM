@@ -10,18 +10,6 @@ const _announceHeader = 'announce';
 const _supportUrlHeader = 'support-url';
 const _hwidLimitReachedHeader = 'x-hwid-max-devices-reached';
 const _hwidNotSupportedHeader = 'x-hwid-not-supported';
-const _serviceNameHeader = 'flclashm-servicename';
-const _serviceLogoHeader = 'flclashm-servicelogo';
-const _serverInfoHeader = 'flclashm-serverinfo';
-const _backgroundUrlHeader = 'flclashm-background';
-const _globalModeHeader = 'flclashm-globalmode';
-const _newDashboardHeader = 'flclashm-newboard';
-const _denyWidgetsHeader = 'flclashm-denywidgets';
-const _customBehaviorHeader = 'flclashm-custom';
-const _settingsHeader = 'flclashm-settings';
-const _themeHeader = 'flclashm-hex';
-const _dashboardLayoutHeader = 'flclashm-widgets';
-const _proxiesViewHeader = 'flclashm-view';
 const _clearedOnMissingRefreshHeaders = {
   _announceHeader,
   _supportUrlHeader,
@@ -41,6 +29,7 @@ class ProductProviderAdvisory {
     this.display = const ProductDisplayHints(),
     this.customization = const ProductCustomizationHints(),
     this.notices = const ProductNoticeHints(),
+    this.behavior = const ProductBehaviorHints(),
   });
 
   factory ProductProviderAdvisory.fromProfile(Profile? profile) =>
@@ -53,40 +42,64 @@ class ProductProviderAdvisory {
         display: ProductDisplayHints(
           announcement: _decodeAnnouncement(headers[_announceHeader]),
           supportUrl: _trimmedHeader(headers[_supportUrlHeader]),
-          serviceName: _decodeBase64Header(headers[_serviceNameHeader]),
-          serviceLogoUrl: _decodeBase64Header(headers[_serviceLogoHeader]),
-          serverInfoGroupName: _decodeBase64Header(headers[_serverInfoHeader]),
-          backgroundUrl: _trimmedHeader(headers[_backgroundUrlHeader]),
+          serviceName:
+              _decodeBase64Header(_providerHeader(headers, 'servicename')),
+          serviceLogoUrl:
+              _decodeBase64Header(_providerHeader(headers, 'servicelogo')),
+          serverInfoGroupName:
+              _decodeBase64Header(_providerHeader(headers, 'serverinfo')),
+          backgroundUrl: _trimmedHeader(_providerHeader(headers, 'background')),
+          buyPlanUrl: _trimmedHeader(_providerHeader(headers, 'buyplan')),
+          buyTrafficUrl: _trimmedHeader(_providerHeader(headers, 'buytraffic')),
           globalModeEnabled:
-              _trimmedHeader(headers[_globalModeHeader]).toLowerCase() !=
+              _trimmedHeader(_providerHeader(headers, 'globalmode'))
+                      .toLowerCase() !=
                   'false',
-          newDashboard: _parseBoolHeader(headers[_newDashboardHeader]),
-          denyDashboardEditing: _parseBoolHeader(headers[_denyWidgetsHeader]),
+          newDashboard: _parseBoolHeader(_providerHeader(headers, 'newboard')),
+          denyDashboardEditing:
+              _parseBoolHeader(_providerHeader(headers, 'denywidgets')),
         ),
         customization: ProductCustomizationHints(
-          trigger: _parseCustomizationTrigger(headers[_customBehaviorHeader]),
+          trigger:
+              _parseCustomizationTrigger(_providerHeader(headers, 'custom')),
           subscriptionSettings: _parseSubscriptionSettings(headers),
-          theme: ProductThemeHint.parse(headers[_themeHeader]),
+          theme: ProductThemeHint.parse(_providerHeader(headers, 'hex')),
           dashboardWidgets:
-              _parseDashboardWidgets(headers[_dashboardLayoutHeader]),
+              _parseDashboardWidgets(_providerHeader(headers, 'widgets')),
           proxiesView:
-              ProductProxiesViewHint.parse(headers[_proxiesViewHeader]),
+              ProductProxiesViewHint.parse(_providerHeader(headers, 'view')),
         ),
         notices: ProductNoticeHints(
           hwidLimitReached: _parseBoolHeader(headers[_hwidLimitReachedHeader]),
           hwidNotSupported: _parseBoolHeader(headers[_hwidNotSupportedHeader]),
+        ),
+        behavior: ProductBehaviorHints(
+          androidSecure:
+              _parseBoolHeader(_providerHeader(headers, 'androidsecure')),
         ),
       );
 
   final ProductDisplayHints display;
   final ProductCustomizationHints customization;
   final ProductNoticeHints notices;
+  final ProductBehaviorHints behavior;
 
   static Map<String, String> mergeForRefresh({
     required Map<String, String> previous,
     required Map<String, String> incoming,
   }) {
-    final merged = Map<String, String>.from(previous)..addAll(incoming);
+    final merged = Map<String, String>.from(previous);
+    for (final key in incoming.keys.where(isFlClashProviderHeader)) {
+      final separator = key.indexOf('-');
+      if (separator == -1 || separator == key.length - 1) {
+        continue;
+      }
+      final suffix = key.substring(separator + 1).toLowerCase();
+      merged
+        ..remove('flclashm-$suffix')
+        ..remove('flclashx-$suffix');
+    }
+    merged.addAll(incoming);
     for (final key in _clearedOnMissingRefreshHeaders) {
       if (!incoming.containsKey(key)) {
         merged.remove(key);
@@ -96,10 +109,11 @@ class ProductProviderAdvisory {
   }
 
   static Set<String>? _parseSubscriptionSettings(Map<String, String> headers) {
-    if (!headers.containsKey(_settingsHeader)) {
+    final value = _providerHeader(headers, 'settings');
+    if (value == null) {
       return null;
     }
-    return headers[_settingsHeader]!
+    return value
         .split(',')
         .map((value) => value.trim().toLowerCase())
         .where((value) => value.isNotEmpty)
@@ -121,6 +135,12 @@ class ProductProviderAdvisory {
 
   static bool _parseBoolHeader(String? value) =>
       _trimmedHeader(value).toLowerCase() == 'true';
+
+  static String? _providerHeader(
+    Map<String, String> headers,
+    String suffix,
+  ) =>
+      resolveFlClashProviderHeader(headers, suffix);
 
   static String _trimmedHeader(String? value) => value?.trim() ?? '';
 
@@ -160,6 +180,8 @@ class ProductDisplayHints {
     this.serviceLogoUrl = '',
     this.serverInfoGroupName = '',
     this.backgroundUrl = '',
+    this.buyPlanUrl = '',
+    this.buyTrafficUrl = '',
     this.globalModeEnabled = true,
     this.newDashboard = false,
     this.denyDashboardEditing = false,
@@ -171,6 +193,8 @@ class ProductDisplayHints {
   final String serviceLogoUrl;
   final String serverInfoGroupName;
   final String backgroundUrl;
+  final String buyPlanUrl;
+  final String buyTrafficUrl;
   final bool globalModeEnabled;
   final bool newDashboard;
   final bool denyDashboardEditing;
@@ -187,6 +211,15 @@ class ProductDisplayHints {
 
   String? get backgroundUrlOrNull =>
       backgroundUrl.isNotEmpty ? backgroundUrl : null;
+}
+
+@immutable
+class ProductBehaviorHints {
+  const ProductBehaviorHints({
+    this.androidSecure = false,
+  });
+
+  final bool androidSecure;
 }
 
 @immutable

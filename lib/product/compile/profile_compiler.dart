@@ -120,6 +120,7 @@ class ProfileCompiler {
     }
 
     var rawConfig = copyConfigTree(rawProfile.config);
+    final diagnostics = <String>[];
     final patchConfig = runtimePatchConfig.copyWith(
       tun: runtimePatchConfig.tun.getRealTun(context.routeMode),
     );
@@ -135,6 +136,7 @@ class ProfileCompiler {
                 rawConfig: rawConfig,
                 rawProfile: rawProfile,
                 context: context,
+                onIgnoredLocalPath: diagnostics.add,
               )
             : ResolvedProfileSplitTunneling(
                 config: rawConfig,
@@ -164,9 +166,11 @@ class ProfileCompiler {
       patchConfig: patchConfig,
       metadata: metadata,
       overrideNetworkSettings: context.overrideNetworkSettings,
+      isAndroid: context.isAndroid,
       localZashboardPath: context.homeDirPath == null
           ? null
           : path.join(context.homeDirPath!, 'zashboard'),
+      onIgnoredLocalPath: diagnostics.add,
     );
     _applyTunSettings(
       rawConfig: rawConfig,
@@ -205,6 +209,7 @@ class ProfileCompiler {
       builtInProxyNodes: compiledBuiltInProxyNodes.nodes,
       metadata: metadata,
       profileAccessControl: resolvedProfileSplitTunneling.accessControl,
+      diagnostics: List.unmodifiable(diagnostics),
     );
   }
 
@@ -302,6 +307,7 @@ class ProfileCompiler {
     required Map<String, dynamic> rawConfig,
     required RawProfile rawProfile,
     required RuntimePlanBuildContext context,
+    required void Function(String diagnostic) onIgnoredLocalPath,
   }) async {
     if (!context.isAndroid) {
       return ResolvedProfileSplitTunneling(
@@ -324,6 +330,7 @@ class ProfileCompiler {
       profileId: rawProfile.profile.id,
       installedPackageNames: installedPackageNames,
       readRemoteSource: context.readSplitTunnelingRemoteSource,
+      onIgnoredLocalPath: onIgnoredLocalPath,
     );
   }
 
@@ -389,13 +396,23 @@ class ProfileCompiler {
     required ClashConfig patchConfig,
     required CompiledProfileMetadata metadata,
     required bool overrideNetworkSettings,
+    required bool isAndroid,
     required String? localZashboardPath,
+    required void Function(String diagnostic) onIgnoredLocalPath,
   }) {
     rawConfig["external-controller"] = metadata.externalController;
     rawConfig["secret"] = metadata.secret;
     final providerUi = rawConfig["external-ui"]?.toString().trim() ?? "";
-    rawConfig["external-ui"] =
-        providerUi.isNotEmpty ? providerUi : (localZashboardPath ?? "");
+    if (isAndroid && providerUi.isNotEmpty) {
+      onIgnoredLocalPath(
+        'Android ignored unsupported local profile path `external-ui`.',
+      );
+    }
+    rawConfig["external-ui"] = isAndroid
+        ? (localZashboardPath ?? "")
+        : providerUi.isNotEmpty
+            ? providerUi
+            : (localZashboardPath ?? "");
     rawConfig["interface-name"] = "";
     if (rawConfig["external-ui-url"] == null ||
         rawConfig["external-ui-url"] == "") {

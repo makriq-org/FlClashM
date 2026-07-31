@@ -596,6 +596,11 @@
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
     },
     {
+      "path": "lib/views/config/general.dart",
+      "bucket": "budget",
+      "reason": "Живой экран сети скрывает mixed-port через типизированный product advisory для обоих совместимых префиксов."
+    },
+    {
       "path": "lib/views/config/network.dart",
       "bucket": "budget",
       "reason": "Убран шумный отладочный лог TunStackItem; форматный дрейф откатан к апстриму."
@@ -619,6 +624,11 @@
       "path": "lib/views/dashboard/widgets/change_server_button.dart",
       "bucket": "budget",
       "reason": "Живой change-server виджет берет имя server-info группы из product display hints, без разбора headers в UI."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/hero_connect.dart",
+      "bucket": "budget",
+      "reason": "Живой hero-виджет читает брендинг, server-info и ссылки покупки через типизированные product display hints."
     },
     {
       "path": "lib/views/dashboard/widgets/metainfo_widget.dart",

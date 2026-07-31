@@ -222,6 +222,57 @@ void main() {
       expect(runtimePlan.config['external-ui'], '/app-home/zashboard');
     });
 
+    test('ignores Android local UI paths and reports a diagnostic', () async {
+      const profile = Profile(
+        id: 'profile-local-ui',
+        autoUpdateDuration: Duration.zero,
+      );
+      final rawProfile = RawProfile.fromConfig(
+        profile: profile,
+        config: const <String, dynamic>{
+          'external-ui': '/sdcard/custom-ui',
+        },
+      );
+      final compiledProfile = compiler.compileProfilePatch(
+        rawProfile: rawProfile,
+        context: const ProfilePatchContext(
+          patchConfig: ClashConfig(),
+          overrideNetworkSettings: false,
+        ),
+      );
+
+      final runtimePlan = await compiler.buildRuntimePlan(
+        rawProfile: rawProfile,
+        context: const RuntimePlanBuildContext(
+          isAndroid: true,
+          overrideNetworkSettings: false,
+          overrideDns: false,
+          routeMode: RouteMode.config,
+          hasCurrentScript: false,
+          profilesPath: '/app-home/profiles',
+          homeDirPath: '/app-home',
+          readInstalledPackageNames: _readNoInstalledPackages,
+        ),
+        securedProfile: SecuredProfilePatch(
+          patchConfig: compiledProfile.patchConfig,
+          metadata: compiledProfile.metadata,
+        ),
+        runtimePatchConfig: compiledProfile.patchConfig,
+        selectedMap: const {},
+        testUrl: defaultTestUrl,
+        providerAssetPathResolver: (profileId, type, url) async =>
+            '/app-home/providers/$profileId/$type',
+      );
+
+      expect(runtimePlan.config['external-ui'], '/app-home/zashboard');
+      expect(
+        runtimePlan.diagnostics,
+        contains(
+          'Android ignored unsupported local profile path `external-ui`.',
+        ),
+      );
+    });
+
     test('defers Android proxy group health checks during setup', () async {
       const profile = Profile(
         id: 'profile-android-health-checks',
@@ -296,10 +347,6 @@ void main() {
           await Directory.systemTemp.createTemp('profile-compiler-split-');
       final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
         ..createSync(recursive: true);
-      File(path.join(profilesDir.path, 'lists', 'include.txt'))
-        ..createSync(recursive: true)
-        ..writeAsStringSync('com.termux\n*.mozilla.*\n');
-
       const profile = Profile(
         id: 'profile-split',
         autoUpdateDuration: Duration.zero,
@@ -308,7 +355,7 @@ void main() {
         profile: profile,
         config: const <String, dynamic>{
           'tun': {
-            'include-package-file': 'lists/include.txt',
+            'include-package': ['com.termux', '*.mozilla.*'],
           },
         },
       );
@@ -370,14 +417,11 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('cold start preserves every Android split-tunneling source type',
+    test('cold start preserves inline and remote Android package selectors',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('cold-split-');
       final profilesDir = Directory(path.join(tempDir.path, 'profiles'))
         ..createSync(recursive: true);
-      File(path.join(profilesDir.path, 'lists', 'include.txt'))
-        ..createSync(recursive: true)
-        ..writeAsStringSync('com.android.chrome\n');
       const networkUrl = 'https://example.com/include.txt';
       final refreshStarted = Completer<void>();
       File(
@@ -404,7 +448,6 @@ void main() {
               '*.mozilla.*',
               r're:^org\.telegram\..+$',
             ],
-            'include-package-file': 'lists/include.txt',
             'include-package-url': networkUrl,
           },
         },
@@ -432,7 +475,6 @@ void main() {
             'com.termux',
             'org.mozilla.firefox',
             'org.telegram.messenger',
-            'com.android.chrome',
             'com.network.app',
           ],
           readSplitTunnelingRemoteSource: (_) async {
@@ -460,7 +502,6 @@ void main() {
             'com.termux',
             'org.mozilla.firefox',
             'org.telegram.messenger',
-            'com.android.chrome',
             'com.network.app',
           ],
         ),
@@ -471,7 +512,6 @@ void main() {
           'com.termux',
           'org.mozilla.firefox',
           'org.telegram.messenger',
-          'com.android.chrome',
           'com.network.app',
         ],
       );

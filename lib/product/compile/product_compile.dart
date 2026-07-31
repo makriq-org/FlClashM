@@ -3,6 +3,7 @@ export 'loaded_profile_repository.dart';
 export 'olcrtc_config_validator.dart';
 export 'product_profile_pipeline.dart';
 export 'product_profile_validator.dart';
+export 'profile_compatibility.dart';
 export 'profile_compiler.dart';
 export 'profile_group_preview.dart';
 export 'profile_split_tunneling.dart';
