@@ -76,8 +76,17 @@ fun Service.buildServiceNotification(
 }
 
 fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM"): Boolean {
-    ensureNotificationChannel()
-    val notification = buildServiceNotification(iconRes, title)
+    // Build the channel + notification inside the guard too: if either throws
+    // during the ~5s startForegroundService() window (bad resource, OOM, odd
+    // OEM), we'd otherwise crash with the exact "did not then call
+    // startForeground()" RemoteServiceException. Degrade to false → stopSelf.
+    val notification = runCatching {
+        ensureNotificationChannel()
+        buildServiceNotification(iconRes, title)
+    }.getOrElse {
+        GlobalState.log("promoteToForeground: notification build failed: ${it.message}")
+        return false
+    }
     val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
     } else 0
