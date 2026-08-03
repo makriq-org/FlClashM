@@ -96,6 +96,11 @@
       "reason": "Нативные CI-тесты фиксируют single-flight сессий и обработку статусов самообновления."
     },
     {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/AndroidRuntimeE2eTest.kt",
+      "bucket": "budget",
+      "reason": "Instrumentation E2E фиксирует форковую цепочку runtime-процессов, VPN-службы и headless cold start."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
       "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки со stack trace через общий безопасный журнал."
