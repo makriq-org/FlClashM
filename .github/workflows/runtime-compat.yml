@@ -74,14 +74,18 @@ jobs:
         shell: msys2 {0}
         env:
           RUNTIME_COMPAT_OUT: ${{ github.workspace }}/runtime-compat-out
-        run: python tool/runtime_compat/runtime_compat.py build --target '${{ matrix.target }}'
+        run: |
+          export PATH="/c/hostedtoolcache/windows/go/1.26.4/x64/bin:$PATH"
+          python tool/runtime_compat/runtime_compat.py build --target '${{ matrix.target }}'
 
       - name: Smoke runtime nodes (Windows)
         if: matrix.shell == 'msys2'
         shell: msys2 {0}
         env:
           RUNTIME_COMPAT_OUT: ${{ github.workspace }}/runtime-compat-out
-        run: python tool/runtime_compat/runtime_compat.py smoke --target '${{ matrix.target }}'
+        run: |
+          export PATH="/c/hostedtoolcache/windows/go/1.26.4/x64/bin:$PATH"
+          python tool/runtime_compat/runtime_compat.py smoke --target '${{ matrix.target }}'
 
       - name: Upload compatibility report and binaries
         if: always()
