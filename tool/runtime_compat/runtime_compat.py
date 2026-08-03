@@ -175,7 +175,7 @@ def smoke(target: str) -> dict[str, dict[str, str]]:
     bins = {
         "naiveproxy": next((bin_root / "naiveproxy").rglob(f"naive{suffix}")),
         "olcrtc": bin_root / "olcrtc" / f"olcrtc{suffix}",
-        "byedpi": bin_root / "byedpi" / f"ciadpi{suffix}",
+        "byedpi": bin_root / "ciadpi" / f"ciadpi{suffix}",
         "stormdns": bin_root / "stormdns" / f"stormdns{suffix}",
     }
     results: dict[str, dict[str, str]] = {}
