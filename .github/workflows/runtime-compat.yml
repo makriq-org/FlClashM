@@ -2,6 +2,11 @@ name: Runtime compatibility spike
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'tool/runtime_compat/**'
+      - '.github/workflows/runtime-compat.yml'
+      - 'lib/product/runtime/*_release.dart'
   pull_request:
     paths:
       - 'tool/runtime_compat/**'
