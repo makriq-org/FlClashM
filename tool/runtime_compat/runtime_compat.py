@@ -189,7 +189,7 @@ def smoke(target: str) -> dict[str, dict[str, str]]:
     # The distributed OlcRTC client intentionally opens SOCKS only after its
     # remote carrier is connected. Its upstream in-memory e2e test is therefore
     # the smallest deterministic proof of listener + SOCKS + byte transfer.
-    olc_test = run("go", "test", "-count=1", "./internal/e2e", "-run",
+    olc_test = run("go", "test", "-count=1", "-timeout=90s", "./internal/e2e", "-run",
                    "^TestClientServerSOCKSTunnelOverMemoryDatachannel$",
                    cwd=OUT / "sources" / "olcrtc", check=False)
     if olc_test.returncode != 0:
@@ -198,7 +198,7 @@ def smoke(target: str) -> dict[str, dict[str, str]]:
                           "upstream in-memory SOCKS e2e transferred data"}
     # StormDNS requires a matching DNS tunnel server for a real transit test.
     # This upstream test creates a loopback listener and proves startup/cleanup.
-    storm_test = run("go", "test", "-count=1", "./internal/client", "-run",
+    storm_test = run("go", "test", "-count=1", "-timeout=90s", "./internal/client", "-run",
                      "^TestStartAsyncRuntimeCollectsResolverTimeoutsEvenWhenHealthFeaturesDisabled$",
                      cwd=OUT / "sources" / "stormdns", check=False)
     if storm_test.returncode != 0:
