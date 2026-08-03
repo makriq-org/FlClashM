@@ -24,6 +24,7 @@ jobs:
       verification: ${{ steps.changes.outputs.verification }}
       android: ${{ steps.changes.outputs.android }}
       full-matrix: ${{ steps.changes.outputs.full-matrix }}
+      e2e: ${{ steps.changes.outputs.e2e }}
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -41,6 +42,7 @@ jobs:
           verification=false
           android=false
           full_matrix=false
+          e2e=false
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
              [ -z "$BASE_SHA" ] || \
@@ -48,6 +50,7 @@ jobs:
             verification=true
             android=true
             full_matrix=true
+            e2e=true
           else
             changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
 
@@ -62,12 +65,17 @@ jobs:
             if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|android/|core/|assets/runtimes/|setup\.dart$|lib/product/runtime/)' <<< "$changed_files"; then
               full_matrix=true
             fi
+
+            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|.github/scripts/run-android-emulator-e2e\.sh$|android/|core/|assets/runtimes/|setup\.dart$|lib/product/(android|runtime)/)' <<< "$changed_files"; then
+              e2e=true
+            fi
           fi
 
           {
             echo "verification=$verification"
             echo "android=$android"
             echo "full-matrix=$full_matrix"
+            echo "e2e=$e2e"
           } >> "$GITHUB_OUTPUT"
 
   base-guards:
@@ -200,8 +208,6 @@ jobs:
         include:
           - arch: arm
             target-platform: android-arm
-          - arch: amd64
-            target-platform: android-x64
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -247,3 +253,88 @@ jobs:
 
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk
+
+  android-emulator-e2e:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          submodules: recursive
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build x86_64 core and runtime assets
+        run: dart setup.dart android --arch amd64 --out core
+
+      - name: Build debug APK and instrumentation APK
+        shell: bash
+        run: |
+          core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\(.*\)';$/\1/p" lib/core_version.dart)
+          test -n "$core_version"
+          flutter build apk \
+            --debug \
+            --target-platform android-x64 \
+            --dart-define=APP_ENV=pre \
+            --dart-define=CORE_VERSION="$core_version"
+          ./android/gradlew \
+            --no-daemon \
+            -p android \
+            -Ptarget-platform=android-x64 \
+            -Ptarget=lib/main.dart \
+            :app:assembleDebugAndroidTest
+
+      - name: Run Android runtime and VPN E2E
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          disk-size: 8G
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none -camera-front none
+          script: bash .github/scripts/run-android-emulator-e2e.sh
+
+      - name: Upload Android E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-emulator-e2e-diagnostics
+          path: ${{ runner.temp }}/android-e2e-artifacts
+          if-no-files-found: warn
+          retention-days: 7
