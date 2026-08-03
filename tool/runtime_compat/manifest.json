@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "purpose": "Disposable desktop runtime compatibility spike. Pins are shared with lib/product/runtime/*_release.dart; desktop output digests are measured, not release pins.",
+  "runtimes": {
+    "naiveproxy": {
+      "version": "v148.0.7778.96-5",
+      "source": "https://github.com/klzgrad/naiveproxy",
+      "artifacts": {
+        "linux-x64": {"name": "naiveproxy-v148.0.7778.96-5-linux-x64.tar.xz", "sha256": "ca6958dcbbfb7b1b38c55a213dab6927ce3c1417d969b815657513b81fc7352d"},
+        "windows-x64": {"name": "naiveproxy-v148.0.7778.96-5-win-x64.zip", "sha256": "54c7918557a7bd694f86ec7942b85d88b3623b21514ac3160c1e9e0e63175e8e"},
+        "macos-x64": {"name": "naiveproxy-v148.0.7778.96-5-mac-x64-x64.tar.xz", "sha256": "b8e6f6348a7384f30409d67e2c35a6d14de64fc6fcf908385dcf5283bf8815cb"},
+        "macos-arm64": {"name": "naiveproxy-v148.0.7778.96-5-mac-arm64-arm64.tar.xz", "sha256": "9a9e7722a038c0cd9775cabdfccfecbb39139839250bd0f77bb855b086f4e691"}
+      }
+    },
+    "olcrtc": {"commit": "ad5758513335cda54362a64621c29e9d9fe759b4", "go": "go1.26.4", "source": "https://github.com/openlibrecommunity/olcrtc.git"},
+    "byedpi": {"commit": "ba532298de7b28cfe854aea83d061369d13ca290", "source": "https://github.com/hufrea/byedpi.git"},
+    "stormdns": {"commit": "87348df5b11f9e490262a713ca268734007af44f", "go": "go1.26.4", "source": "https://github.com/nullroute1970/StormDNS.git"}
+  }
+}
