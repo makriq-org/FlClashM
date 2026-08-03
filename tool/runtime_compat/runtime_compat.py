@@ -186,31 +186,28 @@ def smoke(target: str) -> dict[str, dict[str, str]]:
         [str(bins["naiveproxy"]), f"--listen=socks://127.0.0.1:{naive_port}", "--proxy=socks://127.0.0.1:9"], naive_port, work, "naiveproxy")}
     results["byedpi"] = {"sha256": sha256(bins["byedpi"]), "smoke": invoke_and_stop(
         [str(bins["byedpi"]), "--ip", "127.0.0.1", "--port", str(bye_port)], bye_port, work, "byedpi")}
-    olc_port = 17893
-    olc_config = work / "olcrtc-smoke.yaml"
-    olc_config.write_text(f"""mode: cnc
-auth:
-  provider: jitsi
-room:
-  id: \"https://meet.invalid/flclashm-runtime-compat\"
-crypto:
-  key: \"0000000000000000000000000000000000000000000000000000000000000000\"
-net:
-  transport: datachannel
-  dns: \"127.0.0.1:9\"
-socks:
-  host: \"127.0.0.1\"
-  port: {olc_port}
-data: data
-""")
-    results["olcrtc"] = {"sha256": sha256(bins["olcrtc"]), "smoke": invoke_and_stop(
-        [str(bins["olcrtc"]), str(olc_config)], olc_port, work, "olcrtc")}
-    # StormDNS needs a matching DNS tunnel server; build and CLI invocation are
-    # kept separate from a misleading loopback-only transport claim.
-    help_result = run(str(bins["stormdns"]), "--version", cwd=work, check=False)
-    if help_result.returncode not in (0, 1, 2):
-        raise RuntimeError(f"stormdns --help failed: {help_result.stdout}")
-    results["stormdns"] = {"sha256": sha256(bins["stormdns"]), "smoke": "native CLI invoked; end-to-end tunnel requires a matching DNS server"}
+    # The distributed OlcRTC client intentionally opens SOCKS only after its
+    # remote carrier is connected. Its upstream in-memory e2e test is therefore
+    # the smallest deterministic proof of listener + SOCKS + byte transfer.
+    olc_test = run("go", "test", "-count=1", "./internal/e2e", "-run",
+                   "^TestClientServerSOCKSTunnelOverMemoryDatachannel$",
+                   cwd=OUT / "sources" / "olcrtc", check=False)
+    if olc_test.returncode != 0:
+        raise RuntimeError(f"olcrtc in-memory SOCKS e2e failed: {olc_test.stdout}")
+    results["olcrtc"] = {"sha256": sha256(bins["olcrtc"]), "smoke":
+                          "upstream in-memory SOCKS e2e transferred data"}
+    # StormDNS requires a matching DNS tunnel server for a real transit test.
+    # This upstream test creates a loopback listener and proves startup/cleanup.
+    storm_test = run("go", "test", "-count=1", "./internal/client", "-run",
+                     "^TestStartAsyncRuntimeCollectsResolverTimeoutsEvenWhenHealthFeaturesDisabled$",
+                     cwd=OUT / "sources" / "stormdns", check=False)
+    if storm_test.returncode != 0:
+        raise RuntimeError(f"stormdns listener smoke failed: {storm_test.stdout}")
+    version_result = run(str(bins["stormdns"]), "--version", cwd=work, check=False)
+    if version_result.returncode != 0:
+        raise RuntimeError(f"stormdns --version failed: {version_result.stdout}")
+    results["stormdns"] = {"sha256": sha256(bins["stormdns"]), "smoke":
+                            "upstream loopback listener start/cleanup test passed"}
     return results
 
 
