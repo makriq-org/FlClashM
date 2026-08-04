@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application.dart';
-import '../../clash/core.dart';
 import '../../common/http.dart';
 import '../../common/path.dart';
 import '../../common/system.dart';
@@ -30,7 +29,7 @@ class AppBootstrap {
     }
 
     final version = await system.version;
-    await clashCore.preload();
+    await composition.bootstrap.preloadMihomo();
     await globalState.initApp(version);
     await composition.bootstrap.initialize();
 

@@ -11,6 +11,7 @@ import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/android_security_policy.dart';
 import 'package:flclashx/product/services/android_shell_service.dart';
 import 'package:flclashx/product/services/app_update_service.dart';
+import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -74,12 +75,18 @@ void main() {
       expect(composition.services.androidShell, isA<DesktopShellService>());
       expect(composition.services.appUpdate, isA<DesktopAppUpdateService>());
       expect(composition.mihomoAvailability.isSupported, isFalse);
+      expect(await composition.bootstrap.preloadMihomo(), isFalse);
       final runtimeRegistry = RuntimeRegistry.flClashM(
         readAccessControl: () => const AccessControl(),
         mihomoAvailability: composition.mihomoAvailability,
       );
       expect(
         runtimeRegistry.resolveSelection,
+        throwsA(isA<UnsupportedRuntimeSelectionException>()),
+      );
+      expect(globalState.engineManager.isStarted, isFalse);
+      expect(
+        globalState.runtimeRegistry.resolveSelection,
         throwsA(isA<UnsupportedRuntimeSelectionException>()),
       );
       await expectLater(
@@ -114,6 +121,37 @@ void main() {
         artifact: ProductInstallLayout.stormdnsArtifact,
       ),
       '/opt/flclashm/runtimes/linux/x86_64/stormdns',
+    );
+  });
+
+  test('uses the stable desktop ID and runtime layout in every build target',
+      () async {
+    final sources = await Future.wait([
+      File('lib/common/path.dart').readAsString(),
+      File('linux/CMakeLists.txt').readAsString(),
+      File('windows/CMakeLists.txt').readAsString(),
+      File('macos/Runner/Configs/AppInfo.xcconfig').readAsString(),
+      File('macos/Runner.xcodeproj/project.pbxproj').readAsString(),
+    ]);
+    final runtimeResolver = sources[0];
+    final linux = sources[1];
+    final windows = sources[2];
+    final macosConfig = sources[3];
+    final macosProject = sources[4];
+
+    expect(runtimeResolver, contains('ProductInstallLayout.mihomoArtifact'));
+    expect(runtimeResolver, contains('ProductInstallLayout.helperArtifact'));
+    expect(linux, contains('set(APPLICATION_ID "app.flclashm.client")'));
+    expect(linux, contains(r'/runtimes/linux/${RUNTIME_ARCHITECTURE}'));
+    expect(linux, contains('RENAME "mihomo"'));
+    expect(windows, contains(r'/runtimes/windows/${RUNTIME_ARCHITECTURE}'));
+    expect(windows, contains('RENAME "mihomo.exe"'));
+    expect(windows, contains('RENAME "app.flclashm.client.helper.exe"'));
+    expect(macosConfig,
+        contains('PRODUCT_BUNDLE_IDENTIFIER = app.flclashm.client'));
+    expect(
+      macosProject,
+      contains(r'Contents/runtimes/macos/$(CURRENT_ARCH)/mihomo'),
     );
   });
 }
