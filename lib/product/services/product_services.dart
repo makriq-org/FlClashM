@@ -1,6 +1,9 @@
+import '../platform/product_platform_composition.dart';
 import 'access_control_service.dart';
 import 'android_shell_service.dart';
 import 'app_update_service.dart';
+import 'product_shell_service.dart';
+import 'product_update_service.dart';
 
 export '../widgets/access_control_notice.dart';
 export 'access_control_service.dart';
@@ -11,13 +14,17 @@ export 'product_contributors.dart';
 class ProductServices {
   ProductServices({
     this.accessControl = const AccessControlService(),
-    AndroidShellService? androidShell,
-    this.appUpdate = const AppUpdateService(),
-  }) : androidShell = androidShell ?? AndroidShellService();
+    ProductShellService? androidShell,
+    ProductUpdateService? appUpdate,
+  })  : androidShell = androidShell ?? AndroidShellService(),
+        appUpdate = appUpdate ?? const AppUpdateService();
 
   final AccessControlService accessControl;
-  final AndroidShellService androidShell;
-  final AppUpdateService appUpdate;
+
+  /// Kept as `androidShell` for stable base touchpoints. Its implementation is
+  /// selected only by [ProductPlatformComposition].
+  final ProductShellService androidShell;
+  final ProductUpdateService appUpdate;
 }
 
-final productServices = ProductServices();
+final productServices = productPlatformComposition.services;
