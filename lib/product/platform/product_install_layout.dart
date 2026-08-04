@@ -12,7 +12,7 @@ class ProductInstallLayout {
   static const runtimeDirectoryName = 'runtimes';
 
   static const mihomoArtifact = 'mihomo';
-  static const helperArtifact = 'helper';
+  static const helperArtifact = desktopHelperName;
   static const naiveproxyArtifact = 'naiveproxy';
   static const olcrtcArtifact = 'olcrtc';
   static const byedpiArtifact = 'byedpi';

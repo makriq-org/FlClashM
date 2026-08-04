@@ -33,6 +33,14 @@
       ]
     },
     {
+      "path": "lib/common/path.dart",
+      "boundary": "desktop-runtime-layout",
+      "reason": "The base path facade resolves desktop runtime artifacts only through the product-owned stable install layout.",
+      "targets": [
+        "lib/product/platform/product_install_layout.dart"
+      ]
+    },
+    {
       "path": "lib/common/system.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "System helpers stay a thin base delegate for Android task-back behavior.",
@@ -104,9 +112,10 @@
     {
       "path": "lib/state.dart",
       "boundary": "global-runtime-wiring",
-      "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
+      "reason": "GlobalState receives compile, security and runtime availability only from the product composition without embedding platform policy locally.",
       "targets": [
         "lib/product/compile/product_compile.dart",
+        "lib/product/platform/product_platform_composition.dart",
         "lib/product/runtime/product_runtime.dart",
         "lib/product/security/product_security.dart"
       ]

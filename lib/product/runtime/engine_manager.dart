@@ -113,7 +113,6 @@ class EngineManager {
     required BuildCoreStateCallback buildCoreState,
     required BuildInitParamsCallback buildInitParams,
   })  : _runtimeRegistry = runtimeRegistry,
-        _activeRuntime = runtimeRegistry.resolveSelection(),
         _loadCurrentRawProfile = loadCurrentRawProfile,
         _compileProfilePatch = compileProfilePatch,
         _enforceSecurityPolicy = enforceSecurityPolicy,
@@ -124,7 +123,7 @@ class EngineManager {
         _buildInitParams = buildInitParams;
 
   final RuntimeRegistry _runtimeRegistry;
-  ResolvedRuntimeSelection _activeRuntime;
+  ResolvedRuntimeSelection? _activeRuntime;
   final LoadCurrentRawProfileCallback _loadCurrentRawProfile;
   final CompileProfilePatchCallback _compileProfilePatch;
   final EnforceSecurityPolicyCallback _enforceSecurityPolicy;
@@ -142,12 +141,15 @@ class EngineManager {
   _CompiledRuntimePlan? _pendingCompiledRuntimePlan;
   Future<void> _coldStartPersistChain = Future<void>.value();
 
-  EngineAdapter get _adapter => _activeRuntime.engine.adapter;
+  ResolvedRuntimeSelection get _resolvedRuntime =>
+      _activeRuntime ??= _runtimeRegistry.resolveSelection();
+
+  EngineAdapter get _adapter => _resolvedRuntime.engine.adapter;
 
   RuntimeId get activeEngineId =>
-      _activeRuntime.engine.registration.descriptor.id;
+      _resolvedRuntime.engine.registration.descriptor.id;
 
-  RuntimeSelection get activeRuntimeSelection => _activeRuntime.selection;
+  RuntimeSelection get activeRuntimeSelection => _resolvedRuntime.selection;
 
   DateTime? get startTime => _startTime;
 
@@ -813,12 +815,13 @@ class EngineManager {
 
   ResolvedRuntimeSelection _resolveRuntimeSelection(
       RuntimeSelection selection) {
-    if (_activeRuntime.selection == selection) {
-      return _activeRuntime;
+    final activeRuntime = _activeRuntime;
+    if (activeRuntime?.selection == selection) {
+      return activeRuntime!;
     }
     if (isStarted) {
       throw UnsupportedRuntimeSelectionException(
-        'Runtime switch from ${_activeRuntime.selection.engine.label} '
+        'Runtime switch from ${activeRuntime!.selection.engine.label} '
         'to ${selection.engine.label} requires a full stop/restart boundary.',
       );
     }

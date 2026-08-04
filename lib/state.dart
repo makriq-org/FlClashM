@@ -26,6 +26,7 @@ import 'core_version.dart';
 import 'models/models.dart';
 import 'plugins/app.dart';
 import 'product/compile/product_compile.dart';
+import 'product/platform/product_platform_composition.dart';
 import 'product/runtime/product_runtime.dart';
 import 'product/security/product_security.dart';
 
@@ -89,6 +90,7 @@ class GlobalState {
       readAccessControl: () => config.vpnProps.accessControl,
       readProfileAccessControl: () => activeProfileAccessControl,
       runtimeHealthProbe: const AppRuntimeHealthProbe(),
+      mihomoAvailability: productPlatformComposition.mihomoAvailability,
     );
     engineManager = EngineManager(
       runtimeRegistry: runtimeRegistry,

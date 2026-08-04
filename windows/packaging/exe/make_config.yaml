@@ -1,5 +1,5 @@
 script_template: inno_setup.iss
-app_id: 728B3532-C74B-4870-9068-BE70FE12A3E6
+app_id: app.flclashm.client
 app_name: FlClashM
 publisher: pluralplay
 publisher_url: https://github.com/makriq-org/FlClashM

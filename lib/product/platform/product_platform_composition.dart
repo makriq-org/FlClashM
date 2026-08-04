@@ -1,3 +1,4 @@
+import '../../clash/core.dart';
 import '../../common/android.dart';
 import '../android/android_entrypoint.dart';
 import '../android/android_platform.dart';
@@ -10,11 +11,16 @@ import 'desktop_security_policy.dart';
 import 'platform_profile.dart';
 
 abstract interface class ProductPlatformBootstrap {
+  Future<bool> preloadMihomo();
+
   Future<void> initialize();
 }
 
 class AndroidPlatformBootstrap implements ProductPlatformBootstrap {
   const AndroidPlatformBootstrap();
+
+  @override
+  Future<bool> preloadMihomo() => clashCore.preload();
 
   @override
   Future<void> initialize() async {
@@ -25,6 +31,9 @@ class AndroidPlatformBootstrap implements ProductPlatformBootstrap {
 
 class DesktopPlatformBootstrap implements ProductPlatformBootstrap {
   const DesktopPlatformBootstrap();
+
+  @override
+  Future<bool> preloadMihomo() async => false;
 
   @override
   Future<void> initialize() async {}
