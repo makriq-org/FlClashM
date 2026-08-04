@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -5,20 +7,14 @@ import 'package:path/path.dart' as path;
 import '../../common/common.dart';
 import '../android/android_update_bridge.dart';
 import 'app_update_release.dart';
-
-typedef AsyncTaskRunner = Future<T?> Function<T>(
-  Future<T> Function() task, {
-  String? title,
-});
+import 'product_update_service.dart';
 
 enum AppUpdateCheckTrigger {
   automatic,
   manual,
 }
 
-typedef SkipAppUpdateRelease = Future<void> Function(String tagName);
-
-class AppUpdateService {
+class AppUpdateService implements ProductUpdateService {
   const AppUpdateService({
     this.platform = const AndroidUpdateBridge(),
   });

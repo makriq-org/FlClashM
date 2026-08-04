@@ -1,5 +1,6 @@
 import 'package:flclashx/models/models.dart';
 
+import '../platform/product_platform_composition.dart';
 import '../security/product_security.dart';
 import 'profile_compiler.dart';
 import 'raw_profile.dart';
@@ -8,11 +9,14 @@ import 'runtime_plan.dart';
 class ProductProfilePipeline {
   const ProductProfilePipeline({
     this.profileCompiler = const ProfileCompiler(),
-    this.securityPolicy = androidSecurityPolicy,
-  });
+    SecurityPolicy? securityPolicy,
+  }) : _securityPolicy = securityPolicy;
 
   final ProfileCompiler profileCompiler;
-  final SecurityPolicy securityPolicy;
+  final SecurityPolicy? _securityPolicy;
+
+  SecurityPolicy get securityPolicy =>
+      _securityPolicy ?? productPlatformComposition.securityPolicy;
 
   ClashConfig securePatchConfig({
     required ClashConfig patchConfig,

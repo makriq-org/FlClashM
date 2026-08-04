@@ -12,49 +12,9 @@ import '../../plugins/app.dart';
 import '../../plugins/vpn.dart';
 import '../runtime/engine_manager.dart';
 import '../runtime/vpn_access_control.dart';
+import '../services/runtime_access_platform.dart';
 
-@immutable
-class ProfileAccessSnapshot {
-  const ProfileAccessSnapshot.available(this.accessControl) : available = true;
-
-  const ProfileAccessSnapshot.unavailable()
-      : available = false,
-        accessControl = null;
-
-  final bool available;
-  final AccessControl? accessControl;
-}
-
-abstract interface class RuntimeAccessPlatformBridge {
-  bool get isAndroid;
-
-  Future<List<Package>> readPackages();
-
-  Future<ImageProvider?> readPackageIcon(String packageName);
-
-  String mergeVpnOptions(
-    String optionsJson, {
-    required AccessControl accessControl,
-  });
-
-  Future<bool> startVpn({required AccessControl accessControl});
-
-  Future<void> stopVpn();
-
-  /// Reads the immutable options snapshot used to establish the live Android
-  /// VPN. An available snapshot with null access control means that the VPN
-  /// explicitly has no profile package rule; unavailable means the remote
-  /// service could not provide a trustworthy snapshot.
-  Future<ProfileAccessSnapshot> readAppliedProfileAccess();
-
-  Future<ResolvedTunAccess> resolveTunAccess({
-    required bool requestedTunEnable,
-    required bool realTunEnable,
-    required Future<void> Function() onAuthorizeRestart,
-    required ValueChanged<bool> onResolvedTunEnable,
-    Future<AuthorizeCode> Function()? authorizeCore,
-  });
-}
+export '../services/runtime_access_platform.dart';
 
 class AndroidRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   const AndroidRuntimeAccessPolicy({
