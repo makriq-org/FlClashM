@@ -194,6 +194,7 @@ func handleShutdown() bool {
 	isRunning = false
 	tunUp.Store(false)
 	currentConfig = nil
+	currentRuntimeRawConfig = map[string]any{}
 	return true
 }
 

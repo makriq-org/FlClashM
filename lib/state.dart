@@ -121,7 +121,6 @@ class GlobalState {
   late CommonTheme theme;
   late Color accentColor;
   CorePalette? corePalette;
-  Map<String, dynamic>? lastRuntimeConfig;
   final activeProfileAccessControlNotifier =
       ValueNotifier<AccessControl?>(null);
   final _loadedProfiles = LoadedProfileRepository();
@@ -496,7 +495,6 @@ class GlobalState {
       );
 
   void applyRuntimePlan(RuntimePlan runtimePlan) {
-    lastRuntimeConfig = runtimePlan.config;
     activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
     _applyCompiledProfileMetadata(runtimePlan.metadata);
     _applyRuntimeConfigState(runtimePlan.config);

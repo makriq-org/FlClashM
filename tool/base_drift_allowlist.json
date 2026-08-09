@@ -31,6 +31,36 @@
       "reason": "Фоновый подписчик mihomo сохраняет события через Android stderr даже без подключённого UI."
     },
     {
+      "path": "core/hub.go",
+      "bucket": "budget",
+      "reason": "Завершение обёртки ядра очищает источник истины runtime-снимка."
+    },
+    {
+      "path": "core/action.go",
+      "bucket": "budget",
+      "reason": "Внутренние IPC-действия для HTTP через tunnel и снимка runtime-состояния принадлежат обёртке ядра форка."
+    },
+    {
+      "path": "core/common.go",
+      "bucket": "budget",
+      "reason": "Ядро хранит фактически применённую конфигурацию для достоверного runtime-снимка."
+    },
+    {
+      "path": "core/common_test.go",
+      "bucket": "budget",
+      "reason": "Тесты обёртки ядра закрепляют актуализацию runtime-снимка и отмену внутренних запросов."
+    },
+    {
+      "path": "core/constant.go",
+      "bucket": "budget",
+      "reason": "Контракт внутреннего HTTP IPC и runtime-снимка является частью API обёртки ядра."
+    },
+    {
+      "path": "core/tunnel_http.go",
+      "bucket": "budget",
+      "reason": "HTTP-клиент обёртки передаёт соединения напрямую в tunnel.Tunnel без локального listener-порта."
+    },
+    {
       "path": "android/app/build.gradle.kts",
       "bucket": "budget",
       "reason": "applicationId, keystore-логика и dev-suffix принадлежат форковому Android-слою."
@@ -449,6 +479,26 @@
       "path": "lib/common/http.dart",
       "bucket": "budget",
       "reason": "Базовая логика поиска прокси и отказ от небезопасного сертификатного обхода приняты в бюджет."
+    },
+    {
+      "path": "lib/clash/core.dart",
+      "bucket": "budget",
+      "reason": "Dart-фасад IPC открывает внутренний HTTP transport и достоверный runtime-снимок ядра."
+    },
+    {
+      "path": "lib/enum/enum.dart",
+      "bucket": "budget",
+      "reason": "Новые IPC-действия обёртки ядра должны сериализоваться в общем enum action channel."
+    },
+    {
+      "path": "lib/models/generated/core.g.dart",
+      "bucket": "budget",
+      "reason": "Сгенерированная сериализация enum фиксирует IPC-действия обёртки ядра."
+    },
+    {
+      "path": "lib/views/tools.dart",
+      "bucket": "budget",
+      "reason": "Экран текущей конфигурации читает живой snapshot ядра вместо устаревшего Dart-кэша."
     },
     {
       "path": "lib/common/link.dart",

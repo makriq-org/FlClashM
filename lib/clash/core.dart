@@ -95,6 +95,19 @@ class ClashCore {
 
   Future<String> setupConfig(SetupParams setupParams) => clashInterface.setupConfig(setupParams);
 
+  Future<Map<String, dynamic>> tunnelHTTPRequest(
+    Map<String, dynamic> params,
+  ) async =>
+      Map<String, dynamic>.from(
+        await clashInterface.tunnelHTTPRequest(json.encode(params)),
+      );
+
+  Future<Map<String, dynamic>> getRuntimeSnapshot() async =>
+      Map<String, dynamic>.from(await clashInterface.getRuntimeSnapshot());
+
+  Future<bool> cancelTunnelHTTPRequest(String requestId) =>
+      clashInterface.cancelTunnelHTTPRequest(requestId);
+
   Future<List<Group>> getProxiesGroups() async {
     final proxies = await clashInterface.getProxies();
     if (proxies.isEmpty) return [];

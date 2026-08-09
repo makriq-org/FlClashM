@@ -343,6 +343,9 @@ const _$ActionMethodEnumMap = {
   ActionMethod.updateDns: 'updateDns',
   ActionMethod.getAndroidVpnOptions: 'getAndroidVpnOptions',
   ActionMethod.getCurrentProfileName: 'getCurrentProfileName',
+  ActionMethod.tunnelHTTPRequest: 'tunnelHTTPRequest',
+  ActionMethod.getRuntimeSnapshot: 'getRuntimeSnapshot',
+  ActionMethod.cancelTunnelHTTPRequest: 'cancelTunnelHTTPRequest',
 };
 
 _$ActionResultImpl _$$ActionResultImplFromJson(Map<String, dynamic> json) =>

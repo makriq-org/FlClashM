@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
@@ -16,16 +16,6 @@ import '../services/app_update_manifest_release.dart';
 import '../services/app_update_manifest_rollback.dart';
 import '../services/app_update_release.dart';
 import 'android_package_installer.dart';
-
-final Dio _appUpdateDio = Dio(
-  BaseOptions(
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 30),
-    headers: {
-      'User-Agent': browserUa,
-    },
-  ),
-);
 
 abstract interface class AppUpdateHttpClient {
   Future<List<int>> readBytes(String url);
@@ -45,14 +35,26 @@ abstract interface class AppUpdateHttpClient {
 /// Отмена загрузки обновления. Прячет `CancelToken` от вызывающих слоёв,
 /// чтобы Dio не протекал в сервис обновлений и его тесты.
 class AppUpdateDownloadCancellation {
-  final CancelToken _token = CancelToken();
+  bool _cancelled = false;
+  final _listeners = <void Function()>[];
 
-  bool get isCancelled => _token.isCancelled;
+  bool get isCancelled => _cancelled;
 
   void cancel() {
-    if (!_token.isCancelled) {
-      _token.cancel('Загрузка обновления отменена пользователем');
+    if (_cancelled) return;
+    _cancelled = true;
+    for (final listener in List.of(_listeners)) {
+      listener();
     }
+  }
+
+  void Function() addListener(void Function() listener) {
+    if (_cancelled) {
+      listener();
+      return () {};
+    }
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
   }
 }
 
@@ -70,10 +72,7 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
 
   @override
   Future<List<int>> readBytes(String url) async {
-    final response = await _appUpdateDio.get<List<int>>(
-      url,
-      options: Options(responseType: ResponseType.bytes),
-    );
+    final response = await request.getFileResponseForUrl(url);
     final data = response.data;
     if (response.statusCode != 200 || data == null) {
       throw StateError('Unable to read `$url`.');
@@ -83,11 +82,8 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
 
   @override
   Future<List<dynamic>> readJsonList(String url) async {
-    final response = await _appUpdateDio.get<List<dynamic>>(
-      url,
-      options: Options(responseType: ResponseType.json),
-    );
-    final data = response.data;
+    final response = await request.getTextResponseForUrl(url);
+    final data = response.data == null ? null : jsonDecode(response.data!);
     if (response.statusCode != 200 || data == null) {
       throw StateError('Unable to read `$url`.');
     }
@@ -96,10 +92,7 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
 
   @override
   Future<String?> readText(String url) async {
-    final response = await _appUpdateDio.get<String>(
-      url,
-      options: Options(responseType: ResponseType.plain),
-    );
+    final response = await request.getTextResponseForUrl(url);
     if (response.statusCode != 200) {
       return null;
     }
@@ -113,18 +106,26 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
   }) async {
-    await _appUpdateDio.download(
-      url,
-      targetPath,
-      onReceiveProgress: onReceiveProgress,
-      cancelToken: cancellation?._token,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: {
-          'User-Agent': globalState.ua,
-        },
-      ),
+    if (cancellation?.isCancelled ?? false) {
+      throw const AppUpdateDownloadCancelledException();
+    }
+    final requestId = 'app-update-download#${utils.id}';
+    final removeCancellationListener = cancellation?.addListener(
+      () => unawaited(clashCore.cancelTunnelHTTPRequest(requestId)),
     );
+    try {
+      await request.downloadFileForUrl(
+        url,
+        targetPath,
+        onProgress: onReceiveProgress,
+        requestId: requestId,
+      );
+    } finally {
+      removeCancellationListener?.call();
+    }
+    if (cancellation?.isCancelled ?? false) {
+      throw const AppUpdateDownloadCancelledException();
+    }
   }
 }
 
