@@ -2,14 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/netip"
+	"time"
+
 	"github.com/metacubex/mihomo/adapter/provider"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
-	"net/netip"
-	"time"
 )
 
 type InitParams struct {
@@ -36,6 +38,36 @@ type UpdateParams struct {
 	ExternalController *string            `json:"external-controller"`
 	Interface          *string            `json:"interface-name"`
 	UnifiedDelay       *bool              `json:"unified-delay"`
+}
+
+// TunnelHTTPRequest is an internal control-plane request. It deliberately has
+// no proxy address: the request always enters mihomo through tunnel.Tunnel and
+// is then routed by the active profile just like any other connection.
+type TunnelHTTPRequest struct {
+	URL            string            `json:"url"`
+	Method         string            `json:"method"`
+	Headers        map[string]string `json:"headers"`
+	Body           string            `json:"body"`
+	TimeoutMillis  int64             `json:"timeout-millis"`
+	MaxResponseLen int64             `json:"max-response-len"`
+	TargetPath     string            `json:"target-path"`
+	RequestID      string            `json:"request-id"`
+}
+
+type TunnelHTTPResponse struct {
+	StatusCode int         `json:"status-code"`
+	Headers    http.Header `json:"headers"`
+	Body       []byte      `json:"body"`
+	FinalURL   string      `json:"final-url"`
+	WrittenLen int64       `json:"written-len"`
+	Error      string      `json:"error,omitempty"`
+}
+
+type RuntimeSnapshot struct {
+	Config    map[string]any `json:"config"`
+	Listeners any            `json:"listeners"`
+	Running   bool           `json:"running"`
+	TunUp     bool           `json:"tun-up"`
 }
 
 type tunSchema struct {
@@ -110,6 +142,9 @@ const (
 	healthProbeMethod              Method = "healthProbe"
 	setUiActiveMethod              Method = "setUiActive"
 	setScreenActiveMethod          Method = "setScreenActive"
+	tunnelHTTPRequestMethod        Method = "tunnelHTTPRequest"
+	getRuntimeSnapshotMethod       Method = "getRuntimeSnapshot"
+	cancelTunnelHTTPRequestMethod  Method = "cancelTunnelHTTPRequest"
 )
 
 type Method string

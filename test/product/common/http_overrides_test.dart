@@ -20,7 +20,7 @@ void main() {
     );
   });
 
-  test('FlClashHttpOverrides bypasses the proxy for loopback hosts', () {
+  test('FlClashHttpOverrides never uses a local proxy listener', () {
     globalState.appState = globalState.appState.copyWith(runTime: 1);
 
     expect(
@@ -35,15 +35,9 @@ void main() {
       FlClashHttpOverrides.handleFindProxy(Uri.parse('http://[::1]:9090')),
       'DIRECT',
     );
-  });
-
-  test('FlClashHttpOverrides uses mixed-port only for non-loopback traffic',
-      () {
-    globalState.appState = globalState.appState.copyWith(runTime: 1);
-
     expect(
       FlClashHttpOverrides.handleFindProxy(Uri.parse('https://example.com')),
-      'PROXY localhost:7890',
+      'DIRECT',
     );
   });
 
@@ -55,38 +49,4 @@ void main() {
     );
   });
 
-  test('FlClashHttpOverrides can force mixed-port for runtime IP checks', () {
-    globalState.appState = globalState.appState.copyWith(runTime: 1);
-
-    expect(
-      FlClashHttpOverrides.handleFindProxy(
-        Uri.parse('https://example.com'),
-        forceMixedPort: true,
-      ),
-      'PROXY localhost:7890',
-    );
-    expect(
-      FlClashHttpOverrides.handleFindProxy(
-        Uri.parse('http://127.0.0.1:9090'),
-        forceMixedPort: true,
-      ),
-      'DIRECT',
-    );
-  });
-
-  test('FlClashHttpOverrides does not force disabled mixed-port', () {
-    globalState
-      ..appState = globalState.appState.copyWith(runTime: 1)
-      ..config = globalState.config.copyWith(
-        patchClashConfig: const ClashConfig(mixedPort: 0),
-      );
-
-    expect(
-      FlClashHttpOverrides.handleFindProxy(
-        Uri.parse('https://example.com'),
-        forceMixedPort: true,
-      ),
-      'DIRECT',
-    );
-  });
 }

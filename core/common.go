@@ -30,16 +30,17 @@ import (
 )
 
 var (
-	currentConfig     *config.Config
-	version           atomic.Int32
-	isRunning         = false
-	runLock           sync.Mutex
-	testDelaySem      = semaphore.NewWeighted(50)
-	proxyDescMu       sync.RWMutex
-	proxyDescriptions = map[string]string{}
-	pendingTunEnable      = false
-	currentTestURL        = "https://www.gstatic.com/generate_204"
-	minHealthCheckInterval = 5 * time.Second
+	currentConfig           *config.Config
+	version                 atomic.Int32
+	isRunning               = false
+	runLock                 sync.Mutex
+	testDelaySem            = semaphore.NewWeighted(50)
+	proxyDescMu             sync.RWMutex
+	proxyDescriptions       = map[string]string{}
+	pendingTunEnable        = false
+	currentTestURL          = "https://www.gstatic.com/generate_204"
+	minHealthCheckInterval  = 5 * time.Second
+	currentRuntimeRawConfig = map[string]any{}
 )
 
 type ExternalProviders []ExternalProvider
@@ -313,6 +314,9 @@ func updateConfig(params *UpdateParams) {
 		return
 	}
 	general := currentConfig.General
+	if params.AllowLan != nil {
+		general.AllowLan = *params.AllowLan
+	}
 	if params.MixedPort != nil {
 		general.MixedPort = *params.MixedPort
 	}
@@ -379,6 +383,7 @@ func updateConfig(params *UpdateParams) {
 	}
 
 	updateListeners()
+	applyRuntimeUpdateToSnapshot(params)
 }
 
 func setupConfig(params *SetupParams) error {
@@ -395,11 +400,14 @@ func setupConfig(params *SetupParams) error {
 
 	parseStart := time.Now()
 	currentConfig, err = config.ParseRawConfig(params.Config)
+	effectiveRawConfig := params.Config
 	if err != nil {
 		log.Errorln("[Config] ParseRawConfig failed, falling back to default: %v", err)
-		currentConfig, _ = config.ParseRawConfig(config.DefaultRawConfig())
+		effectiveRawConfig = config.DefaultRawConfig()
+		currentConfig, _ = config.ParseRawConfig(effectiveRawConfig)
 	}
 	log.Infoln("[Setup] ParseRawConfig took %s", time.Since(parseStart))
+	currentRuntimeRawConfig = rawConfigMap(effectiveRawConfig)
 	pendingTunEnable = currentConfig.General.Tun.Enable
 	if runtime.GOOS == "android" || !isRunning {
 		currentConfig.General.Tun.Enable = false
@@ -435,6 +443,109 @@ func setupConfig(params *SetupParams) error {
 	})
 
 	return err
+}
+
+func rawConfigMap(raw *config.RawConfig) map[string]any {
+	if raw == nil {
+		return map[string]any{}
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return map[string]any{}
+	}
+	result := map[string]any{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return map[string]any{}
+	}
+	return result
+}
+
+// applyRuntimeUpdateToSnapshot keeps the core-owned, effective config in sync
+// with successful live updates. This is intentionally adjacent to updateConfig:
+// Flutter's compiled plan is not authoritative after a live mutation.
+func applyRuntimeUpdateToSnapshot(params *UpdateParams) {
+	if params == nil {
+		return
+	}
+	if params.MixedPort != nil {
+		currentRuntimeRawConfig["mixed-port"] = *params.MixedPort
+	}
+	if params.AllowLan != nil {
+		currentRuntimeRawConfig["allow-lan"] = *params.AllowLan
+	}
+	if params.Sniffing != nil {
+		currentRuntimeRawConfig["sniffing"] = *params.Sniffing
+	}
+	if params.FindProcessMode != nil {
+		currentRuntimeRawConfig["find-process-mode"] = params.FindProcessMode.String()
+	}
+	if params.Mode != nil {
+		currentRuntimeRawConfig["mode"] = params.Mode.String()
+	}
+	if params.LogLevel != nil {
+		currentRuntimeRawConfig["log-level"] = params.LogLevel.String()
+	}
+	if params.IPv6 != nil {
+		currentRuntimeRawConfig["ipv6"] = *params.IPv6
+	}
+	if params.TCPConcurrent != nil {
+		currentRuntimeRawConfig["tcp-concurrent"] = *params.TCPConcurrent
+	}
+	if params.Interface != nil {
+		currentRuntimeRawConfig["interface-name"] = *params.Interface
+	}
+	if params.ExternalController != nil {
+		currentRuntimeRawConfig["external-controller"] = *params.ExternalController
+	}
+	if params.UnifiedDelay != nil {
+		currentRuntimeRawConfig["unified-delay"] = *params.UnifiedDelay
+	}
+	if params.Tun != nil {
+		tun, _ := currentRuntimeRawConfig["tun"].(map[string]any)
+		if tun == nil {
+			tun = map[string]any{}
+			currentRuntimeRawConfig["tun"] = tun
+		}
+		tun["enable"] = params.Tun.Enable
+		if params.Tun.Device != nil {
+			tun["device"] = *params.Tun.Device
+		}
+		if params.Tun.Stack != nil {
+			tun["stack"] = params.Tun.Stack.String()
+		}
+		if params.Tun.DNSHijack != nil {
+			tun["dns-hijack"] = *params.Tun.DNSHijack
+		}
+		if params.Tun.AutoRoute != nil {
+			tun["auto-route"] = *params.Tun.AutoRoute
+		}
+		if params.Tun.RouteAddress != nil {
+			tun["route-address"] = *params.Tun.RouteAddress
+		}
+	}
+}
+
+func handleRuntimeSnapshot() *RuntimeSnapshot {
+	runLock.Lock()
+	defer runLock.Unlock()
+	return &RuntimeSnapshot{
+		Config:    cloneRuntimeRawConfig(currentRuntimeRawConfig),
+		Listeners: listener.GetPorts(),
+		Running:   isRunning,
+		TunUp:     tunUp.Load(),
+	}
+}
+
+func cloneRuntimeRawConfig(source map[string]any) map[string]any {
+	data, err := json.Marshal(source)
+	if err != nil {
+		return map[string]any{}
+	}
+	result := map[string]any{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return map[string]any{}
+	}
+	return result
 }
 
 func UnmarshalJson(data []byte, v any) error {

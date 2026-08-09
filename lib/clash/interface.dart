@@ -80,6 +80,15 @@ mixin ClashInterface {
   Future<bool> setState(CoreState state);
 
   Future<bool> setUiActive(bool active);
+
+  FutureOr<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  });
+
+  FutureOr<Map> getRuntimeSnapshot();
+
+  FutureOr<bool> cancelTunnelHTTPRequest(String requestId);
 }
 
 mixin AndroidClashInterface {
@@ -200,6 +209,34 @@ abstract class ClashHandlerInterface with ClashInterface {
       // instead of leaving a pending completer.
       timeout: const Duration(seconds: 2),
     );
+
+  @override
+  Future<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  }) =>
+      invoke<Map>(
+        method: ActionMethod.tunnelHTTPRequest,
+        data: params,
+        timeout: timeout ?? const Duration(seconds: 70),
+        defaultValue: const {
+          'error': 'tunnel HTTP request timed out',
+        },
+      );
+
+  @override
+  Future<Map> getRuntimeSnapshot() => invoke<Map>(
+        method: ActionMethod.getRuntimeSnapshot,
+        timeout: const Duration(seconds: 5),
+        defaultValue: const {},
+      );
+
+  @override
+  Future<bool> cancelTunnelHTTPRequest(String requestId) => invoke<bool>(
+        method: ActionMethod.cancelTunnelHTTPRequest,
+        data: requestId,
+        timeout: const Duration(seconds: 2),
+      );
 
   @override
   Future<bool> shutdown() => invoke<bool>(

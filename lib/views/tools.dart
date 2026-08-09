@@ -291,19 +291,33 @@ class _RuntimeConfigItem extends StatelessWidget {
     return ListItem(
       leading: const Icon(Icons.code),
       title: Text(appLocale.runtimeConfig),
-      onTap: () {
-        final config = globalState.lastRuntimeConfig;
-        if (config == null) {
+      onTap: () async {
+        Map<String, dynamic> snapshot;
+        try {
+          snapshot = await clashCore.getRuntimeSnapshot();
+        } catch (_) {
+          snapshot = const {};
+        }
+        if (!context.mounted) return;
+        final configRaw = snapshot['config'];
+        if (configRaw is! Map || configRaw.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(appLocale.runtimeConfigNotAvailable)),
           );
           return;
         }
 
+        final config = Map<String, dynamic>.from(configRaw);
+        config['_runtime-state'] = {
+          'listeners': snapshot['listeners'],
+          'running': snapshot['running'],
+          'tun-up': snapshot['tun-up'],
+        };
+
         final buffer = StringBuffer();
         yamlDump(buffer, config, 0);
 
-        showExtend(
+        await showExtend(
           context,
           builder: (_, type) => _RuntimeConfigSheet(
             type: type,

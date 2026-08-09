@@ -289,6 +289,9 @@ enum ActionMethod {
   updateDns,
   getAndroidVpnOptions,
   getCurrentProfileName,
+  tunnelHTTPRequest,
+  getRuntimeSnapshot,
+  cancelTunnelHTTPRequest,
 }
 
 enum AuthorizeCode { none, success, error }

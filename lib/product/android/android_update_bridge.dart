@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
@@ -17,16 +17,6 @@ import '../services/app_update_manifest_rollback.dart';
 import '../services/app_update_release.dart';
 import 'android_package_installer.dart';
 
-final Dio _appUpdateDio = Dio(
-  BaseOptions(
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 30),
-    headers: {
-      'User-Agent': browserUa,
-    },
-  ),
-);
-
 abstract interface class AppUpdateHttpClient {
   Future<List<int>> readBytes(String url);
 
@@ -39,20 +29,33 @@ abstract interface class AppUpdateHttpClient {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
+    int? expectedLength,
   });
 }
 
 /// Отмена загрузки обновления. Прячет `CancelToken` от вызывающих слоёв,
 /// чтобы Dio не протекал в сервис обновлений и его тесты.
 class AppUpdateDownloadCancellation {
-  final CancelToken _token = CancelToken();
+  bool _cancelled = false;
+  final _listeners = <void Function()>[];
 
-  bool get isCancelled => _token.isCancelled;
+  bool get isCancelled => _cancelled;
 
   void cancel() {
-    if (!_token.isCancelled) {
-      _token.cancel('Загрузка обновления отменена пользователем');
+    if (_cancelled) return;
+    _cancelled = true;
+    for (final listener in List.of(_listeners)) {
+      listener();
     }
+  }
+
+  void Function() addListener(void Function() listener) {
+    if (_cancelled) {
+      listener();
+      return () {};
+    }
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
   }
 }
 
@@ -68,12 +71,18 @@ class AppUpdateDownloadCancelledException implements Exception {
 class DioAppUpdateHttpClient implements AppUpdateHttpClient {
   const DioAppUpdateHttpClient();
 
+  Future<void> _cancelTunnelRequest(String requestId) async {
+    // The cancellation action can overtake request registration in the Go
+    // executor. Retry briefly so an immediate user cancel is not lost.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (await clashCore.cancelTunnelHTTPRequest(requestId)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   @override
   Future<List<int>> readBytes(String url) async {
-    final response = await _appUpdateDio.get<List<int>>(
-      url,
-      options: Options(responseType: ResponseType.bytes),
-    );
+    final response = await request.getFileResponseForUrl(url);
     final data = response.data;
     if (response.statusCode != 200 || data == null) {
       throw StateError('Unable to read `$url`.');
@@ -83,11 +92,8 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
 
   @override
   Future<List<dynamic>> readJsonList(String url) async {
-    final response = await _appUpdateDio.get<List<dynamic>>(
-      url,
-      options: Options(responseType: ResponseType.json),
-    );
-    final data = response.data;
+    final response = await request.getTextResponseForUrl(url);
+    final data = response.data == null ? null : jsonDecode(response.data!);
     if (response.statusCode != 200 || data == null) {
       throw StateError('Unable to read `$url`.');
     }
@@ -96,10 +102,7 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
 
   @override
   Future<String?> readText(String url) async {
-    final response = await _appUpdateDio.get<String>(
-      url,
-      options: Options(responseType: ResponseType.plain),
-    );
+    final response = await request.getTextResponseForUrl(url);
     if (response.statusCode != 200) {
       return null;
     }
@@ -112,19 +115,29 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
+    int? expectedLength,
   }) async {
-    await _appUpdateDio.download(
-      url,
-      targetPath,
-      onReceiveProgress: onReceiveProgress,
-      cancelToken: cancellation?._token,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: {
-          'User-Agent': globalState.ua,
-        },
-      ),
+    if (cancellation?.isCancelled ?? false) {
+      throw const AppUpdateDownloadCancelledException();
+    }
+    final requestId = 'app-update-download#${utils.id}';
+    final removeCancellationListener = cancellation?.addListener(
+      () => unawaited(_cancelTunnelRequest(requestId)),
     );
+    try {
+      await request.downloadFileForUrl(
+        url,
+        targetPath,
+        onProgress: onReceiveProgress,
+        requestId: requestId,
+        expectedLength: expectedLength,
+      );
+    } finally {
+      removeCancellationListener?.call();
+    }
+    if (cancellation?.isCancelled ?? false) {
+      throw const AppUpdateDownloadCancelledException();
+    }
   }
 }
 
@@ -395,6 +408,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
           targetPath,
           onReceiveProgress: onReceiveProgress,
           cancellation: cancellation,
+          expectedLength: asset.size,
         );
         final actualSha256 = await computeFileSha256(target);
         if (actualSha256 != expectedSha256) {

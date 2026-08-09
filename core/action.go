@@ -140,6 +140,32 @@ func handleAction(action *Action, result ActionResult) {
 		}
 		result.success(config)
 		return
+	case tunnelHTTPRequestMethod:
+		paramsString, ok := action.Data.(string)
+		if !ok {
+			result.error("invalid data type")
+			return
+		}
+		response, err := handleTunnelHTTPRequest(paramsString)
+		if err != nil {
+			// The legacy action bridge only propagates Result.code for getConfig.
+			// Keep transport failures structured until that protocol is replaced.
+			result.success(&TunnelHTTPResponse{Error: err.Error()})
+			return
+		}
+		result.success(response)
+		return
+	case getRuntimeSnapshotMethod:
+		result.success(handleRuntimeSnapshot())
+		return
+	case cancelTunnelHTTPRequestMethod:
+		requestID, ok := action.Data.(string)
+		if !ok {
+			result.error("invalid data type")
+			return
+		}
+		result.success(cancelTunnelHTTPRequest(requestID))
+		return
 	case getCoreVersionMethod:
 		result.success(constant.Version)
 		return
