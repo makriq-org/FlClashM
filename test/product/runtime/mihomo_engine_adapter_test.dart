@@ -29,7 +29,7 @@ void main() {
     setUp(() async {
       callOrder = [];
       core = _FakeMihomoCoreBridge()..callOrder = callOrder;
-      lifecycle = _FakeMihomoLifecycleBridge();
+      lifecycle = _FakeMihomoLifecycleBridge()..callOrder = callOrder;
       platform = _FakeMihomoPlatformBridge();
       builtInProxySupervisor = _FakeBuiltInProxySupervisor()
         ..callOrder = callOrder;
@@ -131,6 +131,19 @@ void main() {
 
       expect(core.shutdownCalls, 1);
       expect(lifecycle.restartCalls, 1);
+    });
+
+    test('prepares built-in proxy nodes before shutting down core', () async {
+      core.isInitializedValue = true;
+      final adapter = buildAdapter();
+
+      await adapter.prepareForRestart();
+
+      expect(callOrder, [
+        'prepareLocalNodes',
+        'shutdownCore',
+        'restartRuntime',
+      ]);
     });
 
     test('starts built-in proxy nodes before core runtime plan setup',
@@ -368,7 +381,9 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   bool get hasCommittedRuntimePlan => hasCommittedRuntimePlanValue;
 
   @override
-  Future<void> prepareForRestart() async {}
+  Future<void> prepareForRestart() async {
+    callOrder?.add('prepareLocalNodes');
+  }
 
   @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
@@ -445,6 +460,7 @@ class _FakeMihomoCoreBridge implements MihomoCoreBridge {
   @override
   Future<void> shutdown() async {
     shutdownCalls++;
+    callOrder?.add('shutdownCore');
     if (shutdownError != null) {
       throw shutdownError!;
     }
@@ -494,10 +510,12 @@ class _FakeMihomoLifecycleBridge implements MihomoLifecycleBridge {
   int restartCalls = 0;
   int persistColdStartCalls = 0;
   SetupParams? lastPersistedSetupParams;
+  List<String>? callOrder;
 
   @override
   Future<void> restartRuntime() async {
     restartCalls++;
+    callOrder?.add('restartRuntime');
   }
 
   @override
