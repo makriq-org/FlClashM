@@ -161,7 +161,7 @@ class AndroidRuntimeE2eTest {
         Service.stopService()
         await("VPN stop") { Service.fetchServiceState()?.state == "stopped" }
         await("VPN transport cleanup") { !hasVpnTransport() }
-        assertNull("foreground notification was not removed", foregroundNotification())
+        await("foreground notification cleanup") { foregroundNotification() == null }
         assertTrue("VPN active marker was not cleared", !SavedParams.isVpnActive())
         assertNotEquals("remote process unexpectedly disappeared on normal stop", 0, remotePid())
     }
