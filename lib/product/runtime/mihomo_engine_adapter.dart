@@ -161,18 +161,20 @@ class MihomoEngineAdapter implements EngineAdapter {
 
   @override
   Future<void> prepareForRestart() async {
+    // Runtime-node preparation uses the RemoteService AIDL bridge, so it must
+    // finish before core.shutdown() unbinds and destroys that service.
+    try {
+      await builtInProxySupervisor.prepareForRestart();
+    } catch (e) {
+      commonPrint.log("Built-in proxy restart prep failed: $e");
+    }
+
     if (await core.isInitialized()) {
       try {
         await core.shutdown();
       } catch (e) {
         commonPrint.log("Mihomo shutdown before restart failed: $e");
       }
-    }
-
-    try {
-      await builtInProxySupervisor.prepareForRestart();
-    } catch (e) {
-      commonPrint.log("Built-in proxy restart prep failed: $e");
     }
 
     await lifecycle.restartRuntime();
