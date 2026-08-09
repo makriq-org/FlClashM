@@ -29,6 +29,7 @@ abstract interface class AppUpdateHttpClient {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
+    int? expectedLength,
   });
 }
 
@@ -70,6 +71,15 @@ class AppUpdateDownloadCancelledException implements Exception {
 class DioAppUpdateHttpClient implements AppUpdateHttpClient {
   const DioAppUpdateHttpClient();
 
+  Future<void> _cancelTunnelRequest(String requestId) async {
+    // The cancellation action can overtake request registration in the Go
+    // executor. Retry briefly so an immediate user cancel is not lost.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (await clashCore.cancelTunnelHTTPRequest(requestId)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   @override
   Future<List<int>> readBytes(String url) async {
     final response = await request.getFileResponseForUrl(url);
@@ -105,13 +115,14 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
+    int? expectedLength,
   }) async {
     if (cancellation?.isCancelled ?? false) {
       throw const AppUpdateDownloadCancelledException();
     }
     final requestId = 'app-update-download#${utils.id}';
     final removeCancellationListener = cancellation?.addListener(
-      () => unawaited(clashCore.cancelTunnelHTTPRequest(requestId)),
+      () => unawaited(_cancelTunnelRequest(requestId)),
     );
     try {
       await request.downloadFileForUrl(
@@ -119,6 +130,7 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
         targetPath,
         onProgress: onReceiveProgress,
         requestId: requestId,
+        expectedLength: expectedLength,
       );
     } finally {
       removeCancellationListener?.call();
@@ -396,6 +408,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
           targetPath,
           onReceiveProgress: onReceiveProgress,
           cancellation: cancellation,
+          expectedLength: asset.size,
         );
         final actualSha256 = await computeFileSha256(target);
         if (actualSha256 != expectedSha256) {

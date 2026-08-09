@@ -298,6 +298,7 @@ class _RuntimeConfigItem extends StatelessWidget {
         } catch (_) {
           snapshot = const {};
         }
+        if (!context.mounted) return;
         final configRaw = snapshot['config'];
         if (configRaw is! Map || configRaw.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -316,7 +317,7 @@ class _RuntimeConfigItem extends StatelessWidget {
         final buffer = StringBuffer();
         yamlDump(buffer, config, 0);
 
-        showExtend(
+        await showExtend(
           context,
           builder: (_, type) => _RuntimeConfigSheet(
             type: type,

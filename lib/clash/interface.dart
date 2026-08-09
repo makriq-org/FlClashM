@@ -81,7 +81,10 @@ mixin ClashInterface {
 
   Future<bool> setUiActive(bool active);
 
-  FutureOr<Map> tunnelHTTPRequest(String params);
+  FutureOr<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  });
 
   FutureOr<Map> getRuntimeSnapshot();
 
@@ -208,10 +211,14 @@ abstract class ClashHandlerInterface with ClashInterface {
     );
 
   @override
-  Future<Map> tunnelHTTPRequest(String params) => invoke<Map>(
+  Future<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  }) =>
+      invoke<Map>(
         method: ActionMethod.tunnelHTTPRequest,
         data: params,
-        timeout: const Duration(seconds: 70),
+        timeout: timeout ?? const Duration(seconds: 70),
         defaultValue: const {
           'error': 'tunnel HTTP request timed out',
         },

@@ -314,6 +314,9 @@ func updateConfig(params *UpdateParams) {
 		return
 	}
 	general := currentConfig.General
+	if params.AllowLan != nil {
+		general.AllowLan = *params.AllowLan
+	}
 	if params.MixedPort != nil {
 		general.MixedPort = *params.MixedPort
 	}
@@ -470,6 +473,9 @@ func applyRuntimeUpdateToSnapshot(params *UpdateParams) {
 	if params.AllowLan != nil {
 		currentRuntimeRawConfig["allow-lan"] = *params.AllowLan
 	}
+	if params.Sniffing != nil {
+		currentRuntimeRawConfig["sniffing"] = *params.Sniffing
+	}
 	if params.FindProcessMode != nil {
 		currentRuntimeRawConfig["find-process-mode"] = params.FindProcessMode.String()
 	}
@@ -484,6 +490,9 @@ func applyRuntimeUpdateToSnapshot(params *UpdateParams) {
 	}
 	if params.TCPConcurrent != nil {
 		currentRuntimeRawConfig["tcp-concurrent"] = *params.TCPConcurrent
+	}
+	if params.Interface != nil {
+		currentRuntimeRawConfig["interface-name"] = *params.Interface
 	}
 	if params.ExternalController != nil {
 		currentRuntimeRawConfig["external-controller"] = *params.ExternalController

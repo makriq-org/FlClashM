@@ -261,6 +261,7 @@ class Request {
     String downloadUrl,
     String targetPath, {
     void Function(int received, int total)? onProgress,
+    int? expectedLength,
   }) async {
     try {
       final tmpPath = '$targetPath.tmp';
@@ -268,6 +269,7 @@ class Request {
         downloadUrl,
         tmpPath,
         onProgress: onProgress,
+        expectedLength: expectedLength,
       );
       final tmpFile = File(tmpPath);
       if (!tmpFile.existsSync()) return 'Download failed';
@@ -285,6 +287,7 @@ class Request {
     String targetPath, {
     void Function(int received, int total)? onProgress,
     String? requestId,
+    int? expectedLength,
   }) async {
     if (!_shouldUseTunnelTransport) {
       await _dio.download(
@@ -294,33 +297,69 @@ class Request {
       );
       return;
     }
-    final response = await clashCore.tunnelHTTPRequest({
-      'url': url,
-      'method': 'GET',
-      'headers': {'User-Agent': globalState.ua},
-      'timeout-millis': const Duration(minutes: 5).inMilliseconds,
-      'max-response-len': 128 << 20,
-      'target-path': targetPath,
-      if (requestId != null) 'request-id': requestId,
-    });
-    final error = response['error']?.toString();
-    if (error != null && error.isNotEmpty) {
-      throw DioException(
-        requestOptions: RequestOptions(path: url),
-        type: DioExceptionType.connectionError,
-        error: error,
-      );
+    final target = File(targetPath);
+    if (target.existsSync()) {
+      target.deleteSync();
     }
-    final statusCode = response['status-code'] as int?;
-    if (statusCode == null || statusCode < 200 || statusCode >= 300) {
-      throw DioException(
-        requestOptions: RequestOptions(path: url),
-        type: DioExceptionType.badResponse,
-        message: 'Tunnel download returned HTTP $statusCode.',
-      );
+    var lastReported = -1;
+    void reportProgress() {
+      if (onProgress == null) return;
+      try {
+        if (!target.existsSync()) return;
+        final received = target.lengthSync();
+        if (received == lastReported) return;
+        lastReported = received;
+        onProgress(received, expectedLength ?? -1);
+      } on FileSystemException {
+        // The downloader can replace or remove the temporary file between
+        // existsSync() and lengthSync(); the next tick will observe its state.
+      }
     }
-    final written = response['written-len'] as int? ?? 0;
-    onProgress?.call(written, written);
+
+    onProgress?.call(0, expectedLength ?? -1);
+    final progressTimer = onProgress == null
+        ? null
+        : Timer.periodic(
+            const Duration(milliseconds: 250),
+            (_) => reportProgress(),
+          );
+    try {
+      final response = await clashCore.tunnelHTTPRequest({
+        'url': url,
+        'method': 'GET',
+        'headers': {'User-Agent': globalState.ua},
+        'timeout-millis': const Duration(minutes: 5).inMilliseconds,
+        'max-response-len': 256 << 20,
+        'target-path': targetPath,
+        if (requestId != null) 'request-id': requestId,
+      });
+      final error = response['error']?.toString();
+      if (error != null && error.isNotEmpty) {
+        throw DioException(
+          requestOptions: RequestOptions(path: url),
+          type: DioExceptionType.connectionError,
+          error: error,
+        );
+      }
+      final statusCode = response['status-code'] as int?;
+      if (statusCode == null || statusCode < 200 || statusCode >= 300) {
+        throw DioException(
+          requestOptions: RequestOptions(path: url),
+          type: DioExceptionType.badResponse,
+          message: 'Tunnel download returned HTTP $statusCode.',
+        );
+      }
+      final written = response['written-len'] as int? ?? 0;
+      onProgress?.call(written, expectedLength ?? written);
+    } catch (_) {
+      if (target.existsSync()) {
+        target.deleteSync();
+      }
+      rethrow;
+    } finally {
+      progressTimer?.cancel();
+      reportProgress();
+    }
   }
 
   // Tried in order, first success wins. All return a dead-simple JSON with an

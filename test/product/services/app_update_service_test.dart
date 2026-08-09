@@ -152,6 +152,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
 
 class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
   final downloadCalls = <String>[];
+  final downloadExpectedLengths = <int?>[];
   final failedDownloadUrls = <String>{};
   final downloadBytes = <int>[1, 2, 3, 4];
   final downloadBytesByUrl = <String, List<int>>{};
@@ -163,14 +164,16 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
     String targetPath, {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
+    int? expectedLength,
   }) async {
     downloadCalls.add(url);
+    downloadExpectedLengths.add(expectedLength);
     if (failedDownloadUrls.contains(url)) {
       throw StateError('unavailable mirror');
     }
     final bytes = downloadBytesByUrl[url] ?? downloadBytes;
     File(targetPath).writeAsBytesSync(bytes);
-    onReceiveProgress?.call(bytes.length, bytes.length);
+    onReceiveProgress?.call(bytes.length, expectedLength ?? bytes.length);
   }
 
   @override
@@ -214,6 +217,7 @@ void main() {
         'https://sourceforge.example/app.apk',
         'https://github.example/app.apk',
       ]);
+      expect(client.downloadExpectedLengths, [asset.size, asset.size]);
       expect(File(targetPath).readAsBytesSync(), client.downloadBytes);
     });
 

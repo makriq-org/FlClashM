@@ -572,6 +572,7 @@ class _CoreUpdateItemState extends State<_CoreUpdateItem> {
     final error = await request.downloadCoreUpdate(
       url,
       appPath.corePendingPath,
+      expectedLength: (asset['size'] as num?)?.toInt(),
       onProgress: (received, total) {
         if (!mounted || total <= 0) return;
         setState(() => _progress = received / total);

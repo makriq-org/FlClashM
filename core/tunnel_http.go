@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	defaultTunnelHTTPTimeout = 60 * time.Second
-	maxTunnelHTTPResponseLen = 16 << 20
+	defaultTunnelHTTPTimeout     = 60 * time.Second
+	maxTunnelHTTPTimeout         = 10 * time.Minute
+	defaultTunnelHTTPResponseLen = 16 << 20
+	maxTunnelHTTPResponseLen     = 256 << 20
 )
 
 var tunnelHTTPRequests sync.Map // map[string]context.CancelFunc
@@ -37,14 +39,8 @@ func handleTunnelHTTPRequest(paramsString string) (*TunnelHTTPResponse, error) {
 		return nil, errors.New("tunnel HTTP request URL is empty")
 	}
 
-	timeout := defaultTunnelHTTPTimeout
-	if params.TimeoutMillis > 0 {
-		timeout = time.Duration(params.TimeoutMillis) * time.Millisecond
-	}
-	maxLen := int64(maxTunnelHTTPResponseLen)
-	if params.MaxResponseLen > 0 && params.MaxResponseLen < maxLen {
-		maxLen = params.MaxResponseLen
-	}
+	timeout := tunnelHTTPTimeout(params.TimeoutMillis)
+	maxLen := tunnelHTTPResponseLimit(params.MaxResponseLen)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -132,6 +128,27 @@ func handleTunnelHTTPRequest(paramsString string) (*TunnelHTTPResponse, error) {
 		FinalURL:   response.Request.URL.String(),
 		WrittenLen: writtenLen,
 	}, nil
+}
+
+func tunnelHTTPTimeout(timeoutMillis int64) time.Duration {
+	if timeoutMillis <= 0 {
+		return defaultTunnelHTTPTimeout
+	}
+	timeout := time.Duration(timeoutMillis) * time.Millisecond
+	if timeout <= 0 || timeout > maxTunnelHTTPTimeout {
+		return maxTunnelHTTPTimeout
+	}
+	return timeout
+}
+
+func tunnelHTTPResponseLimit(requested int64) int64 {
+	if requested <= 0 {
+		return defaultTunnelHTTPResponseLen
+	}
+	if requested > maxTunnelHTTPResponseLen {
+		return maxTunnelHTTPResponseLen
+	}
+	return requested
 }
 
 func cancelTunnelHTTPRequest(requestID string) bool {
