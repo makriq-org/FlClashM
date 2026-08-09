@@ -229,9 +229,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }
 
             "getInstalledPackageNames" -> {
-                scope.launch(Dispatchers.IO) {
-                    val names = getInstalledPackageNames()
-                    result.successOnMain(names)
+                withInstalledAppsPermission {
+                    scope.launch(Dispatchers.IO) {
+                        val names = getInstalledPackageNames()
+                        result.successOnMain(names)
+                    }
                 }
             }
 
