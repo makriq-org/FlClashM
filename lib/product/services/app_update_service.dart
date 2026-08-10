@@ -9,17 +9,16 @@ import '../android/android_update_bridge.dart';
 import 'app_update_release.dart';
 import 'product_update_service.dart';
 
-enum AppUpdateCheckTrigger {
-  automatic,
-  manual,
-}
+enum AppUpdateCheckTrigger { automatic, manual }
 
 class AppUpdateService implements ProductUpdateService {
   const AppUpdateService({
     this.platform = const AndroidUpdateBridge(),
+    this.packageSelector = const AndroidAppUpdatePackageSelector(),
   });
 
   final AppUpdatePlatformBridge platform;
+  final AppUpdatePackageSelector packageSelector;
 
   Future<void> autoCheck({
     required bool enabled,
@@ -100,6 +99,100 @@ class AppUpdateService implements ProductUpdateService {
   }
 
   Future<void> _downloadAndInstallRelease(AppRelease release) async {
+    final package = await packageSelector.select(
+      release: release,
+      platform: platform,
+    );
+
+    final updateDirectoryPath = await platform.getUpdateDirectoryPath();
+    final packagePath = path.join(updateDirectoryPath, package.asset.name);
+    final packageFile = File(packagePath);
+    if (packageFile.existsSync()) {
+      final existingSha256 = await computeFileSha256(packageFile);
+      final existingSize = await packageFile.length();
+      if (existingSha256 == package.sha256 &&
+          existingSize == package.asset.size) {
+        await _openInstaller(packageFile.path);
+        return;
+      }
+      packageFile.deleteSync();
+    }
+
+    final tempFile = File('$packagePath.part');
+    await tempFile.parent.create(recursive: true);
+    if (tempFile.existsSync()) {
+      tempFile.deleteSync();
+    }
+
+    final String actualSha256;
+    try {
+      actualSha256 = await platform.showDownloadProgress<String>(
+        release: release,
+        asset: package.asset,
+        downloadTask: (onReceiveProgress, cancellation) =>
+            platform.downloadReleaseAsset(
+          package.asset,
+          tempFile.path,
+          expectedSha256: package.sha256,
+          onReceiveProgress: onReceiveProgress,
+          cancellation: cancellation,
+        ),
+      );
+    } on AppUpdateDownloadCancelledException {
+      if (tempFile.existsSync()) {
+        tempFile.deleteSync();
+      }
+      rethrow;
+    }
+
+    final actualSize = tempFile.existsSync() ? await tempFile.length() : -1;
+    if (actualSha256 != package.sha256 || actualSize != package.asset.size) {
+      await tempFile.delete();
+      throw StateError(
+        'Package verification failed for `${package.asset.name}`.',
+      );
+    }
+
+    if (packageFile.existsSync()) {
+      packageFile.deleteSync();
+    }
+    await tempFile.rename(packagePath);
+    await _openInstaller(packagePath);
+  }
+
+  Future<void> _openInstaller(String path) async {
+    await platform.prepareInstallHandoff();
+    final installed = await platform.installPackage(path);
+    if (!installed) {
+      throw StateError('Unable to complete the platform installer handoff.');
+    }
+  }
+
+  Future<bool> installPackage(String path) => platform.installPackage(path);
+}
+
+class AppUpdatePackage {
+  const AppUpdatePackage({required this.asset, required this.sha256});
+
+  final ReleaseAsset asset;
+  final String sha256;
+}
+
+abstract interface class AppUpdatePackageSelector {
+  Future<AppUpdatePackage> select({
+    required AppRelease release,
+    required AppUpdatePlatformBridge platform,
+  });
+}
+
+class AndroidAppUpdatePackageSelector implements AppUpdatePackageSelector {
+  const AndroidAppUpdatePackageSelector();
+
+  @override
+  Future<AppUpdatePackage> select({
+    required AppRelease release,
+    required AppUpdatePlatformBridge platform,
+  }) async {
     final supportedAbis = await platform.readSupportedAbis();
     final androidAsset = selectAndroidReleaseAsset(
       release,
@@ -112,99 +205,22 @@ class AppUpdateService implements ProductUpdateService {
       );
     }
 
-    final expectedSha256 = await _resolveExpectedSha256(
-      release: release,
-      androidAsset: androidAsset,
-    );
+    var expectedSha256 = androidAsset.apkAsset.sha256Digest;
+    final checksumAsset = androidAsset.checksumAsset;
+    if (expectedSha256 == null && checksumAsset != null) {
+      expectedSha256 = parseSha256Content(
+        await platform.readRemoteText(checksumAsset.browserDownloadUrl),
+        assetName: androidAsset.apkAsset.name,
+      );
+    }
     if (expectedSha256 == null) {
       throw StateError(
         'No SHA256 checksum is available for `${androidAsset.apkAsset.name}`.',
       );
     }
-
-    final updateDirectoryPath = await platform.getUpdateDirectoryPath();
-    final apkPath = path.join(updateDirectoryPath, androidAsset.apkAsset.name);
-    final apkFile = File(apkPath);
-    if (apkFile.existsSync()) {
-      final existingSha256 = await computeFileSha256(apkFile);
-      if (existingSha256 == expectedSha256) {
-        await _openInstaller(apkFile.path);
-        return;
-      }
-      apkFile.deleteSync();
-    }
-
-    final tempFile = File('$apkPath.part');
-    await tempFile.parent.create(recursive: true);
-    if (tempFile.existsSync()) {
-      tempFile.deleteSync();
-    }
-
-    final String actualSha256;
-    try {
-      actualSha256 = await platform.showDownloadProgress<String>(
-        release: release,
-        asset: androidAsset.apkAsset,
-        downloadTask: (onReceiveProgress, cancellation) =>
-            platform.downloadReleaseAsset(
-          androidAsset.apkAsset,
-          tempFile.path,
-          expectedSha256: expectedSha256,
-          onReceiveProgress: onReceiveProgress,
-          cancellation: cancellation,
-        ),
-      );
-    } on AppUpdateDownloadCancelledException {
-      if (tempFile.existsSync()) {
-        tempFile.deleteSync();
-      }
-      rethrow;
-    }
-
-    if (actualSha256 != expectedSha256) {
-      await tempFile.delete();
-      throw StateError(
-        'SHA256 verification failed for `${androidAsset.apkAsset.name}`.',
-      );
-    }
-
-    if (apkFile.existsSync()) {
-      apkFile.deleteSync();
-    }
-    await tempFile.rename(apkPath);
-    await _openInstaller(apkPath);
-  }
-
-  Future<String?> _resolveExpectedSha256({
-    required AppRelease release,
-    required AndroidReleaseAsset androidAsset,
-  }) async {
-    final inlineDigest = androidAsset.apkAsset.sha256Digest;
-    if (inlineDigest != null) {
-      return inlineDigest;
-    }
-
-    final checksumAsset = androidAsset.checksumAsset;
-    if (checksumAsset == null) {
-      return null;
-    }
-
-    final checksumContent = await platform.readRemoteText(
-      checksumAsset.browserDownloadUrl,
-    );
-    return parseSha256Content(
-      checksumContent,
-      assetName: androidAsset.apkAsset.name,
+    return AppUpdatePackage(
+      asset: androidAsset.apkAsset,
+      sha256: expectedSha256,
     );
   }
-
-  Future<void> _openInstaller(String path) async {
-    await platform.prepareInstallHandoff();
-    final installed = await platform.installPackage(path);
-    if (!installed) {
-      throw StateError('Unable to open the Android installer.');
-    }
-  }
-
-  Future<bool> installPackage(String path) => platform.installPackage(path);
 }

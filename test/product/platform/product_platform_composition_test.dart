@@ -11,6 +11,7 @@ import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/android_security_policy.dart';
 import 'package:flclashx/product/services/android_shell_service.dart';
 import 'package:flclashx/product/services/app_update_service.dart';
+import 'package:flclashx/product/services/desktop_app_update_bridge.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -63,7 +64,7 @@ void main() {
       expect(composition.mihomoAvailability.isSupported, isTrue);
     });
 
-    test('uses channel-free desktop stubs and rejects TUN', () async {
+    test('uses desktop updater and keeps unreleased TUN unavailable', () async {
       final composition = ProductPlatformComposition.forProfile(
         ProductPlatformProfile.fromOperatingSystem('linux'),
       );
@@ -73,7 +74,10 @@ void main() {
         isA<DesktopRuntimeAccessPolicy>(),
       );
       expect(composition.services.androidShell, isA<DesktopShellService>());
-      expect(composition.services.appUpdate, isA<DesktopAppUpdateService>());
+      final updater = composition.services.appUpdate;
+      expect(updater, isA<AppUpdateService>());
+      expect((updater as AppUpdateService).platform,
+          isA<DesktopAppUpdateBridge>());
       expect(composition.mihomoAvailability.isSupported, isFalse);
       expect(await composition.bootstrap.preloadMihomo(), isFalse);
       final runtimeRegistry = RuntimeRegistry.flClashM(
