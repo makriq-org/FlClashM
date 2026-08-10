@@ -5,6 +5,7 @@ export 'byedpi_node_controller.dart';
 export 'byedpi_release.dart';
 export 'connectivity_check.dart';
 export 'desktop_helper_protocol.dart';
+export 'linux_desktop_helper.dart';
 export 'desktop_node_binary_bridges.dart';
 export 'desktop_process_supervisor.dart';
 export 'desktop_runtime_layout.dart';

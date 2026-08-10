@@ -309,7 +309,10 @@ jobs:
 
       - name: Build Linux desktop bundle
         if: matrix.target == 'linux-x64'
-        run: flutter build linux --release
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cargo rpm appimagetool
+          flutter build linux --release
 
       - name: Build Windows desktop bundle
         if: matrix.target == 'windows-x64'
@@ -344,6 +347,10 @@ jobs:
         run: |
           mkdir -p dist
           tar -C build/linux/x64/release -czf dist/FlClashM-linux-x64.tar.gz bundle
+          python3 tool/linux/package_linux.py \
+            --bundle build/linux/x64/release/bundle \
+            --out dist \
+            --version "${GITHUB_REF_NAME#v}"
 
       - name: Archive Windows desktop bundle
         if: matrix.target == 'windows-x64'

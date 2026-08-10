@@ -119,7 +119,12 @@ class ProductPlatformComposition {
         ),
         androidShell: const DesktopShellService(),
         appUpdate: AppUpdateService(
-          platform: DesktopAppUpdateBridge(environment: updateEnvironment),
+          platform: DesktopAppUpdateBridge(
+            environment: updateEnvironment,
+            installHandoff: profile.kind == ProductPlatformKind.linux
+                ? LinuxAppImageInstallHandoff()
+                : const DeferredDesktopInstallHandoff(),
+          ),
           packageSelector: DesktopAppUpdatePackageSelector(
             environment: updateEnvironment,
           ),

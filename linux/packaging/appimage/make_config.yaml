@@ -1,4 +1,5 @@
 display_name: FlClashM
+package_name: app.flclashm.client
 
 icon: ./assets/images/icon.png
 

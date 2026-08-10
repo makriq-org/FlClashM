@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FlClashM
+Comment=mihomo client
+Exec=FlClashM
+Icon=app.flclashm.client
+Terminal=false
+Categories=Network;
+StartupNotify=true
+StartupWMClass=app.flclashm.client
