@@ -34,8 +34,12 @@ class DesktopRuntimeLayout {
   final String architecture;
   final String dataRoot;
 
-  String artifactPath(String artifact) =>
-      '${ProductInstallLayout.artifactPath(installRoot: installRoot, target: target, architecture: architecture, artifact: artifact)}${target == 'windows' ? '.exe' : ''}';
+  String artifactPath(String artifact) => ProductInstallLayout.artifactPath(
+        installRoot: installRoot,
+        target: target,
+        architecture: architecture,
+        artifact: artifact,
+      );
 
   String get nodesRoot => path.join(dataRoot, 'desktop-runtime', 'nodes');
 
@@ -54,11 +58,11 @@ class DesktopRuntimeLayout {
       throw StateError('Runtime artifact escaped the install layout.');
     }
     final file = File(expected);
-    if (!await file.exists()) {
+    if (!file.existsSync()) {
       throw StateError('Bundled runtime artifact `$artifact` is missing.');
     }
     if (target != 'windows') {
-      final stat = await file.stat();
+      final stat = file.statSync();
       if (stat.mode & 0x49 == 0) {
         throw StateError(
           'Bundled runtime artifact `$artifact` is not executable.',

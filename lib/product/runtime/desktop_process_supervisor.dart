@@ -24,30 +24,45 @@ class DesktopBoundedOutput {
 
   final int limit;
   String _value = '';
+  String _pending = '';
 
-  String get value => _value;
+  // Keep enough raw context to redact credentials split across stdout/stderr
+  // chunks. The retained tail is never exposed without going through
+  // [_redact], so a partial secret cannot escape between chunks.
+  static const _redactionOverlap = 4096;
+
+  String get value => _trim('$_value${_redact(_pending)}');
 
   void add(List<int> bytes) {
-    var text = utf8.decode(bytes, allowMalformed: true);
-    text = _redact(text);
-    _value += text;
-    if (_value.length > limit) {
-      _value = _value.substring(_value.length - limit);
+    _pending += utf8.decode(bytes, allowMalformed: true);
+    if (_pending.length > _redactionOverlap) {
+      final keepFrom = _pending.length - _redactionOverlap;
+      // Redaction preserves character positions, which makes this prefix safe
+      // even when a matching credential continues in the retained overlap.
+      _value = _trim(
+        '$_value${_redact(_pending).substring(0, keepFrom)}',
+      );
+      _pending = _pending.substring(keepFrom);
     }
   }
 
+  String _trim(String value) =>
+      value.length <= limit ? value : value.substring(value.length - limit);
+
   static String _redact(String value) => value
-      .replaceAll(
+      .replaceAllMapped(
         RegExp(
           r'(password|token|secret|authorization)\s*[:=]\s*\S+',
           caseSensitive: false,
         ),
-        r'$1=<redacted>',
+        _mask,
       )
-      .replaceAll(
+      .replaceAllMapped(
         RegExp(r'://([^/@:\s]+):([^/@\s]+)@', caseSensitive: false),
-        '://<redacted>@',
+        _mask,
       );
+
+  static String _mask(Match match) => '*' * match.group(0)!.length;
 }
 
 /// Single owner for every desktop child process. Platform helpers may own
@@ -121,7 +136,16 @@ class DesktopProcessSupervisor {
                 'Desktop runtime process `$identity` exited (code=$code).',
               );
               if (onUnexpectedExit != null) {
-                unawaited(Future<void>.sync(() => onUnexpectedExit(code)));
+                unawaited(
+                  Future<void>.sync(() => onUnexpectedExit(code)).catchError(
+                    (Object error, StackTrace stackTrace) {
+                      commonPrint.log(
+                        'Desktop runtime crash handler for `$identity` failed: '
+                        '$error\n$stackTrace',
+                      );
+                    },
+                  ),
+                );
               }
             }
           }),
@@ -157,8 +181,7 @@ class DesktopProcessSupervisor {
           port,
           timeout: const Duration(milliseconds: 500),
         );
-        socket.add(const <int>[5, 1, 0]);
-        await socket.flush();
+        await (socket..add(const <int>[5, 1, 0])).flush();
         final reply = await socket.first.timeout(
           const Duration(milliseconds: 500),
         );
@@ -186,8 +209,7 @@ class DesktopProcessSupervisor {
     Socket? socket;
     try {
       socket = await socketConnect(host, port, timeout: timeout);
-      socket.add(const <int>[5, 1, 0]);
-      await socket.flush();
+      await (socket..add(const <int>[5, 1, 0])).flush();
       final greeting = await socket.first.timeout(timeout);
       if (greeting.length < 2 || greeting[1] != 0) return false;
       final address = addresses.first;
@@ -195,7 +217,9 @@ class DesktopProcessSupervisor {
           uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
       final request = BytesBuilder()
         ..add(const [5, 1, 0])
-        ..add([address.type == InternetAddressType.IPv4 ? 1 : 4])
+        ..add([
+          if (address.type == InternetAddressType.IPv4) 1 else 4,
+        ])
         ..add(address.rawAddress)
         ..add([(targetPort >> 8) & 0xff, targetPort & 0xff]);
       socket.add(request.takeBytes());

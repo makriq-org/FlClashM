@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -60,7 +61,7 @@ class DesktopHelperProtocol {
     ProductInstallLayout.stormdnsArtifact,
   };
 
-  static const _allowedParameters = <DesktopHelperOperation, Set<String>>{
+  static const _requiredParameters = <DesktopHelperOperation, Set<String>>{
     DesktopHelperOperation.tunOpen: {'interface', 'mtu'},
     DesktopHelperOperation.tunClose: {'interface'},
     DesktopHelperOperation.routeApply: {'interface', 'routes'},
@@ -78,16 +79,15 @@ class DesktopHelperProtocol {
     if (request.installIdentity != ProductInstallLayout.desktopApplicationId) {
       return 'Unexpected desktop install identity.';
     }
-    if (request.parameters.keys.any(
-      (key) =>
-          !_allowedParameters[request.operation]!.contains(key) ||
-          _looksExecutable(key),
-    )) {
-      return 'Desktop helper request contains a forbidden parameter.';
+    final required = _requiredParameters[request.operation]!;
+    if (request.parameters.keys.length != required.length ||
+        !request.parameters.keys.toSet().containsAll(required) ||
+        request.parameters.keys.any(_looksExecutable)) {
+      return 'Desktop helper request has an invalid parameter schema.';
     }
     final isRuntime =
         request.operation == DesktopHelperOperation.runtimeStart ||
-        request.operation == DesktopHelperOperation.runtimeStop;
+            request.operation == DesktopHelperOperation.runtimeStop;
     if (isRuntime != (request.runtimeArtifact != null)) {
       return 'Desktop helper runtime operation has an invalid artifact.';
     }
@@ -95,8 +95,8 @@ class DesktopHelperProtocol {
         !_runtimeArtifacts.contains(request.runtimeArtifact)) {
       return 'Desktop helper runtime artifact is not bundled.';
     }
-    if (!_validateValues(request.parameters)) {
-      return 'Desktop helper request contains an invalid value.';
+    if (!_validateOperation(request.operation, request.parameters)) {
+      return 'Desktop helper request has invalid parameter values.';
     }
     return null;
   }
@@ -110,21 +110,63 @@ class DesktopHelperProtocol {
         normalized.contains('shell');
   }
 
-  static bool _validateValues(Map<String, Object?> values) =>
-      values.values.every((value) {
-        if (value == null || value is bool || value is num) return true;
-        if (value is String) {
-          return value.length <= 4096 &&
-              !value.contains('\x00') &&
-              !value.contains('\n') &&
-              !value.contains('\r');
-        }
-        if (value is List) {
-          return value.length <= 256 &&
-              value.every((item) => item is String && item.length <= 4096);
-        }
-        return false;
-      });
+  static bool _validateOperation(
+    DesktopHelperOperation operation,
+    Map<String, Object?> parameters,
+  ) =>
+      switch (operation) {
+        DesktopHelperOperation.tunOpen =>
+          _interface(parameters['interface']) && _mtu(parameters['mtu']),
+        DesktopHelperOperation.tunClose => _interface(parameters['interface']),
+        DesktopHelperOperation.routeApply =>
+          _interface(parameters['interface']) && _routes(parameters['routes']),
+        DesktopHelperOperation.routeRollback =>
+          _transaction(parameters['transaction']),
+        DesktopHelperOperation.dnsApply =>
+          _interface(parameters['interface']) &&
+              _servers(parameters['servers']),
+        DesktopHelperOperation.dnsRollback =>
+          _transaction(parameters['transaction']),
+        DesktopHelperOperation.runtimeStart ||
+        DesktopHelperOperation.runtimeStop =>
+          _runtimeToken(parameters['runtimeToken']),
+      };
+
+  static bool _interface(Object? value) =>
+      value is String &&
+      RegExp(r'^[A-Za-z][A-Za-z0-9_.-]{0,63}$').hasMatch(value);
+
+  static bool _mtu(Object? value) =>
+      value is int && value >= 576 && value <= 65535;
+
+  static bool _routes(Object? value) =>
+      value is List &&
+      value.isNotEmpty &&
+      value.length <= 128 &&
+      value.every((item) => item is String && _cidr(item));
+
+  static bool _servers(Object? value) =>
+      value is List &&
+      value.isNotEmpty &&
+      value.length <= 16 &&
+      value.every(
+          (item) => item is String && InternetAddress.tryParse(item) != null);
+
+  static bool _transaction(Object? value) =>
+      value is String && RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
+
+  static bool _runtimeToken(Object? value) =>
+      value is String && RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(value);
+
+  static bool _cidr(String value) {
+    final parts = value.split('/');
+    if (parts.length != 2) return false;
+    final address = InternetAddress.tryParse(parts.first);
+    final prefix = int.tryParse(parts.last);
+    if (address == null || prefix == null) return false;
+    final maximum = address.type == InternetAddressType.IPv4 ? 32 : 128;
+    return prefix >= 0 && prefix <= maximum;
+  }
 }
 
 abstract interface class DesktopHelperTransport {

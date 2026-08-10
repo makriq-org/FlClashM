@@ -8,6 +8,7 @@ import 'package:flclashx/models/core.dart';
 import 'package:flclashx/product/platform/product_install_layout.dart';
 import 'package:flclashx/product/runtime/desktop_process_supervisor.dart';
 import 'package:flclashx/product/runtime/desktop_runtime_layout.dart';
+import 'package:flclashx/product/runtime/desktop_runtime_node_bridge.dart';
 import 'package:flclashx/state.dart';
 
 class ClashService extends ClashHandlerInterface {
@@ -174,6 +175,10 @@ class ClashService extends ClashHandlerInterface {
       // file and resolve instead of hanging on serverCompleter forever.
       commonPrint.log('destroy: server unavailable: $e');
     }
+    // Exit/restart destroys the complete desktop runtime ownership domain. A
+    // core-only shutdown leaves built-in nodes and a resolver watcher alive.
+    await desktopRuntimeNodeBridge.stopPlan();
+    await desktopProcessSupervisor.stopAll();
     await _deleteSocketFile();
     return true;
   }

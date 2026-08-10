@@ -9,6 +9,7 @@ export 'desktop_node_binary_bridges.dart';
 export 'desktop_process_supervisor.dart';
 export 'desktop_runtime_layout.dart';
 export 'desktop_runtime_node_bridge.dart';
+export 'desktop_system_dns.dart';
 export 'engine_adapter.dart';
 export 'engine_manager.dart';
 export 'mihomo_engine_adapter.dart';

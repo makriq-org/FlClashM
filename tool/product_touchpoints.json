@@ -15,7 +15,8 @@
       "targets": [
         "lib/product/platform/product_install_layout.dart",
         "lib/product/runtime/desktop_process_supervisor.dart",
-        "lib/product/runtime/desktop_runtime_layout.dart"
+        "lib/product/runtime/desktop_runtime_layout.dart",
+        "lib/product/runtime/desktop_runtime_node_bridge.dart"
       ]
     },
     {

@@ -2,13 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/product/android/android_runtime_node_bridge.dart';
 import 'package:path/path.dart' as path;
 
 import '../platform/product_install_layout.dart';
 import 'desktop_process_supervisor.dart';
 import 'desktop_runtime_layout.dart';
+import 'desktop_system_dns.dart';
 
 class DesktopRuntimeNodeBridge
     implements
@@ -19,13 +20,15 @@ class DesktopRuntimeNodeBridge
     DesktopProcessSupervisor? supervisor,
     DesktopRuntimeLayout? layout,
     Future<List<String>> Function()? readSystemDns,
+    this.dnsPollInterval = const Duration(seconds: 5),
   })  : supervisor = supervisor ?? desktopProcessSupervisor,
         layout = layout ?? DesktopRuntimeLayout.current(),
-        _readSystemDns = readSystemDns ?? _defaultSystemDns;
+        _readSystemDns = readSystemDns ?? const DesktopSystemDns().read;
 
   final DesktopProcessSupervisor supervisor;
   final DesktopRuntimeLayout layout;
   final Future<List<String>> Function() _readSystemDns;
+  final Duration dnsPollInterval;
 
   List<Map<String, dynamic>> _nodes = const [];
   int _generation = 0;
@@ -165,7 +168,7 @@ class DesktopRuntimeNodeBridge
     final file = File(
       path.join(await appPath.homeDirPath, 'desktop-runtime', 'nodes.json'),
     );
-    if (await file.exists()) await file.delete();
+    if (file.existsSync()) await file.delete();
   }
 
   Future<void> _replace({
@@ -263,39 +266,60 @@ class DesktopRuntimeNodeBridge
 
   Future<void> _recoverNode(Map<String, dynamic> node, int generation) =>
       _serialize(() async {
-        if (generation != _generation ||
-            !_nodes.any((item) => item['nodeId'] == node['nodeId'])) {
-          return;
-        }
-        final nodeId = node['nodeId'] as String;
-        final crashes = (_crashCounts[nodeId] ?? 0) + 1;
-        _crashCounts[nodeId] = crashes;
-        if (crashes > 3) {
+        try {
+          if (generation != _generation ||
+              !_nodes.any((item) => item['nodeId'] == node['nodeId'])) {
+            return;
+          }
+          final nodeId = node['nodeId'] as String;
+          final crashes = (_crashCounts[nodeId] ?? 0) + 1;
+          _crashCounts[nodeId] = crashes;
+          if (crashes > 3) {
+            _state = RuntimeNodePlanState(
+              generation: generation,
+              status: 'failed',
+              message: 'Desktop runtime node `${node['name']}` crash loop.',
+              nodes: _nodes,
+              optionalCheckActive: false,
+            );
+            await _stopNodes(_nodes);
+            return;
+          }
+          await Future<void>.delayed(Duration(seconds: crashes));
+          if (generation != _generation) return;
+          final recovered = await _startAndCheck(
+            node,
+            identity: _identity(node),
+          );
+          if (!recovered) {
+            _state = RuntimeNodePlanState(
+              generation: generation,
+              status: 'failed',
+              message:
+                  'Desktop runtime node `${node['name']}` did not recover.',
+              nodes: _nodes,
+              optionalCheckActive: false,
+            );
+            await _stopNodes(_nodes);
+          }
+        } catch (error) {
+          if (generation != _generation) return;
           _state = RuntimeNodePlanState(
             generation: generation,
             status: 'failed',
-            message: 'Desktop runtime node `${node['name']}` crash loop.',
+            message: 'Desktop runtime node `${node['name']}` recovery failed: '
+                '$error',
             nodes: _nodes,
             optionalCheckActive: false,
           );
-          await _stopNodes(_nodes);
-          return;
-        }
-        await Future<void>.delayed(Duration(seconds: crashes));
-        if (generation != _generation) return;
-        final recovered = await _startAndCheck(
-          node,
-          identity: _identity(node),
-        );
-        if (!recovered) {
-          _state = RuntimeNodePlanState(
-            generation: generation,
-            status: 'failed',
-            message: 'Desktop runtime node `${node['name']}` did not recover.',
-            nodes: _nodes,
-            optionalCheckActive: false,
-          );
-          await _stopNodes(_nodes);
+          try {
+            await _stopNodes(_nodes);
+          } catch (stopError) {
+            commonPrint.log(
+              'Desktop runtime crash cleanup failed for `${node['name']}`: '
+              '$stopError',
+            );
+          }
         }
       });
 
@@ -378,8 +402,9 @@ class DesktopRuntimeNodeBridge
   }
 
   String _inside(String root, String relative) {
-    if (path.isAbsolute(relative))
+    if (path.isAbsolute(relative)) {
       throw StateError('Absolute runtime artifact path.');
+    }
     final resolved = path.normalize(path.absolute(path.join(root, relative)));
     if (!path.isWithin(path.normalize(path.absolute(root)), resolved)) {
       throw StateError('Runtime artifact escaped its working directory.');
@@ -396,28 +421,28 @@ class DesktopRuntimeNodeBridge
     )) {
       return;
     }
-    _dnsWatcher = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _dnsWatcher = Timer.periodic(dnsPollInterval, (_) {
+      unawaited(_pollSystemDns());
+    });
+  }
+
+  Future<void> _pollSystemDns() async {
+    try {
       final dns = await _readSystemDns();
       final fingerprint = dns.join(',');
       if (_dnsFingerprint.isEmpty) {
         _dnsFingerprint = fingerprint;
       } else if (fingerprint != _dnsFingerprint) {
         _dnsFingerprint = fingerprint;
-        unawaited(applyPlan(_nodes));
+        await _serialize(() async {
+          for (final node in _nodes) {
+            await _renderResolver(node);
+          }
+        });
       }
-    });
-  }
-
-  static Future<List<String>> _defaultSystemDns() async {
-    if (!Platform.isLinux) return const [];
-    final file = File('/etc/resolv.conf');
-    if (!await file.exists()) return const [];
-    final lines = await file.readAsLines();
-    return [
-      for (final line in lines)
-        if (line.trimLeft().startsWith('nameserver '))
-          line.trim().split(RegExp(r'\s+'))[1],
-    ];
+    } catch (error) {
+      commonPrint.log('Desktop system DNS refresh failed: $error');
+    }
   }
 
   Future<T> _serialize<T>(Future<T> Function() action) {
@@ -432,3 +457,8 @@ class DesktopRuntimeNodeBridge
     return completer.future;
   }
 }
+
+DesktopRuntimeNodeBridge? _desktopRuntimeNodeBridge;
+
+DesktopRuntimeNodeBridge get desktopRuntimeNodeBridge =>
+    _desktopRuntimeNodeBridge ??= DesktopRuntimeNodeBridge();

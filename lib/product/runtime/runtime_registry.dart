@@ -12,8 +12,8 @@ import 'mihomo_engine_adapter.dart';
 import 'naiveproxy_node_controller.dart';
 import 'olcrtc_node_controller.dart';
 import 'runtime_health_probe.dart';
-import 'stormdns_node_controller.dart';
 import 'runtime_types.dart';
+import 'stormdns_node_controller.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
 
@@ -23,7 +23,7 @@ EngineAdapter _buildMihomoEngineAdapter(
   RuntimeHealthProbe? runtimeHealthProbe,
 ) {
   final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
-  final desktopRuntime = isDesktop ? DesktopRuntimeNodeBridge() : null;
+  final desktopRuntime = isDesktop ? desktopRuntimeNodeBridge : null;
   return MihomoEngineAdapter(
     builtInProxySupervisor: DefaultBuiltInProxySupervisor(
       naiveProxy: isDesktop
@@ -104,27 +104,28 @@ class RuntimeRegistry {
     AccessControl? Function()? readProfileAccessControl,
     RuntimeHealthProbe? runtimeHealthProbe,
     required RuntimeAvailability mihomoAvailability,
-  }) => RuntimeRegistry(
-    defaultSelection: const RuntimeSelection.mihomo(),
-    engines: [
-      EngineRuntimeRegistration(
-        descriptor: const RuntimeDescriptor(
-          id: RuntimeId.mihomo,
-          role: RuntimeRole.engine,
-          capabilities: {
-            RuntimeCapability.tun,
-            RuntimeCapability.coldStartPersistence,
-          },
-        ),
-        availability: mihomoAvailability,
-        adapterFactory: () => _buildMihomoEngineAdapter(
-          readAccessControl,
-          readProfileAccessControl,
-          runtimeHealthProbe,
-        ),
-      ),
-    ],
-  );
+  }) =>
+      RuntimeRegistry(
+        defaultSelection: const RuntimeSelection.mihomo(),
+        engines: [
+          EngineRuntimeRegistration(
+            descriptor: const RuntimeDescriptor(
+              id: RuntimeId.mihomo,
+              role: RuntimeRole.engine,
+              capabilities: {
+                RuntimeCapability.tun,
+                RuntimeCapability.coldStartPersistence,
+              },
+            ),
+            availability: mihomoAvailability,
+            adapterFactory: () => _buildMihomoEngineAdapter(
+              readAccessControl,
+              readProfileAccessControl,
+              runtimeHealthProbe,
+            ),
+          ),
+        ],
+      );
 
   final RuntimeSelection defaultSelection;
   final Map<RuntimeId, EngineRuntimeRegistration> _engines;

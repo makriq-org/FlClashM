@@ -11,7 +11,7 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: 'mihomo',
-            parameters: {'runtimeToken': 'core'},
+            parameters: {'runtimeToken': 'runtime_token_1234'},
           ),
         ),
         isNull,
@@ -21,7 +21,7 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: '/tmp/evil',
-            parameters: {'runtimeToken': 'core'},
+            parameters: {'runtimeToken': 'runtime_token_1234'},
           ),
         ),
         isNotNull,
@@ -31,6 +31,61 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.tunOpen,
             parameters: {'command': 'sh -c id'},
+          ),
+        ),
+        isNotNull,
+      );
+    });
+
+    test('requires operation-specific parameter types and formats', () {
+      expect(
+        DesktopHelperProtocol.validate(
+          const DesktopHelperRequest(
+            operation: DesktopHelperOperation.tunOpen,
+            parameters: {'interface': 'flclashm0', 'mtu': 1500},
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        DesktopHelperProtocol.validate(
+          const DesktopHelperRequest(
+            operation: DesktopHelperOperation.tunOpen,
+            parameters: {'interface': 'flclashm0'},
+          ),
+        ),
+        isNotNull,
+      );
+      expect(
+        DesktopHelperProtocol.validate(
+          const DesktopHelperRequest(
+            operation: DesktopHelperOperation.routeApply,
+            parameters: {
+              'interface': 'tun0',
+              'routes': ['not-a-route']
+            },
+          ),
+        ),
+        isNotNull,
+      );
+      expect(
+        DesktopHelperProtocol.validate(
+          const DesktopHelperRequest(
+            operation: DesktopHelperOperation.dnsApply,
+            parameters: {
+              'interface': 'tun0',
+              'servers': ['dns.example']
+            },
+          ),
+        ),
+        isNotNull,
+      );
+      expect(
+        DesktopHelperProtocol.validate(
+          const DesktopHelperRequest(
+            operation: DesktopHelperOperation.runtimeStop,
+            runtimeArtifact: 'mihomo',
+            parameters: {'runtimeToken': 'short'},
           ),
         ),
         isNotNull,
@@ -69,7 +124,10 @@ void main() {
       final response = await client.execute(
         const DesktopHelperRequest(
           operation: DesktopHelperOperation.routeApply,
-          parameters: {'interface': 'tun0', 'routes': <String>[]},
+          parameters: {
+            'interface': 'tun0',
+            'routes': ['0.0.0.0/0']
+          },
         ),
         rollback: const DesktopHelperRequest(
           operation: DesktopHelperOperation.routeRollback,
