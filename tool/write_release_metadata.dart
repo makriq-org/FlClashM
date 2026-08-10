@@ -8,6 +8,18 @@ void main(List<String> args) {
   final contract = readReleaseContract();
   final pubspecVersion = readPubspecVersion();
   final coreVersion = readCoreVersion();
+  final tagFailure = validateReleaseTag(
+    refName: options.githubRefName,
+    pubspecVersion: pubspecVersion,
+  );
+  final channelFailure = validateReleaseChannel(
+    releaseChannel: options.releaseChannel,
+    pubspecVersion: pubspecVersion,
+  );
+  final contractFailure = tagFailure ?? channelFailure;
+  if (contractFailure != null) {
+    throw StateError(contractFailure);
+  }
 
   final outputFile = File(options.outputPath);
   outputFile.parent.createSync(recursive: true);
@@ -19,7 +31,7 @@ void main(List<String> args) {
       'releaseRepository': contract.releaseRepository,
       'githubRepository': options.githubRepository,
       'tagName': options.githubRefName,
-      'expectedStableTag': 'v${pubspecVersion.versionName}',
+      'expectedStableTag': pubspecVersion.stableTagName,
       'releaseChannel': options.releaseChannel,
       'pubspecVersion': pubspecVersion.raw,
       'versionName': pubspecVersion.versionName,

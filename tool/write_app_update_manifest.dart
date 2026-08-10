@@ -9,6 +9,19 @@ import 'release_contract.dart';
 
 Future<void> main(List<String> args) async {
   final options = ManifestOptions.parse(args);
+  final pubspecVersion = readPubspecVersion();
+  final tagFailure = validateReleaseTag(
+    refName: options.tagName,
+    pubspecVersion: pubspecVersion,
+  );
+  final channelFailure = validateReleaseChannel(
+    releaseChannel: options.channel.wireName,
+    pubspecVersion: pubspecVersion,
+  );
+  final contractFailure = tagFailure ?? channelFailure;
+  if (contractFailure != null) {
+    throw StateError(contractFailure);
+  }
   final signingKey = Platform.environment['APP_UPDATE_SIGNING_KEY'];
   if (signingKey == null || signingKey.isEmpty) {
     throw StateError('Missing APP_UPDATE_SIGNING_KEY.');
