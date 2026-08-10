@@ -109,7 +109,7 @@ cache limits as StormDNS lists.
 
 > [!NOTE]
 > `strategy-test` is used **only** during auto-selection and overrides the built-in test endpoint — it does not replace `connectivity-check`. The verified result and the temporary fallback are cached **separately**: fallback doesn't block later selection attempts for the normal TTL. Any HTTP check counts as success, including `4xx` and `5xx`.
->
+
 > [!CAUTION]
 > The old `test` section is no longer supported — rename it to `strategy-test`.
 

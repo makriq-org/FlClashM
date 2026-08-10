@@ -108,7 +108,7 @@ StormDNS 列表共用公网 HTTPS、大小、超时和 stale-cache 限制。
 
 > [!NOTE]
 > `strategy-test` **仅**用于自动选择，并覆盖内置测试端点 —— 它不替代 `connectivity-check`。已验证结果与临时 fallback **分开**缓存：fallback 不会在正常 TTL 内阻断后续选择尝试。任何 HTTP 检查都算成功，包括 `4xx` 和 `5xx`。
->
+
 > [!CAUTION]
 > 旧的 `test` 段不再支持 —— 请改名为 `strategy-test`。
 
