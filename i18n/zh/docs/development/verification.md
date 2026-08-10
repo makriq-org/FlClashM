@@ -11,7 +11,8 @@
 - 🔍 对产品与发布代码的选择性静态分析；
 - 🏗 Android `arm64` 构建。
 
-> ➕ 当 `android`、`core`、`assets/runtimes`、`setup.dart` 或 `lib/product/runtime` 变化时，还会构建 `armeabi-v7a` 与 `x86_64`。
+> [!NOTE]
+> 当 `android`、`core`、`assets/runtimes`、`setup.dart` 或 `lib/product/runtime` 变化时，还会构建 `armeabi-v7a` 与 `x86_64`。
 
 **如何触发。** 对工作分支，主工作流在 pull request 事件上运行，而 `push` 只用于 `main`。独立的发布连续性工作流保留供手动运行：该检查其实已自动包含在主工作流中，因此单次提交不会产生重复的检查集。同一 pull request 的新运行会取消上一次未完成的运行。若仅改动无关文档，则跳过重型任务。
 
@@ -36,7 +37,8 @@ dart setup.dart android --arch arm64 --out core
 flutter build apk --release
 ```
 
-> ⚠️ 在**真实 Android 设备**上对应用启动、VPN、后台服务与内置节点的完整验证仍留在本地。
+> [!WARNING]
+> 在**真实 Android 设备**上对应用启动、VPN、后台服务与内置节点的完整验证仍留在本地。
 
 ---
 

@@ -20,7 +20,8 @@ not override it at build time, and the tag must match it with a leading `v`.
 - `FlClashM-android-x86_64.apk`
 - `FlClashM-android-release.aab`
 
-> 🔐 Each release includes a `.sha256` for every file. For a stable release, their presence is additionally treated as a **mandatory part** of the release contract.
+> [!IMPORTANT]
+> Each release includes a `.sha256` for every file. For a stable release, their presence is additionally treated as a **mandatory part** of the release contract.
 
 ## 🚀 Pipeline
 
@@ -45,7 +46,8 @@ For each pointer a binary `.sig` signature is published alongside. The signature
 
 Release files are first uploaded into the immutable `releases/<tag>` directory. Then the pointer signature is published, and **last** — the pointer itself.
 
-> 🔑 A release requires the secrets `APP_UPDATE_SIGNING_KEY`, `SOURCEFORGE_SSH_KEY`, and `SOURCEFORGE_USERNAME`.
+> [!IMPORTANT]
+> A release requires the secrets `APP_UPDATE_SIGNING_KEY`, `SOURCEFORGE_SSH_KEY`, and `SOURCEFORGE_USERNAME`.
 
 ## ⏮ Rollback
 

@@ -20,7 +20,8 @@
 - `FlClashM-android-x86_64.apk`
 - `FlClashM-android-release.aab`
 
-> 🔐 هر انتشار برای هر فایل یک `.sha256` دارد. برای انتشار پایدار، وجود آن‌ها افزون بر این **بخش الزامی** قرارداد انتشار شمرده می‌شود.
+> [!IMPORTANT]
+> هر انتشار برای هر فایل یک `.sha256` دارد. برای انتشار پایدار، وجود آن‌ها افزون بر این **بخش الزامی** قرارداد انتشار شمرده می‌شود.
 
 ## 🚀 خط لوله
 
@@ -45,7 +46,8 @@ SourceForge `flclashm` کانال **اصلی** تحویل APK است و GitHub *
 
 فایل‌های انتشار نخست به پوشهٔ تغییرناپذیر `releases/<tag>` بارگذاری می‌شوند. سپس امضای اشاره‌گر و **در پایان** خودِ اشاره‌گر منتشر می‌شود.
 
-> 🔑 انتشار به رازهای `APP_UPDATE_SIGNING_KEY`، `SOURCEFORGE_SSH_KEY` و `SOURCEFORGE_USERNAME` نیاز دارد.
+> [!IMPORTANT]
+> انتشار به رازهای `APP_UPDATE_SIGNING_KEY`، `SOURCEFORGE_SSH_KEY` و `SOURCEFORGE_USERNAME` نیاز دارد.
 
 ## ⏮ بازگردانی
 
