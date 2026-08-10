@@ -7,6 +7,10 @@ void main() {
   group('RuntimeRegistry', () {
     final registry = RuntimeRegistry.flClashM(
       readAccessControl: () => const AccessControl(),
+      mihomoAvailability: const RuntimeAvailability.supported(
+        updatePath: 'bundled',
+        rollbackPath: 'bundled',
+      ),
     );
 
     test('resolves bundled mihomo by default', () {

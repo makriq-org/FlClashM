@@ -4,15 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application.dart';
-import '../../clash/core.dart';
-import '../../common/android.dart';
 import '../../common/http.dart';
 import '../../common/path.dart';
 import '../../common/system.dart';
 import '../../state.dart';
-import '../android/android_entrypoint.dart';
 import '../diagnostics/diagnostic_recorder.dart';
-import '../platform/platform_profile.dart';
+import '../platform/product_platform_composition.dart';
 
 class AppBootstrap {
   const AppBootstrap._();
@@ -26,17 +23,15 @@ class AppBootstrap {
   }
 
   static Future<void> _runInitialized() async {
-    if (!productPlatform.supported) {
-      throw UnsupportedError(
-        'FlClashM is Android-only. Host platform: ${productPlatform.hostPlatform.name}',
-      );
+    final composition = productPlatformComposition;
+    if (!composition.profile.supported) {
+      throw UnsupportedError(composition.profile.unsupportedMessage);
     }
 
     final version = await system.version;
-    await clashCore.preload();
+    await composition.bootstrap.preloadMihomo();
     await globalState.initApp(version);
-    await android?.init();
-    await androidEntrypoint.init();
+    await composition.bootstrap.initialize();
 
     HttpOverrides.global = FlClashHttpOverrides();
     runApp(const ProviderScope(child: Application()));

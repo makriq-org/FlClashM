@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:async';
 
 import '../../common/common.dart';
@@ -5,8 +7,9 @@ import '../../enum/enum.dart';
 import '../../models/models.dart';
 import '../android/android_foreground_notification_policy.dart';
 import '../android/android_shell_bridge.dart';
+import 'product_shell_service.dart';
 
-class AndroidShellService {
+class AndroidShellService implements ProductShellService {
   AndroidShellService({
     this.platform = const AndroidShellBridge(),
     this.foregroundNotification = const AndroidForegroundNotificationPolicy(),

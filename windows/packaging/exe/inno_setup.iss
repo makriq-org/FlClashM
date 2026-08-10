@@ -41,7 +41,7 @@ var
   i: Integer;
   ResultCode: Integer;
 begin
-  Processes := ['FlClashM.exe', 'FlClashCore.exe', 'FlClashHelperService.exe'];
+  Processes := ['FlClashM.exe'];
 
   // First try graceful shutdown
   for i := 0 to GetArrayLength(Processes)-1 do
@@ -91,17 +91,11 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
 begin
   // Check if app is already installed
   IsUpgrade := IsAppInstalled();
   if IsUpgrade then
     PreviousVersion := GetInstalledVersion();
-  
-  // Stop service if running
-  Exec('sc.exe', 'stop "FlClashHelperService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1000);
   
   // Kill all processes
   KillProcesses;
@@ -148,49 +142,21 @@ begin
     Result := Result + MemoTasksInfo + NewLine;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
-begin
-  if CurStep = ssPostInstall then
-  begin
-    // Refresh icon cache/associations
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
-    Sleep(500);
-    // Ensure helper service is started after install/upgrade, independent of app
-    try
-      Exec('sc.exe', 'start "FlClashHelperService"', '', SW_HIDE, ewNoWait, ResultCode);
-    except
-    end;
-  end;
-end;
-
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  ResultCode: Integer;
 begin
   case CurUninstallStep of
     usUninstall:
     begin
-      // Stop service first
-      Exec('sc.exe', 'stop "FlClashHelperService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      Sleep(1000);
-      
-      // Kill all processes
       KillProcesses;
-      
-      // Delete service
-      Exec('sc.exe', 'delete "FlClashHelperService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      Sleep(500);
     end;
-    
+
     usPostUninstall:
     begin
-      if DirExists(ExpandConstant('{userappdata}\com.follow\clashx')) then
+      if DirExists(ExpandConstant('{userappdata}\app.flclashm.client')) then
       begin
         if MsgBox('Удалить пользовательские данные программы?', mbConfirmation, MB_YESNO) = IDYES then
         begin
-          DelTree(ExpandConstant('{userappdata}\com.follow\clashx'), True, True, True);
+          DelTree(ExpandConstant('{userappdata}\app.flclashm.client'), True, True, True);
         end;
       end;
     end;

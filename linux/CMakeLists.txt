@@ -7,7 +7,7 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "FlClashM")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.makriq.flclash")
+set(APPLICATION_ID "app.flclashm.client")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -107,6 +107,15 @@ install(CODE "
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  set(RUNTIME_ARCHITECTURE "x86_64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+  set(RUNTIME_ARCHITECTURE "arm64")
+else()
+  message(FATAL_ERROR "Unsupported Linux runtime architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+set(INSTALL_RUNTIME_DIR
+  "${CMAKE_INSTALL_PREFIX}/runtimes/linux/${RUNTIME_ARCHITECTURE}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -117,10 +126,10 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# libclash.so
+# Desktop runtime artifacts use the ProductInstallLayout contract.
 set(CLASH_DIR "../libclash/linux")
-install(PROGRAMS "${CLASH_DIR}/FlClashCore" DESTINATION "${BUILD_BUNDLE_DIR}"
-  COMPONENT Runtime)
+install(PROGRAMS "${CLASH_DIR}/FlClashCore" DESTINATION "${INSTALL_RUNTIME_DIR}"
+  RENAME "mihomo" COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"

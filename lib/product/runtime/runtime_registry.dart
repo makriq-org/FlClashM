@@ -67,6 +67,7 @@ class RuntimeRegistry {
     required ReadAccessControlCallback readAccessControl,
     AccessControl? Function()? readProfileAccessControl,
     RuntimeHealthProbe? runtimeHealthProbe,
+    required RuntimeAvailability mihomoAvailability,
   }) =>
       RuntimeRegistry(
         defaultSelection: const RuntimeSelection.mihomo(),
@@ -80,12 +81,7 @@ class RuntimeRegistry {
                 RuntimeCapability.coldStartPersistence,
               },
             ),
-            availability: const RuntimeAvailability.supported(
-              updatePath:
-                  'Bundled Android core is built by setup.dart into libclash/android.',
-              rollbackPath:
-                  'Fallback stays on the bundled mihomo path and current cold-start snapshot.',
-            ),
+            availability: mihomoAvailability,
             adapterFactory: () => _buildMihomoEngineAdapter(
               readAccessControl,
               readProfileAccessControl,
