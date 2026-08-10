@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flclashx/common/path.dart';
 import 'package:flclashx/product/platform/product_install_layout.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,13 +32,13 @@ void main() {
     final manifest =
         jsonDecode(File('tool/runtime_compat/manifest.json').readAsStringSync())
             as Map<String, dynamic>;
-    final targets = (manifest['targets'] as Map<String, dynamic>).values
+    final targets = (manifest['targets'] as Map<String, dynamic>)
+        .values
         .cast<Map<String, dynamic>>()
         .map((entry) => '${entry['os']}:${entry['architecture']}')
         .toSet();
     final contract = ProductInstallLayout
-        .supportedDesktopRuntimeCoordinates
-        .entries
+        .supportedDesktopRuntimeCoordinates.entries
         .expand(
           (entry) =>
               entry.value.map((architecture) => '${entry.key}:$architecture'),
@@ -57,13 +58,22 @@ void main() {
       '/opt/flclashm/runtimes/linux/x86_64/stormdns',
     );
     expect(
-      ProductInstallLayout.artifactPath(
+      AppPath.resolveDesktopArtifactPath(
         installRoot: r'C:\Program Files\FlClashM',
         target: 'windows',
         architecture: 'x86_64',
         artifact: ProductInstallLayout.naiveproxyArtifact,
       ),
       endsWith(r'runtimes/windows/x86_64/naiveproxy.exe'),
+    );
+    expect(
+      AppPath.resolveDesktopArtifactPath(
+        installRoot: r'C:\Program Files\FlClashM',
+        target: 'windows',
+        architecture: 'x86_64',
+        artifact: ProductInstallLayout.helperArtifact,
+      ),
+      endsWith(r'runtimes/windows/x86_64/app.flclashm.client.helper.exe'),
     );
   });
 }

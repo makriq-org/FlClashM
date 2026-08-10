@@ -62,13 +62,29 @@ class AppPath {
           ),
       };
 
-  String _desktopArtifactPath(String artifact) =>
-      '${ProductInstallLayout.artifactPath(
+  String _desktopArtifactPath(String artifact) => resolveDesktopArtifactPath(
         installRoot: desktopInstallRoot,
         target: _desktopRuntimeTarget,
         architecture: desktopArchitecture,
         artifact: artifact,
-      )}$executableExtension';
+      );
+
+  /// Resolves a bundled desktop executable through the install-layout owner.
+  ///
+  /// [ProductInstallLayout] includes the platform-specific executable suffix,
+  /// so callers must use this path unchanged.
+  static String resolveDesktopArtifactPath({
+    required String installRoot,
+    required String target,
+    required String architecture,
+    required String artifact,
+  }) =>
+      ProductInstallLayout.artifactPath(
+        installRoot: installRoot,
+        target: target,
+        architecture: architecture,
+        artifact: artifact,
+      );
 
   String get corePath =>
       Platform.isLinux || Platform.isWindows || Platform.isMacOS

@@ -115,6 +115,8 @@ install(PROGRAMS
   "${RUNTIME_ASSET_DIR}/byedpi.exe"
   "${RUNTIME_ASSET_DIR}/stormdns.exe"
   DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
+install(FILES "${RUNTIME_ASSET_DIR}/runtime-inventory.json"
+  DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
 
 set(CLASH_DIR "../libclash/windows")
 install(PROGRAMS "${CLASH_DIR}/FlClashHelperService.exe" DESTINATION "${INSTALL_RUNTIME_DIR}"

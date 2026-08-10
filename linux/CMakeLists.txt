@@ -151,6 +151,8 @@ install(PROGRAMS
   "${RUNTIME_ASSET_DIR}/byedpi"
   "${RUNTIME_ASSET_DIR}/stormdns"
   DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
+install(FILES "${RUNTIME_ASSET_DIR}/runtime-inventory.json"
+  DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
