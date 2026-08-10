@@ -5,7 +5,8 @@
 - 🖐 **手动** —— 在应用设置里；
 - 📄 **通过配置** —— 提供商直接在 YAML 里定义规则。
 
-> ℹ️ 配置里的规则**优先**于手动设置。若配置定义了分流，应用设置会显示访问控制由配置管理。
+> [!NOTE]
+> 配置里的规则**优先**于手动设置。若配置定义了分流，应用设置会显示访问控制由配置管理。
 
 ---
 
@@ -37,7 +38,8 @@ tun:
     - org.mozilla.firefox
 ```
 
-> ⚠️ `include-package` 与 `exclude-package` **不能**同时使用。
+> [!WARNING]
+> `include-package` 与 `exclude-package` **不能**同时使用。
 
 ---
 
@@ -86,7 +88,8 @@ tun:
   include-package-url: https://example.com/packages.txt
 ```
 
-> 💾 URL 列表会缓存在本地，地址不可用时继续沿用。
+> [!NOTE]
+> URL 列表会缓存在本地，地址不可用时继续沿用。
 
 ---
 

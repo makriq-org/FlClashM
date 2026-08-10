@@ -5,7 +5,8 @@ Split tunneling answers a simple question: **which apps go through the VPN and w
 - 🖐 **manually** — in the app settings;
 - 📄 **via profile** — the provider defines the rules right in the YAML.
 
-> ℹ️ Rules from the profile take **priority** over manual settings. If the profile defines split tunneling, the app settings will show that access control is managed by the profile.
+> [!NOTE]
+> Rules from the profile take **priority** over manual settings. If the profile defines split tunneling, the app settings will show that access control is managed by the profile.
 
 ---
 
@@ -37,7 +38,8 @@ tun:
     - org.mozilla.firefox
 ```
 
-> ⚠️ `include-package` and `exclude-package` **cannot** be used at the same time.
+> [!WARNING]
+> `include-package` and `exclude-package` **cannot** be used at the same time.
 
 ---
 
@@ -86,7 +88,8 @@ tun:
   include-package-url: https://example.com/packages.txt
 ```
 
-> 💾 A URL list is cached locally and used if the address becomes unavailable.
+> [!NOTE]
+> A URL list is cached locally and used if the address becomes unavailable.
 
 ---
 

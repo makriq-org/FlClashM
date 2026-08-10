@@ -16,7 +16,8 @@
 - `FlClashM-android-x86_64.apk`
 - `FlClashM-android-release.aab`
 
-> 🔐 每个发布都为每个文件附带 `.sha256`。对稳定发布，它们的存在还被视为发布契约的**必要部分**。
+> [!IMPORTANT]
+> 每个发布都为每个文件附带 `.sha256`。对稳定发布，它们的存在还被视为发布契约的**必要部分**。
 
 ## 🚀 流水线
 
@@ -41,7 +42,8 @@ SourceForge `flclashm` 是 APK 的**主**分发通道，GitHub 为**备用**。�
 
 发布文件先上传到不可变目录 `releases/<tag>`。随后发布指针签名，**最后**才是指针本身。
 
-> 🔑 发布需要机密 `APP_UPDATE_SIGNING_KEY`、`SOURCEFORGE_SSH_KEY` 和 `SOURCEFORGE_USERNAME`。
+> [!IMPORTANT]
+> 发布需要机密 `APP_UPDATE_SIGNING_KEY`、`SOURCEFORGE_SSH_KEY` 和 `SOURCEFORGE_USERNAME`。
 
 ## ⏮ 回滚
 
