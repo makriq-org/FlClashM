@@ -238,6 +238,136 @@ jobs:
           path: ./dist
           overwrite: true
 
+  desktop-runtime-artifacts:
+    needs: [release-guards]
+    uses: ./.github/workflows/desktop-runtime-artifacts.yml
+
+  build-desktop-artifacts:
+    needs: [desktop-runtime-artifacts]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            runtime-root: build/linux/x64/release/bundle
+            artifact: artifact-desktop-linux-x64
+          - target: windows-x64
+            runner: windows-2025
+            runtime-root: build/windows/x64/runner/Release
+            artifact: artifact-desktop-windows-x64
+          - target: macos-x64
+            runner: macos-15-intel
+            runtime-root: build/macos/Build/Products/Release/FlClashM.app/Contents
+            artifact: artifact-desktop-macos-x64
+          - target: macos-arm64
+            runner: macos-14
+            runtime-root: build/macos/Build/Products/Release/FlClashM.app/Contents
+            artifact: artifact-desktop-macos-arm64
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Download verified desktop runtime layout
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          name: desktop-runtime-${{ matrix.target }}
+          path: .dart_tool/desktop-runtime-assets
+
+      - name: Verify downloaded Linux runtime inventory
+        if: matrix.target == 'linux-x64'
+        env:
+          RUNTIME_COMPAT_OUT: .dart_tool/desktop-runtime-assets
+        run: python3 tool/runtime_compat/runtime_compat.py verify --target linux-x64
+
+      - name: Verify downloaded Windows runtime inventory
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          $env:RUNTIME_COMPAT_OUT = '.dart_tool/desktop-runtime-assets'
+          python tool/runtime_compat/runtime_compat.py verify --target windows-x64
+
+      - name: Verify downloaded macOS runtime inventory
+        if: startsWith(matrix.target, 'macos-')
+        env:
+          RUNTIME_COMPAT_OUT: .dart_tool/desktop-runtime-assets
+        run: python3 tool/runtime_compat/runtime_compat.py verify --target ${{ matrix.target }}
+
+      - name: Build Linux desktop bundle
+        if: matrix.target == 'linux-x64'
+        run: flutter build linux --release
+
+      - name: Build Windows desktop bundle
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: flutter build windows --release
+
+      - name: Build macOS desktop bundle
+        if: startsWith(matrix.target, 'macos-')
+        run: flutter build macos --release
+
+      - name: Verify packaged Linux runtime inventory
+        if: matrix.target == 'linux-x64'
+        env:
+          RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
+        run: python3 tool/runtime_compat/runtime_compat.py verify --target linux-x64
+
+      - name: Verify packaged Windows runtime inventory
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          $env:RUNTIME_COMPAT_OUT = '${{ matrix.runtime-root }}'
+          python tool/runtime_compat/runtime_compat.py verify --target windows-x64
+
+      - name: Verify packaged macOS runtime inventory
+        if: startsWith(matrix.target, 'macos-')
+        env:
+          RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
+        run: python3 tool/runtime_compat/runtime_compat.py verify --target ${{ matrix.target }}
+
+      - name: Archive Linux desktop bundle
+        if: matrix.target == 'linux-x64'
+        run: |
+          mkdir -p dist
+          tar -C build/linux/x64/release -czf dist/FlClashM-linux-x64.tar.gz bundle
+
+      - name: Archive Windows desktop bundle
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath 'dist/FlClashM-windows-x64.zip'
+
+      - name: Archive macOS desktop bundle
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/macos/Build/Products/Release/FlClashM.app \
+            dist/FlClashM-${{ matrix.target }}.zip
+
+      - name: Upload packaged desktop bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./dist
+          if-no-files-found: error
+          overwrite: true
+
   package:
     runs-on: ubuntu-latest
     needs: [build-android-artifacts]

@@ -9,6 +9,8 @@
 ## Unreleased
 
 - Добавлена оболочка приложения для Linux, Windows и macOS.
+- Добавлено управление mihomo и встроенными узлами на Linux, Windows и macOS.
+- Добавлено безопасное обновление полного приложения на Linux, Windows и macOS.
 
 ## v0.10.8-pre2
 

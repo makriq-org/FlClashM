@@ -1,11 +1,19 @@
+import 'dart:io';
+
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 import 'built_in_proxy_supervisor.dart';
+import 'byedpi_node_controller.dart';
+import 'desktop_node_binary_bridges.dart';
+import 'desktop_runtime_node_bridge.dart';
 import 'engine_adapter.dart';
 import 'mihomo_engine_adapter.dart';
+import 'naiveproxy_node_controller.dart';
+import 'olcrtc_node_controller.dart';
 import 'runtime_health_probe.dart';
 import 'runtime_types.dart';
+import 'stormdns_node_controller.dart';
 
 typedef EngineAdapterFactory = EngineAdapter Function();
 
@@ -13,14 +21,42 @@ EngineAdapter _buildMihomoEngineAdapter(
   ReadAccessControlCallback readAccessControl,
   AccessControl? Function()? readProfileAccessControl,
   RuntimeHealthProbe? runtimeHealthProbe,
-) =>
-    MihomoEngineAdapter(
-      builtInProxySupervisor: DefaultBuiltInProxySupervisor(
-        healthProbe: runtimeHealthProbe,
-      ),
-      readAccessControl: readAccessControl,
-      readProfileAccessControl: readProfileAccessControl,
-    );
+) {
+  final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+  final desktopRuntime = isDesktop ? desktopRuntimeNodeBridge : null;
+  return MihomoEngineAdapter(
+    builtInProxySupervisor: DefaultBuiltInProxySupervisor(
+      naiveProxy: isDesktop
+          ? NaiveProxyNodeController(
+              binary: const DesktopNaiveProxyBinaryBridge(),
+              runtime: desktopRuntime!,
+            )
+          : null,
+      byedpi: isDesktop
+          ? ByedpiNodeController(
+              binary: const DesktopByedpiBinaryBridge(),
+              runtime: desktopRuntime!,
+            )
+          : null,
+      olcRtc: isDesktop
+          ? OlcRtcNodeController(
+              binary: const DesktopOlcRtcBinaryBridge(),
+              runtime: desktopRuntime!,
+            )
+          : null,
+      stormDns: isDesktop
+          ? StormDnsNodeController(
+              binary: const DesktopStormDnsBinaryBridge(),
+              runtime: desktopRuntime!,
+            )
+          : null,
+      runtime: desktopRuntime,
+      healthProbe: runtimeHealthProbe,
+    ),
+    readAccessControl: readAccessControl,
+    readProfileAccessControl: readProfileAccessControl,
+  );
+}
 
 @immutable
 class EngineRuntimeRegistration {

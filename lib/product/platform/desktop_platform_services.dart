@@ -7,7 +7,6 @@ import '../../enum/enum.dart';
 import '../../models/models.dart';
 import '../runtime/engine_manager.dart';
 import '../services/product_shell_service.dart';
-import '../services/product_update_service.dart';
 import '../services/runtime_access_platform.dart';
 
 /// Capability that is intentionally absent until its platform PR lands.
@@ -54,17 +53,25 @@ class DesktopRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     required Future<void> Function() onAuthorizeRestart,
     required ValueChanged<bool> onResolvedTunEnable,
     Future<AuthorizeCode> Function()? authorizeCore,
-  }) =>
-      Future.error(
-          UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+  }) {
+    if (!requestedTunEnable) {
+      onResolvedTunEnable(false);
+      return Future.value(const ResolvedTunAccess.proceed(enableTun: false));
+    }
+    return Future.error(
+      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+    );
+  }
 
   @override
   Future<bool> startVpn({required AccessControl accessControl}) => Future.error(
-      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+        UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+      );
 
   @override
   Future<void> stopVpn() => Future.error(
-      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+        UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+      );
 }
 
 /// A deliberately channel-free shell. Android-only lifecycle hooks are no-ops;
@@ -146,33 +153,4 @@ class DesktopShellService implements ProductShellService {
 
   @override
   Future<void> updateExcludeFromRecents({required bool hidden}) async {}
-}
-
-class DesktopAppUpdateService implements ProductUpdateService {
-  const DesktopAppUpdateService();
-
-  @override
-  Future<void> autoCheck({
-    required bool enabled,
-    required bool includePrerelease,
-    required String skippedTagName,
-    SkipAppUpdateRelease? onSkipRelease,
-  }) async {
-    // Startup checks must not fail the desktop shell; the manual path reports
-    // the missing installer explicitly.
-  }
-
-  @override
-  Future<void> manualCheck({
-    required AsyncTaskRunner runTask,
-    required bool includePrerelease,
-    required String skippedTagName,
-    SkipAppUpdateRelease? onSkipRelease,
-    String? loadingTitle,
-  }) =>
-      Future.error(
-        UnsupportedError(
-          desktopCapabilityMessage(DesktopCapability.updateInstallation),
-        ),
-      );
 }

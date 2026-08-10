@@ -5,6 +5,10 @@ import 'dart:io';
 import 'package:flclashx/clash/interface.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/core.dart';
+import 'package:flclashx/product/platform/product_install_layout.dart';
+import 'package:flclashx/product/runtime/desktop_process_supervisor.dart';
+import 'package:flclashx/product/runtime/desktop_runtime_layout.dart';
+import 'package:flclashx/product/runtime/desktop_runtime_node_bridge.dart';
 import 'package:flclashx/state.dart';
 
 class ClashService extends ClashHandlerInterface {
@@ -137,32 +141,21 @@ class ClashService extends ClashHandlerInterface {
       final arg = Platform.isWindows
           ? "${serverSocket.port}"
           : serverSocket.address.address;
-      if (Platform.isWindows && await system.checkIsAdmin()) {
-        final isSuccess = await request.startCoreByHelper(arg);
-        if (isSuccess) {
-          return;
-        }
-      }
-
       final homeDirPath = await appPath.homeDirPath;
       final environment = Map<String, String>.from(Platform.environment);
       environment['SAFE_PATHS'] = homeDirPath;
 
-      final started = await Process.start(
-        appPath.corePath,
-        [
-          arg,
-        ],
+      final executable = await DesktopRuntimeLayout.current(
+        dataRoot: homeDirPath,
+      ).requireArtifact(ProductInstallLayout.mihomoArtifact);
+      final handle = await desktopProcessSupervisor.spawn(
+        identity: 'mihomo',
+        executable: executable,
+        arguments: [arg],
         environment: environment,
       );
+      final started = handle.process;
       process = started;
-      _stdoutSubscription = started.stdout.listen((_) {});
-      _stderrSubscription = started.stderr.listen((e) {
-        final error = utf8.decode(e);
-        if (error.isNotEmpty) {
-          commonPrint.log(error);
-        }
-      });
       _watchProcess(started);
     } finally {
       isStarting = false;
@@ -182,6 +175,10 @@ class ClashService extends ClashHandlerInterface {
       // file and resolve instead of hanging on serverCompleter forever.
       commonPrint.log('destroy: server unavailable: $e');
     }
+    // Exit/restart destroys the complete desktop runtime ownership domain. A
+    // core-only shutdown leaves built-in nodes and a resolver watcher alive.
+    await desktopRuntimeNodeBridge.stopPlan();
+    await desktopProcessSupervisor.stopAll();
     await _deleteSocketFile();
     return true;
   }
@@ -318,15 +315,12 @@ class ClashService extends ClashHandlerInterface {
     // crash-recovery path into a restart that races an intentional stop/restart.
     _stopping = true;
     try {
-      if (Platform.isWindows) {
-        await request.stopCoreByHelper();
-      }
       await _stdoutSubscription?.cancel();
       _stdoutSubscription = null;
       await _stderrSubscription?.cancel();
       _stderrSubscription = null;
       await _destroySocket();
-      process?.kill();
+      await desktopProcessSupervisor.stop('mihomo');
       process = null;
       return true;
     } finally {

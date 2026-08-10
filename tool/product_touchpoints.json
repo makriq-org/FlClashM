@@ -11,6 +11,17 @@
       ]
     },
     {
+      "path": "lib/clash/service.dart",
+      "boundary": "desktop-runtime-supervisor",
+      "reason": "The upstream desktop IPC service delegates bundled mihomo process ownership and exact install-layout validation to the product runtime supervisor.",
+      "targets": [
+        "lib/product/platform/product_install_layout.dart",
+        "lib/product/runtime/desktop_process_supervisor.dart",
+        "lib/product/runtime/desktop_runtime_layout.dart",
+        "lib/product/runtime/desktop_runtime_node_bridge.dart"
+      ]
+    },
+    {
       "path": "lib/common/android.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
@@ -179,6 +190,10 @@
     {
       "path": "lib/product/android/android_update_bridge.dart",
       "reason": "The FlClashM Android updater owns its release prompt and in-app APK download progress dialog."
+    },
+    {
+      "path": "lib/product/services/desktop_app_update_bridge.dart",
+      "reason": "The desktop updater owns its cancellable verified full-package download dialog."
     }
   ]
 }

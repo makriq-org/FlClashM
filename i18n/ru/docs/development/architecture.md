@@ -49,6 +49,7 @@ dart tool/check_product_boundaries.dart
 | `BuiltInProxySupervisor` | Жизненный цикл встроенных узлов |
 | `AppUpdateService` | Проверку, загрузку и установку обновлений приложения |
 | `AppUpdateManifestVerifier` | Проверку подписи и контракта каталога обновлений |
+| `DesktopUpdateCatalogVerifier` | Проверку подписи и точный выбор полного desktop-пакета |
 | `AccessControlService` | Раздельное туннелирование |
 
 ---

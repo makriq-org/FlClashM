@@ -11,6 +11,20 @@ class ProductInstallLayout {
   static const desktopHelperName = '$desktopApplicationId.helper';
   static const runtimeDirectoryName = 'runtimes';
 
+  static const linuxTarget = 'linux';
+  static const windowsTarget = 'windows';
+  static const macosTarget = 'macos';
+  static const x64Architecture = 'x86_64';
+  static const arm64Architecture = 'arm64';
+
+  /// Runtime coordinates for which the release pipeline produces a complete
+  /// inventory. Linux and Windows arm64 are intentionally not advertised.
+  static const supportedDesktopRuntimeCoordinates = <String, List<String>>{
+    linuxTarget: [x64Architecture],
+    windowsTarget: [x64Architecture],
+    macosTarget: [x64Architecture, arm64Architecture],
+  };
+
   static const mihomoArtifact = 'mihomo';
   static const helperArtifact = desktopHelperName;
   static const naiveproxyArtifact = 'naiveproxy';
@@ -31,8 +45,7 @@ class ProductInstallLayout {
     required String installRoot,
     required String target,
     required String architecture,
-  }) =>
-      path.join(installRoot, runtimeDirectoryName, target, architecture);
+  }) => path.join(installRoot, runtimeDirectoryName, target, architecture);
 
   static String artifactPath({
     required String installRoot,
@@ -42,7 +55,10 @@ class ProductInstallLayout {
   }) {
     if (!artifacts.contains(artifact)) {
       throw ArgumentError.value(
-          artifact, 'artifact', 'Unknown runtime artifact');
+        artifact,
+        'artifact',
+        'Unknown runtime artifact',
+      );
     }
     return path.join(
       runtimeRoot(
@@ -50,7 +66,28 @@ class ProductInstallLayout {
         target: target,
         architecture: architecture,
       ),
-      artifact,
+      artifactFileName(target: target, artifact: artifact),
     );
+  }
+
+  static bool supportsDesktopRuntime({
+    required String target,
+    required String architecture,
+  }) =>
+      supportedDesktopRuntimeCoordinates[target]?.contains(architecture) ??
+      false;
+
+  static String artifactFileName({
+    required String target,
+    required String artifact,
+  }) {
+    if (!artifacts.contains(artifact)) {
+      throw ArgumentError.value(
+        artifact,
+        'artifact',
+        'Unknown runtime artifact',
+      );
+    }
+    return target == windowsTarget ? '$artifact.exe' : artifact;
   }
 }

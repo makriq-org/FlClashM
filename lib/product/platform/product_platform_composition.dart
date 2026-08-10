@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../clash/core.dart';
 import '../../common/android.dart';
 import '../../common/window.dart';
@@ -6,6 +8,7 @@ import '../android/android_platform.dart';
 import '../runtime/runtime_types.dart';
 import '../security/android_security_policy.dart';
 import '../security/security_policy.dart';
+import '../services/desktop_app_update_bridge.dart';
 import '../services/product_services.dart';
 import 'desktop_platform_services.dart';
 import 'desktop_security_policy.dart';
@@ -34,7 +37,7 @@ class DesktopPlatformBootstrap implements ProductPlatformBootstrap {
   const DesktopPlatformBootstrap();
 
   @override
-  Future<bool> preloadMihomo() async => false;
+  Future<bool> preloadMihomo() => clashCore.preload();
 
   @override
   Future<void> initialize({required int hostVersion}) async {
@@ -102,6 +105,12 @@ class ProductPlatformComposition {
       );
     }
 
+    final updateEnvironment = DesktopUpdateEnvironment.forOperatingSystem(
+      profile.operatingSystem,
+      packageManagedLinux:
+          profile.kind == ProductPlatformKind.linux &&
+          (Platform.environment['APPIMAGE']?.trim().isEmpty ?? true),
+    );
     return ProductPlatformComposition._(
       profile: profile,
       services: ProductServices(
@@ -109,19 +118,24 @@ class ProductPlatformComposition {
           platform: DesktopRuntimeAccessPolicy(),
         ),
         androidShell: const DesktopShellService(),
-        appUpdate: const DesktopAppUpdateService(),
+        appUpdate: AppUpdateService(
+          platform: DesktopAppUpdateBridge(environment: updateEnvironment),
+          packageSelector: DesktopAppUpdatePackageSelector(
+            environment: updateEnvironment,
+          ),
+        ),
       ),
-      securityPolicy: const DesktopSecurityPolicy(),
+      securityPolicy: DesktopSecurityPolicy.currentInstall(),
       bootstrap: const DesktopPlatformBootstrap(),
       capabilities: const ProductPlatformCapabilities(
         tunConfiguration: false,
         systemProxy: true,
         androidAccessControl: false,
       ),
-      mihomoAvailability: RuntimeAvailability.unsupported(
-        reason: desktopCapabilityMessage(DesktopCapability.tun),
-        updatePath: 'Desktop runtime integration has not been released yet.',
-        rollbackPath: 'Keep using the Android runtime until desktop TUN ships.',
+      mihomoAvailability: const RuntimeAvailability.supported(
+        updatePath:
+            'Bundled desktop runtimes are updated with the application.',
+        rollbackPath: 'Roll back the complete application bundle.',
       ),
     );
   }
