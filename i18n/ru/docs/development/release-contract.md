@@ -4,9 +4,13 @@
 
 | | Формат |
 |---|--------|
-| **Стабильный тег** | `v<versionName>` |
-| **Предварительный** | `v<versionName>-<suffix>` |
+| **Стабильная версия** | `MAJOR.MINOR.PATCH+versionCode` |
+| **Предварительная версия** | `MAJOR.MINOR.PATCH-preN+versionCode` |
+| **Тег** | точное `v<versionName>` |
 | **`applicationId`** | `com.makriq.flclash` |
+
+Полный `versionName`, включая `-preN`, хранится в `pubspec.yaml`. CI не подменяет его
+при сборке, а тег обязан совпадать с ним после добавления префикса `v`.
 
 При синхронизации с FlClashX изменения апстрима тоже учитываются при выборе уровня повышения версии по
 их эффекту для пользователей FlClashM. Версию FlClashX в `versionName` форка не

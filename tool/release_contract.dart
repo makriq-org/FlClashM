@@ -68,11 +68,46 @@ PubspecVersion parsePubspecVersion(
     throw StateError('Unable to parse `versionCode` from `$raw` in `$path`.');
   }
 
+  final versionName = raw.substring(0, plusIndex);
+  if (!RegExp(
+    r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-pre[1-9]\d*)?$',
+  ).hasMatch(versionName)) {
+    throw StateError(
+      'Expected `$path` versionName to use `MAJOR.MINOR.PATCH` or '
+      '`MAJOR.MINOR.PATCH-preN`, got `$versionName`.',
+    );
+  }
+
   return PubspecVersion(
     raw: raw,
-    versionName: raw.substring(0, plusIndex),
+    versionName: versionName,
     versionCode: versionCode,
   );
+}
+
+String? validateReleaseTag({
+  required String refName,
+  required PubspecVersion pubspecVersion,
+}) {
+  if (!refName.startsWith('v')) {
+    return 'Expected release tag to start with `v`, got `$refName`.';
+  }
+  if (refName != pubspecVersion.tagName) {
+    return 'Expected release tag `${pubspecVersion.tagName}` to exactly match '
+        'the pubspec version, got `$refName`.';
+  }
+  return null;
+}
+
+String? validateReleaseChannel({
+  required String releaseChannel,
+  required PubspecVersion pubspecVersion,
+}) {
+  if (releaseChannel != pubspecVersion.releaseChannel) {
+    return 'Expected release channel `${pubspecVersion.releaseChannel}` for '
+        '`${pubspecVersion.versionName}`, got `$releaseChannel`.';
+  }
+  return null;
 }
 
 PubspecVersion? tryParsePubspecVersion(
@@ -224,6 +259,12 @@ class PubspecVersion {
   final String raw;
   final String versionName;
   final int versionCode;
+
+  bool get isPrerelease => versionName.contains('-');
+  String get stableVersionName => versionName.split('-').first;
+  String get tagName => 'v$versionName';
+  String get stableTagName => 'v$stableVersionName';
+  String get releaseChannel => isPrerelease ? 'pre' : 'stable';
 }
 
 Map<String, dynamic> _readMap(

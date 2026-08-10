@@ -4,9 +4,13 @@
 
 | | 格式 |
 |---|------|
-| **稳定标签** | `v<versionName>` |
-| **预发布** | `v<versionName>-<suffix>` |
+| **稳定版本** | `MAJOR.MINOR.PATCH+versionCode` |
+| **预发布版本** | `MAJOR.MINOR.PATCH-preN+versionCode` |
+| **标签** | 精确的 `v<versionName>` |
 | **`applicationId`** | `com.makriq.flclash` |
+
+完整的 `versionName`（包括 `-preN`）保存在 `pubspec.yaml` 中。CI 构建时不会覆盖它，
+标签必须在前面添加 `v` 后与其完全一致。
 
 ## 📂 发布内容
 
