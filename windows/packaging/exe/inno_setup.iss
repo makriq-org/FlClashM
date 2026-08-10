@@ -33,6 +33,10 @@ var
   IsUpgrade: Boolean;
   PreviousVersion: String;
 
+const
+  HelperServiceName = 'app.flclashm.client.helper';
+  HelperRelativePath = 'runtimes\windows\x86_64\app.flclashm.client.helper.exe';
+
 procedure SHChangeNotify(wEventId: Integer; uFlags: Integer; dwItem1: Integer; dwItem2: Integer); external 'SHChangeNotify@shell32.dll stdcall';
 
 procedure KillProcesses;
@@ -60,6 +64,34 @@ begin
   
   // Give time for cleanup
   Sleep(1000);
+end;
+
+procedure StopAndRemoveHelperService;
+var
+  ResultCode: Integer;
+begin
+  { Stop first so an upgrade cannot leave the previous binary locked or running. }
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'delete "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+end;
+
+procedure InstallAndStartHelperService;
+var
+  ResultCode: Integer;
+  ServiceBinary: String;
+begin
+  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось установить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'start "' + HelperServiceName + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось запустить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
 end;
 
 function IsAppInstalled(): Boolean;
@@ -99,8 +131,16 @@ begin
   
   // Kill all processes
   KillProcesses;
+  if IsUpgrade then
+    StopAndRemoveHelperService;
   
   Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    InstallAndStartHelperService;
 end;
 
 procedure InitializeWizard();
@@ -148,6 +188,7 @@ begin
     usUninstall:
     begin
       KillProcesses;
+      StopAndRemoveHelperService;
     end;
 
     usPostUninstall:

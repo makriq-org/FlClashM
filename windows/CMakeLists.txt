@@ -118,8 +118,15 @@ install(PROGRAMS
 install(FILES "${RUNTIME_ASSET_DIR}/runtime-inventory.json"
   DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
 
-set(CLASH_DIR "../libclash/windows")
-install(PROGRAMS "${CLASH_DIR}/FlClashHelperService.exe" DESTINATION "${INSTALL_RUNTIME_DIR}"
+# The privileged binary is built separately as a Windows Service.  It is never
+# copied from a legacy libclash directory: the release job supplies the exact
+# Cargo artifact that was built for this bundle.
+set(FLCLASHM_WINDOWS_HELPER "$ENV{FLCLASHM_WINDOWS_HELPER}")
+if(NOT EXISTS "${FLCLASHM_WINDOWS_HELPER}")
+  message(FATAL_ERROR
+    "Windows helper is missing. Build services/helper with the windows-service feature and set FLCLASHM_WINDOWS_HELPER.")
+endif()
+install(PROGRAMS "${FLCLASHM_WINDOWS_HELPER}" DESTINATION "${INSTALL_RUNTIME_DIR}"
   RENAME "app.flclashm.client.helper.exe" COMPONENT Runtime)
 
 install(FILES "EnableLoopback.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

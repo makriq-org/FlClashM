@@ -311,6 +311,14 @@ jobs:
         if: matrix.target == 'linux-x64'
         run: flutter build linux --release
 
+      - name: Build Windows Service helper
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
+          $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
+          "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build Windows desktop bundle
         if: matrix.target == 'windows-x64'
         shell: pwsh
@@ -349,7 +357,13 @@ jobs:
         if: matrix.target == 'windows-x64'
         shell: pwsh
         run: |
+          choco install innosetup --no-progress --limit-output
           New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          powershell -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 `
+            -BundleDirectory build/windows/x64/runner/Release `
+            -OutputDirectory dist `
+            -Version $version
           Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath 'dist/FlClashM-windows-x64.zip'
 
       - name: Archive macOS desktop bundle

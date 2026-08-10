@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -35,6 +36,14 @@ class DesktopHelperRequest {
   final DesktopHelperOperation operation;
   final String? runtimeArtifact;
   final Map<String, Object?> parameters;
+
+  Map<String, Object?> toJson() => {
+    'protocolVersion': protocolVersion,
+    'installIdentity': installIdentity,
+    'operation': operation.name,
+    if (runtimeArtifact != null) 'runtimeArtifact': runtimeArtifact,
+    'parameters': parameters,
+  };
 }
 
 @immutable
@@ -45,6 +54,17 @@ class DesktopHelperResponse {
   final String message;
 
   bool get isSuccess => state == DesktopHelperState.ready;
+
+  factory DesktopHelperResponse.fromJson(Map<String, Object?> json) {
+    final rawState = json['state'];
+    if (rawState is! String) {
+      throw const FormatException('Desktop helper response has no state.');
+    }
+    return DesktopHelperResponse(
+      state: DesktopHelperState.values.byName(rawState),
+      message: json['message'] is String ? json['message'] as String : '',
+    );
+  }
 }
 
 /// The helper accepts a closed, versioned vocabulary. In particular, callers
@@ -87,7 +107,7 @@ class DesktopHelperProtocol {
     }
     final isRuntime =
         request.operation == DesktopHelperOperation.runtimeStart ||
-            request.operation == DesktopHelperOperation.runtimeStop;
+        request.operation == DesktopHelperOperation.runtimeStop;
     if (isRuntime != (request.runtimeArtifact != null)) {
       return 'Desktop helper runtime operation has an invalid artifact.';
     }
@@ -113,24 +133,23 @@ class DesktopHelperProtocol {
   static bool _validateOperation(
     DesktopHelperOperation operation,
     Map<String, Object?> parameters,
-  ) =>
-      switch (operation) {
-        DesktopHelperOperation.tunOpen =>
-          _interface(parameters['interface']) && _mtu(parameters['mtu']),
-        DesktopHelperOperation.tunClose => _interface(parameters['interface']),
-        DesktopHelperOperation.routeApply =>
-          _interface(parameters['interface']) && _routes(parameters['routes']),
-        DesktopHelperOperation.routeRollback =>
-          _transaction(parameters['transaction']),
-        DesktopHelperOperation.dnsApply =>
-          _interface(parameters['interface']) &&
-              _servers(parameters['servers']),
-        DesktopHelperOperation.dnsRollback =>
-          _transaction(parameters['transaction']),
-        DesktopHelperOperation.runtimeStart ||
-        DesktopHelperOperation.runtimeStop =>
-          _runtimeToken(parameters['runtimeToken']),
-      };
+  ) => switch (operation) {
+    DesktopHelperOperation.tunOpen =>
+      _interface(parameters['interface']) && _mtu(parameters['mtu']),
+    DesktopHelperOperation.tunClose => _interface(parameters['interface']),
+    DesktopHelperOperation.routeApply =>
+      _interface(parameters['interface']) && _routes(parameters['routes']),
+    DesktopHelperOperation.routeRollback => _transaction(
+      parameters['transaction'],
+    ),
+    DesktopHelperOperation.dnsApply =>
+      _interface(parameters['interface']) && _servers(parameters['servers']),
+    DesktopHelperOperation.dnsRollback => _transaction(
+      parameters['transaction'],
+    ),
+    DesktopHelperOperation.runtimeStart || DesktopHelperOperation.runtimeStop =>
+      _runtimeToken(parameters['runtimeToken']),
+  };
 
   static bool _interface(Object? value) =>
       value is String &&
@@ -150,7 +169,8 @@ class DesktopHelperProtocol {
       value.isNotEmpty &&
       value.length <= 16 &&
       value.every(
-          (item) => item is String && InternetAddress.tryParse(item) != null);
+        (item) => item is String && InternetAddress.tryParse(item) != null,
+      );
 
   static bool _transaction(Object? value) =>
       value is String && RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
@@ -182,6 +202,23 @@ class UnavailableDesktopHelperTransport implements DesktopHelperTransport {
         state: DesktopHelperState.unavailable,
         message: 'Desktop privileged helper is unavailable.',
       );
+}
+
+/// Serializes the shared protocol without giving callers a way to append
+/// executable paths or shell fragments before privileged IPC.
+class WindowsDesktopHelperMessageCodec {
+  const WindowsDesktopHelperMessageCodec._();
+
+  static List<int> encode(DesktopHelperRequest request) =>
+      utf8.encode(jsonEncode(request.toJson()));
+
+  static DesktopHelperResponse decode(List<int> bytes) {
+    final value = jsonDecode(utf8.decode(bytes));
+    if (value is! Map) {
+      throw const FormatException('Desktop helper response is not an object.');
+    }
+    return DesktopHelperResponse.fromJson(Map<String, Object?>.from(value));
+  }
 }
 
 class DesktopHelperClient {
