@@ -171,7 +171,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "deleteMultipTip": m0,
     "deleteTip": m1,
     "desc": MessageLookupByLibrary.simpleMessage(
-      "基于 FlClashX、使用 mihomo 内核的 Android 代理客户端，开源且无广告。",
+      "基于 FlClashX、使用 mihomo 内核的跨平台代理客户端，开源且无广告。",
     ),
     "detectionTip": MessageLookupByLibrary.simpleMessage("依赖第三方api，仅供参考"),
     "determiningIp": MessageLookupByLibrary.simpleMessage("正在获取 IP..."),

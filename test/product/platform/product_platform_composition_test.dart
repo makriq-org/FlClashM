@@ -61,6 +61,8 @@ void main() {
       expect(composition.services.androidShell, isA<AndroidShellService>());
       expect(composition.services.appUpdate, isA<AppUpdateService>());
       expect(composition.mihomoAvailability.isSupported, isTrue);
+      expect(composition.capabilities.androidAccessControl, isTrue);
+      expect(composition.capabilities.systemProxy, isFalse);
     });
 
     test(
@@ -82,6 +84,9 @@ void main() {
           isA<DesktopAppUpdateBridge>(),
         );
         expect(composition.mihomoAvailability.isSupported, isTrue);
+        expect(composition.capabilities.androidAccessControl, isFalse);
+        expect(composition.capabilities.systemProxy, isTrue);
+        expect(composition.capabilities.tunConfiguration, isFalse);
         final runtimeRegistry = RuntimeRegistry.flClashM(
           readAccessControl: () => const AccessControl(),
           mihomoAvailability: composition.mihomoAvailability,
@@ -137,12 +142,20 @@ void main() {
         File('windows/CMakeLists.txt').readAsString(),
         File('macos/Runner/Configs/AppInfo.xcconfig').readAsString(),
         File('macos/Runner.xcodeproj/project.pbxproj').readAsString(),
+        File('macos/Runner/AppDelegate.swift').readAsString(),
+        File('windows/packaging/exe/make_config.yaml').readAsString(),
+        File('linux/packaging/deb/make_config.yaml').readAsString(),
+        File('linux/packaging/rpm/make_config.yaml').readAsString(),
       ]);
       final runtimeResolver = sources[0];
       final linux = sources[1];
       final windows = sources[2];
       final macosConfig = sources[3];
       final macosProject = sources[4];
+      final macosAppDelegate = sources[5];
+      final windowsPackaging = sources[6];
+      final debPackaging = sources[7];
+      final rpmPackaging = sources[8];
 
       expect(runtimeResolver, contains('ProductInstallLayout.mihomoArtifact'));
       expect(runtimeResolver, contains('ProductInstallLayout.helperArtifact'));
@@ -170,6 +183,21 @@ void main() {
         macosProject,
         contains(r'Contents/runtimes/macos/$(CURRENT_ARCH)/mihomo'),
       );
+      expect(macosProject, isNot(contains('com.follow.clash')));
+      expect(
+        macosAppDelegate,
+        contains('migrateLegacyApplicationSupportIfNeeded'),
+      );
+      expect(macosAppDelegate, contains('com.follow.clash'));
+      expect(macosAppDelegate, contains('app.flclashm.client'));
+      expect(macosAppDelegate, contains('copyItem(at: legacyDirectory'));
+      expect(
+        macosAppDelegate,
+        isNot(contains('removeItem(at: legacyDirectory')),
+      );
+      expect(windowsPackaging, contains('publisher: makriq-org'));
+      expect(debPackaging, contains('name: makriq-org'));
+      expect(rpmPackaging, contains('packager: makriq-org'));
     },
   );
 }

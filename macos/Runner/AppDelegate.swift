@@ -5,6 +5,9 @@ import LaunchAtLogin
 
 @main
 class AppDelegate: FlutterAppDelegate {
+    private let legacyApplicationSupportDirectory = "com.follow.clash"
+    private let applicationSupportDirectory = "app.flclashm.client"
+
     var statusBarController: StatusBarController?
     var zashboardChannel: FlutterMethodChannel?
     var zashboardWindowController: ZashboardWindowController?
@@ -18,6 +21,7 @@ class AppDelegate: FlutterAppDelegate {
     
     override func applicationDidFinishLaunching(_ aNotification: Notification) {
         NSLog("AppDelegate: applicationDidFinishLaunching called")
+        migrateLegacyApplicationSupportIfNeeded()
         
         guard let mainController = mainFlutterWindow?.contentViewController as? FlutterViewController else {
             NSLog("ERROR: Could not get FlutterViewController from mainFlutterWindow")
@@ -39,6 +43,56 @@ class AppDelegate: FlutterAppDelegate {
         super.applicationDidFinishLaunching(aNotification)
         
         mainFlutterWindow?.close()
+    }
+
+    /// Preserves data created before the desktop bundle identifier was renamed.
+    /// The source is intentionally retained so a failed or interrupted import
+    /// can be retried safely on the next launch.
+    private func migrateLegacyApplicationSupportIfNeeded() {
+        guard let supportDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            NSLog("Could not locate Application Support for legacy data import")
+            return
+        }
+
+        let legacyDirectory = supportDirectory.appendingPathComponent(
+            legacyApplicationSupportDirectory,
+            isDirectory: true
+        )
+        let destinationDirectory = supportDirectory.appendingPathComponent(
+            applicationSupportDirectory,
+            isDirectory: true
+        )
+        let fileManager = FileManager.default
+        var legacyIsDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(
+            atPath: legacyDirectory.path,
+            isDirectory: &legacyIsDirectory
+        ), legacyIsDirectory.boolValue else {
+            return
+        }
+
+        // A current data directory always wins: never merge or overwrite it.
+        guard !fileManager.fileExists(atPath: destinationDirectory.path) else {
+            return
+        }
+
+        let stagingDirectory = supportDirectory.appendingPathComponent(
+            ".\(applicationSupportDirectory)-migration-\(UUID().uuidString)",
+            isDirectory: true
+        )
+
+        do {
+            try fileManager.copyItem(at: legacyDirectory, to: stagingDirectory)
+            try fileManager.moveItem(at: stagingDirectory, to: destinationDirectory)
+            NSLog("Imported legacy Application Support data into %@", destinationDirectory.path)
+        } catch {
+            try? fileManager.removeItem(at: stagingDirectory)
+            NSLog("Could not import legacy Application Support data: %@", error.localizedDescription)
+        }
     }
     
     func setupStatusBarChannel(flutterViewController: FlutterViewController) {

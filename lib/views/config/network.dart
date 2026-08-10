@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/platform/product_platform_composition.dart';
 import 'package:flclashx/providers/config.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -424,7 +425,7 @@ final networkItems = [
         const Ipv6Item(),
       ],
     ),
-  if (system.isDesktop)
+  if (productPlatformComposition.capabilities.systemProxy)
     ...generateSection(
       title: appLocalizations.system,
       items: [
@@ -436,8 +437,12 @@ final networkItems = [
     title: appLocalizations.options,
     items: [
       const OverrideNetworkSettingsItemNetwork(),
-      if (system.isDesktop) const TUNItem(),
-      if (Platform.isMacOS) const AutoSetSystemDnsItem(),
+      if (system.isDesktop &&
+          productPlatformComposition.capabilities.tunConfiguration)
+        const TUNItem(),
+      if (Platform.isMacOS &&
+          productPlatformComposition.capabilities.tunConfiguration)
+        const AutoSetSystemDnsItem(),
       const TunStackItem(),
       if (!system.isDesktop) ...[
         const RouteModeItem(),

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../clash/core.dart';
 import '../../common/android.dart';
+import '../../common/window.dart';
 import '../android/android_entrypoint.dart';
 import '../android/android_platform.dart';
 import '../runtime/runtime_types.dart';
@@ -16,7 +17,7 @@ import 'platform_profile.dart';
 abstract interface class ProductPlatformBootstrap {
   Future<bool> preloadMihomo();
 
-  Future<void> initialize();
+  Future<void> initialize({required int hostVersion});
 }
 
 class AndroidPlatformBootstrap implements ProductPlatformBootstrap {
@@ -26,7 +27,7 @@ class AndroidPlatformBootstrap implements ProductPlatformBootstrap {
   Future<bool> preloadMihomo() => clashCore.preload();
 
   @override
-  Future<void> initialize() async {
+  Future<void> initialize({required int hostVersion}) async {
     await android?.init();
     await androidEntrypoint.init();
   }
@@ -39,7 +40,21 @@ class DesktopPlatformBootstrap implements ProductPlatformBootstrap {
   Future<bool> preloadMihomo() => clashCore.preload();
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize({required int hostVersion}) async {
+    await window?.init(hostVersion);
+  }
+}
+
+class ProductPlatformCapabilities {
+  const ProductPlatformCapabilities({
+    required this.tunConfiguration,
+    required this.systemProxy,
+    required this.androidAccessControl,
+  });
+
+  final bool tunConfiguration;
+  final bool systemProxy;
+  final bool androidAccessControl;
 }
 
 /// The only product composition root. New platforms provide their platform
@@ -50,6 +65,7 @@ class ProductPlatformComposition {
     required this.services,
     required this.securityPolicy,
     required this.bootstrap,
+    required this.capabilities,
     required this.mihomoAvailability,
   });
 
@@ -75,6 +91,11 @@ class ProductPlatformComposition {
         ),
         securityPolicy: const AndroidSecurityPolicy(),
         bootstrap: const AndroidPlatformBootstrap(),
+        capabilities: const ProductPlatformCapabilities(
+          tunConfiguration: false,
+          systemProxy: false,
+          androidAccessControl: true,
+        ),
         mihomoAvailability: const RuntimeAvailability.supported(
           updatePath:
               'Bundled Android core is built by setup.dart into libclash/android.',
@@ -106,6 +127,11 @@ class ProductPlatformComposition {
       ),
       securityPolicy: DesktopSecurityPolicy.currentInstall(),
       bootstrap: const DesktopPlatformBootstrap(),
+      capabilities: const ProductPlatformCapabilities(
+        tunConfiguration: false,
+        systemProxy: true,
+        androidAccessControl: false,
+      ),
       mihomoAvailability: const RuntimeAvailability.supported(
         updatePath:
             'Bundled desktop runtimes are updated with the application.',
@@ -118,6 +144,7 @@ class ProductPlatformComposition {
   final ProductServices services;
   final SecurityPolicy securityPolicy;
   final ProductPlatformBootstrap bootstrap;
+  final ProductPlatformCapabilities capabilities;
   final RuntimeAvailability mihomoAvailability;
 }
 
