@@ -12,6 +12,8 @@ concurrency:
   group: build-core-${{ github.event.inputs.version }}
   cancel-in-progress: false
 
+permissions: {}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NDK_VERSION: "28.0.13004108"
@@ -19,6 +21,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +39,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407

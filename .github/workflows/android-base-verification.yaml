@@ -11,6 +11,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NDK_VERSION: "28.0.13004108"
@@ -30,6 +32,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect verification scope
         id: changes
@@ -90,6 +93,10 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check GitHub Actions pinning
+        run: dart tool/check_actions_pinning.dart
 
       - name: Fetch upstream base
         run: |
@@ -119,7 +126,7 @@ jobs:
         run: flutter test test/product test/tool
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   android-smoke:
     needs: detect-changes
@@ -133,6 +140,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
@@ -213,6 +221,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
@@ -266,6 +275,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Enable KVM
         run: |

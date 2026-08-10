@@ -13,12 +13,13 @@ on:
         default: "30"
         type: string
 
-permissions:
-  actions: write
+permissions: {}
 
 jobs:
   clean:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
       - name: Delete old workflow runs
         env:
