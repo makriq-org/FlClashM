@@ -6,7 +6,8 @@ The provider can send a set of hints prefixed with `flclashm-*` in the subscript
 
 The subscription returns a YAML profile in the response body, and the hints in the HTTP headers. FlClashM applies them when a profile is added or updated (see [`flclashm-custom`](#-behavior)).
 
-> ℹ️ Several headers' values are **base64**-encoded (marked below). Boolean headers accept `true`/`false`.
+> [!NOTE]
+> Several headers' values are **base64**-encoded (marked below). Boolean headers accept `true`/`false`.
 
 ---
 
@@ -60,7 +61,8 @@ flclashm-view: type:tab;sort:delay;card:min
 
 ## 🏷 Service info
 
-> 🔐 The values of these three headers are passed as **base64**.
+> [!IMPORTANT]
+> The values of these three headers are passed as **base64**.
 
 | Header | Value | What it does |
 |--------|-------|--------------|
@@ -91,7 +93,8 @@ flclashm-view: type:tab;sort:delay;card:min
 flclashm-settings: autostart,autoupdate
 ```
 
-> 🏆 `flclashm-settings` is applied **only if the user hasn't overridden** the provider settings manually. The user's manual choice always wins.
+> [!IMPORTANT]
+> `flclashm-settings` is applied **only if the user hasn't overridden** the provider settings manually. The user's manual choice always wins.
 
 ---
 

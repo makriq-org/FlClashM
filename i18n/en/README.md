@@ -19,7 +19,8 @@ Android client for `mihomo`, a fork of [FlClashX](https://github.com/pluralplay/
 
 ---
 
-> ⚠️ This project is under active development. Some features are still being refined, and the interface may change.
+> [!WARNING]
+> This project is under active development. Some features are still being refined, and the interface may change.
 
 ## 📑 Table of contents
 
@@ -163,7 +164,8 @@ Release builds are published in [GitHub Releases](https://github.com/makriq-org/
 | `FlClashM-android-x86_64.apk` | x86_64 (emulators, some tablets) |
 | `FlClashM-android-release.aab` | Android App Bundle |
 
-> ℹ️ By default the built-in updater shows only stable versions. Pre-releases can be enabled in settings.
+> [!NOTE]
+> By default the built-in updater shows only stable versions. Pre-releases can be enabled in settings.
 
 ---
 

@@ -11,7 +11,8 @@ FlClashM 的超能力：**特殊节点直接写在 YAML 配置里**，并表现�
 | 🌩 [`stormdns`](#-stormdns) | 藏在 DNS 查询里的隧道 | 在只放行 DNS 的场景绕过白名单 |
 | 🎭 [`naiveproxy`](#-naiveproxy) | 伪装成 Chrome 流量 | 绕过黑名单、抵抗 TLS 指纹识别 |
 
-> ℹ️ 内置节点**只能**写在 `proxies` 段。本地地址和端口由客户端分配 —— 不能在配置里指定。
+> [!NOTE]
+> 内置节点**只能**写在 `proxies` 段。本地地址和端口由客户端分配 —— 不能在配置里指定。
 
 ---
 
@@ -47,7 +48,8 @@ connectivity-check:
 
 **地址如何选择。** 顺序为：节点自身的 `connectivity-check.urls` → 最近的包含分组的地址 → 应用的全局检查地址。若都没有，则只保留进程与端口检查。
 
-> ⚠️ **`required: false` 与 `required: true` 的区别：**
+> [!WARNING]
+> **`required: false` 与 `required: true` 的区别：**
 > - `false` —— 检查在后台进行，不拖延启动，失败仅记入日志。
 > - `true` —— 缺少地址会**拒绝**配置，检查失败会**取消**启动并回滚已准备的方案。
 >
@@ -104,9 +106,11 @@ proxies:
 HTTPS 文件每行包含一条策略；空行和以 `#` 开头的行会被忽略。链接与
 StormDNS 列表共用公网 HTTPS、大小、超时和 stale-cache 限制。
 
-> ℹ️ `strategy-test` **仅**用于自动选择，并覆盖内置测试端点 —— 它不替代 `connectivity-check`。已验证结果与临时 fallback **分开**缓存：fallback 不会在正常 TTL 内阻断后续选择尝试。任何 HTTP 检查都算成功，包括 `4xx` 和 `5xx`。
->
-> 🚫 旧的 `test` 段不再支持 —— 请改名为 `strategy-test`。
+> [!NOTE]
+> `strategy-test` **仅**用于自动选择，并覆盖内置测试端点 —— 它不替代 `connectivity-check`。已验证结果与临时 fallback **分开**缓存：fallback 不会在正常 TTL 内阻断后续选择尝试。任何 HTTP 检查都算成功，包括 `4xx` 和 `5xx`。
+
+> [!CAUTION]
+> 旧的 `test` 段不再支持 —— 请改名为 `strategy-test`。
 
 ### ✍️ 手动策略
 
@@ -118,7 +122,8 @@ proxies:
     strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 新配置应显式设置 `mode`；省略时使用自动模式。
+> [!TIP]
+> 新配置应显式设置 `mode`；省略时使用自动模式。
 
 ---
 
@@ -167,11 +172,13 @@ transport-options:
   ack-timeout: 2s
 ```
 
-> 💡 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。`transport-options.fps` 和 `transport-options.batch-size` 是必填项。
+> [!TIP]
+> 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。`transport-options.fps` 和 `transport-options.batch-size` 是必填项。
 
 公共配置不再支持多 `profiles`、`failover` 和 `video.hw`。多个 OlcRTC 方案应写成独立节点并放入 Mihomo 组。`provider: none` 必须同时提供 `engine`、`engine-url` 和 `engine-token`，其他 provider 禁止这些字段。
 
-> ⚠️ 必填字段的错误在配置校验阶段即可发现。若 OlcRTC 进程稍后退出，客户端会显示**退出码和输出的最后几行**，而不是干等端口超时。
+> [!WARNING]
+> 必填字段的错误在配置校验阶段即可发现。若 OlcRTC 进程稍后退出，客户端会显示**退出码和输出的最后几行**，而不是干等端口超时。
 
 ---
 
@@ -205,7 +212,8 @@ proxy-groups:
 | `encryption` | `none`、`xor`、`chacha20`、`aes-128-gcm`、`aes-192-gcm`、`aes-256-gcm` |
 | `encryption-key` | 共享密钥；必须与服务端一致 |
 
-> ⚠️ `none` 和 `xor` 模式**不保护内容**，解析器运营方可以看到你的流量。仅在服务端要求时使用。
+> [!WARNING]
+> `none` 和 `xor` 模式**不保护内容**，解析器运营方可以看到你的流量。仅在服务端要求时使用。
 
 ### 📍 解析器
 
@@ -254,7 +262,8 @@ compression:
 
 精细调节位于 `duplication`、`compression`、`mtu`、`arq`、`ping` 和 `runtime` 块。所有时长（包括通用的 `activation` 和 `connectivity-check`）都使用带单位的字符串（`600ms`、`30s`、`24h`、`30d`）。
 
-> ℹ️ StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错**。
+> [!NOTE]
+> StormDNS 会静默截断超出范围的值。FlClashM 则在**启动前直接报错**。
 
 <details>
 <summary>📐 精细调节的取值范围</summary>
@@ -293,7 +302,8 @@ compression:
 
 `startup.max-age`（默认 `30d`）限制可用缓存的最大年龄，并且必须是整数天。
 
-> ⏳ 首次启动要经过解析器扫描，可能耗时长达两分钟 —— 检查预算已为此预留。
+> [!NOTE]
+> 首次启动要经过解析器扫描，可能耗时长达两分钟 —— 检查预算已为此预留。
 
 工作缓存与最终解析器列表、`domains` 以及 StormDNS 版本绑定。配置中的来源、`domains` 或版本发生变化时会生成新缓存，旧缓存仅在配置成功应用后才删除。物理网络 DNS 变化时，会在重启节点前清除当前缓存。若没有合适的缓存，或 StormDNS 判定其无效，它会自行回退到完整扫描 —— 这是正常行为。
 
@@ -327,7 +337,8 @@ proxies:
 
 客户端会安全地构造带转义凭据的 URI，交给 NaiveProxy，并把用于 `mihomo` 的节点替换为本地 SOCKS5。
 
-> 🚫 旧的 `proxy` 字段不再支持。`listen`、诊断文件、代理链以及任何未知字段都会在配置校验时被**拒绝**。
+> [!CAUTION]
+> 旧的 `proxy` 字段不再支持。`listen`、诊断文件、代理链以及任何未知字段都会在配置校验时被**拒绝**。
 
 ---
 
@@ -369,7 +380,8 @@ activation:
 - 唤醒后客户端会立即检查该节点本身。若没有任何包含分组选中它，且在 `sleep.idle` 内没有活动连接 —— 进程重新休眠。
 - **手动选择会立即唤醒节点。**
 
-> ℹ️ 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
+> [!NOTE]
+> 现在**即使没有 `activation` 字段**也默认使用 `auto`。要完全恢复旧行为，请显式设置 `activation: always`。
 
 ---
 

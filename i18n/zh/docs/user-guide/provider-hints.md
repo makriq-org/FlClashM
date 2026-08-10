@@ -6,7 +6,8 @@
 
 订阅在响应体里返回 YAML 配置，在 HTTP 头里返回提示。FlClashM 在添加或更新配置时应用它们（见 [`flclashm-custom`](#-行为)）。
 
-> ℹ️ 部分请求头的值使用 **base64** 编码（下文有标注）。布尔型请求头接受 `true`/`false`。
+> [!NOTE]
+> 部分请求头的值使用 **base64** 编码（下文有标注）。布尔型请求头接受 `true`/`false`。
 
 ---
 
@@ -60,7 +61,8 @@ flclashm-view: type:tab;sort:delay;card:min
 
 ## 🏷 服务信息
 
-> 🔐 这三个请求头的值以 **base64** 传递。
+> [!IMPORTANT]
+> 这三个请求头的值以 **base64** 传递。
 
 | 请求头 | 值 | 作用 |
 |--------|----|------|
@@ -91,7 +93,8 @@ flclashm-view: type:tab;sort:delay;card:min
 flclashm-settings: autostart,autoupdate
 ```
 
-> 🏆 `flclashm-settings` **仅在用户未手动覆盖**提供商设置时生效。用户的手动选择始终优先。
+> [!IMPORTANT]
+> `flclashm-settings` **仅在用户未手动覆盖**提供商设置时生效。用户的手动选择始终优先。
 
 ---
 
