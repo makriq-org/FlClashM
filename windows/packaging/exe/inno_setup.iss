@@ -32,6 +32,7 @@ const
 var
   IsUpgrade: Boolean;
   PreviousVersion: String;
+  PreviousHelperBackup: String;
 
 const
   HelperServiceName = 'app.flclashm.client.helper';
@@ -94,6 +95,23 @@ begin
     RaiseException('Не удалось запустить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
 end;
 
+procedure RestorePreviousHelperService;
+var
+  ResultCode: Integer;
+  ServiceBinary: String;
+begin
+  if (PreviousHelperBackup = '') or not FileExists(PreviousHelperBackup) then
+    exit;
+  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  ForceDirectories(ExtractFileDir(ServiceBinary));
+  FileCopy(PreviousHelperBackup, ServiceBinary, False);
+  Exec(ExpandConstant('{sys}\sc.exe'),
+    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'start "' + HelperServiceName + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 function IsAppInstalled(): Boolean;
 var
   UninstallKey: String;
@@ -129,18 +147,33 @@ begin
   if IsUpgrade then
     PreviousVersion := GetInstalledVersion();
   
-  // Kill all processes
-  KillProcesses;
-  if IsUpgrade then
-    StopAndRemoveHelperService;
-  
   Result := True;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then
-    InstallAndStartHelperService;
+  if CurStep = ssInstall then
+  begin
+    { The wizard is confirmed at this point. Cancelling before it leaves the
+      running GUI and old service untouched. }
+    if IsUpgrade then
+    begin
+      PreviousHelperBackup := ExpandConstant('{tmp}\flclashm-helper.previous.exe');
+      FileCopy(ExpandConstant('{app}\' + HelperRelativePath), PreviousHelperBackup, False);
+    end;
+    KillProcesses;
+    if IsUpgrade then
+      StopAndRemoveHelperService;
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    try
+      InstallAndStartHelperService;
+    except
+      RestorePreviousHelperService;
+      raise;
+    end;
+  end;
 end;
 
 procedure InitializeWizard();

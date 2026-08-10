@@ -1,8 +1,11 @@
 import 'dart:async';
-import 'dart:ffi' show Abi;
+import 'dart:ffi' show Abi, sizeOf;
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
+import 'package:win32/win32.dart' as win32;
 
 import '../../common/common.dart';
 import '../../state.dart';
@@ -108,18 +111,7 @@ class DeferredDesktopInstallHandoff implements DesktopInstallHandoff {
 /// installer because it replaces the service and files in Program Files; the
 /// normal GUI process stays unelevated.
 class WindowsDesktopInstallHandoff implements DesktopInstallHandoff {
-  const WindowsDesktopInstallHandoff({this.startProcess = Process.start});
-
-  final Future<Process> Function(
-    String executable,
-    List<String> arguments, {
-    String? workingDirectory,
-    Map<String, String>? environment,
-    bool includeParentEnvironment,
-    bool runInShell,
-    ProcessStartMode mode,
-  })
-  startProcess;
+  const WindowsDesktopInstallHandoff();
 
   @override
   Future<bool> installVerifiedPackage({
@@ -136,20 +128,32 @@ class WindowsDesktopInstallHandoff implements DesktopInstallHandoff {
         path.extension(installer.path).toLowerCase() != '.exe') {
       throw StateError('Verified Windows installer path is invalid.');
     }
-    await startProcess(
-      installer.path,
-      const [
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
-        '/NORESTART',
-        '/CLOSEAPPLICATIONS',
-        '/RESTARTAPPLICATIONS',
-      ],
-      includeParentEnvironment: true,
-      runInShell: false,
-      mode: ProcessStartMode.detached,
-    );
-    return true;
+    // Process.start cannot honour the Inno `requireAdministrator` manifest:
+    // its child inherits the unelevated token and no consent prompt appears.
+    // ShellExecuteEx with `runas` hands the verified installer to Windows' UAC
+    // broker and reports both cancellation and launch failures to the caller.
+    return using((arena) {
+      final executeInfo = arena<win32.SHELLEXECUTEINFO>();
+      executeInfo.ref
+        ..cbSize = sizeOf<win32.SHELLEXECUTEINFO>()
+        ..fMask = 0x00000040 // SEE_MASK_NOCLOSEPROCESS
+        ..lpVerb = 'runas'.toNativeUtf16(allocator: arena)
+        ..lpFile = installer.path.toNativeUtf16(allocator: arena)
+        ..lpParameters =
+            '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS '
+                '/RESTARTAPPLICATIONS'
+                .toNativeUtf16(allocator: arena)
+        ..nShow = win32.SW_SHOWNORMAL;
+      if (win32.ShellExecuteEx(executeInfo) == 0) {
+        final error = win32.GetLastError();
+        if (error == 1223) return false; // ERROR_CANCELLED
+        throw StateError('Unable to start elevated Windows installer ($error).');
+      }
+      if (executeInfo.ref.hProcess != 0) {
+        win32.CloseHandle(executeInfo.ref.hProcess);
+      }
+      return true;
+    });
   }
 }
 
