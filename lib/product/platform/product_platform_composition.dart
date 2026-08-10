@@ -5,6 +5,7 @@ import '../../common/android.dart';
 import '../../common/window.dart';
 import '../android/android_entrypoint.dart';
 import '../android/android_platform.dart';
+import '../macos/macos_privileged_helper.dart';
 import '../runtime/runtime_types.dart';
 import '../security/android_security_policy.dart';
 import '../security/security_policy.dart';
@@ -107,19 +108,24 @@ class ProductPlatformComposition {
 
     final updateEnvironment = DesktopUpdateEnvironment.forOperatingSystem(
       profile.operatingSystem,
-      packageManagedLinux:
-          profile.kind == ProductPlatformKind.linux &&
+      packageManagedLinux: profile.kind == ProductPlatformKind.linux &&
           (Platform.environment['APPIMAGE']?.trim().isEmpty ?? true),
     );
+    final runtimeAccess = profile.kind == ProductPlatformKind.macos
+        ? MacosRuntimeAccessPolicy()
+        : const DesktopRuntimeAccessPolicy();
     return ProductPlatformComposition._(
       profile: profile,
       services: ProductServices(
-        accessControl: const AccessControlService(
-          platform: DesktopRuntimeAccessPolicy(),
-        ),
+        accessControl: AccessControlService(platform: runtimeAccess),
         androidShell: const DesktopShellService(),
         appUpdate: AppUpdateService(
-          platform: DesktopAppUpdateBridge(environment: updateEnvironment),
+          platform: DesktopAppUpdateBridge(
+            environment: updateEnvironment,
+            installHandoff: profile.kind == ProductPlatformKind.macos
+                ? const MacosDesktopInstallHandoff()
+                : const DeferredDesktopInstallHandoff(),
+          ),
           packageSelector: DesktopAppUpdatePackageSelector(
             environment: updateEnvironment,
           ),
@@ -127,8 +133,8 @@ class ProductPlatformComposition {
       ),
       securityPolicy: DesktopSecurityPolicy.currentInstall(),
       bootstrap: const DesktopPlatformBootstrap(),
-      capabilities: const ProductPlatformCapabilities(
-        tunConfiguration: false,
+      capabilities: ProductPlatformCapabilities(
+        tunConfiguration: profile.kind == ProductPlatformKind.macos,
         systemProxy: true,
         androidAccessControl: false,
       ),

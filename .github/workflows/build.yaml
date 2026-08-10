@@ -339,6 +339,40 @@ jobs:
           RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
         run: python3 tool/runtime_compat/runtime_compat.py verify --target ${{ matrix.target }}
 
+      - name: Smoke packaged macOS runtimes
+        if: startsWith(matrix.target, 'macos-')
+        env:
+          RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
+        run: python3 tool/runtime_compat/runtime_compat.py smoke --target ${{ matrix.target }}
+
+      - name: Check macOS helper and updater binaries
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          app=build/macos/Build/Products/Release/FlClashM.app
+          arch=$(uname -m)
+          "$app/Contents/runtimes/macos/$arch/app.flclashm.client.helper" --self-test
+          "$app/Contents/Resources/updater-handoff" --self-test
+
+      - name: Exercise macOS helper lifecycle
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          source_app=build/macos/Build/Products/Release/FlClashM.app
+          ci_app=/Applications/FlClashM.app
+          cleanup() {
+            sudo "$ci_app/Contents/Resources/helper/install-helper.sh" uninstall || true
+            sudo rm -rf "$ci_app"
+          }
+          trap cleanup EXIT
+          sudo rm -rf "$ci_app"
+          sudo ditto "$source_app" "$ci_app"
+          sudo "$ci_app/Contents/Resources/helper/install-helper.sh" install
+          "$ci_app/Contents/runtimes/macos/$(uname -m)/app.flclashm.client.helper" --client-smoke
+          sudo "$ci_app/Contents/Resources/helper/install-helper.sh" uninstall
+
+      - name: Record manual Gatekeeper release gate
+        if: startsWith(matrix.target, 'macos-')
+        run: echo "Gatekeeper first-launch UI is a manual release gate for this unsigned build."
+
       - name: Archive Linux desktop bundle
         if: matrix.target == 'linux-x64'
         run: |
@@ -354,11 +388,7 @@ jobs:
 
       - name: Archive macOS desktop bundle
         if: startsWith(matrix.target, 'macos-')
-        run: |
-          mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent \
-            build/macos/Build/Products/Release/FlClashM.app \
-            dist/FlClashM-${{ matrix.target }}.zip
+        run: macos/packaging/package.sh build/macos/Build/Products/Release/FlClashM.app dist ${{ matrix.target }}
 
       - name: Upload packaged desktop bundle
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

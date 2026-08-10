@@ -11,6 +11,7 @@ class AppDelegate: FlutterAppDelegate {
     var statusBarController: StatusBarController?
     var zashboardChannel: FlutterMethodChannel?
     var zashboardWindowController: ZashboardWindowController?
+    private let productPlatformBridge = ProductPlatformBridge()
 
     var flutterUIPopover = NSPopover.init()
     
@@ -39,6 +40,7 @@ class AppDelegate: FlutterAppDelegate {
         
         setupStatusBarChannel(flutterViewController: mainController)
         setupZashboardChannel(flutterViewController: mainController)
+        productPlatformBridge.register(with: mainController)
 
         super.applicationDidFinishLaunching(aNotification)
         
@@ -155,6 +157,7 @@ class AppDelegate: FlutterAppDelegate {
     }
     
     override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        productPlatformBridge.disconnect()
         WindowExtPlugin.instance?.handleShouldTerminate()
         return .terminateCancel
     }

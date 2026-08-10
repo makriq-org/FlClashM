@@ -13,6 +13,9 @@ on:
       - 'linux/CMakeLists.txt'
       - 'windows/CMakeLists.txt'
       - 'macos/Runner.xcodeproj/project.pbxproj'
+      - 'macos/Helper/**'
+      - 'macos/Updater/**'
+      - 'macos/packaging/**'
       - 'test/product/platform/product_install_layout_test.dart'
 
 permissions:
@@ -88,6 +91,62 @@ jobs:
           python tool/runtime_compat/runtime_compat.py build --target '${{ matrix.target }}'
           python tool/runtime_compat/runtime_compat.py smoke --target '${{ matrix.target }}'
           python tool/runtime_compat/runtime_compat.py verify --target '${{ matrix.target }}'
+
+      - name: Set up Flutter for macOS app verification
+        if: startsWith(matrix.target, 'macos-')
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.41.7'
+          cache: true
+
+      - name: Build complete macOS app bundle
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          flutter pub get
+          mkdir -p .dart_tool/desktop-runtime-assets
+          ditto desktop-runtime-out/install .dart_tool/desktop-runtime-assets
+          flutter build macos --release
+
+      - name: Verify macOS helper and updater binaries
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          app=build/macos/Build/Products/Release/FlClashM.app
+          arch=$(uname -m)
+          "$app/Contents/runtimes/macos/$arch/app.flclashm.client.helper" --self-test
+          "$app/Contents/Resources/updater-handoff" --self-test
+
+      - name: Exercise macOS helper install lifecycle
+        if: startsWith(matrix.target, 'macos-')
+        run: |
+          source_app=build/macos/Build/Products/Release/FlClashM.app
+          ci_app=/Applications/FlClashM.app
+          cleanup() {
+            sudo "$ci_app/Contents/Resources/helper/install-helper.sh" uninstall || true
+            sudo rm -rf "$ci_app"
+          }
+          trap cleanup EXIT
+          sudo rm -rf "$ci_app"
+          sudo ditto "$source_app" "$ci_app"
+          sudo "$ci_app/Contents/Resources/helper/install-helper.sh" install
+          "$ci_app/Contents/runtimes/macos/$(uname -m)/app.flclashm.client.helper" --client-smoke
+          sudo "$ci_app/Contents/Resources/helper/install-helper.sh" uninstall
+
+      - name: Package macOS ZIP and DMG
+        if: startsWith(matrix.target, 'macos-')
+        run: macos/packaging/package.sh build/macos/Build/Products/Release/FlClashM.app macos-dist '${{ matrix.target }}'
+
+      - name: Upload verified macOS packages
+        if: startsWith(matrix.target, 'macos-')
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: macos-package-${{ matrix.target }}
+          path: macos-dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record manual Gatekeeper release gate
+        if: startsWith(matrix.target, 'macos-')
+        run: echo "Gatekeeper first-launch UI is a manual release gate for this unsigned build."
 
       - name: Upload verified install layout
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

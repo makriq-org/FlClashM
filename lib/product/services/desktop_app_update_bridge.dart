@@ -3,10 +3,13 @@ import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../common/common.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
+import '../macos/macos_privileged_helper.dart';
+import '../runtime/desktop_runtime_node_bridge.dart';
 import 'app_update_manifest.dart';
 import 'app_update_platform_bridge.dart';
 import 'app_update_release.dart';
@@ -101,6 +104,31 @@ class DeferredDesktopInstallHandoff implements DesktopInstallHandoff {
             'The verified AppImage replacement is ready; native replacement handoff is unavailable.',
         }),
       );
+}
+
+class MacosDesktopInstallHandoff implements DesktopInstallHandoff {
+  const MacosDesktopInstallHandoff({
+    MethodChannel channel = const MethodChannel(
+      'app.flclashm.client/privileged-helper',
+    ),
+  }) : _channel = channel;
+
+  final MethodChannel _channel;
+
+  @override
+  Future<bool> installVerifiedPackage({
+    required String packagePath,
+    required DesktopUpdateTarget target,
+  }) async {
+    if (target.operatingSystem != DesktopUpdateOperatingSystem.macos ||
+        target.packageKind != DesktopPackageKind.macosAppArchive) {
+      throw ArgumentError('The macOS handoff accepts only macOS app archives.');
+    }
+    return await _channel.invokeMethod<bool>('installUpdate', {
+          'packagePath': packagePath,
+        }) ??
+        false;
+  }
 }
 
 class DesktopAppUpdatePackageSelector implements AppUpdatePackageSelector {
@@ -290,7 +318,17 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
   }
 
   @override
-  Future<void> prepareInstallHandoff() async {}
+  Future<void> prepareInstallHandoff() async {
+    if (environment.target.operatingSystem !=
+        DesktopUpdateOperatingSystem.macos) {
+      return;
+    }
+    if (globalState.engineManager.isStarted) {
+      await globalState.engineManager.stop();
+    }
+    await desktopRuntimeNodeBridge.stopPlan();
+    await macosSystemDns.set(restore: true);
+  }
 
   @override
   Future<bool> installPackage(String path) {

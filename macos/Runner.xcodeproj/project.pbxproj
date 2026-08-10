@@ -25,6 +25,7 @@
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
+		F50092012CF74B7700D43AEA /* ProductPlatformBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50092002CF74B7700D43AEA /* ProductPlatformBridge.swift */; };
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
@@ -91,6 +92,7 @@
 		335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeneratedPluginRegistrant.swift; sourceTree = "<group>"; };
 		33CC10ED2044A3C60003C045 /* FlClashM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlClashM.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		33CC10F02044A3C60003C045 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F50092002CF74B7700D43AEA /* ProductPlatformBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductPlatformBridge.swift; sourceTree = "<group>"; };
 		33CC10F22044A3C60003C045 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Runner/Assets.xcassets; sourceTree = "<group>"; };
 		33CC10F52044A3C60003C045 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		33CC10F72044A3C60003C045 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Runner/Info.plist; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 			children = (
 				2414C4342E8D575900EF1247 /* StatusBarController.swift */,
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
+				F50092002CF74B7700D43AEA /* ProductPlatformBridge.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
@@ -365,6 +368,10 @@
 				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/olcrtc",
 				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/byedpi",
 				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/stormdns",
+				"$(PROJECT_DIR)/Helper/main.swift",
+				"$(PROJECT_DIR)/Updater/main.swift",
+				"$(PROJECT_DIR)/Helper/install-helper.sh",
+				"$(PROJECT_DIR)/Helper/app.flclashm.client.helper.plist",
 			);
 			name = "Install runtime layout";
 			outputPaths = (
@@ -374,10 +381,12 @@
 				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/olcrtc",
 				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/byedpi",
 				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/stormdns",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/app.flclashm.client.helper",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Resources/updater-handoff",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\ncase \"$CURRENT_ARCH\" in\n  x86_64) runtime_target=macos-x64 ;;\n  arm64) runtime_target=macos-arm64 ;;\n  *) echo \"Unsupported macOS runtime architecture: $CURRENT_ARCH\" >&2; exit 1 ;;\nesac\nassets_root=\"$PROJECT_DIR/../.dart_tool/desktop-runtime-assets\"\nRUNTIME_COMPAT_OUT=\"$assets_root\" python3 \"$PROJECT_DIR/../tool/runtime_compat/runtime_compat.py\" verify --target \"$runtime_target\"\nruntime_source=\"$assets_root/runtimes/macos/$CURRENT_ARCH\"\nruntime_dir=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/runtimes/macos/$CURRENT_ARCH\"\nmkdir -p \"$runtime_dir\"\ncp \"$runtime_source/runtime-inventory.json\" \"$runtime_dir/runtime-inventory.json\"\nfor artifact in mihomo naiveproxy olcrtc byedpi stormdns; do\n  cp \"$runtime_source/$artifact\" \"$runtime_dir/$artifact\"\n  chmod +x \"$runtime_dir/$artifact\"\ndone\n";
+			shellScript = "set -euo pipefail\ncase \"$CURRENT_ARCH\" in\n  x86_64) runtime_target=macos-x64 ;;\n  arm64) runtime_target=macos-arm64 ;;\n  *) echo \"Unsupported macOS runtime architecture: $CURRENT_ARCH\" >&2; exit 1 ;;\nesac\nassets_root=\"$PROJECT_DIR/../.dart_tool/desktop-runtime-assets\"\nRUNTIME_COMPAT_OUT=\"$assets_root\" python3 \"$PROJECT_DIR/../tool/runtime_compat/runtime_compat.py\" verify --target \"$runtime_target\"\nruntime_source=\"$assets_root/runtimes/macos/$CURRENT_ARCH\"\nruntime_dir=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/runtimes/macos/$CURRENT_ARCH\"\nresources_dir=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/Resources\"\nhelper_resources=\"$resources_dir/helper\"\nmkdir -p \"$runtime_dir\" \"$helper_resources\"\ncp \"$runtime_source/runtime-inventory.json\" \"$runtime_dir/runtime-inventory.json\"\nfor artifact in mihomo naiveproxy olcrtc byedpi stormdns; do\n  cp \"$runtime_source/$artifact\" \"$runtime_dir/$artifact\"\n  chmod 0755 \"$runtime_dir/$artifact\"\ndone\nxcrun swiftc -O -target \"$CURRENT_ARCH-apple-macosx11.0\" \"$PROJECT_DIR/Helper/main.swift\" -o \"$runtime_dir/app.flclashm.client.helper\"\nxcrun swiftc -O -target \"$CURRENT_ARCH-apple-macosx11.0\" \"$PROJECT_DIR/Updater/main.swift\" -o \"$resources_dir/updater-handoff\"\ncp \"$PROJECT_DIR/Helper/install-helper.sh\" \"$helper_resources/install-helper.sh\"\ncp \"$PROJECT_DIR/Helper/app.flclashm.client.helper.plist\" \"$helper_resources/app.flclashm.client.helper.plist\"\nchmod 0755 \"$runtime_dir/app.flclashm.client.helper\" \"$resources_dir/updater-handoff\" \"$helper_resources/install-helper.sh\"\nchmod 0644 \"$helper_resources/app.flclashm.client.helper.plist\"\n";
 		};
 		1522C6AC211009D2A7DFAD40 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -511,6 +520,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F50092012CF74B7700D43AEA /* ProductPlatformBridge.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				2414C4352E8D575D00EF1247 /* StatusBarController.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,

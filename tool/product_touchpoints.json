@@ -58,6 +58,7 @@
       "boundary": "platform-shell-bootstrap",
       "reason": "System helpers stay a thin base delegate for Android task-back behavior.",
       "targets": [
+        "lib/product/macos/macos_privileged_helper.dart",
         "lib/product/services/product_services.dart"
       ]
     },

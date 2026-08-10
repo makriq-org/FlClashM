@@ -501,6 +501,11 @@
       "reason": "Экран текущей конфигурации читает живой snapshot ядра вместо устаревшего Dart-кэша."
     },
     {
+      "path": "lib/common/core_update.dart",
+      "bucket": "budget",
+      "reason": "macOS обновляет mihomo только вместе с проверенным app bundle и больше не восстанавливает setuid-бит ядра."
+    },
+    {
       "path": "lib/common/link.dart",
       "bucket": "budget",
       "reason": "Исправление initial link и дедупликации deep-link событий принято в бюджет."
@@ -523,7 +528,7 @@
     {
       "path": "lib/common/system.dart",
       "bucket": "budget",
-      "reason": "System держит только тонкий platform-call для Android task-back; остальная дельта не продуктовая и дальше не дробится."
+      "reason": "System делегирует Android task-back и привилегированные операции macOS в соответствующие product-мосты."
     },
     {
       "path": "lib/common/utils.dart",

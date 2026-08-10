@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/product/macos/macos_privileged_helper.dart';
 import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/input.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class System {
   factory System() {
@@ -54,7 +54,7 @@ class System {
       "macos" => (deviceInfo as MacOsDeviceInfo).majorVersion,
       "android" => (deviceInfo as AndroidDeviceInfo).version.sdkInt,
       "windows" => (deviceInfo as WindowsDeviceInfo).majorVersion,
-      String() => 0
+      String() => 0,
     };
   }
 
@@ -64,12 +64,7 @@ class System {
       final result = await windows?.checkService();
       return result == WindowsHelperServiceStatus.running;
     } else if (Platform.isMacOS) {
-      final result = await Process.run('stat', ['-f', '%Su:%Sg %Sp', corePath]);
-      final output = result.stdout.trim();
-      if (output.startsWith('root:admin') && output.contains('rws')) {
-        return true;
-      }
-      return false;
+      return macosPrivilegedHelper.isReady();
     } else if (Platform.isLinux) {
       final result = await Process.run('stat', ['-c', '%U:%G %A', corePath]);
       final output = result.stdout.trim();
@@ -87,7 +82,9 @@ class System {
     }
 
     if (Platform.isMacOS) {
-      return AuthorizeCode.none;
+      return await macosPrivilegedHelper.ensureReady()
+          ? AuthorizeCode.success
+          : AuthorizeCode.error;
     }
 
     final corePath = appPath.corePath.replaceAll(' ', r'\\ ');
@@ -150,27 +147,28 @@ class System {
       return null;
     }
     final device = lineSplits[1];
-    final serviceResult = await Process.run(
-      'networksetup',
-      ['-listnetworkserviceorder'],
-    );
+    final serviceResult = await Process.run('networksetup', [
+      '-listnetworkserviceorder',
+    ]);
     final serviceResultOutput = serviceResult.stdout.toString();
-    final currentService = serviceResultOutput.split('\n\n').firstWhere(
-          (s) => s.contains("Device: $device"),
-          orElse: () => "",
-        );
+    final currentService = serviceResultOutput
+        .split('\n\n')
+        .firstWhere((s) => s.contains("Device: $device"), orElse: () => "");
     if (currentService.isEmpty) {
       return null;
     }
     final currentServiceNameLine = currentService.split("\n").firstWhere(
-        (line) => RegExp(r'^\(\d+\).*').hasMatch(line),
-        orElse: () => "");
+          (line) => RegExp(r'^\(\d+\).*').hasMatch(line),
+          orElse: () => "",
+        );
     // Strip the leading "(N) " index; the rest is the full service name, which can
     // contain spaces ("Thunderbolt Ethernet", "USB 10/100/1000 LAN"). The old
     // split(' ')[1] truncated multi-word names, silently breaking auto system-DNS
     // (and poisoning originDns with networksetup's error text) on wired/USB adapters.
-    final name =
-        currentServiceNameLine.trim().replaceFirst(RegExp(r'^\(\d+\)\s*'), '');
+    final name = currentServiceNameLine.trim().replaceFirst(
+          RegExp(r'^\(\d+\)\s*'),
+          '',
+        );
     return name.isEmpty ? null : name;
   }
 
@@ -182,10 +180,10 @@ class System {
     if (deviceServiceName == null) {
       return null;
     }
-    final result = await Process.run(
-      'networksetup',
-      ['-getdnsservers', deviceServiceName],
-    );
+    final result = await Process.run('networksetup', [
+      '-getdnsservers',
+      deviceServiceName,
+    ]);
     final output = result.stdout.toString().trim();
     if (output.startsWith("There aren't any DNS Servers set on")) {
       originDns = [];
@@ -199,49 +197,7 @@ class System {
     if (!Platform.isMacOS) {
       return;
     }
-    final serviceName = await getMacOSDefaultServiceName();
-    if (serviceName == null) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    const originKey = "macos_origin_dns";
-    const needAddDns = "1.1.1.1"; // Cloudflare DNS
-    List<String>? nextDns;
-    if (restore) {
-      // Prefer the persisted true origin over the in-memory snapshot, then clear
-      // it so the next session starts clean.
-      nextDns = prefs.getStringList(originKey) ?? originDns;
-      await prefs.remove(originKey);
-    } else {
-      final saved = prefs.getStringList(originKey);
-      final origin = saved ?? await system.getMacOSOriginDns();
-      if (origin == null) {
-        return;
-      }
-      // Persist the TRUE pre-injection DNS exactly once. Preferring a persisted
-      // snapshot over the live read means a crash-polluted live value (already
-      // carrying 1.1.1.1 from a prior unclean exit) can never become the "origin"
-      // and get baked in permanently. A genuine 1.1.1.1 user keeps their value
-      // because we never strip it from the saved snapshot.
-      if (saved == null) {
-        await prefs.setStringList(originKey, origin);
-      }
-      nextDns = origin.contains(needAddDns)
-          ? List<String>.from(origin)
-          : (List<String>.from(origin)..add(needAddDns));
-    }
-    if (nextDns == null) {
-      return;
-    }
-    await Process.run(
-      'networksetup',
-      [
-        '-setdnsservers',
-        serviceName,
-        if (nextDns.isNotEmpty) ...nextDns,
-        if (nextDns.isEmpty) "Empty",
-      ],
-    );
+    await macosSystemDns.set(restore: restore);
   }
 
   Future<void> back() async {
