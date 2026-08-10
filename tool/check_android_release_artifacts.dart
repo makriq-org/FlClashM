@@ -12,6 +12,24 @@ Future<void> main(List<String> args) async {
   final coreVersion = readCoreVersion();
   final failures = <String>[];
 
+  final channelFailure = validateReleaseChannel(
+    releaseChannel: options.releaseChannel,
+    pubspecVersion: pubspecVersion,
+  );
+  if (channelFailure != null) {
+    failures.add(channelFailure);
+  }
+  final githubRefName = options.githubRefName;
+  if (githubRefName != null && githubRefName.isNotEmpty) {
+    final tagFailure = validateReleaseTag(
+      refName: githubRefName,
+      pubspecVersion: pubspecVersion,
+    );
+    if (tagFailure != null) {
+      failures.add(tagFailure);
+    }
+  }
+
   final distDirectory = Directory(options.distPath);
   if (!distDirectory.existsSync()) {
     failures.add('Missing dist directory `${distDirectory.path}`.');
@@ -204,7 +222,7 @@ void _checkMetadataContract({
   _expectJsonString(
     metadata,
     key: 'expectedStableTag',
-    expected: 'v${pubspecVersion.versionName}',
+    expected: pubspecVersion.stableTagName,
     failures: failures,
   );
   _expectJsonString(

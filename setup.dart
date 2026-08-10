@@ -67,7 +67,6 @@ Future<void> main(List<String> args) async {
     stderr.writeln(
       'FlClashM is Android-only. Supported command: dart setup.dart android '
       '[--arch arm|arm64|amd64] [--env stable|pre] '
-      '[--version-name <version>] '
       '[--out app|core|runtime-assets|split-apk|universal-apk|appbundle]',
     );
     exitCode = 64;
@@ -99,7 +98,6 @@ Future<void> main(List<String> args) async {
     await _buildAndroidArtifacts(
       env: command.env,
       coreVersion: coreVersion,
-      versionName: command.versionName,
     );
     return;
   }
@@ -108,7 +106,6 @@ Future<void> main(List<String> args) async {
     out: command.out,
     env: command.env,
     coreVersion: coreVersion,
-    versionName: command.versionName,
   );
 }
 
@@ -120,7 +117,6 @@ CommandArgs _parseArgs(List<String> args) {
   var arch = '';
   var env = 'pre';
   var out = 'app';
-  String? versionName;
 
   for (var i = 1; i < args.length; i++) {
     final arg = args[i];
@@ -143,12 +139,6 @@ CommandArgs _parseArgs(List<String> args) {
         }
         out = args[++i];
         break;
-      case '--version-name':
-        if (i + 1 >= args.length) {
-          throw ArgumentError('Missing value for --version-name');
-        }
-        versionName = args[++i];
-        break;
       default:
         throw ArgumentError('Unknown argument: $arg');
     }
@@ -166,17 +156,11 @@ CommandArgs _parseArgs(List<String> args) {
   if (env != 'stable' && env != 'pre') {
     throw ArgumentError('Invalid --env value: $env');
   }
-  if (versionName != null &&
-      !RegExp(r'^\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$').hasMatch(versionName)) {
-    throw ArgumentError('Invalid --version-name value: $versionName');
-  }
-
   return CommandArgs(
     target: args.first,
     arch: arch.isEmpty ? null : arch,
     env: env,
     out: out,
-    versionName: versionName,
   );
 }
 
@@ -258,7 +242,6 @@ Future<void> _buildAndroidCore({
 Future<void> _buildAndroidArtifacts({
   required String env,
   required String coreVersion,
-  required String? versionName,
 }) async {
   final dist = Directory(_projectPath(_distDir));
   _resetDistDirectory(dist);
@@ -269,21 +252,18 @@ Future<void> _buildAndroidArtifacts({
     flutterEnvironment: flutterEnvironment,
     env: env,
     coreVersion: coreVersion,
-    versionName: versionName,
   );
   await _buildUniversalApk(
     dist: dist,
     flutterEnvironment: flutterEnvironment,
     env: env,
     coreVersion: coreVersion,
-    versionName: versionName,
   );
   await _buildAppBundle(
     dist: dist,
     flutterEnvironment: flutterEnvironment,
     env: env,
     coreVersion: coreVersion,
-    versionName: versionName,
   );
 }
 
@@ -291,7 +271,6 @@ Future<void> _buildAndroidArtifact({
   required String out,
   required String env,
   required String coreVersion,
-  required String? versionName,
 }) async {
   final dist = Directory(_projectPath(_distDir));
   _resetDistDirectory(dist);
@@ -304,7 +283,6 @@ Future<void> _buildAndroidArtifact({
         flutterEnvironment: flutterEnvironment,
         env: env,
         coreVersion: coreVersion,
-        versionName: versionName,
       );
       break;
     case 'universal-apk':
@@ -313,7 +291,6 @@ Future<void> _buildAndroidArtifact({
         flutterEnvironment: flutterEnvironment,
         env: env,
         coreVersion: coreVersion,
-        versionName: versionName,
       );
       break;
     case 'appbundle':
@@ -322,7 +299,6 @@ Future<void> _buildAndroidArtifact({
         flutterEnvironment: flutterEnvironment,
         env: env,
         coreVersion: coreVersion,
-        versionName: versionName,
       );
       break;
     default:
@@ -342,7 +318,6 @@ Future<void> _buildSplitApks({
   required Map<String, String> flutterEnvironment,
   required String env,
   required String coreVersion,
-  required String? versionName,
 }) async {
   await _exec(
     [
@@ -353,7 +328,6 @@ Future<void> _buildSplitApks({
       '--split-per-abi',
       '--dart-define=APP_ENV=$env',
       '--dart-define=CORE_VERSION=$coreVersion',
-      if (versionName != null) '--build-name=$versionName',
     ],
     environment: flutterEnvironment,
     workingDirectory: _projectRoot,
@@ -383,7 +357,6 @@ Future<void> _buildUniversalApk({
   required Map<String, String> flutterEnvironment,
   required String env,
   required String coreVersion,
-  required String? versionName,
 }) async {
   await _exec(
     [
@@ -393,7 +366,6 @@ Future<void> _buildUniversalApk({
       '--release',
       '--dart-define=APP_ENV=$env',
       '--dart-define=CORE_VERSION=$coreVersion',
-      if (versionName != null) '--build-name=$versionName',
     ],
     environment: flutterEnvironment,
     workingDirectory: _projectRoot,
@@ -414,7 +386,6 @@ Future<void> _buildAppBundle({
   required Map<String, String> flutterEnvironment,
   required String env,
   required String coreVersion,
-  required String? versionName,
 }) async {
   await _exec(
     [
@@ -424,7 +395,6 @@ Future<void> _buildAppBundle({
       '--release',
       '--dart-define=APP_ENV=$env',
       '--dart-define=CORE_VERSION=$coreVersion',
-      if (versionName != null) '--build-name=$versionName',
     ],
     environment: flutterEnvironment,
     workingDirectory: _projectRoot,
@@ -1274,12 +1244,10 @@ class CommandArgs {
     this.arch,
     this.env = 'pre',
     this.out = 'app',
-    this.versionName,
   });
 
   final String target;
   final String? arch;
   final String env;
   final String out;
-  final String? versionName;
 }

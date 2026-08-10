@@ -4,9 +4,13 @@
 
 | | قالب |
 |---|------|
-| **تگ پایدار** | `v<versionName>` |
-| **پیش‌انتشار** | `v<versionName>-<suffix>` |
+| **نسخهٔ پایدار** | `MAJOR.MINOR.PATCH+versionCode` |
+| **نسخهٔ پیش‌انتشار** | `MAJOR.MINOR.PATCH-preN+versionCode` |
+| **تگ** | دقیقاً `v<versionName>` |
 | **`applicationId`** | `com.makriq.flclash` |
+
+`versionName` کامل، شامل `-preN`، در `pubspec.yaml` نگه‌داری می‌شود. CI هنگام ساخت آن
+را بازنویسی نمی‌کند و تگ باید با افزودن پیشوند `v` دقیقاً با آن یکسان باشد.
 
 ## 📂 محتوای انتشار
 

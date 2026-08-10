@@ -394,20 +394,12 @@ void _checkBuildWorkflow({
     label: 'release metadata generation in `$buildWorkflowPath`',
     failures: failures,
   );
-  _expectPatternExists(
-    content: content,
-    pattern: RegExp(r'version_name="\$\{GITHUB_REF_NAME#v\}"'),
-    label:
-        'package version derivation from the release tag in `$buildWorkflowPath`',
-    failures: failures,
-  );
-  _expectPatternExists(
-    content: content,
-    pattern: RegExp(r'--version-name\s+"\$version_name"'),
-    label:
-        'release tag version forwarding to Android builds in `$buildWorkflowPath`',
-    failures: failures,
-  );
+  if (content.contains('--version-name') || content.contains('--build-name')) {
+    failures.add(
+      'Expected `$buildWorkflowPath` to use the full version from '
+      '`$pubspecPath` without a build-time version override.',
+    );
+  }
   _expectPatternExists(
     content: content,
     pattern: RegExp(
@@ -499,12 +491,12 @@ void _checkSetupContract({
     label: 'release app name in `$setupPath`',
     failures: failures,
   );
-  _expectPatternExists(
-    content: content,
-    pattern: RegExp(r"'--build-name=\$versionName'"),
-    label: 'Android package version override in `$setupPath`',
-    failures: failures,
-  );
+  if (content.contains('--build-name') || content.contains('--version-name')) {
+    failures.add(
+      'Expected `$setupPath` to use the full version from `$pubspecPath` '
+      'without a build-time version override.',
+    );
+  }
 
   for (final artifact in contract.releaseArtifacts) {
     final expectedSourceName =
@@ -592,28 +584,12 @@ void _checkTagContract({
   required PubspecVersion pubspecVersion,
   required List<String> failures,
 }) {
-  final expectedStableTag = 'v${pubspecVersion.versionName}';
-  if (!refName.startsWith('v')) {
-    failures.add(
-      'Expected release tag to start with `v`, got `$refName`.',
-    );
-    return;
-  }
-
-  if (refName.contains('-')) {
-    final expectedPrefix = '$expectedStableTag-';
-    if (!refName.startsWith(expectedPrefix) || refName == expectedPrefix) {
-      failures.add(
-        'Expected pre-release tag to start with `$expectedPrefix`, got `$refName`.',
-      );
-    }
-    return;
-  }
-
-  if (refName != expectedStableTag) {
-    failures.add(
-      'Expected stable release tag `$expectedStableTag`, got `$refName`.',
-    );
+  final failure = validateReleaseTag(
+    refName: refName,
+    pubspecVersion: pubspecVersion,
+  );
+  if (failure != null) {
+    failures.add(failure);
   }
 }
 

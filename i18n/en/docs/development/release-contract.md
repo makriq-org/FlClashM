@@ -4,9 +4,13 @@
 
 | | Format |
 |---|--------|
-| **Stable tag** | `v<versionName>` |
-| **Pre-release** | `v<versionName>-<suffix>` |
+| **Stable version** | `MAJOR.MINOR.PATCH+versionCode` |
+| **Pre-release version** | `MAJOR.MINOR.PATCH-preN+versionCode` |
+| **Tag** | exact `v<versionName>` |
 | **`applicationId`** | `com.makriq.flclash` |
+
+The complete `versionName`, including `-preN`, is stored in `pubspec.yaml`. CI does
+not override it at build time, and the tag must match it with a leading `v`.
 
 ## 📂 Release contents
 

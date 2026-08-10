@@ -110,7 +110,7 @@ void main() {
         '--dist=${dist.path}',
         '--out=${tempDir.path}/pre.json',
         '--release-notes=${notes.path}',
-        '--tag=v0.10.5-pre7',
+        '--tag=v0.10.8-pre3',
         '--github-repository=makriq-org/FlClashM',
         '--channel=pre',
         '--published-at=2026-07-14T10:00:00.000Z',
