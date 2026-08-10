@@ -71,15 +71,31 @@ endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$")
-  set(RUNTIME_ARCHITECTURE "x86_64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
-  set(RUNTIME_ARCHITECTURE "arm64")
-else()
-  message(FATAL_ERROR "Unsupported Windows runtime architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$")
+  message(FATAL_ERROR
+    "Unsupported Windows runtime architecture: ${CMAKE_SYSTEM_PROCESSOR}; FlClashM ships desktop runtime artifacts only for Windows x64")
 endif()
+set(RUNTIME_ARCHITECTURE "x86_64")
 set(INSTALL_RUNTIME_DIR
   "${CMAKE_INSTALL_PREFIX}/runtimes/windows/${RUNTIME_ARCHITECTURE}")
+set(FLCLASHM_RUNTIME_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../.dart_tool/desktop-runtime-assets"
+  CACHE PATH "Verified FlClashM desktop runtime asset root")
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env
+    "RUNTIME_COMPAT_OUT=${FLCLASHM_RUNTIME_ASSETS}"
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tool/runtime_compat/runtime_compat.py"
+    verify --target windows-x64
+  RESULT_VARIABLE RUNTIME_VERIFY_RESULT
+  OUTPUT_VARIABLE RUNTIME_VERIFY_OUTPUT
+  ERROR_VARIABLE RUNTIME_VERIFY_ERROR)
+if(NOT RUNTIME_VERIFY_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "Desktop runtime asset verification failed. Build or download desktop-runtime-windows-x64 into ${FLCLASHM_RUNTIME_ASSETS}.\n${RUNTIME_VERIFY_OUTPUT}${RUNTIME_VERIFY_ERROR}")
+endif()
+set(RUNTIME_ASSET_DIR
+  "${FLCLASHM_RUNTIME_ASSETS}/runtimes/windows/${RUNTIME_ARCHITECTURE}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -90,18 +106,17 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# Desktop runtime artifacts use the ProductInstallLayout contract.
+# Desktop runtime artifacts use the ProductInstallLayout contract and are
+# verified before CMake is allowed to produce an install bundle.
+install(PROGRAMS
+  "${RUNTIME_ASSET_DIR}/mihomo.exe"
+  "${RUNTIME_ASSET_DIR}/naiveproxy.exe"
+  "${RUNTIME_ASSET_DIR}/olcrtc.exe"
+  "${RUNTIME_ASSET_DIR}/byedpi.exe"
+  "${RUNTIME_ASSET_DIR}/stormdns.exe"
+  DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
+
 set(CLASH_DIR "../libclash/windows")
-
-# if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-# elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM" OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv[0-9]+")
-# elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86")
-#   set(CLASH_DIR "../libclash/windows/x86")
-# endif()
-
-install(PROGRAMS "${CLASH_DIR}/FlClashCore.exe" DESTINATION "${INSTALL_RUNTIME_DIR}"
-  RENAME "mihomo.exe" COMPONENT Runtime)
-
 install(PROGRAMS "${CLASH_DIR}/FlClashHelperService.exe" DESTINATION "${INSTALL_RUNTIME_DIR}"
   RENAME "app.flclashm.client.helper.exe" COMPONENT Runtime)
 

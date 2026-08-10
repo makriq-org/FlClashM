@@ -1,0 +1,108 @@
+name: Desktop runtime artifacts
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tool/runtime_compat/**'
+      - '.github/workflows/desktop-runtime-artifacts.yml'
+      - 'lib/product/platform/product_install_layout.dart'
+      - 'lib/product/runtime/*_release.dart'
+      - 'core/**'
+      - 'test/product/platform/product_install_layout_test.dart'
+  pull_request:
+    paths:
+      - 'tool/runtime_compat/**'
+      - '.github/workflows/desktop-runtime-artifacts.yml'
+      - 'lib/product/platform/product_install_layout.dart'
+      - 'lib/product/runtime/*_release.dart'
+      - 'core/**'
+      - 'linux/CMakeLists.txt'
+      - 'windows/CMakeLists.txt'
+      - 'macos/Runner.xcodeproj/project.pbxproj'
+      - 'test/product/platform/product_install_layout_test.dart'
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime-artifacts:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            shell: bash
+          - target: windows-x64
+            runner: windows-2025
+            shell: msys2
+          - target: macos-x64
+            runner: macos-15-intel
+            shell: bash
+          - target: macos-arm64
+            runner: macos-14
+            shell: bash
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up pinned Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.4'
+          check-latest: true
+
+      - name: Set up MSYS2 toolchain
+        if: matrix.shell == 'msys2'
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            make
+            git
+
+      - name: Test install layout and inventory guards (Unix)
+        if: matrix.shell == 'bash'
+        run: python3 -m unittest tool/runtime_compat/test_runtime_compat.py
+
+      - name: Test install layout and inventory guards (Windows)
+        if: matrix.shell == 'msys2'
+        shell: msys2 {0}
+        run: python -m unittest tool/runtime_compat/test_runtime_compat.py
+
+      - name: Build, smoke and verify bundle (Unix)
+        if: matrix.shell == 'bash'
+        env:
+          RUNTIME_COMPAT_OUT: ${{ github.workspace }}/desktop-runtime-out
+        run: |
+          tool/runtime_compat/build.sh --target '${{ matrix.target }}'
+          tool/runtime_compat/smoke.sh --target '${{ matrix.target }}'
+          tool/runtime_compat/verify.sh --target '${{ matrix.target }}'
+
+      - name: Build, smoke and verify bundle (Windows)
+        if: matrix.shell == 'msys2'
+        shell: msys2 {0}
+        env:
+          RUNTIME_COMPAT_OUT: ${{ github.workspace }}/desktop-runtime-out
+        run: |
+          export PATH="/c/hostedtoolcache/windows/go/1.26.4/x64/bin:$PATH"
+          python tool/runtime_compat/runtime_compat.py build --target '${{ matrix.target }}'
+          python tool/runtime_compat/runtime_compat.py smoke --target '${{ matrix.target }}'
+          python tool/runtime_compat/runtime_compat.py verify --target '${{ matrix.target }}'
+
+      - name: Upload verified install layout
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: desktop-runtime-${{ matrix.target }}
+          path: |
+            desktop-runtime-out/install/
+            desktop-runtime-out/runtime-report.json
+          if-no-files-found: error
+          retention-days: 14

@@ -143,9 +143,20 @@ void main() {
     expect(runtimeResolver, contains('ProductInstallLayout.helperArtifact'));
     expect(linux, contains('set(APPLICATION_ID "app.flclashm.client")'));
     expect(linux, contains(r'/runtimes/linux/${RUNTIME_ARCHITECTURE}'));
-    expect(linux, contains('RENAME "mihomo"'));
+    expect(linux, contains('runtime_compat.py'));
+    for (final artifact in ProductInstallLayout.artifacts
+        .where((artifact) => artifact != ProductInstallLayout.helperArtifact)) {
+      expect(linux, contains('\${RUNTIME_ASSET_DIR}/$artifact"'));
+    }
     expect(windows, contains(r'/runtimes/windows/${RUNTIME_ARCHITECTURE}'));
-    expect(windows, contains('RENAME "mihomo.exe"'));
+    expect(windows, contains('runtime_compat.py'));
+    for (final artifact in ProductInstallLayout.artifacts
+        .where((artifact) => artifact != ProductInstallLayout.helperArtifact)) {
+      expect(
+        windows,
+        contains('\${RUNTIME_ASSET_DIR}/$artifact.exe"'),
+      );
+    }
     expect(windows, contains('RENAME "app.flclashm.client.helper.exe"'));
     expect(macosConfig,
         contains('PRODUCT_BUNDLE_IDENTIFIER = app.flclashm.client'));
