@@ -182,5 +182,36 @@ void main() {
       );
       expect(secured, same(source));
     });
+
+    test('leaves route ownership to the macOS helper', () {
+      const macosPolicy = DesktopSecurityPolicy(
+        processPaths: ['/Applications/FlClashM.app/Contents/runtimes/mihomo'],
+        helperOwnsRoutes: true,
+      );
+      final secured = macosPolicy.securePatchConfig(
+        patchConfig: const ClashConfig(
+          tun: Tun(enable: true, autoRoute: true),
+        ),
+        context: const SecurityPolicyContext(isAndroid: false),
+      );
+      final update = macosPolicy.secureRuntimeUpdate(
+        updateParams: const UpdateParams(
+          tun: Tun(enable: true, autoRoute: true),
+          mixedPort: defaultMixedPort,
+          allowLan: false,
+          findProcessMode: FindProcessMode.strict,
+          mode: Mode.rule,
+          logLevel: LogLevel.info,
+          ipv6: false,
+          tcpConcurrent: true,
+          externalController: ExternalControllerStatus.close,
+          unifiedDelay: true,
+        ),
+        context: const SecurityPolicyContext(isAndroid: false),
+      );
+
+      expect(secured.tun.autoRoute, isFalse);
+      expect(update.tun.autoRoute, isFalse);
+    });
   });
 }

@@ -44,6 +44,10 @@ class CoreUpdater {
   /// process is spawned: a running exe can't be deleted on Windows, and on
   /// macOS/Linux a swap after spawn leaves the whole session on the old core.
   Future<void> applyPending() async {
+    // macOS ships and updates mihomo only as part of the verified app bundle.
+    // Mutating a binary inside the bundle would invalidate the atomic rollback
+    // boundary and used to require restoring an unsafe setuid bit.
+    if (Platform.isMacOS) return;
     final pending = File(appPath.corePendingPath);
     if (!await pending.exists()) {
       return;
@@ -69,8 +73,6 @@ class CoreUpdater {
         // A helper-started core survives app restarts and holds the exe lock.
         await request.stopCoreByHelper();
       }
-      // Read the setuid state BEFORE the old binary is deleted.
-      final wasAuthorized = Platform.isMacOS && await system.checkIsAdmin();
       final target = File(appPath.corePath);
       if (await target.exists()) {
         for (var i = 0; i < 10; i++) {
@@ -91,9 +93,6 @@ class CoreUpdater {
         if (status != null && status != WindowsHelperServiceStatus.none) {
           await syncHelperAllowedHash();
         }
-      }
-      if (wasAuthorized) {
-        await _restoreMacSetuid();
       }
       commonPrint.log("Pending core update applied successfully");
     } catch (e) {
@@ -116,20 +115,6 @@ class CoreUpdater {
     } catch (_) {
       final ok = windows?.runas("cmd.exe", '/c echo $hash> "$path"') ?? false;
       commonPrint.log("helper allowed-hash elevated write: $ok");
-    }
-  }
-
-  /// TUN needs the core setuid-root (mirrors setCorePermissions in
-  /// AppDelegate.swift). The fresh binary loses the bit, so re-request it in
-  /// the update context; on cancel the Swift launch check prompts again later.
-  Future<void> _restoreMacSetuid() async {
-    final path = appPath.corePath.replaceAll("'", r"'\''");
-    final script =
-        'do shell script "chown root:admin \'$path\' && chmod +sx \'$path\'"'
-        ' with administrator privileges';
-    final res = await Process.run('osascript', ['-e', script]);
-    if (res.exitCode != 0) {
-      commonPrint.log("core setuid restore declined/failed: ${res.stderr}");
     }
   }
 }

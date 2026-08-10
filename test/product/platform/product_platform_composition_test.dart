@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/android/android_runtime_access_policy.dart';
+import 'package:flclashx/product/macos/macos_privileged_helper.dart';
 import 'package:flclashx/product/platform/desktop_platform_services.dart';
 import 'package:flclashx/product/platform/platform_profile.dart';
 import 'package:flclashx/product/platform/product_install_layout.dart';
@@ -105,6 +106,19 @@ void main() {
         );
       },
     );
+
+    test('enables macOS TUN only through the product helper boundary', () {
+      final composition = ProductPlatformComposition.forProfile(
+        ProductPlatformProfile.fromOperatingSystem('macos'),
+      );
+
+      expect(
+        composition.services.accessControl.platform,
+        isA<MacosRuntimeAccessPolicy>(),
+      );
+      expect(composition.capabilities.tunConfiguration, isTrue);
+      expect(composition.capabilities.androidAccessControl, isFalse);
+    });
 
     test('desktop source never imports Android channels', () async {
       final source = await File(
