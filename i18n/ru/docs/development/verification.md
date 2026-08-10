@@ -8,6 +8,7 @@
 - 📦 контракт релизов;
 - 🔄 расхождения base-файлов с `upstream/dev`;
 - 🧪 тесты `test/product` и `test/tool`;
+- 🔒 закрепление внешних GitHub Actions за полными commit SHA;
 - 🔍 выборочный статический анализ продуктового и выпускного кода;
 - 🏗 Android-сборку для `arm64`.
 
@@ -22,11 +23,14 @@
 
 **Как запускается.** Для рабочих веток основной процесс запускается событием pull request, а `push` используется только для `main`. Отдельный процесс непрерывности выпуска оставлен для ручного запуска: автоматически эта проверка уже входит в основной процесс, поэтому один коммит не создаёт дублирующие наборы проверок. Новый запуск того же pull request отменяет предыдущий незавершённый. Если изменена только посторонняя документация, тяжёлые задания пропускаются.
 
+Отдельный `secret-scan` проверяет Gitleaks все коммиты, добавленные pull request или push в `main`. Версия сканера и SHA-256 его архива зафиксированы в workflow.
+
 ## 💻 Локальная проверка
 
 ```bash
 flutter pub get
 dart tool/check_product_boundaries.dart
+dart tool/check_actions_pinning.dart
 dart tool/check_release_continuity.dart
 dart tool/check_base_drift.dart
 flutter test test/product test/tool

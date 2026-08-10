@@ -20,13 +20,19 @@ on:
         type: boolean
         default: true
 
+permissions: {}
+
 jobs:
   aur-publish:
     if: ${{ inputs.aur }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Setup SSH for AUR
         env:
@@ -132,11 +138,14 @@ jobs:
     # Runs even if AUR was skipped/failed, as long as Telegram is requested.
     if: ${{ always() && inputs.telegram }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Prepare commit list
         id: prepare_commits

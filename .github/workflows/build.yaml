@@ -9,6 +9,8 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
   HAS_RELEASE_SIGNING: ${{ secrets.KEYSTORE != '' && secrets.KEY_ALIAS != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
@@ -27,6 +29,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Fetch upstream base
         run: |
@@ -69,6 +72,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
 
       - name: Free disk space
         run: |
@@ -166,6 +171,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
 
       - name: Free disk space
         run: |
@@ -239,6 +246,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
@@ -312,6 +321,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Download Android artifacts
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
