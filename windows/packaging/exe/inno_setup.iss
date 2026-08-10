@@ -32,6 +32,11 @@ const
 var
   IsUpgrade: Boolean;
   PreviousVersion: String;
+  PreviousHelperBackup: String;
+
+const
+  HelperServiceName = 'app.flclashm.client.helper';
+  HelperRelativePath = 'runtimes\windows\x86_64\app.flclashm.client.helper.exe';
 
 procedure SHChangeNotify(wEventId: Integer; uFlags: Integer; dwItem1: Integer; dwItem2: Integer); external 'SHChangeNotify@shell32.dll stdcall';
 
@@ -60,6 +65,51 @@ begin
   
   // Give time for cleanup
   Sleep(1000);
+end;
+
+procedure StopAndRemoveHelperService;
+var
+  ResultCode: Integer;
+begin
+  { Stop first so an upgrade cannot leave the previous binary locked or running. }
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'delete "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+end;
+
+procedure InstallAndStartHelperService;
+var
+  ResultCode: Integer;
+  ServiceBinary: String;
+begin
+  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось установить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'start "' + HelperServiceName + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось запустить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+end;
+
+procedure RestorePreviousHelperService;
+var
+  ResultCode: Integer;
+  ServiceBinary: String;
+begin
+  if (PreviousHelperBackup = '') or not FileExists(PreviousHelperBackup) then
+    exit;
+  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  ForceDirectories(ExtractFileDir(ServiceBinary));
+  FileCopy(PreviousHelperBackup, ServiceBinary, False);
+  Exec(ExpandConstant('{sys}\sc.exe'),
+    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\sc.exe'), 'start "' + HelperServiceName + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function IsAppInstalled(): Boolean;
@@ -97,10 +147,33 @@ begin
   if IsUpgrade then
     PreviousVersion := GetInstalledVersion();
   
-  // Kill all processes
-  KillProcesses;
-  
   Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    { The wizard is confirmed at this point. Cancelling before it leaves the
+      running GUI and old service untouched. }
+    if IsUpgrade then
+    begin
+      PreviousHelperBackup := ExpandConstant('{tmp}\flclashm-helper.previous.exe');
+      FileCopy(ExpandConstant('{app}\' + HelperRelativePath), PreviousHelperBackup, False);
+    end;
+    KillProcesses;
+    if IsUpgrade then
+      StopAndRemoveHelperService;
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    try
+      InstallAndStartHelperService;
+    except
+      RestorePreviousHelperService;
+      raise;
+    end;
+  end;
 end;
 
 procedure InitializeWizard();
@@ -148,6 +221,7 @@ begin
     usUninstall:
     begin
       KillProcesses;
+      StopAndRemoveHelperService;
     end;
 
     usPostUninstall:

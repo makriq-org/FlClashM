@@ -311,6 +311,14 @@ jobs:
         if: matrix.target == 'linux-x64'
         run: flutter build linux --release
 
+      - name: Build Windows Service helper
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
+          $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
+          "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build Windows desktop bundle
         if: matrix.target == 'windows-x64'
         shell: pwsh
@@ -349,7 +357,16 @@ jobs:
         if: matrix.target == 'windows-x64'
         shell: pwsh
         run: |
+          choco install innosetup --no-progress --limit-output
           New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          powershell -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 `
+            -BundleDirectory build/windows/x64/runner/Release `
+            -OutputDirectory dist `
+            -Version $version
+          $installer = Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Inno installer was not produced.' }
+          Move-Item $installer.FullName 'dist/FlClashM-windows-x64-setup.exe'
           Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath 'dist/FlClashM-windows-x64.zip'
 
       - name: Archive macOS desktop bundle
@@ -370,7 +387,7 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
-    needs: [build-android-artifacts]
+    needs: [build-android-artifacts, build-desktop-artifacts]
     permissions:
       contents: read
     steps:
@@ -396,6 +413,13 @@ jobs:
         with:
           path: ./dist/
           pattern: artifact-android-*
+          merge-multiple: true
+
+      - name: Download packaged Windows desktop artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          name: artifact-desktop-windows-x64
+          path: ./dist/
           merge-multiple: true
 
       - name: Assert Android release signing continuity
@@ -433,10 +457,10 @@ jobs:
             --github-ref-name "${{ github.ref_name }}" \
             --github-repository "${GITHUB_REPOSITORY}"
 
-      - name: Upload Android artifacts
+      - name: Upload aggregated release artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: artifact-android
+          name: artifact-release
           path: ./dist
           overwrite: true
 
@@ -453,11 +477,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Download Android artifacts
+      - name: Download aggregated release artifacts
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           path: ./dist/
-          pattern: artifact-android
+          pattern: artifact-release
           merge-multiple: true
 
       - name: Setup Flutter

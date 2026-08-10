@@ -1,0 +1,109 @@
+name: Windows desktop
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-desktop-e2e.yml'
+      - '.github/workflows/build.yaml'
+      - 'services/helper/**'
+      - 'windows/**'
+      - 'lib/product/**'
+      - 'tool/**'
+      - 'pubspec.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64-install-service:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.41.7'
+          cache: true
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.4'
+
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            make
+            git
+
+      - name: Get Flutter dependencies and validate product boundaries
+        shell: pwsh
+        run: |
+          flutter pub get
+          git remote add upstream https://github.com/pluralplay/FlClashX.git 2>$null
+          git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
+          dart tool/check_product_boundaries.dart
+          dart tool/check_base_drift.dart
+          flutter analyze --fatal-infos lib/product test/product tool
+          flutter test test/product/runtime/desktop_helper_protocol_test.dart test/product/platform/windows_packaging_contract_test.dart test/product/services/desktop_update_catalog_test.dart
+
+      - name: Build Windows Service helper
+        shell: pwsh
+        run: |
+          cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
+          $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
+          "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build bundle and Inno installer
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $env:RUNTIME_COMPAT_OUT = '.dart_tool/desktop-runtime-assets'
+          python tool/runtime_compat/runtime_compat.py build --target windows-x64
+          python tool/runtime_compat/runtime_compat.py smoke --target windows-x64
+          flutter build windows --release
+          choco install innosetup --no-progress --limit-output
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          powershell -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 `
+            -BundleDirectory build/windows/x64/runner/Release `
+            -OutputDirectory dist `
+            -Version $version
+
+      - name: Install, exercise service IPC, stop and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $service = 'app.flclashm.client.helper'
+          $installer = Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Inno installer was not produced.' }
+          try {
+            & $installer.FullName /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+            if ($LASTEXITCODE -ne 0) { throw "Installer failed: $LASTEXITCODE" }
+            sc.exe query $service | Out-Host
+            $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'app.flclashm.client.helper.v1', [IO.Pipes.PipeDirection]::InOut)
+            $pipe.Connect(15000)
+            $request = '{"protocolVersion":1,"installIdentity":"app.flclashm.client","operation":"tunClose","parameters":{"interface":"flclashm0"}}'
+            $bytes = [Text.Encoding]::UTF8.GetBytes($request)
+            $pipe.Write($bytes, 0, $bytes.Length)
+            $pipe.Flush()
+            $buffer = New-Object byte[] 4096
+            $read = $pipe.Read($buffer, 0, $buffer.Length)
+            $response = [Text.Encoding]::UTF8.GetString($buffer, 0, $read) | ConvertFrom-Json
+            if ($response.state -ne 'ready') { throw "Helper rejected fixed IPC command: $($response.message)" }
+            $pipe.Dispose()
+            $uninstaller = Join-Path $env:ProgramFiles 'FlClashM\unins000.exe'
+            & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+            if ($LASTEXITCODE -ne 0) { throw "Uninstaller failed: $LASTEXITCODE" }
+            sc.exe query $service
+            if ($LASTEXITCODE -eq 0) { throw 'Service remained after uninstall.' }
+          } finally {
+            sc.exe stop $service | Out-Null
+            sc.exe delete $service | Out-Null
+          }
