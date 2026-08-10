@@ -3,14 +3,6 @@ name: Desktop runtime artifacts
 on:
   workflow_call:
   workflow_dispatch:
-  push:
-    paths:
-      - 'tool/runtime_compat/**'
-      - '.github/workflows/desktop-runtime-artifacts.yml'
-      - 'lib/product/platform/product_install_layout.dart'
-      - 'lib/product/runtime/*_release.dart'
-      - 'core/**'
-      - 'test/product/platform/product_install_layout_test.dart'
   pull_request:
     paths:
       - 'tool/runtime_compat/**'
