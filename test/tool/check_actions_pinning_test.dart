@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tool/check_actions_pinning.dart';
@@ -30,6 +32,26 @@ steps:
   - uses: ./github/actions/local
   - uses: docker://alpine:3.22
 ''', sourcePath: '.github/workflows/ci.yaml');
+
+    expect(failures, isEmpty);
+  });
+
+  test('repository workflows pin all remote actions', () {
+    final failures = <String>[];
+    final workflowFiles =
+        Directory(workflowsPath).listSync().whereType<File>().where(
+              (file) =>
+                  file.path.endsWith('.yaml') || file.path.endsWith('.yml'),
+            );
+
+    for (final workflow in workflowFiles) {
+      failures.addAll(
+        findUnpinnedActions(
+          workflow.readAsStringSync(),
+          sourcePath: workflow.path,
+        ),
+      );
+    }
 
     expect(failures, isEmpty);
   });

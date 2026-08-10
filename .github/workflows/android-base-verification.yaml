@@ -95,6 +95,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
       - name: Check GitHub Actions pinning
         run: dart tool/check_actions_pinning.dart
 
@@ -103,12 +109,6 @@ jobs:
           git remote add upstream https://github.com/pluralplay/FlClashX.git 2>/dev/null || \
             git remote set-url upstream https://github.com/pluralplay/FlClashX.git
           git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          flutter-version: "3.41.7"
-          cache: true
 
       - name: Get Flutter dependencies
         run: flutter pub get
