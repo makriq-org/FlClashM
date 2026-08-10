@@ -53,10 +53,15 @@ class DesktopRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     required Future<void> Function() onAuthorizeRestart,
     required ValueChanged<bool> onResolvedTunEnable,
     Future<AuthorizeCode> Function()? authorizeCore,
-  }) =>
-      Future.error(
-        UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
-      );
+  }) {
+    if (!requestedTunEnable) {
+      onResolvedTunEnable(false);
+      return Future.value(const ResolvedTunAccess.proceed(enableTun: false));
+    }
+    return Future.error(
+      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+    );
+  }
 
   @override
   Future<bool> startVpn({required AccessControl accessControl}) => Future.error(

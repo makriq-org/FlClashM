@@ -36,7 +36,7 @@ class DesktopPlatformBootstrap implements ProductPlatformBootstrap {
   const DesktopPlatformBootstrap();
 
   @override
-  Future<bool> preloadMihomo() async => false;
+  Future<bool> preloadMihomo() => clashCore.preload();
 
   @override
   Future<void> initialize() async {}
@@ -104,12 +104,12 @@ class ProductPlatformComposition {
           ),
         ),
       ),
-      securityPolicy: const DesktopSecurityPolicy(),
+      securityPolicy: DesktopSecurityPolicy.currentInstall(),
       bootstrap: const DesktopPlatformBootstrap(),
-      mihomoAvailability: RuntimeAvailability.unsupported(
-        reason: desktopCapabilityMessage(DesktopCapability.tun),
-        updatePath: 'Desktop runtime integration has not been released yet.',
-        rollbackPath: 'Keep using the Android runtime until desktop TUN ships.',
+      mihomoAvailability: const RuntimeAvailability.supported(
+        updatePath:
+            'Bundled desktop runtimes are updated with the application.',
+        rollbackPath: 'Roll back the complete application bundle.',
       ),
     );
   }

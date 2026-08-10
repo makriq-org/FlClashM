@@ -8,6 +8,13 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 После этого жизненным циклом управляют `EngineManager` и `EngineAdapter`.
 
+На ПК `DesktopProcessSupervisor` остаётся единственным владельцем дочерних
+процессов mihomo и встроенных узлов. Бинарники разрешаются только из стабильной
+install layout, вывод ограничивается и очищается от секретов, а замена плана
+проходит через ту же транзакцию stage → start/check → commit/rollback, что и на
+Android. Для TUN, маршрутов и DNS определён закрытый версионированный helper-
+протокол; до появления платформенной реализации он возвращает `unavailable`.
+
 ---
 
 ## 🔍 Проверка встроенных узлов
