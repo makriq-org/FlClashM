@@ -5,7 +5,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/l10n/l10n.dart';
+import 'package:flclashx/manager/hotkey_manager.dart';
 import 'package:flclashx/manager/manager.dart';
+import 'package:flclashx/product/platform/platform_profile.dart';
+import 'package:flclashx/product/platform/product_platform_composition.dart';
 import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
@@ -16,6 +19,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'controller.dart';
 import 'pages/pages.dart';
+
+Widget buildProductPlatformState({
+  required ProductPlatformProfile profile,
+  required Widget child,
+}) {
+  if (profile.isDesktop) {
+    return WindowManager(
+      child: TrayManager(
+        child: HotKeyManager(child: ProxyManager(child: child)),
+      ),
+    );
+  }
+  return AndroidManager(child: child);
+}
+
+Widget buildProductPlatformApp({
+  required ProductPlatformProfile profile,
+  required Widget child,
+}) =>
+    profile.isDesktop
+        ? WindowHeaderContainer(child: child)
+        : VpnManager(child: child);
 
 class Application extends ConsumerStatefulWidget {
   const Application({super.key});
@@ -30,6 +55,9 @@ class ApplicationState extends ConsumerState<Application> {
   final _pageTransitionsTheme = const PageTransitionsTheme(
     builders: <TargetPlatform, PageTransitionsBuilder>{
       TargetPlatform.android: CommonPageTransitionsBuilder(),
+      TargetPlatform.windows: CommonPageTransitionsBuilder(),
+      TargetPlatform.linux: CommonPageTransitionsBuilder(),
+      TargetPlatform.macOS: CommonPageTransitionsBuilder(),
     },
   );
 
@@ -78,7 +106,10 @@ class ApplicationState extends ConsumerState<Application> {
     });
   }
 
-  Widget _buildPlatformState(Widget child) => AndroidManager(child: child);
+  Widget _buildPlatformState(Widget child) => buildProductPlatformState(
+        profile: productPlatformComposition.profile,
+        child: child,
+      );
 
   Widget _buildState(Widget child) => AppStateManager(
         child: ClashManager(
@@ -95,7 +126,10 @@ class ApplicationState extends ConsumerState<Application> {
         ),
       );
 
-  Widget _buildPlatformApp(Widget child) => VpnManager(child: child);
+  Widget _buildPlatformApp(Widget child) => buildProductPlatformApp(
+        profile: productPlatformComposition.profile,
+        child: child,
+      );
 
   Widget _buildApp(Widget child) =>
       MessageManager(child: ThemeManager(child: child));
@@ -121,9 +155,19 @@ class ApplicationState extends ConsumerState<Application> {
                   GlobalCupertinoLocalizations.delegate,
                   GlobalWidgetsLocalizations.delegate,
                 ],
-                builder: (_, child) => AppEnvManager(
-                  child: _buildPlatformApp(_buildApp(child!)),
-                ),
+                builder: (_, child) {
+                  final app = AppEnvManager(
+                    child: _buildPlatformApp(_buildApp(child!)),
+                  );
+                  if (Platform.isMacOS) {
+                    return FittedBox(
+                      fit: BoxFit.contain,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(width: 500, height: 800, child: app),
+                    );
+                  }
+                  return app;
+                },
                 scrollBehavior: BaseScrollBehavior(),
                 title: appName,
                 locale: utils.getLocaleForString(locale),

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:defer_pointer/defer_pointer.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/product/platform/product_platform_composition.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/foundation.dart';
@@ -144,6 +145,15 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
     required bool hasServerInfoData,
   }) {
     if (!item.platforms.contains(SupportPlatform.currentPlatform)) {
+      return false;
+    }
+
+    final capabilities = productPlatformComposition.capabilities;
+    if (item == DashboardWidget.tunButton && !capabilities.tunConfiguration) {
+      return false;
+    }
+    if (item == DashboardWidget.systemProxyButton &&
+        !capabilities.systemProxy) {
       return false;
     }
 

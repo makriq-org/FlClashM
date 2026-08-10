@@ -3,8 +3,10 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization.",
+      "reason": "App shell selects the existing Android or desktop manager stack through the product platform composition.",
       "targets": [
+        "lib/product/platform/platform_profile.dart",
+        "lib/product/platform/product_platform_composition.dart",
         "lib/product/services/product_services.dart"
       ]
     },
@@ -142,6 +144,22 @@
       "reason": "Settings items ask the product layer which switches the subscription provider actually manages, instead of hardcoding the lock in base UI.",
       "targets": [
         "lib/product/subscription/provider_managed_app_settings.dart"
+      ]
+    },
+    {
+      "path": "lib/views/config/network.dart",
+      "boundary": "platform-capability-ui",
+      "reason": "The upstream network page shows desktop system-proxy and TUN controls only when the product composition exposes those capabilities.",
+      "targets": [
+        "lib/product/platform/product_platform_composition.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dashboard/dashboard.dart",
+      "boundary": "platform-capability-ui",
+      "reason": "The upstream dashboard filters quick controls using capabilities selected by the product platform composition.",
+      "targets": [
+        "lib/product/platform/product_platform_composition.dart"
       ]
     },
     {

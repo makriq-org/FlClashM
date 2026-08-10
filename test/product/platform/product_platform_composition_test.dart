@@ -61,6 +61,8 @@ void main() {
       expect(composition.services.androidShell, isA<AndroidShellService>());
       expect(composition.services.appUpdate, isA<AppUpdateService>());
       expect(composition.mihomoAvailability.isSupported, isTrue);
+      expect(composition.capabilities.androidAccessControl, isTrue);
+      expect(composition.capabilities.systemProxy, isFalse);
     });
 
     test('uses channel-free desktop stubs and rejects TUN', () async {
@@ -75,6 +77,9 @@ void main() {
       expect(composition.services.androidShell, isA<DesktopShellService>());
       expect(composition.services.appUpdate, isA<DesktopAppUpdateService>());
       expect(composition.mihomoAvailability.isSupported, isFalse);
+      expect(composition.capabilities.androidAccessControl, isFalse);
+      expect(composition.capabilities.systemProxy, isTrue);
+      expect(composition.capabilities.tunConfiguration, isFalse);
       expect(await composition.bootstrap.preloadMihomo(), isFalse);
       final runtimeRegistry = RuntimeRegistry.flClashM(
         readAccessControl: () => const AccessControl(),
@@ -153,5 +158,6 @@ void main() {
       macosProject,
       contains(r'Contents/runtimes/macos/$(CURRENT_ARCH)/mihomo'),
     );
+    expect(macosProject, isNot(contains('com.follow.clash')));
   });
 }
