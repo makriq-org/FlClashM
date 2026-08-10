@@ -11,7 +11,8 @@ Four types are supported:
 | 🌩 [`stormdns`](#-stormdns) | A tunnel inside DNS queries | Bypassing whitelists where only DNS is let through |
 | 🎭 [`naiveproxy`](#-naiveproxy) | Parroting of Chrome traffic | Bypassing blocklists, resistance to TLS fingerprinting |
 
-> ℹ️ Built-in nodes are defined **only** in the `proxies` section. Local addresses and ports are assigned by the client — you can't set them in the profile.
+> [!NOTE]
+> Built-in nodes are defined **only** in the `proxies` section. Local addresses and ports are assigned by the client — you can't set them in the profile.
 
 ---
 
@@ -47,7 +48,8 @@ connectivity-check:
 
 **How the address is chosen.** In order: the node's own `connectivity-check.urls` → the address of the nearest containing group → the app's global check address. If there's no address, only the process and port checks remain.
 
-> ⚠️ **The difference between `required: false` and `required: true`:**
+> [!WARNING]
+> **The difference between `required: false` and `required: true`:**
 > - `false` — the check runs in the background, doesn't delay startup, and on failure only writes to the log.
 > - `true` — a missing address **rejects** the profile, and a failed check **cancels** startup with a rollback of the prepared plan.
 >
@@ -105,9 +107,11 @@ An HTTPS file contains one strategy per line; blank lines and lines beginning
 with `#` are ignored. Links use the same public-HTTPS, size, timeout, and stale
 cache limits as StormDNS lists.
 
-> ℹ️ `strategy-test` is used **only** during auto-selection and overrides the built-in test endpoint — it does not replace `connectivity-check`. The verified result and the temporary fallback are cached **separately**: fallback doesn't block later selection attempts for the normal TTL. Any HTTP check counts as success, including `4xx` and `5xx`.
->
-> 🚫 The old `test` section is no longer supported — rename it to `strategy-test`.
+> [!NOTE]
+> `strategy-test` is used **only** during auto-selection and overrides the built-in test endpoint — it does not replace `connectivity-check`. The verified result and the temporary fallback are cached **separately**: fallback doesn't block later selection attempts for the normal TTL. Any HTTP check counts as success, including `4xx` and `5xx`.
+
+> [!CAUTION]
+> The old `test` section is no longer supported — rename it to `strategy-test`.
 
 ### ✍️ Manual strategy
 
@@ -119,7 +123,8 @@ proxies:
     strategy: "--disorder 1 --auto=torst --tlsrec 1+s"
 ```
 
-> 💡 New profiles set `mode` explicitly; omitting it selects automatic mode.
+> [!TIP]
+> New profiles set `mode` explicitly; omitting it selects automatic mode.
 
 ---
 
@@ -168,11 +173,13 @@ transport-options:
   ack-timeout: 2s
 ```
 
-> 💡 For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. `transport-options.fps` and `transport-options.batch-size` are required.
+> [!TIP]
+> For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. `transport-options.fps` and `transport-options.batch-size` are required.
 
 `profiles`, `failover`, and `video.hw` are removed from the public contract. Define separate OlcRTC nodes and combine them with a Mihomo group. `provider: none` requires `engine`, `engine-url`, and `engine-token`; other providers forbid them.
 
-> ⚠️ Errors in required fields show up already during profile validation. If the OlcRTC process dies later, the client shows the **exit code and the last lines of output** instead of waiting for a port timeout.
+> [!WARNING]
+> Errors in required fields show up already during profile validation. If the OlcRTC process dies later, the client shows the **exit code and the last lines of output** instead of waiting for a port timeout.
 
 ---
 
@@ -206,7 +213,8 @@ proxy-groups:
 | `encryption` | `none`, `xor`, `chacha20`, `aes-128-gcm`, `aes-192-gcm`, `aes-256-gcm` |
 | `encryption-key` | Shared key; must match the server |
 
-> ⚠️ The `none` and `xor` modes **do not protect the payload** from the resolver operator, who can read your traffic. Use them only when the server requires it.
+> [!WARNING]
+> The `none` and `xor` modes **do not protect the payload** from the resolver operator, who can read your traffic. Use them only when the server requires it.
 
 ### 📍 Resolvers
 
@@ -255,7 +263,8 @@ compression:
 
 Fine tuning lives in the `duplication`, `compression`, `mtu`, `arq`, `ping`, and `runtime` blocks. Every duration, including shared `activation` and `connectivity-check` fields, is a string with a unit (`600ms`, `30s`, `24h`, `30d`).
 
-> ℹ️ StormDNS silently clamps out-of-range values. FlClashM **reports an error before startup** instead.
+> [!NOTE]
+> StormDNS silently clamps out-of-range values. FlClashM **reports an error before startup** instead.
 
 <details>
 <summary>📐 Fine-tuning bounds</summary>
@@ -294,7 +303,8 @@ Field names match the StormDNS config.
 
 `startup.max-age` (default `30d`) limits how old a usable cache may be and must resolve to a whole number of days.
 
-> ⏳ The first startup goes through a resolver scan and can take up to two minutes — that is what the check budget allows for.
+> [!NOTE]
+> The first startup goes through a resolver scan and can take up to two minutes — that is what the check budget allows for.
 
 The working cache is bound to the final resolver list, `domains`, and the StormDNS build. Changing profile sources, `domains`, or the build creates a new cache, and the old one is only removed once the profile applies successfully. A physical-network DNS change clears the current cache before restarting the node. If no suitable cache exists, or StormDNS rejects it, it falls back to a full scan on its own — that is expected.
 
@@ -328,7 +338,8 @@ proxies:
 
 The client safely builds a URI with escaped credentials, passes it to NaiveProxy, and replaces the node for `mihomo` with a local SOCKS5.
 
-> 🚫 The old `proxy` field is not supported. `listen`, diagnostic files, proxy chains, and any unknown fields are **rejected** during profile validation.
+> [!CAUTION]
+> The old `proxy` field is not supported. `listen`, diagnostic files, proxy chains, and any unknown fields are **rejected** during profile validation.
 
 ---
 
@@ -370,7 +381,8 @@ activation:
 - After waking, the client immediately checks the node itself. If no containing group selected it and there are no active connections for `sleep.idle` — the process goes back to sleep.
 - **Manual selection wakes the node immediately.**
 
-> ℹ️ `auto` is now used **even without an `activation` field**. To fully restore the previous behavior, set `activation: always` explicitly.
+> [!NOTE]
+> `auto` is now used **even without an `activation` field**. To fully restore the previous behavior, set `activation: always` explicitly.
 
 ---
 

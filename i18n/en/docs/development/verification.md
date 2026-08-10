@@ -11,7 +11,8 @@
 - 🔍 selective static analysis of the product and release code;
 - 🏗 the Android `arm64` build.
 
-> ➕ When `android`, `core`, `assets/runtimes`, `setup.dart`, or `lib/product/runtime` change, `armeabi-v7a` and `x86_64` are also built.
+> [!NOTE]
+> When `android`, `core`, `assets/runtimes`, `setup.dart`, or `lib/product/runtime` change, `armeabi-v7a` and `x86_64` are also built.
 
 **How it's triggered.** For working branches the main workflow runs on the pull request event, while `push` is used only for `main`. A separate release-continuity workflow is kept for manual runs: automatically that check is already part of the main workflow, so a single commit doesn't create duplicate check sets. A new run of the same pull request cancels the previous unfinished one. If only unrelated documentation changed, the heavy jobs are skipped.
 
@@ -36,7 +37,8 @@ dart setup.dart android --arch arm64 --out core
 flutter build apk --release
 ```
 
-> ⚠️ Full verification of app startup, VPN, background services, and built-in nodes on **real Android devices** stays local.
+> [!WARNING]
+> Full verification of app startup, VPN, background services, and built-in nodes on **real Android devices** stays local.
 
 ---
 
