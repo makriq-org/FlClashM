@@ -359,15 +359,25 @@
 			files = (
 			);
 			inputPaths = (
-				"$(PROJECT_DIR)/../libclash/macos/FlClashCore",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/runtime-inventory.json",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/mihomo",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/naiveproxy",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/olcrtc",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/byedpi",
+				"$(PROJECT_DIR)/../.dart_tool/desktop-runtime-assets/runtimes/macos/$(CURRENT_ARCH)/stormdns",
 			);
 			name = "Install runtime layout";
 			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/runtime-inventory.json",
 				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/mihomo",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/naiveproxy",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/olcrtc",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/byedpi",
+				"$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/runtimes/macos/$(CURRENT_ARCH)/stormdns",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "runtime_dir=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/runtimes/macos/$CURRENT_ARCH\"\nmkdir -p \"$runtime_dir\"\ncp \"$PROJECT_DIR/../libclash/macos/FlClashCore\" \"$runtime_dir/mihomo\"\nchmod +x \"$runtime_dir/mihomo\"\n";
+			shellScript = "set -euo pipefail\ncase \"$CURRENT_ARCH\" in\n  x86_64) runtime_target=macos-x64 ;;\n  arm64) runtime_target=macos-arm64 ;;\n  *) echo \"Unsupported macOS runtime architecture: $CURRENT_ARCH\" >&2; exit 1 ;;\nesac\nassets_root=\"$PROJECT_DIR/../.dart_tool/desktop-runtime-assets\"\nRUNTIME_COMPAT_OUT=\"$assets_root\" python3 \"$PROJECT_DIR/../tool/runtime_compat/runtime_compat.py\" verify --target \"$runtime_target\"\nruntime_source=\"$assets_root/runtimes/macos/$CURRENT_ARCH\"\nruntime_dir=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Contents/runtimes/macos/$CURRENT_ARCH\"\nmkdir -p \"$runtime_dir\"\ncp \"$runtime_source/runtime-inventory.json\" \"$runtime_dir/runtime-inventory.json\"\nfor artifact in mihomo naiveproxy olcrtc byedpi stormdns; do\n  cp \"$runtime_source/$artifact\" \"$runtime_dir/$artifact\"\n  chmod +x \"$runtime_dir/$artifact\"\ndone\n";
 		};
 		1522C6AC211009D2A7DFAD40 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
