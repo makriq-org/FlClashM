@@ -7,7 +7,6 @@ import 'package:flclashx/product/platform/platform_profile.dart';
 import 'package:flclashx/product/platform/product_install_layout.dart';
 import 'package:flclashx/product/platform/product_platform_composition.dart';
 import 'package:flclashx/product/runtime/runtime_registry.dart';
-import 'package:flclashx/product/runtime/runtime_types.dart';
 import 'package:flclashx/product/security/android_security_policy.dart';
 import 'package:flclashx/product/services/android_shell_service.dart';
 import 'package:flclashx/product/services/app_update_service.dart';
@@ -63,7 +62,8 @@ void main() {
       expect(composition.mihomoAvailability.isSupported, isTrue);
     });
 
-    test('uses channel-free desktop stubs and rejects TUN', () async {
+    test('uses channel-free desktop services and rejects privileged TUN',
+        () async {
       final composition = ProductPlatformComposition.forProfile(
         ProductPlatformProfile.fromOperatingSystem('linux'),
       );
@@ -74,21 +74,15 @@ void main() {
       );
       expect(composition.services.androidShell, isA<DesktopShellService>());
       expect(composition.services.appUpdate, isA<DesktopAppUpdateService>());
-      expect(composition.mihomoAvailability.isSupported, isFalse);
-      expect(await composition.bootstrap.preloadMihomo(), isFalse);
+      expect(composition.mihomoAvailability.isSupported, isTrue);
       final runtimeRegistry = RuntimeRegistry.flClashM(
         readAccessControl: () => const AccessControl(),
         mihomoAvailability: composition.mihomoAvailability,
       );
-      expect(
-        runtimeRegistry.resolveSelection,
-        throwsA(isA<UnsupportedRuntimeSelectionException>()),
-      );
+      expect(runtimeRegistry.resolveSelection().engine.adapter, isNotNull);
       expect(globalState.engineManager.isStarted, isFalse);
-      expect(
-        globalState.runtimeRegistry.resolveSelection,
-        throwsA(isA<UnsupportedRuntimeSelectionException>()),
-      );
+      expect(globalState.runtimeRegistry.resolveSelection().engine.adapter,
+          isNotNull);
       await expectLater(
         composition.services.accessControl.startVpn(
           accessControl: const AccessControl(enable: true),

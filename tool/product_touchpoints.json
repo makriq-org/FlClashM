@@ -9,6 +9,16 @@
       ]
     },
     {
+      "path": "lib/clash/service.dart",
+      "boundary": "desktop-runtime-supervisor",
+      "reason": "The upstream desktop IPC service delegates bundled mihomo process ownership and exact install-layout validation to the product runtime supervisor.",
+      "targets": [
+        "lib/product/platform/product_install_layout.dart",
+        "lib/product/runtime/desktop_process_supervisor.dart",
+        "lib/product/runtime/desktop_runtime_layout.dart"
+      ]
+    },
+    {
       "path": "lib/common/android.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",

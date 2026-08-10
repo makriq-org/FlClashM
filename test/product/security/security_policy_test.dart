@@ -1,6 +1,7 @@
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/product_compile.dart';
+import 'package:flclashx/product/platform/desktop_security_policy.dart';
 import 'package:flclashx/product/security/product_security.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -143,6 +144,43 @@ void main() {
         securedProfile.metadata?.groupDescriptions,
         metadata.groupDescriptions,
       );
+    });
+  });
+
+  group('DesktopSecurityPolicy', () {
+    const desktopPolicy = DesktopSecurityPolicy(
+      processPaths: ['/opt/flclashm/mihomo', '/opt/flclashm/byedpi'],
+    );
+
+    test('prepends exact direct process rules only when TUN is enabled', () {
+      final secured = desktopPolicy.secureProfile(
+        compiledProfile: const CompiledProfilePatch(
+          patchConfig: ClashConfig(
+            tun: Tun(enable: true),
+            rule: ['DOMAIN,example.com,Proxy'],
+          ),
+          metadata: null,
+        ),
+        context: const SecurityPolicyContext(isAndroid: false),
+      );
+
+      expect(secured.patchConfig.rule, [
+        'PROCESS-PATH,/opt/flclashm/mihomo,DIRECT',
+        'PROCESS-PATH,/opt/flclashm/byedpi,DIRECT',
+        'DOMAIN,example.com,Proxy',
+      ]);
+    });
+
+    test('does not mutate a non-TUN effective config', () {
+      const source = ClashConfig(
+        tun: Tun(enable: false),
+        rule: ['MATCH,Proxy'],
+      );
+      final secured = desktopPolicy.securePatchConfig(
+        patchConfig: source,
+        context: const SecurityPolicyContext(isAndroid: false),
+      );
+      expect(secured, same(source));
     });
   });
 }

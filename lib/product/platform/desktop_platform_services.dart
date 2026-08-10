@@ -40,8 +40,7 @@ class DesktopRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
   String mergeVpnOptions(
     String optionsJson, {
     required AccessControl accessControl,
-  }) =>
-      optionsJson;
+  }) => optionsJson;
 
   @override
   Future<ProfileAccessSnapshot> readAppliedProfileAccess() =>
@@ -54,17 +53,25 @@ class DesktopRuntimeAccessPolicy implements RuntimeAccessPlatformBridge {
     required Future<void> Function() onAuthorizeRestart,
     required ValueChanged<bool> onResolvedTunEnable,
     Future<AuthorizeCode> Function()? authorizeCore,
-  }) =>
-      Future.error(
-          UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+  }) {
+    if (!requestedTunEnable) {
+      onResolvedTunEnable(false);
+      return Future.value(const ResolvedTunAccess.proceed(enableTun: false));
+    }
+    return Future.error(
+      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+    );
+  }
 
   @override
   Future<bool> startVpn({required AccessControl accessControl}) => Future.error(
-      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+    UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+  );
 
   @override
   Future<void> stopVpn() => Future.error(
-      UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)));
+    UnsupportedError(desktopCapabilityMessage(DesktopCapability.tun)),
+  );
 }
 
 /// A deliberately channel-free shell. Android-only lifecycle hooks are no-ops;
@@ -83,8 +90,7 @@ class DesktopShellService implements ProductShellService {
   String buildForegroundNotificationTitle({
     required Profile? profile,
     Iterable<Group> groups = const [],
-  }) =>
-      profile?.label ?? 'FlClashM';
+  }) => profile?.label ?? 'FlClashM';
 
   @override
   Future<void> initShortcuts() async {}
@@ -169,10 +175,9 @@ class DesktopAppUpdateService implements ProductUpdateService {
     required String skippedTagName,
     SkipAppUpdateRelease? onSkipRelease,
     String? loadingTitle,
-  }) =>
-      Future.error(
-        UnsupportedError(
-          desktopCapabilityMessage(DesktopCapability.updateInstallation),
-        ),
-      );
+  }) => Future.error(
+    UnsupportedError(
+      desktopCapabilityMessage(DesktopCapability.updateInstallation),
+    ),
+  );
 }
