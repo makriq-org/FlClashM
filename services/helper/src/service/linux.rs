@@ -21,6 +21,7 @@ const APPLICATION_ID: &str = "app.flclashm.client";
 const PROTOCOL_VERSION: u8 = 1;
 const SOCKET_PATH: &str = "/run/flclashm/helper.sock";
 const STATE_PATH: &str = "/run/flclashm/transaction.json";
+const APPIMAGE_PEER_UID_PATH: &str = "/run/flclashm/appimage-peer-uid";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,43 +102,35 @@ fn serve(socket_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn flclashm_group() -> Option<libc::gid_t> {
-    let group = CString::new("flclashm").ok()?;
-    let entry = unsafe { libc::getgrnam(group.as_ptr()) };
-    (!entry.is_null()).then(|| unsafe { (*entry).gr_gid })
-}
-
 fn configure_parent(path: &Path) -> Result<()> {
-    let mode = if flclashm_group().is_some() {
-        0o750
-    } else {
-        0o711
-    };
-    fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
-    if let Some(group) = flclashm_group() {
-        chown(path, u32::MAX, group)?;
-    }
+    // Package-managed installations must not grant every desktop user access
+    // merely because a package-owned group exists.  The service socket stays
+    // root-only and package clients enter through the polkit-approved helper.
+    fs::set_permissions(path, fs::Permissions::from_mode(0o711))?;
     Ok(())
 }
 
 fn configure_socket(path: &Path) -> Result<()> {
-    if let Some(group) = flclashm_group() {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o660))?;
-        return chown(path, u32::MAX, group);
-    }
-    // AppImage has no package-created group.  pkexec supplies the one user
-    // that authorized bootstrap; only that UID can reach the 0600 socket.
-    let uid = std::env::var("PKEXEC_UID")
+    // AppImage has no package-owned service. pkexec supplies the one user
+    // which authorized bootstrap; persist that UID and accept no other user.
+    // A package service has no PKEXEC_UID, so its socket is root-only.
+    let appimage_uid = std::env::var("PKEXEC_UID")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
-        .filter(|uid| *uid != 0)
-        .context("required flclashm group is missing")?;
-    let entry = unsafe { libc::getpwuid(uid) };
-    if entry.is_null() {
-        bail!("cannot resolve AppImage helper client");
+        .filter(|uid| *uid != 0);
+    if let Some(uid) = appimage_uid {
+        let entry = unsafe { libc::getpwuid(uid) };
+        if entry.is_null() {
+            bail!("cannot resolve AppImage helper client");
+        }
+        fs::write(APPIMAGE_PEER_UID_PATH, uid.to_string())?;
+        fs::set_permissions(APPIMAGE_PEER_UID_PATH, fs::Permissions::from_mode(0o600))?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        return chown(path, uid, unsafe { (*entry).pw_gid });
     }
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    chown(path, uid, unsafe { (*entry).pw_gid })
+    let _ = fs::remove_file(APPIMAGE_PEER_UID_PATH);
+    Ok(())
 }
 
 fn chown(path: &Path, uid: u32, gid: libc::gid_t) -> Result<()> {
@@ -157,6 +150,21 @@ fn bootstrap() -> Result<()> {
         0 => {
             unsafe {
                 libc::setsid();
+            }
+            // Do not retain Process.run pipes in the daemon: pkexec waits for
+            // EOF and otherwise hangs until the helper exits.
+            let null = CString::new("/dev/null")?;
+            let descriptor = unsafe { libc::open(null.as_ptr(), libc::O_RDWR) };
+            if descriptor < 0 {
+                bail!("cannot redirect helper stdio");
+            }
+            for target in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
+                if unsafe { libc::dup2(descriptor, target) } < 0 {
+                    bail!("cannot redirect helper stdio");
+                }
+            }
+            if descriptor > libc::STDERR_FILENO {
+                unsafe { libc::close(descriptor) };
             }
             serve(SOCKET_PATH)
         }
@@ -219,7 +227,17 @@ fn verify_peer(stream: &UnixStream) -> Result<()> {
         bail!("cannot verify Unix socket peer credentials");
     }
     if credential.uid == 0 {
-        bail!("root is not a GUI helper client");
+        // Package installations use a new pkexec-authenticated request client
+        // for each operation.  Root is valid only after polkit has approved
+        // that client; direct desktop users cannot open the 0600 socket.
+        return Ok(());
+    }
+    let allowed_uid = fs::read_to_string(APPIMAGE_PEER_UID_PATH)
+        .ok()
+        .and_then(|value| value.trim().parse::<u32>().ok())
+        .context("helper does not have an authorized desktop peer")?;
+    if credential.uid != allowed_uid {
+        bail!("unexpected Linux helper peer UID");
     }
     Ok(())
 }
@@ -454,17 +472,23 @@ fn tun_open(request: &Request) -> Result<()> {
 fn route_apply(request: &Request) -> Result<()> {
     let interface = interface(request)?;
     let routes = routes(request)?;
+    let mut state = read_state();
+    state.interface = Some(interface.into());
     for route in &routes {
+        // `replace` overwrites an unrelated route and cannot reconstruct all
+        // route attributes reliably. `add` leaves an existing route intact;
+        // every successfully added route is journalled before the next step.
         command(
             "/usr/sbin/ip",
-            &["route", "replace", route, "dev", interface],
+            &["route", "add", route, "dev", interface],
         )?;
+        state.routes.push((*route).into());
+        if let Err(error) = write_state(&state) {
+            let _ = command("/usr/sbin/ip", &["route", "del", route, "dev", interface]);
+            return Err(error);
+        }
     }
-    write_state(&Transaction {
-        interface: Some(interface.into()),
-        routes: routes.iter().map(|route| (*route).into()).collect(),
-        ..read_state()
-    })
+    Ok(())
 }
 
 fn dns_apply(request: &Request) -> Result<()> {
