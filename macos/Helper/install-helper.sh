@@ -25,16 +25,23 @@ case "${1:-}" in
     source_helper="$bundle/Contents/runtimes/macos/$(uname -m)/$identity.helper"
     source_plist="$script_dir/$identity.helper.plist"
     [ -f "$source_helper" ] && [ -x "$source_helper" ] && [ -f "$source_plist" ]
+    helper_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$bundle/Contents/Info.plist")
+    case "$helper_build" in ''|*[!A-Za-z0-9._+-]*) echo "Invalid helper build identity." >&2; exit 1;; esac
     /bin/launchctl bootout system/$identity.helper >/dev/null 2>&1 || true
-    if [ -x "$helper" ]; then "$helper" --rollback-all || true; fi
+    if [ -x "$helper" ]; then "$helper" --rollback-all; fi
     /usr/bin/install -o root -g wheel -m 0755 "$source_helper" "$helper"
-    /usr/bin/install -o root -g wheel -m 0644 "$source_plist" "$daemon"
+    /usr/bin/sed "s/__HELPER_BUILD__/$helper_build/g" "$source_plist" > "$daemon.new"
+    /usr/bin/install -o root -g wheel -m 0644 "$daemon.new" "$daemon"
+    /bin/rm -f "$daemon.new"
     /bin/launchctl bootstrap system "$daemon"
     /bin/launchctl kickstart -k system/$identity.helper
     ;;
   uninstall)
+    if [ -x "$helper" ] && ! "$helper" --rollback-all; then
+      echo "Helper network rollback failed; helper was retained for recovery." >&2
+      exit 1
+    fi
     /bin/launchctl bootout system/$identity.helper >/dev/null 2>&1 || true
-    if [ -x "$helper" ]; then "$helper" --rollback-all || true; fi
     /bin/rm -f "$helper" "$daemon" "$socket" "$state"
     ;;
   *)

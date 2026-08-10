@@ -8,6 +8,8 @@
   <array>
     <string>/Library/PrivilegedHelperTools/app.flclashm.client.helper</string>
     <string>--serve</string>
+    <string>--build</string>
+    <string>__HELPER_BUILD__</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

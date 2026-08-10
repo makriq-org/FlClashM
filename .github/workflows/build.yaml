@@ -400,7 +400,7 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
-    needs: [build-android-artifacts]
+    needs: [build-android-artifacts, build-desktop-artifacts]
     permissions:
       contents: read
     steps:
@@ -426,6 +426,13 @@ jobs:
         with:
           path: ./dist/
           pattern: artifact-android-*
+          merge-multiple: true
+
+      - name: Download packaged macOS desktop artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          path: ./dist/
+          pattern: artifact-desktop-macos-*
           merge-multiple: true
 
       - name: Assert Android release signing continuity
@@ -463,10 +470,10 @@ jobs:
             --github-ref-name "${{ github.ref_name }}" \
             --github-repository "${GITHUB_REPOSITORY}"
 
-      - name: Upload Android artifacts
+      - name: Upload aggregated release artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: artifact-android
+          name: artifact-release
           path: ./dist
           overwrite: true
 
@@ -483,11 +490,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Download Android artifacts
+      - name: Download aggregated release artifacts
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           path: ./dist/
-          pattern: artifact-android
+          pattern: artifact-release
           merge-multiple: true
 
       - name: Setup Flutter

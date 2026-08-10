@@ -19,6 +19,24 @@ private func run(_ executable: String, _ arguments: [String]) throws {
     }
 }
 
+private func startAndConfirmHealthy(_ bundle: URL) throws {
+    let executable = bundle.appendingPathComponent("Contents/MacOS/FlClashM")
+    guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+        throw UpdateError.message("The replacement application executable is missing.")
+    }
+    let process = Process()
+    process.executableURL = executable
+    try process.run()
+    // A successful `open` only proves LaunchServices accepted the request. Keep
+    // the previous bundle until the new process remains alive through startup.
+    for _ in 0..<100 {
+        usleep(100_000)
+        if !process.isRunning {
+            throw UpdateError.message("The replacement application exited during health check.")
+        }
+    }
+}
+
 private func waitForExit(_ pid: pid_t) throws {
     for _ in 0..<300 {
         if kill(pid, 0) != 0 && errno == ESRCH { return }
@@ -84,8 +102,8 @@ private func install(current: URL, archive: URL, parentPID: pid_t) throws {
         guard bundleIdentifier(current) == identity else {
             throw UpdateError.message("Installed bundle validation failed.")
         }
-        try run("/usr/bin/open", ["-n", current.path])
-        try? FileManager.default.removeItem(at: previous)
+        try startAndConfirmHealthy(current)
+        try FileManager.default.removeItem(at: previous)
     } catch {
         if FileManager.default.fileExists(atPath: current.path) {
             try? FileManager.default.removeItem(at: current)

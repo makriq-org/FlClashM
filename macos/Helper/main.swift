@@ -7,6 +7,7 @@ private let socketPath = "/var/run/\(identity).helper.sock"
 private let statePath = "/var/db/\(identity).helper-state.json"
 private let routeTransaction = "app-session-route"
 private let dnsTransaction = "app-session-dns"
+private var helperBuild = ""
 
 private struct SavedState: Codable {
     var interface: String?
@@ -118,19 +119,56 @@ private func defaultNetworkService() throws -> String {
     return name
 }
 
-private func rollback(_ state: inout SavedState) {
+@discardableResult
+private func rollback(_ state: inout SavedState) -> Bool {
+    var pending = state
+    var complete = true
     if let service = state.dnsService, let servers = state.dnsServers {
         let args = ["-setdnsservers", service] + (servers.isEmpty ? ["Empty"] : servers)
-        _ = try? run("/usr/sbin/networksetup", args, allowFailure: true)
+        do {
+            _ = try run("/usr/sbin/networksetup", args)
+            pending.dnsService = nil
+            pending.dnsServers = nil
+        } catch {
+            complete = false
+        }
     }
     if let interface = state.interface {
+        var remaining: [String] = []
         for route in state.routes.reversed() {
-            _ = try? run("/sbin/route", ["-n", "delete", "-net", route, "-interface", interface], allowFailure: true)
+            do {
+                _ = try run("/sbin/route", ["-n", "delete", "-net", route, "-interface", interface])
+            } catch {
+                remaining.append(route)
+                complete = false
+            }
         }
-        _ = try? run("/sbin/ifconfig", [interface, "down"], allowFailure: true)
+        pending.routes = Array(remaining.reversed())
+        if pending.routes.isEmpty {
+            do {
+                _ = try run("/sbin/ifconfig", [interface, "down"])
+                pending.interface = nil
+            } catch {
+                complete = false
+            }
+        }
     }
-    state = SavedState()
-    try? FileManager.default.removeItem(atPath: statePath)
+    if complete, pending.interface == nil, pending.routes.isEmpty,
+       pending.dnsService == nil, pending.dnsServers == nil {
+        do {
+            if FileManager.default.fileExists(atPath: statePath) {
+                try FileManager.default.removeItem(atPath: statePath)
+            }
+            state = SavedState()
+            return true
+        } catch {
+            // Keep a durable record if the state file cannot be removed.
+            complete = false
+        }
+    }
+    state = pending
+    try? saveState(pending)
+    return false
 }
 
 private func response(state: String, message: String = "") -> Data {
@@ -175,11 +213,9 @@ private func handle(_ request: [String: Any], state: inout SavedState) throws ->
         guard interface == "FlClashM" else {
             throw HelperError.message("Invalid runtime interface identity.")
         }
-        if let runtimeInterface = state.interface {
-            _ = try? run("/sbin/ifconfig", [runtimeInterface, "down"], allowFailure: true)
+        guard rollback(&state) else {
+            throw HelperError.message("Unable to fully roll back the TUN session.")
         }
-        if state.routes.isEmpty { state.interface = nil }
-        try saveState(state)
     case "routeApply":
         guard Set(parameters.keys) == Set(["interface", "routes"]),
               let interface = validInterface(parameters["interface"]),
@@ -203,15 +239,9 @@ private func handle(_ request: [String: Any], state: inout SavedState) throws ->
         guard Set(parameters.keys) == Set(["transaction"]), validTransaction(parameters["transaction"], expected: routeTransaction) else {
             throw HelperError.message("Invalid route rollback transaction.")
         }
-        if let interface = state.interface {
-            for route in state.routes.reversed() {
-                _ = try? run("/sbin/route", ["-n", "delete", "-net", route, "-interface", interface], allowFailure: true)
-            }
-            _ = try? run("/sbin/ifconfig", [interface, "down"], allowFailure: true)
+        guard rollback(&state) else {
+            throw HelperError.message("Unable to fully roll back network routes.")
         }
-        state.routes = []
-        state.interface = nil
-        try saveState(state)
     case "dnsApply":
         guard Set(parameters.keys) == Set(["interface", "servers"]), validInterface(parameters["interface"]) == "FlClashM",
               let servers = parameters["servers"] as? [String], !servers.isEmpty, servers.count <= 16,
@@ -229,12 +259,9 @@ private func handle(_ request: [String: Any], state: inout SavedState) throws ->
         guard Set(parameters.keys) == Set(["transaction"]), validTransaction(parameters["transaction"], expected: dnsTransaction) else {
             throw HelperError.message("Invalid DNS rollback transaction.")
         }
-        if let service = state.dnsService, let servers = state.dnsServers {
-            _ = try run("/usr/sbin/networksetup", ["-setdnsservers", service] + (servers.isEmpty ? ["Empty"] : servers))
+        guard rollback(&state) else {
+            throw HelperError.message("Unable to fully roll back DNS.")
         }
-        state.dnsService = nil
-        state.dnsServers = nil
-        try saveState(state)
     case "runtimeStart", "runtimeStop":
         throw HelperError.message("Runtime processes must remain unprivileged on macOS.")
     default:
@@ -266,7 +293,7 @@ private func serveClient(_ client: Int32, state: inout SavedState) {
     var peerGID: gid_t = 0
     guard getpeereid(client, &peerUID, &peerGID) == 0,
           peerUID != 0, peerUID == consoleUID() else { return }
-    let hello: [String: Any] = ["state": "ready", "message": "", "protocolVersion": protocolVersion, "installIdentity": identity]
+    let hello: [String: Any] = ["state": "ready", "message": "", "protocolVersion": protocolVersion, "installIdentity": identity, "helperBuild": helperBuild]
     let helloData = (try? JSONSerialization.data(withJSONObject: hello)) ?? Data()
     _ = (helloData + Data([0x0a])).withUnsafeBytes { Darwin.write(client, $0.baseAddress, $0.count) }
     while true {
@@ -353,10 +380,17 @@ private func clientSmoke() throws {
 
 do {
     switch CommandLine.arguments.dropFirst().first {
-    case "--serve": try serve()
+    case "--serve":
+        guard CommandLine.arguments.count == 4, CommandLine.arguments[2] == "--build",
+              !CommandLine.arguments[3].isEmpty else {
+            throw HelperError.message("Expected a helper build identity.")
+        }
+        helperBuild = CommandLine.arguments[3]
+        try serve()
     case "--rollback-all":
         guard geteuid() == 0 else { throw HelperError.message("Cleanup must run as root.") }
-        var state = loadState(); rollback(&state)
+        var state = loadState()
+        guard rollback(&state) else { throw HelperError.message("Cleanup is incomplete; retained rollback state.") }
     case "--client-smoke": try clientSmoke()
     case "--self-test":
         guard validInterface("FlClashM") != nil, validCIDR("0.0.0.0/1"), validIP("1.1.1.1") else {

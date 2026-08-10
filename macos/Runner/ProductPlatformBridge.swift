@@ -6,6 +6,7 @@ final class ProductPlatformBridge {
     private static let identity = "app.flclashm.client"
     private static let protocolVersion = 1
     private static let socketPath = "/var/run/\(identity).helper.sock"
+    private static let helperBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
 
     private var descriptor: Int32 = -1
     private let lock = NSLock()
@@ -80,7 +81,8 @@ final class ProductPlatformBridge {
         guard let hello = try readJSON(),
               hello["state"] as? String == "ready",
               hello["protocolVersion"] as? Int == Self.protocolVersion,
-              hello["installIdentity"] as? String == Self.identity else {
+              hello["installIdentity"] as? String == Self.identity,
+              hello["helperBuild"] as? String == Self.helperBuild else {
             Darwin.close(descriptor); descriptor = -1
             throw BridgeError.message("The installed helper is incompatible with this app.")
         }
