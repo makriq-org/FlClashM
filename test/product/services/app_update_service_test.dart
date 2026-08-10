@@ -17,6 +17,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     this.promptResult,
     this.installResult = true,
     this.openReleasePageOnError = false,
+    this.cancelDownload = false,
   });
 
   final AppRelease? checkResult;
@@ -25,6 +26,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   final bool installResult;
   final bool openReleasePageOnError;
   final String updateDirectoryPath;
+  final bool cancelDownload;
 
   int checkCalls = 0;
   int errorCalls = 0;
@@ -107,6 +109,10 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     final file = File(targetPath);
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes, flush: true);
+    if (cancelDownload) {
+      cancellation?.cancel();
+      throw const AppUpdateDownloadCancelledException();
+    }
     onReceiveProgress?.call(bytes.length, bytes.length);
     final actualSha256 = sha256.convert(bytes).toString();
     if (actualSha256 != expectedSha256) {
@@ -707,7 +713,7 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
       expect(bridge.installCalls, 1);
       expect(
         bridge.installErrorMessage,
-        contains('Unable to open the Android installer'),
+        contains('Unable to complete the platform installer handoff'),
       );
       expect(
         bridge.installErrorReleaseUrl,
@@ -717,6 +723,89 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
         bridge.openedReleaseUrls,
         ['https://example.com/releases/v1.2.3'],
       );
+    });
+
+    test('cancellation removes partial staging and never calls install',
+        () async {
+      final bytes = utf8.encode('partial-desktop-package');
+      final digest = sha256.convert(bytes).toString();
+      final release = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: 'https://example.com/releases/v1.2.3',
+        assets: [
+          ReleaseAsset(
+            name: 'FlClashM.AppImage',
+            browserDownloadUrl: 'https://example.com/FlClashM.AppImage',
+            size: bytes.length,
+            digest: 'sha256:$digest',
+          ),
+        ],
+        prerelease: false,
+        draft: false,
+      );
+      final bridge = _FakeUpdateBridge(
+        updateDirectoryPath: tempDir.path,
+        checkResult: release,
+        promptResult: AppUpdatePromptAction.download,
+        cancelDownload: true,
+      )..assetBytesByUrl['https://example.com/FlClashM.AppImage'] = bytes;
+      final service = AppUpdateService(
+        platform: bridge,
+        packageSelector: const _SinglePackageSelector(),
+      );
+
+      await service.handleCheckResult(
+        release: release,
+        trigger: AppUpdateCheckTrigger.manual,
+      );
+
+      expect(
+          File('${tempDir.path}/FlClashM.AppImage.part').existsSync(), false);
+      expect(File('${tempDir.path}/FlClashM.AppImage').existsSync(), false);
+      expect(bridge.installCalls, 0);
+      expect(bridge.installErrorMessage, isNull);
+    });
+
+    test('size mismatch never promotes a verified digest to ready package',
+        () async {
+      final bytes = utf8.encode('desktop-package');
+      final digest = sha256.convert(bytes).toString();
+      final release = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: 'https://example.com/releases/v1.2.3',
+        assets: [
+          ReleaseAsset(
+            name: 'FlClashM.AppImage',
+            browserDownloadUrl: 'https://example.com/FlClashM.AppImage',
+            size: bytes.length + 1,
+            digest: 'sha256:$digest',
+          ),
+        ],
+        prerelease: false,
+        draft: false,
+      );
+      final bridge = _FakeUpdateBridge(
+        updateDirectoryPath: tempDir.path,
+        checkResult: release,
+        promptResult: AppUpdatePromptAction.download,
+      )..assetBytesByUrl['https://example.com/FlClashM.AppImage'] = bytes;
+      final service = AppUpdateService(
+        platform: bridge,
+        packageSelector: const _SinglePackageSelector(),
+      );
+
+      await service.handleCheckResult(
+        release: release,
+        trigger: AppUpdateCheckTrigger.manual,
+      );
+
+      expect(
+          File('${tempDir.path}/FlClashM.AppImage.part').existsSync(), false);
+      expect(File('${tempDir.path}/FlClashM.AppImage').existsSync(), false);
+      expect(bridge.installCalls, 0);
+      expect(bridge.installErrorMessage, contains('verification failed'));
     });
 
     test('skips selected release without downloading', () async {
@@ -784,4 +873,17 @@ $digest  FlClashM-1.2.3-android-arm64-v8a.apk
       expect(utils.compareVersions('1.2.4', '1.2.4-pre10'), greaterThan(0));
     });
   });
+}
+
+class _SinglePackageSelector implements AppUpdatePackageSelector {
+  const _SinglePackageSelector();
+
+  @override
+  Future<AppUpdatePackage> select({
+    required AppRelease release,
+    required AppUpdatePlatformBridge platform,
+  }) async {
+    final asset = release.assets.single;
+    return AppUpdatePackage(asset: asset, sha256: asset.sha256Digest!);
+  }
 }

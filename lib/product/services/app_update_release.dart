@@ -11,18 +11,16 @@ class ReleaseAsset {
     this.digest,
     List<String>? downloadUrls,
   }) : downloadUrls = List.unmodifiable(
-          downloadUrls ?? <String>[browserDownloadUrl],
-        );
+         downloadUrls ?? <String>[browserDownloadUrl],
+       );
 
   factory ReleaseAsset.fromJson(Map<String, dynamic> json) => ReleaseAsset(
-        name: json['name']?.toString() ?? '',
-        browserDownloadUrl: json['browser_download_url']?.toString() ?? '',
-        size: (json['size'] as num?)?.toInt() ?? 0,
-        digest: json['digest']?.toString(),
-        downloadUrls: <String>[
-          json['browser_download_url']?.toString() ?? '',
-        ],
-      );
+    name: json['name']?.toString() ?? '',
+    browserDownloadUrl: json['browser_download_url']?.toString() ?? '',
+    size: (json['size'] as num?)?.toInt() ?? 0,
+    digest: json['digest']?.toString(),
+    downloadUrls: <String>[json['browser_download_url']?.toString() ?? ''],
+  );
 
   static final RegExp _androidAssetPattern = RegExp(
     r'-android(?:-([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*))?\.apk$',
@@ -72,16 +70,20 @@ class AppRelease {
     required this.assets,
     required this.prerelease,
     required this.draft,
+    this.versionCode,
+    this.catalogId,
   });
 
   factory AppRelease.fromJson(Map<String, dynamic> json) {
     final rawAssets = json['assets'];
     final assets = rawAssets is List
         ? rawAssets
-            .whereType<Map>()
-            .map((item) =>
-                ReleaseAsset.fromJson(Map<String, dynamic>.from(item)))
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    ReleaseAsset.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList()
         : <ReleaseAsset>[];
     return AppRelease(
       tagName: json['tag_name']?.toString() ?? '',
@@ -99,6 +101,8 @@ class AppRelease {
   final List<ReleaseAsset> assets;
   final bool prerelease;
   final bool draft;
+  final int? versionCode;
+  final String? catalogId;
 
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -173,10 +177,7 @@ AndroidReleaseAsset? selectAndroidReleaseAsset(
   return null;
 }
 
-String? parseSha256Content(
-  String? content, {
-  String? assetName,
-}) {
+String? parseSha256Content(String? content, {String? assetName}) {
   if (content == null || content.trim().isEmpty) {
     return null;
   }
@@ -212,10 +213,7 @@ Future<String> computeFileSha256(File file) async {
 }
 
 AppRelease? selectLatestStableRelease(Iterable<AppRelease> releases) =>
-    selectLatestAppRelease(
-      releases,
-      includePrerelease: false,
-    );
+    selectLatestAppRelease(releases, includePrerelease: false);
 
 AppRelease? selectLatestAppRelease(
   Iterable<AppRelease> releases, {
@@ -266,9 +264,7 @@ _ParsedSha256Line? _parseSha256Line(String rawLine) {
     caseSensitive: false,
   ).firstMatch(line);
   if (digestOnlyMatch != null) {
-    return _ParsedSha256Line(
-      hash: digestOnlyMatch.group(1)!.toLowerCase(),
-    );
+    return _ParsedSha256Line(hash: digestOnlyMatch.group(1)!.toLowerCase());
   }
 
   return null;
@@ -284,10 +280,7 @@ bool _matchesSha256AssetName(String rawAssetName, String expectedAssetName) {
 }
 
 class _ParsedSha256Line {
-  const _ParsedSha256Line({
-    required this.hash,
-    this.assetName,
-  });
+  const _ParsedSha256Line({required this.hash, this.assetName});
 
   final String hash;
   final String? assetName;

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../clash/core.dart';
 import '../../common/android.dart';
 import '../android/android_entrypoint.dart';
@@ -5,6 +7,7 @@ import '../android/android_platform.dart';
 import '../runtime/runtime_types.dart';
 import '../security/android_security_policy.dart';
 import '../security/security_policy.dart';
+import '../services/desktop_app_update_bridge.dart';
 import '../services/product_services.dart';
 import 'desktop_platform_services.dart';
 import 'desktop_security_policy.dart';
@@ -51,7 +54,8 @@ class ProductPlatformComposition {
   });
 
   factory ProductPlatformComposition.forProfile(
-      ProductPlatformProfile profile) {
+    ProductPlatformProfile profile,
+  ) {
     if (!profile.supported) {
       throw UnsupportedError(profile.unsupportedMessage);
     }
@@ -80,6 +84,12 @@ class ProductPlatformComposition {
       );
     }
 
+    final updateEnvironment = DesktopUpdateEnvironment.forOperatingSystem(
+      profile.operatingSystem,
+      packageManagedLinux:
+          profile.kind == ProductPlatformKind.linux &&
+          (Platform.environment['APPIMAGE']?.trim().isEmpty ?? true),
+    );
     return ProductPlatformComposition._(
       profile: profile,
       services: ProductServices(
@@ -87,7 +97,12 @@ class ProductPlatformComposition {
           platform: DesktopRuntimeAccessPolicy(),
         ),
         androidShell: const DesktopShellService(),
-        appUpdate: const DesktopAppUpdateService(),
+        appUpdate: AppUpdateService(
+          platform: DesktopAppUpdateBridge(environment: updateEnvironment),
+          packageSelector: DesktopAppUpdatePackageSelector(
+            environment: updateEnvironment,
+          ),
+        ),
       ),
       securityPolicy: const DesktopSecurityPolicy(),
       bootstrap: const DesktopPlatformBootstrap(),
@@ -106,5 +121,6 @@ class ProductPlatformComposition {
   final RuntimeAvailability mihomoAvailability;
 }
 
-final productPlatformComposition =
-    ProductPlatformComposition.forProfile(productPlatform);
+final productPlatformComposition = ProductPlatformComposition.forProfile(
+  productPlatform,
+);
