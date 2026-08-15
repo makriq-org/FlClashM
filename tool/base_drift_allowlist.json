@@ -531,6 +531,11 @@
       "reason": "Общий багфикс сравнения версий полезен всему base-слою и принят в бюджет."
     },
     {
+      "path": "lib/common/yaml_dump.dart",
+      "bucket": "budget",
+      "reason": "Безопасная YAML-сериализация нужна для совместимости сложных профилей с валидатором mihomo."
+    },
+    {
       "path": "lib/common/window.dart",
       "bucket": "budget",
       "reason": "Windows protocol registration сведён к актуальным схемам форка: clash и flclashm."
