@@ -1,4 +1,4 @@
-git-ad5758513335cda54362a64621c29e9d9fe759b4
+git-b33680871cdb94a7523829f8073de3eafa5b3ece
 https://github.com/openlibrecommunity/olcrtc.git
 go1.26.4
 ndk-28.0.13004108
