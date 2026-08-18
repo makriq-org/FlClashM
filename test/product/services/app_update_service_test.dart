@@ -399,6 +399,37 @@ void main() {
     });
   });
 
+  group('selectLatestAppRelease', () {
+    test('uses Android version code when visible versions restart', () {
+      final previous = AppRelease(
+        tagName: 'v0.10.8-pre4',
+        body: '',
+        htmlUrl: '',
+        assets: const [],
+        prerelease: true,
+        draft: false,
+        versionCode: 2026081601,
+      );
+      final restarted = AppRelease(
+        tagName: 'v0.1.0',
+        body: '',
+        htmlUrl: '',
+        assets: const [],
+        prerelease: false,
+        draft: false,
+        versionCode: 2026081801,
+      );
+
+      expect(
+        selectLatestAppRelease(
+          [previous, restarted],
+          includePrerelease: true,
+        )?.tagName,
+        'v0.1.0',
+      );
+    });
+  });
+
   group('AppUpdateService', () {
     late Directory tempDir;
 

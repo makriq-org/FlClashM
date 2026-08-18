@@ -72,6 +72,7 @@ class AppRelease {
     required this.assets,
     required this.prerelease,
     required this.draft,
+    this.versionCode,
   });
 
   factory AppRelease.fromJson(Map<String, dynamic> json) {
@@ -90,6 +91,7 @@ class AppRelease {
       assets: assets,
       prerelease: json['prerelease'] as bool? ?? false,
       draft: json['draft'] as bool? ?? false,
+      versionCode: (json['version_code'] as num?)?.toInt(),
     );
   }
 
@@ -99,6 +101,8 @@ class AppRelease {
   final List<ReleaseAsset> assets;
   final bool prerelease;
   final bool draft;
+  /// Android installation order from a signed update manifest.
+  final int? versionCode;
 
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -227,11 +231,22 @@ AppRelease? selectLatestAppRelease(
       continue;
     }
     if (latestRelease == null ||
-        utils.compareVersions(release.version, latestRelease.version) > 0) {
+        _isNewerAppRelease(release, latestRelease)) {
       latestRelease = release;
     }
   }
   return latestRelease;
+}
+
+bool _isNewerAppRelease(AppRelease candidate, AppRelease current) {
+  final candidateCode = candidate.versionCode;
+  final currentCode = current.versionCode;
+  if (candidateCode != null || currentCode != null) {
+    if (candidateCode == null) return false;
+    if (currentCode == null) return true;
+    return candidateCode > currentCode;
+  }
+  return utils.compareVersions(candidate.version, current.version) > 0;
 }
 
 _ParsedSha256Line? _parseSha256Line(String rawLine) {
