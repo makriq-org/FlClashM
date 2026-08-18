@@ -96,6 +96,10 @@ void main() {
 
   test('starts under the standalone Dart VM used by the release workflow',
       () async {
+    final versionName = RegExp(
+      r'^version:\s*([^+]+)\+',
+      multiLine: true,
+    ).firstMatch(File('pubspec.yaml').readAsStringSync())!.group(1)!;
     final tempDir = Directory.systemTemp.createTempSync('update-manifest-vm-');
     addTearDown(() => tempDir.deleteSync(recursive: true));
     final dist = Directory('${tempDir.path}/dist')..createSync();
@@ -110,9 +114,9 @@ void main() {
         '--dist=${dist.path}',
         '--out=${tempDir.path}/pre.json',
         '--release-notes=${notes.path}',
-        '--tag=v0.10.8',
+        '--tag=v$versionName',
         '--github-repository=makriq-org/FlClashM',
-        '--channel=stable',
+        '--channel=${versionName.contains('-') ? 'pre' : 'stable'}',
         '--published-at=2026-07-14T10:00:00.000Z',
       ],
       workingDirectory: Directory.current.path,
