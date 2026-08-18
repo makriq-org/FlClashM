@@ -9,6 +9,7 @@ extension AppUpdateManifestReleaseMapping on AppUpdateManifest {
         assets: assets.map((asset) => asset.toReleaseAsset()).toList(),
         prerelease: channel == AppUpdateChannel.prerelease,
         draft: false,
+        versionCode: versionCode,
       );
 }
 

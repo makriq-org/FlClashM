@@ -234,11 +234,16 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
       return null;
     }
 
-    final hasUpdate = utils.compareVersions(
-          release.version,
-          globalState.packageInfo.version,
-        ) >
-        0;
+    final installedVersionCode = int.tryParse(
+      globalState.packageInfo.buildNumber,
+    );
+    final hasUpdate = release.versionCode != null && installedVersionCode != null
+        ? release.versionCode! > installedVersionCode
+        : utils.compareVersions(
+              release.version,
+              globalState.packageInfo.version,
+            ) >
+            0;
     return hasUpdate ? release : null;
   }
 
