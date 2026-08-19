@@ -104,7 +104,7 @@ void main() {
           File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
 
       expect(first['arguments'], second['arguments']);
-      expect(first['arguments'], containsAllInOrder(['--disorder', '1']));
+      expect(first['arguments'], containsAllInOrder(_defaultFallbackArgs));
       expect(cache.existsSync(), isTrue);
       final cached = json.decode(await cache.readAsString()) as Map;
       expect(cached['strategy'], isNotEmpty);
@@ -233,7 +233,7 @@ void main() {
 
       expect(runtime.batchCalls, hasLength(1));
       expect(runtime.batchCalls.single.nodes, hasLength(4));
-      expect(node['arguments'], containsAllInOrder(['--disorder', '1']));
+      expect(node['arguments'], containsAllInOrder(_defaultFallbackArgs));
       expect(
         runtime.batchCalls.single.nodes
             .map((probe) => (probe['connectivityCheck'] as Map)['timeout']),
@@ -342,7 +342,7 @@ void main() {
         '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
       ).readAsString()) as Map;
       expect(cache['verified'], isFalse);
-      expect(cache['strategy'], contains('--disorder 1'));
+      expect((cache['strategy'] as String).split(' '), _defaultFallbackArgs);
     });
 
     test('restores the provisional cache when background activation fails',
@@ -518,10 +518,38 @@ void main() {
           (json.decode(runtime.savedManifest!) as Map)['nodes'] as List;
 
       expect(nodes, hasLength(1));
-      expect((nodes.single as Map)['arguments'], contains('--disorder'));
+      expect(
+        (nodes.single as Map)['arguments'],
+        containsAllInOrder(_defaultFallbackArgs),
+      );
     });
   });
 }
+
+const _defaultFallbackArgs = <String>[
+  '-n',
+  'google.com',
+  '-Qr',
+  '-f-204',
+  '-s1:5+sm',
+  '-a1',
+  '-As',
+  '-d1',
+  '-s3+s',
+  '-s5+s',
+  '-q7',
+  '-a1',
+  '-As',
+  '-o2',
+  '-f-43',
+  '-a1',
+  '-As',
+  '-r5',
+  '-Mh',
+  '-s1:5+s',
+  '-s3:7+sm',
+  '-a1',
+];
 
 BuiltInProxyNodePlan _plan({
   required String mode,
