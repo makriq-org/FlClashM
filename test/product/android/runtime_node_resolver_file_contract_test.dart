@@ -46,6 +46,7 @@ void main() {
     expect(resolverFile, contains('value.optString("path", "")'));
     expect(resolverFile, contains('optBoolean("dependsOnSystemDns", false)'));
     expect(resolverFile, contains('optJSONArray("resetPaths")'));
+    expect(resolverFile, contains('optString("systemDnsMode", "resolver-list")'));
   });
 
   test('runtime-node stdin stays open for lifetime-controlled clients', () {
@@ -431,5 +432,39 @@ void main() {
     expect(
         resolverFile, contains('if (!seen.add(resolverKey(entry))) continue'));
     expect(resolverFile, contains('private fun resolverKey('));
+  });
+
+  test('single-endpoint mode stays generic and fails closed', () {
+    expect(resolverFile, contains('SINGLE_HOST_PORT'));
+    expect(resolverFile, contains('SYSTEM_DNS_VALUE_PLACEHOLDER'));
+    expect(resolverFile, contains('else -> INVALID'));
+    expect(resolverFile, contains('.count { it == placeholder } != 1'));
+  });
+
+  test('a failed DNS restart restores the previous generated artifact', () {
+    expect(processManager, contains('rollbackSystemDnsNode('));
+    expect(processManager, contains('RuntimeNodeResolverFileWriter.snapshot('));
+    expect(processManager, contains('RuntimeNodeResolverFileWriter.restore('));
+    expect(processManager, contains('renderResolverFile = false'));
+    expect(
+      processManager,
+      contains('minOf(spec.connectivityCheck.startupTimeoutMillis, budget / 2)'),
+      reason: 'the update attempt must reserve time for rollback',
+    );
+    expect(
+      processManager,
+      contains('val rollbackBudget = deadline - SystemClock.elapsedRealtime()'),
+      reason: 'rollback must use only the time left in the DNS pass',
+    );
+    expect(
+      processManager,
+      contains('touched[spec.nodeId] = rollback.copy(message = rollbackFailure)'),
+      reason: 'a rollback failure must replace the original update error',
+    );
+    expect(
+      processManager,
+      contains('pendingSystemDnsRestarts.add(spec.nodeId)'),
+      reason: 'the new DNS must remain pending after the old process returns',
+    );
   });
 }

@@ -65,8 +65,10 @@ class OlcRtcConfigValidator {
       );
     }
     final dns = _requiredString(config['dns-server'], 'olcrtc.dns-server');
-    if (!_isHostPort(dns)) {
-      throw const FormatException('olcrtc `dns-server` must use `host:port`.');
+    if (dns != 'system' && !_isHostPort(dns)) {
+      throw const FormatException(
+        'olcrtc `dns-server` must use `host:port` or `system`.',
+      );
     }
 
     final transport = _requiredString(config['transport'], 'olcrtc.transport');
