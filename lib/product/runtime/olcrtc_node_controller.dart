@@ -106,6 +106,12 @@ class OlcRtcNodeController
   }
 
   @override
+  Map<String, String> readAdditionalArtifacts(BuiltInProxyNodePlan plan) {
+    if (plan.metadata['depends-on-system-dns'] != 'true') return const {};
+    return {olcRtcConfigTemplateFileName: readConfigArtifact(plan)};
+  }
+
+  @override
   OlcRtcNodeLayout resolveNodeLayout(
     OlcRtcSharedInstallLayout sharedLayout,
     String nodeId,
@@ -130,6 +136,13 @@ class OlcRtcNodeController
       LocalNodeLaunchExtras(
         fields: {
           'arguments': _buildArguments(layout),
+          if (plan.metadata['depends-on-system-dns'] == 'true')
+            'resolverFile': <String, dynamic>{
+              'template': olcRtcConfigTemplateFileName,
+              'path': olcRtcConfigFileName,
+              'dependsOnSystemDns': true,
+              'systemDnsMode': 'single-host-port',
+            },
         },
       );
 }

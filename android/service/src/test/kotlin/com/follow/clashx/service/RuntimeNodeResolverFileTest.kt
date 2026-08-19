@@ -13,6 +13,106 @@ class RuntimeNodeResolverFileTest {
     private val placeholder = RuntimeNodeResolverFile.SYSTEM_DNS_PLACEHOLDER
 
     @Test
+    fun `single endpoint mode uses the first Android DNS with port 53`() {
+        val root = createTempDir(prefix = "resolver-file-")
+        try {
+            File(root, "config.template.yaml").writeText(
+                "net:\n  dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
+            )
+            val spec = RuntimeNodeResolverFile(
+                template = "config.template.yaml",
+                path = "config.yaml",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+                systemDnsMode = SystemDnsRenderMode.SINGLE_HOST_PORT,
+            )
+
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.CHANGED,
+                RuntimeNodeResolverFileWriter.render(root, spec, listOf("2001:db8::53", "8.8.8.8")),
+            )
+            assertEquals("net:\n  dns: [2001:db8::53]:53\n", File(root, "config.yaml").readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `single endpoint mode reports unavailable system DNS`() {
+        val root = createTempDir(prefix = "resolver-file-")
+        try {
+            File(root, "config.template.yaml").writeText(
+                "dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
+            )
+            val spec = RuntimeNodeResolverFile(
+                template = "config.template.yaml",
+                path = "config.yaml",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+                systemDnsMode = SystemDnsRenderMode.SINGLE_HOST_PORT,
+            )
+            assertEquals(
+                RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE,
+                RuntimeNodeResolverFileWriter.render(root, spec, emptyList()),
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `single endpoint mode requires exactly one placeholder`() {
+        val root = createTempDir(prefix = "resolver-file-")
+        try {
+            val spec = RuntimeNodeResolverFile(
+                template = "config.template.yaml",
+                path = "config.yaml",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+                systemDnsMode = SystemDnsRenderMode.SINGLE_HOST_PORT,
+            )
+            for (template in listOf(
+                "dns: 1.1.1.1:53\n",
+                "first: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n" +
+                    "second: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
+            )) {
+                File(root, "config.template.yaml").writeText(template)
+                assertEquals(
+                    RuntimeNodeResolverFileRenderResult.FAILED,
+                    RuntimeNodeResolverFileWriter.render(root, spec, listOf("8.8.8.8")),
+                )
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `previous generated file can be restored after a DNS update failure`() {
+        val root = createTempDir(prefix = "resolver-file-")
+        try {
+            File(root, "config.template.yaml").writeText(
+                "dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
+            )
+            val spec = RuntimeNodeResolverFile(
+                template = "config.template.yaml",
+                path = "config.yaml",
+                dependsOnSystemDns = true,
+                resetPaths = emptyList(),
+                systemDnsMode = SystemDnsRenderMode.SINGLE_HOST_PORT,
+            )
+            RuntimeNodeResolverFileWriter.render(root, spec, listOf("1.1.1.1"))
+            val snapshot = RuntimeNodeResolverFileWriter.snapshot(root, spec)!!
+            RuntimeNodeResolverFileWriter.render(root, spec, listOf("8.8.8.8"))
+
+            assertTrue(RuntimeNodeResolverFileWriter.restore(root, spec, snapshot))
+            assertEquals("dns: 1.1.1.1:53\n", File(root, "config.yaml").readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `system dns is expanded where the node asked for it`() {
         assertEquals(
             "1.1.1.1\n8.8.8.8\n8.8.4.4\n9.9.9.9\n",

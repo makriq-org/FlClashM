@@ -45,7 +45,10 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
           if (roomChannel != null) 'channel': roomChannel,
         },
       'crypto': {'key': encryptionKey},
-      'net': {'transport': transport, 'dns': dnsServer},
+      'net': {
+        'transport': transport,
+        'dns': dnsServer == 'system' ? olcRtcSystemDnsPlaceholder : dnsServer,
+      },
       'socks': {'host': localhost, 'port': listenPort},
       if (engine != null)
         'engine': {'name': engine, 'url': engineUrl, 'token': engineToken},
@@ -131,15 +134,15 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
       files: {
         'built-in-proxies/olcrtc/$nodeId/config.yaml': _encodeYaml(native),
       },
+      metadata: {'depends-on-system-dns': '${dnsServer == 'system'}'},
     );
   }
 
   Map<String, dynamic> _olcRtcNativeOptions(
     Map<String, dynamic> options,
     Map<String, String> aliases,
-  ) =>
-      {
-        for (final entry in options.entries)
-          aliases[entry.key] ?? entry.key: entry.value,
-      };
+  ) => {
+    for (final entry in options.entries)
+      aliases[entry.key] ?? entry.key: entry.value,
+  };
 }
