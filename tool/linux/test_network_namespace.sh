@@ -31,7 +31,16 @@ sudo unshare --mount --net --fork -- env \
   request "{\"protocolVersion\":1,\"installIdentity\":\"app.flclashm.client\",\"operation\":\"routeRollback\",\"parameters\":{\"transaction\":\"ci_rollback\"}}" | ready
   ! ip link show flclashm0 >/dev/null 2>&1
   ! ip route show 198.18.0.0/15 | grep -q "flclashm0"
-  before=$(sha256sum /etc/resolv.conf)
+  resolv_conf_state() {
+    if test -L /etc/resolv.conf; then
+      printf "link:%s\n" "$(readlink /etc/resolv.conf)"
+    elif test -f /etc/resolv.conf; then
+      sha256sum /etc/resolv.conf
+    else
+      printf "missing\n"
+    fi
+  }
+  before=$(resolv_conf_state)
   request "{\"protocolVersion\":1,\"installIdentity\":\"app.flclashm.client\",\"operation\":\"dnsApply\",\"parameters\":{\"interface\":\"flclashm0\",\"servers\":[\"1.1.1.1\"]}}" | grep -q "\"state\":\"failed\""
-  test "$before" = "$(sha256sum /etc/resolv.conf)"
+  test "$before" = "$(resolv_conf_state)"
 '
