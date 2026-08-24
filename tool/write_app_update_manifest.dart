@@ -104,7 +104,7 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
     channel: options.channel,
     tagName: options.tagName,
     versionName: options.tagName.substring(1),
-    versionCode: pubspecVersion.versionCode,
+    versionCode: options.versionCode ?? pubspecVersion.versionCode,
     publishedAt: options.publishedAt,
     body: releaseNotes.readAsStringSync(),
     htmlUrl: '$sourceForgeProjectUrl/files/releases/${options.tagName}/',
@@ -158,6 +158,7 @@ class ManifestOptions {
     required this.githubRepository,
     required this.channel,
     required this.publishedAt,
+    this.versionCode,
   });
 
   factory ManifestOptions.parse(List<String> args) {
@@ -203,6 +204,13 @@ class ManifestOptions {
     if (publishedAt == null || !publishedAt.isUtc) {
       throw ArgumentError('--published-at must be an ISO-8601 UTC timestamp.');
     }
+    final rawVersionCode = values['version-code'];
+    final versionCode = rawVersionCode == null
+        ? null
+        : int.tryParse(rawVersionCode);
+    if (rawVersionCode != null && (versionCode == null || versionCode <= 0)) {
+      throw ArgumentError('--version-code must be a positive integer.');
+    }
 
     return ManifestOptions(
       distPath: requiredValue('dist'),
@@ -212,6 +220,7 @@ class ManifestOptions {
       githubRepository: requiredValue('github-repository'),
       channel: channel,
       publishedAt: publishedAt,
+      versionCode: versionCode,
     );
   }
 
@@ -222,4 +231,5 @@ class ManifestOptions {
   final String githubRepository;
   final AppUpdateChannel channel;
   final DateTime publishedAt;
+  final int? versionCode;
 }
