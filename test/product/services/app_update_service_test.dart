@@ -157,6 +157,7 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
   final downloadBytes = <int>[1, 2, 3, 4];
   final downloadBytesByUrl = <String, List<int>>{};
   final jsonLists = <String, List<dynamic>>{};
+  final textDocuments = <String, String>{};
 
   @override
   Future<void> download(
@@ -185,7 +186,7 @@ class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
       jsonLists[url] ?? (throw StateError('unavailable JSON'));
 
   @override
-  Future<String?> readText(String url) => throw UnimplementedError('not used');
+  Future<String?> readText(String url) async => textDocuments[url];
 }
 
 void main() {
@@ -282,6 +283,66 @@ void main() {
       );
 
       expect(release?.tagName, 'v1.2.3');
+    });
+
+    test('uses release metadata after a visible version restart', () async {
+      globalState.packageInfo = PackageInfo(
+        appName: 'FlClashM',
+        packageName: 'com.makriq.flclash',
+        version: '0.10.8',
+        buildNumber: '2026083801',
+      );
+      const metadataUrl = 'https://github.example/v0.1.0/metadata.json';
+      final client = _FakeAppUpdateHttpClient();
+      client.jsonLists[
+          'https://api.github.com/repos/makriq-org/FlClashM/releases?per_page=20'] = [
+        {
+          'tag_name': 'v0.1.0',
+          'assets': [
+            {
+              'name': 'FlClashM-android-release-metadata.json',
+              'browser_download_url': metadataUrl,
+              'size': 1,
+            },
+            {
+              'name': 'FlClashM-android-arm64-v8a.apk',
+              'browser_download_url': 'https://github.example/v0.1.0/app.apk',
+              'size': 1,
+            },
+          ],
+          'prerelease': false,
+          'draft': false,
+        },
+        {
+          'tag_name': 'v0.10.8',
+          'assets': <dynamic>[],
+          'prerelease': false,
+          'draft': false,
+        },
+      ];
+      client.textDocuments[metadataUrl] = jsonEncode({
+        'schemaVersion': 1,
+        'applicationId': 'com.makriq.flclash',
+        'tagName': 'v0.1.0',
+        'versionCode': 2026085802,
+        'apkVersionCodes': {
+          'FlClashM-android-arm64-v8a.apk': 2026083802,
+          'FlClashM-android-x86_64.apk': 2026085802,
+        },
+      });
+      final bridge = AndroidUpdateBridge(httpClient: client);
+
+      final release = await bridge.checkForAppUpdate(
+        includePrerelease: false,
+        skippedTagName: '',
+      );
+
+      expect(release?.tagName, 'v0.1.0');
+      expect(release?.versionCode, 2026085802);
+      expect(
+        release?.assets.firstWhere((asset) => asset.isAndroidApk).versionCode,
+        2026083802,
+      );
     });
   });
 
@@ -397,6 +458,44 @@ void main() {
 
       expect(asset, isNull);
     });
+  });
+
+  test('checks the package code of the selected ABI APK', () {
+    final release = AppRelease(
+      tagName: 'v0.1.0',
+      body: '',
+      htmlUrl: '',
+      assets: [
+        ReleaseAsset(
+          name: 'FlClashM-android-arm64-v8a.apk',
+          browserDownloadUrl: 'https://example.com/app.apk',
+          size: 1,
+          versionCode: 2026083802,
+        ),
+      ],
+      prerelease: false,
+      draft: false,
+      versionCode: 2026085802,
+    );
+
+    expect(
+      isAppReleaseUpdateAvailable(
+        release,
+        installedVersionCode: 2026083801,
+        installedVersionName: '0.10.8',
+        supportedAbis: const ['arm64-v8a'],
+      ),
+      isTrue,
+    );
+    expect(
+      isAppReleaseUpdateAvailable(
+        release,
+        installedVersionCode: 2026083802,
+        installedVersionName: '0.10.8',
+        supportedAbis: const ['arm64-v8a'],
+      ),
+      isFalse,
+    );
   });
 
   group('selectLatestAppRelease', () {

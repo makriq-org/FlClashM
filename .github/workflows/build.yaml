@@ -278,6 +278,7 @@ jobs:
             release_channel=stable
           fi
           dart tool/write_release_metadata.dart \
+            --dist dist \
             --out dist/FlClashM-android-release-metadata.json \
             --github-ref-name "${{ github.ref_name }}" \
             --github-sha "${{ github.sha }}" \
