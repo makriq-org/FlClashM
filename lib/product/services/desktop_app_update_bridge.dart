@@ -142,7 +142,7 @@ class LinuxAppImageInstallHandoff implements DesktopInstallHandoff {
     if (!pending.path.endsWith('.AppImage') ||
         !current.path.endsWith('.AppImage') ||
         !pending.existsSync() ||
-        await FileSystemEntity.type(current.path, followLinks: false) !=
+        FileSystemEntity.typeSync(current.path, followLinks: false) !=
             FileSystemEntityType.file) {
       throw StateError('Invalid AppImage replacement path.');
     }

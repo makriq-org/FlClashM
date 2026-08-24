@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../platform/product_install_layout.dart';
 import 'desktop_helper_protocol.dart';
 import 'desktop_runtime_layout.dart';
-import '../platform/product_install_layout.dart';
 
 /// Uses the fixed-layout helper only as an unprivileged Unix-socket client.
 /// The root daemon validates SO_PEERCRED itself; Dart never opens a privileged
@@ -46,7 +46,7 @@ class LinuxDesktopHelperTransport implements DesktopHelperTransport {
     );
     if (result.exitCode != 0) {
       if (allowBootstrap &&
-          Platform.environment['APPIMAGE']?.trim().isNotEmpty == true) {
+          (Platform.environment['APPIMAGE']?.trim().isNotEmpty ?? false)) {
         final bootstrap = await Process.run(
           '/usr/bin/pkexec',
           [bundledExecutable, '--bootstrap'],
