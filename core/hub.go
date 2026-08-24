@@ -80,21 +80,13 @@ func handleInitClash(paramsString string) bool {
 	if err != nil {
 		return false
 	}
-	// EXPERIMENT: GC disabled entirely (was SetGCPercent(50)) — collections now
-	// happen only when the heap reaches the soft memory limit below. This also
-	// silences the runtime's forced 2-minute GC, so an idle core never wakes for
-	// GC at all. Trade-off being evaluated: the heap floats up to the limit by
-	// design, and under sustained traffic it parks there with limit-triggered
-	// collections (the "GC wall"). If battery/CPU regresses, restore
-	// SetGCPercent(50).
-	debug.SetGCPercent(-1)
-	// 70 MB soft limit (experiment; was 128, and 60 before that). History: a 60 MB
-	// limit forced near-continuous GC — up to the runtime's 50%-CPU GC cap — when a
-	// GEOIP/GEOSITE-heavy config's live heap sat close to it. 70 is back near that
-	// regime on purpose, paired with GOGC=off: watch geo-heavy configs for the same
-	// burn. With GOGC off this is the ONLY GC trigger left — never remove it, or
-	// the heap grows unbounded until LMK/OOM.
-	debug.SetMemoryLimit(70 * 1024 * 1024)
+	// Keep regular heap-growth-triggered collections enabled. Disabling GOGC made
+	// the core collect continuously once its live heap reached the memory limit,
+	// causing excessive CPU and battery use even with almost no traffic.
+	debug.SetGCPercent(50)
+	// Keep the 128 MB soft limit as a safety backstop above the normal working set.
+	// Lower limits caused the live heap to remain on the limit and enter a GC wall.
+	debug.SetMemoryLimit(128 * 1024 * 1024)
 	version.Store(int32(params.Version))
 	constant.SetHomeDir(params.HomeDir)
 	// Default to "foreground": the main process drives setUiActive(false) when it
