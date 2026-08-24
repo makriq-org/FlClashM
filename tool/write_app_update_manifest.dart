@@ -61,6 +61,20 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
       'Missing release notes `${options.releaseNotesPath}`.',
     );
   }
+  final releaseContract = readReleaseContract();
+  final metadataFile = File(
+    '${dist.path}${Platform.pathSeparator}'
+    '${releaseContract.releaseMetadataFileName}',
+  );
+  final apkVersionCodes = metadataFile.existsSync()
+      ? _readApkVersionCodes(metadataFile)
+      : const <String, int>{};
+  if (apkVersionCodes.isEmpty && options.versionCode == null) {
+    throw StateError(
+      'Release metadata with APK version codes is required unless '
+      '--version-code is provided for manifest repair.',
+    );
+  }
 
   final assets = <AppUpdateManifestAsset>[];
   final files = dist
@@ -75,6 +89,10 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
       continue;
     }
     final digest = await sha256.bind(file.openRead()).first;
+    final apkVersionCode = apkVersionCodes[name];
+    if (apkVersionCodes.isNotEmpty && apkVersionCode == null) {
+      throw StateError('Missing APK versionCode for `$name`.');
+    }
     assets.add(
       AppUpdateManifestAsset(
         name: name,
@@ -92,6 +110,7 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
                 '${options.tagName}/$name',
           ).toString(),
         ],
+        versionCode: apkVersionCode,
       ),
     );
   }
@@ -99,17 +118,50 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
     throw StateError('No Android APK assets found in `${options.distPath}`.');
   }
 
-  final pubspecVersion = readPubspecVersion();
+  final releaseVersionCode = options.versionCode ??
+      assets.map((asset) => asset.versionCode!).reduce(
+        (left, right) => left > right ? left : right,
+      );
   return AppUpdateManifest(
     channel: options.channel,
     tagName: options.tagName,
     versionName: options.tagName.substring(1),
-    versionCode: options.versionCode ?? pubspecVersion.versionCode,
+    versionCode: releaseVersionCode,
     publishedAt: options.publishedAt,
     body: releaseNotes.readAsStringSync(),
     htmlUrl: '$sourceForgeProjectUrl/files/releases/${options.tagName}/',
     assets: assets,
   );
+}
+
+Map<String, int> _readApkVersionCodes(File metadataFile) {
+  final decoded = jsonDecode(metadataFile.readAsStringSync());
+  if (decoded is! Map<String, dynamic>) {
+    throw StateError('Invalid release metadata `${metadataFile.path}`.');
+  }
+  final rawCodes = decoded['apkVersionCodes'];
+  if (rawCodes is! Map) {
+    return const {};
+  }
+  final result = <String, int>{};
+  for (final entry in rawCodes.entries) {
+    final name = entry.key.toString();
+    final code = entry.value;
+    if (name.isEmpty || code is! int || code <= 0) {
+      throw StateError('Invalid APK version code in release metadata.');
+    }
+    result[name] = code;
+  }
+  final declaredVersionCode = decoded['versionCode'];
+  final maximumVersionCode = result.values.reduce(
+    (left, right) => left > right ? left : right,
+  );
+  if (declaredVersionCode != maximumVersionCode) {
+    throw StateError(
+      'Release metadata versionCode does not match APK version codes.',
+    );
+  }
+  return result;
 }
 
 Future<List<int>> signAppUpdateManifest(
@@ -205,9 +257,8 @@ class ManifestOptions {
       throw ArgumentError('--published-at must be an ISO-8601 UTC timestamp.');
     }
     final rawVersionCode = values['version-code'];
-    final versionCode = rawVersionCode == null
-        ? null
-        : int.tryParse(rawVersionCode);
+    final versionCode =
+        rawVersionCode == null ? null : int.tryParse(rawVersionCode);
     if (rawVersionCode != null && (versionCode == null || versionCode <= 0)) {
       throw ArgumentError('--version-code must be a positive integer.');
     }

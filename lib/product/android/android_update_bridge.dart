@@ -224,7 +224,8 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     );
     final availableReleases = <AppRelease>[
       ...sourceForge.releases,
-      if (!sourceForge.complete) ...await _readGitHubReleases(),
+      if (!sourceForge.complete)
+        ...await _readGitHubReleases(includePrerelease: includePrerelease),
     ];
     final release = selectLatestAppRelease(
       availableReleases,
@@ -237,13 +238,12 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     final installedVersionCode = int.tryParse(
       globalState.packageInfo.buildNumber,
     );
-    final hasUpdate = release.versionCode != null && installedVersionCode != null
-        ? release.versionCode! > installedVersionCode
-        : utils.compareVersions(
-              release.version,
-              globalState.packageInfo.version,
-            ) >
-            0;
+    final hasUpdate = isAppReleaseUpdateAvailable(
+      release,
+      installedVersionCode: installedVersionCode,
+      installedVersionName: globalState.packageInfo.version,
+      supportedAbis: await readSupportedAbis(),
+    );
     return hasUpdate ? release : null;
   }
 
@@ -283,15 +283,58 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     return (releases: releases, complete: complete);
   }
 
-  Future<List<AppRelease>> _readGitHubReleases() async {
+  Future<List<AppRelease>> _readGitHubReleases({
+    required bool includePrerelease,
+  }) async {
     try {
       final data = await httpClient.readJsonList(
         'https://api.github.com/repos/$repository/releases?per_page=20',
       );
-      return data
-          .whereType<Map>()
-          .map((item) => AppRelease.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false);
+      final releases = <AppRelease>[];
+      var hasStable = false;
+      var hasPrerelease = false;
+      // GitHub returns releases newest first. Only the current candidate for
+      // each enabled channel needs its metadata sidecar fetched.
+      for (final item in data.whereType<Map>()) {
+        var release = AppRelease.fromJson(Map<String, dynamic>.from(item));
+        if (release.draft ||
+            (release.prerelease && !includePrerelease) ||
+            (release.prerelease ? hasPrerelease : hasStable)) {
+          continue;
+        }
+        if (release.prerelease) {
+          hasPrerelease = true;
+        } else {
+          hasStable = true;
+        }
+        ReleaseAsset? metadataAsset;
+        for (final asset in release.assets) {
+          if (asset.name == 'FlClashM-android-release-metadata.json') {
+            metadataAsset = asset;
+            break;
+          }
+        }
+        if (metadataAsset != null) {
+          try {
+            final metadata = await httpClient.readText(
+              metadataAsset.browserDownloadUrl,
+            );
+            if (metadata != null) {
+              release = applyAppReleaseMetadata(release, metadata);
+            }
+          } catch (error) {
+            commonPrint.log(
+              'Failed to read GitHub release metadata for '
+              '${release.tagName}: $error',
+            );
+          }
+        }
+        releases.add(release);
+        if (hasStable && (!includePrerelease || hasPrerelease)) {
+          break;
+        }
+      }
+      return releases;
     } catch (error) {
       commonPrint.log('Failed to read GitHub app releases: $error');
       return const [];

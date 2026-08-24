@@ -98,6 +98,20 @@ class AppUpdateManifest {
       }
       assets.add(asset);
     }
+    final codedAssets = assets.where((asset) => asset.versionCode != null);
+    if (codedAssets.isNotEmpty) {
+      if (codedAssets.length != assets.length) {
+        throw const FormatException('Incomplete APK version code metadata.');
+      }
+      final maximumAssetVersionCode = codedAssets
+          .map((asset) => asset.versionCode!)
+          .reduce((left, right) => left > right ? left : right);
+      if (maximumAssetVersionCode != versionCode) {
+        throw const FormatException(
+          'Release version code does not match APK version codes.',
+        );
+      }
+    }
 
     return AppUpdateManifest(
       channel: expectedChannel,
@@ -141,6 +155,7 @@ class AppUpdateManifestAsset {
     required this.size,
     required this.sha256,
     required this.urls,
+    this.versionCode,
   });
 
   factory AppUpdateManifestAsset.fromJson(Map<String, dynamic> json) {
@@ -148,6 +163,7 @@ class AppUpdateManifestAsset {
     final size = json['size'];
     final sha256 = _requiredString(json, 'sha256').toLowerCase();
     final rawUrls = json['urls'];
+    final versionCode = json['versionCode'];
     if (name.contains(RegExp(r'[/\\]'))) {
       throw const FormatException('Invalid app update asset name.');
     }
@@ -159,6 +175,9 @@ class AppUpdateManifestAsset {
     }
     if (rawUrls is! List || rawUrls.isEmpty) {
       throw const FormatException('Missing app update asset URLs.');
+    }
+    if (versionCode != null && (versionCode is! int || versionCode <= 0)) {
+      throw const FormatException('Invalid app update asset version code.');
     }
     final urls = rawUrls.map((value) {
       final url = value?.toString() ?? '';
@@ -178,6 +197,7 @@ class AppUpdateManifestAsset {
       size: size,
       sha256: sha256,
       urls: List.unmodifiable(urls),
+      versionCode: versionCode as int?,
     );
   }
 
@@ -185,12 +205,14 @@ class AppUpdateManifestAsset {
   final int size;
   final String sha256;
   final List<String> urls;
+  final int? versionCode;
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'size': size,
         'sha256': sha256,
         'urls': urls,
+        if (versionCode != null) 'versionCode': versionCode,
       };
 }
 

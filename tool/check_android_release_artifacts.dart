@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import 'android_apk_version_codes.dart';
 import 'release_contract.dart';
 
 Future<void> main(List<String> args) async {
@@ -54,6 +55,20 @@ Future<void> main(List<String> args) async {
   }
 
   final metadataFile = releaseFiles[contract.releaseMetadataFileName];
+  AndroidApkVersionCodes? apkVersionCodes;
+  final apkNames = contract.releaseArtifacts
+      .where((name) => name.endsWith('.apk'))
+      .toList(growable: false);
+  if (apkNames.every((name) => releaseFiles[name]?.existsSync() ?? false)) {
+    try {
+      apkVersionCodes = await readAndroidApkVersionCodes(
+        distPath: options.distPath,
+        apkNames: apkNames,
+      );
+    } catch (error) {
+      failures.add('$error');
+    }
+  }
   if (metadataFile != null && metadataFile.existsSync()) {
     final metadata = _readJsonFile(metadataFile, failures);
     if (metadata != null) {
@@ -63,6 +78,7 @@ Future<void> main(List<String> args) async {
         pubspecVersion: pubspecVersion,
         coreVersion: coreVersion,
         options: options,
+        apkVersionCodes: apkVersionCodes,
         failures: failures,
       );
     }
@@ -193,6 +209,7 @@ void _checkMetadataContract({
   required PubspecVersion pubspecVersion,
   required String coreVersion,
   required ArtifactCheckOptions options,
+  required AndroidApkVersionCodes? apkVersionCodes,
   required List<String> failures,
 }) {
   _expectJsonInt(
@@ -245,10 +262,38 @@ void _checkMetadataContract({
   );
   _expectJsonInt(
     metadata,
-    key: 'versionCode',
+    key: 'baseVersionCode',
     expected: pubspecVersion.versionCode,
     failures: failures,
   );
+  if (apkVersionCodes != null) {
+    _expectJsonInt(
+      metadata,
+      key: 'versionCode',
+      expected: apkVersionCodes.maximum,
+      failures: failures,
+    );
+    final rawCodes = metadata['apkVersionCodes'];
+    if (rawCodes is! Map) {
+      failures.add('Expected JSON object `apkVersionCodes`.');
+    } else {
+      if (rawCodes.length != apkVersionCodes.values.length) {
+        failures.add(
+          'Expected `${apkVersionCodes.values.length}` APK version codes, '
+          'got `${rawCodes.length}`.',
+        );
+      }
+      for (final entry in apkVersionCodes.values.entries) {
+        final actual = rawCodes[entry.key];
+        if (actual != entry.value) {
+          failures.add(
+            'Expected `apkVersionCodes.${entry.key}` to be '
+            '`${entry.value}`, got `${actual ?? '<missing>'}`.',
+          );
+        }
+      }
+    }
+  }
   _expectJsonString(
     metadata,
     key: 'coreVersion',

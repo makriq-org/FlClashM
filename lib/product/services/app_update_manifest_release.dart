@@ -20,5 +20,6 @@ extension AppUpdateManifestAssetReleaseMapping on AppUpdateManifestAsset {
         downloadUrls: urls,
         size: size,
         digest: 'sha256:$sha256',
+        versionCode: versionCode,
       );
 }
