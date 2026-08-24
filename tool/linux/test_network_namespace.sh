@@ -23,7 +23,7 @@ sudo unshare --mount --net --fork -- env \
   request() {
     printf "%s\\n" "$1" | setpriv --reuid="$CLIENT_UID" --regid="$CLIENT_GID" --clear-groups "$HELPER" --request
   }
-  ready() { grep -q '"state":"ready"'; }
+  ready() { grep -q "\"state\":\"ready\""; }
   request "{\"protocolVersion\":1,\"installIdentity\":\"app.flclashm.client\",\"operation\":\"tunOpen\",\"parameters\":{\"interface\":\"flclashm0\",\"mtu\":1500}}" | ready
   ip link show flclashm0 >/dev/null
   request "{\"protocolVersion\":1,\"installIdentity\":\"app.flclashm.client\",\"operation\":\"routeApply\",\"parameters\":{\"interface\":\"flclashm0\",\"routes\":[\"198.18.0.0/15\"]}}" | ready
