@@ -76,6 +76,31 @@ void main() {
     );
   });
 
+  test('allows a verified APK version code override for manifest repair',
+      () async {
+    final tempDir = Directory.systemTemp.createTempSync('update-manifest-code-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final dist = Directory('${tempDir.path}/dist')..createSync();
+    File('${dist.path}/FlClashM-android-arm64-v8a.apk')
+        .writeAsBytesSync([1, 2, 3]);
+    final notes = File('${tempDir.path}/release.md')
+      ..writeAsStringSync('- Проверка\n');
+    final options = ManifestOptions(
+      distPath: dist.path,
+      outputPath: '${dist.path}/stable.json',
+      releaseNotesPath: notes.path,
+      tagName: 'v0.10.5',
+      githubRepository: 'makriq-org/FlClashM',
+      channel: AppUpdateChannel.stable,
+      publishedAt: DateTime.utc(2026, 8, 24),
+      versionCode: 2026085802,
+    );
+
+    final manifest = await buildAppUpdateManifest(options);
+
+    expect(manifest.versionCode, 2026085802);
+  });
+
   test('rejects a signing key that does not match the embedded public key',
       () async {
     final signingSeed = List<int>.generate(32, (index) => index);

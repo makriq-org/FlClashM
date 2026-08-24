@@ -1,0 +1,148 @@
+name: repair update manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Current stable release tag"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  repair-stable-manifest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout current updater tooling
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Require repair secrets
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
+        run: |
+          if [ -z "$APP_UPDATE_SIGNING_KEY" ] || \
+             [ -z "$SOURCEFORGE_SSH_KEY" ] || \
+             [ -z "$SOURCEFORGE_USERNAME" ]; then
+            echo "Manifest repair requires update publishing secrets." >&2
+            exit 1
+          fi
+
+      - name: Download current stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          current_tag=$(curl -fsSL https://flclashm.sourceforge.io/update/stable.json | jq -r .release.tagName)
+          if [ "$TAG" != "$current_tag" ]; then
+            echo "Repair is limited to current stable tag $current_tag, got $TAG." >&2
+            exit 1
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > release.md
+          mkdir -p dist
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "FlClashM-android-*.apk" \
+            --dir dist
+
+      - name: Read maximum APK version code
+        id: apk
+        run: |
+          max_code=0
+          for apk in dist/*.apk; do
+            code=$(apkanalyzer manifest version-code "$apk")
+            if ! [[ "$code" =~ ^[0-9]+$ ]]; then
+              echo "Invalid version code from $apk: $code" >&2
+              exit 1
+            fi
+            if [ "$code" -gt "$max_code" ]; then
+              max_code=$code
+            fi
+          done
+          echo "Maximum APK version code: $max_code"
+          echo "version_code=$max_code" >> "$GITHUB_OUTPUT"
+
+      - name: Generate repaired signed manifest
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+          TAG: ${{ inputs.tag }}
+          VERSION_CODE: ${{ steps.apk.outputs.version_code }}
+        run: |
+          published_at=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          dart tool/write_app_update_manifest.dart \
+            --dist dist \
+            --out repaired/stable.json \
+            --release-notes release.md \
+            --tag "$TAG" \
+            --github-repository "$GITHUB_REPOSITORY" \
+            --channel stable \
+            --published-at "$published_at" \
+            --version-code "$VERSION_CODE"
+
+      - name: Configure verified SourceForge SSH access
+        env:
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SOURCEFORGE_SSH_KEY" > "$HOME/.ssh/sourceforge"
+          chmod 600 "$HOME/.ssh/sourceforge"
+          : > "$HOME/.ssh/known_hosts"
+          for host in web.sourceforge.net; do
+            host_key=$(ssh-keyscan -t ed25519 "$host" 2>/dev/null)
+            fingerprint=$(printf '%s\n' "$host_key" | ssh-keygen -lf - | awk '{print $2}' | sort -u)
+            if [ "$fingerprint" != "SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY" ]; then
+              echo "Unexpected SourceForge SSH host key for $host: $fingerprint" >&2
+              exit 1
+            fi
+            printf '%s\n' "$host_key" >> "$HOME/.ssh/known_hosts"
+          done
+
+      - name: Publish repaired stable manifest
+        env:
+          SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
+        run: |
+          ssh_options="-i $HOME/.ssh/sourceforge -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          mkdir -p publish/update
+          cp repaired/stable.json repaired/stable.json.sig publish/update/
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            publish/./update/stable.json.sig \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            publish/./update/stable.json \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+
+      - name: Verify published manifest
+        env:
+          TAG: ${{ inputs.tag }}
+          VERSION_CODE: ${{ steps.apk.outputs.version_code }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            published=$(curl -fsSL "https://flclashm.sourceforge.io/update/stable.json?attempt=$attempt")
+            if [ "$(jq -r .release.tagName <<<"$published")" = "$TAG" ] && \
+               [ "$(jq -r .release.versionCode <<<"$published")" = "$VERSION_CODE" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Published stable manifest did not converge." >&2
+          exit 1
