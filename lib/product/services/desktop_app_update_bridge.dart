@@ -3,6 +3,7 @@ import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 
 import '../../common/common.dart';
 import '../../state.dart';
@@ -101,6 +102,67 @@ class DeferredDesktopInstallHandoff implements DesktopInstallHandoff {
             'The verified AppImage replacement is ready; native replacement handoff is unavailable.',
         }),
       );
+}
+
+/// Replaces only the currently running AppImage.  A verified download remains
+/// on its original filesystem until this point; cross-device copy is rejected
+/// because it would lose the atomic rollback property of `rename(2)`.
+class LinuxAppImageInstallHandoff implements DesktopInstallHandoff {
+  LinuxAppImageInstallHandoff({
+    Map<String, String>? environment,
+    this.launch = Process.start,
+  }) : environment = environment ?? Platform.environment;
+
+  final Map<String, String> environment;
+  final Future<Process> Function(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment,
+    bool runInShell,
+    ProcessStartMode mode,
+  }) launch;
+
+  @override
+  Future<bool> installVerifiedPackage({
+    required String packagePath,
+    required DesktopUpdateTarget target,
+  }) async {
+    if (target.operatingSystem != DesktopUpdateOperatingSystem.linux ||
+        target.packageKind != DesktopPackageKind.appImage) {
+      throw ArgumentError.value(target, 'target', 'Expected a Linux AppImage');
+    }
+    final runningPath = environment['APPIMAGE']?.trim();
+    if (runningPath == null || runningPath.isEmpty) {
+      throw StateError('Only a running AppImage can replace itself.');
+    }
+    final pending = File(path.normalize(path.absolute(packagePath)));
+    final current = File(path.normalize(path.absolute(runningPath)));
+    if (!pending.path.endsWith('.AppImage') ||
+        !current.path.endsWith('.AppImage') ||
+        !pending.existsSync() ||
+        FileSystemEntity.typeSync(current.path, followLinks: false) !=
+            FileSystemEntityType.file) {
+      throw StateError('Invalid AppImage replacement path.');
+    }
+    try {
+      await pending.rename(current.path);
+    } on FileSystemException catch (error) {
+      throw StateError(
+        'The verified AppImage must be on the same filesystem as the running '
+        'application for an atomic replacement: ${error.message}',
+      );
+    }
+    await launch(
+      current.path,
+      const ['--relaunch-after-update'],
+      includeParentEnvironment: true,
+      runInShell: false,
+      mode: ProcessStartMode.detached,
+    );
+    return true;
+  }
 }
 
 class DesktopAppUpdatePackageSelector implements AppUpdatePackageSelector {

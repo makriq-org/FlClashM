@@ -132,6 +132,21 @@ if(NOT RUNTIME_VERIFY_RESULT EQUAL 0)
 endif()
 set(RUNTIME_ASSET_DIR
   "${FLCLASHM_RUNTIME_ASSETS}/runtimes/linux/${RUNTIME_ARCHITECTURE}")
+find_program(CARGO_EXECUTABLE cargo REQUIRED)
+set(FLCLASHM_HELPER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../services/helper")
+set(FLCLASHM_HELPER_BINARY "${FLCLASHM_HELPER_SOURCE_DIR}/target/release/helper")
+add_custom_command(
+  OUTPUT "${FLCLASHM_HELPER_BINARY}"
+  COMMAND "${CARGO_EXECUTABLE}" build --locked --release
+          --manifest-path "${FLCLASHM_HELPER_SOURCE_DIR}/Cargo.toml"
+  WORKING_DIRECTORY "${FLCLASHM_HELPER_SOURCE_DIR}"
+  DEPENDS
+    "${FLCLASHM_HELPER_SOURCE_DIR}/Cargo.toml"
+    "${FLCLASHM_HELPER_SOURCE_DIR}/Cargo.lock"
+    "${FLCLASHM_HELPER_SOURCE_DIR}/src/main.rs"
+    "${FLCLASHM_HELPER_SOURCE_DIR}/src/service/linux.rs"
+  COMMENT "Building FlClashM Linux privileged helper")
+add_custom_target(flclashm_linux_helper ALL DEPENDS "${FLCLASHM_HELPER_BINARY}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -140,6 +155,12 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
+# The same verified helper is shipped in the fixed runtime layout.  DEB/RPM
+# additionally place an admin-owned copy in /usr/libexec for the systemd unit.
+install(PROGRAMS "${FLCLASHM_HELPER_BINARY}"
+  DESTINATION "${INSTALL_RUNTIME_DIR}" RENAME "app.flclashm.client.helper"
   COMPONENT Runtime)
 
 # Desktop runtime artifacts use the ProductInstallLayout contract and are

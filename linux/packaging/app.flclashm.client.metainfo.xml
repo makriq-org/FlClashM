@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.flclashm.client</id>
+  <name>FlClashM</name>
+  <summary>mihomo client</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Other</project_license>
+  <launchable type="desktop-id">app.flclashm.client.desktop</launchable>
+  <provides><id>app.flclashm.client</id></provides>
+  <categories><category>Network</category></categories>
+</component>

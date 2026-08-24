@@ -1,0 +1,24 @@
+[Unit]
+Description=FlClashM privileged network helper
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/flclashm-helper
+ExecStopPost=/usr/libexec/flclashm-helper --rollback
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=flclashm
+RuntimeDirectoryMode=0750
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/flclashm /dev/net/tun
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

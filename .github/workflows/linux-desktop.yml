@@ -1,0 +1,36 @@
+name: Linux desktop
+
+on:
+  pull_request:
+    paths:
+      - 'linux/**'
+      - 'services/helper/**'
+      - 'tool/linux/**'
+      - 'lib/product/runtime/linux_desktop_helper.dart'
+      - 'lib/product/services/desktop_app_update_bridge.dart'
+  push:
+    branches: [feat/cross-platform]
+    paths:
+      - 'linux/**'
+      - 'services/helper/**'
+      - 'tool/linux/**'
+
+permissions:
+  contents: read
+
+jobs:
+  helper-network-namespace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - name: Build and test the Linux helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cargo iproute2 util-linux
+          cargo test --locked --manifest-path services/helper/Cargo.toml
+          cargo build --locked --release --manifest-path services/helper/Cargo.toml
+      - name: Exercise TUN route DNS rollback in a network namespace
+        run: tool/linux/test_network_namespace.sh services/helper/target/release/helper "$USER"
+      - name: Check package builder syntax
+        run: python3 -m py_compile tool/linux/package_linux.py

@@ -12,6 +12,7 @@ export 'desktop_runtime_node_bridge.dart';
 export 'desktop_system_dns.dart';
 export 'engine_adapter.dart';
 export 'engine_manager.dart';
+export 'linux_desktop_helper.dart';
 export 'mihomo_engine_adapter.dart';
 export 'naiveproxy_node_controller.dart';
 export 'naiveproxy_release.dart';

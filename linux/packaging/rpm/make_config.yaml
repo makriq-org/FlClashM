@@ -1,4 +1,5 @@
 display_name: FlClashM
+package_name: app.flclashm.client
 
 packager: makriq-org
 packagerEmail: 141617622+makriq@users.noreply.github.com

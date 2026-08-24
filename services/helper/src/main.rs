@@ -1,7 +1,7 @@
-#[cfg(not(all(feature = "windows-service", target_os = "windows")))]
-use tokio::runtime::Runtime;
-#[cfg(not(all(feature = "windows-service", target_os = "windows")))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 use crate::service::hub::run_service;
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+use tokio::runtime::Runtime;
 
 mod service;
 
@@ -10,7 +10,15 @@ pub fn main() -> windows_service::Result<()> {
     service::windows::main()
 }
 
-#[cfg(not(all(feature = "windows-service", target_os = "windows")))]
+#[cfg(target_os = "linux")]
+fn main() {
+    if let Err(error) = service::linux::main() {
+        eprintln!("flclashm Linux helper: {error:#}");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 fn main() {
     if let Ok(rt) = Runtime::new() {
         rt.block_on(async {
