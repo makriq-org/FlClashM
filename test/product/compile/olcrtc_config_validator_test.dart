@@ -51,6 +51,7 @@ void main() {
   });
 
   test('rejects missing and malformed DNS endpoints', () {
+    expect(() => validator.validate(config(dns: 'system')), returnsNormally);
     expect(
       () => validator.validate(config(dns: null)),
       throwsA(isA<FormatException>()),

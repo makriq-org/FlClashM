@@ -14,7 +14,9 @@ import 'built_in_proxy_types.dart';
 import 'byedpi_release.dart';
 import 'local_node_controller.dart';
 
-const _byedpiAutoFallbackStrategy = '--disorder 1 --auto=torst --tlsrec 1+s';
+const _byedpiAutoFallbackStrategy =
+    '-n google.com -Qr -f-204 -s1:5+sm -a1 -As -d1 -s3+s -s5+s '
+    '-q7 -a1 -As -o2 -f-43 -a1 -As -r5 -Mh -s1:5+s -s3:7+sm -a1';
 const _defaultByedpiStrategyTestSni = 'google.com';
 // Strategy probes must not resolve their test host through the system resolver:
 // while mihomo is up its fake-ip DNS answers with a placeholder address that the

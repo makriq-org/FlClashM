@@ -1,6 +1,7 @@
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/compile/built_in_proxy_compiler.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
+import 'package:flclashx/product/runtime/olcrtc_release.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -46,6 +47,23 @@ void main() {
       expect(plan.activation!.wakeUrls.single.host, 'probe.example');
     }
     expect(always.activation!.mode, NodeActivationMode.always);
+  });
+
+  test('compiles system DNS as a platform-rendered config value', () {
+    final plan = compiler
+        .compile(
+          rawConfig: {
+            'proxies': [
+              {..._olcrtc, 'activation': 'always', 'dns-server': 'system'},
+            ],
+          },
+          patchConfig: const ClashConfig(),
+        )
+        .nodes
+        .single;
+
+    expect(plan.metadata['depends-on-system-dns'], 'true');
+    expect(plan.files.values.single, contains(olcRtcSystemDnsPlaceholder));
   });
 
   test('parses the complete activation map and serializes it', () {
