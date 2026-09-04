@@ -541,6 +541,11 @@
       "reason": "Windows protocol registration сведён к актуальным схемам форка: clash и flclashm."
     },
     {
+      "path": "lib/core_version.dart",
+      "bucket": "budget",
+      "reason": "Версия встроенного mihomo обновляется вместе с зависимостью ядра форка."
+    },
+    {
       "path": "lib/controller.dart",
       "bucket": "budget",
       "reason": "Существующее действие экспорта остаётся тонким делегатом безопасного product ZIP-builder."
