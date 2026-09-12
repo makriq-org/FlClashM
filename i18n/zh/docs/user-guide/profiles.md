@@ -156,12 +156,18 @@ proxy-groups:
 | `encryption-key` | 256 位加密密钥 —— **恰好 64 个十六进制字符** |
 | `transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |
 | `dns-server` | 必填 DNS 服务器，格式 `地址:端口` |
-| `transport-options` | 当前传输的参数；`datachannel` 禁止此段 |
+| `transport-options` | 当前传输的可选参数；`datachannel` 禁止此段 |
 
 参数取决于传输：`vp8channel` 接受 `fps` 和 `batch-size`；`seichannel`
 还接受 `fragment-size` 和字符串时长 `ack-timeout`；`videochannel` 接受
-`codec`、`width`、`height`、`fps`、`bitrate`、`fragment-size`、
+`codec`、`width`、`height`、`fps`、`fragment-size`、
 `qr-recovery`、`tile-module` 和 `tile-rs`。
+
+所有传输参数均可省略。默认值为 `fps: 30` 和 `batch-size: 64`；
+`seichannel` 还使用 `fragment-size: 900` 和 `ack-timeout: 2s`；
+`videochannel` 使用 `codec: qrcode`、`1920x1080` 和
+`qr-recovery: low`。`tile` 编解码器固定使用 `1080x1080`。旧的
+`bitrate` 参数仍会被接受以兼容现有配置，但新版 OlcRTC 会忽略它。
 
 ```yaml
 transport: seichannel
@@ -173,9 +179,13 @@ transport-options:
 ```
 
 > [!TIP]
-> 对 `wbstream` 推荐 `vp8channel`：该提供者的访客模式不授予发布数据通道的权限。`transport-options.fps` 和 `transport-options.batch-size` 是必填项。
+> 推荐组合是 `jitsi` + `datachannel`。`wbstream` 没有管理员令牌时，以及使用 `telemost` 时，请选择 `vp8channel`。
 
 公共配置不再支持多 `profiles`、`failover` 和 `video.hw`。多个 OlcRTC 方案应写成独立节点并放入 Mihomo 组。`provider: none` 必须同时提供 `engine`、`engine-url` 和 `engine-token`，其他 provider 禁止这些字段。
+
+新版使用 OLC2 加密 wire 格式，无法连接旧版 OlcRTC 服务器。请同时更新
+客户端和服务器；`seichannel` 与 `videochannel` 两端还必须使用 OLVC 5
+帧格式。
 
 > [!WARNING]
 > 必填字段的错误在配置校验阶段即可发现。若 OlcRTC 进程稍后退出，客户端会显示**退出码和输出的最后几行**，而不是干等端口超时。

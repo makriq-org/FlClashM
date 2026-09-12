@@ -129,9 +129,9 @@ class OlcRtcConfigValidator {
       );
     }
     final payload = traffic['max-payload-size'];
-    if (payload is int && payload != 0 && payload < 49) {
+    if (payload is int && payload != 0 && payload < 53) {
       throw const FormatException(
-        'olcrtc `traffic.max-payload-size` must be zero or at least 49.',
+        'olcrtc `traffic.max-payload-size` must be zero or at least 53.',
       );
     }
   }
@@ -140,24 +140,6 @@ class OlcRtcConfigValidator {
     String transport,
     Map<String, dynamic> options,
   ) {
-    final required = switch (transport) {
-      'vp8channel' => const {'fps', 'batch-size'},
-      'seichannel' => const {
-          'fps',
-          'batch-size',
-          'fragment-size',
-          'ack-timeout',
-        },
-      'videochannel' => const {'width', 'height', 'fps', 'bitrate'},
-      _ => const <String>{},
-    };
-    final missing = required.where((key) => !options.containsKey(key));
-    if (missing.isNotEmpty) {
-      throw FormatException(
-        'olcrtc transport `$transport` requires: ${missing.join(', ')}.',
-      );
-    }
-
     final allowed = switch (transport) {
       'vp8channel' => const {'fps', 'batch-size'},
       'seichannel' => const {
@@ -186,7 +168,25 @@ class OlcRtcConfigValidator {
         '${irrelevant.join(', ')}.',
       );
     }
+    final fps = options['fps'];
+    if (fps is int && (fps < 1 || fps > 240)) {
+      throw const FormatException(
+        'olcrtc `transport-options.fps` must be between 1 and 240.',
+      );
+    }
+    final batchSize = options['batch-size'];
+    if (batchSize is int && batchSize < 1) {
+      throw const FormatException(
+        'olcrtc `transport-options.batch-size` must be positive.',
+      );
+    }
     if (transport == 'seichannel') {
+      final fragmentSize = options['fragment-size'];
+      if (fragmentSize is int && (fragmentSize < 1 || fragmentSize > 60000)) {
+        throw const FormatException(
+          'olcrtc `transport-options.fragment-size` must be between 1 and 60000 for `seichannel`.',
+        );
+      }
       parsePublicConfigDuration(
         options['ack-timeout'],
         path: 'olcrtc.transport-options.ack-timeout',
@@ -196,11 +196,22 @@ class OlcRtcConfigValidator {
     }
     if (transport != 'videochannel') return;
 
-    _requiredString(
-      options['bitrate'],
-      'olcrtc.transport-options.bitrate',
-    );
     final codec = _string(options['codec']) ?? 'qrcode';
+    final width = options['width'] ?? (codec == 'tile' ? 1080 : 1920);
+    final height = options['height'] ?? 1080;
+    if (width is int && (width < 16 || width > 8192) ||
+        height is int && (height < 16 || height > 8192)) {
+      throw const FormatException(
+        'olcrtc video dimensions must be between 16 and 8192.',
+      );
+    }
+    final qrRecovery = _string(options['qr-recovery']);
+    if (qrRecovery != null &&
+        !const {'low', 'medium', 'high', 'highest'}.contains(qrRecovery)) {
+      throw const FormatException(
+        'olcrtc `transport-options.qr-recovery` must be low, medium, high, or highest.',
+      );
+    }
     if (codec == 'tile') {
       if (options.containsKey('fragment-size') ||
           options.containsKey('qr-recovery')) {
@@ -208,8 +219,6 @@ class OlcRtcConfigValidator {
           'olcrtc tile codec does not support QR transport options.',
         );
       }
-      final width = options['width'] ?? 1080;
-      final height = options['height'] ?? 1080;
       if (width != 1080 || height != 1080) {
         throw const FormatException(
           'olcrtc tile codec requires width and height of 1080.',
@@ -219,6 +228,18 @@ class OlcRtcConfigValidator {
         options.containsKey('tile-rs')) {
       throw const FormatException(
         'olcrtc qrcode codec does not support tile transport options.',
+      );
+    }
+    final tileModule = options['tile-module'];
+    if (tileModule is int && (tileModule < 0 || tileModule > 270)) {
+      throw const FormatException(
+        'olcrtc `transport-options.tile-module` must be between 0 and 270.',
+      );
+    }
+    final tileRs = options['tile-rs'];
+    if (tileRs is int && (tileRs < 0 || tileRs > 200)) {
+      throw const FormatException(
+        'olcrtc `transport-options.tile-rs` must be between 0 and 200.',
       );
     }
   }

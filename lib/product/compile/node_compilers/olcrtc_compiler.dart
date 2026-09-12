@@ -34,7 +34,6 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
 
     final native = <String, dynamic>{
       'mode': 'cnc',
-      'data': 'data',
       'auth': {
         'provider': provider,
         if (providerToken != null) 'token': providerToken,
@@ -54,6 +53,9 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
         'engine': {'name': engine, 'url': engineUrl, 'token': engineToken},
     };
     if (transport == 'videochannel') {
+      // Upstream keeps bitrate only as an ignored migration field. Accept it
+      // in existing profiles for compatibility, but do not emit the no-op.
+      options.remove('bitrate');
       native['video'] = {
         ..._olcRtcNativeOptions(options, const {
           'fragment-size': 'qr_size',
@@ -61,9 +63,6 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
           'tile-module': 'tile_module',
           'tile-rs': 'tile_rs',
         }),
-        // The pinned runtime requires this field. Hardware selection is not a
-        // public capability on Android, so the compiler owns the safe value.
-        'hw': 'none',
       };
     } else if (transport == 'vp8channel') {
       native['vp8'] = _olcRtcNativeOptions(options, const {
@@ -141,8 +140,9 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
   Map<String, dynamic> _olcRtcNativeOptions(
     Map<String, dynamic> options,
     Map<String, String> aliases,
-  ) => {
-    for (final entry in options.entries)
-      aliases[entry.key] ?? entry.key: entry.value,
-  };
+  ) =>
+      {
+        for (final entry in options.entries)
+          aliases[entry.key] ?? entry.key: entry.value,
+      };
 }

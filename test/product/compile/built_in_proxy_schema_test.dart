@@ -168,5 +168,27 @@ void main() {
     expect(fields['olcrtc.liveness.interval']!.defaultValue.value, '10s');
     expect(fields['olcrtc.liveness.timeout']!.defaultValue.value, '15s');
     expect(fields['olcrtc.liveness.failures']!.defaultValue.value, 4);
+    expect(
+      fields['olcrtc.transport-options.codec']!.defaultValue.value,
+      'qrcode',
+    );
+    expect(fields['olcrtc.transport-options.fps']!.defaultValue.value, 30);
+    expect(
+      fields['olcrtc.transport-options.batch-size']!.defaultValue.value,
+      64,
+    );
+    expect(
+      fields['olcrtc.transport-options.ack-timeout']!.defaultValue.value,
+      '2s',
+    );
+    expect(
+      fields['olcrtc.transport-options.qr-recovery']!.allowedValues,
+      {'low', 'medium', 'high', 'highest'},
+    );
+    expect(fields['olcrtc.transport-options.width']!.range.minimum, 16);
+    expect(fields['olcrtc.transport-options.width']!.range.maximum, 8192);
+    expect(fields['olcrtc.transport-options.fps']!.range.maximum, 240);
+    expect(fields['olcrtc.transport-options.tile-module']!.range.maximum, 270);
+    expect(fields['olcrtc.transport-options.tile-rs']!.range.maximum, 200);
   });
 }
