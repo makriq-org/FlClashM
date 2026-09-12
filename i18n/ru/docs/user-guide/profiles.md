@@ -157,12 +157,19 @@ proxy-groups:
 | `encryption-key` | 256-битный ключ — **ровно 64 hex-символа** |
 | `transport` | `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
 | `dns-server` | Обязательный DNS-сервер в формате `адрес:порт` или `system` |
-| `transport-options` | Параметры выбранного транспорта; для `datachannel` секция запрещена |
+| `transport-options` | Необязательные параметры выбранного транспорта; для `datachannel` секция запрещена |
 
 Параметры зависят от транспорта: `vp8channel` принимает `fps` и `batch-size`;
 `seichannel` — ещё `fragment-size` и строковый `ack-timeout`; `videochannel` —
-`codec`, `width`, `height`, `fps`, `bitrate`, `fragment-size`, `qr-recovery`,
+`codec`, `width`, `height`, `fps`, `fragment-size`, `qr-recovery`,
 `tile-module` и `tile-rs`.
+
+Все параметры транспорта необязательны. По умолчанию используются `fps: 30`,
+`batch-size: 64`, для `seichannel` — `fragment-size: 900` и
+`ack-timeout: 2s`, для `videochannel` — `codec: qrcode`, разрешение
+`1920x1080` и `qr-recovery: low`. Для `codec: tile` разрешение всегда
+`1080x1080`. Старый параметр `bitrate` пока принимается для совместимости
+профилей, но новый OlcRTC его игнорирует.
 
 ```yaml
 transport: seichannel
@@ -174,11 +181,15 @@ transport-options:
 ```
 
 > [!TIP]
-> Для `wbstream` рекомендуется `vp8channel`. Для него обязательны `transport-options.fps` и `transport-options.batch-size`.
+> Рекомендуемая комбинация — `jitsi` + `datachannel`. Для `wbstream` без токена модератора и для `telemost` используйте `vp8channel`.
 
 `profiles`, `failover` и `video.hw` удалены из публичного контракта. Несколько вариантов OlcRTC задаются отдельными узлами и объединяются обычной группой Mihomo. Для `provider: none` обязательны `engine`, `engine-url` и `engine-token`; с другими провайдерами эти поля запрещены.
 
 `dns-server: system` подставляет DNS текущей физической сети Android при запуске и при её смене. Встроенный OlcRTC принимает один адрес, поэтому используется первый DNS, который Android отдал в порядке приоритета: IPv4 становится `адрес:53`, IPv6 — `[адрес]:53`. Если сеть не объявила DNS, OlcRTC не запускается до следующего обновления сети; работающий узел перезапускается только когда выбранный адрес действительно изменился.
+
+Новая версия использует защищённый wire-формат OLC2 и несовместима со старыми
+серверами OlcRTC. Обновите сервер и клиент одновременно; для `seichannel` и
+`videochannel` обе стороны также должны использовать новый формат кадров OLVC 5.
 
 > [!WARNING]
 > Ошибки обязательных полей видны уже при проверке профиля. Если процесс OlcRTC упадёт позже, клиент покажет **код завершения и последние строки вывода** вместо ожидания тайм-аута порта.

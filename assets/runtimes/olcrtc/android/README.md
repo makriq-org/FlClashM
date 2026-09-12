@@ -9,6 +9,6 @@ That contract also pins Go and Android NDK versions used for reproducible builds
 The same file pins the SHA-256 digest of every ABI binary. Setup and tests
 reject stale or modified binaries even when `release.txt` still matches.
 
-OlcRTC embeds its default name dictionaries. The generated config keeps the
-required `data: data` value; missing external dictionary overrides are accepted,
-so no separate runtime data directory is packaged.
+OlcRTC embeds its default name dictionaries. The generated config leaves the
+optional `data` override unset, so no separate runtime data directory is
+packaged.

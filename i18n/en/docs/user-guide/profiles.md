@@ -156,13 +156,20 @@ proxy-groups:
 | `room` | Video-call room identifier |
 | `encryption-key` | 256-bit encryption key — **exactly 64 hex characters** |
 | `transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
-| `dns-server` | Mandatory DNS server as `address:port` |
-| `transport-options` | Options of the selected transport; forbidden for `datachannel` |
+| `dns-server` | Mandatory DNS server as `address:port` or `system` |
+| `transport-options` | Optional settings for the selected transport; forbidden for `datachannel` |
 
 Options depend on the transport: `vp8channel` accepts `fps` and `batch-size`;
 `seichannel` also accepts `fragment-size` and a duration-string `ack-timeout`;
-`videochannel` accepts `codec`, `width`, `height`, `fps`, `bitrate`,
+`videochannel` accepts `codec`, `width`, `height`, `fps`,
 `fragment-size`, `qr-recovery`, `tile-module`, and `tile-rs`.
+
+All transport settings are optional. Defaults are `fps: 30` and
+`batch-size: 64`; `seichannel` also defaults to `fragment-size: 900` and
+`ack-timeout: 2s`; `videochannel` defaults to `codec: qrcode`, `1920x1080`,
+and `qr-recovery: low`. The `tile` codec always uses `1080x1080`. The old
+`bitrate` setting is still accepted for profile compatibility, but current
+OlcRTC ignores it.
 
 ```yaml
 transport: seichannel
@@ -174,9 +181,17 @@ transport-options:
 ```
 
 > [!TIP]
-> For `wbstream`, `vp8channel` is recommended: this provider's guest mode doesn't grant the right to publish a data channel. `transport-options.fps` and `transport-options.batch-size` are required.
+> The recommended combination is `jitsi` + `datachannel`. Use `vp8channel` for `wbstream` without a moderator token and for `telemost`.
 
 `profiles`, `failover`, and `video.hw` are removed from the public contract. Define separate OlcRTC nodes and combine them with a Mihomo group. `provider: none` requires `engine`, `engine-url`, and `engine-token`; other providers forbid them.
+
+`dns-server: system` follows the current physical Android network. FlClashM
+passes the first DNS address reported by Android and restarts only active,
+dependent OlcRTC nodes when that address changes.
+
+This release uses the OLC2 encrypted wire format and cannot connect to older
+OlcRTC servers. Update client and server together; `seichannel` and
+`videochannel` also require OLVC frame format version 5 on both sides.
 
 > [!WARNING]
 > Errors in required fields show up already during profile validation. If the OlcRTC process dies later, the client shows the **exit code and the last lines of output** instead of waiting for a port timeout.

@@ -50,6 +50,21 @@ void main() {
     }
   });
 
+  test('accepts upstream defaults for every media transport', () {
+    for (final transport in const [
+      'vp8channel',
+      'seichannel',
+      'videochannel',
+    ]) {
+      final value = config(transport: transport)..remove('transport-options');
+      expect(
+        () => validator.validate(value),
+        returnsNormally,
+        reason: transport,
+      );
+    }
+  });
+
   test('rejects missing and malformed DNS endpoints', () {
     expect(() => validator.validate(config(dns: 'system')), returnsNormally);
     expect(
@@ -122,6 +137,26 @@ void main() {
           },
       ),
       throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('matches upstream transport and encrypted payload bounds', () {
+    for (final value in [
+      config()..['transport-options'] = {'fps': 241},
+      config(transport: 'seichannel')
+        ..['transport-options'] = {'fragment-size': 60001},
+      config(transport: 'videochannel')..['transport-options'] = {'width': 15},
+      config(transport: 'videochannel')
+        ..['transport-options'] = {'qr-recovery': 'quartile'},
+      config()..['traffic'] = {'max-payload-size': 52},
+    ]) {
+      expect(() => validator.validate(value), throwsA(isA<FormatException>()));
+    }
+    expect(
+      () => validator.validate(
+        config()..['traffic'] = {'max-payload-size': 53},
+      ),
+      returnsNormally,
     );
   });
 }

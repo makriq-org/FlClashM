@@ -56,15 +56,16 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - Before startup FlClashM validates provider/direct-engine rules, transport-specific options, the key, and DNS
 - The Android service keeps a limited tail of the process output; if OlcRTC exits before opening the SOCKS5 port, the reason is returned to Dart immediately and shown to the user
 - Runs as a separate process via the stable `config.yaml` contract; the mobile library is not used
-- The sources are pinned to commit `ad5758513335cda54362a64621c29e9d9fe759b4`
-- `data: data` is required for the CLI, but a separate directory layout isn't needed: the name dictionaries are embedded in the executable, and missing external files are treated as an optional override
+- The sources are pinned to commit `189d16c093c4f721376afb5eaa0213d132a11242`
+- The generated config omits `data`: name dictionaries are embedded, while a non-empty value now explicitly selects an override directory
+- The runtime uses OLC2 and OLVC 5 formats that are incompatible with older builds, so client and server must be updated together
 - The SHA-256 of each binary is pinned next to the commit; asset preparation and tests reject outdated or altered files even with a matching stamp
 
 <details>
 <summary>🔧 Updating and rolling back olcrtc</summary>
 
-- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.26.4 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
-- **Rollback:** restore the previous commit `5dd6822d807e3352fe4452a3b071e043d958a020` and rebuild the artifacts with the same command.
+- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.26.5 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
+- **Rollback:** restore the previous commit `b33680871cdb94a7523829f8073de3eafa5b3ece` and rebuild the artifacts with the same command; roll the server back at the same time because the wire format changed.
 
 </details>
 

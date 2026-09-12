@@ -157,13 +157,20 @@ proxy-groups:
 | `encryption-key` | کلید رمزنگاری ۲۵۶بیتی — **دقیقاً ۶۴ کاراکتر هگز** |
 | `transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |
 | `dns-server` | سرور DNS الزامی به‌شکل `آدرس:پورت` |
-| `transport-options` | گزینه‌های transport انتخاب‌شده؛ برای `datachannel` ممنوع است |
+| `transport-options` | گزینه‌های اختیاری transport انتخاب‌شده؛ برای `datachannel` ممنوع است |
 
 گزینه‌ها به transport وابسته‌اند: `vp8channel` فیلدهای `fps` و `batch-size` را
 می‌پذیرد؛ `seichannel` علاوه بر آن‌ها `fragment-size` و `ack-timeout` با مقدار
 duration رشته‌ای را می‌پذیرد؛ `videochannel` فیلدهای `codec`، `width`، `height`،
-`fps`، `bitrate`، `fragment-size`، `qr-recovery`، `tile-module` و `tile-rs` را
+`fps`، `fragment-size`، `qr-recovery`، `tile-module` و `tile-rs` را
 می‌پذیرد.
+
+همهٔ گزینه‌های transport اختیاری‌اند. مقدارهای پیش‌فرض `fps: 30` و
+`batch-size: 64` هستند؛ `seichannel` همچنین از `fragment-size: 900` و
+`ack-timeout: 2s` استفاده می‌کند و `videochannel` با `codec: qrcode`، وضوح
+`1920x1080` و `qr-recovery: low` شروع می‌شود. کدک `tile` همیشه وضوح
+`1080x1080` دارد. گزینهٔ قدیمی `bitrate` برای سازگاری پروفایل پذیرفته می‌شود،
+اما OlcRTC جدید آن را نادیده می‌گیرد.
 
 ```yaml
 transport: seichannel
@@ -175,9 +182,13 @@ transport-options:
 ```
 
 > [!TIP]
-> برای `wbstream`، `vp8channel` توصیه می‌شود: حالت مهمانِ این ارائه‌دهنده اجازهٔ انتشار کانال داده را نمی‌دهد. فیلدهای `transport-options.fps` و `transport-options.batch-size` اجباری‌اند.
+> ترکیب پیشنهادی `jitsi` + `datachannel` است. برای `wbstream` بدون توکن مدیر و برای `telemost` از `vp8channel` استفاده کنید.
 
 `profiles`، `failover` و `video.hw` از قرارداد عمومی حذف شده‌اند. چند حالت OlcRTC را به‌صورت نودهای جدا و در یک گروه Mihomo تعریف کنید. `provider: none` به `engine`، `engine-url` و `engine-token` نیاز دارد و providerهای دیگر این فیلدها را نمی‌پذیرند.
+
+نسخهٔ جدید از قالب رمزنگاری‌شدهٔ OLC2 استفاده می‌کند و با سرورهای قدیمی
+OlcRTC سازگار نیست. کلاینت و سرور را هم‌زمان به‌روز کنید؛ `seichannel` و
+`videochannel` نیز در هر دو سمت به قالب فریم OLVC نسخهٔ ۵ نیاز دارند.
 
 > [!WARNING]
 > خطای فیلدهای الزامی همان هنگام اعتبارسنجی پروفایل دیده می‌شود. اگر فرایند OlcRTC بعداً از کار بیفتد، کلاینت **کد خروج و آخرین خطوط خروجی** را نشان می‌دهد نه اینکه منتظر timeout پورت بماند.

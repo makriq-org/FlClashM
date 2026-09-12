@@ -56,15 +56,16 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 启动前 FlClashM 校验 provider/engine 规则、传输专属参数、密钥和 DNS
 - Android 服务保留有限的进程输出尾部；若 OlcRTC 在打开 SOCKS5 端口前退出，原因会立即回传给 Dart 并显示给用户
 - 通过稳定的 `config.yaml` 契约以独立进程运行；不使用移动库
-- 源码固定在提交 `ad5758513335cda54362a64621c29e9d9fe759b4`
-- CLI 需要 `data: data`，但无需单独的目录布局：名称字典已嵌入可执行文件，缺失的外部文件视为可选覆盖
+- 源码固定在提交 `189d16c093c4f721376afb5eaa0213d132a11242`
+- 生成的配置不再写入 `data`：名称字典已嵌入可执行文件，非空值现在明确表示外部覆盖目录
+- runtime 使用与旧版本不兼容的 OLC2 和 OLVC 5 格式，因此客户端与服务器必须同时更新
 - 每个二进制的 SHA-256 固定在提交旁；资源准备与测试即使在戳记匹配时也会拒绝过时或被改动的文件
 
 <details>
 <summary>🔧 olcrtc 的更新与回滚</summary>
 
-- **更新：** 更换固定提交，用固定的 Go 1.26.4 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
-- **回滚：** 恢复旧提交 `5dd6822d807e3352fe4452a3b071e043d958a020`，并用同一命令重建产物。
+- **更新：** 更换固定提交，用固定的 Go 1.26.5 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
+- **回滚：** 恢复旧提交 `b33680871cdb94a7523829f8073de3eafa5b3ece`，并用同一命令重建产物；wire 格式已变化，服务器也必须同时回滚。
 
 </details>
 
