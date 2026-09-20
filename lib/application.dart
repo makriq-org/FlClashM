@@ -89,6 +89,13 @@ class ApplicationState extends ConsumerState<Application> {
               }
               unawaited(globalState.appController.updateLocalIp());
               globalState.appController.addCheckIpNumDebounce();
+              unawaited(
+                globalState.engineManager.notifyNetworkChanged().catchError(
+                      (Object error) => commonPrint.log(
+                        'ByeDPI network switch failed: $error',
+                      ),
+                    ),
+              );
             },
             child: child,
           ),

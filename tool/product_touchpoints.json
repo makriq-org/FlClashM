@@ -3,7 +3,7 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization.",
+      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization and forwards physical-network changes to the product runtime.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]

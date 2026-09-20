@@ -100,6 +100,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - **类型：** `byedpi`
 - **`manual` 模式：** 接受 `strategy` 字符串
 - **`auto` 模式：** 遍历 ByeByeDPI 策略并缓存可用的一条
+- 缓存按物理网络指纹隔离；网络切换会取消旧的后台选择，原子应用该网络的缓存或启动新选择，并刷新冷启动清单
 - 无 `mode` 时，有 `strategy` 选手动，无 `strategy` 选自动
 - `strategies` 可按顺序组合 `builtin:byebyeedpi`、内联策略和公网 HTTPS 列表；省略时使用内置列表
 - 支持 `{sni}` 替换

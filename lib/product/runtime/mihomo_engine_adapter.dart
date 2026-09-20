@@ -249,6 +249,10 @@ class MihomoEngineAdapter implements EngineAdapter {
       builtInProxySupervisor.notifyProxySelected(groupName, proxyName);
 
   @override
+  Future<void> notifyNetworkChanged() =>
+      builtInProxySupervisor.notifyNetworkChanged();
+
+  @override
   Future<bool> start({String? notificationTitle}) async {
     if (notificationTitle != null && notificationTitle.isNotEmpty) {
       try {

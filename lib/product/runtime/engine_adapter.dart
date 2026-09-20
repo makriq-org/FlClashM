@@ -20,6 +20,8 @@ abstract interface class EngineAdapter {
 
   Future<void> notifyProxySelected(String groupName, String proxyName);
 
+  Future<void> notifyNetworkChanged();
+
   Future<void> stop();
 
   Future<DateTime?> readStartTime();
