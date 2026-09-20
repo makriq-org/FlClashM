@@ -131,9 +131,14 @@
       "reason": "Instrumentation E2E фиксирует форковую цепочку runtime-процессов, VPN-службы и headless cold start."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PhysicalNetworkScope.kt",
+      "bucket": "budget",
+      "reason": "Android platform layer формирует обезличенный fingerprint физической сети для сетевого кэша ByeDPI."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
-      "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки со stack trace через общий безопасный журнал."
+      "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки и отдаёт product runtime обезличенный fingerprint физической сети."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/services/FlClashMTileService.kt",
@@ -443,7 +448,7 @@
     {
       "path": "lib/application.dart",
       "bucket": "budget",
-      "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
+      "reason": "Base-оболочка сведена к тонким вызовам product-сервисов и передаёт runtime событие смены физической сети."
     },
     {
       "path": "lib/clash/interface.dart",

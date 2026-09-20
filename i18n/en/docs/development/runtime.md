@@ -100,6 +100,7 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - **Type:** `byedpi`
 - **`manual` mode:** takes a `strategy` string
 - **`auto` mode:** cycles through ByeByeDPI strategies and caches the working one
+- The cache is split by physical-network fingerprint; a network change cancels stale background selection, atomically applies that network's cache or starts a new selection, and refreshes the cold-start manifest
 - Without `mode`, `strategy` selects manual mode and its absence selects automatic mode
 - `strategies` combines `builtin:byebyeedpi`, inline strategies, and public HTTPS lists; without it the built-in list is used
 - `{sni}` substitution is supported

@@ -47,6 +47,8 @@ abstract interface class BuiltInProxySupervisor {
 
   Future<void> notifyProxySelected(String groupName, String proxyName);
 
+  Future<void> notifyNetworkChanged();
+
   Future<void> pauseAutoActivation();
 
   Future<void> stop();
@@ -196,6 +198,53 @@ class DefaultBuiltInProxySupervisor implements BuiltInProxySupervisor {
         final generation = _planGeneration;
         byedpi.startBackgroundSelection(
           _filter(_currentPlans, BuiltInProxyType.byedpi),
+          onSelectionChanged: () => _activateBackgroundSelection(generation),
+        );
+        _startWatchdog(generation);
+      });
+
+  @override
+  Future<void> notifyNetworkChanged() => _serializeRuntimeMutation(() async {
+        final autoPlans = _filter(_currentPlans, BuiltInProxyType.byedpi)
+            .where(byedpi.isAutoPlan)
+            .toList(growable: false);
+        if (autoPlans.isEmpty) return;
+
+        final previousScope = byedpi.currentNetworkScope;
+        final nextScope = await byedpi.resolveCurrentNetworkScope();
+        if (nextScope == previousScope) return;
+
+        _planGeneration++;
+        _preemptPendingWakes();
+        await _cancelWatchdog();
+        await byedpi.cancelBackgroundSelection();
+        byedpi.activeNetworkScope = nextScope;
+        final generation = _planGeneration;
+        final nodes = await _buildRuntimeNodes(_currentPlans);
+        final state = await runtime.applyPlan(nodes);
+        if (!state.isReady) {
+          byedpi.activeNetworkScope = previousScope;
+          final rollbackNodes = await _buildRuntimeNodes(_currentPlans);
+          final rollback = await runtime.applyPlan(rollbackNodes);
+          if (rollback.isReady) {
+            await _saveRuntimeNodes(rollbackNodes);
+          }
+          _startWatchdog(generation);
+          throw StateError(
+            state.message.isEmpty
+                ? 'ByeDPI could not switch to the new physical network.'
+                : state.message,
+          );
+        }
+
+        try {
+          await _saveRuntimeNodes(nodes);
+        } catch (_) {
+          // The live runtime has already switched successfully. A normal
+          // persistence point will refresh the cold-start manifest later.
+        }
+        byedpi.startBackgroundSelection(
+          autoPlans,
           onSelectionChanged: () => _activateBackgroundSelection(generation),
         );
         _startWatchdog(generation);

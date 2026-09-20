@@ -100,8 +100,8 @@ void main() {
 
       final first = (await controller.buildRuntimeNodes([plan])).single;
       final second = (await controller.buildRuntimeNodes([plan])).single;
-      final cache =
-          File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
+      final cache = File(
+          '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json');
 
       expect(first['arguments'], second['arguments']);
       expect(first['arguments'], containsAllInOrder(_defaultFallbackArgs));
@@ -137,9 +137,52 @@ void main() {
         isTrue,
       );
       final cache = json.decode(await File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       ).readAsString()) as Map;
       expect(cache['verified'], isTrue);
+    });
+
+    test('keeps independent strategies for physical networks', () async {
+      var networkScope = 'network-wifi-a';
+      controller = ByedpiNodeController(
+        binary: _FakeBinaryBridge(layout),
+        runtime: runtime,
+        allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+        resolveNetworkScope: () async => networkScope,
+        now: () => DateTime.utc(2026, 1, 1),
+        monotonicNow: () => monotonicTime,
+      );
+      final plan = _plan(mode: 'auto', args: '');
+      runtime.batchResults.addAll([0, 1]);
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+
+      final wifi = (await controller.buildRuntimeNodes([plan])).single;
+      networkScope = 'network-cellular-a';
+      controller.activeNetworkScope =
+          await controller.resolveCurrentNetworkScope();
+      final cellular = (await controller.buildRuntimeNodes([plan])).single;
+      networkScope = 'network-wifi-a';
+      controller.activeNetworkScope =
+          await controller.resolveCurrentNetworkScope();
+      final wifiAgain = (await controller.buildRuntimeNodes([plan])).single;
+
+      expect(wifi['arguments'], containsAllInOrder(['--fake', '1']));
+      expect(cellular['arguments'], containsAllInOrder(['--disorder', '1']));
+      expect(wifiAgain['arguments'], wifi['arguments']);
+      expect(runtime.batchCalls, hasLength(2));
+      expect(
+        File('${layout.nodesDirectoryPath}/node-a/strategy-cache-network-wifi-a.json')
+            .existsSync(),
+        isTrue,
+      );
+      expect(
+        File('${layout.nodesDirectoryPath}/node-a/strategy-cache-network-cellular-a.json')
+            .existsSync(),
+        isTrue,
+      );
     });
 
     test('expands builtin markers in place and keeps first occurrence',
@@ -246,7 +289,7 @@ void main() {
         everyElement(5),
       );
       final cache = json.decode(await File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       ).readAsString()) as Map;
       expect(cache['verified'], isFalse);
       expect(cache['nextIndex'], 4);
@@ -297,7 +340,7 @@ void main() {
 
       expect(runtime.batchCalls, hasLength(2));
       final cache = json.decode(await File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       ).readAsString()) as Map;
       expect(cache['verified'], isTrue);
       expect(cache['strategy'], '--strategy 4');
@@ -339,7 +382,7 @@ void main() {
       await activated.future.timeout(const Duration(seconds: 1));
 
       final cache = json.decode(await File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       ).readAsString()) as Map;
       expect(cache['verified'], isFalse);
       expect((cache['strategy'] as String).split(' '), _defaultFallbackArgs);
@@ -378,7 +421,7 @@ void main() {
       );
       await controller.buildRuntimeNodes([plan]);
       final cache = File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       );
       final provisional = json.decode(await cache.readAsString()) as Map;
       runtime.batchResults.add(0);
@@ -432,7 +475,7 @@ void main() {
       );
       await controller.buildRuntimeNodes([plan]);
       final cache = File(
-        '${layout.nodesDirectoryPath}/node-a/strategy-cache.json',
+        '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json',
       );
       final provisional = json.decode(await cache.readAsString()) as Map;
       runtime
@@ -465,8 +508,8 @@ void main() {
         isEmpty,
       );
       await controller.buildRuntimeNodes([plan]);
-      final cache =
-          File('${layout.nodesDirectoryPath}/node-a/strategy-cache.json');
+      final cache = File(
+          '${layout.nodesDirectoryPath}/node-a/strategy-cache-network-unknown.json');
       final legacyCache = json.decode(await cache.readAsString()) as Map
         ..remove('selectionRevision');
       await cache.writeAsString(json.encode(legacyCache), flush: true);

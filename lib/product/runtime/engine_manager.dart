@@ -216,6 +216,11 @@ class EngineManager {
     await _adapter.notifyProxySelected(groupName, proxyName);
   }
 
+  Future<void> notifyNetworkChanged() async {
+    if (!isStarted) return;
+    await _adapter.notifyNetworkChanged();
+  }
+
   Future<void> stop() async {
     Object? error;
     StackTrace? stackTrace;
