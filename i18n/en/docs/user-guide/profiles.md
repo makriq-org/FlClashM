@@ -65,7 +65,7 @@ ByeDPI defeats DPI by "corrupting" packets so the filter can't recognize the con
 
 ### 🤖 Automatic strategy selection
 
-The client cycles through strategies from the ByeByeDPI list, finds a working one, and caches it — on a cold start it's picked up immediately.
+The client cycles through strategies from the ByeByeDPI list, finds a working one, and caches it separately for each physical network, so returning to a known network reuses its result immediately. The identifier is derived from transport type, DNS, and route without requesting SSID or carrier access; at most 16 recent networks are retained.
 
 ```yaml
 proxies:

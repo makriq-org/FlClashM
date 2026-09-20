@@ -29,6 +29,10 @@ const _byedpiAutoSelectionRevision = 2;
 final _byedpiMonotonicClock = Stopwatch()..start();
 
 typedef ByedpiProbePortAllocator = Future<int> Function();
+typedef ByedpiNetworkScopeResolver = Future<String> Function();
+
+const _defaultByedpiNetworkScope = 'network-unknown';
+const _byedpiNetworkCacheLimit = 16;
 
 @immutable
 class ByedpiSharedInstallLayout extends LocalNodeSharedInstallLayout {
@@ -294,10 +298,13 @@ class ByedpiNodeController
     ByedpiBinaryBridge binary = const DefaultByedpiBinaryBridge(),
     super.runtime = const AndroidRuntimeNodeBridge(),
     this.allocateProbePort = _allocateLoopbackPort,
+    ByedpiNetworkScopeResolver? resolveNetworkScope,
     DateTime Function()? now,
     Duration Function()? monotonicNow,
   })  : now = now ?? DateTime.now,
         monotonicNow = monotonicNow ?? _readMonotonicClock,
+        resolveNetworkScope =
+            resolveNetworkScope ?? _resolvePlatformNetworkScope,
         super(
           typeLabel: 'byedpi',
           configArtifactName: 'config.json',
@@ -307,7 +314,9 @@ class ByedpiNodeController
   final DateTime Function() now;
   final Duration Function() monotonicNow;
   final ByedpiProbePortAllocator allocateProbePort;
+  final ByedpiNetworkScopeResolver resolveNetworkScope;
   final Map<String, _ByedpiPendingSelection> _pendingSelections = {};
+  String? _networkScope;
   int _backgroundGeneration = 0;
   Future<void>? _backgroundWorker;
 
@@ -350,6 +359,7 @@ class ByedpiNodeController
     final config = await _readNodeConfig(plan, layout);
     var strategy = config.args;
     if (config.isAuto) {
+      await _ensureNetworkScope();
       strategy = await _resolveAutoStrategy(
         plan: plan,
         sharedLayout: sharedLayout,
@@ -362,6 +372,37 @@ class ByedpiNodeController
         'arguments': _buildArguments(strategy, config),
       },
     );
+  }
+
+  String get currentNetworkScope => _networkScope ?? _defaultByedpiNetworkScope;
+
+  bool isAutoPlan(BuiltInProxyNodePlan plan) {
+    try {
+      final value = json.decode(readConfigArtifact(plan));
+      return value is Map && value['mode'] == 'auto';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String> resolveCurrentNetworkScope() => _readNetworkScope();
+
+  set activeNetworkScope(String scope) {
+    _networkScope = scope;
+  }
+
+  Future<void> _ensureNetworkScope() async {
+    _networkScope ??= await _readNetworkScope();
+  }
+
+  Future<String> _readNetworkScope() async {
+    try {
+      final value = (await resolveNetworkScope()).trim().toLowerCase();
+      if (RegExp(r'^[a-z0-9-]{1,80}$').hasMatch(value)) return value;
+    } catch (error) {
+      commonPrint.log('byedpi could not resolve the physical network: $error');
+    }
+    return _defaultByedpiNetworkScope;
   }
 
   Future<String> _resolveAutoStrategy({
@@ -872,13 +913,16 @@ class ByedpiNodeController
   }
 
   Future<_ByedpiStrategyCache?> _readCache(ByedpiNodeLayout layout) async {
-    final file = File(layout.cachePath);
+    final file = File(_scopedCachePath(layout));
+    if (!file.existsSync()) {
+      await _migrateLegacyCache(layout, file);
+    }
     if (!file.existsSync()) return null;
     try {
       return _ByedpiStrategyCache.fromJson(await file.readAsString());
     } catch (error) {
       commonPrint.log(
-        'byedpi ignored an unreadable strategy cache at ${layout.cachePath}: '
+        'byedpi ignored an unreadable strategy cache at ${file.path}: '
         '$error',
       );
       return null;
@@ -889,10 +933,56 @@ class ByedpiNodeController
     ByedpiNodeLayout layout,
     _ByedpiStrategyCache cache,
   ) async {
-    final target = File(layout.cachePath);
-    final temporary = File('${layout.cachePath}.tmp');
+    final target = File(_scopedCachePath(layout));
+    final temporary = File('${target.path}.tmp');
     await temporary.writeAsString(json.encode(cache.toJson()), flush: true);
     await temporary.rename(target.path);
+    await _pruneNetworkCaches(layout, keep: target.path);
+  }
+
+  String _scopedCachePath(ByedpiNodeLayout layout) => path.join(
+        layout.workingDirectoryPath,
+        'strategy-cache-$currentNetworkScope.json',
+      );
+
+  Future<void> _migrateLegacyCache(
+    ByedpiNodeLayout layout,
+    File scoped,
+  ) async {
+    final legacy = File(layout.cachePath);
+    if (!legacy.existsSync()) return;
+    try {
+      await scoped.writeAsBytes(await legacy.readAsBytes(), flush: true);
+      await legacy.delete();
+    } catch (error) {
+      commonPrint.log(
+        'byedpi could not migrate the legacy strategy cache: $error',
+      );
+    }
+  }
+
+  Future<void> _pruneNetworkCaches(
+    ByedpiNodeLayout layout, {
+    required String keep,
+  }) async {
+    final directory = Directory(layout.workingDirectoryPath);
+    if (!directory.existsSync()) return;
+    final files = directory
+        .listSync()
+        .whereType<File>()
+        .where(
+          (file) =>
+              path.basename(file.path).startsWith('strategy-cache-') &&
+              file.path.endsWith('.json'),
+        )
+        .toList()
+      ..sort(
+        (left, right) =>
+            right.lastModifiedSync().compareTo(left.lastModifiedSync()),
+      );
+    for (final file in files.skip(_byedpiNetworkCacheLimit)) {
+      if (file.path != keep) await file.delete();
+    }
   }
 
   Future<void> _restoreCache(
@@ -1031,4 +1121,9 @@ class ByedpiNodeController
   }
 
   static Duration _readMonotonicClock() => _byedpiMonotonicClock.elapsed;
+
+  static Future<String> _resolvePlatformNetworkScope() async {
+    if (!Platform.isAndroid) return _defaultByedpiNetworkScope;
+    return const AndroidRuntimeNodeBridge().readNetworkScope();
+  }
 }

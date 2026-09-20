@@ -31,6 +31,7 @@ void main() {
             'optionalCheckActive': false,
             'nodes': const [],
           }),
+        'getPhysicalNetworkScope' => 'network-abc123',
         'stopRuntimeNodePlan' => true,
         'probeRuntimeNode' => true,
         'probeRuntimeNodes' => 2,
@@ -108,5 +109,12 @@ void main() {
     final request = json.decode(arguments['request'] as String) as Map;
     expect(request['nodes'], hasLength(3));
     expect(request['concurrency'], 2);
+  });
+
+  test('reads the anonymized physical-network scope', () async {
+    const bridge = AndroidRuntimeNodeBridge();
+
+    expect(await bridge.readNetworkScope(), 'network-abc123');
+    expect(calls.single.method, 'getPhysicalNetworkScope');
   });
 }
