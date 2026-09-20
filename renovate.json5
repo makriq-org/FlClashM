@@ -1,0 +1,124 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':dependencyDashboard',
+  ],
+
+  timezone: 'Europe/Moscow',
+  schedule: ['before 06:00 on Monday'],
+  dependencyDashboard: true,
+  dependencyDashboardApproval: true,
+  dependencyDashboardTitle: 'Обновления зависимостей',
+  dependencyDashboardHeader: 'Renovate проверяет зависимости раз в неделю. Отметьте обновление в списке, чтобы разрешить создание PR. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
+
+  automerge: false,
+  prConcurrentLimit: 2,
+  prHourlyLimit: 1,
+  minimumReleaseAge: '7 days',
+  labels: ['task'],
+
+  commitMessagePrefix: 'chore:',
+  commitMessageAction: 'обновлён пакет',
+  commitMessageTopic: '{{depName}}',
+  commitMessageExtra: 'до {{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}',
+  commitMessageLowerCase: 'never',
+
+  prHeader: '## Зачем\n\nПоддержать зависимости проекта в актуальном состоянии.',
+  prBodyTemplate: '{{{header}}}\n\n## Что сделано\n\n{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}\n\n## Как проверено\n\n- автоматические проверки запускаются в CI\n\n## Влияние на пользователя\n\nCHANGELOG не требуется · наличие BREAKING проверяется вручную\n\n{{{controls}}}{{{footer}}}',
+  prBodyHeadingDefinitions: {
+    Package: 'Зависимость',
+    Type: 'Тип',
+    Update: 'Обновление',
+    Change: 'Изменение',
+    Pending: 'Ожидание',
+  },
+  prFooter: 'PR создан Renovate.',
+
+  nix: {
+    enabled: true,
+  },
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['before 06:00 on the first day of the month'],
+  },
+
+  packageRules: [
+    {
+      description: 'Встроенные runtime-компоненты обновляются только вручную',
+      matchManagers: ['custom.regex'],
+      dependencyDashboardApproval: true,
+      minimumReleaseAge: '0 days',
+      prBodyNotes: [
+        '> [!IMPORTANT]\n> Этот PR только начинает подготовку runtime-обновления. Перед слиянием нужно пересобрать бинарники, обновить SHA-256 и проверить все поддерживаемые Android ABI.',
+      ],
+    },
+  ],
+
+  customManagers: [
+    {
+      customType: 'regex',
+      description: 'Отслеживать HEAD основной ветки StormDNS',
+      managerFilePatterns: ['/^lib/product/runtime/stormdns_release\\.dart$/'],
+      matchStrings: [
+        "const stormDnsPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
+      ],
+      currentValueTemplate: 'main',
+      depNameTemplate: 'StormDNS runtime',
+      packageNameTemplate: 'https://github.com/nullroute1970/StormDNS',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+    {
+      customType: 'regex',
+      description: 'Отслеживать HEAD основной ветки OlcRTC',
+      managerFilePatterns: ['/^lib/product/runtime/olcrtc_release\\.dart$/'],
+      matchStrings: [
+        "const olcRtcPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
+      ],
+      currentValueTemplate: 'master',
+      depNameTemplate: 'OlcRTC runtime',
+      packageNameTemplate: 'https://github.com/openlibrecommunity/olcrtc',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+    {
+      customType: 'regex',
+      description: 'Отслеживать HEAD основной ветки ByeDPI',
+      managerFilePatterns: ['/^lib/product/runtime/byedpi_release\\.dart$/'],
+      matchStrings: [
+        "const byedpiPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
+      ],
+      currentValueTemplate: 'main',
+      depNameTemplate: 'ByeDPI runtime',
+      packageNameTemplate: 'https://github.com/hufrea/byedpi',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+    {
+      customType: 'regex',
+      description: 'Отслеживать HEAD списка стратегий ByeByeDPI',
+      managerFilePatterns: ['/^lib/product/runtime/byedpi_release\\.dart$/'],
+      matchStrings: [
+        "const byedpiStrategyPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
+      ],
+      currentValueTemplate: 'master',
+      depNameTemplate: 'ByeByeDPI strategies',
+      packageNameTemplate: 'https://github.com/romanvht/ByeByeDPI',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+    {
+      customType: 'regex',
+      description: 'Отслеживать релизы naiveproxy',
+      managerFilePatterns: ['/^lib/product/runtime/naiveproxy_release\\.dart$/'],
+      matchStrings: [
+        "const naiveProxyPinnedReleaseTag = '(?<currentValue>[^']+)';",
+      ],
+      depNameTemplate: 'naiveproxy runtime',
+      packageNameTemplate: 'klzgrad/naiveproxy',
+      datasourceTemplate: 'github-releases',
+      versioningTemplate: 'loose',
+    },
+  ],
+}
