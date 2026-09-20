@@ -7,8 +7,17 @@ import android.net.NetworkCapabilities
 import java.security.MessageDigest
 
 internal object PhysicalNetworkScope {
+    private val physicalTransports = intArrayOf(
+        NetworkCapabilities.TRANSPORT_WIFI,
+        NetworkCapabilities.TRANSPORT_CELLULAR,
+        NetworkCapabilities.TRANSPORT_ETHERNET,
+        NetworkCapabilities.TRANSPORT_BLUETOOTH,
+        NetworkCapabilities.TRANSPORT_USB,
+    )
+
     fun read(context: Context): String {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeCapabilities = manager.activeNetwork?.let(manager::getNetworkCapabilities)
         val ordered = buildList {
             manager.activeNetwork?.let(::add)
             manager.allNetworks.forEach { if (!contains(it)) add(it) }
@@ -21,11 +30,24 @@ internal object PhysicalNetworkScope {
             val links = manager.getLinkProperties(network) ?: return@mapNotNull null
             capabilities to links
         }
-        val selected = candidates.firstOrNull {
+        // A VPN is the active network, but its capabilities also expose the
+        // physical transport currently carrying it. Prefer that transport over
+        // the unspecified order of allNetworks.
+        val preferred = activeCapabilities?.let { active ->
+            candidates.filter { sharesPhysicalTransport(active, it.first) }
+        }.orEmpty()
+        val selected = preferred.firstOrNull {
+            it.first.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } ?: preferred.firstOrNull() ?: candidates.firstOrNull {
             it.first.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         } ?: candidates.firstOrNull() ?: return "network-offline"
         return fingerprint(selected.first, selected.second)
     }
+
+    private fun sharesPhysicalTransport(
+        left: NetworkCapabilities,
+        right: NetworkCapabilities,
+    ): Boolean = physicalTransports.any { left.hasTransport(it) && right.hasTransport(it) }
 
     private fun fingerprint(
         capabilities: NetworkCapabilities,
