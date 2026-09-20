@@ -43,6 +43,9 @@ List<String> findUnpinnedActions(
   final failures = <String>[];
   final usesPattern = RegExp(r'''^\s*(?:-\s*)?uses:\s*["']?([^\s"'#]+)''');
   final fullCommitSha = RegExp(r'^[0-9a-fA-F]{40}$');
+  final versionComment = RegExp(
+    r'#\s*v?\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?\s*$',
+  );
   final lines = workflow.split('\n');
 
   for (var index = 0; index < lines.length; index++) {
@@ -59,6 +62,14 @@ List<String> findUnpinnedActions(
       failures.add(
         '$sourcePath:${index + 1} uses `$action`; pin remote actions to a '
         'full 40-character commit SHA.',
+      );
+      continue;
+    }
+
+    if (!versionComment.hasMatch(lines[index])) {
+      failures.add(
+        '$sourcePath:${index + 1} uses `$action`; add its release tag as a '
+        'version comment so Renovate can update the pinned SHA.',
       );
     }
   }
