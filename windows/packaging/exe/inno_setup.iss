@@ -7,6 +7,7 @@ AppPublisherURL={{PUBLISHER_URL}}
 AppSupportURL={{PUBLISHER_URL}}
 AppUpdatesURL={{PUBLISHER_URL}}
 DefaultDirName={{INSTALL_DIR_NAME}}
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputDir=.
 OutputBaseFilename={{OUTPUT_BASE_FILENAME}}
@@ -19,8 +20,10 @@ ArchitecturesAllowed={{ARCH}}
 ArchitecturesInstallIn64BitMode={{ARCH}}
 UninstallDisplayIcon={uninstallexe}
 ChangesAssociations=yes
+CloseApplications=no
+RestartApplications=no
 ; Update mode settings
-UsePreviousAppDir=yes
+UsePreviousAppDir=no
 UsePreviousGroup=yes
 UsePreviousTasks=yes
 
@@ -32,34 +35,234 @@ const
 var
   IsUpgrade: Boolean;
   PreviousVersion: String;
+  PreviousBundleBackup: String;
+  FreshInstallDirectoryCreated: Boolean;
+  InstallStarted: Boolean;
+  InstallSucceeded: Boolean;
+
+const
+  HelperServiceName = 'app.flclashm.client.helper';
+  HelperRelativePath = 'runtimes\windows\x86_64\app.flclashm.client.helper.exe';
+
+function IsFromApp(): Boolean;
+begin
+  Result := ExpandConstant('{param:FROMAPP|0}') = '1';
+end;
+
+procedure WriteInstallResult(const Status: String);
+begin
+  { HKLM is administrator-owned but readable by the interactive user. A
+    caller-controlled ProgramData junction must not redirect an elevated file
+    write to an arbitrary destination. }
+  if not RegWriteStringValue(HKEY_LOCAL_MACHINE_64, 'Software\FlClashM',
+    'InstallResult', '{{APP_VERSION}}:' + Status + ':' +
+    GetDateTimeString('yyyymmddhhnnss', '-', ':')) then
+    Log('Не удалось записать результат установки FlClashM в реестр.');
+end;
 
 procedure SHChangeNotify(wEventId: Integer; uFlags: Integer; dwItem1: Integer; dwItem2: Integer); external 'SHChangeNotify@shell32.dll stdcall';
 
-procedure KillProcesses;
+function IsProcessRunning(const ProcessName: String): Boolean;
 var
-  Processes: TArrayOfString;
-  i: Integer;
   ResultCode: Integer;
 begin
-  Processes := ['FlClashM.exe'];
+  { Check all interactive sessions. The installer must never terminate another
+    user's GUI before it has restored that user's proxy and tunnel. }
+  Result := not Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "if (Get-Process -Name ' + ProcessName + ' -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0);
+end;
 
-  // First try graceful shutdown
-  for i := 0 to GetArrayLength(Processes)-1 do
+function WaitForGracefulExit(): Boolean;
+var
+  Attempt: Integer;
+begin
+  for Attempt := 1 to 30 do
   begin
-    Exec('taskkill', '/im ' + Processes[i], '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if not IsProcessRunning('FlClashM') and
+       not IsProcessRunning('proxy_watchdog') then
+    begin
+      Result := True;
+      exit;
+    end;
+    Sleep(1000);
   end;
-  
-  // Wait for processes to terminate gracefully
-  Sleep(1000);
+  Result := False;
+end;
 
-  // Force kill any remaining processes
-  for i := 0 to GetArrayLength(Processes)-1 do
+procedure CopyBundle(const Source, Destination: String);
+var
+  ResultCode: Integer;
+begin
+  ForceDirectories(Destination);
+  if not Exec(
+    ExpandConstant('{sys}\robocopy.exe'),
+    '"' + Source + '" "' + Destination + '" /MIR /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode >= 8) then
+    RaiseException('Не удалось сохранить или восстановить предыдущую установку. Код: ' + IntToStr(ResultCode));
+end;
+
+procedure EnforceProtectedInstallAcl;
+var
+  ResultCode: Integer;
+begin
+  { Reset explicit ACLs on the fixed Program Files directory and children.
+    They inherit Program Files permissions: users can read/run, while SYSTEM
+    and Administrators can write. A previous user-writable ACL must not turn
+    the helper's trusted executable path into a privilege boundary bypass. }
+  if not Exec(ExpandConstant('{sys}\icacls.exe'),
+    '"' + ExpandConstant('{app}') + '" /reset /T', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось защитить права каталога FlClashM. Код: ' + IntToStr(ResultCode));
+end;
+
+procedure StopAndRemoveHelperService;
+var
+  ResultCode: Integer;
+  Attempt: Integer;
+begin
+  { The GUI has already completed network teardown. Service stop is still
+    required to release its binary and any privileged child. }
+  Exec(ExpandConstant('{sys}\sc.exe'), 'query "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if ResultCode = 1060 then
+    exit;
+  if ResultCode <> 0 then
+    RaiseException('Не удалось проверить службу FlClashM. Код: ' + IntToStr(ResultCode));
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if (ResultCode <> 0) and (ResultCode <> 1062) then
+    RaiseException('Не удалось остановить службу FlClashM. Код: ' + IntToStr(ResultCode));
+  if not Exec(ExpandConstant('{sys}\sc.exe'), 'delete "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось удалить службу FlClashM. Код: ' + IntToStr(ResultCode));
+  for Attempt := 1 to 15 do
   begin
-    Exec('taskkill', '/f /im ' + Processes[i], '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
+    Exec(ExpandConstant('{sys}\sc.exe'), 'query "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode = 1060 then
+      exit;
   end;
-  
-  // Give time for cleanup
-  Sleep(1000);
+  RaiseException('Служба FlClashM не завершилась за 15 секунд.');
+end;
+
+procedure InstallAndStartHelperService;
+var
+  ResultCode: Integer;
+  ServiceBinary: String;
+  Attempt: Integer;
+begin
+  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  if not FileExists(ExpandConstant('{app}\FlClashM.exe')) or
+     not FileExists(ExpandConstant('{app}\runtimes\windows\x86_64\mihomo.exe')) or
+     not FileExists(ServiceBinary) then
+    RaiseException('В установленном пакете отсутствуют обязательные файлы FlClashM.');
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось установить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+  if not Exec(
+    ExpandConstant('{sys}\sc.exe'),
+    'start "' + HelperServiceName + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось запустить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+  for Attempt := 1 to 10 do
+  begin
+    if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -NonInteractive -Command "if ((Get-Service -Name ''' + HelperServiceName + ''' -ErrorAction SilentlyContinue).Status -eq ''Running'') { exit 0 } else { exit 1 }"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+      exit;
+    Sleep(1000);
+  end;
+  RaiseException('Служба FlClashM не перешла в рабочее состояние.');
+end;
+
+procedure RestorePreviousHelperService;
+begin
+  if (PreviousBundleBackup = '') or not DirExists(PreviousBundleBackup) then
+    exit;
+  if FileExists(ExpandConstant('{app}\' + HelperRelativePath)) then
+    InstallAndStartHelperService;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  { The helper authenticates the installed GUI path. Never let /DIR or a
+    previous per-user installation move that trusted executable into a
+    user-writable directory. }
+  if CompareText(ExpandFileName(ExpandConstant('{app}')),
+    ExpandFileName(ExpandConstant('{autopf}\FlClashM'))) <> 0 then
+  begin
+    Result := 'FlClashM должен быть установлен в защищённый каталог Program Files. Удалите старую установку в другом каталоге и повторите установку.';
+    exit;
+  end;
+  if IsUpgrade and not FileExists(ExpandConstant('{app}\FlClashM.exe')) then
+  begin
+    Result := 'Предыдущая установка FlClashM находится в другом каталоге. Сначала удалите её, затем установите новую версию в Program Files.';
+    exit;
+  end;
+  if not WaitForGracefulExit() then
+    Result := 'FlClashM ещё работает или восстанавливает системный прокси. Закройте приложение через меню значка в области уведомлений и повторите установку.';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := not IsProcessRunning('FlClashM') and
+            not IsProcessRunning('proxy_watchdog');
+  if not Result then
+    MsgBox('Сначала закройте FlClashM через меню значка в области уведомлений, затем повторите удаление.', mbError, MB_OK);
+end;
+
+procedure RelaunchAppAsOriginalUser();
+var
+  ResultCode: Integer;
+begin
+  if not FileExists(ExpandConstant('{app}\FlClashM.exe')) then
+    exit;
+  try
+    if not ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
+      SW_SHOWNORMAL, ewNoWait, ResultCode) then
+      Log('Не удалось повторно открыть FlClashM. Код: ' + IntToStr(ResultCode));
+  except
+    Log('Не удалось повторно открыть FlClashM с правами исходного пользователя.');
+  end;
+end;
+
+procedure DeinitializeSetup();
+begin
+  if InstallSucceeded then
+    exit;
+  if not InstallStarted then
+  begin
+    { An app-initiated setup may fail before touching files (for example,
+      another user's GUI is still open). Restore the old GUI in that case. }
+    if IsFromApp() then
+    begin
+      WriteInstallResult('failed');
+      RelaunchAppAsOriginalUser();
+    end;
+    exit;
+  end;
+  try
+    StopAndRemoveHelperService;
+    if PreviousBundleBackup <> '' then
+    begin
+      CopyBundle(PreviousBundleBackup, ExpandConstant('{app}'));
+      RestorePreviousHelperService;
+    end;
+    if FreshInstallDirectoryCreated and
+       (PreviousBundleBackup = '') and
+       DirExists(ExpandConstant('{app}')) and
+       not DelTree(ExpandConstant('{app}'), True, True, True) then
+      RaiseException('Не удалось удалить неполную новую установку FlClashM.');
+    WriteInstallResult('failed');
+    { The old GUI must read the failure marker after it has been written. }
+    if (PreviousBundleBackup <> '') and IsFromApp() then
+      RelaunchAppAsOriginalUser();
+  except
+    WriteInstallResult('rollback-failed');
+    MsgBox('Обновление прервалось, и восстановить прежнюю версию автоматически не удалось. Повторите установку предыдущего пакета.', mbError, MB_OK);
+  end;
 end;
 
 function IsAppInstalled(): Boolean;
@@ -97,10 +300,35 @@ begin
   if IsUpgrade then
     PreviousVersion := GetInstalledVersion();
   
-  // Kill all processes
-  KillProcesses;
-  
   Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    FreshInstallDirectoryCreated := not IsUpgrade and
+      not DirExists(ExpandConstant('{app}'));
+    if DirExists(ExpandConstant('{app}')) then
+    begin
+      PreviousBundleBackup := ExpandConstant('{tmp}\flclashm-previous-bundle');
+      CopyBundle(ExpandConstant('{app}'), PreviousBundleBackup);
+    end;
+    InstallStarted := True;
+    StopAndRemoveHelperService;
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    EnforceProtectedInstallAcl;
+    InstallAndStartHelperService;
+  end
+  else if CurStep = ssDone then
+  begin
+    InstallSucceeded := True;
+    WriteInstallResult('success');
+    if IsFromApp() then
+      RelaunchAppAsOriginalUser();
+  end;
 end;
 
 procedure InitializeWizard();
@@ -147,11 +375,12 @@ begin
   case CurUninstallStep of
     usUninstall:
     begin
-      KillProcesses;
+      StopAndRemoveHelperService;
     end;
 
     usPostUninstall:
     begin
+      RegDeleteValue(HKEY_LOCAL_MACHINE_64, 'Software\FlClashM', 'InstallResult');
       if DirExists(ExpandConstant('{userappdata}\app.flclashm.client')) then
       begin
         if MsgBox('Удалить пользовательские данные программы?', mbConfirmation, MB_YESNO) = IDYES then
@@ -203,4 +432,4 @@ Source: "{{SOURCE_DIR}}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 Name: "{autoprograms}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"
 Name: "{autodesktop}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"; Tasks: desktopicon
 [Run]
-Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: {% if PRIVILEGES_REQUIRED == 'admin' %}runascurrentuser{% endif %} nowait postinstall skipifsilent
+Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: runasoriginaluser nowait postinstall skipifsilent; Check: not IsFromApp

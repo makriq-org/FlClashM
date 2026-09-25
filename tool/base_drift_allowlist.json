@@ -471,6 +471,11 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/core_update.dart",
+      "bucket": "budget",
+      "reason": "Windows больше не применяет отдельный pending-бинарник ядра: mihomo обновляется только проверенным полным пакетом приложения вместе со службой."
+    },
+    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Base-фасад логгера делегирует ограниченную очередь, ротацию и pre-write redaction product-слою."
@@ -596,6 +601,11 @@
       "reason": "Дифф сведен к выбору мобильного навбара через селектор режима; страница уже остается тонким потребителем."
     },
     {
+      "path": "lib/manager/proxy_manager.dart",
+      "bucket": "budget",
+      "reason": "Windows-переключение системного прокси сериализовано и учитывает владение настройкой; запуск без владения не меняет прокси пользователя."
+    },
+    {
       "path": "lib/plugins/app.dart",
       "bucket": "budget",
       "reason": "Нативный канал вызовов для списка установленных пакетов относится к нативному bridge-слою форка."
@@ -638,7 +648,7 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
+      "reason": "Живой about-экран делегирует ручную проверку обновлений в ProductServices; Windows скрывает старое отдельное обновление ядра, поскольку ядро обновляется вместе с приложением."
     },
     {
       "path": "lib/views/access.dart",

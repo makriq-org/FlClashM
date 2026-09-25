@@ -1,8 +1,12 @@
 import 'dart:async';
-import 'dart:ffi' show Abi;
+import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
+import 'package:win32/win32.dart' as win32;
+import 'package:win32_registry/win32_registry.dart';
 
 import '../../common/common.dart';
 import '../../state.dart';
@@ -37,19 +41,19 @@ class DesktopUpdateEnvironment {
       'windows' => DesktopUpdateOperatingSystem.windows,
       'macos' => DesktopUpdateOperatingSystem.macos,
       _ => throw UnsupportedError(
-          'Desktop updates do not support `${Platform.operatingSystem}`.',
-        ),
+        'Desktop updates do not support `${Platform.operatingSystem}`.',
+      ),
     };
-    final resolvedArchitecture = architecture ??
+    final resolvedArchitecture =
+        architecture ??
         switch (Abi.current()) {
           Abi.linuxX64 ||
           Abi.windowsX64 ||
-          Abi.macosX64 =>
-            DesktopUpdateArchitecture.x64,
+          Abi.macosX64 => DesktopUpdateArchitecture.x64,
           Abi.macosArm64 => DesktopUpdateArchitecture.arm64,
           _ => throw UnsupportedError(
-              'Desktop updates do not support `${Abi.current()}`.',
-            ),
+            'Desktop updates do not support `${Abi.current()}`.',
+          ),
         };
     final packageKind = switch (operatingSystem) {
       DesktopUpdateOperatingSystem.linux => DesktopPackageKind.appImage,
@@ -65,7 +69,7 @@ class DesktopUpdateEnvironment {
       ),
       packageManagedLinux:
           operatingSystem == DesktopUpdateOperatingSystem.linux &&
-              packageManagedLinux,
+          packageManagedLinux,
     );
   }
 
@@ -90,17 +94,124 @@ class DeferredDesktopInstallHandoff implements DesktopInstallHandoff {
   Future<bool> installVerifiedPackage({
     required String packagePath,
     required DesktopUpdateTarget target,
-  }) =>
-      Future.error(
-        UnsupportedError(switch (target.packageKind) {
-          DesktopPackageKind.windowsInstaller =>
-            'The verified Windows installer is ready; native installer handoff is unavailable.',
-          DesktopPackageKind.macosAppArchive =>
-            'The verified macOS app replacement is ready; native replacement handoff is unavailable.',
-          DesktopPackageKind.appImage =>
-            'The verified AppImage replacement is ready; native replacement handoff is unavailable.',
-        }),
+  }) => Future.error(
+    UnsupportedError(switch (target.packageKind) {
+      DesktopPackageKind.windowsInstaller =>
+        'The verified Windows installer is ready; native installer handoff is unavailable.',
+      DesktopPackageKind.macosAppArchive =>
+        'The verified macOS app replacement is ready; native replacement handoff is unavailable.',
+      DesktopPackageKind.appImage =>
+        'The verified AppImage replacement is ready; native replacement handoff is unavailable.',
+    }),
+  );
+}
+
+/// Starts a verified Inno Setup package without a shell.  UAC belongs to the
+/// installer because it replaces the service and files in Program Files; the
+/// normal GUI process stays unelevated.
+class WindowsDesktopInstallHandoff implements DesktopInstallHandoff {
+  const WindowsDesktopInstallHandoff();
+
+  @override
+  Future<bool> installVerifiedPackage({
+    required String packagePath,
+    required DesktopUpdateTarget target,
+  }) async {
+    if (target.packageKind != DesktopPackageKind.windowsInstaller ||
+        !Platform.isWindows) {
+      return false;
+    }
+    final installer = File(packagePath);
+    if (!path.isAbsolute(installer.path) ||
+        !installer.existsSync() ||
+        path.extension(installer.path).toLowerCase() != '.exe') {
+      throw StateError('Verified Windows installer path is invalid.');
+    }
+    // Process.start cannot honour the Inno `requireAdministrator` manifest:
+    // its child inherits the unelevated token and no consent prompt appears.
+    // ShellExecuteEx with `runas` hands the verified installer to Windows' UAC
+    // broker and reports both cancellation and launch failures to the caller.
+    final accepted = using((arena) {
+      final executeInfo = calloc.allocate<win32.SHELLEXECUTEINFO>(
+        sizeOf<win32.SHELLEXECUTEINFO>(),
       );
+      try {
+        executeInfo.ref
+          ..cbSize = sizeOf<win32.SHELLEXECUTEINFO>()
+          ..fMask = 0x00000040 // SEE_MASK_NOCLOSEPROCESS
+          ..lpVerb = 'runas'.toNativeUtf16(allocator: arena)
+          ..lpFile = installer.path.toNativeUtf16(allocator: arena)
+          ..lpParameters =
+              '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART '
+                  '/NOCLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /FROMAPP=1'
+                  .toNativeUtf16(allocator: arena)
+          ..nShow = win32.SW_SHOWNORMAL;
+        if (win32.ShellExecuteEx(executeInfo) == 0) {
+          final error = win32.GetLastError();
+          if (error == 1223) return false; // ERROR_CANCELLED
+          throw StateError('Unable to start elevated Windows installer ($error).');
+        }
+        if (executeInfo.ref.hProcess != 0) {
+          win32.CloseHandle(executeInfo.ref.hProcess);
+        }
+        return true;
+      } finally {
+        calloc.free(executeInfo);
+      }
+    });
+    if (accepted) {
+      // The elevation prompt has been accepted.  The installer waits for this
+      // process to leave before replacing any files; the normal exit path
+      // restores proxy, routes and DNS before stopping mihomo.  Do not await:
+      // handleExit terminates the process after the bounded cleanup.
+      unawaited(globalState.appController.handleExit());
+    }
+    return accepted;
+  }
+}
+
+enum WindowsInstallOutcome { success, failed, rollbackFailed }
+
+class WindowsInstallResult {
+  const WindowsInstallResult({required this.version, required this.outcome});
+
+  final String version;
+  final WindowsInstallOutcome outcome;
+}
+
+/// Installer writes its result to admin-owned HKLM. A per-user receipt prevents
+/// repeated notifications without asking an unelevated GUI to remove it.
+class WindowsInstallResultStore {
+  const WindowsInstallResultStore({
+    required this.readResult,
+    required this.receiptFile,
+  });
+
+  final String? Function() readResult;
+  final File receiptFile;
+
+  Future<WindowsInstallResult?> consume() async {
+    final raw = readResult()?.trim();
+    if (raw == null || raw.length > 256) return null;
+    final match = RegExp(
+      r'^(\d+\.\d+\.\d+(?:-pre\d+)?):(success|failed|rollback-failed):(\d{14})$',
+    ).firstMatch(raw);
+    if (match == null) return null;
+    if (receiptFile.existsSync() &&
+        (await receiptFile.readAsString()) == raw) {
+      return null;
+    }
+    await receiptFile.parent.create(recursive: true);
+    await receiptFile.writeAsString(raw, flush: true);
+    return WindowsInstallResult(
+      version: match.group(1)!,
+      outcome: switch (match.group(2)!) {
+        'success' => WindowsInstallOutcome.success,
+        'failed' => WindowsInstallOutcome.failed,
+        _ => WindowsInstallOutcome.rollbackFailed,
+      },
+    );
+  }
 }
 
 class DesktopAppUpdatePackageSelector implements AppUpdatePackageSelector {
@@ -136,19 +247,56 @@ class DesktopAppUpdatePackageSelector implements AppUpdatePackageSelector {
 }
 
 class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
-  const DesktopAppUpdateBridge({
+  DesktopAppUpdateBridge({
     required this.environment,
     this.catalogVerifier = const DesktopUpdateCatalogVerifier(),
     this.desktopRollbackGuard =
         const SharedPreferencesDesktopUpdateRollbackGuard(),
-    this.installHandoff = const DeferredDesktopInstallHandoff(),
+    DesktopInstallHandoff? installHandoff,
     super.httpClient,
-  });
+  }) : installHandoff =
+           installHandoff ??
+           (environment.target.operatingSystem ==
+                   DesktopUpdateOperatingSystem.windows
+               ? const WindowsDesktopInstallHandoff()
+               : const DeferredDesktopInstallHandoff());
 
   final DesktopUpdateEnvironment environment;
   final DesktopUpdateCatalogVerifier catalogVerifier;
   final DesktopUpdateRollbackGuard desktopRollbackGuard;
   final DesktopInstallHandoff installHandoff;
+
+  static String? _readWindowsInstallResult() {
+    final key = Registry.openPath(
+      RegistryHive.localMachine,
+      path: r'Software\FlClashM',
+    );
+    try {
+      return key.getStringValue('InstallResult');
+    } finally {
+      key.close();
+    }
+  }
+
+  Future<WindowsInstallResult?> consumePendingInstallResult() async {
+    if (environment.target.operatingSystem !=
+            DesktopUpdateOperatingSystem.windows ||
+        !Platform.isWindows) {
+      return null;
+    }
+    try {
+      final home = await appPath.homeDirPath;
+      return await WindowsInstallResultStore(
+        readResult: _readWindowsInstallResult,
+        receiptFile: File(
+          path.join(home, 'updates', 'windows-install-seen.result'),
+        ),
+      ).consume();
+    } catch (error) {
+      commonPrint.log('Unable to read Windows installer result: $error');
+      return null;
+    }
+  }
 
   @override
   String get latestReleaseUrl => '$sourceForgeProjectUrl/files/releases/';
@@ -256,7 +404,8 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
     required Future<T> Function(
       void Function(int received, int total) onReceiveProgress,
       AppUpdateDownloadCancellation cancellation,
-    ) downloadTask,
+    )
+    downloadTask,
   }) async {
     final cancellation = AppUpdateDownloadCancellation();
     final progress = ValueNotifier<(int, int)>((0, asset.size));
@@ -290,7 +439,10 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
   }
 
   @override
-  Future<void> prepareInstallHandoff() async {}
+  Future<void> prepareInstallHandoff() async {
+    // Windows runtime remains live while UAC is pending. A cancelled prompt
+    // must leave the proxy and tunnel pointing at their running owner.
+  }
 
   @override
   Future<bool> installPackage(String path) {
@@ -322,23 +474,23 @@ class _DesktopUpdateDownloadDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<(int, int)>(
-        valueListenable: progress,
-        builder: (context, value, _) {
-          final total = value.$2 > 0 ? value.$2 : 0;
-          final fraction = total > 0 ? value.$1 / total : null;
-          return CommonDialog(
-            title: '${appLocalizations.downloadUpdate} ${release.tagName}',
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: onCancel,
-                  child: Text(appLocalizations.cancel),
-                ),
-              ),
-            ],
-            child: LinearProgressIndicator(value: fraction?.clamp(0, 1)),
-          );
-        },
+    valueListenable: progress,
+    builder: (context, value, _) {
+      final total = value.$2 > 0 ? value.$2 : 0;
+      final fraction = total > 0 ? value.$1 / total : null;
+      return CommonDialog(
+        title: '${appLocalizations.downloadUpdate} ${release.tagName}',
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: onCancel,
+              child: Text(appLocalizations.cancel),
+            ),
+          ),
+        ],
+        child: LinearProgressIndicator(value: fraction?.clamp(0, 1)),
       );
+    },
+  );
 }
