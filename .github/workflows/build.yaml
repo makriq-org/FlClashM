@@ -62,7 +62,7 @@ jobs:
         run: flutter test test/product test/tool
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/write_desktop_update_catalog.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   build:
     runs-on: ubuntu-latest
@@ -564,6 +564,25 @@ jobs:
             --channel "$release_channel" \
             --published-at "$published_at"
 
+      - name: Generate signed desktop update catalog
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          published_at=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          mkdir -p "${RUNNER_TEMP}/desktop-update"
+          dart tool/write_desktop_update_catalog.dart \
+            --dist dist \
+            --out "${RUNNER_TEMP}/desktop-update/${release_channel}.json" \
+            --release-notes release.md \
+            --tag "${{ github.ref_name }}" \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --channel "$release_channel" \
+            --published-at "$published_at"
+
       - name: Configure verified SourceForge SSH access
         env:
           SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
@@ -624,6 +643,20 @@ jobs:
           rsync -av --checksum --relative \
             -e "ssh $ssh_options" \
             "${web_stage}/./update/${release_channel}.json" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+
+          desktop_root="${RUNNER_TEMP}/desktop-update"
+          mkdir -p "${web_stage}/update/desktop"
+          cp "${desktop_root}/${release_channel}.json" \
+            "${desktop_root}/${release_channel}.json.sig" \
+            "${web_stage}/update/desktop/"
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            "${web_stage}/./update/desktop/${release_channel}.json.sig" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            "${web_stage}/./update/desktop/${release_channel}.json" \
             "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
 
       - name: Release (Stable)

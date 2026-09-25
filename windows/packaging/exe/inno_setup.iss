@@ -19,6 +19,8 @@ ArchitecturesAllowed={{ARCH}}
 ArchitecturesInstallIn64BitMode={{ARCH}}
 UninstallDisplayIcon={uninstallexe}
 ChangesAssociations=yes
+CloseApplications=no
+RestartApplications=no
 ; Update mode settings
 UsePreviousAppDir=yes
 UsePreviousGroup=yes
@@ -32,57 +34,111 @@ const
 var
   IsUpgrade: Boolean;
   PreviousVersion: String;
-  PreviousHelperBackup: String;
+  PreviousBundleBackup: String;
+  InstallStarted: Boolean;
+  InstallSucceeded: Boolean;
 
 const
   HelperServiceName = 'app.flclashm.client.helper';
   HelperRelativePath = 'runtimes\windows\x86_64\app.flclashm.client.helper.exe';
 
+function IsFromApp(): Boolean;
+begin
+  Result := ExpandConstant('{param:FROMAPP|0}') = '1';
+end;
+
+procedure WriteInstallResult(const Status: String);
+var
+  ResultDirectory: String;
+begin
+  ResultDirectory := ExpandConstant('{commonappdata}\FlClashM');
+  if ForceDirectories(ResultDirectory) then
+    SaveStringToFile(ResultDirectory + '\windows-install.result',
+      '{{APP_VERSION}}:' + Status + ':' +
+      GetDateTimeString('yyyymmddhhnnss', '-', ':'), False);
+end;
+
 procedure SHChangeNotify(wEventId: Integer; uFlags: Integer; dwItem1: Integer; dwItem2: Integer); external 'SHChangeNotify@shell32.dll stdcall';
 
-procedure KillProcesses;
+function IsProcessRunning(const ProcessName: String): Boolean;
 var
-  Processes: TArrayOfString;
-  i: Integer;
   ResultCode: Integer;
 begin
-  Processes := ['FlClashM.exe'];
+  { Check all interactive sessions. The installer must never terminate another
+    user's GUI before it has restored that user's proxy and tunnel. }
+  Result := not Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "if (Get-Process -Name ' + ProcessName + ' -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0);
+end;
 
-  // First try graceful shutdown
-  for i := 0 to GetArrayLength(Processes)-1 do
+function WaitForGracefulExit(): Boolean;
+var
+  Attempt: Integer;
+begin
+  for Attempt := 1 to 30 do
   begin
-    Exec('taskkill', '/im ' + Processes[i], '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if not IsProcessRunning('FlClashM') and
+       not IsProcessRunning('proxy_watchdog') then
+    begin
+      Result := True;
+      exit;
+    end;
+    Sleep(1000);
   end;
-  
-  // Wait for processes to terminate gracefully
-  Sleep(1000);
+  Result := False;
+end;
 
-  // Force kill any remaining processes
-  for i := 0 to GetArrayLength(Processes)-1 do
-  begin
-    Exec('taskkill', '/f /im ' + Processes[i], '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
-  
-  // Give time for cleanup
-  Sleep(1000);
+procedure CopyBundle(const Source, Destination: String);
+var
+  ResultCode: Integer;
+begin
+  ForceDirectories(Destination);
+  if not Exec(
+    ExpandConstant('{sys}\robocopy.exe'),
+    '"' + Source + '" "' + Destination + '" /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode >= 8) then
+    RaiseException('Не удалось сохранить или восстановить предыдущую установку. Код: ' + IntToStr(ResultCode));
 end;
 
 procedure StopAndRemoveHelperService;
 var
   ResultCode: Integer;
+  Attempt: Integer;
 begin
-  { Stop first so an upgrade cannot leave the previous binary locked or running. }
+  { The GUI has already completed network teardown. Service stop is still
+    required to release its binary and any privileged child. }
+  Exec(ExpandConstant('{sys}\sc.exe'), 'query "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if ResultCode = 1060 then
+    exit;
+  if ResultCode <> 0 then
+    RaiseException('Не удалось проверить службу FlClashM. Код: ' + IntToStr(ResultCode));
   Exec(ExpandConstant('{sys}\sc.exe'), 'stop "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\sc.exe'), 'delete "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1000);
+  if (ResultCode <> 0) and (ResultCode <> 1062) then
+    RaiseException('Не удалось остановить службу FlClashM. Код: ' + IntToStr(ResultCode));
+  if not Exec(ExpandConstant('{sys}\sc.exe'), 'delete "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось удалить службу FlClashM. Код: ' + IntToStr(ResultCode));
+  for Attempt := 1 to 15 do
+  begin
+    Sleep(1000);
+    Exec(ExpandConstant('{sys}\sc.exe'), 'query "' + HelperServiceName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode = 1060 then
+      exit;
+  end;
+  RaiseException('Служба FlClashM не завершилась за 15 секунд.');
 end;
 
 procedure InstallAndStartHelperService;
 var
   ResultCode: Integer;
   ServiceBinary: String;
+  Attempt: Integer;
 begin
   ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
+  if not FileExists(ExpandConstant('{app}\FlClashM.exe')) or
+     not FileExists(ExpandConstant('{app}\runtimes\windows\x86_64\mihomo.exe')) or
+     not FileExists(ServiceBinary) then
+    RaiseException('В установленном пакете отсутствуют обязательные файлы FlClashM.');
   if not Exec(
     ExpandConstant('{sys}\sc.exe'),
     'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
@@ -93,6 +149,15 @@ begin
     'start "' + HelperServiceName + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
     RaiseException('Не удалось запустить системную службу FlClashM. Код: ' + IntToStr(ResultCode));
+  for Attempt := 1 to 10 do
+  begin
+    if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -NonInteractive -Command "if ((Get-Service -Name ''' + HelperServiceName + ''' -ErrorAction SilentlyContinue).Status -eq ''Running'') { exit 0 } else { exit 1 }"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+      exit;
+    Sleep(1000);
+  end;
+  RaiseException('Служба FlClashM не перешла в рабочее состояние.');
 end;
 
 procedure RestorePreviousHelperService;
@@ -100,16 +165,56 @@ var
   ResultCode: Integer;
   ServiceBinary: String;
 begin
-  if (PreviousHelperBackup = '') or not FileExists(PreviousHelperBackup) then
+  if (PreviousBundleBackup = '') or not DirExists(PreviousBundleBackup) then
     exit;
   ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
-  ForceDirectories(ExtractFileDir(ServiceBinary));
-  FileCopy(PreviousHelperBackup, ServiceBinary, False);
+  if not FileExists(ServiceBinary) then
+    exit;
   Exec(ExpandConstant('{sys}\sc.exe'),
     'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}\sc.exe'), 'start "' + HelperServiceName + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if not WaitForGracefulExit() then
+    Result := 'FlClashM ещё работает или восстанавливает системный прокси. Закройте приложение через меню значка в области уведомлений и повторите установку.';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := not IsProcessRunning('FlClashM') and
+            not IsProcessRunning('proxy_watchdog');
+  if not Result then
+    MsgBox('Сначала закройте FlClashM через меню значка в области уведомлений, затем повторите удаление.', mbError, MB_OK);
+end;
+
+procedure DeinitializeSetup();
+var
+  ResultCode: Integer;
+begin
+  if not InstallStarted or InstallSucceeded then
+    exit;
+  try
+    StopAndRemoveHelperService;
+    if PreviousBundleBackup <> '' then
+    begin
+      CopyBundle(PreviousBundleBackup, ExpandConstant('{app}'));
+      RestorePreviousHelperService;
+      { If the GUI initiated the upgrade, return the user to the working old
+        version after a recoverable installer failure. }
+      if IsFromApp() and FileExists(ExpandConstant('{app}\FlClashM.exe')) then
+        ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
+          SW_SHOWNORMAL, ewNoWait, ResultCode);
+    end;
+    WriteInstallResult('failed');
+  except
+    WriteInstallResult('rollback-failed');
+    MsgBox('Обновление прервалось, и восстановить прежнюю версию автоматически не удалось. Повторите установку предыдущего пакета.', mbError, MB_OK);
+  end;
 end;
 
 function IsAppInstalled(): Boolean;
@@ -151,28 +256,31 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
 begin
   if CurStep = ssInstall then
   begin
-    { The wizard is confirmed at this point. Cancelling before it leaves the
-      running GUI and old service untouched. }
     if IsUpgrade then
     begin
-      PreviousHelperBackup := ExpandConstant('{tmp}\flclashm-helper.previous.exe');
-      FileCopy(ExpandConstant('{app}\' + HelperRelativePath), PreviousHelperBackup, False);
+      PreviousBundleBackup := ExpandConstant('{tmp}\flclashm-previous-bundle');
+      CopyBundle(ExpandConstant('{app}'), PreviousBundleBackup);
     end;
-    KillProcesses;
+    InstallStarted := True;
     if IsUpgrade then
       StopAndRemoveHelperService;
   end
   else if CurStep = ssPostInstall then
   begin
-    try
-      InstallAndStartHelperService;
-    except
-      RestorePreviousHelperService;
-      raise;
-    end;
+    InstallAndStartHelperService;
+  end
+  else if CurStep = ssDone then
+  begin
+    InstallSucceeded := True;
+    WriteInstallResult('success');
+    if IsFromApp() then
+      ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
+        SW_SHOWNORMAL, ewNoWait, ResultCode);
   end;
 end;
 
@@ -220,7 +328,6 @@ begin
   case CurUninstallStep of
     usUninstall:
     begin
-      KillProcesses;
       StopAndRemoveHelperService;
     end;
 
@@ -277,4 +384,4 @@ Source: "{{SOURCE_DIR}}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 Name: "{autoprograms}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"
 Name: "{autodesktop}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"; Tasks: desktopicon
 [Run]
-Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: {% if PRIVILEGES_REQUIRED == 'admin' %}runascurrentuser{% endif %} nowait postinstall skipifsilent
+Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: runasoriginaluser nowait postinstall skipifsilent; Check: not IsFromApp

@@ -9,8 +9,6 @@ import 'package:win32/win32.dart' as win32;
 
 import '../../common/common.dart';
 import '../../state.dart';
-import '../runtime/desktop_process_supervisor.dart';
-import '../runtime/desktop_runtime_node_bridge.dart';
 import '../../widgets/dialog.dart';
 import 'app_update_manifest.dart';
 import 'app_update_platform_bridge.dart';
@@ -132,28 +130,84 @@ class WindowsDesktopInstallHandoff implements DesktopInstallHandoff {
     // its child inherits the unelevated token and no consent prompt appears.
     // ShellExecuteEx with `runas` hands the verified installer to Windows' UAC
     // broker and reports both cancellation and launch failures to the caller.
-    return using((arena) {
-      final executeInfo = arena<win32.SHELLEXECUTEINFO>();
-      executeInfo.ref
-        ..cbSize = sizeOf<win32.SHELLEXECUTEINFO>()
-        ..fMask = 0x00000040 // SEE_MASK_NOCLOSEPROCESS
-        ..lpVerb = 'runas'.toNativeUtf16(allocator: arena)
-        ..lpFile = installer.path.toNativeUtf16(allocator: arena)
-        ..lpParameters =
-            '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS '
-                '/RESTARTAPPLICATIONS'
-                .toNativeUtf16(allocator: arena)
-        ..nShow = win32.SW_SHOWNORMAL;
-      if (win32.ShellExecuteEx(executeInfo) == 0) {
-        final error = win32.GetLastError();
-        if (error == 1223) return false; // ERROR_CANCELLED
-        throw StateError('Unable to start elevated Windows installer ($error).');
+    final accepted = using((arena) {
+      final executeInfo = calloc<win32.SHELLEXECUTEINFO>();
+      try {
+        executeInfo.ref
+          ..cbSize = sizeOf<win32.SHELLEXECUTEINFO>()
+          ..fMask = 0x00000040 // SEE_MASK_NOCLOSEPROCESS
+          ..lpVerb = 'runas'.toNativeUtf16(allocator: arena)
+          ..lpFile = installer.path.toNativeUtf16(allocator: arena)
+          ..lpParameters =
+              '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART '
+                  '/NOCLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /FROMAPP=1'
+                  .toNativeUtf16(allocator: arena)
+          ..nShow = win32.SW_SHOWNORMAL;
+        if (win32.ShellExecuteEx(executeInfo) == 0) {
+          final error = win32.GetLastError();
+          if (error == 1223) return false; // ERROR_CANCELLED
+          throw StateError('Unable to start elevated Windows installer ($error).');
+        }
+        if (executeInfo.ref.hProcess != 0) {
+          win32.CloseHandle(executeInfo.ref.hProcess);
+        }
+        return true;
+      } finally {
+        calloc.free(executeInfo);
       }
-      if (executeInfo.ref.hProcess != 0) {
-        win32.CloseHandle(executeInfo.ref.hProcess);
-      }
-      return true;
     });
+    if (accepted) {
+      // The elevation prompt has been accepted.  The installer waits for this
+      // process to leave before replacing any files; the normal exit path
+      // restores proxy, routes and DNS before stopping mihomo.  Do not await:
+      // handleExit terminates the process after the bounded cleanup.
+      unawaited(globalState.appController.handleExit());
+    }
+    return accepted;
+  }
+}
+
+enum WindowsInstallOutcome { success, failed, rollbackFailed }
+
+class WindowsInstallResult {
+  const WindowsInstallResult({required this.version, required this.outcome});
+
+  final String version;
+  final WindowsInstallOutcome outcome;
+}
+
+/// Installer writes its result to an admin-owned, user-readable ProgramData
+/// file. A per-user receipt prevents repeated notifications without asking an
+/// unelevated GUI to delete a machine-wide file.
+class WindowsInstallResultStore {
+  const WindowsInstallResultStore({required this.resultFile, required this.receiptFile});
+
+  final File resultFile;
+  final File receiptFile;
+
+  Future<WindowsInstallResult?> consume() async {
+    if (!await resultFile.exists() || await resultFile.length() > 256) {
+      return null;
+    }
+    final raw = (await resultFile.readAsString()).replaceFirst('\uFEFF', '').trim();
+    final match = RegExp(
+      r'^(\d+\.\d+\.\d+(?:-pre\d+)?):(success|failed|rollback-failed):(\d{14})$',
+    ).firstMatch(raw);
+    if (match == null) return null;
+    if (await receiptFile.exists() &&
+        (await receiptFile.readAsString()) == raw) {
+      return null;
+    }
+    await receiptFile.parent.create(recursive: true);
+    await receiptFile.writeAsString(raw, flush: true);
+    return WindowsInstallResult(
+      version: match.group(1)!,
+      outcome: switch (match.group(2)!) {
+        'success' => WindowsInstallOutcome.success,
+        'failed' => WindowsInstallOutcome.failed,
+        _ => WindowsInstallOutcome.rollbackFailed,
+      },
+    );
   }
 }
 
@@ -208,6 +262,25 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
   final DesktopUpdateCatalogVerifier catalogVerifier;
   final DesktopUpdateRollbackGuard desktopRollbackGuard;
   final DesktopInstallHandoff installHandoff;
+
+  Future<WindowsInstallResult?> consumePendingInstallResult() async {
+    if (environment.target.operatingSystem != DesktopUpdateOperatingSystem.windows ||
+        !Platform.isWindows) {
+      return null;
+    }
+    final programData = Platform.environment['PROGRAMDATA'];
+    if (programData == null || programData.isEmpty) return null;
+    try {
+      final home = await appPath.homeDirPath;
+      return WindowsInstallResultStore(
+        resultFile: File(path.join(programData, 'FlClashM', 'windows-install.result')),
+        receiptFile: File(path.join(home, 'updates', 'windows-install-seen.result')),
+      ).consume();
+    } catch (error) {
+      commonPrint.log('Unable to read Windows installer result: $error');
+      return null;
+    }
+  }
 
   @override
   String get latestReleaseUrl => '$sourceForgeProjectUrl/files/releases/';
@@ -351,15 +424,8 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
 
   @override
   Future<void> prepareInstallHandoff() async {
-    if (environment.target.operatingSystem !=
-        DesktopUpdateOperatingSystem.windows) {
-      return;
-    }
-    // The Inno installer must replace the helper and runtime atomically. Stop
-    // every local child first so a failed start, a normal update and uninstall
-    // all converge on the same rollback path.
-    await desktopRuntimeNodeBridge.stopPlan();
-    await desktopProcessSupervisor.stopAll();
+    // Windows runtime remains live while UAC is pending. A cancelled prompt
+    // must leave the proxy and tunnel pointing at their running owner.
   }
 
   @override

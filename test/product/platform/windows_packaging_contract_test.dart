@@ -22,6 +22,11 @@ void main() {
       );
       expect(installer, contains('StopAndRemoveHelperService'));
       expect(installer, contains('InstallAndStartHelperService'));
+      expect(installer, contains('WaitForGracefulExit'));
+      expect(installer, contains('proxy_watchdog'));
+      expect(installer, contains('PreviousBundleBackup'));
+      expect(installer, contains("WriteInstallResult('success')"));
+      expect(installer, isNot(contains('taskkill')));
       expect(installer, contains('Удалить пользовательские данные программы?'));
       expect(helper, contains(r'\\.\pipe\app.flclashm.client.helper.v1'));
       expect(helper, contains('D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)'));
@@ -38,7 +43,7 @@ void main() {
     ).readAsStringSync();
     expect(workflow, contains('Build bundle and Inno installer'));
     expect(workflow, contains('NamedPipeClientStream'));
-    expect(workflow, contains('sc.exe query $service'));
-    expect(workflow, contains('sc.exe delete $service'));
+    expect(workflow, contains(r'sc.exe query $service'));
+    expect(workflow, contains(r'sc.exe delete $service'));
   });
 }
