@@ -50,21 +50,22 @@ class DesktopHelperRequest {
 class DesktopHelperResponse {
   const DesktopHelperResponse({required this.state, this.message = ''});
 
-  final DesktopHelperState state;
-  final String message;
-
-  bool get isSuccess => state == DesktopHelperState.ready;
-
   factory DesktopHelperResponse.fromJson(Map<String, Object?> json) {
     final rawState = json['state'];
+    final rawMessage = json['message'];
     if (rawState is! String) {
       throw const FormatException('Desktop helper response has no state.');
     }
     return DesktopHelperResponse(
       state: DesktopHelperState.values.byName(rawState),
-      message: json['message'] is String ? json['message'] as String : '',
+      message: rawMessage is String ? rawMessage : '',
     );
   }
+
+  final DesktopHelperState state;
+  final String message;
+
+  bool get isSuccess => state == DesktopHelperState.ready;
 }
 
 /// The helper accepts a closed, versioned vocabulary. In particular, callers

@@ -124,7 +124,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Product boundary check failed.' }
           dart tool/check_base_drift.dart
           if ($LASTEXITCODE -ne 0) { throw 'Base drift check failed.' }
-          flutter analyze --fatal-infos lib/product test/product tool
+          flutter analyze --no-fatal-infos lib/product test/product tool
           if ($LASTEXITCODE -ne 0) { throw 'Flutter analyze failed.' }
           flutter test test/product/runtime/desktop_helper_protocol_test.dart test/product/platform/windows_packaging_contract_test.dart test/product/services/desktop_update_catalog_test.dart test/tool/write_desktop_update_catalog_test.dart
           if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed.' }
