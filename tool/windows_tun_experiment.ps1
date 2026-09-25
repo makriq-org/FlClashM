@@ -51,8 +51,9 @@ function Start-ExperimentCore([bool]$AutoRoute) {
     if (-not $accept.Wait([TimeSpan]::FromSeconds(20))) { throw 'mihomo did not connect to the control socket' }
     $script:client = $accept.Result
     $stream = $script:client.GetStream()
-    $script:reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
-    $script:writer = [IO.StreamWriter]::new($stream, [Text.Encoding]::UTF8)
+    $utf8NoBom = [Text.UTF8Encoding]::new($false)
+    $script:reader = [IO.StreamReader]::new($stream, $utf8NoBom)
+    $script:writer = [IO.StreamWriter]::new($stream, $utf8NoBom)
     $mihomoHome = Join-Path $OutputDirectory 'mihomo-home'
     New-Item -ItemType Directory -Force $mihomoHome | Out-Null
     $initialized = Send-CoreAction 'initClash' (@{ 'home-dir' = $mihomoHome; version = 1 } | ConvertTo-Json -Compress)
