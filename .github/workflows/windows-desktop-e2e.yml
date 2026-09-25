@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
-          go build -trimpath -tags=with_gvisor,cmfa -o ../windows-tun-mihomo.exe .
+          go build -trimpath '-tags=with_gvisor,cmfa' -o ../windows-tun-mihomo.exe .
           if ($LASTEXITCODE -ne 0) { throw 'Native mihomo build failed.' }
         working-directory: core
 
