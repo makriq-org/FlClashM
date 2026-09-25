@@ -76,6 +76,20 @@ jobs:
             -OutputDirectory dist `
             -Version $version
 
+      - name: Observe bounded native mihomo TUN lifecycle
+        shell: pwsh
+        run: |
+          $mihomo = Join-Path (Resolve-Path '.dart_tool/desktop-runtime-assets').Path 'install/runtimes/windows/x86_64/mihomo.exe'
+          ./tool/windows_tun_experiment.ps1 -Mihomo $mihomo
+
+      - name: Upload Windows TUN evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-tun-experiment
+          path: windows-tun-experiment/
+          if-no-files-found: ignore
+
       - name: Install, exercise service IPC, stop and uninstall
         shell: pwsh
         run: |
