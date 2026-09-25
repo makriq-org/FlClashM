@@ -1,5 +1,6 @@
 #include <windows.h>
 
+#include <cstdlib>
 #include <string>
 
 #include "proxy_state.h"
@@ -9,7 +10,7 @@
 // even when Flutter cannot run its normal shutdown callback.
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR args, int) {
   wchar_t* end = nullptr;
-  DWORD parent_pid = wcstoul(args, &end, 10);
+  DWORD parent_pid = static_cast<DWORD>(std::wcstoul(args, &end, 10));
   if (parent_pid == 0 || end == args || *end != L'\0') return 1;
   HANDLE parent = OpenProcess(SYNCHRONIZE, FALSE, parent_pid);
   if (!parent) return 1;

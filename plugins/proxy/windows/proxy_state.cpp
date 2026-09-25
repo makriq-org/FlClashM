@@ -224,17 +224,27 @@ bool DeleteJournal(std::wstring* error) {
   return false;
 }
 
-bool ProcessStillAlive(const Journal& journal) {
+enum class ProcessStatus { alive, dead, unknown };
+
+ProcessStatus OwnerProcessStatus(const Journal& journal) {
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
                                FALSE, journal.owner_pid);
-  if (!process) return false;
+  if (!process) {
+    return GetLastError() == ERROR_INVALID_PARAMETER
+               ? ProcessStatus::dead : ProcessStatus::unknown;
+  }
   FILETIME created{}, exited{}, kernel{}, user{};
-  bool alive = GetProcessTimes(process, &created, &exited, &kernel, &user) &&
-               ((static_cast<ULONGLONG>(created.dwHighDateTime) << 32) |
-                 created.dwLowDateTime) == journal.owner_created &&
-               WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+  if (!GetProcessTimes(process, &created, &exited, &kernel, &user)) {
+    CloseHandle(process);
+    return ProcessStatus::unknown;
+  }
+  const auto creation = (static_cast<ULONGLONG>(created.dwHighDateTime) << 32) |
+                        created.dwLowDateTime;
+  const DWORD wait = WaitForSingleObject(process, 0);
   CloseHandle(process);
-  return alive;
+  if (creation != journal.owner_created || wait == WAIT_OBJECT_0)
+    return ProcessStatus::dead;
+  return wait == WAIT_TIMEOUT ? ProcessStatus::alive : ProcessStatus::unknown;
 }
 
 ULONGLONG CurrentProcessCreated() {
@@ -386,7 +396,14 @@ bool RecoverLocked(bool only_if_dead, std::wstring* error) {
   bool exists = false;
   if (!LoadJournal(&journal, &exists, error)) return false;
   if (!exists) return true;
-  if (only_if_dead && ProcessStillAlive(journal)) return true;
+  if (only_if_dead) {
+    const auto status = OwnerProcessStatus(journal);
+    if (status == ProcessStatus::alive) return true;
+    if (status == ProcessStatus::unknown) {
+      *error = L"Cannot establish whether proxy owner is still running";
+      return false;
+    }
+  }
   if (!Restore(journal, error)) return false;
   return DeleteJournal(error);
 }
@@ -408,7 +425,12 @@ bool StopOwnedProxy(std::wstring* error) {
   // A second GUI instance must never undo the first instance's proxy.
   if (journal.owner_pid != GetCurrentProcessId() ||
       journal.owner_created != CurrentProcessCreated()) {
-    if (ProcessStillAlive(journal)) return true;
+    const auto status = OwnerProcessStatus(journal);
+    if (status == ProcessStatus::alive) return true;
+    if (status == ProcessStatus::unknown) {
+      *error = L"Cannot establish whether proxy owner is still running";
+      return false;
+    }
   }
   if (!Restore(journal, error)) return false;
   return DeleteJournal(error);
@@ -436,8 +458,11 @@ bool StartOwnedProxy(int port, const std::vector<std::wstring>& bypass,
       // Refreshing the port must retain the original pre-FlClashM snapshot.
       if (!Restore(old, error) || !DeleteJournal(error)) return false;
     } else {
-      if (ProcessStillAlive(old)) {
-        *error = L"Another FlClashM instance owns the system proxy";
+      const auto status = OwnerProcessStatus(old);
+      if (status != ProcessStatus::dead) {
+        *error = status == ProcessStatus::alive
+                     ? L"Another FlClashM instance owns the system proxy"
+                     : L"Cannot establish whether proxy owner is still running";
         return false;
       }
       if (!Restore(old, error) || !DeleteJournal(error)) return false;
