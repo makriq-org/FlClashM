@@ -174,6 +174,13 @@ int Run() {
       actual.bypass != L"changed.by.user.example" ||
       actual.flags != baseline.flags || actual.server != baseline.server) return 13;
   if (!Write(baseline)) return 14;
+  if (!proxy::StartOwnedProxy(17888, {}, &error)) return 15;
+  if (!Read(&actual)) return 16;
+  actual.server = L"new.user.proxy.example:9999";
+  if (!Write(actual) || !proxy::StopOwnedProxy(&error) || !Read(&actual) ||
+      actual.server != L"new.user.proxy.example:9999" ||
+      actual.flags != (PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY)) return 17;
+  if (!Write(baseline)) return 18;
   // Simulate the owner process ending without StopOwnedProxy. The watchdog
   // must restore the original PAC/autodetect/proxy state promptly.
   const auto path = Executable(L"proxy_lifecycle_test.exe");

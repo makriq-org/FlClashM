@@ -360,7 +360,6 @@ bool OwnedStillCurrent(const Journal& journal, std::wstring* error) {
 
 bool Restore(const Journal& journal, std::wstring* error) {
   bool all_ok = true;
-  bool changed = false;
   std::wstring first_error;
   std::vector<std::wstring> present;
   if (!ListConnections(&present, error)) return false;
@@ -377,7 +376,11 @@ bool Restore(const Journal& journal, std::wstring* error) {
     }
     // Restore only values that still have the values we wrote. If the user or
     // another program changed a value while FlClashM ran, preserve that edit.
-    const DWORD flags = current.flags == kOwnedFlags ? entry.before.flags : current.flags;
+    // Changing the server while keeping proxy enabled is a new user choice.
+    // Restoring DIRECT in that case would silently disable their new proxy.
+    const bool user_server = current.server != entry.owned_server;
+    const DWORD flags = current.flags == kOwnedFlags && !user_server
+                            ? entry.before.flags : current.flags;
     const std::wstring& server = current.server == entry.owned_server
                                      ? entry.before.server : current.server;
     const std::wstring& bypass = current.bypass == entry.owned_bypass
@@ -389,12 +392,12 @@ bool Restore(const Journal& journal, std::wstring* error) {
                        bypass != current.bypass, &issue)) {
       if (first_error.empty()) first_error = issue;
       all_ok = false;
-    } else {
-      changed = true;
     }
   }
+  // A prior attempt may have written registry values but failed to notify
+  // WinINet. Keep retrying the notification before clearing ownership.
   std::wstring notify_error;
-  if (changed && !Notify(&notify_error)) {
+  if (!Notify(&notify_error)) {
     if (first_error.empty()) first_error = notify_error;
     all_ok = false;
   }

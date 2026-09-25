@@ -41,6 +41,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR args, int) {
   const DWORD wait = WaitForSingleObject(parent, INFINITE);
   CloseHandle(parent);
   if (wait != WAIT_OBJECT_0) return 4;
-  std::wstring error;
-  return proxy::RecoverOwnedProxy(parent_pid, owner_created, &error) ? 0 : 4;
+  DWORD delay_ms = 1000;
+  for (;;) {
+    std::wstring error;
+    if (proxy::RecoverOwnedProxy(parent_pid, owner_created, &error)) return 0;
+    OutputDebugStringW((L"FlClashM proxy recovery failed: " + error + L"\n").c_str());
+    // Keep the executable alive so the installer refuses to replace it while
+    // the user's previous settings have not been restored. The retry interval
+    // is bounded to avoid CPU or log storms on a persistent Windows error.
+    Sleep(delay_ms);
+    if (delay_ms < 5000) delay_ms = delay_ms * 2 < 5000 ? delay_ms * 2 : 5000;
+  }
 }
