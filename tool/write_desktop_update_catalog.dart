@@ -118,7 +118,7 @@ class DesktopCatalogOptions {
       }
       values[argument.substring(2)] = args[++index];
     }
-    String required(String name) => values[name]?.trim().isNotEmpty == true
+    String required(String name) => (values[name]?.trim().isNotEmpty ?? false)
         ? values[name]!
         : throw ArgumentError('Missing --$name.');
     final channel = switch (required('channel')) {

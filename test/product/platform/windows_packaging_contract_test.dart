@@ -26,7 +26,7 @@ void main() {
       expect(installer, contains('DisableDirPage=yes'));
       expect(installer, contains('UsePreviousAppDir=no'));
       expect(installer, contains('EnforceProtectedInstallAcl'));
-      expect(installer, contains("ExpandConstant('{autopf}\\FlClashM')"));
+      expect(installer, contains(r"ExpandConstant('{autopf}\FlClashM')"));
       expect(installer, contains('proxy_watchdog'));
       expect(installer, contains('PreviousBundleBackup'));
       expect(installer, contains('FreshInstallDirectoryCreated'));

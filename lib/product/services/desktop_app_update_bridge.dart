@@ -197,7 +197,7 @@ class WindowsInstallResultStore {
       r'^(\d+\.\d+\.\d+(?:-pre\d+)?):(success|failed|rollback-failed):(\d{14})$',
     ).firstMatch(raw);
     if (match == null) return null;
-    if (await receiptFile.exists() &&
+    if (receiptFile.existsSync() &&
         (await receiptFile.readAsString()) == raw) {
       return null;
     }
