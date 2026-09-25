@@ -131,7 +131,9 @@ class WindowsDesktopInstallHandoff implements DesktopInstallHandoff {
     // ShellExecuteEx with `runas` hands the verified installer to Windows' UAC
     // broker and reports both cancellation and launch failures to the caller.
     final accepted = using((arena) {
-      final executeInfo = calloc<win32.SHELLEXECUTEINFO>();
+      final executeInfo = calloc.allocate<win32.SHELLEXECUTEINFO>(
+        sizeOf<win32.SHELLEXECUTEINFO>(),
+      );
       try {
         executeInfo.ref
           ..cbSize = sizeOf<win32.SHELLEXECUTEINFO>()
@@ -272,7 +274,7 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
     if (programData == null || programData.isEmpty) return null;
     try {
       final home = await appPath.homeDirPath;
-      return WindowsInstallResultStore(
+      return await WindowsInstallResultStore(
         resultFile: File(path.join(programData, 'FlClashM', 'windows-install.result')),
         receiptFile: File(path.join(home, 'updates', 'windows-install-seen.result')),
       ).consume();

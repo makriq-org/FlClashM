@@ -471,6 +471,11 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/core_update.dart",
+      "bucket": "budget",
+      "reason": "Windows больше не применяет отдельный pending-бинарник ядра: mihomo обновляется только проверенным полным пакетом приложения вместе со службой."
+    },
+    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Base-фасад логгера делегирует ограниченную очередь, ротацию и pre-write redaction product-слою."
