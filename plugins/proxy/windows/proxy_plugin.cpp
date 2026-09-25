@@ -132,7 +132,7 @@ bool EnsureWatchdog(std::wstring* error) {
     Sleep(10);
   }
   CloseHandle(parent_stdout);
-  if (!ready) {
+  if (!ready || WaitForSingleObject(process.hProcess, 0) != WAIT_TIMEOUT) {
     *error = L"Proxy watchdog did not become ready";
     CloseHandle(parent_stdin);
     CloseHandle(process.hProcess);

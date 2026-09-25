@@ -38,8 +38,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR args, int) {
     if (buffer == 'C') { CloseHandle(parent_pipe); CloseHandle(parent); return 0; }
   }
   CloseHandle(parent_pipe);
-  WaitForSingleObject(parent, INFINITE);
+  const DWORD wait = WaitForSingleObject(parent, INFINITE);
   CloseHandle(parent);
+  if (wait != WAIT_OBJECT_0) return 4;
   std::wstring error;
   return proxy::RecoverOwnedProxy(parent_pid, owner_created, &error) ? 0 : 4;
 }
