@@ -20,6 +20,8 @@ set(PLUGIN_NAME "proxy_plugin")
 list(APPEND PLUGIN_SOURCES
   "proxy_plugin.cpp"
   "proxy_plugin.h"
+  "proxy_state.cpp"
+  "proxy_state.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -46,15 +48,28 @@ target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 # dependencies here.
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
+target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin wininet rasapi32 advapi32)
+
+add_executable(proxy_watchdog WIN32 "proxy_watchdog.cpp" "proxy_state.cpp" "proxy_state.h")
+apply_standard_settings(proxy_watchdog)
+target_link_libraries(proxy_watchdog PRIVATE wininet rasapi32 advapi32)
+
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.
 set(proxy_bundled_libraries
-  ""
+  "$<TARGET_FILE:proxy_watchdog>"
   PARENT_SCOPE
 )
+
+add_executable(proxy_lifecycle_test EXCLUDE_FROM_ALL
+  "test/proxy_lifecycle_test.cpp" "proxy_state.cpp" "proxy_state.h")
+apply_standard_settings(proxy_lifecycle_test)
+target_include_directories(proxy_lifecycle_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(proxy_lifecycle_test PRIVATE wininet rasapi32 advapi32)
+set_target_properties(proxy_lifecycle_test PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/runner/$<CONFIG>")
 
 # === Tests ===
 # These unit tests can be run from a terminal after building the example, or
@@ -86,7 +101,7 @@ add_executable(${TEST_RUNNER}
 )
 apply_standard_settings(${TEST_RUNNER})
 target_include_directories(${TEST_RUNNER} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(${TEST_RUNNER} PRIVATE flutter_wrapper_plugin)
+target_link_libraries(${TEST_RUNNER} PRIVATE flutter_wrapper_plugin wininet rasapi32 advapi32)
 target_link_libraries(${TEST_RUNNER} PRIVATE gtest_main gmock)
 # flutter_wrapper_plugin has link dependencies on the Flutter DLL.
 add_custom_command(TARGET ${TEST_RUNNER} POST_BUILD
