@@ -5,22 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory directory;
-  late File resultFile;
   late File receiptFile;
+  String? marker;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('flclashm-install-result-');
-    resultFile = File('${directory.path}/machine/windows-install.result');
     receiptFile = File('${directory.path}/user/updates/seen.result');
-    await resultFile.parent.create(recursive: true);
+    marker = null;
   });
 
   tearDown(() => directory.delete(recursive: true));
 
   test('reports a completed install only once for each user', () async {
-    await resultFile.writeAsString('0.11.0-pre1:success:20260925093000');
+    marker = '0.11.0-pre1:success:20260925093000';
     final store = WindowsInstallResultStore(
-      resultFile: resultFile,
+      readResult: () => marker,
       receiptFile: receiptFile,
     );
 
@@ -29,24 +28,24 @@ void main() {
     expect(first?.outcome, WindowsInstallOutcome.success);
     expect(await store.consume(), isNull);
 
-    await resultFile.writeAsString('0.11.0-pre1:failed:20260925110000');
+    marker = '0.11.0-pre1:failed:20260925110000';
     expect((await store.consume())?.outcome, WindowsInstallOutcome.failed);
   });
 
   test('reports failed restoration without trusting malformed markers', () async {
     final store = WindowsInstallResultStore(
-      resultFile: resultFile,
+      readResult: () => marker,
       receiptFile: receiptFile,
     );
-    await resultFile.writeAsString('0.11.0:rollback-failed:20260925110000');
+    marker = '0.11.0:rollback-failed:20260925110000';
     expect(
       (await store.consume())?.outcome,
       WindowsInstallOutcome.rollbackFailed,
     );
 
-    await resultFile.writeAsString('0.11.0:success:invalid');
+    marker = '0.11.0:success:invalid';
     expect(await store.consume(), isNull);
-    await resultFile.writeAsBytes(List<int>.filled(257, 65));
+    marker = 'A' * 257;
     expect(await store.consume(), isNull);
   });
 }

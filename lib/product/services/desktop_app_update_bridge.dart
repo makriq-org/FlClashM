@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:ffi' show Abi, sizeOf;
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:win32/win32.dart' as win32;
+import 'package:win32_registry/win32_registry.dart';
 
 import '../../common/common.dart';
 import '../../state.dart';
@@ -178,20 +179,20 @@ class WindowsInstallResult {
   final WindowsInstallOutcome outcome;
 }
 
-/// Installer writes its result to an admin-owned, user-readable ProgramData
-/// file. A per-user receipt prevents repeated notifications without asking an
-/// unelevated GUI to delete a machine-wide file.
+/// Installer writes its result to admin-owned HKLM. A per-user receipt prevents
+/// repeated notifications without asking an unelevated GUI to remove it.
 class WindowsInstallResultStore {
-  const WindowsInstallResultStore({required this.resultFile, required this.receiptFile});
+  const WindowsInstallResultStore({
+    required this.readResult,
+    required this.receiptFile,
+  });
 
-  final File resultFile;
+  final String? Function() readResult;
   final File receiptFile;
 
   Future<WindowsInstallResult?> consume() async {
-    if (!await resultFile.exists() || await resultFile.length() > 256) {
-      return null;
-    }
-    final raw = (await resultFile.readAsString()).replaceFirst('\uFEFF', '').trim();
+    final raw = readResult()?.trim();
+    if (raw == null || raw.length > 256) return null;
     final match = RegExp(
       r'^(\d+\.\d+\.\d+(?:-pre\d+)?):(success|failed|rollback-failed):(\d{14})$',
     ).firstMatch(raw);
@@ -265,18 +266,31 @@ class DesktopAppUpdateBridge extends BaseAppUpdatePlatformBridge {
   final DesktopUpdateRollbackGuard desktopRollbackGuard;
   final DesktopInstallHandoff installHandoff;
 
+  static String? _readWindowsInstallResult() {
+    final key = Registry.openPath(
+      RegistryHive.localMachine,
+      path: r'Software\FlClashM',
+    );
+    try {
+      return key.getStringValue('InstallResult');
+    } finally {
+      key.close();
+    }
+  }
+
   Future<WindowsInstallResult?> consumePendingInstallResult() async {
-    if (environment.target.operatingSystem != DesktopUpdateOperatingSystem.windows ||
+    if (environment.target.operatingSystem !=
+            DesktopUpdateOperatingSystem.windows ||
         !Platform.isWindows) {
       return null;
     }
-    final programData = Platform.environment['PROGRAMDATA'];
-    if (programData == null || programData.isEmpty) return null;
     try {
       final home = await appPath.homeDirPath;
       return await WindowsInstallResultStore(
-        resultFile: File(path.join(programData, 'FlClashM', 'windows-install.result')),
-        receiptFile: File(path.join(home, 'updates', 'windows-install-seen.result')),
+        readResult: _readWindowsInstallResult,
+        receiptFile: File(
+          path.join(home, 'updates', 'windows-install-seen.result'),
+        ),
       ).consume();
     } catch (error) {
       commonPrint.log('Unable to read Windows installer result: $error');

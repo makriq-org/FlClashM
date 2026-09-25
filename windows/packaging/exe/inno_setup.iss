@@ -7,6 +7,7 @@ AppPublisherURL={{PUBLISHER_URL}}
 AppSupportURL={{PUBLISHER_URL}}
 AppUpdatesURL={{PUBLISHER_URL}}
 DefaultDirName={{INSTALL_DIR_NAME}}
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputDir=.
 OutputBaseFilename={{OUTPUT_BASE_FILENAME}}
@@ -22,7 +23,7 @@ ChangesAssociations=yes
 CloseApplications=no
 RestartApplications=no
 ; Update mode settings
-UsePreviousAppDir=yes
+UsePreviousAppDir=no
 UsePreviousGroup=yes
 UsePreviousTasks=yes
 
@@ -35,6 +36,7 @@ var
   IsUpgrade: Boolean;
   PreviousVersion: String;
   PreviousBundleBackup: String;
+  FreshInstallDirectoryCreated: Boolean;
   InstallStarted: Boolean;
   InstallSucceeded: Boolean;
 
@@ -48,14 +50,14 @@ begin
 end;
 
 procedure WriteInstallResult(const Status: String);
-var
-  ResultDirectory: String;
 begin
-  ResultDirectory := ExpandConstant('{commonappdata}\FlClashM');
-  if ForceDirectories(ResultDirectory) then
-    SaveStringToFile(ResultDirectory + '\windows-install.result',
-      '{{APP_VERSION}}:' + Status + ':' +
-      GetDateTimeString('yyyymmddhhnnss', '-', ':'), False);
+  { HKLM is administrator-owned but readable by the interactive user. A
+    caller-controlled ProgramData junction must not redirect an elevated file
+    write to an arbitrary destination. }
+  if not RegWriteStringValue(HKEY_LOCAL_MACHINE_64, 'Software\FlClashM',
+    'InstallResult', '{{APP_VERSION}}:' + Status + ':' +
+    GetDateTimeString('yyyymmddhhnnss', '-', ':')) then
+    Log('Не удалось записать результат установки FlClashM в реестр.');
 end;
 
 procedure SHChangeNotify(wEventId: Integer; uFlags: Integer; dwItem1: Integer; dwItem2: Integer); external 'SHChangeNotify@shell32.dll stdcall';
@@ -96,9 +98,23 @@ begin
   ForceDirectories(Destination);
   if not Exec(
     ExpandConstant('{sys}\robocopy.exe'),
-    '"' + Source + '" "' + Destination + '" /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS',
+    '"' + Source + '" "' + Destination + '" /MIR /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode >= 8) then
     RaiseException('Не удалось сохранить или восстановить предыдущую установку. Код: ' + IntToStr(ResultCode));
+end;
+
+procedure EnforceProtectedInstallAcl;
+var
+  ResultCode: Integer;
+begin
+  { Reset explicit ACLs on the fixed Program Files directory and children.
+    They inherit Program Files permissions: users can read/run, while SYSTEM
+    and Administrators can write. A previous user-writable ACL must not turn
+    the helper's trusted executable path into a privilege boundary bypass. }
+  if not Exec(ExpandConstant('{sys}\icacls.exe'),
+    '"' + ExpandConstant('{app}') + '" /reset /T', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось защитить права каталога FlClashM. Код: ' + IntToStr(ResultCode));
 end;
 
 procedure StopAndRemoveHelperService;
@@ -161,25 +177,30 @@ begin
 end;
 
 procedure RestorePreviousHelperService;
-var
-  ResultCode: Integer;
-  ServiceBinary: String;
 begin
   if (PreviousBundleBackup = '') or not DirExists(PreviousBundleBackup) then
     exit;
-  ServiceBinary := ExpandConstant('{app}\' + HelperRelativePath);
-  if not FileExists(ServiceBinary) then
-    exit;
-  Exec(ExpandConstant('{sys}\sc.exe'),
-    'create "' + HelperServiceName + '" binPath= "\"' + ServiceBinary + '\"" start= auto',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\sc.exe'), 'start "' + HelperServiceName + '"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if FileExists(ExpandConstant('{app}\' + HelperRelativePath)) then
+    InstallAndStartHelperService;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
+  { The helper authenticates the installed GUI path. Never let /DIR or a
+    previous per-user installation move that trusted executable into a
+    user-writable directory. }
+  if CompareText(ExpandFileName(ExpandConstant('{app}')),
+    ExpandFileName(ExpandConstant('{autopf}\FlClashM'))) <> 0 then
+  begin
+    Result := 'FlClashM должен быть установлен в защищённый каталог Program Files. Удалите старую установку в другом каталоге и повторите установку.';
+    exit;
+  end;
+  if IsUpgrade and not FileExists(ExpandConstant('{app}\FlClashM.exe')) then
+  begin
+    Result := 'Предыдущая установка FlClashM находится в другом каталоге. Сначала удалите её, затем установите новую версию в Program Files.';
+    exit;
+  end;
   if not WaitForGracefulExit() then
     Result := 'FlClashM ещё работает или восстанавливает системный прокси. Закройте приложение через меню значка в области уведомлений и повторите установку.';
 end;
@@ -192,25 +213,52 @@ begin
     MsgBox('Сначала закройте FlClashM через меню значка в области уведомлений, затем повторите удаление.', mbError, MB_OK);
 end;
 
-procedure DeinitializeSetup();
+procedure RelaunchAppAsOriginalUser();
 var
   ResultCode: Integer;
 begin
-  if not InstallStarted or InstallSucceeded then
+  if not FileExists(ExpandConstant('{app}\FlClashM.exe')) then
     exit;
+  try
+    if not ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
+      SW_SHOWNORMAL, ewNoWait, ResultCode) then
+      Log('Не удалось повторно открыть FlClashM. Код: ' + IntToStr(ResultCode));
+  except
+    Log('Не удалось повторно открыть FlClashM с правами исходного пользователя.');
+  end;
+end;
+
+procedure DeinitializeSetup();
+begin
+  if InstallSucceeded then
+    exit;
+  if not InstallStarted then
+  begin
+    { An app-initiated setup may fail before touching files (for example,
+      another user's GUI is still open). Restore the old GUI in that case. }
+    if IsFromApp() then
+    begin
+      WriteInstallResult('failed');
+      RelaunchAppAsOriginalUser();
+    end;
+    exit;
+  end;
   try
     StopAndRemoveHelperService;
     if PreviousBundleBackup <> '' then
     begin
       CopyBundle(PreviousBundleBackup, ExpandConstant('{app}'));
       RestorePreviousHelperService;
-      { If the GUI initiated the upgrade, return the user to the working old
-        version after a recoverable installer failure. }
-      if IsFromApp() and FileExists(ExpandConstant('{app}\FlClashM.exe')) then
-        ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
-          SW_SHOWNORMAL, ewNoWait, ResultCode);
     end;
+    if FreshInstallDirectoryCreated and
+       (PreviousBundleBackup = '') and
+       DirExists(ExpandConstant('{app}')) and
+       not DelTree(ExpandConstant('{app}'), True, True, True) then
+      RaiseException('Не удалось удалить неполную новую установку FlClashM.');
     WriteInstallResult('failed');
+    { The old GUI must read the failure marker after it has been written. }
+    if (PreviousBundleBackup <> '') and IsFromApp() then
+      RelaunchAppAsOriginalUser();
   except
     WriteInstallResult('rollback-failed');
     MsgBox('Обновление прервалось, и восстановить прежнюю версию автоматически не удалось. Повторите установку предыдущего пакета.', mbError, MB_OK);
@@ -256,22 +304,22 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
 begin
   if CurStep = ssInstall then
   begin
-    if IsUpgrade then
+    FreshInstallDirectoryCreated := not IsUpgrade and
+      not DirExists(ExpandConstant('{app}'));
+    if DirExists(ExpandConstant('{app}')) then
     begin
       PreviousBundleBackup := ExpandConstant('{tmp}\flclashm-previous-bundle');
       CopyBundle(ExpandConstant('{app}'), PreviousBundleBackup);
     end;
     InstallStarted := True;
-    if IsUpgrade then
-      StopAndRemoveHelperService;
+    StopAndRemoveHelperService;
   end
   else if CurStep = ssPostInstall then
   begin
+    EnforceProtectedInstallAcl;
     InstallAndStartHelperService;
   end
   else if CurStep = ssDone then
@@ -279,8 +327,7 @@ begin
     InstallSucceeded := True;
     WriteInstallResult('success');
     if IsFromApp() then
-      ExecAsOriginalUser(ExpandConstant('{app}\FlClashM.exe'), '', '',
-        SW_SHOWNORMAL, ewNoWait, ResultCode);
+      RelaunchAppAsOriginalUser();
   end;
 end;
 
@@ -333,6 +380,7 @@ begin
 
     usPostUninstall:
     begin
+      RegDeleteValue(HKEY_LOCAL_MACHINE_64, 'Software\FlClashM', 'InstallResult');
       if DirExists(ExpandConstant('{userappdata}\app.flclashm.client')) then
       begin
         if MsgBox('Удалить пользовательские данные программы?', mbConfirmation, MB_YESNO) = IDYES then

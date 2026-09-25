@@ -23,9 +23,16 @@ void main() {
       expect(installer, contains('StopAndRemoveHelperService'));
       expect(installer, contains('InstallAndStartHelperService'));
       expect(installer, contains('WaitForGracefulExit'));
+      expect(installer, contains('DisableDirPage=yes'));
+      expect(installer, contains('UsePreviousAppDir=no'));
+      expect(installer, contains('EnforceProtectedInstallAcl'));
+      expect(installer, contains("ExpandConstant('{autopf}\\FlClashM')"));
       expect(installer, contains('proxy_watchdog'));
       expect(installer, contains('PreviousBundleBackup'));
+      expect(installer, contains('FreshInstallDirectoryCreated'));
       expect(installer, contains("WriteInstallResult('success')"));
+      expect(installer, contains('RegWriteStringValue(HKEY_LOCAL_MACHINE_64'));
+      expect(installer, isNot(contains('{commonappdata}')));
       expect(installer, isNot(contains('taskkill')));
       expect(installer, contains('Удалить пользовательские данные программы?'));
       expect(helper, contains(r'\\.\pipe\app.flclashm.client.helper.v1'));
