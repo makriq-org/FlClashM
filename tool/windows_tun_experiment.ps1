@@ -53,9 +53,9 @@ function Start-ExperimentCore([bool]$AutoRoute) {
     $stream = $script:client.GetStream()
     $script:reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
     $script:writer = [IO.StreamWriter]::new($stream, [Text.Encoding]::UTF8)
-    $home = Join-Path $OutputDirectory 'mihomo-home'
-    New-Item -ItemType Directory -Force $home | Out-Null
-    $initialized = Send-CoreAction 'initClash' (@{ 'home-dir' = $home; version = 1 } | ConvertTo-Json -Compress)
+    $mihomoHome = Join-Path $OutputDirectory 'mihomo-home'
+    New-Item -ItemType Directory -Force $mihomoHome | Out-Null
+    $initialized = Send-CoreAction 'initClash' (@{ 'home-dir' = $mihomoHome; version = 1 } | ConvertTo-Json -Compress)
     if ($initialized -ne $true) { throw 'mihomo initialization failed' }
     $config = @{
       'mixed-port' = 0
