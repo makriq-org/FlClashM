@@ -572,7 +572,8 @@ jobs:
           if [ "${{ env.IS_STABLE }}" = "true" ]; then
             release_channel=stable
           fi
-          published_at=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          # A rerun of the same immutable tag must sign identical catalog bytes.
+          published_at=$(date -u -d "$(git show -s --format=%cI "$GITHUB_SHA")" +"%Y-%m-%dT%H:%M:%S.000Z")
           mkdir -p "${RUNNER_TEMP}/desktop-update"
           dart tool/write_desktop_update_catalog.dart \
             --dist dist \

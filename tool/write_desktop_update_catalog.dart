@@ -8,7 +8,7 @@ import 'release_contract.dart';
 import 'write_app_update_manifest.dart' show signAppUpdateManifest;
 
 Future<void> main(List<String> args) async {
-  final options = _Options.parse(args);
+  final options = DesktopCatalogOptions.parse(args);
   final version = readPubspecVersion();
   final failure = validateReleaseTag(
         refName: options.tag,
@@ -24,27 +24,7 @@ Future<void> main(List<String> args) async {
     throw StateError('Missing APP_UPDATE_SIGNING_KEY.');
   }
 
-  final assets = await _assets(options);
-  if (assets.isEmpty) {
-    throw StateError('No desktop update packages found in `${options.dist}`.');
-  }
-  final catalog = <String, Object?>{
-    'schemaVersion': 1,
-    'catalogId': sha256
-        .convert(utf8.encode('${options.tag}:${options.channel.wireName}'))
-        .toString()
-        .substring(0, 32),
-    'channel': options.channel.wireName,
-    'release': <String, Object?>{
-      'tagName': options.tag,
-      'versionName': options.tag.substring(1),
-      'versionCode': version.versionCode,
-      'publishedAt': options.publishedAt.toIso8601String(),
-      'body': File(options.releaseNotes).readAsStringSync(),
-      'htmlUrl': '$sourceForgeProjectUrl/files/releases/${options.tag}/',
-      'assets': assets,
-    },
-  };
+  final catalog = await buildDesktopUpdateCatalog(options);
   final bytes = utf8.encode('${const JsonEncoder.withIndent('  ').convert(catalog)}\n');
   final signature = await signAppUpdateManifest(
     bytes,
@@ -57,7 +37,33 @@ Future<void> main(List<String> args) async {
   File('${output.path}.sig').writeAsBytesSync(signature, flush: true);
 }
 
-Future<List<Map<String, Object>>> _assets(_Options options) async {
+Future<Map<String, Object?>> buildDesktopUpdateCatalog(
+  DesktopCatalogOptions options,
+) async {
+  final assets = await _assets(options);
+  if (assets.isEmpty) {
+    throw StateError('No desktop update packages found in `${options.dist}`.');
+  }
+  return <String, Object?>{
+    'schemaVersion': 1,
+    'catalogId': sha256
+        .convert(utf8.encode('${options.tag}:${options.channel.wireName}'))
+        .toString()
+        .substring(0, 32),
+    'channel': options.channel.wireName,
+    'release': <String, Object?>{
+      'tagName': options.tag,
+      'versionName': options.tag.substring(1),
+      'versionCode': readPubspecVersion().versionCode,
+      'publishedAt': options.publishedAt.toIso8601String(),
+      'body': File(options.releaseNotes).readAsStringSync(),
+      'htmlUrl': '$sourceForgeProjectUrl/files/releases/${options.tag}/',
+      'assets': assets,
+    },
+  };
+}
+
+Future<List<Map<String, Object>>> _assets(DesktopCatalogOptions options) async {
   const targets = <String, (String, String, String)> {
     'FlClashM-linux-x64.AppImage': ('linux', 'x86_64', 'appimage'),
     'FlClashM-windows-x64-setup.exe': ('windows', 'x86_64', 'windows-installer'),
@@ -92,8 +98,8 @@ Future<List<Map<String, Object>>> _assets(_Options options) async {
   return assets;
 }
 
-class _Options {
-  const _Options({
+class DesktopCatalogOptions {
+  const DesktopCatalogOptions({
     required this.dist,
     required this.output,
     required this.releaseNotes,
@@ -103,7 +109,7 @@ class _Options {
     required this.publishedAt,
   });
 
-  factory _Options.parse(List<String> args) {
+  factory DesktopCatalogOptions.parse(List<String> args) {
     final values = <String, String>{};
     for (var index = 0; index < args.length; index++) {
       final argument = args[index];
@@ -124,7 +130,7 @@ class _Options {
     if (publishedAt == null || !publishedAt.isUtc) {
       throw ArgumentError('Expected a UTC --published-at timestamp.');
     }
-    return _Options(
+    return DesktopCatalogOptions(
       dist: required('dist'),
       output: required('out'),
       releaseNotes: required('release-notes'),
