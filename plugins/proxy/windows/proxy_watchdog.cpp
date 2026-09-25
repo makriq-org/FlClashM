@@ -14,6 +14,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR args, int) {
   if (parent_pid == 0 || end == args || *end != L'\0') return 1;
   HANDLE parent = OpenProcess(SYNCHRONIZE, FALSE, parent_pid);
   if (!parent) return 1;
+  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetProcessTimes(parent, &created, &exited, &kernel, &user)) {
+    CloseHandle(parent);
+    return 1;
+  }
+  const auto owner_created =
+      (static_cast<ULONGLONG>(created.dwHighDateTime) << 32) |
+       created.dwLowDateTime;
   HANDLE parent_pipe = GetStdHandle(STD_INPUT_HANDLE);
   HANDLE ready_pipe = GetStdHandle(STD_OUTPUT_HANDLE);
   if (!parent_pipe || parent_pipe == INVALID_HANDLE_VALUE ||
@@ -32,5 +40,5 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR args, int) {
   WaitForSingleObject(parent, INFINITE);
   CloseHandle(parent);
   std::wstring error;
-  return proxy::RecoverOwnedProxy(&error) ? 0 : 4;
+  return proxy::RecoverOwnedProxy(parent_pid, owner_created, &error) ? 0 : 4;
 }

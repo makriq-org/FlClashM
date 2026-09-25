@@ -37,7 +37,7 @@ class _ProxyManagerState extends ConsumerState<ProxyManager> {
           debugPrint('Could not enable the system proxy');
           _disableFailedWindowsProxy();
         }
-      } else if (_started || Platform.isWindows) {
+      } else {
         // On Windows this also recovers an orphaned journal after a crash. When
         // there is no owner it is a strict no-op, including on first launch.
         final stopped = await proxy?.stopProxy() == true;

@@ -139,7 +139,9 @@ int Run() {
     Settings original;
     ~RestoreOnExit() {
       std::wstring error;
-      if (!proxy::StopOwnedProxy(&error) || !Write(original)) {
+      const bool stopped = proxy::StopOwnedProxy(&error);
+      const bool restored = Write(original);
+      if (!stopped || !restored) {
         std::wcerr << L"Failed to restore runner proxy settings: " << error << std::endl;
         ExitProcess(90);
       }

@@ -305,18 +305,27 @@ bool QueryConnection(const std::wstring& name, ConnectionState* out,
 
 bool SetConnection(const std::wstring& name, DWORD flags,
                    const std::wstring& server, const std::wstring& bypass,
+                   bool set_flags, bool set_server, bool set_bypass,
                    std::wstring* error) {
   std::array<INTERNET_PER_CONN_OPTIONW, 3> options{};
-  options[0].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
-  options[0].Value.pszValue = const_cast<wchar_t*>(server.c_str());
-  options[1].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
-  options[1].Value.pszValue = const_cast<wchar_t*>(bypass.c_str());
-  options[2].dwOption = INTERNET_PER_CONN_FLAGS;
-  options[2].Value.dwValue = flags;
+  DWORD count = 0;
+  if (set_server) {
+    options[count].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+    options[count++].Value.pszValue = const_cast<wchar_t*>(server.c_str());
+  }
+  if (set_bypass) {
+    options[count].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+    options[count++].Value.pszValue = const_cast<wchar_t*>(bypass.c_str());
+  }
+  if (set_flags) {
+    options[count].dwOption = INTERNET_PER_CONN_FLAGS;
+    options[count++].Value.dwValue = flags;
+  }
+  if (count == 0) return true;
   INTERNET_PER_CONN_OPTION_LISTW list{};
   list.dwSize = sizeof(list);
   list.pszConnection = name.empty() ? nullptr : const_cast<wchar_t*>(name.c_str());
-  list.dwOptionCount = static_cast<DWORD>(options.size());
+  list.dwOptionCount = count;
   list.pOptions = options.data();
   if (!InternetSetOptionW(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION,
                           &list, sizeof(list))) {
@@ -375,7 +384,9 @@ bool Restore(const Journal& journal, std::wstring* error) {
                                      ? entry.before.bypass : current.bypass;
     if (flags == current.flags && server == current.server && bypass == current.bypass)
       continue;
-    if (!SetConnection(entry.before.name, flags, server, bypass, &issue)) {
+    if (!SetConnection(entry.before.name, flags, server, bypass,
+                       flags != current.flags, server != current.server,
+                       bypass != current.bypass, &issue)) {
       if (first_error.empty()) first_error = issue;
       all_ok = false;
     } else {
@@ -391,28 +402,22 @@ bool Restore(const Journal& journal, std::wstring* error) {
   return all_ok;
 }
 
-bool RecoverLocked(bool only_if_dead, std::wstring* error) {
-  Journal journal;
-  bool exists = false;
-  if (!LoadJournal(&journal, &exists, error)) return false;
-  if (!exists) return true;
-  if (only_if_dead) {
-    const auto status = OwnerProcessStatus(journal);
-    if (status == ProcessStatus::alive) return true;
-    if (status == ProcessStatus::unknown) {
-      *error = L"Cannot establish whether proxy owner is still running";
-      return false;
-    }
-  }
-  if (!Restore(journal, error)) return false;
-  return DeleteJournal(error);
-}
 
 }  // namespace
 
-bool RecoverOwnedProxy(std::wstring* error) {
+bool RecoverOwnedProxy(std::uint32_t owner_pid, std::uint64_t owner_created,
+                       std::wstring* error) {
   MutexLock lock(error);
-  return lock.ok() && RecoverLocked(true, error);
+  if (!lock.ok()) return false;
+  Journal journal;
+  bool exists = false;
+  if (!LoadJournal(&journal, &exists, error)) return false;
+  if (!exists || journal.owner_pid != owner_pid ||
+      journal.owner_created != owner_created) return true;
+  // The watchdog opened this exact process before signalling readiness and
+  // waited for its handle to terminate. A recycled PID cannot fool it.
+  if (!Restore(journal, error)) return false;
+  return DeleteJournal(error);
 }
 
 bool StopOwnedProxy(std::wstring* error) {
@@ -493,7 +498,8 @@ bool StartOwnedProxy(int port, const std::vector<std::wstring>& bypass,
   }
   if (!SaveJournal(journal, error)) return false;
   for (const auto& entry : journal.entries) {
-    if (!SetConnection(entry.before.name, kOwnedFlags, server, bypass_string, error)) {
+    if (!SetConnection(entry.before.name, kOwnedFlags, server, bypass_string,
+                       true, true, true, error)) {
       std::wstring restore_error;
       if (Restore(journal, &restore_error)) DeleteJournal(&restore_error);
       return false;
