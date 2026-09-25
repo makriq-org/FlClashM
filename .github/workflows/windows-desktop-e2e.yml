@@ -82,6 +82,13 @@ jobs:
           $mihomo = Join-Path (Resolve-Path '.dart_tool/desktop-runtime-assets').Path 'install/runtimes/windows/x86_64/mihomo.exe'
           ./tool/windows_tun_experiment.ps1 -Mihomo $mihomo
 
+      - name: Verify system proxy lifecycle and crash recovery
+        shell: pwsh
+        run: |
+          cmake --build build/windows/x64 --config Release --target proxy_lifecycle_test
+          & 'build/windows/x64/runner/Release/proxy_lifecycle_test.exe'
+          if ($LASTEXITCODE -ne 0) { throw "Proxy lifecycle failed: $LASTEXITCODE" }
+
       - name: Upload Windows TUN evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
