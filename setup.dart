@@ -179,6 +179,11 @@ Future<void> _buildAndroidCore({
   required List<AndroidArch> arches,
   required String coreVersion,
 }) async {
+  await _exec(
+    ['bash', _projectPath('tool', 'prepare_core.sh')],
+    workingDirectory: _projectRoot,
+    name: 'prepare patched mihomo dependencies',
+  );
   final ndkBin = _resolveNdkBinDir();
   final targetRoot = Directory(_projectPath(_libclashDir));
   if (!targetRoot.existsSync()) {
@@ -221,6 +226,7 @@ Future<void> _buildAndroidCore({
       [
         'go',
         'build',
+        '-mod=vendor',
         '-ldflags=-w -s -X github.com/metacubex/mihomo/constant.Version=$coreVersion',
         '-tags=with_gvisor,cmfa',
         '-buildmode=c-shared',
