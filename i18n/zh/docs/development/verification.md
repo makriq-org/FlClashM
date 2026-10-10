@@ -29,7 +29,7 @@ flutter analyze --fatal-infos lib/product test/product test/tool
 
 ## 📱 Android 构建
 
-需要：Android SDK、NDK `28.0.13004108`、JDK 17。
+需要：Android SDK 37.0、NDK `28.0.13004108` + `28.2.13676358`、JDK 17。
 
 ```bash
 flutter pub get

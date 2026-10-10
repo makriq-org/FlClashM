@@ -65,7 +65,7 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 <summary>🔧 Updating and rolling back olcrtc</summary>
 
 - **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.2 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
-- **Rollback:** restore the previous commit `b33680871cdb94a7523829f8073de3eafa5b3ece` and rebuild the artifacts with the same command; roll the server back at the same time because the wire format changed.
+- **Rollback:** restore the previous source pin `189d16c093c4f721376afb5eaa0213d132a11242` together with its module locks, release metadata, and Android artifacts. This update preserves the existing wire format.
 
 </details>
 
