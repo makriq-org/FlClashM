@@ -11,11 +11,11 @@ part 'generated/common.freezed.dart';
 part 'generated/common.g.dart';
 
 @freezed
-class NavigationItem with _$NavigationItem {
+abstract class NavigationItem with _$NavigationItem {
   const factory NavigationItem({
     required Icon icon,
     required PageLabel label,
-    final String? description,
+    String? description,
     required Widget view,
     @Default(true) bool keep,
     String? path,
@@ -25,7 +25,7 @@ class NavigationItem with _$NavigationItem {
 }
 
 @freezed
-class Package with _$Package {
+abstract class Package with _$Package {
   const factory Package({
     required String packageName,
     required String label,
@@ -39,7 +39,7 @@ class Package with _$Package {
 }
 
 @freezed
-class Metadata with _$Metadata {
+abstract class Metadata with _$Metadata {
   const factory Metadata({
     required int uid,
     required String network,
@@ -57,7 +57,7 @@ class Metadata with _$Metadata {
 }
 
 @freezed
-class Connection with _$Connection {
+abstract class Connection with _$Connection {
   const factory Connection({
     required String id,
     num? upload,
@@ -91,7 +91,7 @@ String _logDateTime(_) => DateTime.now().toString();
 // }
 
 @freezed
-class Log with _$Log {
+abstract class Log with _$Log {
   const factory Log({
     @JsonKey(name: "LogLevel") @Default(LogLevel.app) LogLevel logLevel,
     @JsonKey(name: "Payload") @Default("") String payload,
@@ -110,7 +110,7 @@ class Log with _$Log {
 }
 
 @freezed
-class LogsState with _$LogsState {
+abstract class LogsState with _$LogsState {
   const factory LogsState({
     @Default([]) List<Log> logs,
     @Default([]) List<String> keywords,
@@ -134,7 +134,7 @@ extension LogsStateExt on LogsState {
 }
 
 @freezed
-class ConnectionsState with _$ConnectionsState {
+abstract class ConnectionsState with _$ConnectionsState {
   const factory ConnectionsState({
     @Default([]) List<Connection> connections,
     @Default([]) List<String> keywords,
@@ -167,7 +167,7 @@ extension ConnectionsStateExt on ConnectionsState {
 const defaultDavFileName = "backup.zip";
 
 @freezed
-class DAV with _$DAV {
+abstract class DAV with _$DAV {
   const factory DAV({
     required String uri,
     required String user,
@@ -179,7 +179,7 @@ class DAV with _$DAV {
 }
 
 @freezed
-class FileInfo with _$FileInfo {
+abstract class FileInfo with _$FileInfo {
   const factory FileInfo({
     required int size,
     required DateTime lastModified,
@@ -192,7 +192,7 @@ extension FileInfoExt on FileInfo {
 }
 
 @freezed
-class VersionInfo with _$VersionInfo {
+abstract class VersionInfo with _$VersionInfo {
   const factory VersionInfo({
     @Default("") String clashName,
     @Default("") String version,
@@ -247,7 +247,7 @@ class TrafficValueShow {
 }
 
 @freezed
-class Proxy with _$Proxy {
+abstract class Proxy with _$Proxy {
   const factory Proxy(
       {required String name,
       required String type,
@@ -258,7 +258,7 @@ class Proxy with _$Proxy {
 }
 
 @freezed
-class Group with _$Group {
+abstract class Group with _$Group {
   const factory Group({
     required GroupType type,
     @Default([]) List<Proxy> all,
@@ -379,7 +379,7 @@ class TrafficValue {
 }
 
 @freezed
-class ColorSchemes with _$ColorSchemes {
+abstract class ColorSchemes with _$ColorSchemes {
   const factory ColorSchemes({
     ColorScheme? lightColorScheme,
     ColorScheme? darkColorScheme,
@@ -490,7 +490,7 @@ class IpInfo {
 }
 
 @freezed
-class HotKeyAction with _$HotKeyAction {
+abstract class HotKeyAction with _$HotKeyAction {
   const factory HotKeyAction({
     required HotAction action,
     int? key,
@@ -504,7 +504,7 @@ class HotKeyAction with _$HotKeyAction {
 typedef Validator = String? Function(String? value);
 
 @freezed
-class Field with _$Field {
+abstract class Field with _$Field {
   const factory Field({
     required String label,
     required String value,
@@ -530,7 +530,7 @@ class PopupMenuItemData {
 }
 
 @freezed
-class TextPainterParams with _$TextPainterParams {
+abstract class TextPainterParams with _$TextPainterParams {
   const factory TextPainterParams({
     required String? text,
     required double? fontSize,
@@ -548,7 +548,7 @@ class CloseWindowIntent extends Intent {
 }
 
 @freezed
-class Result<T> with _$Result<T> {
+abstract class Result<T> with _$Result<T> {
   const factory Result({
     required T? data,
     required ResultType type,
@@ -575,7 +575,7 @@ extension ResultExt on Result {
 }
 
 @freezed
-class Script with _$Script {
+abstract class Script with _$Script {
   const factory Script({
     required String id,
     required String label,

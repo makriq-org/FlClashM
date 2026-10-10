@@ -704,8 +704,10 @@ class StormDnsSettingsResolver {
       return value;
     }
     final bounds = <String>[
-      if (minimum != null)
-        range.exclusiveMinimum ? 'above $minimum' : 'at least $minimum',
+      if (minimum != null && range.exclusiveMinimum)
+        'above $minimum'
+      else if (minimum != null)
+        'at least $minimum',
       if (maximum != null) 'at most $maximum',
     ];
     throw FormatException(

@@ -1,7 +1,8 @@
-git-87348df5b11f9e490262a713ca268734007af44f
+git-ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc
 https://github.com/nullroute1970/StormDNS.git
-go1.26.4
+go1.27.2
 ndk-28.0.13004108
+modules:d457b63e8cd3a9f59f24652e5d5a8267125abea98d07b96729f18d3be85713b1
 armeabi-v7a:arm:7
 arm64-v8a:arm64:
 x86_64:amd64:

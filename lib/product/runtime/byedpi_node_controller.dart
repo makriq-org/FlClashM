@@ -872,7 +872,7 @@ class ByedpiNodeController
     final selection = _asMap(value['selection']);
     final urls = [
       for (final item in (test['urls'] as List? ?? const []))
-        if (Uri.tryParse('$item') case final uri?) uri,
+        ?Uri.tryParse('$item'),
     ];
     return _ByedpiConfig(
       mode: '${value['mode'] ?? 'manual'}',

@@ -261,12 +261,13 @@ class BuiltInProxyNormalizer {
               : value is List
                   ? [
                       for (var index = 0; index < value.length; index++)
-                        value[index] is Map
-                            ? _normalizeKeys(
-                                value[index] as Map,
-                                path: '$path.$canonical[$index]',
-                              )
-                            : value[index],
+                        if (value[index] is Map)
+                          _normalizeKeys(
+                            value[index] as Map,
+                            path: '$path.$canonical[$index]',
+                          )
+                        else
+                          value[index],
                     ]
                   : value;
     }

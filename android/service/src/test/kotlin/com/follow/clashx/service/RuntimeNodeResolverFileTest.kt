@@ -14,7 +14,7 @@ class RuntimeNodeResolverFileTest {
 
     @Test
     fun `single endpoint mode uses the first Android DNS with port 53`() {
-        val root = createTempDir(prefix = "resolver-file-")
+        val root = Files.createTempDirectory("resolver-file-").toFile()
         try {
             File(root, "config.template.yaml").writeText(
                 "net:\n  dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
@@ -39,7 +39,7 @@ class RuntimeNodeResolverFileTest {
 
     @Test
     fun `single endpoint mode reports unavailable system DNS`() {
-        val root = createTempDir(prefix = "resolver-file-")
+        val root = Files.createTempDirectory("resolver-file-").toFile()
         try {
             File(root, "config.template.yaml").writeText(
                 "dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",
@@ -62,7 +62,7 @@ class RuntimeNodeResolverFileTest {
 
     @Test
     fun `single endpoint mode requires exactly one placeholder`() {
-        val root = createTempDir(prefix = "resolver-file-")
+        val root = Files.createTempDirectory("resolver-file-").toFile()
         try {
             val spec = RuntimeNodeResolverFile(
                 template = "config.template.yaml",
@@ -89,7 +89,7 @@ class RuntimeNodeResolverFileTest {
 
     @Test
     fun `previous generated file can be restored after a DNS update failure`() {
-        val root = createTempDir(prefix = "resolver-file-")
+        val root = Files.createTempDirectory("resolver-file-").toFile()
         try {
             File(root, "config.template.yaml").writeText(
                 "dns: ${RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER}\n",

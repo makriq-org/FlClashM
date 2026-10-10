@@ -30,6 +30,9 @@ nix develop -c make check            # boundaries + release-contract + drift + t
 nix develop -c make fetch-upstream   # подтянуть upstream/dev
 ```
 
+Закреплённые зависимости OlcRTC и StormDNS и порядок их обновления описаны в
+[tool/runtime_go_modules](../../../../tool/runtime_go_modules/README.md).
+
 Подробности сборки и проверок — в [проверке сборки](verification.md) и в [README проекта](../../../../README.md#-сборка).
 
 > 🤖 Правила работы над кодом (границы base/product, touchpoints, drift-бюджет) описаны в [AGENTS.md](../../../../AGENTS.md).

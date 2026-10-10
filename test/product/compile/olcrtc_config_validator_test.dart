@@ -21,7 +21,7 @@ void main() {
         },
         'encryption-key': key,
         'transport': transport,
-        if (dns != null) 'dns-server': dns,
+        'dns-server': ?dns,
         if (transport != 'datachannel')
           'transport-options': switch (transport) {
             'vp8channel' => {'fps': 30, 'batch-size': 64},

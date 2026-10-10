@@ -1,16 +1,18 @@
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/material.dart';
 import 'package:riverpod/riverpod.dart';
+
 import 'context.dart';
 
-mixin AutoDisposeNotifierMixin<T> on AutoDisposeNotifier<T> {
+mixin AutoDisposeNotifierMixin<T> on AnyNotifier<T, T> {
   set value(T value) {
     state = value;
   }
 
   @override
   bool updateShouldNotify(previous, next) {
-    final res = super.updateShouldNotify(previous, next);
+    // Keep the identity-based notification semantics used before Riverpod 3.
+    final res = !identical(previous, next);
     if (res) {
       onUpdate(next);
     }

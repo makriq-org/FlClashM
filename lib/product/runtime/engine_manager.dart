@@ -104,24 +104,16 @@ class _CompiledRuntimePlan {
 class EngineManager {
   EngineManager({
     required RuntimeRegistry runtimeRegistry,
-    required LoadCurrentRawProfileCallback loadCurrentRawProfile,
-    required CompileProfilePatchCallback compileProfilePatch,
-    required EnforceSecurityPolicyCallback enforceSecurityPolicy,
-    required SecureRuntimeUpdateCallback secureRuntimeUpdate,
-    required BuildRuntimePlanCallback buildRuntimePlan,
-    required ApplyRuntimePlanCallback applyRuntimePlan,
-    required BuildCoreStateCallback buildCoreState,
-    required BuildInitParamsCallback buildInitParams,
+    required this._loadCurrentRawProfile,
+    required this._compileProfilePatch,
+    required this._enforceSecurityPolicy,
+    required this._secureRuntimeUpdate,
+    required this._buildRuntimePlan,
+    required this._applyRuntimePlan,
+    required this._buildCoreState,
+    required this._buildInitParams,
   })  : _runtimeRegistry = runtimeRegistry,
-        _activeRuntime = runtimeRegistry.resolveSelection(),
-        _loadCurrentRawProfile = loadCurrentRawProfile,
-        _compileProfilePatch = compileProfilePatch,
-        _enforceSecurityPolicy = enforceSecurityPolicy,
-        _secureRuntimeUpdate = secureRuntimeUpdate,
-        _buildRuntimePlan = buildRuntimePlan,
-        _applyRuntimePlan = applyRuntimePlan,
-        _buildCoreState = buildCoreState,
-        _buildInitParams = buildInitParams;
+        _activeRuntime = runtimeRegistry.resolveSelection();
 
   final RuntimeRegistry _runtimeRegistry;
   ResolvedRuntimeSelection _activeRuntime;

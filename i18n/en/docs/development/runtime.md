@@ -56,7 +56,7 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - Before startup FlClashM validates provider/direct-engine rules, transport-specific options, the key, and DNS
 - The Android service keeps a limited tail of the process output; if OlcRTC exits before opening the SOCKS5 port, the reason is returned to Dart immediately and shown to the user
 - Runs as a separate process via the stable `config.yaml` contract; the mobile library is not used
-- The sources are pinned to commit `189d16c093c4f721376afb5eaa0213d132a11242`
+- The sources are pinned to commit `f3ad8fb7c0d0fa981423f83269526fa94077c23d`
 - The generated config omits `data`: name dictionaries are embedded, while a non-empty value now explicitly selects an override directory
 - The runtime uses OLC2 and OLVC 5 formats that are incompatible with older builds, so client and server must be updated together
 - The SHA-256 of each binary is pinned next to the commit; asset preparation and tests reject outdated or altered files even with a matching stamp
@@ -64,7 +64,7 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 <details>
 <summary>🔧 Updating and rolling back olcrtc</summary>
 
-- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.26.5 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
+- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.2 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
 - **Rollback:** restore the previous commit `b33680871cdb94a7523829f8073de3eafa5b3ece` and rebuild the artifacts with the same command; roll the server back at the same time because the wire format changed.
 
 </details>
@@ -78,13 +78,13 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - The `messenger` / `balanced` / `bulk` presets set duplication and compression; the layering order is **StormDNS defaults → preset → explicit fields**
 - Schema ranges are taken from StormDNS `finalizeClientConfig`: anything upstream would silently clamp is rejected before launch. Linked bounds are checked in full — `upload-setup` ≥ `upload`, `download-setup` ≥ `download`, `mtu.*.max` ≥ `min`, `nack-max-gap` ≤ `window/4`, `process-workers` ≥ `workers`, and the ordering of RTO values, ping intervals, ping thresholds and `session-retry-base` ≤ `session-retry-max`
 - Declares startup-failure marker lines; the service stops waiting for the port as soon as one matches, instead of sitting out the 120 s budget
-- Sources are pinned to commit `87348df5b11f9e490262a713ca268734007af44f`
+- Sources are pinned to commit `ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc`
 - The SHA-256 of every binary is pinned next to the commit; asset preparation and tests reject stale or modified files even when the stamp matches
 
 <details>
 <summary>🔧 Updating and rolling back stormdns</summary>
 
-- **Update:** change the pinned commit, rebuild the three Android ABIs with the pinned Go 1.26.4 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, refresh the pinned SHA-256 values from the produced files, and re-run the command and the tests.
+- **Update:** change the pinned commit, rebuild the three Android ABIs with the pinned Go 1.27.2 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, refresh the pinned SHA-256 values from the produced files, and re-run the command and the tests.
 - **Rollback:** the node ships for the first time, so there is no previous pinned commit. A version rollback means restoring the commit and rebuilding the same way; the operational rollback for a user is removing the node from the profile. No data migration is needed: the working cache is keyed by fingerprint and is rebuilt.
 
 </details>

@@ -21,7 +21,7 @@ void main() {
         .compile(
           rawConfig: <String, dynamic>{
             'proxies': [node],
-            if (groups != null) 'proxy-groups': groups,
+            'proxy-groups': ?groups,
           },
           patchConfig: const ClashConfig(),
           globalTestUrl: globalTestUrl,
@@ -316,5 +316,5 @@ Map<String, dynamic> _group(String name, List<String> proxies, {String? url}) =>
       'name': name,
       'type': 'fallback',
       'proxies': proxies,
-      if (url != null) 'url': url,
+      'url': ?url,
     };

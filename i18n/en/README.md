@@ -186,7 +186,7 @@ Full reference — in the **[documentation hub](docs/README.md)**.
 
 ## 🏗 Building
 
-Requires **Flutter 3.41.x**, **JDK 17**, **Android SDK/NDK**, and **Go 1.26.x**.
+Requires **Flutter 3.47.x**, **JDK 17**, **Android SDK/NDK**, and **Go 1.27.2**.
 
 ### On NixOS (recommended)
 

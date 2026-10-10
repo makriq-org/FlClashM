@@ -6,11 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('bundled release stamp and Android ABI assets match the pin', () {
+    final modulesDigest = sha256.convert([
+      ...File('tool/runtime_go_modules/olcrtc.mod').readAsBytesSync(),
+      ...File('tool/runtime_go_modules/olcrtc.sum').readAsBytesSync(),
+    ]);
     final expectedStamp = <String>[
       olcRtcPinnedReleaseTag,
       olcRtcSourceRepository,
       olcRtcPinnedGoVersion,
       'ndk-$olcRtcPinnedNdkVersion',
+      'modules:$modulesDigest',
       ...olcRtcReleaseAssets.values.map(
         (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
       ),
@@ -22,11 +27,7 @@ void main() {
           .trim(),
       expectedStamp,
     );
-    expect(olcRtcReleaseAssets.keys, {
-      'armeabi-v7a',
-      'arm64-v8a',
-      'x86_64',
-    });
+    expect(olcRtcReleaseAssets.keys, {'armeabi-v7a', 'arm64-v8a', 'x86_64'});
     for (final asset in olcRtcReleaseAssets.values) {
       final bytes = File(asset.bundledAssetPath).readAsBytesSync();
       expect(bytes.length, greaterThan(4), reason: asset.abi);

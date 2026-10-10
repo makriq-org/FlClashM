@@ -186,7 +186,7 @@ tun:
 
 ## 🏗 ساخت
 
-نیازمند **Flutter 3.41.x**، **JDK 17**، **Android SDK/NDK** و **Go 1.26.x**.
+نیازمند **Flutter 3.47.x**، **JDK 17**، **Android SDK/NDK** و **Go 1.27.2**.
 
 ### روی NixOS (توصیه‌شده)
 
