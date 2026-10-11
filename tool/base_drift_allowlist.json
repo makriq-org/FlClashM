@@ -883,7 +883,7 @@
     {
       "path": "android/build.gradle.kts",
       "bucket": "budget",
-      "reason": "Выровнены JVM-цели Java/Kotlin в flutter_js для совместимости с актуальным Kotlin без отключения проверки целей."
+      "reason": "Добавлены узкие настройки Kotlin для flutter_js и file_picker: согласованные JVM-цели и компиляция в режиме совместимости AGP 9."
     }
   ]
 }
