@@ -186,7 +186,7 @@ tun:
 
 ## 🏗 Сборка
 
-Нужны **Flutter 3.41.x**, **JDK 17**, **Android SDK/NDK** и **Go 1.26.x**.
+Нужны **Flutter 3.47.x**, **JDK 17**, **Android SDK/NDK** и **Go 1.27.2**.
 
 ### На NixOS (рекомендуется)
 

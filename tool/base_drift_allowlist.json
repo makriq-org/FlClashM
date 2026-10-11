@@ -749,6 +749,141 @@
       "path": "lib/widgets/line_chart.dart",
       "bucket": "budget",
       "reason": "График использует уже построенный Path без лишнего полного прохода по метрикам на каждом кадре."
+    },
+    {
+      "path": "android/core/build.gradle.kts",
+      "bucket": "budget",
+      "reason": "Обновлены Android-инструменты и библиотеки для совместимости с актуальными Flutter-плагинами."
+    },
+    {
+      "path": "android/gradle.properties",
+      "bucket": "budget",
+      "reason": "Обновлены Android-инструменты и библиотеки для совместимости с актуальными Flutter-плагинами."
+    },
+    {
+      "path": "android/gradle/wrapper/gradle-wrapper.properties",
+      "bucket": "budget",
+      "reason": "Обновлены Android-инструменты и библиотеки для совместимости с актуальными Flutter-плагинами."
+    },
+    {
+      "path": "lib/common/color.dart",
+      "bucket": "budget",
+      "reason": "Удалён недопустимый в Dart 3.13 модификатор параметра без изменения вычисления цвета."
+    },
+    {
+      "path": "lib/common/mixin.dart",
+      "bucket": "budget",
+      "reason": "Адаптирован общий notifier к Riverpod 3 с сохранением уведомлений и записи настроек."
+    },
+    {
+      "path": "lib/common/picker.dart",
+      "bucket": "budget",
+      "reason": "Выбор файлов переведён на статический API FilePicker 11 без изменения пользовательского сценария."
+    },
+    {
+      "path": "lib/models/app.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/models/clash_config.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/models/common.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/models/core.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/models/generated/app.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/clash_config.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/clash_config.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/common.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/common.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/core.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/profile.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/profile.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/selector.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/generated/widget.freezed.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/models/selector.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/models/widget.dart",
+      "bucket": "budget",
+      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+    },
+    {
+      "path": "lib/pages/scan.dart",
+      "bucket": "budget",
+      "reason": "Выбор файлов переведён на статический API FilePicker 11 без изменения пользовательского сценария."
+    },
+    {
+      "path": "lib/providers/generated/app.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/providers/generated/config.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "lib/providers/generated/state.g.dart",
+      "bucket": "budget",
+      "reason": "Перегенерированы модели и провайдеры после обновления Freezed, JSON и Riverpod."
+    },
+    {
+      "path": "android/build.gradle.kts",
+      "bucket": "budget",
+      "reason": "Выровнены JVM-цели Java/Kotlin в flutter_js для совместимости с актуальным Kotlin без отключения проверки целей."
     }
   ]
 }

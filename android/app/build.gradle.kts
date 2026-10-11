@@ -26,17 +26,13 @@ val isRelease = mStoreFile.exists()
 
 android {
     namespace = "com.follow.clashx"
-    compileSdk = 36
-    ndkVersion = "28.0.13004108"
+    compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -100,13 +96,13 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":common"))
     implementation(project(":service"))
-    implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.code.gson:gson:2.10.1")
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    implementation("androidx.core:core-splashscreen:1.2.0")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("com.google.code.gson:gson:2.14.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     testImplementation(kotlin("test"))
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
 
 fun detectKeystoreType(file: File): String? {
@@ -128,5 +124,11 @@ fun detectKeystoreType(file: File): String? {
         "JKS"
     } else {
         "PKCS12"
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }

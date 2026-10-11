@@ -850,7 +850,7 @@ class BuiltInProxyCompiler {
     }
     return [
       for (final item in value)
-        if (_trimmedString(item) case final itemValue?) itemValue,
+        ?_trimmedString(item),
     ];
   }
 

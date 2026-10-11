@@ -18,15 +18,17 @@ analyzer:
     - lib/generated_plugin_registrant.dart
     - lib/clash/generated/**
     - lib/l10n/**
+    - android/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   rules:
     - always_declare_return_types
     - avoid_print
     - avoid_empty_else
-    - avoid_null_checks_in_equality_operators
     - avoid_positional_boolean_parameters
-    - avoid_private_typedef_functions
     - avoid_relative_lib_imports
     - avoid_renaming_method_parameters
     - avoid_returning_this
@@ -77,7 +79,6 @@ linter:
     - type_annotate_public_apis
     - type_init_formals
     - unawaited_futures
-    - unnecessary_await_in_return
     - unnecessary_brace_in_string_interps
     - unnecessary_const
     - unnecessary_constructor_name
@@ -109,7 +110,6 @@ linter:
     - prefer_void_to_null
     - test_types_in_equals
     - throw_in_finally
-    - use_if_null_to_convert_nulls_to_bools
     - valid_regexps
     - avoid_unnecessary_containers
     - prefer_foreach

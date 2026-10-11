@@ -8,11 +8,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('bundled release stamp and Android ABI assets match the pin', () {
+    final modulesDigest = sha256.convert([
+      ...File('tool/runtime_go_modules/stormdns.mod').readAsBytesSync(),
+      ...File('tool/runtime_go_modules/stormdns.sum').readAsBytesSync(),
+    ]);
     final expectedStamp = <String>[
       stormDnsPinnedReleaseTag,
       stormDnsSourceRepository,
       stormDnsPinnedGoVersion,
       'ndk-$stormDnsPinnedNdkVersion',
+      'modules:$modulesDigest',
       ...stormDnsReleaseAssets.values.map(
         (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
       ),
@@ -24,11 +29,7 @@ void main() {
           .trim(),
       expectedStamp,
     );
-    expect(stormDnsReleaseAssets.keys, {
-      'armeabi-v7a',
-      'arm64-v8a',
-      'x86_64',
-    });
+    expect(stormDnsReleaseAssets.keys, {'armeabi-v7a', 'arm64-v8a', 'x86_64'});
     for (final asset in stormDnsReleaseAssets.values) {
       final bytes = File(asset.bundledAssetPath).readAsBytesSync();
       expect(bytes.length, greaterThan(4), reason: asset.abi);
@@ -84,15 +85,16 @@ void main() {
   });
 
   test('the MIT notice is kept next to the runtime metadata', () {
-    final licence =
-        File('assets/runtimes/stormdns/android/LICENSE').readAsStringSync();
+    final licence = File('assets/runtimes/stormdns/android/LICENSE')
+        .readAsStringSync();
     expect(licence, contains('MIT License'));
     expect(licence, contains('StormDNS'));
   });
 
   test('the descriptor matches the agreed runtime contract', () {
-    final descriptor =
-        builtInProxyRegistry.descriptorFor(BuiltInProxyType.stormdns);
+    final descriptor = builtInProxyRegistry.descriptorFor(
+      BuiltInProxyType.stormdns,
+    );
     expect(descriptor.listenPortRangeStart, 36200);
     expect(descriptor.supportsUdp, isFalse);
     expect(descriptor.defaultUdp, isFalse);

@@ -16,7 +16,7 @@ class Picker {
   static const _maxImportBytes = 20 * 1024 * 1024;
 
   Future<PlatformFile?> pickerFile() async {
-    final filePickerResult = await FilePicker.platform.pickFiles(
+    final filePickerResult = await FilePicker.pickFiles(
       withData: false,
       allowMultiple: false,
       initialDirectory: await appPath.downloadDirPath,
@@ -40,7 +40,7 @@ class Picker {
   }
 
   Future<String?> saveFile(String fileName, Uint8List bytes) async {
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       fileName: fileName,
       initialDirectory: await appPath.downloadDirPath,
       bytes: Platform.isAndroid ? bytes : null,

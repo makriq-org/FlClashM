@@ -35,7 +35,7 @@ class _ScanPageState extends State<ScanPage> {
     String? imagePath;
 
     if (system.isDesktop) {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
       );
       if (result != null && result.files.single.path != null) {
