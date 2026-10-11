@@ -65,7 +65,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 <summary>🔧 olcrtc 的更新与回滚</summary>
 
 - **更新：** 更换固定提交，用固定的 Go 1.27.2 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
-- **回滚：** 恢复旧提交 `b33680871cdb94a7523829f8073de3eafa5b3ece`，并用同一命令重建产物；wire 格式已变化，服务器也必须同时回滚。
+- **回滚：** 恢复之前固定的源提交 `189d16c093c4f721376afb5eaa0213d132a11242`，并一同恢复模块锁定文件、发布元数据和 Android 产物。本次更新保留现有 wire 格式。
 
 </details>
 

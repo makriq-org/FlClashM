@@ -463,10 +463,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private fun updateExcludeFromRecents(value: Boolean?) {
         val am = getSystemService(FlClashApplication.getAppContext(), ActivityManager::class.java)
         val task = am?.appTasks?.firstOrNull {
+            val taskInfo = it.taskInfo ?: return@firstOrNull false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                it.taskInfo.taskId == activityRef?.get()?.taskId
+                taskInfo.taskId == activityRef?.get()?.taskId
             } else {
-                it.taskInfo.id == activityRef?.get()?.taskId
+                taskInfo.id == activityRef?.get()?.taskId
             }
         }
 
