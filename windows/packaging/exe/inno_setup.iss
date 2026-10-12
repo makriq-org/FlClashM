@@ -352,6 +352,15 @@ begin
        DirExists(ExpandConstant('{app}')) and
        not DelTree(ExpandConstant('{app}'), True, True, True) then
       RaiseException('Не удалось удалить неполную новую установку FlClashM.');
+    if FreshInstallDirectoryCreated and (PreviousBundleBackup = '') then
+    begin
+      if FileExists(ExpandConstant('{autoprograms}\{{DISPLAY_NAME}}.lnk')) and
+         not DeleteFile(ExpandConstant('{autoprograms}\{{DISPLAY_NAME}}.lnk')) then
+        RaiseException('Не удалось удалить ярлык неудачной установки.');
+      if FileExists(ExpandConstant('{autodesktop}\{{DISPLAY_NAME}}.lnk')) and
+         not DeleteFile(ExpandConstant('{autodesktop}\{{DISPLAY_NAME}}.lnk')) then
+        RaiseException('Не удалось удалить ярлык неудачной установки.');
+    end;
     if PreviousMachineRegistration then
     begin
       if (PreviousVersion <> '') and

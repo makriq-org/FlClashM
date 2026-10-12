@@ -36,7 +36,8 @@ jobs:
           $bundle = Join-Path $env:RUNNER_TEMP 'inno-contract/bundle'
           $helperDir = Join-Path $bundle 'runtimes/windows/x86_64'
           New-Item -ItemType Directory -Force $helperDir | Out-Null
-          # Compiler fixtures are never installed or uploaded as a distributable.
+          # The failing fixture is installed only for the rollback check below.
+          # It is never uploaded as a distributable.
           Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $bundle 'FlClashM.exe')
           Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $helperDir 'app.flclashm.client.helper.exe')
           $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
@@ -60,6 +61,9 @@ jobs:
           if (Test-Path $appRoot) { throw 'Failed fresh installation left application files.' }
           if (Get-Service 'app.flclashm.client.helper' -ErrorAction SilentlyContinue) { throw 'Failed fresh installation left a service.' }
           if (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.flclashm.client_is1') { throw 'Failed fresh installation left its uninstall registration.' }
+          $startMenu = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'FlClashM.lnk'
+          $desktop = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'FlClashM.lnk'
+          if ((Test-Path $startMenu) -or (Test-Path $desktop)) { throw 'Failed fresh installation left application shortcuts.' }
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
