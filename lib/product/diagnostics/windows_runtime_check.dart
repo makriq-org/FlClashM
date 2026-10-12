@@ -6,6 +6,7 @@ import '../../clash/service.dart';
 import '../../common/path.dart';
 import '../../models/models.dart';
 import '../platform/windows_runtime_access_policy.dart';
+import '../runtime/desktop_process_supervisor.dart';
 import '../runtime/windows_mihomo_runtime.dart';
 
 /// Opt-in verification entrypoint in CI builds only. Uses the installed GUI,
@@ -13,11 +14,14 @@ import '../runtime/windows_mihomo_runtime.dart';
 Future<void> runWindowsRuntimeCheck(List<String> args) async {
   final output = File(args[1]);
   final hold = args.contains('--hold');
+  var stage = 'ordinary-core-start';
   try {
     final core = clashService!;
     await core.preload();
+    stage = 'ordinary-core-connect';
     await core.socketCompleter.future.timeout(const Duration(seconds: 30));
     final policy = WindowsRuntimeAccessPolicy();
+    stage = 'service-core-start';
     await policy.resolveTunAccess(
       requestedTunEnable: true,
       realTunEnable: false,
@@ -31,6 +35,7 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
     final initialized = await core
         .init(InitParams(homeDir: await appPath.homeDirPath, version: 1));
     if (!initialized) throw StateError('Service core did not initialize.');
+    stage = 'service-core-configure';
     final configured = await core.setupConfig(const SetupParams(
       config: {
         'mixed-port': 0,
@@ -50,6 +55,7 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
     ));
     if (configured.isNotEmpty) throw StateError(configured);
     for (var cycle = 0; cycle < 2; cycle++) {
+      stage = 'tun-cycle-$cycle';
       if (!await core.startListener()) {
         throw StateError('Windows TUN listener did not start.');
       }
@@ -76,6 +82,7 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
       onAuthorizeRestart: core.reStart,
       onResolvedTunEnable: (_) {},
     );
+    stage = 'return-to-ordinary-core';
     await core.socketCompleter.future.timeout(const Duration(seconds: 30));
     if (windowsMihomoRuntime.isActive) {
       throw StateError('Disabling TUN did not return ownership to the user.');
@@ -87,7 +94,14 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
     exit(0);
   } catch (error, stack) {
     await output.writeAsString(
-        jsonEncode({'success': false, 'error': '$error', 'stack': '$stack'}),
+        jsonEncode({
+          'success': false,
+          'stage': stage,
+          'error': '$error',
+          'stack': '$stack',
+          'corePid': clashService?.process?.pid,
+          'coreOutput': desktopProcessSupervisor.outputFor('mihomo'),
+        }),
         flush: true);
     try {
       await clashService?.destroy();

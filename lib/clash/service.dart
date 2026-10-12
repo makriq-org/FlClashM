@@ -20,9 +20,13 @@ class ClashService extends ClashHandlerInterface {
 
   ClashService._internal() {
     unawaited(_initServer());
-    reStart();
+    _initialStart = reStart();
+    // preload observes the original spawn failure. Until it awaits this
+    // future, suppress the unhandled error from the constructor's startup.
+    _initialStart.ignore();
   }
   static ClashService? _instance;
+  late final Future<void> _initialStart;
 
   Completer<ServerSocket> serverCompleter = Completer();
 
@@ -197,6 +201,7 @@ class ClashService extends ClashHandlerInterface {
         identity: 'mihomo',
         executable: executable,
         arguments: [arg],
+        workingDirectory: Platform.isWindows ? homeDirPath : null,
         environment: environment,
       );
       final started = handle.process;
@@ -390,6 +395,7 @@ class ClashService extends ClashHandlerInterface {
       commonPrint.log('preload: server unavailable: $e');
       return false;
     }
+    await _initialStart;
     return true;
   }
 }

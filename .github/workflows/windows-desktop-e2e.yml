@@ -284,12 +284,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Collect protected Windows lifecycle evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:ProgramFiles 'FlClashM/service-data'
+          if (Test-Path $source) {
+            $destination = 'windows-desktop-evidence/service-data'
+            New-Item -ItemType Directory -Force $destination | Out-Null
+            Copy-Item (Join-Path $source '*') $destination -Recurse -Force
+          }
+
       - name: Upload installed Windows lifecycle evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-desktop-evidence
-          path: |
-            windows-desktop-evidence/
-            C:/Program Files/FlClashM/service-data/
+          path: windows-desktop-evidence/
           if-no-files-found: ignore

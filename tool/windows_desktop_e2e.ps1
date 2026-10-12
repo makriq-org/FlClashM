@@ -59,6 +59,7 @@ function Run-AppCheck([string]$Name, [PSCredential]$Credential, [bool]$Hold) {
     if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) { throw "GUI $Name did not exit successfully." }
     Require-CleanNetwork
     $events.Add($Name)
+    Write-Host "Passed installed GUI check: $Name"
   }
   return $process
 }
