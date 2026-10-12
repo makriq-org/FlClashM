@@ -1,6 +1,8 @@
+[CmdletBinding(DefaultParameterSetName = 'Lifecycle')]
 param(
-  [Parameter(Mandatory = $true)][string]$Installer,
-  [Parameter(Mandatory = $true)][string]$FailingInstaller,
+  [Parameter(Mandatory = $true, ParameterSetName = 'Lifecycle')][string]$Installer,
+  [Parameter(Mandatory = $true, ParameterSetName = 'Lifecycle')][string]$FailingInstaller,
+  [Parameter(Mandatory = $true, ParameterSetName = 'Profile')][switch]$ProfileOnly,
   [string]$OutputDirectory = 'windows-desktop-evidence'
 )
 $ErrorActionPreference = 'Stop'
@@ -69,13 +71,13 @@ function Run-AppCheck([string]$Name, [PSCredential]$Credential, [bool]$Hold) {
   return $process
 }
 
-try {
-  Run-Setup (Resolve-Path $Installer).Path $true
-  if ((Get-Service $serviceName).Status -ne 'Running') { throw 'Service did not start after installation.' }
-  $events.Add('installed')
-  $null = Run-AppCheck 'administrator-lifecycle' $null $false
+function Initialize-OrdinaryUser {
   $password = ConvertTo-SecureString ([Guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
-  New-LocalUser -Name $probeName -Password $password -AccountNeverExpires | Out-Null
+  $user = New-LocalUser -Name $probeName -Password $password -AccountNeverExpires
+  $users = Get-LocalGroup -SID 'S-1-5-32-545'
+  if (-not (@(Get-LocalGroupMember -Group $users).SID -contains $user.SID)) {
+    Add-LocalGroupMember -Group $users -Member $user
+  }
   icacls.exe $output /grant "${probeName}:(OI)(CI)M" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Could not grant evidence directory access.' }
   $credential = [PSCredential]::new("$env:COMPUTERNAME\$probeName", $password)
@@ -87,6 +89,11 @@ try {
   @'
 param([string]$OutputFile)
 $ErrorActionPreference = 'Stop'
+try {
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+if ([Security.Principal.WindowsPrincipal]::new($identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  throw 'Probe must be an ordinary user.'
+}
 $create = [Environment+SpecialFolderOption]::Create
 $profile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile, $create)
 $roaming = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData, $create)
@@ -96,13 +103,34 @@ $temporary = Join-Path $local 'Temp'
 New-Item -ItemType Directory -Force $temporary | Out-Null
 @{ USERPROFILE=$profile; APPDATA=$roaming; LOCALAPPDATA=$local; TEMP=$temporary; TMP=$temporary } |
   ConvertTo-Json | Set-Content -Encoding utf8 $OutputFile
+} catch {
+  @{ error=($_ | Out-String); identity=$identity.Name; profile=$profile; roaming=$roaming; local=$local } |
+    ConvertTo-Json | Set-Content -Encoding utf8 $OutputFile
+  exit 1
+}
 '@ | Set-Content -Encoding utf8 $profileScript
   $initialize = Start-Process -FilePath (Get-Command pwsh).Source -Credential $credential -LoadUserProfile -PassThru `
     -ArgumentList @('-NoProfile', '-File', "`"$profileScript`"", '-OutputFile', "`"$profileFile`"")
   if (-not $initialize.WaitForExit(30000)) { Stop-Process -Id $initialize.Id -Force; throw 'Probe profile initialization timed out.' }
-  if ($initialize.ExitCode -ne 0 -or -not (Test-Path $profileFile)) { throw 'Probe profile initialization failed.' }
-  $probeEnvironment = Get-Content $profileFile -Raw | ConvertFrom-Json -AsHashtable
+  if ($initialize.ExitCode -ne 0 -or -not (Test-Path $profileFile)) {
+    if (Test-Path $profileFile) { Get-Content $profileFile -Raw | Write-Host }
+    throw 'Probe profile initialization failed.'
+  }
+  $script:probeEnvironment = Get-Content $profileFile -Raw | ConvertFrom-Json -AsHashtable
   Write-Host 'Initialized the ordinary-user profile and its AppData folders.'
+  return $credential
+}
+
+try {
+  if ($ProfileOnly) {
+    $null = Initialize-OrdinaryUser
+    return
+  }
+  Run-Setup (Resolve-Path $Installer).Path $true
+  if ((Get-Service $serviceName).Status -ne 'Running') { throw 'Service did not start after installation.' }
+  $events.Add('installed')
+  $null = Run-AppCheck 'administrator-lifecycle' $null $false
+  $credential = Initialize-OrdinaryUser
   $null = Run-AppCheck 'ordinary-user-lifecycle' $credential $false
 
   $held = Run-AppCheck 'ordinary-user-crash' $credential $true
@@ -156,8 +184,10 @@ New-Item -ItemType Directory -Force $temporary | Out-Null
   $events.Add('uninstalled-preserved-data')
   @{ success=$true; checks=$events.ToArray() } | ConvertTo-Json -Depth 5 | Set-Content "$output\summary.json"
 } finally {
-  Get-Process FlClashM -ErrorAction SilentlyContinue | Stop-Process -Force
-  Stop-Service $serviceName -ErrorAction SilentlyContinue
-  sc.exe delete $serviceName | Out-Null
+  if (-not $ProfileOnly) {
+    Get-Process FlClashM -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-Service $serviceName -ErrorAction SilentlyContinue
+    sc.exe delete $serviceName | Out-Null
+  }
   Remove-LocalUser -Name $probeName -ErrorAction SilentlyContinue
 }

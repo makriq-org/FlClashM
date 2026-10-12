@@ -78,6 +78,20 @@ endif()
 set(RUNTIME_ARCHITECTURE "x86_64")
 set(INSTALL_RUNTIME_DIR
   "${CMAKE_INSTALL_PREFIX}/runtimes/windows/${RUNTIME_ARCHITECTURE}")
+
+# The GUI/plugins and MSVC-built helper need the compiler's redistributable
+# runtime on a clean Windows installation. Place it beside both entrypoints;
+# a service cannot rely on the GUI directory being in its DLL search path.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+include(InstallRequiredSystemLibraries)
+if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  message(FATAL_ERROR "MSVC redistributable runtime libraries were not found")
+endif()
+install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+  DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
+
 set(FLCLASHM_RUNTIME_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../.dart_tool/desktop-runtime-assets"
   CACHE PATH "Verified FlClashM desktop runtime asset root")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
