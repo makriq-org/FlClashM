@@ -221,8 +221,13 @@ try {
 } finally {
   if (-not $ProfileOnly) {
     Get-Process FlClashM -ErrorAction SilentlyContinue | Stop-Process -Force
-    Stop-Service $serviceName -ErrorAction SilentlyContinue
-    sc.exe delete $serviceName | Out-Null
+    # Successful uninstall already removed the service. Calling sc delete
+    # again returns 1060 and makes the Actions PowerShell wrapper fail even
+    # when summary.json records all lifecycle checks as successful.
+    if (Get-Service $serviceName -ErrorAction SilentlyContinue) {
+      Stop-Service $serviceName -ErrorAction SilentlyContinue
+      sc.exe delete $serviceName | Out-Null
+    }
   }
   Remove-LocalUser -Name $probeName -ErrorAction SilentlyContinue
 }
