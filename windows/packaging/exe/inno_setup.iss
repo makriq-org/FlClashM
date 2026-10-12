@@ -99,13 +99,25 @@ end;
 procedure CopyBundle(const Source, Destination: String);
 var
   ResultCode: Integer;
+  CopyLog: String;
+  CopyLogLines: TArrayOfString;
+  Line: Integer;
 begin
   ForceDirectories(Destination);
+  CopyLog := ExpandConstant('{tmp}\flclashm-copy-bundle.log');
+  { The service cache can contain SYSTEM-owned files after restoring its ACL.
+    The elevated installer must use Windows backup privileges to preserve it
+    without granting interactive users access to those files. }
   if not Exec(
     ExpandConstant('{sys}\robocopy.exe'),
-    '"' + Source + '" "' + Destination + '" /MIR /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS',
+    '"' + Source + '" "' + Destination + '" /MIR /B /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS /LOG:"' + CopyLog + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode >= 8) then
+  begin
+    if LoadStringsFromFile(CopyLog, CopyLogLines) then
+      for Line := 0 to GetArrayLength(CopyLogLines) - 1 do
+        Log('FlClashM bundle copy: ' + CopyLogLines[Line]);
     RaiseException('Не удалось сохранить или восстановить предыдущую установку. Код: ' + IntToStr(ResultCode));
+  end;
 end;
 
 procedure EnforceProtectedInstallAcl;
