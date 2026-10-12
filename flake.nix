@@ -36,6 +36,7 @@
           goPkgs.go_1_27
           bash
           git
+          patch
           android-tools
           gnumake
           cmake

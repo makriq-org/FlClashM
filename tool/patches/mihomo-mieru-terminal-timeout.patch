@@ -1,0 +1,87 @@
+--- a/vendor/github.com/enfein/mieru/v3/pkg/protocol/underlay_stream.go
++++ b/vendor/github.com/enfein/mieru/v3/pkg/protocol/underlay_stream.go
+@@ -18,6 +18,7 @@
+ import (
+ 	"context"
+ 	"encoding/hex"
++	"errors"
+ 	"fmt"
+ 	"io"
+ 	"math"
+@@ -346,8 +347,8 @@
+ 	}
+ 	encryptedMeta := make([]byte, readLen)
+ 	if n, err := io.ReadFull(t.conn, encryptedMeta); err != nil {
+-		if stderror.IsTimeout(err) && n == 0 {
+-			// No TCP data received. Caller will retry.
++		if stderror.IsTimeout(err) && n == 0 && !errors.Is(err, net.ErrClosed) {
++			// Retry read deadlines, but never a timeout that closed the underlay.
+ 			return nil, nil
+ 		}
+ 		err = fmt.Errorf("metadata: read %d bytes from StreamUnderlay failed: %w", readLen, err)
+--- /dev/null
++++ b/vendor/github.com/enfein/mieru/v3/pkg/protocol/underlay_timeout_test.go
+@@ -0,0 +1,63 @@
++package protocol
++
++import (
++	"errors"
++	"io"
++	"net"
++	"os"
++	"testing"
++	"time"
++
++	"github.com/enfein/mieru/v3/pkg/stderror"
++	"github.com/metacubex/quic-go"
++)
++
++type timeoutTestConn struct {
++	net.Conn
++	err error
++	n   int
++}
++
++func (c timeoutTestConn) Read(p []byte) (int, error)      { return c.n, c.err }
++func (c timeoutTestConn) SetReadDeadline(time.Time) error { return nil }
++
++func TestStreamUnderlayTerminalTimeout(t *testing.T) {
++	for _, tc := range []struct {
++		name  string
++		err   error
++		n     int
++		retry bool
++	}{
++		{"QUIC idle timeout", &quic.IdleTimeoutError{}, 0, false},
++		{"QUIC handshake timeout", &quic.HandshakeTimeoutError{}, 0, false},
++		{"wrapped QUIC timeout", &net.OpError{Op: "read", Net: "quic", Err: &quic.IdleTimeoutError{}}, 0, false},
++		{"read deadline", os.ErrDeadlineExceeded, 0, true},
++		{"wrapped read deadline", &net.OpError{Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded}, 0, true},
++		{"partial metadata timeout", os.ErrDeadlineExceeded, 1, false},
++		{"closed connection", net.ErrClosed, 0, false},
++		{"end of stream", io.EOF, 0, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			underlay := &StreamUnderlay{conn: timeoutTestConn{err: tc.err, n: tc.n}}
++			segment, err := underlay.readOneSegment()
++			if segment != nil {
++				t.Fatal("unexpected segment")
++			}
++			if tc.retry {
++				if err != nil {
++					t.Fatalf("read deadline should be retryable: %v", err)
++				}
++			} else {
++				if err == nil {
++					t.Fatal("terminal or partial read failure was silently retried")
++				}
++				if !errors.Is(err, tc.err) {
++					t.Fatalf("original error lost: %v", err)
++				}
++				if stderror.GetErrorType(err) != stderror.NETWORK_ERROR {
++					t.Fatalf("not a network error: %v", err)
++				}
++			}
++		})
++	}
++}
