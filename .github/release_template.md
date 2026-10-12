@@ -8,6 +8,10 @@
 
 ### 📥 Скачать
 
+[Скачать установщик Windows x64](https://github.com/REPO/releases/download/TAG/FlClashM-windows-x64-setup.exe)
+
+Windows: установка требует UAC; приложение работает с правами пользователя. Данные сохраняются при обновлении.
+
 [![Universal APK](https://img.shields.io/badge/Universal_APK-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-universal.apk) [![arm64-v8a](https://img.shields.io/badge/arm64--v8a-1f6feb?style=for-the-badge&logo=android&logoColor=white)](https://github.com/REPO/releases/download/TAG/FlClashM-android-arm64-v8a.apk)
 
 Не уверены — берите **Universal**. Другие варианты (`armeabi-v7a`, `x86_64`), AAB и файлы `.sha256` — во вложениях ниже.
