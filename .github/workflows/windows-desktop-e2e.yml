@@ -154,7 +154,10 @@ jobs:
           python tool/runtime_compat/runtime_compat.py smoke --target windows-x64
           if ($LASTEXITCODE -ne 0) { throw 'Runtime artifact smoke test failed.' }
           flutter build windows --release --dart-define=FLCLASHM_WINDOWS_E2E=true
-          if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows build failed.' }
+          if ($LASTEXITCODE -ne 0) {
+            cmake --install build/windows/x64 --config Release --verbose
+            throw 'Flutter Windows build failed.'
+          }
           choco install innosetup --no-progress --limit-output
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
           $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
@@ -248,6 +251,9 @@ jobs:
         run: |
           flutter build windows --release
           if ($LASTEXITCODE -ne 0) { throw 'Production Windows build failed.' }
+          $env:RUNTIME_COMPAT_OUT = 'build/windows/x64/runner/Release'
+          python tool/runtime_compat/runtime_compat.py verify --installed --target windows-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Windows runtime inventory failed.' }
           $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
           ./windows/packaging/exe/build_installer.ps1 -BundleDirectory build/windows/x64/runner/Release -OutputDirectory dist/release -Version $version
           Get-ChildItem dist/release -Filter '*-setup.exe' | ForEach-Object {

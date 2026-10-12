@@ -288,7 +288,7 @@ jobs:
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: desktop-runtime-${{ matrix.target }}
-          path: .dart_tool/desktop-runtime-assets
+          path: .dart_tool/desktop-runtime-assets/install
 
       - name: Verify downloaded Linux runtime inventory
         if: matrix.target == 'linux-x64'
@@ -334,20 +334,20 @@ jobs:
         if: matrix.target == 'linux-x64'
         env:
           RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
-        run: python3 tool/runtime_compat/runtime_compat.py verify --target linux-x64
+        run: python3 tool/runtime_compat/runtime_compat.py verify --installed --target linux-x64
 
       - name: Verify packaged Windows runtime inventory
         if: matrix.target == 'windows-x64'
         shell: pwsh
         run: |
           $env:RUNTIME_COMPAT_OUT = '${{ matrix.runtime-root }}'
-          python tool/runtime_compat/runtime_compat.py verify --target windows-x64
+          python tool/runtime_compat/runtime_compat.py verify --installed --target windows-x64
 
       - name: Verify packaged macOS runtime inventory
         if: startsWith(matrix.target, 'macos-')
         env:
           RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
-        run: python3 tool/runtime_compat/runtime_compat.py verify --target ${{ matrix.target }}
+        run: python3 tool/runtime_compat/runtime_compat.py verify --installed --target ${{ matrix.target }}
 
       - name: Archive Linux desktop bundle
         if: matrix.target == 'linux-x64'

@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parents[1]
 MANIFEST = json.loads((ROOT / "manifest.json").read_text())
 OUT = Path(os.environ.get("RUNTIME_COMPAT_OUT", ROOT / ".out")).resolve()
+BUNDLED_LAYOUT = False
 RUNTIME_NAMES = ("mihomo", "naiveproxy", "olcrtc", "byedpi", "stormdns")
 
 
@@ -103,7 +104,8 @@ def suffix(target: str) -> str:
 
 def install_root(target: str) -> Path:
     spec = MANIFEST["targets"][target]
-    return OUT / "install" / "runtimes" / spec["os"] / spec["architecture"]
+    root = OUT if BUNDLED_LAYOUT else OUT / "install"
+    return root / "runtimes" / spec["os"] / spec["architecture"]
 
 
 def installed_path(name: str, target: str) -> Path:
@@ -388,10 +390,15 @@ def verify_inventory(target: str) -> dict[str, object]:
 
 
 def main() -> None:
+    global BUNDLED_LAYOUT
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=("build", "smoke", "verify"))
     parser.add_argument("--target", default=target_default())
+    parser.add_argument("--installed", action="store_true", help="Verify an application bundle whose runtimes are directly under RUNTIME_COMPAT_OUT")
     args = parser.parse_args()
+    if args.installed and args.action != "verify":
+        parser.error("--installed is only supported with verify")
+    BUNDLED_LAYOUT = args.installed
     if args.action == "build":
         result = build(args.target)
     elif args.action == "smoke":
