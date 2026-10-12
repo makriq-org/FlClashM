@@ -8,9 +8,9 @@
   timezone: 'Europe/Moscow',
   schedule: ['before 06:00 on Monday'],
   dependencyDashboard: true,
-  dependencyDashboardApproval: true,
+  dependencyDashboardApproval: false,
   dependencyDashboardTitle: 'Обновления зависимостей',
-  dependencyDashboardHeader: 'Renovate проверяет зависимости раз в неделю. Отметьте обновление в списке, чтобы разрешить создание PR. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
+  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений раз в неделю. Этот список справочный: подтверждать создание PR не требуется. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
 
   automerge: false,
   prConcurrentLimit: 2,
@@ -45,9 +45,8 @@
 
   packageRules: [
     {
-      description: 'Встроенные runtime-компоненты обновляются только вручную',
+      description: 'PR встроенных runtime-компонентов требуют ручной подготовки перед слиянием',
       matchManagers: ['custom.regex'],
-      dependencyDashboardApproval: true,
       minimumReleaseAge: '0 days',
       prBodyNotes: [
         '> [!IMPORTANT]\n> Этот PR только начинает подготовку runtime-обновления. Перед слиянием нужно пересобрать бинарники, обновить SHA-256 и проверить все поддерживаемые Android ABI.',
