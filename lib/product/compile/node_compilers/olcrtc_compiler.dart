@@ -36,12 +36,12 @@ extension OlcRtcNodeCompiler on BuiltInProxyCompiler {
       'mode': 'cnc',
       'auth': {
         'provider': provider,
-        if (providerToken != null) 'token': providerToken,
+        'token': ?providerToken,
       },
       if (room != null || roomChannel != null)
         'room': {
-          if (room != null) 'id': room,
-          if (roomChannel != null) 'channel': roomChannel,
+          'id': ?room,
+          'channel': ?roomChannel,
         },
       'crypto': {'key': encryptionKey},
       'net': {

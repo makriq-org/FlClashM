@@ -3,7 +3,7 @@ const byedpiPinnedReleaseTag = 'git-$byedpiPinnedCommit';
 const byedpiSourceRepository = 'https://github.com/hufrea/byedpi.git';
 const byedpiStrategySourceRepository =
     'https://github.com/romanvht/ByeByeDPI.git';
-const byedpiStrategyPinnedCommit = '4a0dabe94297fc7040d015a12b4c217837714628';
+const byedpiStrategyPinnedCommit = '96a3c1ff555043d915af814aa4f0e9a572c89aba';
 const byedpiBundledAssetRoot = 'assets/runtimes/byedpi/android';
 const byedpiRuntimeDirectoryName = 'byedpi';
 const byedpiExecutableFileName = 'ciadpi';

@@ -186,7 +186,7 @@ tun:
 
 ## 🏗 构建
 
-需要 **Flutter 3.41.x**、**JDK 17**、**Android SDK/NDK** 和 **Go 1.26.x**。
+需要 **Flutter 3.47.x**、**JDK 17**、**Android SDK/NDK** 和 **Go 1.27.2**。
 
 ### 在 NixOS 上（推荐）
 

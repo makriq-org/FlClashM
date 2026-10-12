@@ -11,7 +11,7 @@ part 'generated/app.freezed.dart';
 typedef DelayMap = Map<String, Map<String, int?>>;
 
 @freezed
-class AppState with _$AppState {
+abstract class AppState with _$AppState {
   const factory AppState({
     @Default(false) bool isInit,
     @Default(false) bool backBlock,

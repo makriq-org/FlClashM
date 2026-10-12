@@ -5,8 +5,8 @@ plugins {
 
 android {
     namespace = "com.follow.clashx.core"
-    compileSdk = 36
-    ndkVersion = "28.0.13004108"
+    compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         minSdk = 23
@@ -35,17 +35,13 @@ android {
         }
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
 dependencies {
-    implementation("androidx.annotation:annotation-jvm:1.9.1")
+    implementation("androidx.annotation:annotation-jvm:1.11.0")
 }
 
 val copyNativeLibs by tasks.register<Copy>("copyNativeLibs") {
@@ -71,5 +67,11 @@ val copyNativeLibs by tasks.register<Copy>("copyNativeLibs") {
 afterEvaluate {
     tasks.named("preBuild") {
         dependsOn(copyNativeLibs)
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }

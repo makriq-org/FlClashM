@@ -136,7 +136,7 @@ extension ByedpiNodeCompiler on BuiltInProxyCompiler {
       final startupTimeout = selection.remove('startup-timeout');
       final background = selection.remove('continue-in-background');
       config['selection'] = <String, dynamic>{
-        if (selectionConcurrency != null) 'concurrency': selectionConcurrency,
+        'concurrency': ?selectionConcurrency,
         if (startupTimeout != null)
           'foreground-timeout': _seconds(
             startupTimeout,
@@ -144,7 +144,7 @@ extension ByedpiNodeCompiler on BuiltInProxyCompiler {
             15,
             const Duration(minutes: 1),
           ).inSeconds,
-        if (background != null) 'background': background,
+        'background': ?background,
       };
       config['cache'] = <String, dynamic>{
         if (cache['ttl'] != null)

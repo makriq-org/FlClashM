@@ -37,7 +37,28 @@ fn sha256_file(path: &str) -> Result<String, Error> {
         hasher.update(&buffer[..bytes_read]);
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sha256_file;
+
+    #[test]
+    fn sha256_matches_the_allowed_binary_hash_format() {
+        let path = std::env::temp_dir().join(format!("flclashm-sha256-{}", std::process::id()));
+        std::fs::write(&path, b"abc").unwrap();
+        let hash = sha256_file(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(
+            hash,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 }
 
 fn allowed_hash_path() -> Option<std::path::PathBuf> {

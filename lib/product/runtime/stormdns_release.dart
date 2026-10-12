@@ -1,6 +1,6 @@
-const stormDnsPinnedCommit = '87348df5b11f9e490262a713ca268734007af44f';
+const stormDnsPinnedCommit = 'ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc';
 const stormDnsPinnedReleaseTag = 'git-$stormDnsPinnedCommit';
-const stormDnsPinnedGoVersion = 'go1.26.4';
+const stormDnsPinnedGoVersion = 'go1.27.2';
 const stormDnsPinnedNdkVersion = '28.0.13004108';
 const stormDnsSourceRepository = 'https://github.com/nullroute1970/StormDNS.git';
 const stormDnsBundledAssetRoot = 'assets/runtimes/stormdns/android';
@@ -56,18 +56,18 @@ const stormDnsReleaseAssets = <String, StormDnsReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: 'c4827e10919f6996948bf2fa36c1e125156d8196e23d8abcdd590678d94eb839',
+    sha256: '64d0073dc5a6d5eca1230611cdeec0141638eb2bd7dba762c40ddb06dcd17bd7',
   ),
   'arm64-v8a': StormDnsReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: '95b77cedd2411d3195abefbdf3c946b7e72ef25ee08e18d73e4f03b33f6b3f01',
+    sha256: 'b330ef9c4dc175ae1ec5cdff4dced413639102f0a0705d47ea5907ec08b5bf62',
   ),
   'x86_64': StormDnsReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '96c5f69049872ce1008e4801bac7930b9d740b23c9cc05275f45bdafed0137ab',
+    sha256: '32ad47d5709f16dd58cd267926346c066eb1e5ae319c34d6957a68dfbc6564e3',
   ),
 };

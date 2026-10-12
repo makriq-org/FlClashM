@@ -17,20 +17,21 @@ jobs:
       contents: read
     steps:
       - name: Checkout current updater tooling
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          flutter-version: "3.41.7"
+          flutter-version: "3.47.7"
           cache: true
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
-          packages: platform-tools
+          cmdline-tools-version: '16111833' # 23.0
+          packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
 
       - name: Get Flutter dependencies
         run: flutter pub get

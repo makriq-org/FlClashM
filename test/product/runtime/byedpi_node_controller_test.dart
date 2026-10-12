@@ -620,7 +620,7 @@ BuiltInProxyNodePlan _plan({
           'args': args,
           'mode': mode,
           if (strategies == null) 'strategyList': 'byebyeedpi',
-          if (strategies != null) 'strategies': strategies,
+          'strategies': ?strategies,
           'strategyTest': {
             'urls': ['https://example.com'],
             'timeout': timeout,

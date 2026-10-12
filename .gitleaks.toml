@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Go module checksums, not API keys"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^tool/runtime_go_modules/(olcrtc|stormdns)\.sum$''']
+regexes = ['''^[^\s]+ v[^\s]+ h1:[A-Za-z0-9+/]{43}=$''']

@@ -142,11 +142,9 @@ class MihomoEngineAdapter implements EngineAdapter {
     this.lifecycle = const DefaultMihomoLifecycleBridge(),
     this.platform = const DefaultMihomoPlatformBridge(),
     BuiltInProxySupervisor? builtInProxySupervisor,
-    required ReadAccessControlCallback readAccessControl,
-    ReadProfileAccessControlCallback? readProfileAccessControl,
-  })  : _readAccessControl = readAccessControl,
-        _readProfileAccessControl = readProfileAccessControl,
-        builtInProxySupervisor =
+    required this._readAccessControl,
+    this._readProfileAccessControl,
+  })  : builtInProxySupervisor =
             builtInProxySupervisor ?? DefaultBuiltInProxySupervisor();
 
   final MihomoCoreBridge core;
@@ -217,7 +215,7 @@ class MihomoEngineAdapter implements EngineAdapter {
       );
       if (!startedRuntimePlan.isSuccess) {
         final stateMessage = startedRuntimePlan.state?.message;
-        return _rollbackRuntimePlanSetup(
+        return await _rollbackRuntimePlanSetup(
           message: stateMessage?.isNotEmpty ?? false
               ? stateMessage!
               : 'Built-in proxy nodes did not start.',

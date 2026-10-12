@@ -2,9 +2,9 @@
   description = "FlClashM Android development environment";
 
   inputs.nixpkgs.url =
-    "github:NixOS/nixpkgs/5f85796ab70f9a6ac935b366065d4565288947ac";
+    "github:NixOS/nixpkgs/6510408d147d8c5e6d76043e899e9251756f6a75";
   inputs.nixpkgsGo.url =
-    "github:NixOS/nixpkgs/eb1e54bea78e7537f0f12b649afc3d395a48c6f5";
+    "github:NixOS/nixpkgs/6510408d147d8c5e6d76043e899e9251756f6a75";
 
   outputs = { nixpkgs, nixpkgsGo, ... }:
     let
@@ -18,11 +18,12 @@
       };
       goPkgs = import nixpkgsGo { inherit system; };
       android = pkgs.androidenv.composeAndroidPackages {
-        platformVersions = [ "34" "35" "36" ];
-        buildToolsVersions = [ "35.0.0" "36.0.0" ];
+        platformVersions = [ "34" "35" "36" "37.0" ];
+        buildToolsVersions = [ "35.0.0" "36.0.0" "37.0.0" ];
         cmakeVersions = [ "3.22.1" ];
         includeNDK = true;
-        ndkVersions = [ "28.0.13004108" ];
+        # Runtime binaries keep their reproducible NDK pin; Flutter JNI uses 28.2.
+        ndkVersions = [ "28.0.13004108" "28.2.13676358" ];
       };
       androidSdk = android.androidsdk;
       sdkRoot = "${androidSdk}/libexec/android-sdk";
@@ -32,7 +33,7 @@
         packages = with pkgs; [
           flutter
           jdk17
-          goPkgs.go_1_26
+          goPkgs.go_1_27
           bash
           git
           patch
@@ -60,7 +61,7 @@
         JAVA_HOME = "${pkgs.jdk17.home}";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         GRADLE_OPTS =
-          "-Dorg.gradle.project.android.aapt2FromMavenOverride=${sdkRoot}/build-tools/36.0.0/aapt2";
+          "-Dorg.gradle.project.android.aapt2FromMavenOverride=${sdkRoot}/build-tools/37.0.0/aapt2";
 
         shellHook = ''
           if [[ -d android ]]; then

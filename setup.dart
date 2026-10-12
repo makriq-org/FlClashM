@@ -843,6 +843,7 @@ Future<void> _syncOlcRtcAssets() async {
         'go',
         'build',
         '-trimpath',
+        '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
         '-ldflags=-s -w -checklinkname=0',
         '-o',
         target.path,
@@ -913,6 +914,7 @@ Future<void> _syncStormDnsAssets() async {
         'go',
         'build',
         '-trimpath',
+        '-modfile=${_projectPath('tool', 'runtime_go_modules', 'stormdns.mod')}',
         '-ldflags=-s -w',
         '-o',
         target.path,
@@ -996,6 +998,7 @@ String _buildStormDnsStamp() {
     stormDnsSourceRepository,
     stormDnsPinnedGoVersion,
     'ndk-$stormDnsPinnedNdkVersion',
+    'modules:${_runtimeGoModuleDigest('stormdns')}',
     ...stormDnsReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
     ),
@@ -1063,11 +1066,22 @@ String _buildOlcRtcStamp() {
     olcRtcSourceRepository,
     olcRtcPinnedGoVersion,
     'ndk-$olcRtcPinnedNdkVersion',
+    'modules:${_runtimeGoModuleDigest('olcrtc')}',
     ...olcRtcReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
     ),
   ];
   return lines.join('\n');
+}
+
+String _runtimeGoModuleDigest(String runtime) {
+  final bytes = BytesBuilder();
+  for (final extension in const ['mod', 'sum']) {
+    bytes.add(File(_projectPath(
+      'tool', 'runtime_go_modules', '$runtime.$extension',
+    )).readAsBytesSync());
+  }
+  return sha256.convert(bytes.takeBytes()).toString();
 }
 
 Future<void> _requireGoVersion(String expectedVersion) async {
@@ -1093,7 +1107,8 @@ Future<void> _requireGoVersion(String expectedVersion) async {
 }
 
 Future<Uint8List> _downloadBytes(Uri uri) async {
-  final client = HttpClient();
+  final client = HttpClient()
+    ..findProxy = HttpClient.findProxyFromEnvironment;
   try {
     final request = await client.getUrl(uri);
     final response = await request.close();
