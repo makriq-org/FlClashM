@@ -9,6 +9,7 @@ import '../platform/product_install_layout.dart';
 const desktopHelperProtocolVersion = 1;
 
 enum DesktopHelperOperation {
+  ping,
   tunOpen,
   tunClose,
   routeApply,
@@ -38,12 +39,12 @@ class DesktopHelperRequest {
   final Map<String, Object?> parameters;
 
   Map<String, Object?> toJson() => {
-    'protocolVersion': protocolVersion,
-    'installIdentity': installIdentity,
-    'operation': operation.name,
-    if (runtimeArtifact != null) 'runtimeArtifact': runtimeArtifact,
-    'parameters': parameters,
-  };
+        'protocolVersion': protocolVersion,
+        'installIdentity': installIdentity,
+        'operation': operation.name,
+        if (runtimeArtifact != null) 'runtimeArtifact': runtimeArtifact,
+        'parameters': parameters,
+      };
 }
 
 @immutable
@@ -83,13 +84,14 @@ class DesktopHelperProtocol {
   };
 
   static const _requiredParameters = <DesktopHelperOperation, Set<String>>{
+    DesktopHelperOperation.ping: {},
     DesktopHelperOperation.tunOpen: {'interface', 'mtu'},
     DesktopHelperOperation.tunClose: {'interface'},
     DesktopHelperOperation.routeApply: {'interface', 'routes'},
     DesktopHelperOperation.routeRollback: {'transaction'},
     DesktopHelperOperation.dnsApply: {'interface', 'servers'},
     DesktopHelperOperation.dnsRollback: {'transaction'},
-    DesktopHelperOperation.runtimeStart: {'runtimeToken'},
+    DesktopHelperOperation.runtimeStart: {'runtimeToken', 'port'},
     DesktopHelperOperation.runtimeStop: {'runtimeToken'},
   };
 
@@ -108,7 +110,7 @@ class DesktopHelperProtocol {
     }
     final isRuntime =
         request.operation == DesktopHelperOperation.runtimeStart ||
-        request.operation == DesktopHelperOperation.runtimeStop;
+            request.operation == DesktopHelperOperation.runtimeStop;
     if (isRuntime != (request.runtimeArtifact != null)) {
       return 'Desktop helper runtime operation has an invalid artifact.';
     }
@@ -134,27 +136,36 @@ class DesktopHelperProtocol {
   static bool _validateOperation(
     DesktopHelperOperation operation,
     Map<String, Object?> parameters,
-  ) => switch (operation) {
-    DesktopHelperOperation.tunOpen =>
-      _interface(parameters['interface']) && _mtu(parameters['mtu']),
-    DesktopHelperOperation.tunClose => _interface(parameters['interface']),
-    DesktopHelperOperation.routeApply =>
-      _interface(parameters['interface']) && _routes(parameters['routes']),
-    DesktopHelperOperation.routeRollback => _transaction(
-      parameters['transaction'],
-    ),
-    DesktopHelperOperation.dnsApply =>
-      _interface(parameters['interface']) && _servers(parameters['servers']),
-    DesktopHelperOperation.dnsRollback => _transaction(
-      parameters['transaction'],
-    ),
-    DesktopHelperOperation.runtimeStart || DesktopHelperOperation.runtimeStop =>
-      _runtimeToken(parameters['runtimeToken']),
-  };
+  ) =>
+      switch (operation) {
+        DesktopHelperOperation.ping => true,
+        DesktopHelperOperation.tunOpen =>
+          _interface(parameters['interface']) && _mtu(parameters['mtu']),
+        DesktopHelperOperation.tunClose => _interface(parameters['interface']),
+        DesktopHelperOperation.routeApply =>
+          _interface(parameters['interface']) && _routes(parameters['routes']),
+        DesktopHelperOperation.routeRollback => _transaction(
+            parameters['transaction'],
+          ),
+        DesktopHelperOperation.dnsApply =>
+          _interface(parameters['interface']) &&
+              _servers(parameters['servers']),
+        DesktopHelperOperation.dnsRollback => _transaction(
+            parameters['transaction'],
+          ),
+        DesktopHelperOperation.runtimeStart =>
+          _runtimeToken(parameters['runtimeToken']) &&
+              _port(parameters['port']),
+        DesktopHelperOperation.runtimeStop =>
+          _runtimeToken(parameters['runtimeToken']),
+      };
 
   static bool _interface(Object? value) =>
       value is String &&
       RegExp(r'^[A-Za-z][A-Za-z0-9_.-]{0,63}$').hasMatch(value);
+
+  static bool _port(Object? value) =>
+      value is int && value > 0 && value <= 65535;
 
   static bool _mtu(Object? value) =>
       value is int && value >= 576 && value <= 65535;
@@ -177,7 +188,7 @@ class DesktopHelperProtocol {
       value is String && RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
 
   static bool _runtimeToken(Object? value) =>
-      value is String && RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(value);
+      value is String && RegExp(r'^[a-f0-9]{64}$').hasMatch(value);
 
   static bool _cidr(String value) {
     final parts = value.split('/');

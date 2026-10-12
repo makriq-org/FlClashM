@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 typedef ReadTextFile = Future<String> Function(String path);
@@ -15,6 +16,11 @@ class DesktopSystemDns {
     this.readFile = _readFile,
     this.runCommand = Process.run,
   });
+
+  static const _windowsDnsScript =
+      r"$active = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' -and $_.Name -ne 'FlClashM' } | ForEach-Object { $_.ifIndex }); "
+      r'$servers = @(Get-DnsClientServerAddress -ErrorAction Stop | Where-Object { $active -contains $_.InterfaceIndex } | ForEach-Object { $_.ServerAddresses }); '
+      r'ConvertTo-Json -InputObject $servers -Compress';
 
   final String? target;
   final ReadTextFile readFile;
@@ -50,10 +56,19 @@ class DesktopSystemDns {
 
   Future<List<String>> _readWindows() async {
     try {
-      final result = await runCommand('ipconfig', const ['/all']);
+      final result = await runCommand('powershell.exe', const [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        _windowsDnsScript,
+      ]);
       if (result.exitCode != 0) return const [];
-      return _uniqueAddresses(_windows('${result.stdout}'));
+      final decoded = jsonDecode('${result.stdout}');
+      if (decoded is! List) return const [];
+      return _uniqueAddresses(decoded.whereType<String>());
     } on ProcessException {
+      return const [];
+    } on FormatException {
       return const [];
     }
   }
@@ -74,25 +89,6 @@ class DesktopSystemDns {
     for (final line in value.split('\n')) {
       final match = matcher.firstMatch(line);
       if (match != null) yield match.group(1)!;
-    }
-  }
-
-  static Iterable<String> _windows(String value) sync* {
-    final first = RegExp(r'^\s*DNS Servers[^:]*:\s*(\S+)\s*$');
-    var collectContinuation = false;
-    for (final line in value.split('\n')) {
-      final match = first.firstMatch(line);
-      if (match != null) {
-        collectContinuation = true;
-        yield match.group(1)!;
-        continue;
-      }
-      final candidate = line.trim();
-      if (collectContinuation && InternetAddress.tryParse(candidate) != null) {
-        yield candidate;
-        continue;
-      }
-      collectContinuation = false;
     }
   }
 

@@ -759,6 +759,31 @@
       "path": "lib/widgets/line_chart.dart",
       "bucket": "budget",
       "reason": "График использует уже построенный Path без лишнего полного прохода по метрикам на каждом кадре."
+    },
+    {
+      "path": "core/main.go",
+      "bucket": "budget",
+      "reason": "Служба запрашивает штатную очистку TUN закрытием stdin ядра."
+    },
+    {
+      "path": "core/server.go",
+      "bucket": "budget",
+      "reason": "Windows IPC подтверждает секрет сеанса и очищает сеть при потере GUI."
+    },
+    {
+      "path": "core/service_guard.go",
+      "bucket": "budget",
+      "reason": "Привилегированное Windows-ядро принимает файлы только в защищённом каталоге."
+    },
+    {
+      "path": "core/service_guard_test.go",
+      "bucket": "budget",
+      "reason": "Тесты запрещают произвольный доступ к файлам через привилегированное ядро."
+    },
+    {
+      "path": "lib/common/windows.dart",
+      "bucket": "budget",
+      "reason": "Проверка службы использует аутентифицированный IPC; установка принадлежит Inno Setup."
     }
   ]
 }

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"unsafe"
 
+	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
 )
 
@@ -128,6 +130,30 @@ func handleAction(action *Action, result ActionResult) {
 		result.success(handleResetConnections())
 		return
 	case getConfigMethod:
+		if serviceHome() != "" {
+			input, ok := action.Data.(map[string]any)
+			if !ok {
+				result.error("Service profile must be read by the GUI")
+				return
+			}
+			text, ok := input["content"].(string)
+			if !ok || len(text) > 24<<20 {
+				result.error("Invalid staged profile")
+				return
+			}
+			bytes, err := base64.StdEncoding.DecodeString(text)
+			if err != nil {
+				result.error(err.Error())
+				return
+			}
+			profile, err := config.UnmarshalRawConfig(bytes)
+			if err != nil {
+				result.error(err.Error())
+				return
+			}
+			result.success(profile)
+			return
+		}
 		path, ok := action.Data.(string)
 		if !ok {
 			result.error("invalid data type")

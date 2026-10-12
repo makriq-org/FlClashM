@@ -20,13 +20,13 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: '1.26.4'
+          go-version: '1.26.5'
 
       - name: Build only the bundled mihomo core
         shell: pwsh
@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload native TUN evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-native-tun-evidence
           path: |
@@ -85,23 +85,23 @@ jobs:
 
   windows-x64-install-service:
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.41.7'
           cache: true
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: '1.26.4'
+          go-version: '1.26.5'
 
-      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: MINGW64
           install: >-
@@ -134,6 +134,8 @@ jobs:
         run: |
           cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
           if ($LASTEXITCODE -ne 0) { throw 'Windows helper build failed.' }
+          cargo test --locked --manifest-path services/helper/Cargo.toml --features windows-service
+          if ($LASTEXITCODE -ne 0) { throw 'Windows helper tests failed.' }
           $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
           "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -147,7 +149,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Runtime artifact build failed.' }
           python tool/runtime_compat/runtime_compat.py smoke --target windows-x64
           if ($LASTEXITCODE -ne 0) { throw 'Runtime artifact smoke test failed.' }
-          flutter build windows --release
+          flutter build windows --release --dart-define=FLCLASHM_WINDOWS_E2E=true
           if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows build failed.' }
           choco install innosetup --no-progress --limit-output
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
@@ -157,6 +159,16 @@ jobs:
             -OutputDirectory dist `
             -Version $version
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+          try {
+            'rollback must remove this new file' | Set-Content 'build/windows/x64/runner/Release/rollback-new-file.test'
+            ./windows/packaging/exe/build_installer.ps1 `
+              -BundleDirectory build/windows/x64/runner/Release `
+              -OutputDirectory dist/rollback-test `
+              -Version $version -TestFailAfterFiles
+          } finally {
+            Remove-Item 'build/windows/x64/runner/Release/rollback-new-file.test' -ErrorAction SilentlyContinue
+          }
+
 
       - name: Verify system proxy lifecycle and crash recovery
         shell: pwsh
@@ -201,7 +213,7 @@ jobs:
 
       - name: Upload ordinary-user TUN evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-tun-nonadmin
           path: ${{ runner.temp }}/windows-tun-nonadmin/
@@ -209,7 +221,7 @@ jobs:
 
       - name: Upload Windows TUN evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-tun-experiment
           path: windows-tun-experiment/
@@ -223,33 +235,35 @@ jobs:
       - name: Install, exercise service IPC, stop and uninstall
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $service = 'app.flclashm.client.helper'
-          $installer = Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1
-          if ($null -eq $installer) { throw 'Inno installer was not produced.' }
-          try {
-            & $installer.FullName /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-            if ($LASTEXITCODE -ne 0) { throw "Installer failed: $LASTEXITCODE" }
-            $installResult = (Get-ItemProperty -Path 'HKLM:\Software\FlClashM' -Name InstallResult).InstallResult
-            if ($installResult -notmatch '^[^:]+:success:[0-9]{14}$') { throw 'Installer did not report success.' }
-            sc.exe query $service | Out-Host
-            $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'app.flclashm.client.helper.v1', [IO.Pipes.PipeDirection]::InOut)
-            $pipe.Connect(15000)
-            $request = '{"protocolVersion":1,"installIdentity":"app.flclashm.client","operation":"tunClose","parameters":{"interface":"flclashm0"}}'
-            $bytes = [Text.Encoding]::UTF8.GetBytes($request)
-            $pipe.Write($bytes, 0, $bytes.Length)
-            $pipe.Flush()
-            $buffer = New-Object byte[] 4096
-            $read = $pipe.Read($buffer, 0, $buffer.Length)
-            $response = [Text.Encoding]::UTF8.GetString($buffer, 0, $read) | ConvertFrom-Json
-            if ($response.state -ne 'failed' -or $response.message -notlike 'Client is not the installed FlClashM application*') { throw "Helper accepted an unauthorized IPC command: $($response.message)" }
-            $pipe.Dispose()
-            $uninstaller = Join-Path $env:ProgramFiles 'FlClashM\unins000.exe'
-            & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-            if ($LASTEXITCODE -ne 0) { throw "Uninstaller failed: $LASTEXITCODE" }
-            sc.exe query $service
-            if ($LASTEXITCODE -eq 0) { throw 'Service remained after uninstall.' }
-          } finally {
-            sc.exe stop $service | Out-Null
-            sc.exe delete $service | Out-Null
+          $installer = (Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          $failing = (Get-ChildItem dist/rollback-test -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          ./tool/windows_desktop_e2e.ps1 -Installer $installer -FailingInstaller $failing
+
+      - name: Build the distributable without CI entrypoints
+        shell: pwsh
+        run: |
+          flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { throw 'Production Windows build failed.' }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          ./windows/packaging/exe/build_installer.ps1 -BundleDirectory build/windows/x64/runner/Release -OutputDirectory dist/release -Version $version
+          Get-ChildItem dist/release -Filter '*-setup.exe' | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() | Set-Content ($_.FullName + '.sha256')
           }
+
+      - name: Upload installer for manual Windows 10 and 11 verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: FlClashM-windows-x64-preview
+          path: dist/release/*-setup.exe*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload installed Windows lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-desktop-evidence
+          path: |
+            windows-desktop-evidence/
+            C:/Program Files/FlClashM/service-data/
+          if-no-files-found: ignore

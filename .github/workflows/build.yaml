@@ -271,12 +271,12 @@ jobs:
             artifact: artifact-desktop-macos-arm64
     steps:
       - name: Checkout release commit
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -285,7 +285,7 @@ jobs:
         run: flutter pub get
 
       - name: Download verified desktop runtime layout
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: desktop-runtime-${{ matrix.target }}
           path: .dart_tool/desktop-runtime-assets
@@ -380,7 +380,7 @@ jobs:
             dist/FlClashM-${{ matrix.target }}.zip
 
       - name: Upload packaged desktop bundle
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.artifact }}
           path: ./dist
@@ -420,7 +420,7 @@ jobs:
           merge-multiple: true
 
       - name: Download packaged Windows desktop artifacts
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: artifact-desktop-windows-x64
           path: ./dist/
@@ -463,7 +463,7 @@ jobs:
             --github-repository "${GITHUB_REPOSITORY}"
 
       - name: Upload aggregated release artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: artifact-release
           path: ./dist
@@ -483,7 +483,7 @@ jobs:
           persist-credentials: false
 
       - name: Download aggregated release artifacts
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: ./dist/
           pattern: artifact-release

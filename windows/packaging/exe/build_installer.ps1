@@ -2,6 +2,7 @@ param(
   [Parameter(Mandatory = $true)][string]$BundleDirectory,
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
   [Parameter(Mandatory = $true)][string]$Version,
+  [switch]$TestFailAfterFiles,
   [string]$Iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 
@@ -16,11 +17,14 @@ if (-not (Test-Path $Iscc)) {
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $template = Get-Content (Join-Path $PSScriptRoot 'inno_setup.iss') -Raw
-$template = [regex]::Replace(
-  $template,
-  '(?s)\[Languages\].*?\[Tasks\]',
-  "[Languages]`r`nName: \"english\"; MessagesFile: \"compiler:Default.isl\"`r`nName: \"russian\"; MessagesFile: \"compiler:Languages\\Russian.isl\"`r`n`r`n[Tasks]"
-)
+$languages = @'
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+
+[Tasks]
+'@
+$template = [regex]::Replace($template, '(?s)\[Languages\].*?\[Tasks\]', $languages)
 $values = @{
   '{{APP_ID}}' = 'app.flclashm.client'
   '{{APP_VERSION}}' = $Version
@@ -42,7 +46,9 @@ $template = $template.Replace('{% if PRIVILEGES_REQUIRED == ''admin'' %}runascur
 $template = $template.Replace('{% if locale.lang == ''en'' %}Name: "english"; MessagesFile: "compiler:Default.isl"{% endif %}', '')
 $rendered = Join-Path $OutputDirectory 'FlClashM-windows-x64.iss'
 Set-Content -Path $rendered -Value $template -NoNewline -Encoding utf8
-& $Iscc "/O$OutputDirectory" $rendered
+$compilerArguments = @("/O$OutputDirectory")
+if ($TestFailAfterFiles) { $compilerArguments += '/DFLCLASHM_CI_FAIL_INSTALL' }
+& $Iscc @compilerArguments $rendered
 if ($LASTEXITCODE -ne 0) {
   throw "Inno Setup завершился с кодом $LASTEXITCODE"
 }

@@ -399,7 +399,11 @@ func setupConfig(params *SetupParams) error {
 	}
 
 	parseStart := time.Now()
-	currentConfig, err = config.ParseRawConfig(params.Config)
+	parsedConfig, err := config.ParseRawConfig(params.Config)
+	if err != nil && serviceHome() != "" {
+		return err
+	}
+	currentConfig = parsedConfig
 	effectiveRawConfig := params.Config
 	if err != nil {
 		log.Errorln("[Config] ParseRawConfig failed, falling back to default: %v", err)
@@ -532,7 +536,7 @@ func handleRuntimeSnapshot() *RuntimeSnapshot {
 		Config:    cloneRuntimeRawConfig(currentRuntimeRawConfig),
 		Listeners: listener.GetPorts(),
 		Running:   isRunning,
-		TunUp:     tunUp.Load(),
+		TunUp:     tunUp.Load() || (runtime.GOOS == "windows" && isRunning && listener.GetTunConf().Enable),
 	}
 }
 

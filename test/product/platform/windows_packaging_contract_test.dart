@@ -29,6 +29,8 @@ void main() {
       expect(installer, contains(r"ExpandConstant('{autopf}\FlClashM')"));
       expect(installer, contains('proxy_watchdog'));
       expect(installer, contains('PreviousBundleBackup'));
+      expect(installer, contains('service-data'));
+      expect(installer, contains('not UninstallSilent'));
       expect(installer, contains('FreshInstallDirectoryCreated'));
       expect(installer, contains("WriteInstallResult('success')"));
       expect(installer, contains('RegWriteStringValue(HKEY_LOCAL_MACHINE_64'));
@@ -41,6 +43,9 @@ void main() {
       expect(helper, isNot(contains('127.0.0.1')));
       expect(helper, isNot(contains('allowed_core.sha256')));
       expect(helper, isNot(contains('Command::new')));
+      expect(helper, contains('windows_runtime::authenticate'));
+      expect(helper, contains('Operation::RuntimeStart'));
+      expect(helper, contains('PIPE_REJECT_REMOTE_CLIENTS'));
     },
   );
 
@@ -49,8 +54,10 @@ void main() {
       '.github/workflows/windows-desktop-e2e.yml',
     ).readAsStringSync();
     expect(workflow, contains('Build bundle and Inno installer'));
-    expect(workflow, contains('NamedPipeClientStream'));
-    expect(workflow, contains(r'sc.exe query $service'));
-    expect(workflow, contains(r'sc.exe delete $service'));
+    expect(workflow, contains('windows_desktop_e2e.ps1'));
+    final e2e = File('tool/windows_desktop_e2e.ps1').readAsStringSync();
+    expect(e2e, contains('NamedPipeClientStream'));
+    expect(e2e, contains(r'Get-Service $serviceName'));
+    expect(e2e, contains(r'sc.exe delete $serviceName'));
   });
 }

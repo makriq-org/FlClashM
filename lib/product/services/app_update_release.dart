@@ -110,9 +110,6 @@ class AppRelease {
   final int? versionCode;
   final String? catalogId;
 
-  /// Android installation order from a signed manifest or release metadata.
-  final int? versionCode;
-
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
 

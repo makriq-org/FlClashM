@@ -10,6 +10,7 @@ import 'package:flclashx/product/runtime/desktop_process_supervisor.dart';
 import 'package:flclashx/product/runtime/desktop_runtime_layout.dart';
 import 'package:flclashx/product/runtime/desktop_runtime_node_bridge.dart';
 import 'package:flclashx/state.dart';
+import 'package:flclashx/product/runtime/windows_mihomo_runtime.dart';
 
 class ClashService extends ClashHandlerInterface {
   factory ClashService() {
@@ -30,7 +31,10 @@ class ClashService extends ClashHandlerInterface {
   bool isStarting = false;
 
   Process? process;
-  StreamSubscription? _socketSubscription;
+  StreamIterator<String>? _socketIterator;
+  Socket? _activeSocket;
+  String? _controlToken;
+  final _windowsMessages = WindowsCoreMessageBridge();
   StreamSubscription? _stdoutSubscription;
   StreamSubscription? _stderrSubscription;
 
@@ -71,32 +75,7 @@ class ClashService extends ClashHandlerInterface {
       );
       serverCompleter.complete(server);
       await for (final socket in server) {
-        await _destroySocket();
-        socketCompleter.complete(socket);
-        _socketSubscription = socket
-            .transform(uint8ListToListIntConverter)
-            .transform(utf8.decoder)
-            .transform(const LineSplitter())
-            .listen(
-          (data) {
-            try {
-              handleResult(
-                ActionResult.fromJson(
-                  json.decode(data.trim()),
-                ),
-              );
-            } catch (e) {
-              commonPrint.log('socket parse error: $e');
-            }
-          },
-          onError: (Object e) {
-            commonPrint.log('socket error: $e');
-            _onCoreLost('socket error');
-          },
-          // EOF on the IPC socket means the core process died. An intentional
-          // teardown cancels this subscription first, so onDone won't fire then.
-          onDone: () => _onCoreLost('socket closed'),
-        );
+        unawaited(_acceptSocket(socket));
       }
     }, (error, stack) {
       commonPrint.log(error.toString());
@@ -113,6 +92,49 @@ class ClashService extends ClashHandlerInterface {
     });
   }
 
+  Future<void> _acceptSocket(Socket socket) async {
+    final iterator = StreamIterator<String>(socket
+        .transform(uint8ListToListIntConverter)
+        .transform(utf8.decoder)
+        .transform(const LineSplitter()));
+    var accepted = false;
+    try {
+      if (Platform.isWindows) {
+        final expected = _controlToken;
+        if (expected == null ||
+            !await iterator.moveNext().timeout(const Duration(seconds: 3)))
+          return;
+        final hello = jsonDecode(iterator.current);
+        if (hello is! Map ||
+            hello['controlToken'] != expected ||
+            _controlToken != expected) return;
+      }
+      await _destroySocket();
+      _activeSocket = socket;
+      _socketIterator = iterator;
+      accepted = true;
+      socketCompleter.complete(socket);
+      while (await iterator.moveNext()) {
+        final decoded =
+            Map<String, dynamic>.from(jsonDecode(iterator.current) as Map);
+        handleResult(ActionResult.fromJson(
+          Platform.isWindows && windowsMihomoRuntime.isActive
+              ? await _windowsMessages.receive(decoded)
+              : decoded,
+        ));
+      }
+    } catch (error) {
+      commonPrint.log('core socket failed: $error');
+    } finally {
+      if (!accepted) {
+        await iterator.cancel();
+        socket.destroy();
+      } else if (identical(_activeSocket, socket)) {
+        _onCoreLost('socket closed');
+      }
+    }
+  }
+
   @override
   Future<void> reStart() async {
     if (isStarting == true) {
@@ -120,7 +142,8 @@ class ClashService extends ClashHandlerInterface {
     }
     isStarting = true;
     try {
-      if (process != null) {
+      if (process != null ||
+          (Platform.isWindows && windowsMihomoRuntime.isActive)) {
         await shutdown();
       }
       // Swap in a downloaded core update before anything spawns the binary — a
@@ -145,6 +168,18 @@ class ClashService extends ClashHandlerInterface {
       final environment = Map<String, String>.from(Platform.environment);
       environment['SAFE_PATHS'] = homeDirPath;
 
+      if (Platform.isWindows) {
+        _controlToken = createWindowsControlToken();
+        environment['FLCLASHM_CONTROL_TOKEN'] = _controlToken!;
+        if (windowsMihomoRuntime.preferService) {
+          if (!await windowsMihomoRuntime.available()) {
+            throw StateError('Системная служба Windows недоступна для TUN.');
+          }
+          await windowsMihomoRuntime.start(
+              port: serverSocket.port, token: _controlToken!);
+          return;
+        }
+      }
       final executable = await DesktopRuntimeLayout.current(
         dataRoot: homeDirPath,
       ).requireArtifact(ProductInstallLayout.mihomoArtifact);
@@ -177,6 +212,7 @@ class ClashService extends ClashHandlerInterface {
     }
     // Exit/restart destroys the complete desktop runtime ownership domain. A
     // core-only shutdown leaves built-in nodes and a resolver watcher alive.
+    await shutdown();
     await desktopRuntimeNodeBridge.stopPlan();
     await desktopProcessSupervisor.stopAll();
     await _deleteSocketFile();
@@ -187,7 +223,9 @@ class ClashService extends ClashHandlerInterface {
   Future<void> sendMessage(String message) async {
     try {
       final socket = await socketCompleter.future;
-      socket.writeln(message);
+      socket.writeln(Platform.isWindows && windowsMihomoRuntime.isActive
+          ? await _windowsMessages.prepare(message)
+          : message);
     } catch (e) {
       // Writing to a dead socket used to throw into an unawaited future and
       // strand this call until its 30s safeFuture timeout. Fail it fast with the
@@ -285,12 +323,15 @@ class ClashService extends ClashHandlerInterface {
   }
 
   Future<void> _destroySocket() async {
-    await _socketSubscription?.cancel();
-    _socketSubscription = null;
+    final iterator = _socketIterator;
+    final socket = _activeSocket;
+    _socketIterator = null;
+    _activeSocket = null;
+    socket?.destroy();
+    await iterator?.cancel();
+    _windowsMessages.clear();
     if (socketCompleter.isCompleted) {
       _flushPendingCompleters();
-      final lastSocket = await socketCompleter.future;
-      await lastSocket.close();
       socketCompleter = Completer();
     }
   }
@@ -320,6 +361,7 @@ class ClashService extends ClashHandlerInterface {
       await _stderrSubscription?.cancel();
       _stderrSubscription = null;
       await _destroySocket();
+      if (Platform.isWindows) await windowsMihomoRuntime.stop();
       await desktopProcessSupervisor.stop('mihomo');
       process = null;
       return true;

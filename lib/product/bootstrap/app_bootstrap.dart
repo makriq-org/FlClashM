@@ -12,6 +12,7 @@ import '../../common/system.dart';
 import '../../pages/editor_window.dart';
 import '../../state.dart';
 import '../diagnostics/diagnostic_recorder.dart';
+import '../diagnostics/windows_runtime_check.dart';
 import '../platform/product_platform_composition.dart';
 import '../services/app_update_service.dart';
 import '../services/desktop_app_update_bridge.dart';
@@ -29,6 +30,14 @@ class AppBootstrap {
 
     if (Platform.isWindows || Platform.isLinux) {
       DartPluginRegistrant.ensureInitialized();
+    }
+
+    if (const bool.fromEnvironment('FLCLASHM_WINDOWS_E2E') &&
+        Platform.isWindows &&
+        args.length >= 2 &&
+        args.first == '--windows-runtime-check') {
+      await runWindowsRuntimeCheck(args);
+      return;
     }
 
     await productDiagnosticRecorder.initialize(await appPath.homeDirPath);

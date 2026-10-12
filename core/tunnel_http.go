@@ -35,6 +35,9 @@ func handleTunnelHTTPRequest(paramsString string) (*TunnelHTTPResponse, error) {
 	if err := json.Unmarshal([]byte(paramsString), &params); err != nil {
 		return nil, fmt.Errorf("invalid tunnel HTTP request: %w", err)
 	}
+	if serviceHome() != "" && params.TargetPath != "" {
+		return nil, errors.New("Windows service downloads must be saved by the GUI")
+	}
 	if strings.TrimSpace(params.URL) == "" {
 		return nil, errors.New("tunnel HTTP request URL is empty")
 	}

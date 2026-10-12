@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 )
@@ -55,11 +56,19 @@ func startServer(arg string) {
 		return
 	}
 
+	if token := os.Getenv("FLCLASHM_CONTROL_TOKEN"); token != "" {
+		hello, _ := json.Marshal(map[string]string{"controlToken": token})
+		if _, err := c.Write(append(hello, '\n')); err != nil {
+			_ = c.Close()
+			return
+		}
+	}
 	connMu.Lock()
 	conn = c
 	connMu.Unlock()
 
 	defer func() {
+		handleShutdown()
 		connMu.Lock()
 		if conn != nil {
 			_ = conn.Close()

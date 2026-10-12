@@ -11,7 +11,11 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: 'mihomo',
-            parameters: {'runtimeToken': 'runtime_token_1234'},
+            parameters: {
+              'runtimeToken':
+                  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+              'port': 49152
+            },
           ),
         ),
         isNull,
@@ -21,7 +25,11 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: '/tmp/evil',
-            parameters: {'runtimeToken': 'runtime_token_1234'},
+            parameters: {
+              'runtimeToken':
+                  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+              'port': 49152
+            },
           ),
         ),
         isNotNull,
@@ -119,7 +127,11 @@ void main() {
       const request = DesktopHelperRequest(
         operation: DesktopHelperOperation.runtimeStart,
         runtimeArtifact: 'mihomo',
-        parameters: {'runtimeToken': 'runtime_token_1234'},
+        parameters: {
+          'runtimeToken':
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          'port': 49152
+        },
       );
       expect(WindowsDesktopHelperMessageCodec.encode(request), isNotEmpty);
       final response = WindowsDesktopHelperMessageCodec.decode(const [

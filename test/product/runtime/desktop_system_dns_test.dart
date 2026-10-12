@@ -28,19 +28,17 @@ void main() {
     expect(await reader.read(), ['1.1.1.1', '2606:4700:4700::1111']);
   });
 
-  test('reads continued resolver addresses on Windows', () async {
+  test('reads locale-independent Windows DNS while excluding the TUN adapter',
+      () async {
     final reader = DesktopSystemDns(
       target: 'windows',
-      runCommand: (_, __) async => ProcessResult(
-        1,
-        0,
-        '   DNS Servers . . . . . . . . . . . : 9.9.9.9\n'
-            '                                       149.112.112.112\n'
-            '   NetBIOS over Tcpip. . . . . . . . : Enabled',
-        '',
-      ),
+      runCommand: (executable, arguments) async {
+        expect(executable, 'powershell.exe');
+        expect(arguments.last, contains(r"$_.Name -ne 'FlClashM'"));
+        return ProcessResult(
+            1, 0, '["9.9.9.9","149.112.112.112","9.9.9.9"]', '');
+      },
     );
-
     expect(await reader.read(), ['9.9.9.9', '149.112.112.112']);
   });
 }

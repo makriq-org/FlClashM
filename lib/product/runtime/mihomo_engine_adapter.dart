@@ -56,7 +56,11 @@ class DefaultMihomoCoreBridge implements MihomoCoreBridge {
       clashCore.updateConfig(updateParams);
 
   @override
-  Future<void> startListener() => clashCore.startListener();
+  Future<void> startListener() async {
+    if (!await clashCore.clashInterface.startListener()) {
+      throw StateError('Не удалось запустить сетевые слушатели и TUN ядра.');
+    }
+  }
 
   @override
   Future<void> stopListener() => clashCore.stopListener();

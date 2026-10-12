@@ -106,15 +106,43 @@ end;
 procedure EnforceProtectedInstallAcl;
 var
   ResultCode: Integer;
+  FindRec: TFindRec;
+  Child: String;
 begin
-  { Reset explicit ACLs on the fixed Program Files directory and children.
-    They inherit Program Files permissions: users can read/run, while SYSTEM
-    and Administrators can write. A previous user-writable ACL must not turn
-    the helper's trusted executable path into a privilege boundary bypass. }
+  { Reset packaged files to Program Files permissions without temporarily
+    exposing the protected per-user core cache during an upgrade. }
   if not Exec(ExpandConstant('{sys}\icacls.exe'),
-    '"' + ExpandConstant('{app}') + '" /reset /T', '',
+    '"' + ExpandConstant('{app}') + '" /reset /Q', '',
     SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-    RaiseException('Не удалось защитить права каталога FlClashM. Код: ' + IntToStr(ResultCode));
+    RaiseException('Не удалось защитить каталог FlClashM.');
+  if FindFirst(ExpandConstant('{app}\*'), FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') and
+           (CompareText(FindRec.Name, 'service-data') <> 0) then
+        begin
+          Child := ExpandConstant('{app}\') + FindRec.Name;
+          if not Exec(ExpandConstant('{sys}\icacls.exe'),
+            '"' + Child + '" /reset /T /Q', '',
+            SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+            RaiseException('Не удалось защитить файлы FlClashM.');
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+procedure ProtectServiceData;
+var
+  ResultCode: Integer;
+begin
+  if not Exec(ExpandConstant('{sys}\icacls.exe'),
+    '"' + ExpandConstant('{app}\service-data') + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /remove:g *S-1-5-32-545 /T /Q',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось защитить данные системного ядра.');
 end;
 
 procedure StopAndRemoveHelperService;
@@ -247,7 +275,11 @@ begin
     StopAndRemoveHelperService;
     if PreviousBundleBackup <> '' then
     begin
+      if DirExists(ExpandConstant('{app}')) and not DelTree(ExpandConstant('{app}'), True, True, True) then
+        RaiseException('Не удалось удалить файлы неудачной установки.');
       CopyBundle(PreviousBundleBackup, ExpandConstant('{app}'));
+      EnforceProtectedInstallAcl;
+      ProtectServiceData;
       RestorePreviousHelperService;
     end;
     if FreshInstallDirectoryCreated and
@@ -320,6 +352,12 @@ begin
   else if CurStep = ssPostInstall then
   begin
     EnforceProtectedInstallAcl;
+    if not ForceDirectories(ExpandConstant('{app}\service-data')) then
+      RaiseException('Не удалось создать защищённый каталог ядра.');
+    ProtectServiceData;
+#ifdef FLCLASHM_CI_FAIL_INSTALL
+    RaiseException('CI: проверка отката после замены файлов.');
+#endif
     InstallAndStartHelperService;
   end
   else if CurStep = ssDone then
@@ -381,11 +419,11 @@ begin
     usPostUninstall:
     begin
       RegDeleteValue(HKEY_LOCAL_MACHINE_64, 'Software\FlClashM', 'InstallResult');
-      if DirExists(ExpandConstant('{userappdata}\app.flclashm.client')) then
+      if not UninstallSilent and DirExists(ExpandConstant('{userappdata}\makriq-org\FlClashM')) then
       begin
         if MsgBox('Удалить пользовательские данные программы?', mbConfirmation, MB_YESNO) = IDYES then
         begin
-          DelTree(ExpandConstant('{userappdata}\app.flclashm.client'), True, True, True);
+          DelTree(ExpandConstant('{userappdata}\makriq-org\FlClashM'), True, True, True);
         end;
       end;
     end;

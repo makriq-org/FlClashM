@@ -69,13 +69,14 @@ def verify_shared_pins() -> None:
     wanted_mihomo = MANIFEST["runtimes"]["mihomo"]["version"]
     if mihomo is None or mihomo.group(1) != wanted_mihomo:
         fail(f"mihomo manifest pin differs from core/go.mod: expected {wanted_mihomo}")
-    for filename, constant in (
-        ("olcrtc_release.dart", "olcRtcPinnedGoVersion"),
-        ("stormdns_release.dart", "stormDnsPinnedGoVersion"),
+    for runtime, filename, constant in (
+        ("olcrtc", "olcrtc_release.dart", "olcRtcPinnedGoVersion"),
+        ("stormdns", "stormdns_release.dart", "stormDnsPinnedGoVersion"),
     ):
         text = (PROJECT / "lib" / "product" / "runtime" / filename).read_text()
-        if f"const {constant} = '{MANIFEST['go']}';" not in text:
-            fail(f"desktop Go pin differs from {filename}: expected {MANIFEST['go']}")
+        android_go = MANIFEST["runtimes"][runtime]["androidGo"]
+        if f"const {constant} = '{android_go}';" not in text:
+            fail(f"Android Go source pin differs from {filename}: expected {android_go}")
 
 
 def target_default() -> str:
