@@ -154,8 +154,13 @@ fn serve_pipe() -> anyhow::Result<()> {
             let connected = unsafe { ConnectNamedPipe(pipe.0, None) }.is_ok()
                 || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED;
             if connected {
-                let _ = serve_client(pipe.0, &mut runtime);
-                break;
+                // NOWAIT's first successful ConnectNamedPipe means the pipe is
+                // available, not necessarily that a client connected yet.
+                let mut pid = 0;
+                if unsafe { GetNamedPipeClientProcessId(pipe.0, &mut pid) }.is_ok() {
+                    let _ = serve_client(pipe.0, &mut runtime);
+                    break;
+                }
             }
             std::thread::sleep(Duration::from_millis(25));
         }

@@ -5,6 +5,7 @@ import 'dart:io';
 import '../../clash/service.dart';
 import '../../common/path.dart';
 import '../../models/models.dart';
+import '../platform/windows_runtime_access_policy.dart';
 import '../runtime/windows_mihomo_runtime.dart';
 
 /// Opt-in verification entrypoint in CI builds only. Uses the installed GUI,
@@ -13,9 +14,16 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
   final output = File(args[1]);
   final hold = args.contains('--hold');
   try {
-    windowsMihomoRuntime.preferService = true;
     final core = clashService!;
     await core.preload();
+    await core.socketCompleter.future.timeout(const Duration(seconds: 30));
+    final policy = WindowsRuntimeAccessPolicy();
+    await policy.resolveTunAccess(
+      requestedTunEnable: true,
+      realTunEnable: false,
+      onAuthorizeRestart: core.reStart,
+      onResolvedTunEnable: (_) {},
+    );
     await core.socketCompleter.future.timeout(const Duration(seconds: 30));
     if (!windowsMihomoRuntime.isActive) {
       throw StateError('Installed service did not own the core.');
@@ -61,6 +69,16 @@ Future<void> runWindowsRuntimeCheck(List<String> args) async {
       if ((await core.getRuntimeSnapshot())['tun-up'] != false) {
         throw StateError('TUN remained live after stop.');
       }
+    }
+    await policy.resolveTunAccess(
+      requestedTunEnable: false,
+      realTunEnable: true,
+      onAuthorizeRestart: core.reStart,
+      onResolvedTunEnable: (_) {},
+    );
+    await core.socketCompleter.future.timeout(const Duration(seconds: 30));
+    if (windowsMihomoRuntime.isActive) {
+      throw StateError('Disabling TUN did not return ownership to the user.');
     }
     await core.destroy();
     await output.writeAsString(
