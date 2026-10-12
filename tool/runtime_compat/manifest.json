@@ -8,7 +8,7 @@
     "macos-arm64": {"os": "macos", "architecture": "arm64"}
   },
   "runtimes": {
-    "mihomo": {"version": "v1.19.29", "source": "core/go.mod"},
+    "mihomo": {"version": "v1.19.30", "source": "core/go.mod"},
     "naiveproxy": {
       "version": "v148.0.7778.96-5",
       "source": "https://github.com/klzgrad/naiveproxy",

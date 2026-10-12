@@ -11,18 +11,15 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use windows::core::w;
-use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL};
-use windows::Win32::Security::{
-    ConvertStringSecurityDescriptorToSecurityDescriptorW, PSECURITY_DESCRIPTOR, SDDL_REVISION_1,
-    SECURITY_ATTRIBUTES,
-};
+use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL, LocalFree};
+use windows::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1};
+use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
-    FILE_SHARE_NONE, OPEN_EXISTING,
+    FILE_SHARE_MODE, OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
 };
-use windows::Win32::System::Memory::LocalFree;
 use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, PIPE_ACCESS_DUPLEX, PIPE_READMODE_MESSAGE,
+    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_MESSAGE,
     PIPE_TYPE_MESSAGE, PIPE_WAIT,
 };
 use windows_service::{
@@ -159,8 +156,8 @@ fn wake_pipe() {
     if let Ok(pipe) = unsafe {
         CreateFileW(
             PIPE_NAME,
-            FILE_GENERIC_READ | FILE_GENERIC_WRITE,
-            FILE_SHARE_NONE,
+            (FILE_GENERIC_READ | FILE_GENERIC_WRITE).0,
+            FILE_SHARE_MODE(0),
             None,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL,
@@ -202,7 +199,8 @@ fn create_pipe() -> anyhow::Result<HANDLE> {
         )
     };
     let _ = unsafe { LocalFree(HLOCAL(descriptor.0 as _)) };
-    Ok(result?)
+    anyhow::ensure!(!result.is_invalid(), "CreateNamedPipeW failed: {}", windows::core::Error::from_win32());
+    Ok(result)
 }
 
 fn serve_client(pipe: HANDLE) -> anyhow::Result<()> {
