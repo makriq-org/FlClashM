@@ -71,6 +71,10 @@ List<int> _exchange(List<int> bytes) => using((arena) {
         }
         final output = arena<Uint8>(16 * 1024);
         final read = _transfer(pipe, output, 16 * 1024, false, arena);
+        final acknowledgement = arena<Uint8>()..value = 10;
+        if (_transfer(pipe, acknowledgement, 1, true, arena) != 1) {
+          throw StateError('Could not confirm reading the helper response.');
+        }
         return List<int>.from(output.asTypedList(read));
       } finally {
         CloseHandle(pipe);

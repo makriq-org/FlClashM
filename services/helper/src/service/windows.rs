@@ -17,10 +17,14 @@ use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, PIPE_ACCESS_DUPLEX};
+use windows::Win32::Storage::FileSystem::{
+    ReadFile, WriteFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_FIRST_PIPE_INSTANCE,
+    PIPE_ACCESS_DUPLEX,
+};
 use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PeekNamedPipe, PIPE_NOWAIT,
-    PIPE_READMODE_MESSAGE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_MESSAGE,
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
+    PeekNamedPipe, PIPE_NOWAIT, PIPE_READMODE_MESSAGE, PIPE_REJECT_REMOTE_CLIENTS,
+    PIPE_TYPE_MESSAGE,
 };
 use windows_service::{
     define_windows_service,
@@ -137,8 +141,8 @@ fn set_status(
 
 fn serve_pipe() -> anyhow::Result<()> {
     let mut runtime: Option<Runtime> = None;
+    let pipe = windows_runtime::OwnedHandle(create_pipe()?);
     while !STOP_REQUESTED.load(Ordering::Acquire) {
-        let pipe = windows_runtime::OwnedHandle(create_pipe()?);
         loop {
             if STOP_REQUESTED.load(Ordering::Acquire) {
                 return Ok(());
@@ -157,8 +161,11 @@ fn serve_pipe() -> anyhow::Result<()> {
                 // NOWAIT's first successful ConnectNamedPipe means the pipe is
                 // available, not necessarily that a client connected yet.
                 let mut pid = 0;
-                if unsafe { GetNamedPipeClientProcessId(pipe.0, &mut pid) }.is_ok() {
+                if unsafe { GetNamedPipeClientProcessId(pipe.0, &mut pid) }.is_ok()
+                    && unsafe { PeekNamedPipe(pipe.0, None, 0, None, None, None) }.is_ok()
+                {
                     let _ = serve_client(pipe.0, &mut runtime);
+                    let _ = unsafe { DisconnectNamedPipe(pipe.0) };
                     break;
                 }
             }
@@ -189,7 +196,7 @@ fn create_pipe() -> anyhow::Result<HANDLE> {
     let result = unsafe {
         CreateNamedPipeW(
             PIPE_NAME,
-            PIPE_ACCESS_DUPLEX,
+            FILE_FLAGS_AND_ATTRIBUTES(PIPE_ACCESS_DUPLEX.0 | FILE_FLAG_FIRST_PIPE_INSTANCE.0),
             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
             1,
             MAX_MESSAGE as u32,
@@ -211,39 +218,19 @@ fn serve_client(pipe: HANDLE, runtime: &mut Option<Runtime>) -> anyhow::Result<(
     let mut pid = 0;
     unsafe { GetNamedPipeClientProcessId(pipe, &mut pid) }?;
     let authorization = windows_runtime::authenticate(pid);
+    let input = read_message(pipe, MAX_MESSAGE)?;
     let response = match authorization {
         Err(_) => Response {
             state: "failed",
             message: "Client is not the installed FlClashM application.",
         },
-        Ok(client) => {
-            let deadline = Instant::now() + Duration::from_secs(3);
-            let mut input = vec![0_u8; MAX_MESSAGE];
-            let mut read = 0_u32;
-            loop {
-                anyhow::ensure!(
-                    !STOP_REQUESTED.load(Ordering::Acquire) && Instant::now() < deadline,
-                    "Client request timed out."
-                );
-                let mut available = 0;
-                unsafe { PeekNamedPipe(pipe, None, 0, None, Some(&mut available), None) }?;
-                anyhow::ensure!(
-                    available as usize <= MAX_MESSAGE,
-                    "Helper message is too large."
-                );
-                if available > 0 {
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            unsafe { ReadFile(pipe, Some(input.as_mut_slice()), Some(&mut read), None) }?;
-            match serde_json::from_slice::<Request>(&input[..read as usize]) {
-                Ok(request) => {
-                    let checked = validate(&request);
-                    if checked.state != "ready" {
-                        checked
-                    } else {
-                        match request.operation {
+        Ok(client) => match serde_json::from_slice::<Request>(&input) {
+            Ok(request) => {
+                let checked = validate(&request);
+                if checked.state != "ready" {
+                    checked
+                } else {
+                    match request.operation {
                             Operation::Ping => Response { state: "ready", message: "Windows helper is ready." },
                             Operation::RuntimeStart => {
                                 if runtime.is_some() {
@@ -269,14 +256,13 @@ fn serve_client(pipe: HANDLE, runtime: &mut Option<Runtime>) -> anyhow::Result<(
                             }
                             _ => Response { state: "unavailable", message: "TUN, routes and DNS are managed only by the installed mihomo runtime." },
                         }
-                    }
                 }
-                Err(_) => Response {
-                    state: "failed",
-                    message: "Malformed helper request.",
-                },
             }
-        }
+            Err(_) => Response {
+                state: "failed",
+                message: "Malformed helper request.",
+            },
+        },
     };
     let body = serde_json::to_vec(&response)?;
     let mut written = 0_u32;
@@ -285,7 +271,36 @@ fn serve_client(pipe: HANDLE, runtime: &mut Option<Runtime>) -> anyhow::Result<(
         written as usize == body.len(),
         "Incomplete helper response."
     );
+    // DisconnectNamedPipe discards unread response buffers. The client must
+    // confirm receipt before this persistent endpoint accepts another caller.
+    let acknowledgement = read_message(pipe, 1)?;
+    anyhow::ensure!(acknowledgement == [10], "Invalid response acknowledgement.");
     Ok(())
+}
+
+fn read_message(pipe: HANDLE, maximum: usize) -> anyhow::Result<Vec<u8>> {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        anyhow::ensure!(
+            !STOP_REQUESTED.load(Ordering::Acquire) && Instant::now() < deadline,
+            "Client request timed out."
+        );
+        let mut available = 0;
+        unsafe { PeekNamedPipe(pipe, None, 0, None, Some(&mut available), None) }?;
+        anyhow::ensure!(
+            available as usize <= maximum,
+            "Helper message is too large."
+        );
+        if available > 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let mut input = vec![0_u8; maximum];
+    let mut read = 0_u32;
+    unsafe { ReadFile(pipe, Some(input.as_mut_slice()), Some(&mut read), None) }?;
+    input.truncate(read as usize);
+    Ok(input)
 }
 
 fn validate(request: &Request) -> Response<'static> {
