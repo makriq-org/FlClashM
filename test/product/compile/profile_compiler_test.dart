@@ -1137,7 +1137,7 @@ void main() {
       expect(configYaml, isNotNull);
       final runtimeConfig = loadYaml(configYaml!) as YamlMap;
       expect(runtimeConfig['mode'], 'cnc');
-      expect(runtimeConfig['data'], 'data');
+      expect(runtimeConfig, isNot(contains('data')));
       expect(runtimeConfig['auth']['provider'], 'jitsi');
       expect(runtimeConfig['room']['id'], 'https://meet.example.org/room');
       expect(runtimeConfig['socks']['host'], '127.0.0.1');

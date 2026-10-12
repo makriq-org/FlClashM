@@ -512,21 +512,23 @@ const _canonicalOlcRtcFields = <BuiltInProxyFieldSchema>[
     path: 'olcrtc.transport-options.codec',
     type: ConfigValueType.string,
     allowedValues: <Object>{'qrcode', 'tile'},
+    defaultValue: ConfigDefaultValue.of('qrcode'),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.width',
     type: ConfigValueType.integer,
-    range: ConfigValueRange(minimum: 1),
+    range: ConfigValueRange(minimum: 16, maximum: 8192),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.height',
     type: ConfigValueType.integer,
-    range: ConfigValueRange(minimum: 1),
+    range: ConfigValueRange(minimum: 16, maximum: 8192),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.fps',
     type: ConfigValueType.integer,
-    range: ConfigValueRange(minimum: 1),
+    range: ConfigValueRange(minimum: 1, maximum: 240),
+    defaultValue: ConfigDefaultValue.of(30),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.bitrate',
@@ -536,6 +538,7 @@ const _canonicalOlcRtcFields = <BuiltInProxyFieldSchema>[
     path: 'olcrtc.transport-options.batch-size',
     type: ConfigValueType.integer,
     range: ConfigValueRange(minimum: 1),
+    defaultValue: ConfigDefaultValue.of(64),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.fragment-size',
@@ -546,21 +549,23 @@ const _canonicalOlcRtcFields = <BuiltInProxyFieldSchema>[
     path: 'olcrtc.transport-options.ack-timeout',
     type: ConfigValueType.string,
     additionalTypes: <ConfigValueType>{ConfigValueType.integer},
+    defaultValue: ConfigDefaultValue.of('2s'),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.qr-recovery',
     type: ConfigValueType.string,
-    allowedValues: <Object>{'low', 'medium', 'quartile', 'high', 'highest'},
+    allowedValues: <Object>{'low', 'medium', 'high', 'highest'},
+    defaultValue: ConfigDefaultValue.of('low'),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.tile-module',
     type: ConfigValueType.integer,
-    range: ConfigValueRange(minimum: 0),
+    range: ConfigValueRange(minimum: 0, maximum: 270),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.transport-options.tile-rs',
     type: ConfigValueType.integer,
-    range: ConfigValueRange(minimum: 0),
+    range: ConfigValueRange(minimum: 0, maximum: 200),
   ),
   BuiltInProxyFieldSchema(
     path: 'olcrtc.liveness',

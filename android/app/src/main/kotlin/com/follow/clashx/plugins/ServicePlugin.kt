@@ -119,6 +119,9 @@ class ServicePlugin :
             "getRuntimeNodePlanState" -> launch {
                 result.successOnMain(Service.getRuntimeNodePlanState())
             }
+            "getPhysicalNetworkScope" -> {
+                result.success(PhysicalNetworkScope.read(context))
+            }
             "stopRuntimeNodePlan" -> launch {
                 Service.stopRuntimeNodePlan()
                 result.successOnMain(true)

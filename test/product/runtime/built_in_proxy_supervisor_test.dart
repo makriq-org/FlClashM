@@ -33,6 +33,7 @@ void main() {
       Duration Function()? monotonicNow,
       Future<void> Function(Duration)? delay,
       RuntimeHealthProbe? healthProbe,
+      ByedpiNetworkScopeResolver? resolveByedpiNetworkScope,
     }) {
       final naiveLayout = NaiveProxySharedInstallLayout(
         abi: 'arm64-v8a',
@@ -69,6 +70,8 @@ void main() {
           ),
           runtime: runtime,
           allocateProbePort: () async => 39800 + runtime.allocatedPorts++,
+          resolveNetworkScope:
+              resolveByedpiNetworkScope ?? () async => 'network-test',
           monotonicNow: monotonicNow,
         ),
         olcRtc: OlcRtcNodeController(
@@ -90,6 +93,37 @@ void main() {
       expect(
         runtime.appliedPlans.single.map((node) => node['type']).toSet(),
         {'naiveproxy', 'byedpi', 'olcrtc'},
+      );
+    });
+
+    test('reapplies auto ByeDPI when the physical network changes', () async {
+      var networkScope = 'network-wifi';
+      final supervisor = buildSupervisor(
+        resolveByedpiNetworkScope: () async => networkScope,
+        monotonicNow: () => Duration.zero,
+      );
+      final plan = _byedpiAutoPlan();
+      runtime.batchResults.add(0);
+      expect(await supervisor.stageRuntimePlan([plan]), isEmpty);
+      await supervisor.commitStagedRuntimePlan([plan]);
+      expect(await supervisor.start(), isTrue);
+      final callsBeforeChange = runtime.appliedPlans.length;
+
+      networkScope = 'network-cellular';
+      runtime.batchResults.add(0);
+      await supervisor.notifyNetworkChanged();
+
+      expect(runtime.appliedPlans, hasLength(callsBeforeChange + 1));
+      expect(runtime.savedManifest, isNotNull);
+      final cacheRoot = Directory('${tempDir.path}/byedpi/nodes/byedpi-auto');
+      expect(
+        File('${cacheRoot.path}/strategy-cache-network-wifi.json').existsSync(),
+        isTrue,
+      );
+      expect(
+        File('${cacheRoot.path}/strategy-cache-network-cellular.json')
+            .existsSync(),
+        isTrue,
       );
     });
 

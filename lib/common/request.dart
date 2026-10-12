@@ -11,6 +11,19 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter/cupertino.dart';
 
+@visibleForTesting
+Response<T> validateTunnelHttpResponse<T>(Response<T> response) {
+  final statusCode = response.statusCode;
+  if (statusCode != null && statusCode >= 200 && statusCode < 300) {
+    return response;
+  }
+  throw DioException.badResponse(
+    statusCode: statusCode ?? 500,
+    requestOptions: response.requestOptions,
+    response: response,
+  );
+}
+
 class Request {
   Request() {
     _dio = Dio(
@@ -89,12 +102,13 @@ class Request {
             : ['$value'];
       }
     }
-    return Response<Uint8List>(
+    final tunnelResponse = Response<Uint8List>(
       requestOptions: requestOptions,
       data: Uint8List.fromList(base64Decode(body)),
       statusCode: response['status-code'] as int?,
       headers: Headers.fromMap(responseHeaders),
     );
+    return validateTunnelHttpResponse(tunnelResponse);
   }
 
   Future<Response<Uint8List>> getFileResponseForUrl(

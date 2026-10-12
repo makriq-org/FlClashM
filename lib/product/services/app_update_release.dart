@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -9,18 +10,22 @@ class ReleaseAsset {
     required this.browserDownloadUrl,
     required this.size,
     this.digest,
+    this.versionCode,
     List<String>? downloadUrls,
   }) : downloadUrls = List.unmodifiable(
-         downloadUrls ?? <String>[browserDownloadUrl],
-       );
+          downloadUrls ?? <String>[browserDownloadUrl],
+        );
 
   factory ReleaseAsset.fromJson(Map<String, dynamic> json) => ReleaseAsset(
-    name: json['name']?.toString() ?? '',
-    browserDownloadUrl: json['browser_download_url']?.toString() ?? '',
-    size: (json['size'] as num?)?.toInt() ?? 0,
-    digest: json['digest']?.toString(),
-    downloadUrls: <String>[json['browser_download_url']?.toString() ?? ''],
-  );
+        name: json['name']?.toString() ?? '',
+        browserDownloadUrl: json['browser_download_url']?.toString() ?? '',
+        size: (json['size'] as num?)?.toInt() ?? 0,
+        digest: json['digest']?.toString(),
+        versionCode: (json['version_code'] as num?)?.toInt(),
+        downloadUrls: <String>[
+          json['browser_download_url']?.toString() ?? '',
+        ],
+      );
 
   static final RegExp _androidAssetPattern = RegExp(
     r'-android(?:-([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*))?\.apk$',
@@ -31,6 +36,7 @@ class ReleaseAsset {
   final int size;
   final String? digest;
   final List<String> downloadUrls;
+  final int? versionCode;
 
   bool get isAndroidApk => _androidAssetPattern.hasMatch(name);
 
@@ -78,12 +84,11 @@ class AppRelease {
     final rawAssets = json['assets'];
     final assets = rawAssets is List
         ? rawAssets
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    ReleaseAsset.fromJson(Map<String, dynamic>.from(item)),
-              )
-              .toList()
+            .whereType<Map>()
+            .map(
+              (item) => ReleaseAsset.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList()
         : <ReleaseAsset>[];
     return AppRelease(
       tagName: json['tag_name']?.toString() ?? '',
@@ -92,6 +97,7 @@ class AppRelease {
       assets: assets,
       prerelease: json['prerelease'] as bool? ?? false,
       draft: json['draft'] as bool? ?? false,
+      versionCode: (json['version_code'] as num?)?.toInt(),
     );
   }
 
@@ -103,6 +109,9 @@ class AppRelease {
   final bool draft;
   final int? versionCode;
   final String? catalogId;
+
+  /// Android installation order from a signed manifest or release metadata.
+  final int? versionCode;
 
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -116,6 +125,81 @@ class AppRelease {
     }
     return null;
   }
+}
+
+AppRelease applyAppReleaseMetadata(AppRelease release, String metadataText) {
+  final decoded = jsonDecode(metadataText);
+  if (decoded is! Map<String, dynamic> ||
+      decoded['schemaVersion'] != 1 ||
+      decoded['applicationId'] != 'com.makriq.flclash' ||
+      decoded['tagName'] != release.tagName) {
+    throw const FormatException('Invalid Android release metadata.');
+  }
+  final versionCode = decoded['versionCode'];
+  if (versionCode is! int || versionCode <= 0) {
+    throw const FormatException('Invalid Android release version code.');
+  }
+  final rawApkVersionCodes = decoded['apkVersionCodes'];
+  final apkVersionCodes = <String, int>{};
+  if (rawApkVersionCodes is Map) {
+    for (final entry in rawApkVersionCodes.entries) {
+      final code = entry.value;
+      if (code is! int || code <= 0) {
+        throw const FormatException('Invalid APK version code metadata.');
+      }
+      apkVersionCodes[entry.key.toString()] = code;
+    }
+    if (apkVersionCodes.isNotEmpty) {
+      final maximumApkVersionCode = apkVersionCodes.values.reduce(
+        (left, right) => left > right ? left : right,
+      );
+      if (maximumApkVersionCode != versionCode) {
+        throw const FormatException(
+          'Release version code does not match APK metadata.',
+        );
+      }
+    }
+  }
+  return AppRelease(
+    tagName: release.tagName,
+    body: release.body,
+    htmlUrl: release.htmlUrl,
+    assets: release.assets
+        .map(
+          (asset) => ReleaseAsset(
+            name: asset.name,
+            browserDownloadUrl: asset.browserDownloadUrl,
+            downloadUrls: asset.downloadUrls,
+            size: asset.size,
+            digest: asset.digest,
+            versionCode: apkVersionCodes[asset.name] ?? asset.versionCode,
+          ),
+        )
+        .toList(growable: false),
+    prerelease: release.prerelease,
+    draft: release.draft,
+    versionCode: versionCode,
+  );
+}
+
+bool isAppReleaseUpdateAvailable(
+  AppRelease release, {
+  required int? installedVersionCode,
+  required String installedVersionName,
+  required List<String> supportedAbis,
+}) {
+  var candidateVersionCode = release.versionCode;
+  if (installedVersionCode != null) {
+    candidateVersionCode = selectAndroidReleaseAsset(
+          release,
+          supportedAbis: supportedAbis,
+        )?.apkAsset.versionCode ??
+        candidateVersionCode;
+  }
+  if (candidateVersionCode != null && installedVersionCode != null) {
+    return candidateVersionCode > installedVersionCode;
+  }
+  return utils.compareVersions(release.version, installedVersionName) > 0;
 }
 
 class AndroidReleaseAsset {
@@ -224,12 +308,22 @@ AppRelease? selectLatestAppRelease(
     if (release.draft || (!includePrerelease && release.prerelease)) {
       continue;
     }
-    if (latestRelease == null ||
-        utils.compareVersions(release.version, latestRelease.version) > 0) {
+    if (latestRelease == null || _isNewerAppRelease(release, latestRelease)) {
       latestRelease = release;
     }
   }
   return latestRelease;
+}
+
+bool _isNewerAppRelease(AppRelease candidate, AppRelease current) {
+  final candidateCode = candidate.versionCode;
+  final currentCode = current.versionCode;
+  if (candidateCode != null || currentCode != null) {
+    if (candidateCode == null) return false;
+    if (currentCode == null) return true;
+    return candidateCode > currentCode;
+  }
+  return utils.compareVersions(candidate.version, current.version) > 0;
 }
 
 _ParsedSha256Line? _parseSha256Line(String rawLine) {

@@ -65,6 +65,15 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineMana
 
 Пример: `feat/olcrtc-auto-activation`. Прямой push в `main` запрещён — только через PR.
 
+### Desktop-направление
+
+- `feat/cross-platform` — постоянная интеграционная ветка desktop-направления. Пока
+  направление активно, ветку не удалять, даже если её текущая вершина уже входит в
+  `main`.
+- Этапы работы ответвляются от `feat/cross-platform`, а их PR направляются обратно в
+  неё. После слияния удаляется только ветка этапа.
+- Первый этап — `feat/platform-composition`.
+
 ## Коммиты
 
 Формат заголовка: **`тип: описание`**

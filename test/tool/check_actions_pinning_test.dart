@@ -26,6 +26,16 @@ steps:
     expect(failures.first, contains('.github/workflows/ci.yaml:2'));
   });
 
+  test('rejects a full commit SHA without a release tag comment', () {
+    final failures = findUnpinnedActions('''
+steps:
+  - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+''', sourcePath: '.github/workflows/ci.yaml');
+
+    expect(failures, hasLength(1));
+    expect(failures.single, contains('so Renovate can update'));
+  });
+
   test('ignores local and Docker actions', () {
     final failures = findUnpinnedActions('''
 steps:

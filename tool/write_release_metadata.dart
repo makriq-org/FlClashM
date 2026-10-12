@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'android_apk_version_codes.dart';
 import 'release_contract.dart';
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   final options = MetadataOptions.parse(args);
   final contract = readReleaseContract();
   final pubspecVersion = readPubspecVersion();
@@ -20,11 +21,36 @@ void main(List<String> args) {
   if (contractFailure != null) {
     throw StateError(contractFailure);
   }
+  final apkVersionCodes = await readAndroidApkVersionCodes(
+    distPath: options.distPath,
+    apkNames: contract.releaseArtifacts.where((name) => name.endsWith('.apk')),
+  );
 
   final outputFile = File(options.outputPath);
   outputFile.parent.createSync(recursive: true);
   outputFile.writeAsStringSync(
-    const JsonEncoder.withIndent('  ').convert({
+    const JsonEncoder.withIndent('  ').convert(
+      buildReleaseMetadata(
+        contract: contract,
+        pubspecVersion: pubspecVersion,
+        coreVersion: coreVersion,
+        options: options,
+        apkVersionCodes: apkVersionCodes,
+      ),
+    ),
+  );
+
+  stdout.writeln('Wrote release metadata to `${outputFile.path}`.');
+}
+
+Map<String, dynamic> buildReleaseMetadata({
+  required ReleaseContract contract,
+  required PubspecVersion pubspecVersion,
+  required String coreVersion,
+  required MetadataOptions options,
+  required AndroidApkVersionCodes apkVersionCodes,
+}) =>
+    {
       'schemaVersion': 1,
       'appName': contract.appName,
       'applicationId': contract.applicationId,
@@ -35,16 +61,14 @@ void main(List<String> args) {
       'releaseChannel': options.releaseChannel,
       'pubspecVersion': pubspecVersion.raw,
       'versionName': pubspecVersion.versionName,
-      'versionCode': pubspecVersion.versionCode,
+      'baseVersionCode': pubspecVersion.versionCode,
+      'versionCode': apkVersionCodes.maximum,
+      'apkVersionCodes': apkVersionCodes.values,
       'coreVersion': coreVersion,
       'commitSha': options.githubSha,
       'releaseArtifacts': contract.releaseArtifacts,
       'releaseMetadataFileName': contract.releaseMetadataFileName,
-    }),
-  );
-
-  stdout.writeln('Wrote release metadata to `${outputFile.path}`.');
-}
+    };
 
 class MetadataOptions {
   const MetadataOptions({
@@ -53,6 +77,7 @@ class MetadataOptions {
     required this.githubSha,
     required this.githubRepository,
     required this.releaseChannel,
+    required this.distPath,
   });
 
   factory MetadataOptions.parse(List<String> args) {
@@ -61,6 +86,7 @@ class MetadataOptions {
     String? githubSha;
     String? githubRepository;
     String? releaseChannel;
+    var distPath = 'dist';
 
     for (var index = 0; index < args.length; index++) {
       final arg = args[index];
@@ -105,6 +131,15 @@ class MetadataOptions {
         index++;
         continue;
       }
+      if (arg == '--dist') {
+        distPath = _requireValue(args, index, '--dist');
+        index++;
+        continue;
+      }
+      if (arg.startsWith('--dist=')) {
+        distPath = arg.substring('--dist='.length);
+        continue;
+      }
       if (arg.startsWith('--release-channel=')) {
         releaseChannel = arg.substring('--release-channel='.length);
         continue;
@@ -140,6 +175,7 @@ class MetadataOptions {
       githubSha: githubSha,
       githubRepository: githubRepository,
       releaseChannel: checkedReleaseChannel,
+      distPath: distPath,
     );
   }
 
@@ -148,6 +184,7 @@ class MetadataOptions {
   final String githubSha;
   final String githubRepository;
   final String releaseChannel;
+  final String distPath;
 }
 
 String _requireValue(List<String> args, int index, String flag) {

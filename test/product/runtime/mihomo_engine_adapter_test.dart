@@ -386,6 +386,9 @@ class _FakeBuiltInProxySupervisor implements BuiltInProxySupervisor {
   }
 
   @override
+  Future<void> notifyNetworkChanged() async {}
+
+  @override
   Future<String> stageRuntimePlan(List<BuiltInProxyNodePlan> plans) async {
     stageCalls++;
     callOrder?.add('stageLocalNodes');

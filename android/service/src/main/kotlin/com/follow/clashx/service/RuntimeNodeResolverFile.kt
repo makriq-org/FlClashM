@@ -24,6 +24,7 @@ data class RuntimeNodeResolverFile(
     val path: String,
     val dependsOnSystemDns: Boolean,
     val resetPaths: List<String>,
+    val systemDnsMode: SystemDnsRenderMode = SystemDnsRenderMode.RESOLVER_LIST,
 ) {
     companion object {
         /**
@@ -31,6 +32,9 @@ data class RuntimeNodeResolverFile(
          * inserted. Pinned against the Dart constant by a product contract test.
          */
         const val SYSTEM_DNS_PLACEHOLDER = "# @flclashm:system-dns"
+
+        /** Inline marker for artifacts that consume one DNS endpoint. */
+        const val SYSTEM_DNS_VALUE_PLACEHOLDER = "@flclashm-system-dns@"
 
         fun fromJson(value: JSONObject?): RuntimeNodeResolverFile? {
             if (value == null) return null
@@ -49,7 +53,25 @@ data class RuntimeNodeResolverFile(
                 path = path,
                 dependsOnSystemDns = value.optBoolean("dependsOnSystemDns", false),
                 resetPaths = resetPaths,
+                systemDnsMode = SystemDnsRenderMode.fromWire(
+                    value.optString("systemDnsMode", "resolver-list"),
+                ),
             )
+        }
+    }
+}
+
+/** The generated artifact either consumes a resolver list or one `host:port`. */
+enum class SystemDnsRenderMode {
+    RESOLVER_LIST,
+    SINGLE_HOST_PORT,
+    INVALID;
+
+    companion object {
+        fun fromWire(value: String): SystemDnsRenderMode = when (value) {
+            "resolver-list" -> RESOLVER_LIST
+            "single-host-port" -> SINGLE_HOST_PORT
+            else -> INVALID
         }
     }
 }
@@ -71,11 +93,44 @@ enum class RuntimeNodeResolverFileRenderResult {
     SYSTEM_DNS_UNAVAILABLE,
 }
 
+/** The generated file before a DNS update, retained only long enough to undo it. */
+data class RuntimeNodeResolverFileSnapshot(val content: String?)
+
 /**
  * Renders resolver files and keeps every produced path inside the node working
  * directory.
  */
 object RuntimeNodeResolverFileWriter {
+
+    fun snapshot(
+        workingDirectory: File,
+        spec: RuntimeNodeResolverFile,
+    ): RuntimeNodeResolverFileSnapshot? {
+        val target = resolveInside(workingDirectory, spec.path) ?: return null
+        val content = if (target.exists()) runCatching { target.readText() }.getOrNull() else null
+        return RuntimeNodeResolverFileSnapshot(content)
+    }
+
+    /** Restores a previous generated artifact without exposing a partial file. */
+    fun restore(
+        workingDirectory: File,
+        spec: RuntimeNodeResolverFile,
+        snapshot: RuntimeNodeResolverFileSnapshot,
+    ): Boolean {
+        val target = resolveInside(workingDirectory, spec.path) ?: return false
+        val content = snapshot.content
+        if (content == null) return !target.exists() || target.delete()
+        val temp = File(target.parentFile, "${target.name}.rollback.tmp")
+        return runCatching {
+            target.parentFile?.mkdirs()
+            temp.writeText(content)
+            check(temp.renameTo(target)) { "Could not atomically restore ${target.path}" }
+            true
+        }.getOrElse {
+            temp.delete()
+            false
+        }
+    }
 
     /**
      * Resolves [relativePath] against [workingDirectory], rejecting anything
@@ -118,14 +173,19 @@ object RuntimeNodeResolverFileWriter {
         val templateText = runCatching { template.readText() }.getOrNull()
             ?: return RuntimeNodeResolverFileRenderResult.FAILED
         val rendered = runCatching {
-            buildResolverList(templateText, systemDns)
+            renderTemplate(templateText, systemDns, spec.systemDnsMode)
         }.getOrNull() ?: return RuntimeNodeResolverFileRenderResult.FAILED
         if (rendered.isEmpty()) {
             // An empty list has two very different causes. Report them apart so
             // the caller can say "the network is not handing out DNS yet"
             // instead of the generic "could not render the resolver file".
-            val wantsSystemDns = templateText.lineSequence().any {
-                it.trim() == RuntimeNodeResolverFile.SYSTEM_DNS_PLACEHOLDER
+            val wantsSystemDns = when (spec.systemDnsMode) {
+                SystemDnsRenderMode.RESOLVER_LIST -> templateText.lineSequence().any {
+                    it.trim() == RuntimeNodeResolverFile.SYSTEM_DNS_PLACEHOLDER
+                }
+                SystemDnsRenderMode.SINGLE_HOST_PORT ->
+                    templateText.contains(RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER)
+                SystemDnsRenderMode.INVALID -> false
             }
             return if (wantsSystemDns && systemDns.isEmpty()) {
                 RuntimeNodeResolverFileRenderResult.SYSTEM_DNS_UNAVAILABLE
@@ -151,6 +211,27 @@ object RuntimeNodeResolverFileWriter {
             RuntimeNodeResolverFileRenderResult.FAILED
         }
     }
+
+    private fun renderTemplate(
+        template: String,
+        systemDns: List<String>,
+        mode: SystemDnsRenderMode,
+    ): String = when (mode) {
+        SystemDnsRenderMode.RESOLVER_LIST -> buildResolverList(template, systemDns)
+        SystemDnsRenderMode.SINGLE_HOST_PORT -> renderSingleHostPort(template, systemDns)
+        SystemDnsRenderMode.INVALID -> ""
+    }
+
+    private fun renderSingleHostPort(template: String, systemDns: List<String>): String {
+        val placeholder = RuntimeNodeResolverFile.SYSTEM_DNS_VALUE_PLACEHOLDER
+        if (template.windowed(placeholder.length).count { it == placeholder } != 1) return ""
+        val endpoint = systemDns.firstOrNull()?.let(::systemDnsEndpoint) ?: return ""
+        return template.replace(placeholder, endpoint)
+    }
+
+    /** OlcRTC accepts one endpoint; Android's ordered first resolver wins. */
+    private fun systemDnsEndpoint(address: String): String =
+        if (address.contains(':')) "[$address]:53" else "$address:53"
 
     /**
      * Deletes runtime-owned paths whose contents depend on the generated list.

@@ -73,6 +73,28 @@ void main() {
       expect(node['revision'], hasLength(64));
     });
 
+    test('declares a generic single-DNS artifact for system DNS', () async {
+      final plan = _plan('room-a', systemDns: true);
+      await controller.stageRuntimePlan(
+        currentPlans: const [],
+        nextPlans: [plan],
+      );
+
+      final node = (await controller.buildRuntimeNodes([plan])).single;
+      expect(node['resolverFile'], {
+        'template': olcRtcConfigTemplateFileName,
+        'path': olcRtcConfigFileName,
+        'dependsOnSystemDns': true,
+        'systemDnsMode': 'single-host-port',
+      });
+      expect(
+        await File(
+          '${layout.nodesDirectoryPath}/node-a/$olcRtcConfigTemplateFileName',
+        ).readAsString(),
+        contains(olcRtcSystemDnsPlaceholder),
+      );
+    });
+
     test('persists one manifest and clears it for an empty plan', () async {
       await controller.persistColdStart([_plan('room-a')]);
       expect(
@@ -84,7 +106,7 @@ void main() {
   });
 }
 
-BuiltInProxyNodePlan _plan(String room) => BuiltInProxyNodePlan(
+BuiltInProxyNodePlan _plan(String room, {bool systemDns = false}) => BuiltInProxyNodePlan(
       nodeId: 'node-a',
       name: 'OlcRTC',
       type: BuiltInProxyType.olcrtc,
@@ -96,10 +118,12 @@ BuiltInProxyNodePlan _plan(String room) => BuiltInProxyNodePlan(
         'built-in-proxies/olcrtc/node-a/config.yaml': 'mode: "cnc"\n'
             'room:\n'
             '  id: "$room"\n'
+            '${systemDns ? 'net:\n  dns: "$olcRtcSystemDnsPlaceholder"\n' : ''}'
             'socks:\n'
             '  host: "127.0.0.1"\n'
             '  port: 35910',
       },
+      metadata: {'depends-on-system-dns': '$systemDns'},
     );
 
 class _FakeBinaryBridge implements OlcRtcBinaryBridge {
