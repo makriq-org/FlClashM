@@ -18,7 +18,8 @@
         "lib/product/platform/product_install_layout.dart",
         "lib/product/runtime/desktop_process_supervisor.dart",
         "lib/product/runtime/desktop_runtime_layout.dart",
-        "lib/product/runtime/desktop_runtime_node_bridge.dart"
+        "lib/product/runtime/desktop_runtime_node_bridge.dart",
+        "lib/product/runtime/windows_mihomo_runtime.dart"
       ]
     },
     {
@@ -179,6 +180,14 @@
       "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",
       "targets": [
         "lib/product/subscription/provider_advisory.dart"
+      ]
+    },
+    {
+      "path": "lib/common/windows.dart",
+      "boundary": "windows-service-lifecycle",
+      "reason": "Windows service health uses authenticated product IPC; only Inno Setup may install or replace the service.",
+      "targets": [
+        "lib/product/runtime/windows_mihomo_runtime.dart"
       ]
     }
   ],

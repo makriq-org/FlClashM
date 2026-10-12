@@ -44,31 +44,16 @@ class CoreUpdater {
   /// process is spawned: a running exe can't be deleted on Windows, and on
   /// macOS/Linux a swap after spawn leaves the whole session on the old core.
   Future<void> applyPending() async {
+    // Windows ships mihomo inside the signed full-app update catalog.  Never
+    // replace one executable outside that package: the service, runtime
+    // inventory and GUI must advance together.
+    if (Platform.isWindows) return;
     final pending = File(appPath.corePendingPath);
     if (!await pending.exists()) {
       return;
     }
     commonPrint.log("Applying pending core update...");
     try {
-      // Windows service mode: the core lives under Program Files, which the
-      // unelevated app can't overwrite (rename -> access-denied). The SYSTEM
-      // helper does the swap (stop + move + refresh allow-list hash) for us.
-      if (Platform.isWindows) {
-        final status = await windows?.checkService();
-        if (status == WindowsHelperServiceStatus.running) {
-          final ok = await request.replaceCoreByHelper(
-            appPath.corePendingPath,
-            appPath.corePath,
-          );
-          if (ok) {
-            commonPrint.log("Pending core update applied via helper");
-            return;
-          }
-          commonPrint.log("Helper swap failed, falling back to local swap");
-        }
-        // A helper-started core survives app restarts and holds the exe lock.
-        await request.stopCoreByHelper();
-      }
       // Read the setuid state BEFORE the old binary is deleted.
       final wasAuthorized = Platform.isMacOS && await system.checkIsAdmin();
       final target = File(appPath.corePath);
@@ -83,15 +68,7 @@ class CoreUpdater {
         }
       }
       await pending.rename(appPath.corePath);
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', appPath.corePath]);
-      }
-      if (Platform.isWindows) {
-        final status = await windows?.checkService();
-        if (status != null && status != WindowsHelperServiceStatus.none) {
-          await syncHelperAllowedHash();
-        }
-      }
+      await Process.run('chmod', ['+x', appPath.corePath]);
       if (wasAuthorized) {
         await _restoreMacSetuid();
       }

@@ -1,7 +1,7 @@
 name: flclashx
 description: FlClashM is a cross-platform mihomo client for Android, Linux, Windows, and macOS.
 publish_to: "none"
-version: 0.10.8-pre3+2026080901
+version: 0.4.0-pre1+2026101201
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

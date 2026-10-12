@@ -131,7 +131,7 @@ if(NOT RUNTIME_VERIFY_RESULT EQUAL 0)
     "Desktop runtime asset verification failed. Build or download desktop-runtime-linux-x64 into ${FLCLASHM_RUNTIME_ASSETS}.\n${RUNTIME_VERIFY_OUTPUT}${RUNTIME_VERIFY_ERROR}")
 endif()
 set(RUNTIME_ASSET_DIR
-  "${FLCLASHM_RUNTIME_ASSETS}/runtimes/linux/${RUNTIME_ARCHITECTURE}")
+  "${FLCLASHM_RUNTIME_ASSETS}/install/runtimes/linux/${RUNTIME_ARCHITECTURE}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

@@ -145,7 +145,7 @@ class AboutView extends ConsumerWidget {
             },
             trailing: const Icon(Icons.update),
           ),
-          if (system.isDesktop) const _CoreUpdateItem(),
+          if (system.isDesktop && !Platform.isWindows) const _CoreUpdateItem(),
           ListItem(
             title: Text(appLocalizations.project),
             onTap: () {

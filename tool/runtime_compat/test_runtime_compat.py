@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import struct
 import tempfile
@@ -19,6 +20,8 @@ class RuntimeInventoryTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.previous_out = runtime_compat.OUT
+        self.previous_layout = runtime_compat.BUNDLED_LAYOUT
+        runtime_compat.BUNDLED_LAYOUT = False
         runtime_compat.OUT = Path(self.temporary.name)
         root = runtime_compat.install_root("linux-x64")
         root.mkdir(parents=True)
@@ -36,6 +39,7 @@ class RuntimeInventoryTest(unittest.TestCase):
 
     def tearDown(self):
         runtime_compat.OUT = self.previous_out
+        runtime_compat.BUNDLED_LAYOUT = self.previous_layout
         self.temporary.cleanup()
 
     def test_inventory_round_trip_uses_stable_install_layout(self):
@@ -50,6 +54,17 @@ class RuntimeInventoryTest(unittest.TestCase):
             runtime_compat.inventory_path("linux-x64").parent.parts[-3:],
             ("runtimes", "linux", "x86_64"),
         )
+
+    def test_packaged_bundle_verifies_the_same_inventory(self):
+        written = runtime_compat.write_inventory("linux-x64")
+        bundle = runtime_compat.OUT / "bundle"
+        shutil.copytree(runtime_compat.OUT / "install" / "runtimes", bundle / "runtimes")
+        runtime_compat.OUT = bundle
+        runtime_compat.BUNDLED_LAYOUT = True
+        self.assertEqual(written, runtime_compat.verify_inventory("linux-x64"))
+        runtime_compat.installed_path("mihomo", "linux-x64").unlink()
+        with self.assertRaisesRegex(RuntimeError, "missing"):
+            runtime_compat.verify_inventory("linux-x64")
 
     def test_digest_tampering_fails_packaging_verification(self):
         runtime_compat.write_inventory("linux-x64")

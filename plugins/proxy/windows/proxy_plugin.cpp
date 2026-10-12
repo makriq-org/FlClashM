@@ -1,193 +1,215 @@
 #include "proxy_plugin.h"
 
-// This must be included before many other Windows headers.
 #include <windows.h>
-
-#include <WinInet.h>
-#include <Ras.h>
-#include <RasError.h>
-#include <vector>
-#include <iostream>
-
-#pragma comment(lib, "wininet")
-#pragma comment(lib, "Rasapi32")
-
-// For getPlatformVersion; remove unless needed for your plugin implementation.
-#include <VersionHelpers.h>
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
 #include <memory>
-#include <sstream>
+#include <string>
+#include <vector>
 
-void startProxy(const int port, const flutter::EncodableList& bypassDomain)
-{
-  INTERNET_PER_CONN_OPTION_LIST list;
-  DWORD dwBufSize = sizeof(list);
-  list.dwSize = sizeof(list);
-  list.pszConnection = nullptr;
+#include "proxy_state.h"
 
-  auto url = "127.0.0.1:" + std::to_string(port);
-  auto wUrl = std::wstring(url.begin(), url.end());
-  auto fullAddr = new WCHAR[url.length() + 1];
-  wcscpy_s(fullAddr, url.length() + 1, wUrl.c_str());
+namespace proxy {
+namespace {
 
-  std::wstring wBypassList;
+HANDLE watchdog_pipe = nullptr;
+HANDLE watchdog_process = nullptr;
 
-  for (const auto& domain : bypassDomain) {
-    if (!wBypassList.empty()) {
-       wBypassList += L";";
-    }
-    wBypassList += std::wstring(std::get<std::string>(domain).begin(), std::get<std::string>(domain).end());
-  }
-
-  auto bypassAddr = new WCHAR[wBypassList.length() + 1];
-  wcscpy_s(bypassAddr, wBypassList.length() + 1, wBypassList.c_str());
-
-  list.dwOptionCount = 3;
-  list.pOptions = new INTERNET_PER_CONN_OPTION[3];
-
-  if (!list.pOptions)
-  {
-    return;
-  }
-
-  list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
-  list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY;
-
-  list.pOptions[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
-  list.pOptions[1].Value.pszValue = fullAddr;
-
-  list.pOptions[2].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
-  list.pOptions[2].Value.pszValue = bypassAddr;
-
-  InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize);
-
-  RASENTRYNAME entry;
-  entry.dwSize = sizeof(entry);
-  std::vector<RASENTRYNAME> entries;
-  DWORD size = sizeof(entry), count;
-  LPRASENTRYNAME entryAddr = &entry;
-  auto ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
-  if (ret == ERROR_BUFFER_TOO_SMALL)
-  {
-    entries.resize(count);
-    entries[0].dwSize = sizeof(RASENTRYNAME);
-    entryAddr = entries.data();
-    ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
-  }
-  if (ret != ERROR_SUCCESS)
-  {
-    return;
-  }
-  for (DWORD i = 0; i < count; i++)
-  {
-    list.pszConnection = entryAddr[i].szEntryName;
-    InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize);
-  }
-
-  delete[] fullAddr;
-  delete[] bypassAddr;
-  delete[] list.pOptions;
-
-  InternetSetOption(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
-  InternetSetOption(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+std::string ToUtf8(const std::wstring& value) {
+  int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.c_str(),
+                                 static_cast<int>(value.size()), nullptr, 0,
+                                 nullptr, nullptr);
+  if (size <= 0) return "Windows proxy error";
+  std::string result(size, '\0');
+  WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.c_str(),
+                      static_cast<int>(value.size()), result.data(), size,
+                      nullptr, nullptr);
+  return result;
 }
 
-void stopProxy()
-{
-  INTERNET_PER_CONN_OPTION_LIST list;
-  DWORD dwBufSize = sizeof(list);
-
-  list.dwSize = sizeof(list);
-  list.pszConnection = nullptr;
-  list.dwOptionCount = 1;
-  list.pOptions = new INTERNET_PER_CONN_OPTION[1];
-  if (nullptr == list.pOptions)
-  {
-    return;
-  }
-  list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
-  list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT;
-
-  InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize);
-
-  RASENTRYNAME entry;
-  entry.dwSize = sizeof(entry);
-  std::vector<RASENTRYNAME> entries;
-  DWORD size = sizeof(entry), count;
-  LPRASENTRYNAME entryAddr = &entry;
-  auto ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
-  if (ret == ERROR_BUFFER_TOO_SMALL)
-  {
-    entries.resize(count);
-    entries[0].dwSize = sizeof(RASENTRYNAME);
-    entryAddr = entries.data();
-    ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
-  }
-  if (ret != ERROR_SUCCESS)
-  {
-    return;
-  }
-  for (DWORD i = 0; i < count; i++)
-  {
-    list.pszConnection = entryAddr[i].szEntryName;
-    InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize);
-  }
-  delete[] list.pOptions;
-  InternetSetOption(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
-  InternetSetOption(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+bool FromUtf8(const std::string& value, std::wstring* result) {
+  if (value.empty()) { result->clear(); return true; }
+  int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                 value.data(), static_cast<int>(value.size()),
+                                 nullptr, 0);
+  if (size <= 0) return false;
+  result->resize(size);
+  return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                             value.data(), static_cast<int>(value.size()),
+                             result->data(), size) == size;
 }
 
-namespace proxy
-{
-
-  // static
-  void ProxyPlugin::RegisterWithRegistrar(
-      flutter::PluginRegistrarWindows *registrar)
-  {
-    auto channel =
-        std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-            registrar->messenger(), "proxy",
-            &flutter::StandardMethodCodec::GetInstance());
-
-    auto plugin = std::make_unique<ProxyPlugin>();
-
-    channel->SetMethodCallHandler(
-        [plugin_pointer = plugin.get()](const auto &call, auto result)
-        {
-          plugin_pointer->HandleMethodCall(call, std::move(result));
-        });
-
-    registrar->AddPlugin(std::move(plugin));
+bool WatchdogPath(std::wstring* path, std::wstring* error) {
+  HMODULE module = GetModuleHandleW(L"proxy_plugin.dll");
+  if (!module) { *error = L"proxy_plugin.dll is not loaded"; return false; }
+  std::vector<wchar_t> buffer(MAX_PATH);
+  DWORD length = 0;
+  for (;;) {
+    length = GetModuleFileNameW(module, buffer.data(),
+                                static_cast<DWORD>(buffer.size()));
+    if (length == 0) { *error = L"GetModuleFileNameW failed"; return false; }
+    if (length < buffer.size() - 1) break;
+    if (buffer.size() >= 32768) { *error = L"Proxy plugin path too long"; return false; }
+    buffer.resize(buffer.size() * 2);
   }
+  std::wstring dll_path(buffer.data(), length);
+  auto slash = dll_path.find_last_of(L"\\/");
+  if (slash == std::wstring::npos) { *error = L"Invalid proxy plugin path"; return false; }
+  *path = dll_path.substr(0, slash + 1) + L"proxy_watchdog.exe";
+  return true;
+}
 
-  ProxyPlugin::ProxyPlugin() {}
+void ReleaseWatchdog(bool clean) {
+  if (watchdog_pipe) {
+    if (clean) { const char done = 'C'; DWORD written = 0;
+      WriteFile(watchdog_pipe, &done, 1, &written, nullptr); }
+    CloseHandle(watchdog_pipe); watchdog_pipe = nullptr; }
+  if (watchdog_process) { CloseHandle(watchdog_process); watchdog_process = nullptr; }
+}
 
-  ProxyPlugin::~ProxyPlugin() {}
-
-  void ProxyPlugin::HandleMethodCall(
-      const flutter::MethodCall<flutter::EncodableValue> &method_call,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
-  {
-    if (method_call.method_name().compare("StopProxy") == 0)
-    {
-      stopProxy();
-      result->Success(true);
-    }
-    else if (method_call.method_name().compare("StartProxy") == 0)
-    {
-      auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
-      auto port = std::get<int>(arguments->at(flutter::EncodableValue("port")));
-      auto bypassDomain = std::get<flutter::EncodableList>(arguments->at(flutter::EncodableValue("bypassDomain")));
-      startProxy(port, bypassDomain);
-      result->Success(true);
-    }
-    else
-    {
-      result->NotImplemented();
-    }
+bool EnsureWatchdog(std::wstring* error) {
+  if (watchdog_pipe) {
+    if (WaitForSingleObject(watchdog_process, 0) == WAIT_TIMEOUT) return true;
+    ReleaseWatchdog(false);
   }
-} // namespace proxy
+  std::wstring path;
+  if (!WatchdogPath(&path, error)) return false;
+  HANDLE child_stdin = nullptr, parent_stdin = nullptr;
+  HANDLE parent_stdout = nullptr, child_stdout = nullptr;
+  SECURITY_ATTRIBUTES attributes{sizeof(attributes), nullptr, TRUE};
+  if (!CreatePipe(&child_stdin, &parent_stdin, &attributes, 0) ||
+      !CreatePipe(&parent_stdout, &child_stdout, &attributes, 0)) {
+    *error = L"Cannot create proxy watchdog pipes";
+    if (child_stdin) CloseHandle(child_stdin);
+    if (parent_stdin) CloseHandle(parent_stdin);
+    if (parent_stdout) CloseHandle(parent_stdout);
+    if (child_stdout) CloseHandle(child_stdout);
+    return false;
+  }
+  if (!SetHandleInformation(parent_stdin, HANDLE_FLAG_INHERIT, 0) ||
+      !SetHandleInformation(parent_stdout, HANDLE_FLAG_INHERIT, 0)) {
+    *error = L"Cannot protect proxy watchdog pipe handles";
+    CloseHandle(child_stdin); CloseHandle(parent_stdin);
+    CloseHandle(parent_stdout); CloseHandle(child_stdout);
+    return false;
+  }
+  STARTUPINFOW startup{};
+  startup.cb = sizeof(startup);
+  startup.dwFlags = STARTF_USESTDHANDLES;
+  startup.hStdInput = child_stdin;
+  startup.hStdOutput = child_stdout;
+  startup.hStdError = child_stdout;
+  PROCESS_INFORMATION process{};
+  std::wstring command = L"\"" + path + L"\" " +
+                         std::to_wstring(GetCurrentProcessId());
+  bool launched = CreateProcessW(path.c_str(), command.data(), nullptr, nullptr,
+                                  TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
+                                  &startup, &process) != 0;
+  CloseHandle(child_stdin);
+  CloseHandle(child_stdout);
+  if (!launched) {
+    *error = L"CreateProcessW(proxy watchdog): " + std::to_wstring(GetLastError());
+    CloseHandle(parent_stdin);
+    CloseHandle(parent_stdout);
+    return false;
+  }
+  CloseHandle(process.hThread);
+  bool ready = false;
+  for (int i = 0; i < 500; ++i) {
+    DWORD available = 0;
+    if (PeekNamedPipe(parent_stdout, nullptr, 0, nullptr, &available, nullptr) &&
+        available > 0) {
+      char marker = 0;
+      DWORD received = 0;
+      ready = ReadFile(parent_stdout, &marker, 1, &received, nullptr) &&
+              received == 1 && marker == 'R';
+      break;
+    }
+    if (WaitForSingleObject(process.hProcess, 0) != WAIT_TIMEOUT) break;
+    Sleep(10);
+  }
+  CloseHandle(parent_stdout);
+  if (!ready || WaitForSingleObject(process.hProcess, 0) != WAIT_TIMEOUT) {
+    *error = L"Proxy watchdog did not become ready";
+    CloseHandle(parent_stdin);
+    CloseHandle(process.hProcess);
+    return false;
+  }
+  watchdog_pipe = parent_stdin;
+  watchdog_process = process.hProcess;
+  return true;
+}
+
+void Fail(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>& result,
+          const std::wstring& error) {
+  result->Error("proxy_error", ToUtf8(error));
+}
+
+}  // namespace
+
+void ProxyPlugin::RegisterWithRegistrar(flutter::PluginRegistrarWindows* registrar) {
+  auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      registrar->messenger(), "proxy", &flutter::StandardMethodCodec::GetInstance());
+  auto plugin = std::make_unique<ProxyPlugin>();
+  channel->SetMethodCallHandler(
+      [plugin_pointer = plugin.get()](const auto& call, auto result) {
+        plugin_pointer->HandleMethodCall(call, std::move(result));
+      });
+  registrar->AddPlugin(std::move(plugin));
+}
+
+ProxyPlugin::ProxyPlugin() = default;
+ProxyPlugin::~ProxyPlugin() { ReleaseWatchdog(false); }
+
+void ProxyPlugin::HandleMethodCall(
+    const flutter::MethodCall<flutter::EncodableValue>& method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  std::wstring error;
+  if (method_call.method_name() == "StopProxy") {
+    if (!StopOwnedProxy(&error)) { Fail(result, error); return; }
+    ReleaseWatchdog(true);
+    result->Success(true);
+    return;
+  }
+  if (method_call.method_name() == "StartProxy") {
+    const auto* args = method_call.arguments()
+                           ? std::get_if<flutter::EncodableMap>(method_call.arguments())
+                           : nullptr;
+    if (!args) { result->Error("invalid_arguments", "Missing proxy arguments"); return; }
+    const auto port_it = args->find(flutter::EncodableValue("port"));
+    const auto bypass_it = args->find(flutter::EncodableValue("bypassDomain"));
+    if (port_it == args->end() || bypass_it == args->end()) {
+      result->Error("invalid_arguments", "Missing proxy port or bypass list");
+      return;
+    }
+    const auto* port = std::get_if<int>(&port_it->second);
+    const auto* bypass = std::get_if<flutter::EncodableList>(&bypass_it->second);
+    if (!port || !bypass) {
+      result->Error("invalid_arguments", "Invalid proxy port or bypass list");
+      return;
+    }
+    std::vector<std::wstring> domains;
+    for (const auto& value : *bypass) {
+      const auto* domain = std::get_if<std::string>(&value);
+      std::wstring wide;
+      if (!domain || !FromUtf8(*domain, &wide)) {
+        result->Error("invalid_arguments", "Invalid UTF-8 bypass domain");
+        return;
+      }
+      domains.push_back(std::move(wide));
+    }
+    if (!EnsureWatchdog(&error)) { Fail(result, error); return; }
+    if (!StartOwnedProxy(*port, domains, &error)) {
+      Fail(result, error);
+      return;
+    }
+    result->Success(true);
+    return;
+  }
+  result->NotImplemented();
+}
+
+}  // namespace proxy

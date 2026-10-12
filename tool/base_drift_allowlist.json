@@ -131,9 +131,14 @@
       "reason": "Instrumentation E2E фиксирует форковую цепочку runtime-процессов, VPN-службы и headless cold start."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PhysicalNetworkScope.kt",
+      "bucket": "budget",
+      "reason": "Android platform layer формирует обезличенный fingerprint физической сети для сетевого кэша ByeDPI."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/ServicePlugin.kt",
       "bucket": "budget",
-      "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки со stack trace через общий безопасный журнал."
+      "reason": "Сервисный мост сохраняет Kotlin/IPC ошибки и отдаёт product runtime обезличенный fingerprint физической сети."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/services/FlClashMTileService.kt",
@@ -443,7 +448,7 @@
     {
       "path": "lib/application.dart",
       "bucket": "budget",
-      "reason": "Base-оболочка уже сведена к тонкому запуску Android shell shortcut и удалённому legacy desktop-path; дальше выносить нечего."
+      "reason": "Base-оболочка сведена к тонким вызовам product-сервисов и передаёт runtime событие смены физической сети."
     },
     {
       "path": "lib/clash/interface.dart",
@@ -469,6 +474,11 @@
       "path": "lib/common/constant.dart",
       "bucket": "budget",
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
+    },
+    {
+      "path": "lib/common/core_update.dart",
+      "bucket": "budget",
+      "reason": "Windows больше не применяет отдельный pending-бинарник ядра: mihomo обновляется только проверенным полным пакетом приложения вместе со службой."
     },
     {
       "path": "lib/common/file_logger.dart",
@@ -531,9 +541,19 @@
       "reason": "Общий багфикс сравнения версий полезен всему base-слою и принят в бюджет."
     },
     {
+      "path": "lib/common/yaml_dump.dart",
+      "bucket": "budget",
+      "reason": "Безопасная YAML-сериализация нужна для совместимости сложных профилей с валидатором mihomo."
+    },
+    {
       "path": "lib/common/window.dart",
       "bucket": "budget",
       "reason": "Windows protocol registration сведён к актуальным схемам форка: clash и flclashm."
+    },
+    {
+      "path": "lib/core_version.dart",
+      "bucket": "budget",
+      "reason": "Версия встроенного mihomo обновляется вместе с зависимостью ядра форка."
     },
     {
       "path": "lib/controller.dart",
@@ -596,6 +616,11 @@
       "reason": "Дифф сведен к выбору мобильного навбара через селектор режима; страница уже остается тонким потребителем."
     },
     {
+      "path": "lib/manager/proxy_manager.dart",
+      "bucket": "budget",
+      "reason": "Windows-переключение системного прокси сериализовано и учитывает владение настройкой; запуск без владения не меняет прокси пользователя."
+    },
+    {
       "path": "lib/plugins/app.dart",
       "bucket": "budget",
       "reason": "Нативный канал вызовов для списка установленных пакетов относится к нативному bridge-слою форка."
@@ -638,7 +663,7 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
+      "reason": "Живой about-экран делегирует ручную проверку обновлений в ProductServices; Windows скрывает старое отдельное обновление ядра, поскольку ядро обновляется вместе с приложением."
     },
     {
       "path": "lib/views/access.dart",
@@ -734,6 +759,36 @@
       "path": "lib/widgets/line_chart.dart",
       "bucket": "budget",
       "reason": "График использует уже построенный Path без лишнего полного прохода по метрикам на каждом кадре."
+    },
+    {
+      "path": "core/main.go",
+      "bucket": "budget",
+      "reason": "Служба запрашивает штатную очистку TUN закрытием stdin ядра."
+    },
+    {
+      "path": "core/server.go",
+      "bucket": "budget",
+      "reason": "Windows IPC подтверждает секрет сеанса и очищает сеть при потере GUI."
+    },
+    {
+      "path": "core/service_guard.go",
+      "bucket": "budget",
+      "reason": "Привилегированное Windows-ядро принимает файлы только в защищённом каталоге."
+    },
+    {
+      "path": "core/service_guard_test.go",
+      "bucket": "budget",
+      "reason": "Тесты запрещают произвольный доступ к файлам через привилегированное ядро."
+    },
+    {
+      "path": "lib/common/windows.dart",
+      "bucket": "budget",
+      "reason": "Проверка службы использует аутентифицированный IPC; установка принадлежит Inno Setup."
+    },
+    {
+      "path": "core/server_test.go",
+      "bucket": "budget",
+      "reason": "Тесты взаимного HMAC-подтверждения Windows управляющего соединения запрещают утечку секрета и подмену GUI."
     }
   ]
 }

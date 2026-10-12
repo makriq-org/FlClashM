@@ -21,7 +21,7 @@ void main() {
         'release': {
           'tagName': 'v1.2.3',
           'versionName': '1.2.3',
-          'versionCode': 2026071401,
+          'versionCode': 2026073401,
           'publishedAt': '2026-07-14T10:00:00.000Z',
           'body': '- Исправлено обновление',
           'htmlUrl':
@@ -31,6 +31,7 @@ void main() {
               'name': 'FlClashM-android-arm64-v8a.apk',
               'size': 123,
               'sha256': List.filled(64, 'a').join(),
+              'versionCode': 2026073401,
               'urls': [
                 Uri.https(
                   'sourceforge.net',
@@ -80,6 +81,7 @@ void main() {
       List.filled(64, 'a').join(),
     );
     expect(release.assets.single.downloadUrls, hasLength(2));
+    expect(release.assets.single.versionCode, 2026073401);
     expect(
       release.assets.single.downloadUrls.first,
       startsWith('https://sourceforge.net/'),

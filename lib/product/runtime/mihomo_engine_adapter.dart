@@ -56,7 +56,11 @@ class DefaultMihomoCoreBridge implements MihomoCoreBridge {
       clashCore.updateConfig(updateParams);
 
   @override
-  Future<void> startListener() => clashCore.startListener();
+  Future<void> startListener() async {
+    if (!await clashCore.clashInterface.startListener()) {
+      throw StateError('Не удалось запустить сетевые слушатели и TUN ядра.');
+    }
+  }
 
   @override
   Future<void> stopListener() => clashCore.stopListener();
@@ -75,7 +79,13 @@ abstract interface class MihomoLifecycleBridge {
 }
 
 class DefaultMihomoLifecycleBridge implements MihomoLifecycleBridge {
-  const DefaultMihomoLifecycleBridge();
+  const DefaultMihomoLifecycleBridge(
+      {this.readDesktopSnapshot = _readDesktopSnapshot});
+
+  final Future<Map> Function() readDesktopSnapshot;
+
+  static Future<Map> _readDesktopSnapshot() =>
+      clashService!.getRuntimeSnapshot();
 
   @override
   Future<void> restartRuntime() async {
@@ -87,7 +97,16 @@ class DefaultMihomoLifecycleBridge implements MihomoLifecycleBridge {
   }
 
   @override
-  Future<DateTime?> readStartTime() async => await clashLib?.getRunTime();
+  Future<DateTime?> readStartTime() async {
+    if (clashLib != null) return clashLib!.getRunTime();
+    final snapshot = await readDesktopSnapshot();
+    if (snapshot['running'] == false) return null;
+    final startedAt = snapshot['started-at-millis'];
+    if (snapshot['running'] != true || startedAt is! int || startedAt <= 0) {
+      throw StateError('Desktop runtime state is unknown.');
+    }
+    return DateTime.fromMillisecondsSinceEpoch(startedAt);
+  }
 
   @override
   Future<void> persistColdStart({
@@ -247,6 +266,10 @@ class MihomoEngineAdapter implements EngineAdapter {
   @override
   Future<void> notifyProxySelected(String groupName, String proxyName) =>
       builtInProxySupervisor.notifyProxySelected(groupName, proxyName);
+
+  @override
+  Future<void> notifyNetworkChanged() =>
+      builtInProxySupervisor.notifyNetworkChanged();
 
   @override
   Future<bool> start({String? notificationTitle}) async {

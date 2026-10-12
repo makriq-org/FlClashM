@@ -67,6 +67,10 @@ class AndroidRuntimeNodeBridge
   static const MethodChannel _channel =
       MethodChannel('com.makriq.flclash/service');
 
+  Future<String> readNetworkScope() async =>
+      await _channel.invokeMethod<String>('getPhysicalNetworkScope') ??
+      'network-unknown';
+
   @override
   Future<RuntimeNodePlanState> applyPlan(
     List<Map<String, dynamic>> nodes,

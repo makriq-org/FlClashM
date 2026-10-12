@@ -37,3 +37,5 @@ nix develop -c make fetch-upstream   # подтянуть upstream/dev
 ---
 
 > 🌍 Другие языки: [English](../../../en/docs/development/README.md) · [中文](../../../zh/docs/development/README.md) · [فارسی](../../../fa/docs/development/README.md)
+
+- [Windows x64: runtime и проверка](windows.md)

@@ -33,6 +33,7 @@ var (
 	currentConfig           *config.Config
 	version                 atomic.Int32
 	isRunning               = false
+	startedAtMillis         int64
 	runLock                 sync.Mutex
 	testDelaySem            = semaphore.NewWeighted(50)
 	proxyDescMu             sync.RWMutex
@@ -399,7 +400,11 @@ func setupConfig(params *SetupParams) error {
 	}
 
 	parseStart := time.Now()
-	currentConfig, err = config.ParseRawConfig(params.Config)
+	parsedConfig, err := config.ParseRawConfig(params.Config)
+	if err != nil && serviceHome() != "" {
+		return err
+	}
+	currentConfig = parsedConfig
 	effectiveRawConfig := params.Config
 	if err != nil {
 		log.Errorln("[Config] ParseRawConfig failed, falling back to default: %v", err)
@@ -529,10 +534,11 @@ func handleRuntimeSnapshot() *RuntimeSnapshot {
 	runLock.Lock()
 	defer runLock.Unlock()
 	return &RuntimeSnapshot{
-		Config:    cloneRuntimeRawConfig(currentRuntimeRawConfig),
-		Listeners: listener.GetPorts(),
-		Running:   isRunning,
-		TunUp:     tunUp.Load(),
+		Config:          cloneRuntimeRawConfig(currentRuntimeRawConfig),
+		Listeners:       listener.GetPorts(),
+		Running:         isRunning,
+		StartedAtMillis: startedAtMillis,
+		TunUp:           tunUp.Load() || (runtime.GOOS == "windows" && isRunning && listener.GetTunConf().Enable),
 	}
 }
 

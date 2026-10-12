@@ -5,6 +5,7 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_registry.dart';
 import 'package:flclashx/product/runtime/built_in_proxy_types.dart';
 import 'package:flclashx/product/runtime/connectivity_check.dart';
+import 'package:flclashx/product/runtime/olcrtc_release.dart';
 import 'package:flclashx/product/runtime/stormdns_release.dart';
 import 'package:flutter/foundation.dart';
 

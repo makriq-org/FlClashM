@@ -78,6 +78,20 @@ endif()
 set(RUNTIME_ARCHITECTURE "x86_64")
 set(INSTALL_RUNTIME_DIR
   "${CMAKE_INSTALL_PREFIX}/runtimes/windows/${RUNTIME_ARCHITECTURE}")
+
+# The GUI/plugins and MSVC-built helper need the compiler's redistributable
+# runtime on a clean Windows installation. Place it beside both entrypoints;
+# a service cannot rely on the GUI directory being in its DLL search path.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+include(InstallRequiredSystemLibraries)
+if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  message(FATAL_ERROR "MSVC redistributable runtime libraries were not found")
+endif()
+install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+  DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
+
 set(FLCLASHM_RUNTIME_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../.dart_tool/desktop-runtime-assets"
   CACHE PATH "Verified FlClashM desktop runtime asset root")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -95,7 +109,7 @@ if(NOT RUNTIME_VERIFY_RESULT EQUAL 0)
     "Desktop runtime asset verification failed. Build or download desktop-runtime-windows-x64 into ${FLCLASHM_RUNTIME_ASSETS}.\n${RUNTIME_VERIFY_OUTPUT}${RUNTIME_VERIFY_ERROR}")
 endif()
 set(RUNTIME_ASSET_DIR
-  "${FLCLASHM_RUNTIME_ASSETS}/runtimes/windows/${RUNTIME_ARCHITECTURE}")
+  "${FLCLASHM_RUNTIME_ASSETS}/install/runtimes/windows/${RUNTIME_ARCHITECTURE}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -118,8 +132,15 @@ install(PROGRAMS
 install(FILES "${RUNTIME_ASSET_DIR}/runtime-inventory.json"
   DESTINATION "${INSTALL_RUNTIME_DIR}" COMPONENT Runtime)
 
-set(CLASH_DIR "../libclash/windows")
-install(PROGRAMS "${CLASH_DIR}/FlClashHelperService.exe" DESTINATION "${INSTALL_RUNTIME_DIR}"
+# The privileged binary is built separately as a Windows Service.  It is never
+# copied from a legacy libclash directory: the release job supplies the exact
+# Cargo artifact that was built for this bundle.
+file(TO_CMAKE_PATH "$ENV{FLCLASHM_WINDOWS_HELPER}" FLCLASHM_WINDOWS_HELPER)
+if(NOT EXISTS "${FLCLASHM_WINDOWS_HELPER}")
+  message(FATAL_ERROR
+    "Windows helper is missing. Build services/helper with the windows-service feature and set FLCLASHM_WINDOWS_HELPER.")
+endif()
+install(PROGRAMS "${FLCLASHM_WINDOWS_HELPER}" DESTINATION "${INSTALL_RUNTIME_DIR}"
   RENAME "app.flclashm.client.helper.exe" COMPONENT Runtime)
 
 install(FILES "EnableLoopback.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

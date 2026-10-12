@@ -13,6 +13,7 @@ import '../services/product_services.dart';
 import 'desktop_platform_services.dart';
 import 'desktop_security_policy.dart';
 import 'platform_profile.dart';
+import 'windows_runtime_access_policy.dart';
 
 abstract interface class ProductPlatformBootstrap {
   Future<bool> preloadMihomo();
@@ -107,15 +108,16 @@ class ProductPlatformComposition {
 
     final updateEnvironment = DesktopUpdateEnvironment.forOperatingSystem(
       profile.operatingSystem,
-      packageManagedLinux:
-          profile.kind == ProductPlatformKind.linux &&
+      packageManagedLinux: profile.kind == ProductPlatformKind.linux &&
           (Platform.environment['APPIMAGE']?.trim().isEmpty ?? true),
     );
     return ProductPlatformComposition._(
       profile: profile,
       services: ProductServices(
-        accessControl: const AccessControlService(
-          platform: DesktopRuntimeAccessPolicy(),
+        accessControl: AccessControlService(
+          platform: profile.kind == ProductPlatformKind.windows
+              ? WindowsRuntimeAccessPolicy()
+              : const DesktopRuntimeAccessPolicy(),
         ),
         androidShell: const DesktopShellService(),
         appUpdate: AppUpdateService(
@@ -127,8 +129,8 @@ class ProductPlatformComposition {
       ),
       securityPolicy: DesktopSecurityPolicy.currentInstall(),
       bootstrap: const DesktopPlatformBootstrap(),
-      capabilities: const ProductPlatformCapabilities(
-        tunConfiguration: false,
+      capabilities: ProductPlatformCapabilities(
+        tunConfiguration: profile.kind == ProductPlatformKind.windows,
         systemProxy: true,
         androidAccessControl: false,
       ),

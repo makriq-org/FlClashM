@@ -6,6 +6,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:path/path.dart';
 import 'package:win32/win32.dart';
+import 'package:flclashx/product/runtime/windows_mihomo_runtime.dart';
 
 class Windows {
   factory Windows() {
@@ -34,7 +35,8 @@ class Windows {
         final valueNamePtr = valueName.toNativeUtf16(allocator: arena);
         final phkResult = arena<HKEY>();
 
-        var result = RegOpenKeyEx(HKEY_CURRENT_USER, keyPath, 0, KEY_READ, phkResult);
+        var result =
+            RegOpenKeyEx(HKEY_CURRENT_USER, keyPath, 0, KEY_READ, phkResult);
         if (result != ERROR_SUCCESS) return false;
 
         final hKey = phkResult.value;
@@ -42,7 +44,8 @@ class Windows {
         final dataSize = arena<DWORD>();
         dataSize.value = sizeOf<DWORD>();
 
-        result = RegQueryValueEx(hKey, valueNamePtr, nullptr, nullptr, data.cast(), dataSize);
+        result = RegQueryValueEx(
+            hKey, valueNamePtr, nullptr, nullptr, data.cast(), dataSize);
         RegCloseKey(hKey);
         if (result != ERROR_SUCCESS) return false;
 
@@ -117,8 +120,8 @@ class Windows {
           }
         }
       } catch (_) {
-      // FFI call may fail on unsupported Windows versions
-    }
+        // FFI call may fail on unsupported Windows versions
+      }
     } catch (_) {
       // FFI call may fail on unsupported Windows versions
     }
@@ -141,8 +144,8 @@ class Windows {
 
         setWindowTheme(hwnd, themeName, nullptr);
       } catch (_) {
-      // FFI call may fail on unsupported Windows versions
-    }
+        // FFI call may fail on unsupported Windows versions
+      }
 
       if (themeName != nullptr) {
         calloc.free(themeName);
@@ -194,21 +197,6 @@ class Windows {
     return true;
   }
 
-  Future<void> _killProcess(int port) async {
-    final result = await Process.run('netstat', ['-ano']);
-    final lines = result.stdout.toString().trim().split('\n');
-    for (final line in lines) {
-      if (!line.contains(":$port") || !line.contains("LISTENING")) {
-        continue;
-      }
-      final parts = line.trim().split(RegExp(r'\s+'));
-      final pid = int.tryParse(parts.last);
-      if (pid != null) {
-        await Process.run('taskkill', ['/PID', pid.toString(), '/F']);
-      }
-    }
-  }
-
   Future<WindowsHelperServiceStatus> checkService() async {
     // final qcResult = await Process.run('sc', ['qc', appHelperService]);
     // final qcOutput = qcResult.stdout.toString();
@@ -220,61 +208,16 @@ class Windows {
       return WindowsHelperServiceStatus.none;
     }
     final output = result.stdout.toString();
-    if (output.contains("RUNNING") && await request.pingHelper()) {
+    if (output.contains("RUNNING") && await windowsMihomoRuntime.available()) {
       return WindowsHelperServiceStatus.running;
     }
     return WindowsHelperServiceStatus.presence;
   }
 
-  /// Install the helper service (requires UAC elevation).
-  /// This should only be called when the service is not installed.
-  /// After installation, sets security descriptor to allow non-admin users
-  /// to start/stop the service without UAC.
-  Future<bool> installService() async {
-    final status = await checkService();
-
-    if (status == WindowsHelperServiceStatus.running) {
-      return true;
-    }
-
-    await _killProcess(helperPort);
-
-    final coreHash = await coreUpdater.calcCoreSha256();
-    final command = [
-      "/c",
-      if (status == WindowsHelperServiceStatus.presence) ...[
-        "sc",
-        "delete",
-        appHelperService,
-        "&&",
-      ],
-      "sc",
-      "create",
-      appHelperService,
-      'binPath= "${appPath.helperPath}"',
-      'start= auto',
-      "&&",
-      "sc",
-      "start",
-      appHelperService,
-      // Sync the helper's core allow-list while elevation is already granted,
-      // so a previously updated core isn't refused by a stale hash.
-      if (coreHash != null) ...[
-        "&&",
-        "echo",
-        '$coreHash>',
-        '"${appPath.allowedCoreHashPath}"',
-      ],
-    ].join(" ");
-
-    final res = runas("cmd.exe", command);
-
-    await Future.delayed(
-      const Duration(milliseconds: 300),
-    );
-
-    return res;
-  }
+  /// Privileged installation belongs exclusively to the verified Inno package.
+  /// A GUI must never build shell commands that replace a system service.
+  Future<bool> installService() async =>
+      await checkService() == WindowsHelperServiceStatus.running;
 
   /// Try to start an existing service without UAC.
   /// Returns true if the service was started successfully or is already running.

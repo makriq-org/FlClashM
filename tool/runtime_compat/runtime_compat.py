@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parents[1]
 MANIFEST = json.loads((ROOT / "manifest.json").read_text())
 OUT = Path(os.environ.get("RUNTIME_COMPAT_OUT", ROOT / ".out")).resolve()
+BUNDLED_LAYOUT = False
 RUNTIME_NAMES = ("mihomo", "naiveproxy", "olcrtc", "byedpi", "stormdns")
 
 
@@ -69,13 +70,14 @@ def verify_shared_pins() -> None:
     wanted_mihomo = MANIFEST["runtimes"]["mihomo"]["version"]
     if mihomo is None or mihomo.group(1) != wanted_mihomo:
         fail(f"mihomo manifest pin differs from core/go.mod: expected {wanted_mihomo}")
-    for filename, constant in (
-        ("olcrtc_release.dart", "olcRtcPinnedGoVersion"),
-        ("stormdns_release.dart", "stormDnsPinnedGoVersion"),
+    for runtime, filename, constant in (
+        ("olcrtc", "olcrtc_release.dart", "olcRtcPinnedGoVersion"),
+        ("stormdns", "stormdns_release.dart", "stormDnsPinnedGoVersion"),
     ):
         text = (PROJECT / "lib" / "product" / "runtime" / filename).read_text()
-        if f"const {constant} = '{MANIFEST['go']}';" not in text:
-            fail(f"desktop Go pin differs from {filename}: expected {MANIFEST['go']}")
+        android_go = MANIFEST["runtimes"][runtime]["androidGo"]
+        if f"const {constant} = '{android_go}';" not in text:
+            fail(f"Android Go source pin differs from {filename}: expected {android_go}")
 
 
 def target_default() -> str:
@@ -102,7 +104,8 @@ def suffix(target: str) -> str:
 
 def install_root(target: str) -> Path:
     spec = MANIFEST["targets"][target]
-    return OUT / "install" / "runtimes" / spec["os"] / spec["architecture"]
+    root = OUT if BUNDLED_LAYOUT else OUT / "install"
+    return root / "runtimes" / spec["os"] / spec["architecture"]
 
 
 def installed_path(name: str, target: str) -> Path:
@@ -387,10 +390,15 @@ def verify_inventory(target: str) -> dict[str, object]:
 
 
 def main() -> None:
+    global BUNDLED_LAYOUT
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=("build", "smoke", "verify"))
     parser.add_argument("--target", default=target_default())
+    parser.add_argument("--installed", action="store_true", help="Verify an application bundle whose runtimes are directly under RUNTIME_COMPAT_OUT")
     args = parser.parse_args()
+    if args.installed and args.action != "verify":
+        parser.error("--installed is only supported with verify")
+    BUNDLED_LAYOUT = args.installed
     if args.action == "build":
         result = build(args.target)
     elif args.action == "smoke":

@@ -11,7 +11,11 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: 'mihomo',
-            parameters: {'runtimeToken': 'runtime_token_1234'},
+            parameters: {
+              'runtimeToken':
+                  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+              'port': 49152
+            },
           ),
         ),
         isNull,
@@ -21,7 +25,11 @@ void main() {
           const DesktopHelperRequest(
             operation: DesktopHelperOperation.runtimeStart,
             runtimeArtifact: '/tmp/evil',
-            parameters: {'runtimeToken': 'runtime_token_1234'},
+            parameters: {
+              'runtimeToken':
+                  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+              'port': 49152
+            },
           ),
         ),
         isNotNull,
@@ -62,7 +70,7 @@ void main() {
             operation: DesktopHelperOperation.routeApply,
             parameters: {
               'interface': 'tun0',
-              'routes': ['not-a-route']
+              'routes': ['not-a-route'],
             },
           ),
         ),
@@ -74,7 +82,7 @@ void main() {
             operation: DesktopHelperOperation.dnsApply,
             parameters: {
               'interface': 'tun0',
-              'servers': ['dns.example']
+              'servers': ['dns.example'],
             },
           ),
         ),
@@ -115,6 +123,52 @@ void main() {
       );
     });
 
+    test('serializes the closed helper request and response vocabulary', () {
+      const request = DesktopHelperRequest(
+        operation: DesktopHelperOperation.runtimeStart,
+        runtimeArtifact: 'mihomo',
+        parameters: {
+          'runtimeToken':
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          'port': 49152
+        },
+      );
+      expect(WindowsDesktopHelperMessageCodec.encode(request), isNotEmpty);
+      final response = WindowsDesktopHelperMessageCodec.decode(const [
+        123,
+        34,
+        115,
+        116,
+        97,
+        116,
+        101,
+        34,
+        58,
+        34,
+        114,
+        101,
+        97,
+        100,
+        121,
+        34,
+        44,
+        34,
+        109,
+        101,
+        115,
+        115,
+        97,
+        103,
+        101,
+        34,
+        58,
+        34,
+        34,
+        125,
+      ]);
+      expect(response.isSuccess, isTrue);
+    });
+
     test('times out and invokes the declared rollback operation', () async {
       final transport = _Transport();
       final client = DesktopHelperClient(
@@ -126,7 +180,7 @@ void main() {
           operation: DesktopHelperOperation.routeApply,
           parameters: {
             'interface': 'tun0',
-            'routes': ['0.0.0.0/0']
+            'routes': ['0.0.0.0/0'],
           },
         ),
         rollback: const DesktopHelperRequest(

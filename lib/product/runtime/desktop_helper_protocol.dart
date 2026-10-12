@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../platform/product_install_layout.dart';
 const desktopHelperProtocolVersion = 1;
 
 enum DesktopHelperOperation {
+  ping,
   tunOpen,
   tunClose,
   routeApply,
@@ -35,11 +37,31 @@ class DesktopHelperRequest {
   final DesktopHelperOperation operation;
   final String? runtimeArtifact;
   final Map<String, Object?> parameters;
+
+  Map<String, Object?> toJson() => {
+        'protocolVersion': protocolVersion,
+        'installIdentity': installIdentity,
+        'operation': operation.name,
+        if (runtimeArtifact != null) 'runtimeArtifact': runtimeArtifact,
+        'parameters': parameters,
+      };
 }
 
 @immutable
 class DesktopHelperResponse {
   const DesktopHelperResponse({required this.state, this.message = ''});
+
+  factory DesktopHelperResponse.fromJson(Map<String, Object?> json) {
+    final rawState = json['state'];
+    final rawMessage = json['message'];
+    if (rawState is! String) {
+      throw const FormatException('Desktop helper response has no state.');
+    }
+    return DesktopHelperResponse(
+      state: DesktopHelperState.values.byName(rawState),
+      message: rawMessage is String ? rawMessage : '',
+    );
+  }
 
   final DesktopHelperState state;
   final String message;
@@ -62,13 +84,14 @@ class DesktopHelperProtocol {
   };
 
   static const _requiredParameters = <DesktopHelperOperation, Set<String>>{
+    DesktopHelperOperation.ping: {},
     DesktopHelperOperation.tunOpen: {'interface', 'mtu'},
     DesktopHelperOperation.tunClose: {'interface'},
     DesktopHelperOperation.routeApply: {'interface', 'routes'},
     DesktopHelperOperation.routeRollback: {'transaction'},
     DesktopHelperOperation.dnsApply: {'interface', 'servers'},
     DesktopHelperOperation.dnsRollback: {'transaction'},
-    DesktopHelperOperation.runtimeStart: {'runtimeToken'},
+    DesktopHelperOperation.runtimeStart: {'runtimeToken', 'port'},
     DesktopHelperOperation.runtimeStop: {'runtimeToken'},
   };
 
@@ -115,19 +138,24 @@ class DesktopHelperProtocol {
     Map<String, Object?> parameters,
   ) =>
       switch (operation) {
+        DesktopHelperOperation.ping => true,
         DesktopHelperOperation.tunOpen =>
           _interface(parameters['interface']) && _mtu(parameters['mtu']),
         DesktopHelperOperation.tunClose => _interface(parameters['interface']),
         DesktopHelperOperation.routeApply =>
           _interface(parameters['interface']) && _routes(parameters['routes']),
-        DesktopHelperOperation.routeRollback =>
-          _transaction(parameters['transaction']),
+        DesktopHelperOperation.routeRollback => _transaction(
+            parameters['transaction'],
+          ),
         DesktopHelperOperation.dnsApply =>
           _interface(parameters['interface']) &&
               _servers(parameters['servers']),
-        DesktopHelperOperation.dnsRollback =>
-          _transaction(parameters['transaction']),
-        DesktopHelperOperation.runtimeStart ||
+        DesktopHelperOperation.dnsRollback => _transaction(
+            parameters['transaction'],
+          ),
+        DesktopHelperOperation.runtimeStart =>
+          _runtimeToken(parameters['runtimeToken']) &&
+              _port(parameters['port']),
         DesktopHelperOperation.runtimeStop =>
           _runtimeToken(parameters['runtimeToken']),
       };
@@ -135,6 +163,9 @@ class DesktopHelperProtocol {
   static bool _interface(Object? value) =>
       value is String &&
       RegExp(r'^[A-Za-z][A-Za-z0-9_.-]{0,63}$').hasMatch(value);
+
+  static bool _port(Object? value) =>
+      value is int && value > 0 && value <= 65535;
 
   static bool _mtu(Object? value) =>
       value is int && value >= 576 && value <= 65535;
@@ -150,13 +181,14 @@ class DesktopHelperProtocol {
       value.isNotEmpty &&
       value.length <= 16 &&
       value.every(
-          (item) => item is String && InternetAddress.tryParse(item) != null);
+        (item) => item is String && InternetAddress.tryParse(item) != null,
+      );
 
   static bool _transaction(Object? value) =>
       value is String && RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
 
   static bool _runtimeToken(Object? value) =>
-      value is String && RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(value);
+      value is String && RegExp(r'^[a-f0-9]{64}$').hasMatch(value);
 
   static bool _cidr(String value) {
     final parts = value.split('/');
@@ -182,6 +214,23 @@ class UnavailableDesktopHelperTransport implements DesktopHelperTransport {
         state: DesktopHelperState.unavailable,
         message: 'Desktop privileged helper is unavailable.',
       );
+}
+
+/// Serializes the shared protocol without giving callers a way to append
+/// executable paths or shell fragments before privileged IPC.
+class WindowsDesktopHelperMessageCodec {
+  const WindowsDesktopHelperMessageCodec._();
+
+  static List<int> encode(DesktopHelperRequest request) =>
+      utf8.encode(jsonEncode(request.toJson()));
+
+  static DesktopHelperResponse decode(List<int> bytes) {
+    final value = jsonDecode(utf8.decode(bytes));
+    if (value is! Map) {
+      throw const FormatException('Desktop helper response is not an object.');
+    }
+    return DesktopHelperResponse.fromJson(Map<String, Object?>.from(value));
+  }
 }
 
 class DesktopHelperClient {

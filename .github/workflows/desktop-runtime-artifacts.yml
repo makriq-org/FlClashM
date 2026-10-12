@@ -41,17 +41,17 @@ jobs:
             shell: bash
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up pinned Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: '1.26.4'
+          go-version: '1.26.5'
           check-latest: true
 
       - name: Set up MSYS2 toolchain
         if: matrix.shell == 'msys2'
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: MINGW64
           install: >-
@@ -84,15 +84,15 @@ jobs:
         env:
           RUNTIME_COMPAT_OUT: ${{ github.workspace }}/desktop-runtime-out
         run: |
-          export PATH="/c/hostedtoolcache/windows/go/1.26.4/x64/bin:$PATH"
+          export PATH="/c/hostedtoolcache/windows/go/1.26.5/x64/bin:$PATH"
           python tool/runtime_compat/runtime_compat.py build --target '${{ matrix.target }}'
           python tool/runtime_compat/runtime_compat.py smoke --target '${{ matrix.target }}'
           python tool/runtime_compat/runtime_compat.py verify --target '${{ matrix.target }}'
 
       - name: Upload verified install layout
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: desktop-runtime-${{ matrix.target }}
-          path: desktop-runtime-out/install/runtimes/
+          path: desktop-runtime-out/install/
           if-no-files-found: error
           retention-days: 14

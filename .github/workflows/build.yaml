@@ -26,7 +26,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -38,7 +38,7 @@ jobs:
           git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -62,7 +62,7 @@ jobs:
         run: flutter test test/product test/tool
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/write_desktop_update_catalog.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   build:
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
@@ -87,13 +87,15 @@ jobs:
           df -h
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: platform-tools
 
       - name: Install Android NDK
         run: |
@@ -104,7 +106,7 @@ jobs:
         run: flutter --version
 
       - name: Setup Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.5"
           cache-dependency-path: core/go.sum
@@ -134,7 +136,7 @@ jobs:
         run: dart setup.dart android --out core
 
       - name: Upload Android runtime assets
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: artifact-runtime-assets-android
           path: |
@@ -145,7 +147,7 @@ jobs:
           overwrite: true
 
       - name: Upload Android core artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: artifact-core-android
           path: |
@@ -170,7 +172,7 @@ jobs:
             artifact: artifact-android-appbundle
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
@@ -186,7 +188,7 @@ jobs:
           df -h
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -210,13 +212,13 @@ jobs:
         run: flutter pub get
 
       - name: Download Android core artifacts
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: artifact-core-android
           path: .
 
       - name: Download Android runtime assets
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: artifact-runtime-assets-android
           path: .
@@ -232,7 +234,7 @@ jobs:
             --env "$release_channel"
 
       - name: Upload Android ${{ matrix.out }} artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.artifact }}
           path: ./dist
@@ -269,12 +271,12 @@ jobs:
             artifact: artifact-desktop-macos-arm64
     steps:
       - name: Checkout release commit
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -283,10 +285,10 @@ jobs:
         run: flutter pub get
 
       - name: Download verified desktop runtime layout
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: desktop-runtime-${{ matrix.target }}
-          path: .dart_tool/desktop-runtime-assets
+          path: .dart_tool/desktop-runtime-assets/install
 
       - name: Verify downloaded Linux runtime inventory
         if: matrix.target == 'linux-x64'
@@ -311,6 +313,14 @@ jobs:
         if: matrix.target == 'linux-x64'
         run: flutter build linux --release
 
+      - name: Build Windows Service helper
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
+          $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
+          "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build Windows desktop bundle
         if: matrix.target == 'windows-x64'
         shell: pwsh
@@ -324,20 +334,20 @@ jobs:
         if: matrix.target == 'linux-x64'
         env:
           RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
-        run: python3 tool/runtime_compat/runtime_compat.py verify --target linux-x64
+        run: python3 tool/runtime_compat/runtime_compat.py verify --installed --target linux-x64
 
       - name: Verify packaged Windows runtime inventory
         if: matrix.target == 'windows-x64'
         shell: pwsh
         run: |
           $env:RUNTIME_COMPAT_OUT = '${{ matrix.runtime-root }}'
-          python tool/runtime_compat/runtime_compat.py verify --target windows-x64
+          python tool/runtime_compat/runtime_compat.py verify --installed --target windows-x64
 
       - name: Verify packaged macOS runtime inventory
         if: startsWith(matrix.target, 'macos-')
         env:
           RUNTIME_COMPAT_OUT: ${{ matrix.runtime-root }}
-        run: python3 tool/runtime_compat/runtime_compat.py verify --target ${{ matrix.target }}
+        run: python3 tool/runtime_compat/runtime_compat.py verify --installed --target ${{ matrix.target }}
 
       - name: Archive Linux desktop bundle
         if: matrix.target == 'linux-x64'
@@ -349,7 +359,16 @@ jobs:
         if: matrix.target == 'windows-x64'
         shell: pwsh
         run: |
+          choco install innosetup --no-progress --limit-output
           New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          powershell -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 `
+            -BundleDirectory build/windows/x64/runner/Release `
+            -OutputDirectory dist `
+            -Version $version
+          $installer = Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Inno installer was not produced.' }
+          Move-Item $installer.FullName 'dist/FlClashM-windows-x64-setup.exe'
           Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath 'dist/FlClashM-windows-x64.zip'
 
       - name: Archive macOS desktop bundle
@@ -361,7 +380,7 @@ jobs:
             dist/FlClashM-${{ matrix.target }}.zip
 
       - name: Upload packaged desktop bundle
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.artifact }}
           path: ./dist
@@ -370,20 +389,22 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
-    needs: [build-android-artifacts]
+    needs: [build-android-artifacts, build-desktop-artifacts]
     permissions:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: platform-tools
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -392,10 +413,17 @@ jobs:
         run: flutter pub get
 
       - name: Download Android release artifacts
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: ./dist/
           pattern: artifact-android-*
+          merge-multiple: true
+
+      - name: Download packaged Windows desktop artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: artifact-desktop-windows-x64
+          path: ./dist/
           merge-multiple: true
 
       - name: Assert Android release signing continuity
@@ -408,6 +436,7 @@ jobs:
             release_channel=stable
           fi
           dart tool/write_release_metadata.dart \
+            --dist dist \
             --out dist/FlClashM-android-release-metadata.json \
             --github-ref-name "${{ github.ref_name }}" \
             --github-sha "${{ github.sha }}" \
@@ -433,10 +462,10 @@ jobs:
             --github-ref-name "${{ github.ref_name }}" \
             --github-repository "${GITHUB_REPOSITORY}"
 
-      - name: Upload Android artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - name: Upload aggregated release artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: artifact-android
+          name: artifact-release
           path: ./dist
           overwrite: true
 
@@ -448,20 +477,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Download Android artifacts
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+      - name: Download aggregated release artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: ./dist/
-          pattern: artifact-android
+          pattern: artifact-release
           merge-multiple: true
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: "3.41.7"
           cache: true
@@ -540,6 +569,26 @@ jobs:
             --channel "$release_channel" \
             --published-at "$published_at"
 
+      - name: Generate signed desktop update catalog
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+        run: |
+          release_channel=pre
+          if [ "${{ env.IS_STABLE }}" = "true" ]; then
+            release_channel=stable
+          fi
+          # A rerun of the same immutable tag must sign identical catalog bytes.
+          published_at=$(date -u -d "$(git show -s --format=%cI "$GITHUB_SHA")" +"%Y-%m-%dT%H:%M:%S.000Z")
+          mkdir -p "${RUNNER_TEMP}/desktop-update"
+          dart tool/write_desktop_update_catalog.dart \
+            --dist dist \
+            --out "${RUNNER_TEMP}/desktop-update/${release_channel}.json" \
+            --release-notes release.md \
+            --tag "${{ github.ref_name }}" \
+            --github-repository "${GITHUB_REPOSITORY}" \
+            --channel "$release_channel" \
+            --published-at "$published_at"
+
       - name: Configure verified SourceForge SSH access
         env:
           SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
@@ -602,9 +651,23 @@ jobs:
             "${web_stage}/./update/${release_channel}.json" \
             "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
 
+          desktop_root="${RUNNER_TEMP}/desktop-update"
+          mkdir -p "${web_stage}/update/desktop"
+          cp "${desktop_root}/${release_channel}.json" \
+            "${desktop_root}/${release_channel}.json.sig" \
+            "${web_stage}/update/desktop/"
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            "${web_stage}/./update/desktop/${release_channel}.json.sig" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+          rsync -av --checksum --relative \
+            -e "ssh $ssh_options" \
+            "${web_stage}/./update/desktop/${release_channel}.json" \
+            "$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/"
+
       - name: Release (Stable)
         if: ${{ env.IS_STABLE == 'true' }}
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: ./dist/*
           body_path: "./release.md"
@@ -612,7 +675,7 @@ jobs:
 
       - name: Release (Pre-release)
         if: ${{ env.IS_STABLE != 'true' }}
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: ./dist/*
           body_path: "./release.md"

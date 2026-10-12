@@ -1,6 +1,6 @@
-const olcRtcPinnedCommit = 'ad5758513335cda54362a64621c29e9d9fe759b4';
+const olcRtcPinnedCommit = '189d16c093c4f721376afb5eaa0213d132a11242';
 const olcRtcPinnedReleaseTag = 'git-$olcRtcPinnedCommit';
-const olcRtcPinnedGoVersion = 'go1.26.4';
+const olcRtcPinnedGoVersion = 'go1.26.5';
 const olcRtcPinnedNdkVersion = '28.0.13004108';
 const olcRtcSourceRepository =
     'https://github.com/openlibrecommunity/olcrtc.git';
@@ -8,6 +8,8 @@ const olcRtcBundledAssetRoot = 'assets/runtimes/olcrtc/android';
 const olcRtcRuntimeDirectoryName = 'olcrtc';
 const olcRtcExecutableFileName = 'olcrtc';
 const olcRtcAndroidNativeLibraryFileName = 'libflclashm_olcrtc.so';
+const olcRtcConfigTemplateFileName = 'config.template.yaml';
+const olcRtcSystemDnsPlaceholder = '@flclashm-system-dns@';
 const olcRtcConfigFileName = 'config.yaml';
 
 class OlcRtcReleaseAsset {
@@ -34,18 +36,18 @@ const olcRtcReleaseAssets = <String, OlcRtcReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: 'ebeb8a3627a2fdf6c5bd5f98c82d92dbdc0dd5871e09b964ee7238dedc2c3add',
+    sha256: '407089570bf7164b273d41a55ea010bb31690f5f82028a175b4e1c93d607c836',
   ),
   'arm64-v8a': OlcRtcReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: 'e22ac7177dadfa6d9a19c744b1b000a466b10235fac5220297ff5544dc71b700',
+    sha256: 'ff5c544557f01b7d19e02f5cd3a3aa617371d23daf69bf2e2c84bdf46ec5f254',
   ),
   'x86_64': OlcRtcReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '4794777ce04ce3f2aa684e3d80e0d1c2c3bb9b7e7c4d9742f8ecf324940b38b6',
+    sha256: 'bdd01bb0d5439ad0edbac09dfec96038de815fb3f4f917610a832f2d340133ac',
   ),
 };

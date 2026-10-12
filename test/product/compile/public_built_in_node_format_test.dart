@@ -275,7 +275,7 @@ void main() {
     expect(yaml, isNot(contains('transport-options')));
   });
 
-  test('OlcRTC keeps video bitrate and owns the disabled hardware mode', () {
+  test('OlcRTC drops deprecated video fields and runtime data override', () {
     final result = compiler.compile(
       rawConfig: {
         'proxies': [
@@ -300,8 +300,39 @@ void main() {
       patchConfig: const ClashConfig(),
     );
     final yaml = result.nodes.single.files.values.single;
-    expect(yaml, contains('bitrate: "2M"'));
-    expect(yaml, contains('hw: "none"'));
+    expect(yaml, isNot(contains('bitrate')));
+    expect(yaml, isNot(contains('hw:')));
+    expect(yaml, isNot(contains('data:')));
+  });
+
+  test('OlcRTC accepts upstream transport defaults', () {
+    for (final transport in const [
+      'vp8channel',
+      'seichannel',
+      'videochannel',
+    ]) {
+      expect(
+        () => compiler.compile(
+          rawConfig: {
+            'proxies': [
+              {
+                'name': 'RTC',
+                'type': 'olcrtc',
+                'activation': 'always',
+                'provider': 'jitsi',
+                'room': 'https://meet.example.org/room',
+                'encryption-key': _key,
+                'transport': transport,
+                'dns-server': '1.1.1.1:53',
+              },
+            ],
+          },
+          patchConfig: const ClashConfig(),
+        ),
+        returnsNormally,
+        reason: transport,
+      );
+    }
   });
 
   test('OlcRTC enforces provider and transport cross-field rules', () {

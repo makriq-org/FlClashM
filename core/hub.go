@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/observable"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -27,23 +27,24 @@ import (
 	"github.com/metacubex/mihomo/constant"
 	cp "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/hub/executor"
+	"github.com/metacubex/mihomo/listener"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
 var (
-	isInit              atomic.Bool
-	externalProviders   = map[string]cp.Provider{}
-	logSubscriber       observable.Subscription[log.Event]
-	healthCheckStopCh   chan struct{}
-	healthCheckChMu     sync.Mutex
-	healthCheckMu       sync.Mutex
-	healthCheckSeen     = map[string]string{}
-	requestStopCh       chan struct{}
-	requestChMu         sync.Mutex
-	requestMu           sync.Mutex
-	requestSeen         = map[string]bool{}
+	isInit            atomic.Bool
+	externalProviders = map[string]cp.Provider{}
+	logSubscriber     observable.Subscription[log.Event]
+	healthCheckStopCh chan struct{}
+	healthCheckChMu   sync.Mutex
+	healthCheckMu     sync.Mutex
+	healthCheckSeen   = map[string]string{}
+	requestStopCh     chan struct{}
+	requestChMu       sync.Mutex
+	requestMu         sync.Mutex
+	requestSeen       = map[string]bool{}
 	// uiActive reflects whether the Flutter UI is in the foreground. When false
 	// (app backgrounded) the request forwarder is paused and the health-check
 	// forwarder slows to backgroundHealthCheckInterval, so the core stops pinging
@@ -80,22 +81,17 @@ func handleInitClash(paramsString string) bool {
 	if err != nil {
 		return false
 	}
-	// EXPERIMENT: GC disabled entirely (was SetGCPercent(50)) — collections now
-	// happen only when the heap reaches the soft memory limit below. This also
-	// silences the runtime's forced 2-minute GC, so an idle core never wakes for
-	// GC at all. Trade-off being evaluated: the heap floats up to the limit by
-	// design, and under sustained traffic it parks there with limit-triggered
-	// collections (the "GC wall"). If battery/CPU regresses, restore
-	// SetGCPercent(50).
-	debug.SetGCPercent(-1)
-	// 70 MB soft limit (experiment; was 128, and 60 before that). History: a 60 MB
-	// limit forced near-continuous GC — up to the runtime's 50%-CPU GC cap — when a
-	// GEOIP/GEOSITE-heavy config's live heap sat close to it. 70 is back near that
-	// regime on purpose, paired with GOGC=off: watch geo-heavy configs for the same
-	// burn. With GOGC off this is the ONLY GC trigger left — never remove it, or
-	// the heap grows unbounded until LMK/OOM.
-	debug.SetMemoryLimit(70 * 1024 * 1024)
+	// Keep regular heap-growth-triggered collections enabled. Disabling GOGC made
+	// the core collect continuously once its live heap reached the memory limit,
+	// causing excessive CPU and battery use even with almost no traffic.
+	debug.SetGCPercent(50)
+	// Keep the 128 MB soft limit as a safety backstop above the normal working set.
+	// Lower limits caused the live heap to remain on the limit and enter a GC wall.
+	debug.SetMemoryLimit(128 * 1024 * 1024)
 	version.Store(int32(params.Version))
+	if home := serviceHome(); home != "" {
+		params.HomeDir = home
+	}
 	constant.SetHomeDir(params.HomeDir)
 	// Default to "foreground": the main process drives setUiActive(false) when it
 	// backgrounds. A headless cold-start has no UI but keeping the foreground
@@ -130,6 +126,13 @@ func handleStartListener() bool {
 	// re-run updateProxies, loadProvider(wg.Wait()), updateDNS and runtime.GC()
 	// for no reason and was the main source of the long "start" delay.
 	updateListeners()
+	if runtime.GOOS == "windows" && pendingTunEnable && !listener.GetTunConf().Enable {
+		isRunning = false
+		stopListeners()
+		runLock.Unlock()
+		return false
+	}
+	startedAtMillis = time.Now().UnixMilli()
 	runLock.Unlock()
 
 	go func() {
@@ -160,6 +163,7 @@ func handleStopListener() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	isRunning = false
+	startedAtMillis = 0
 	// Keep health-check forwarder running so proxy pings stay fresh in the UI
 	// while the VPN is off. It is torn down only on full shutdown.
 	stopRequestForwarder()
@@ -192,6 +196,7 @@ func handleShutdown() bool {
 	runtime.GC()
 	isInit.Store(false)
 	isRunning = false
+	startedAtMillis = 0
 	tunUp.Store(false)
 	currentConfig = nil
 	currentRuntimeRawConfig = map[string]any{}
@@ -1025,17 +1030,42 @@ func handleUpdateConfig(bytes []byte) string {
 	if err != nil {
 		return err.Error()
 	}
+	if serviceHome() != "" {
+		if params.ExternalController != nil && *params.ExternalController != "" {
+			return "The Windows service core accepts commands only through its private control socket"
+		}
+		if params.Tun != nil && params.Tun.Device != nil {
+			device := "FlClashM"
+			params.Tun.Device = &device
+		}
+	}
 	updateConfig(params)
 	return ""
 }
 
 func handleSetupConfig(bytes []byte) string {
+	secured, guardErr := secureServiceSetup(bytes)
+	if guardErr != nil {
+		return guardErr.Error()
+	}
+	bytes = secured
 	var params = defaultSetupParams()
 	err := UnmarshalJson(bytes, params)
 	if err != nil {
 		log.Errorln("unmarshalRawConfig error %v", err)
-		_ = setupConfig(defaultSetupParams())
+		if serviceHome() == "" {
+			_ = setupConfig(defaultSetupParams())
+		}
 		return err.Error()
+	}
+	if serviceHome() != "" {
+		params.Config.ExternalController = ""
+		params.Config.ExternalControllerTLS = ""
+		params.Config.ExternalControllerUnix = ""
+		params.Config.ExternalControllerPipe = ""
+		params.Config.ExternalUI = ""
+		params.Config.ExternalUIURL = ""
+		params.Config.Tun.Device = "FlClashM"
 	}
 	err = setupConfig(params)
 	if err != nil {

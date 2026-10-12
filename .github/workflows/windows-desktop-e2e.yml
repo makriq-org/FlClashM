@@ -1,0 +1,317 @@
+name: Windows desktop
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-desktop-e2e.yml'
+      - '.github/workflows/build.yaml'
+      - 'services/helper/**'
+      - 'windows/**'
+      - 'lib/product/**'
+      - 'tool/**'
+      - 'pubspec.*'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-native-tun-probe:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compile installer contract before the full Flutter build
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
+          $bundle = Join-Path $env:RUNNER_TEMP 'inno-contract/bundle'
+          $helperDir = Join-Path $bundle 'runtimes/windows/x86_64'
+          New-Item -ItemType Directory -Force $helperDir | Out-Null
+          # The failing fixture is installed only for the rollback check below.
+          # It is never uploaded as a distributable.
+          Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $bundle 'FlClashM.exe')
+          Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $helperDir 'app.flclashm.client.helper.exe')
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          ./windows/packaging/exe/build_installer.ps1 -BundleDirectory $bundle -OutputDirectory (Join-Path $env:RUNNER_TEMP 'inno-contract/output') -Version $version -TestFailAfterFiles
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 -BundleDirectory $bundle -OutputDirectory (Join-Path $env:RUNNER_TEMP 'inno-contract/legacy-output') -Version $version -TestFailAfterFiles
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell 5 installer contract failed.' }
+
+      - name: Validate ordinary-user profile before the full Flutter build
+        shell: pwsh
+        run: ./tool/windows_desktop_e2e.ps1 -ProfileOnly -OutputDirectory (Join-Path $env:RUNNER_TEMP 'ordinary-profile-check')
+
+      - name: Verify a failed fresh installation rolls back and returns failure
+        shell: pwsh
+        run: |
+          $fixture = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'inno-contract/legacy-output') -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          $appRoot = Join-Path $env:ProgramFiles 'FlClashM'
+          if (Test-Path $appRoot) { throw 'Fresh-install fixture requires an empty application directory.' }
+          $setup = Start-Process $fixture -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru
+          if (-not $setup.WaitForExit(60000)) { Stop-Process -Id $setup.Id -Force; throw 'Failing fixture setup timed out.' }
+          if ($setup.ExitCode -eq 0) { throw 'A failed installer reported success.' }
+          if (Test-Path $appRoot) { throw 'Failed fresh installation left application files.' }
+          if (Get-Service 'app.flclashm.client.helper' -ErrorAction SilentlyContinue) { throw 'Failed fresh installation left a service.' }
+          if (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.flclashm.client_is1') { throw 'Failed fresh installation left its uninstall registration.' }
+          $startMenu = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'FlClashM.lnk'
+          $desktop = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'FlClashM.lnk'
+          if ((Test-Path $startMenu) -or (Test-Path $desktop)) { throw 'Failed fresh installation left application shortcuts.' }
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.5'
+
+      - name: Build only the bundled mihomo core
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          go build -trimpath '-tags=with_gvisor,cmfa' -o ../windows-tun-mihomo.exe .
+          if ($LASTEXITCODE -ne 0) { throw 'Native mihomo build failed.' }
+        working-directory: core
+
+      - name: Observe administrator TUN lifecycle
+        id: early_admin_tun
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          ./tool/windows_tun_experiment.ps1 -Mihomo (Resolve-Path './windows-tun-mihomo.exe').Path -OutputDirectory 'windows-tun-early-admin'
+
+      - name: Probe ordinary-user TUN rights
+        if: always() && steps.early_admin_tun.outcome != 'skipped'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlClashMProbe'
+          $password = ConvertTo-SecureString ([Guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
+          $output = Join-Path $env:RUNNER_TEMP 'windows-tun-early-nonadmin'
+          New-Item -ItemType Directory -Force $output | Out-Null
+          try {
+            New-LocalUser -Name $name -Password $password -AccountNeverExpires | Out-Null
+            icacls.exe $output /grant "${name}:(OI)(CI)M" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Could not grant probe output access.' }
+            $credential = [PSCredential]::new("$env:COMPUTERNAME\$name", $password)
+            $mihomo = (Resolve-Path './windows-tun-mihomo.exe').Path
+            $script = (Resolve-Path './tool/windows_tun_experiment.ps1').Path
+            $arguments = @('-NoProfile', '-File', "`"$script`"", '-Mihomo', "`"$mihomo`"", '-OutputDirectory', "`"$output`"")
+            $probe = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -Credential $credential -LoadUserProfile -Wait -PassThru
+            "exitCode=$($probe.ExitCode)" | Set-Content -Encoding utf8 (Join-Path $output 'exit.txt')
+          } catch {
+            $_ | Out-String | Set-Content -Encoding utf8 (Join-Path $output 'launch-error.txt')
+          } finally {
+            Remove-LocalUser -Name $name -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload native TUN evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-native-tun-evidence
+          path: |
+            windows-tun-early-admin/
+            ${{ runner.temp }}/windows-tun-early-nonadmin/
+          if-no-files-found: ignore
+
+      - name: Require administrator TUN probe to pass
+        if: always() && steps.early_admin_tun.outcome == 'failure'
+        shell: pwsh
+        run: throw 'Native administrator TUN experiment failed; inspect uploaded evidence.'
+
+  windows-x64-install-service:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.41.7'
+          cache: true
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.5'
+
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            make
+            git
+
+      - name: Get Flutter dependencies and validate product boundaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed.' }
+          if (-not (git remote)) { throw 'Git repository is unavailable.' }
+          if (-not ((git remote) -contains 'upstream')) { git remote add upstream https://github.com/pluralplay/FlClashX.git }
+          git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
+          if ($LASTEXITCODE -ne 0) { throw 'Upstream fetch failed.' }
+          dart tool/check_product_boundaries.dart
+          if ($LASTEXITCODE -ne 0) { throw 'Product boundary check failed.' }
+          dart tool/check_base_drift.dart
+          if ($LASTEXITCODE -ne 0) { throw 'Base drift check failed.' }
+          flutter analyze --no-fatal-infos lib/product test/product tool
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter analyze failed.' }
+          flutter test test/product/runtime/desktop_helper_protocol_test.dart test/product/platform/windows_packaging_contract_test.dart test/product/services/desktop_update_catalog_test.dart test/tool/write_desktop_update_catalog_test.dart
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed.' }
+
+      - name: Build Windows Service helper
+        shell: pwsh
+        run: |
+          cargo build --locked --manifest-path services/helper/Cargo.toml --release --features windows-service
+          if ($LASTEXITCODE -ne 0) { throw 'Windows helper build failed.' }
+          cargo test --locked --manifest-path services/helper/Cargo.toml --features windows-service
+          if ($LASTEXITCODE -ne 0) { throw 'Windows helper tests failed.' }
+          $helper = Resolve-Path 'services/helper/target/release/flclashm_helper.exe'
+          "FLCLASHM_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build bundle and Inno installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $env:RUNTIME_COMPAT_OUT = '.dart_tool/desktop-runtime-assets'
+          python tool/runtime_compat/runtime_compat.py build --target windows-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime artifact build failed.' }
+          python tool/runtime_compat/runtime_compat.py smoke --target windows-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime artifact smoke test failed.' }
+          flutter build windows --release --dart-define=FLCLASHM_WINDOWS_E2E=true
+          if ($LASTEXITCODE -ne 0) {
+            cmake --install build/windows/x64 --config Release --verbose
+            throw 'Flutter Windows build failed.'
+          }
+          choco install innosetup --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          powershell -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 `
+            -BundleDirectory build/windows/x64/runner/Release `
+            -OutputDirectory dist `
+            -Version $version
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+          try {
+            'rollback must remove this new file' | Set-Content 'build/windows/x64/runner/Release/rollback-new-file.test'
+            ./windows/packaging/exe/build_installer.ps1 `
+              -BundleDirectory build/windows/x64/runner/Release `
+              -OutputDirectory dist/rollback-test `
+              -Version '0.4.0-pre999' -TestFailAfterFiles
+          } finally {
+            Remove-Item 'build/windows/x64/runner/Release/rollback-new-file.test' -ErrorAction SilentlyContinue
+          }
+
+
+      - name: Verify system proxy lifecycle and crash recovery
+        shell: pwsh
+        run: |
+          cmake --build build/windows/x64 --config Release --target proxy_lifecycle_test
+          if ($LASTEXITCODE -ne 0) { throw 'Proxy lifecycle test build failed.' }
+          & 'build/windows/x64/runner/Release/proxy_lifecycle_test.exe'
+          if ($LASTEXITCODE -ne 0) { throw "Proxy lifecycle failed: $LASTEXITCODE" }
+
+      - name: Observe bounded native mihomo TUN lifecycle
+        id: admin_tun
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $mihomo = Join-Path (Resolve-Path '.dart_tool/desktop-runtime-assets').Path 'install/runtimes/windows/x86_64/mihomo.exe'
+          ./tool/windows_tun_experiment.ps1 -Mihomo $mihomo
+
+      - name: Probe ordinary-user TUN rights
+        if: always() && steps.admin_tun.outcome != 'skipped'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlClashMProbe'
+          $password = ConvertTo-SecureString ([Guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
+          $output = Join-Path $env:RUNNER_TEMP 'windows-tun-nonadmin'
+          New-Item -ItemType Directory -Force $output | Out-Null
+          try {
+            New-LocalUser -Name $name -Password $password -AccountNeverExpires | Out-Null
+            icacls.exe $output /grant "${name}:(OI)(CI)M" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Could not grant probe output access.' }
+            $credential = [PSCredential]::new("$env:COMPUTERNAME\$name", $password)
+            $mihomo = Join-Path (Resolve-Path '.dart_tool/desktop-runtime-assets').Path 'install/runtimes/windows/x86_64/mihomo.exe'
+            $script = (Resolve-Path './tool/windows_tun_experiment.ps1').Path
+            $arguments = @('-NoProfile', '-File', "`"$script`"", '-Mihomo', "`"$mihomo`"", '-OutputDirectory', "`"$output`"")
+            $probe = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -Credential $credential -LoadUserProfile -Wait -PassThru
+            "exitCode=$($probe.ExitCode)" | Set-Content -Encoding utf8 (Join-Path $output 'exit.txt')
+          } catch {
+            $_ | Out-String | Set-Content -Encoding utf8 (Join-Path $output 'launch-error.txt')
+          } finally {
+            Remove-LocalUser -Name $name -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload ordinary-user TUN evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-tun-nonadmin
+          path: ${{ runner.temp }}/windows-tun-nonadmin/
+          if-no-files-found: ignore
+
+      - name: Upload Windows TUN evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-tun-experiment
+          path: windows-tun-experiment/
+          if-no-files-found: ignore
+
+      - name: Require administrator TUN probe to pass
+        if: always() && steps.admin_tun.outcome == 'failure'
+        shell: pwsh
+        run: throw 'Native administrator TUN experiment failed; inspect uploaded evidence.'
+
+      - name: Install, exercise service IPC, stop and uninstall
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          $failing = (Get-ChildItem dist/rollback-test -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          ./tool/windows_desktop_e2e.ps1 -Installer $installer -FailingInstaller $failing
+
+      - name: Build the distributable without CI entrypoints
+        shell: pwsh
+        run: |
+          # The native proxy test shares the runner output directory. It must
+          # not remain in the production installer after the E2E build.
+          Remove-Item 'build/windows/x64/runner/Release/proxy_lifecycle_test.exe', 'build/windows/x64/runner/Release/proxy_lifecycle_test.pdb' -ErrorAction SilentlyContinue
+          flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { throw 'Production Windows build failed.' }
+          $env:RUNTIME_COMPAT_OUT = 'build/windows/x64/runner/Release'
+          python tool/runtime_compat/runtime_compat.py verify --installed --target windows-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Windows runtime inventory failed.' }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          ./windows/packaging/exe/build_installer.ps1 -BundleDirectory build/windows/x64/runner/Release -OutputDirectory dist/release -Version $version
+          Get-ChildItem dist/release -Filter '*-setup.exe' | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() | Set-Content ($_.FullName + '.sha256')
+          }
+
+      - name: Upload installer for manual Windows 10 and 11 verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: FlClashM-windows-x64-preview
+          path: dist/release/*-setup.exe*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload installed Windows lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-desktop-evidence
+          path: windows-desktop-evidence/
+          if-no-files-found: ignore

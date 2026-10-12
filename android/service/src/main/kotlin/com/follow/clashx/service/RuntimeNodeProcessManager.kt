@@ -548,6 +548,7 @@ object RuntimeNodeProcessManager {
         // Only the nodes this pass actually worked on decide its status.
         val touched = linkedMapOf<String, NodeOutcome>()
         val deadline = SystemClock.elapsedRealtime() + DNS_UPDATE_BUDGET_MILLIS
+        var retryRequiredMessage: String? = null
 
         for (spec in dependents) {
             val resolverFile = spec.resolverFile ?: continue
@@ -555,6 +556,20 @@ object RuntimeNodeProcessManager {
             val restartPending = pendingSystemDnsRestarts.contains(spec.nodeId)
             val resetPending = pendingSystemDnsResets.contains(spec.nodeId)
             val wasRunning = restartPending || readStartTime(spec.nodeId) > 0L
+            val previousGeneratedFile = if (wasRunning) {
+                withContext(Dispatchers.IO) {
+                    RuntimeNodeResolverFileWriter.snapshot(runtimeDir, resolverFile)
+                }
+            } else {
+                null
+            }
+            if (wasRunning && previousGeneratedFile == null) {
+                val message = "Could not snapshot the generated DNS artifact for runtime node " +
+                    "`${spec.nodeId}`"
+                GlobalState.log(message)
+                touched[spec.nodeId] = NodeOutcome(spec, ready = false, reused = false, message = message)
+                continue
+            }
             val renderResult = withContext(Dispatchers.IO) {
                 RuntimeNodeResolverFileWriter.render(
                     workingDirectory = runtimeDir,
@@ -619,9 +634,10 @@ object RuntimeNodeProcessManager {
             if (!wasRunning) continue
 
             val budget = deadline - SystemClock.elapsedRealtime()
-            if (budget < DNS_RESTART_MIN_BUDGET_MILLIS) {
+            if (budget < DNS_RESTART_MIN_BUDGET_MILLIS * 2) {
                 // Out of budget rather than broken: hand the rest to the retry
-                // instead of holding the plan lock for another startup timeout.
+                // instead of starting an update with no time left to restore
+                // the previous process if the new configuration fails.
                 val message = "Runtime node `${spec.nodeId}` was not restarted after a " +
                     "DNS change: this update ran out of its time budget"
                 GlobalState.log(message)
@@ -639,7 +655,7 @@ object RuntimeNodeProcessManager {
                 prepareNode(
                     spec,
                     startupTimeoutMillis =
-                        minOf(spec.connectivityCheck.startupTimeoutMillis, budget),
+                        minOf(spec.connectivityCheck.startupTimeoutMillis, budget / 2),
                 )
             } catch (cancellation: CancellationException) {
                 // Preempted mid-restart: leave nothing half-started behind. The
@@ -660,6 +676,26 @@ object RuntimeNodeProcessManager {
                     "Runtime node `${spec.nodeId}` failed to restart after a DNS change: " +
                         outcome.message,
                 )
+                val rollbackBudget = deadline - SystemClock.elapsedRealtime()
+                val rollback = rollbackSystemDnsNode(
+                    spec = spec,
+                    resolverFile = resolverFile,
+                    runtimeDir = runtimeDir,
+                    snapshot = previousGeneratedFile!!,
+                    startupTimeoutMillis =
+                        minOf(spec.connectivityCheck.startupTimeoutMillis, rollbackBudget),
+                )
+                if (rollback.ready) {
+                    retryRequiredMessage = "Runtime node `${spec.nodeId}` kept its previous DNS " +
+                        "configuration after the DNS update failed"
+                    touched[spec.nodeId] = rollback
+                    continue
+                }
+                val rollbackFailure = "Runtime node `${spec.nodeId}` could not restore its " +
+                    "previous DNS configuration after the update failed: ${rollback.message}"
+                GlobalState.log(rollbackFailure)
+                touched[spec.nodeId] = rollback.copy(message = rollbackFailure)
+                continue
             }
             touched[spec.nodeId] = outcome
         }
@@ -673,17 +709,18 @@ object RuntimeNodeProcessManager {
             touched[spec.nodeId] ?: untouchedOutcome(spec)
         }
         val failure = touched.values.firstOrNull { !it.ready }
+        val updateFailureMessage = failure?.message ?: retryRequiredMessage
         lastStateJson = stateJson(
             currentGeneration,
-            if (failure == null) "ready" else "failed",
+            if (updateFailureMessage == null) "ready" else "failed",
             outcomes,
-            failure?.message.orEmpty(),
+            updateFailureMessage.orEmpty(),
         )
-        if (failure == null) {
+        if (updateFailureMessage == null) {
             lastAppliedSystemDns = normalized
             launchOptionalChecks(currentGeneration, activePlan.values.toList())
         }
-        return failure != null
+        return updateFailureMessage != null
     }
 
     /** Plan entry for a node this DNS pass did not have to touch. */
@@ -712,6 +749,46 @@ object RuntimeNodeProcessManager {
                 "network advertises none and the node declares no others"
 
         else -> "Could not render the resolver file for runtime node `$nodeId`"
+    }
+
+    /** Restores the old generated artifact and starts the node without re-rendering it. */
+    private suspend fun rollbackSystemDnsNode(
+        spec: RuntimeNodeSpec,
+        resolverFile: RuntimeNodeResolverFile,
+        runtimeDir: File,
+        snapshot: RuntimeNodeResolverFileSnapshot,
+        startupTimeoutMillis: Long,
+    ): NodeOutcome {
+        val restored = withContext(Dispatchers.IO) {
+            RuntimeNodeResolverFileWriter.restore(runtimeDir, resolverFile, snapshot)
+        }
+        if (!restored) {
+            return NodeOutcome(
+                spec,
+                ready = false,
+                reused = false,
+                message = "Could not restore the previous DNS artifact for runtime node `${spec.nodeId}`",
+            )
+        }
+        if (startupTimeoutMillis <= 0L) {
+            return NodeOutcome(
+                spec,
+                ready = false,
+                reused = false,
+                message = "The previous DNS artifact for runtime node `${spec.nodeId}` was " +
+                    "restored, but the DNS update exhausted its restart budget",
+            )
+        }
+        val outcome = prepareNode(
+            spec,
+            startupTimeoutMillis = startupTimeoutMillis,
+            renderResolverFile = false,
+        )
+        if (outcome.ready) {
+            readyNodeIds.add(spec.nodeId)
+            GlobalState.log("Restored runtime node `${spec.nodeId}` after a DNS update failure")
+        }
+        return outcome
     }
 
     /**
@@ -868,9 +945,10 @@ object RuntimeNodeProcessManager {
     private suspend fun prepareNode(
         spec: RuntimeNodeSpec,
         startupTimeoutMillis: Long = spec.connectivityCheck.startupTimeoutMillis,
+        renderResolverFile: Boolean = true,
     ): NodeOutcome {
         return runCatching {
-            val startedAt = start(spec)
+            val startedAt = start(spec, renderResolverFile)
             check(startedAt > 0L) {
                 startFailures.remove(spec.nodeId)
                     ?: "Runtime node `${spec.nodeId}` did not start"
@@ -1015,7 +1093,10 @@ object RuntimeNodeProcessManager {
         return 0L
     }
 
-    private suspend fun start(spec: RuntimeNodeSpec): Long {
+    private suspend fun start(
+        spec: RuntimeNodeSpec,
+        renderResolverFile: Boolean = true,
+    ): Long {
         val lock = nodeLocks.getOrPut(spec.nodeId) { Mutex() }
         return lock.withLock {
             withContext(Dispatchers.IO) {
@@ -1052,7 +1133,7 @@ object RuntimeNodeProcessManager {
                 // The generated resolver list is rebuilt from its template on
                 // every launch so a node started at cold start picks up the
                 // system DNS observed since the plan was written.
-                spec.resolverFile?.let { resolverFile ->
+                spec.resolverFile?.takeIf { renderResolverFile }?.let { resolverFile ->
                     val renderResult = RuntimeNodeResolverFileWriter.render(
                         workingDirectory = runtimeDir,
                         spec = resolverFile,
