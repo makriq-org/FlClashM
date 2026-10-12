@@ -265,6 +265,9 @@ jobs:
       - name: Build the distributable without CI entrypoints
         shell: pwsh
         run: |
+          # The native proxy test shares the runner output directory. It must
+          # not remain in the production installer after the E2E build.
+          Remove-Item 'build/windows/x64/runner/Release/proxy_lifecycle_test.exe', 'build/windows/x64/runner/Release/proxy_lifecycle_test.pdb' -ErrorAction SilentlyContinue
           flutter build windows --release
           if ($LASTEXITCODE -ne 0) { throw 'Production Windows build failed.' }
           $env:RUNTIME_COMPAT_OUT = 'build/windows/x64/runner/Release'

@@ -10,6 +10,7 @@ $gui = Join-Path $appRoot 'FlClashM.exe'
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 $output = (Resolve-Path $OutputDirectory).Path
 $probeName = 'FlClashMDesktopProbe'
+$probeEnvironment = $null
 $events = [Collections.Generic.List[string]]::new()
 
 function Run-Setup([string]$File, [bool]$ExpectSuccess) {
@@ -37,7 +38,11 @@ function Run-AppCheck([string]$Name, [PSCredential]$Credential, [bool]$Hold) {
   $arguments = @('--windows-runtime-check', "`"$resultFile`"")
   if ($Hold) { $arguments += '--hold' }
   $parameters = @{ FilePath=$gui; ArgumentList=$arguments; PassThru=$true }
-  if ($null -ne $Credential) { $parameters.Credential = $Credential; $parameters.LoadUserProfile = $true }
+  if ($null -ne $Credential) {
+    $parameters.Credential = $Credential
+    $parameters.LoadUserProfile = $true
+    $parameters.Environment = $probeEnvironment
+  }
   $process = Start-Process @parameters
   $deadline = (Get-Date).AddSeconds(90)
   while (-not (Test-Path $resultFile)) {
@@ -74,6 +79,30 @@ try {
   icacls.exe $output /grant "${probeName}:(OI)(CI)M" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Could not grant evidence directory access.' }
   $credential = [PSCredential]::new("$env:COMPUTERNAME\$probeName", $password)
+  # LoadUserProfile loads the registry hive but does not perform a first shell
+  # logon. Create the known AppData folders under the probe's own token, then
+  # launch its GUI with that user's environment rather than runneradmin's.
+  $profileScript = Join-Path $output 'initialize-probe-profile.ps1'
+  $profileFile = Join-Path $output 'probe-profile.json'
+  @'
+param([string]$OutputFile)
+$ErrorActionPreference = 'Stop'
+$create = [Environment+SpecialFolderOption]::Create
+$profile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile, $create)
+$roaming = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData, $create)
+$local = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData, $create)
+if (-not $profile -or -not $roaming -or -not $local) { throw 'Probe known folders could not be created.' }
+$temporary = Join-Path $local 'Temp'
+New-Item -ItemType Directory -Force $temporary | Out-Null
+@{ USERPROFILE=$profile; APPDATA=$roaming; LOCALAPPDATA=$local; TEMP=$temporary; TMP=$temporary } |
+  ConvertTo-Json | Set-Content -Encoding utf8 $OutputFile
+'@ | Set-Content -Encoding utf8 $profileScript
+  $initialize = Start-Process -FilePath (Get-Command pwsh).Source -Credential $credential -LoadUserProfile -PassThru `
+    -ArgumentList @('-NoProfile', '-File', "`"$profileScript`"", '-OutputFile', "`"$profileFile`"")
+  if (-not $initialize.WaitForExit(30000)) { Stop-Process -Id $initialize.Id -Force; throw 'Probe profile initialization timed out.' }
+  if ($initialize.ExitCode -ne 0 -or -not (Test-Path $profileFile)) { throw 'Probe profile initialization failed.' }
+  $probeEnvironment = Get-Content $profileFile -Raw | ConvertFrom-Json -AsHashtable
+  Write-Host 'Initialized the ordinary-user profile and its AppData folders.'
   $null = Run-AppCheck 'ordinary-user-lifecycle' $credential $false
 
   $held = Run-AppCheck 'ordinary-user-crash' $credential $true
