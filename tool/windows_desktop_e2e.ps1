@@ -49,8 +49,10 @@ function Run-AppCheck([string]$Name, [PSCredential]$Credential, [bool]$Hold) {
   }
   $result = Get-Content $resultFile -Raw | ConvertFrom-Json
   if ($result.success -ne $true) {
-    Get-Content $resultFile -Raw | Write-Output
-    Get-CimInstance Win32_Service -Filter "Name='$serviceName'" | Select-Object State, ProcessId, StartName, PathName | Format-List | Out-String | Write-Output
+    # The caller assigns this function's return to $null; use the host stream
+    # for diagnostics so it cannot discard the failure details.
+    Get-Content $resultFile -Raw | Write-Host
+    Get-CimInstance Win32_Service -Filter "Name='$serviceName'" | Select-Object State, ProcessId, StartName, PathName | Format-List | Out-String | Write-Host
     throw "GUI $Name failed: $($result.error)"
   }
   if (-not $Hold) {

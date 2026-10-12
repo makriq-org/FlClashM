@@ -35,12 +35,17 @@ List<int> _exchange(List<int> bytes) => using((arena) {
       final pipeName = r'\\.\pipe\app.flclashm.client.helper.v1'
           .toNativeUtf16(allocator: arena);
       final kernel = DynamicLibrary.open('kernel32.dll');
+      // Resolve this before any fallible API call: a lazy symbol lookup can
+      // overwrite the thread's last-error value. Read it once, immediately.
+      final lastError = kernel
+          .lookupFunction<Uint32 Function(), int Function()>('GetLastError',
+              isLeaf: true);
       final waitNamedPipe = kernel.lookupFunction<
           Int32 Function(Pointer<Utf16>, Uint32),
           int Function(Pointer<Utf16>, int)>('WaitNamedPipeW');
       if (waitNamedPipe(pipeName, 1500) == 0) {
         throw StateError(
-            'Windows helper pipe is unavailable (${GetLastError()}). Reinstall FlClashM using its installer.');
+            'Windows helper pipe is unavailable (${lastError()}). Reinstall FlClashM using its installer.');
       }
       final pipe = CreateFile(
         pipeName,
@@ -52,8 +57,7 @@ List<int> _exchange(List<int> bytes) => using((arena) {
         0,
       );
       if (pipe == INVALID_HANDLE_VALUE) {
-        throw StateError(
-            'Cannot open Windows helper pipe (${GetLastError()}).');
+        throw StateError('Cannot open Windows helper pipe (${lastError()}).');
       }
       try {
         final serverPid = arena<Uint32>();
@@ -66,14 +70,16 @@ List<int> _exchange(List<int> bytes) => using((arena) {
         _verifyServer(serverPid.value, arena);
         final input = arena<Uint8>(bytes.length);
         input.asTypedList(bytes.length).setAll(0, bytes);
-        final written = _transfer(pipe, input, bytes.length, true, arena);
+        final written =
+            _transfer(pipe, input, bytes.length, true, arena, lastError);
         if (written != bytes.length) {
           throw StateError('Incomplete Windows helper request.');
         }
         final output = arena<Uint8>(16 * 1024);
-        final read = _transfer(pipe, output, 16 * 1024, false, arena);
+        final read =
+            _transfer(pipe, output, 16 * 1024, false, arena, lastError);
         final acknowledgement = arena<Uint8>()..value = 10;
-        if (_transfer(pipe, acknowledgement, 1, true, arena) != 1) {
+        if (_transfer(pipe, acknowledgement, 1, true, arena, lastError) != 1) {
           throw StateError('Could not confirm reading the helper response.');
         }
         return List<int>.from(output.asTypedList(read));
@@ -82,8 +88,8 @@ List<int> _exchange(List<int> bytes) => using((arena) {
       }
     });
 
-int _transfer(
-    int pipe, Pointer<Uint8> buffer, int length, bool write, Arena arena) {
+int _transfer(int pipe, Pointer<Uint8> buffer, int length, bool write,
+    Arena arena, int Function() lastError) {
   final overlapped = arena<OVERLAPPED>();
   final count = arena<Uint32>();
   final event = CreateEvent(nullptr, TRUE, FALSE, nullptr);
@@ -93,8 +99,10 @@ int _transfer(
     final result = write
         ? WriteFile(pipe, buffer, length, nullptr, overlapped)
         : ReadFile(pipe, buffer, length, nullptr, overlapped);
-    if (result == 0 && GetLastError() != ERROR_IO_PENDING) {
-      throw StateError('Windows helper IO failed: ${GetLastError()}.');
+    final error = result == 0 ? lastError() : 0;
+    if (result == 0 && error != ERROR_IO_PENDING) {
+      throw StateError(
+          'Windows helper ${write ? 'write' : 'read'} failed: $error.');
     }
     if (WaitForSingleObject(event, 7000) != WAIT_OBJECT_0) {
       CancelIoEx(pipe, overlapped);
@@ -103,8 +111,7 @@ int _transfer(
       throw StateError('Windows helper response timed out.');
     }
     if (GetOverlappedResult(pipe, overlapped, count, FALSE) == 0) {
-      throw StateError(
-          'Windows helper IO did not complete (${GetLastError()}).');
+      throw StateError('Windows helper IO did not complete (${lastError()}).');
     }
     return count.value;
   } finally {
