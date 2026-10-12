@@ -20,9 +20,12 @@ class WindowsRuntimeAccessPolicy extends DesktopRuntimeAccessPolicy {
     required ValueChanged<bool> onResolvedTunEnable,
     Future<AuthorizeCode> Function()? authorizeCore,
   }) async {
-    if (requestedTunEnable && !await runtime.available()) {
-      throw StateError(
-          'Для TUN установите FlClashM через Windows-установщик: системная служба недоступна.');
+    if (requestedTunEnable) {
+      final helper = await runtime.checkAvailability();
+      if (!helper.isSuccess) {
+        throw StateError(
+            'Системная служба Windows недоступна для TUN. ${helper.message}');
+      }
     }
     if (runtime.preferService != requestedTunEnable ||
         (requestedTunEnable && !runtime.isActive)) {

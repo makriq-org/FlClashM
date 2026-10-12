@@ -21,11 +21,12 @@ class WindowsMihomoRuntime {
   bool preferService = false;
   bool get isActive => _token != null;
 
-  Future<bool> available() async =>
-      (await _helper.execute(const DesktopHelperRequest(
+  Future<DesktopHelperResponse> checkAvailability() =>
+      _helper.execute(const DesktopHelperRequest(
         operation: DesktopHelperOperation.ping,
-      )))
-          .isSuccess;
+      ));
+
+  Future<bool> available() async => (await checkAvailability()).isSuccess;
 
   Future<void> start({required int port, required String token}) async {
     final request = DesktopHelperRequest(

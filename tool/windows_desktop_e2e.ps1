@@ -48,7 +48,11 @@ function Run-AppCheck([string]$Name, [PSCredential]$Credential, [bool]$Hold) {
     Start-Sleep -Milliseconds 200
   }
   $result = Get-Content $resultFile -Raw | ConvertFrom-Json
-  if ($result.success -ne $true) { throw "GUI $Name failed: $($result.error)" }
+  if ($result.success -ne $true) {
+    Get-Content $resultFile -Raw | Write-Output
+    Get-CimInstance Win32_Service -Filter "Name='$serviceName'" | Select-Object State, ProcessId, StartName, PathName | Format-List | Out-String | Write-Output
+    throw "GUI $Name failed: $($result.error)"
+  }
   if (-not $Hold) {
     if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) { throw "GUI $Name did not exit successfully." }
     Require-CleanNetwork

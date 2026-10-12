@@ -40,7 +40,7 @@ List<int> _exchange(List<int> bytes) => using((arena) {
           int Function(Pointer<Utf16>, int)>('WaitNamedPipeW');
       if (waitNamedPipe(pipeName, 1500) == 0) {
         throw StateError(
-            'Windows helper is not running. Reinstall FlClashM using its installer.');
+            'Windows helper pipe is unavailable (${GetLastError()}). Reinstall FlClashM using its installer.');
       }
       final pipe = CreateFile(
         pipeName,
@@ -52,7 +52,8 @@ List<int> _exchange(List<int> bytes) => using((arena) {
         0,
       );
       if (pipe == INVALID_HANDLE_VALUE) {
-        throw StateError('Cannot open Windows helper pipe.');
+        throw StateError(
+            'Cannot open Windows helper pipe (${GetLastError()}).');
       }
       try {
         final serverPid = arena<Uint32>();
@@ -102,7 +103,8 @@ int _transfer(
       throw StateError('Windows helper response timed out.');
     }
     if (GetOverlappedResult(pipe, overlapped, count, FALSE) == 0) {
-      throw StateError('Windows helper IO did not complete.');
+      throw StateError(
+          'Windows helper IO did not complete (${GetLastError()}).');
     }
     return count.value;
   } finally {
