@@ -158,10 +158,13 @@ try {
   $marker = Join-Path $dataRoot 'windows-e2e-preserved.txt'
   'preserve me' | Set-Content $marker
   $oldHash = (Get-FileHash $gui -Algorithm SHA256).Hash
+  $uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.flclashm.client_is1'
+  $oldVersion = (Get-ItemProperty $uninstallKey).DisplayVersion
   Run-Setup (Resolve-Path $FailingInstaller).Path $false
   if ((Get-FileHash $gui -Algorithm SHA256).Hash -ne $oldHash) { throw 'Rollback did not restore the original GUI.' }
   if (Test-Path (Join-Path $appRoot 'rollback-new-file.test')) { throw 'Rollback left a new package file behind.' }
   if ((Get-Service $serviceName).Status -ne 'Running') { throw 'Rollback did not restore the helper service.' }
+  if ((Get-ItemProperty $uninstallKey).DisplayVersion -ne $oldVersion) { throw 'Rollback did not restore the registered version.' }
   $events.Add('failed-install-rolled-back')
   $null = Run-AppCheck 'after-rollback' $credential $false
   Run-Setup (Resolve-Path $Installer).Path $true

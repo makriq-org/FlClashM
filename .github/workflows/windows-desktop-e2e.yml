@@ -48,6 +48,19 @@ jobs:
         shell: pwsh
         run: ./tool/windows_desktop_e2e.ps1 -ProfileOnly -OutputDirectory (Join-Path $env:RUNNER_TEMP 'ordinary-profile-check')
 
+      - name: Verify a failed fresh installation rolls back and returns failure
+        shell: pwsh
+        run: |
+          $fixture = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'inno-contract/legacy-output') -Filter '*-setup.exe' | Select-Object -First 1).FullName
+          $appRoot = Join-Path $env:ProgramFiles 'FlClashM'
+          if (Test-Path $appRoot) { throw 'Fresh-install fixture requires an empty application directory.' }
+          $setup = Start-Process $fixture -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru
+          if (-not $setup.WaitForExit(60000)) { Stop-Process -Id $setup.Id -Force; throw 'Failing fixture setup timed out.' }
+          if ($setup.ExitCode -eq 0) { throw 'A failed installer reported success.' }
+          if (Test-Path $appRoot) { throw 'Failed fresh installation left application files.' }
+          if (Get-Service 'app.flclashm.client.helper' -ErrorAction SilentlyContinue) { throw 'Failed fresh installation left a service.' }
+          if (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.flclashm.client_is1') { throw 'Failed fresh installation left its uninstall registration.' }
+
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.26.5'
@@ -191,7 +204,7 @@ jobs:
             ./windows/packaging/exe/build_installer.ps1 `
               -BundleDirectory build/windows/x64/runner/Release `
               -OutputDirectory dist/rollback-test `
-              -Version $version -TestFailAfterFiles
+              -Version '0.4.0-pre999' -TestFailAfterFiles
           } finally {
             Remove-Item 'build/windows/x64/runner/Release/rollback-new-file.test' -ErrorAction SilentlyContinue
           }
@@ -290,17 +303,6 @@ jobs:
           path: dist/release/*-setup.exe*
           if-no-files-found: error
           retention-days: 14
-
-      - name: Collect protected Windows lifecycle evidence
-        if: always()
-        shell: pwsh
-        run: |
-          $source = Join-Path $env:ProgramFiles 'FlClashM/service-data'
-          if (Test-Path $source) {
-            $destination = 'windows-desktop-evidence/service-data'
-            New-Item -ItemType Directory -Force $destination | Out-Null
-            Copy-Item (Join-Path $source '*') $destination -Recurse -Force
-          }
 
       - name: Upload installed Windows lifecycle evidence
         if: always()

@@ -39,11 +39,15 @@ var
   PreviousBundleBackup: String;
   FreshInstallDirectoryCreated: Boolean;
   InstallStarted: Boolean;
+  InstallPrepared: Boolean;
   InstallSucceeded: Boolean;
+  InstallFailed: Boolean;
+  PreviousMachineRegistration: Boolean;
 
 const
   HelperServiceName = 'app.flclashm.client.helper';
   HelperRelativePath = 'runtimes\windows\x86_64\app.flclashm.client.helper.exe';
+  UninstallRegistryKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{APP_ID}}_is1';
 
 function IsFromApp(): Boolean;
 begin
@@ -214,6 +218,8 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  BackupCandidate: String;
 begin
   Result := '';
   { The helper authenticates the installed GUI path. Never let /DIR or a
@@ -231,7 +237,35 @@ begin
     exit;
   end;
   if not WaitForGracefulExit() then
+  begin
     Result := 'FlClashM ещё работает или восстанавливает системный прокси. Закройте приложение через меню значка в области уведомлений и повторите установку.';
+    exit;
+  end;
+  { Preparing can return an error and prevent all file replacement. Exceptions
+    in CurStepChanged are only reported by Inno and do not abort installation. }
+  if not InstallPrepared then
+  begin
+    try
+      if not InstallStarted then
+      begin
+        FreshInstallDirectoryCreated := not IsUpgrade and
+          not DirExists(ExpandConstant('{app}'));
+        if DirExists(ExpandConstant('{app}')) then
+        begin
+          BackupCandidate := ExpandConstant('{tmp}\flclashm-previous-bundle');
+          CopyBundle(ExpandConstant('{app}'), BackupCandidate);
+          PreviousBundleBackup := BackupCandidate;
+        end;
+        InstallStarted := True;
+      end;
+      StopAndRemoveHelperService;
+      InstallPrepared := True;
+      InstallFailed := False;
+    except
+      InstallFailed := True;
+      Result := 'Не удалось подготовить установку FlClashM: ' + GetExceptionMessage;
+    end;
+  end;
 end;
 
 function InitializeUninstall(): Boolean;
@@ -288,6 +322,16 @@ begin
        DirExists(ExpandConstant('{app}')) and
        not DelTree(ExpandConstant('{app}'), True, True, True) then
       RaiseException('Не удалось удалить неполную новую установку FlClashM.');
+    if PreviousMachineRegistration then
+    begin
+      if (PreviousVersion <> '') and
+         not RegWriteStringValue(HKEY_LOCAL_MACHINE_64, UninstallRegistryKey,
+           'DisplayVersion', PreviousVersion) then
+        RaiseException('Не удалось восстановить версию предыдущей установки.');
+    end
+    else if RegKeyExists(HKEY_LOCAL_MACHINE_64, UninstallRegistryKey) and
+            not RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE_64, UninstallRegistryKey) then
+      RaiseException('Не удалось удалить регистрацию неудачной установки.');
     WriteInstallResult('failed');
     { The old GUI must read the failure marker after it has been written. }
     if (PreviousBundleBackup <> '') and IsFromApp() then
@@ -330,6 +374,7 @@ function InitializeSetup(): Boolean;
 begin
   // Check if app is already installed
   IsUpgrade := IsAppInstalled();
+  PreviousMachineRegistration := RegKeyExists(HKEY_LOCAL_MACHINE_64, UninstallRegistryKey);
   if IsUpgrade then
     PreviousVersion := GetInstalledVersion();
   
@@ -338,36 +383,49 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssInstall then
+  if CurStep = ssPostInstall then
   begin
-    FreshInstallDirectoryCreated := not IsUpgrade and
-      not DirExists(ExpandConstant('{app}'));
-    if DirExists(ExpandConstant('{app}')) then
-    begin
-      PreviousBundleBackup := ExpandConstant('{tmp}\flclashm-previous-bundle');
-      CopyBundle(ExpandConstant('{app}'), PreviousBundleBackup);
-    end;
-    InstallStarted := True;
-    StopAndRemoveHelperService;
-  end
-  else if CurStep = ssPostInstall then
-  begin
-    EnforceProtectedInstallAcl;
-    if not ForceDirectories(ExpandConstant('{app}\service-data')) then
-      RaiseException('Не удалось создать защищённый каталог ядра.');
-    ProtectServiceData;
+    try
+      EnforceProtectedInstallAcl;
+      if not ForceDirectories(ExpandConstant('{app}\service-data')) then
+        RaiseException('Не удалось создать защищённый каталог ядра.');
+      ProtectServiceData;
 #ifdef FLCLASHM_CI_FAIL_INSTALL
-    RaiseException('CI: проверка отката после замены файлов.');
+      RaiseException('CI: проверка отката после замены файлов.');
 #endif
-    InstallAndStartHelperService;
+      InstallAndStartHelperService;
+    except
+      InstallFailed := True;
+      Log('FlClashM post-install failed: ' + GetExceptionMessage);
+      WizardForm.FinishedHeadingLabel.Caption := 'Не удалось установить FlClashM';
+      if PreviousBundleBackup <> '' then
+        WizardForm.FinishedLabel.Caption := 'После закрытия установщика предыдущая версия будет восстановлена.'
+      else
+        WizardForm.FinishedLabel.Caption := 'После закрытия установщика неполная установка будет удалена.';
+    end;
   end
   else if CurStep = ssDone then
   begin
+    if InstallFailed then
+      exit;
     InstallSucceeded := True;
     WriteInstallResult('success');
     if IsFromApp() then
       RelaunchAppAsOriginalUser();
   end;
+end;
+
+function GetCustomSetupExitCode(): Integer;
+begin
+  if InstallFailed then
+    Result := 100
+  else
+    Result := 0;
+end;
+
+function CanLaunchInstalledApp(): Boolean;
+begin
+  Result := not InstallFailed and not IsFromApp();
 end;
 
 procedure InitializeWizard();
@@ -471,4 +529,4 @@ Source: "{{SOURCE_DIR}}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 Name: "{autoprograms}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"
 Name: "{autodesktop}\\{{DISPLAY_NAME}}"; Filename: "{app}\\{{EXECUTABLE_NAME}}"; Tasks: desktopicon
 [Run]
-Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: runasoriginaluser nowait postinstall skipifsilent; Check: not IsFromApp
+Filename: "{app}\\{{EXECUTABLE_NAME}}"; Description: "{cm:LaunchProgram,{{DISPLAY_NAME}}}"; Flags: runasoriginaluser nowait postinstall skipifsilent; Check: CanLaunchInstalledApp
