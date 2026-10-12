@@ -125,6 +125,31 @@ New-Item -ItemType Directory -Force $temporary | Out-Null
   return $credential
 }
 
+function Require-ProtectedCache([PSCredential]$Credential) {
+  $data = Join-Path $appRoot 'service-data'
+  $cache = Get-ChildItem -LiteralPath $data -Recurse -File | Select-Object -First 1
+  if ($null -eq $cache) { throw 'The runtime did not create a service cache file.' }
+  $scriptFile = Join-Path $output 'verify-protected-cache.ps1'
+  @'
+param([string]$Directory, [string]$CacheFile)
+$ErrorActionPreference = 'Stop'
+try {
+  [IO.Directory]::GetFileSystemEntries($Directory) | Out-Null
+  throw 'Ordinary user could list the service cache.'
+} catch [UnauthorizedAccessException] {}
+try {
+  $stream = [IO.File]::OpenRead($CacheFile)
+  $stream.Dispose()
+  throw 'Ordinary user could read a service cache file.'
+} catch [UnauthorizedAccessException] {}
+'@ | Set-Content -Encoding utf8 $scriptFile
+  $check = Start-Process -FilePath (Get-Command pwsh).Source -Credential $Credential -LoadUserProfile -PassThru `
+    -ArgumentList @('-NoProfile', '-File', "`"$scriptFile`"", '-Directory', "`"$data`"", '-CacheFile', "`"$($cache.FullName)`"")
+  if (-not $check.WaitForExit(10000)) { Stop-Process -Id $check.Id -Force; throw 'Cache access check timed out.' }
+  if ($check.ExitCode -ne 0) { throw 'Service cache was not protected from the ordinary user.' }
+  Write-Host 'Ordinary user cannot list or read the protected service cache.'
+}
+
 try {
   if ($ProfileOnly) {
     $null = Initialize-OrdinaryUser
@@ -136,6 +161,7 @@ try {
   $null = Run-AppCheck 'administrator-lifecycle' $null $false
   $credential = Initialize-OrdinaryUser
   $null = Run-AppCheck 'ordinary-user-lifecycle' $credential $false
+  Require-ProtectedCache $credential
 
   $held = Run-AppCheck 'ordinary-user-crash' $credential $true
   # Manual replacement must refuse an active GUI and leave its runtime alive.
@@ -167,8 +193,10 @@ try {
   if ((Get-ItemProperty $uninstallKey).DisplayVersion -ne $oldVersion) { throw 'Rollback did not restore the registered version.' }
   $events.Add('failed-install-rolled-back')
   $null = Run-AppCheck 'after-rollback' $credential $false
+  Require-ProtectedCache $credential
   Run-Setup (Resolve-Path $Installer).Path $true
   if (-not (Test-Path $marker)) { throw 'Upgrade deleted user data.' }
+  Require-ProtectedCache $credential
   $events.Add('upgrade-preserved-data')
 
   # A process outside the protected GUI image must never get a privileged lease.

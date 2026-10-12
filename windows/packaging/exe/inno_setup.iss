@@ -96,21 +96,44 @@ begin
   Result := False;
 end;
 
+procedure ProtectRuntimeData(const Directory: String);
+var
+  ResultCode: Integer;
+begin
+  if not Exec(ExpandConstant('{sys}\icacls.exe'),
+    '"' + Directory + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /remove:g *S-1-5-32-545 /T /Q',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException('Не удалось защитить данные системного ядра.');
+end;
+
 procedure CopyBundle(const Source, Destination: String);
 var
   ResultCode: Integer;
+  DestinationData: String;
   CopyLog: String;
   CopyLogLines: TArrayOfString;
   Line: Integer;
 begin
-  ForceDirectories(Destination);
+  if not ForceDirectories(Destination) then
+    RaiseException('Не удалось создать каталог копии FlClashM.');
+  if DirExists(Source + '\service-data') then
+  begin
+    DestinationData := Destination + '\service-data';
+    if not ForceDirectories(DestinationData) then
+      RaiseException('Не удалось создать защищённый каталог копии ядра.');
+    { Protect the destination before writing any cache bytes, including while
+      restoring the bundle under Program Files. }
+    ProtectRuntimeData(DestinationData);
+  end;
   CopyLog := ExpandConstant('{tmp}\flclashm-copy-bundle.log');
   { The service cache can contain SYSTEM-owned files after restoring its ACL.
     The elevated installer must use Windows backup privileges to preserve it
     without granting interactive users access to those files. }
   if not Exec(
     ExpandConstant('{sys}\robocopy.exe'),
-    '"' + Source + '" "' + Destination + '" /MIR /B /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS /LOG:"' + CopyLog + '"',
+    { /E /PURGE preserves destination directory security. /MIR can replace
+      the protected temporary directory's ACL with Program Files permissions. }
+    '"' + Source + '" "' + Destination + '" /E /PURGE /B /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS /LOG:"' + CopyLog + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode >= 8) then
   begin
     if LoadStringsFromFile(CopyLog, CopyLogLines) then
@@ -153,13 +176,8 @@ begin
 end;
 
 procedure ProtectServiceData;
-var
-  ResultCode: Integer;
 begin
-  if not Exec(ExpandConstant('{sys}\icacls.exe'),
-    '"' + ExpandConstant('{app}\service-data') + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /remove:g *S-1-5-32-545 /T /Q',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-    RaiseException('Не удалось защитить данные системного ядра.');
+  ProtectRuntimeData(ExpandConstant('{app}\service-data'));
 end;
 
 procedure StopAndRemoveHelperService;
