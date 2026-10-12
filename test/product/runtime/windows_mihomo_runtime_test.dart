@@ -9,11 +9,15 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeHelper implements DesktopHelperTransport {
   final requests = <DesktopHelperRequest>[];
   bool failStop = false;
+  bool failStart = false;
   @override
   Future<DesktopHelperResponse> send(DesktopHelperRequest request) async {
     requests.add(request);
     return DesktopHelperResponse(
-      state: failStop && request.operation == DesktopHelperOperation.runtimeStop
+      state: (failStop &&
+                  request.operation == DesktopHelperOperation.runtimeStop) ||
+              (failStart &&
+                  request.operation == DesktopHelperOperation.runtimeStart)
           ? DesktopHelperState.failed
           : DesktopHelperState.ready,
       message: 'cleanup failed',
@@ -22,6 +26,37 @@ class FakeHelper implements DesktopHelperTransport {
 }
 
 void main() {
+  test('a refused start does not leave a fictitious lease', () async {
+    final helper = FakeHelper()..failStart = true;
+    final runtime = WindowsMihomoRuntime(transport: helper);
+    await expectLater(
+        runtime.start(port: 49152, token: createWindowsControlToken()),
+        throwsStateError);
+    expect(runtime.isActive, isFalse);
+    await runtime.stop();
+    expect(helper.requests, hasLength(1));
+  });
+
+  test('control proof authenticates both roles without disclosing the token',
+      () {
+    const token =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    const nonce =
+        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    final proof = windowsControlProof(token, 'core/v1', nonce);
+    expect(proof, isNot(contains(token)));
+    expect(verifyWindowsControlHello({'nonce': nonce, 'proof': proof}, token),
+        isTrue);
+    expect(
+        verifyWindowsControlHello({
+          'nonce': nonce,
+          'proof': windowsControlProof(token, 'gui/v1', nonce)
+        }, token),
+        isFalse);
+    expect(verifyWindowsControlHello({'nonce': '', 'proof': proof}, token),
+        isFalse);
+  });
+
   test('runtime stop retains the lease until cleanup succeeds', () async {
     final helper = FakeHelper();
     final runtime = WindowsMihomoRuntime(transport: helper);

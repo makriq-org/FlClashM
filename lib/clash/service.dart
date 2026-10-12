@@ -71,7 +71,7 @@ class ClashService extends ClashHandlerInterface {
       final server = await ServerSocket.bind(
         address,
         0,
-        shared: true,
+        shared: !Platform.isWindows,
       );
       serverCompleter.complete(server);
       await for (final socket in server) {
@@ -106,8 +106,18 @@ class ClashService extends ClashHandlerInterface {
           return;
         final hello = jsonDecode(iterator.current);
         if (hello is! Map ||
-            hello['controlToken'] != expected ||
-            _controlToken != expected) return;
+            !verifyWindowsControlHello(hello, expected) ||
+            _controlToken != expected) {
+          return;
+        }
+        socket.writeln(jsonEncode({
+          'proof':
+              windowsControlProof(expected, 'gui/v1', hello['nonce'] as String)
+        }));
+        await socket.flush();
+        if (_controlToken != expected) {
+          return;
+        }
       }
       await _destroySocket();
       _activeSocket = socket;

@@ -784,6 +784,11 @@
       "path": "lib/common/windows.dart",
       "bucket": "budget",
       "reason": "Проверка службы использует аутентифицированный IPC; установка принадлежит Inno Setup."
+    },
+    {
+      "path": "core/server_test.go",
+      "bucket": "budget",
+      "reason": "Тесты взаимного HMAC-подтверждения Windows управляющего соединения запрещают утечку секрета и подмену GUI."
     }
   ]
 }

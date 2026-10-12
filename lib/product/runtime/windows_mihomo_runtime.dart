@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
+
 import '../../models/models.dart';
 import 'desktop_helper_protocol.dart';
 import 'windows_helper_transport.dart';
@@ -9,10 +11,12 @@ import 'windows_helper_transport.dart';
 class WindowsMihomoRuntime {
   WindowsMihomoRuntime(
       {DesktopHelperTransport transport = const WindowsHelperTransport()})
-      : _helper = DesktopHelperClient(
+      : _transport = transport,
+        _helper = DesktopHelperClient(
             transport: transport, timeout: const Duration(seconds: 12));
 
   final DesktopHelperClient _helper;
+  final DesktopHelperTransport _transport;
   String? _token;
   bool preferService = false;
   bool get isActive => _token != null;
@@ -24,14 +28,24 @@ class WindowsMihomoRuntime {
           .isSuccess;
 
   Future<void> start({required int port, required String token}) async {
-    _token = token;
-    final response = await _helper.execute(DesktopHelperRequest(
+    final request = DesktopHelperRequest(
       operation: DesktopHelperOperation.runtimeStart,
       runtimeArtifact: 'mihomo',
       parameters: {'runtimeToken': token, 'port': port},
-    ));
-    if (!response.isSuccess) throw StateError(response.message);
+    );
+    final invalid = DesktopHelperProtocol.validate(request);
+    if (invalid != null) {
+      throw ArgumentError(invalid);
+    }
+    // Transport failure leaves an uncertain lease for a subsequent stop;
+    // explicit refusal must not block a return to the ordinary proxy owner.
     _token = token;
+    final response =
+        await _transport.send(request).timeout(const Duration(seconds: 12));
+    if (!response.isSuccess) {
+      _token = null;
+      throw StateError(response.message);
+    }
   }
 
   Future<void> stop() async {
@@ -139,4 +153,26 @@ class WindowsCoreMessageBridge {
   }
 
   void clear() => _downloads.clear();
+}
+
+String windowsControlProof(String token, String role, String nonce) =>
+    Hmac(sha256, utf8.encode(token))
+        .convert(utf8.encode('$role:$nonce'))
+        .toString();
+
+bool verifyWindowsControlHello(Map hello, String token) {
+  final nonce = hello['nonce'];
+  final proof = hello['proof'];
+  if (nonce is! String ||
+      !RegExp(r'^[a-f0-9]{64}$').hasMatch(nonce) ||
+      proof is! String ||
+      proof.length != 64) {
+    return false;
+  }
+  final expected = windowsControlProof(token, 'core/v1', nonce);
+  var difference = 0;
+  for (var i = 0; i < 64; i++) {
+    difference |= proof.codeUnitAt(i) ^ expected.codeUnitAt(i);
+  }
+  return difference == 0;
 }

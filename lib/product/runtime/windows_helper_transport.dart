@@ -8,6 +8,9 @@ import 'package:win32/win32.dart';
 
 import 'desktop_helper_protocol.dart';
 
+// SERVICE_QUERY_CONFIG is absent from the win32 5 generated constants.
+const _serviceQueryConfig = 0x0001;
+
 /// Performs bounded overlapped pipe IO off the UI isolate. Both peers validate
 /// the installed image; a user-created pipe cannot impersonate LocalSystem.
 class WindowsHelperTransport implements DesktopHelperTransport {
@@ -104,68 +107,71 @@ int _transfer(
 }
 
 void _verifyServer(int pid, Arena arena) {
-  final process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-  if (process == 0) throw StateError('Cannot inspect Windows helper process.');
+  // Querying a LocalSystem process token is forbidden to ordinary users. SCM
+  // supplies the authoritative service PID, account and protected binary path.
+  final manager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
+  if (manager == 0) {
+    throw StateError('Cannot query Windows Service Manager.');
+  }
   try {
-    final name = arena<Uint16>(32768).cast<Utf16>();
-    final size = arena<Uint32>()..value = 32768;
-    if (QueryFullProcessImageName(process, 0, name, size) == 0) {
-      throw StateError('Cannot read Windows helper image.');
-    }
-    final folder = arena<Pointer<Utf16>>();
-    final id = Guid.parse(FOLDERID_ProgramFiles).toNativeGUID(allocator: arena);
-    if (SHGetKnownFolderPath(id, 0, 0, folder) < 0) {
-      throw StateError('Cannot locate Program Files.');
-    }
-    final String root;
-    try {
-      root = folder.value.toDartString();
-    } finally {
-      CoTaskMemFree(folder.value);
-    }
-    final expected = path.windows.join(root, 'FlClashM', 'runtimes', 'windows',
-        'x86_64', 'app.flclashm.client.helper.exe');
-    if (File(name.toDartString(length: size.value))
-            .resolveSymbolicLinksSync()
-            .toLowerCase() !=
-        File(expected).resolveSymbolicLinksSync().toLowerCase()) {
-      throw StateError('Named pipe belongs to an unexpected executable.');
-    }
-    final token = arena<IntPtr>();
-    if (OpenProcessToken(process, TOKEN_QUERY, token) == 0) {
-      throw StateError('Cannot inspect helper token.');
+    final service = OpenService(
+        manager,
+        'app.flclashm.client.helper'.toNativeUtf16(allocator: arena),
+        SERVICE_QUERY_STATUS | _serviceQueryConfig);
+    if (service == 0) {
+      throw StateError('Windows helper service is not installed.');
     }
     try {
+      final status = arena<SERVICE_STATUS_PROCESS>();
       final required = arena<Uint32>();
-      GetTokenInformation(token.value, TokenUser, nullptr, 0, required);
+      if (QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, status.cast(),
+                  sizeOf<SERVICE_STATUS_PROCESS>(), required) ==
+              0 ||
+          status.ref.dwCurrentState != SERVICE_RUNNING ||
+          status.ref.dwProcessId != pid ||
+          status.ref.dwServiceType != SERVICE_WIN32_OWN_PROCESS) {
+        throw StateError(
+            'Named pipe is not owned by the installed running service.');
+      }
+      QueryServiceConfig(service, nullptr, 0, required);
       if (required.value == 0 || required.value > 65536) {
-        throw StateError('Invalid helper token.');
+        throw StateError('Invalid helper service configuration.');
       }
-      final data = arena<Uint8>(required.value);
-      if (GetTokenInformation(
-              token.value, TokenUser, data, required.value, required) ==
-          0) {
-        throw StateError('Cannot read helper token.');
+      final config = arena<Uint8>(required.value).cast<QUERY_SERVICE_CONFIG>();
+      if (QueryServiceConfig(service, config, required.value, required) == 0) {
+        throw StateError('Cannot read helper service configuration.');
       }
-      final sid = arena<Pointer<Utf16>>();
-      final convert = DynamicLibrary.open('advapi32.dll').lookupFunction<
-          Int32 Function(Pointer<Void>, Pointer<Pointer<Utf16>>),
-          int Function(Pointer<Void>,
-              Pointer<Pointer<Utf16>>)>('ConvertSidToStringSidW');
-      if (convert(data.cast<Pointer<Void>>().value, sid) == 0) {
-        throw StateError('Cannot read helper SID.');
+      final account =
+          config.ref.lpServiceStartName.toDartString().toLowerCase();
+      if (account != 'localsystem' && account != r'nt authority\system') {
+        throw StateError('Windows helper must run as LocalSystem.');
       }
+      final folder = arena<Pointer<Utf16>>();
+      final id =
+          Guid.parse(FOLDERID_ProgramFiles).toNativeGUID(allocator: arena);
+      if (SHGetKnownFolderPath(id, 0, 0, folder) < 0) {
+        throw StateError('Cannot locate Program Files.');
+      }
+      final String root;
       try {
-        if (sid.value.toDartString() != 'S-1-5-18') {
-          throw StateError('Windows helper is not running as LocalSystem.');
-        }
+        root = folder.value.toDartString();
       } finally {
-        LocalFree(sid.value);
+        CoTaskMemFree(folder.value);
+      }
+      final expected = path.windows.join(root, 'FlClashM', 'runtimes',
+          'windows', 'x86_64', 'app.flclashm.client.helper.exe');
+      var actual = config.ref.lpBinaryPathName.toDartString().trim();
+      if (actual.startsWith('"') && actual.endsWith('"')) {
+        actual = actual.substring(1, actual.length - 1);
+      }
+      if (path.windows.normalize(actual).toLowerCase() !=
+          path.windows.normalize(expected).toLowerCase()) {
+        throw StateError('Windows service points to an unexpected executable.');
       }
     } finally {
-      CloseHandle(token.value);
+      CloseServiceHandle(service);
     }
   } finally {
-    CloseHandle(process);
+    CloseServiceHandle(manager);
   }
 }

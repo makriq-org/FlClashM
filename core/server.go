@@ -4,12 +4,17 @@ package main
 
 import (
 	"bufio"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var conn net.Conn
@@ -56,9 +61,9 @@ func startServer(arg string) {
 		return
 	}
 
+	reader := bufio.NewReader(c)
 	if token := os.Getenv("FLCLASHM_CONTROL_TOKEN"); token != "" {
-		hello, _ := json.Marshal(map[string]string{"controlToken": token})
-		if _, err := c.Write(append(hello, '\n')); err != nil {
+		if err := authenticateControlConnection(c, reader, token); err != nil {
 			_ = c.Close()
 			return
 		}
@@ -76,8 +81,6 @@ func startServer(arg string) {
 		}
 		connMu.Unlock()
 	}()
-
-	reader := bufio.NewReader(c)
 
 	for {
 		data, err := reader.ReadString('\n')
@@ -104,4 +107,45 @@ func startServer(arg string) {
 
 func nextHandle(action *Action, result ActionResult) bool {
 	return false
+}
+
+func controlProof(token, role, nonce string) string {
+	mac := hmac.New(sha256.New, []byte(token))
+	_, _ = mac.Write([]byte(role + ":" + nonce))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func authenticateControlConnection(c net.Conn, reader *bufio.Reader, token string) error {
+	nonceBytes := make([]byte, 32)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return err
+	}
+	nonce := hex.EncodeToString(nonceBytes)
+	hello, _ := json.Marshal(map[string]string{"nonce": nonce, "proof": controlProof(token, "core/v1", nonce)})
+	if err := c.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		return err
+	}
+	defer c.SetDeadline(time.Time{})
+	if _, err := c.Write(append(hello, '\n')); err != nil {
+		return err
+	}
+	line, err := reader.ReadSlice('\n')
+	if err != nil {
+		return err
+	}
+	var ack struct {
+		Proof string `json:"proof"`
+	}
+	if err := json.Unmarshal(line, &ack); err != nil {
+		return err
+	}
+	actual, err := hex.DecodeString(ack.Proof)
+	if err != nil {
+		return err
+	}
+	expected, _ := hex.DecodeString(controlProof(token, "gui/v1", nonce))
+	if !hmac.Equal(actual, expected) {
+		return fmt.Errorf("GUI control proof is invalid")
+	}
+	return nil
 }
