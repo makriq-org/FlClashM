@@ -1,3 +1,6 @@
 assets/data/*.dat binary
 assets/data/*.mmdb binary
 assets/data/*.metadb binary
+
+# Unified diffs prefix Go tab indentation with a context marker.
+tool/patches/*.patch whitespace=-space-before-tab

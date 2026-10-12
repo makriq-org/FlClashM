@@ -81,3 +81,6 @@ store/
 # Environment variables (contains sensitive data)
 .env
 *.local.sh
+
+# Generated, patched Go dependencies (tool/prepare_core.sh)
+/core/vendor/
