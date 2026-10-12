@@ -14,7 +14,7 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 
 В `tool/patches/mihomo-mieru-terminal-timeout.patch` перенесено исправление из
 системного репозитория NixOS (`patches/mihomo-mieru-terminal-timeout.patch`, коммит
-`0d7e2b5`). Контекст импорта адаптирован к закреплённому Mieru v3.35.0.
+`0d7e2b5`). Контекст импорта адаптирован к закреплённому Mieru v3.38.0.
 
 Патч относится к Runtime Layer и меняет только чтение Mieru: таймаут закрытого
 QUIC-соединения возвращается как сетевая ошибка, а обычный read deadline без
