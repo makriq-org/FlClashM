@@ -28,6 +28,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Compile installer contract before the full Flutter build
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
+          $bundle = Join-Path $env:RUNNER_TEMP 'inno-contract/bundle'
+          $helperDir = Join-Path $bundle 'runtimes/windows/x86_64'
+          New-Item -ItemType Directory -Force $helperDir | Out-Null
+          # Compiler fixtures are never installed or uploaded as a distributable.
+          Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $bundle 'FlClashM.exe')
+          Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $helperDir 'app.flclashm.client.helper.exe')
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          ./windows/packaging/exe/build_installer.ps1 -BundleDirectory $bundle -OutputDirectory (Join-Path $env:RUNNER_TEMP 'inno-contract/output') -Version $version -TestFailAfterFiles
+
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.26.5'

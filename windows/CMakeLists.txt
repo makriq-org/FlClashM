@@ -121,7 +121,7 @@ install(FILES "${RUNTIME_ASSET_DIR}/runtime-inventory.json"
 # The privileged binary is built separately as a Windows Service.  It is never
 # copied from a legacy libclash directory: the release job supplies the exact
 # Cargo artifact that was built for this bundle.
-set(FLCLASHM_WINDOWS_HELPER "$ENV{FLCLASHM_WINDOWS_HELPER}")
+file(TO_CMAKE_PATH "$ENV{FLCLASHM_WINDOWS_HELPER}" FLCLASHM_WINDOWS_HELPER)
 if(NOT EXISTS "${FLCLASHM_WINDOWS_HELPER}")
   message(FATAL_ERROR
     "Windows helper is missing. Build services/helper with the windows-service feature and set FLCLASHM_WINDOWS_HELPER.")
