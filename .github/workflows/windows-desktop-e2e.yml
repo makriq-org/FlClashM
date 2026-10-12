@@ -41,6 +41,8 @@ jobs:
           Copy-Item "$env:WINDIR/System32/whoami.exe" (Join-Path $helperDir 'app.flclashm.client.helper.exe')
           $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
           ./windows/packaging/exe/build_installer.ps1 -BundleDirectory $bundle -OutputDirectory (Join-Path $env:RUNNER_TEMP 'inno-contract/output') -Version $version -TestFailAfterFiles
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows/packaging/exe/build_installer.ps1 -BundleDirectory $bundle -OutputDirectory (Join-Path $env:RUNNER_TEMP 'inno-contract/legacy-output') -Version $version -TestFailAfterFiles
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell 5 installer contract failed.' }
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:

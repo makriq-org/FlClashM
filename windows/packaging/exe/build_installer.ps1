@@ -9,14 +9,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $bundle = (Resolve-Path $BundleDirectory).Path
 if (-not (Test-Path (Join-Path $bundle 'runtimes\windows\x86_64\app.flclashm.client.helper.exe'))) {
-  throw 'В Windows bundle отсутствует service helper.'
+  throw 'Windows bundle is missing the service helper.'
 }
 if (-not (Test-Path $Iscc)) {
-  throw "Inno Setup compiler не найден: $Iscc"
+  throw "Inno Setup compiler was not found: $Iscc"
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
-$template = Get-Content (Join-Path $PSScriptRoot 'inno_setup.iss') -Raw
+$template = Get-Content (Join-Path $PSScriptRoot 'inno_setup.iss') -Raw -Encoding UTF8
 $languages = @'
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -50,5 +50,5 @@ $compilerArguments = @("/O$OutputDirectory")
 if ($TestFailAfterFiles) { $compilerArguments += '/DFLCLASHM_CI_FAIL_INSTALL' }
 & $Iscc @compilerArguments $rendered
 if ($LASTEXITCODE -ne 0) {
-  throw "Inno Setup завершился с кодом $LASTEXITCODE"
+  throw "Inno Setup exited with code $LASTEXITCODE"
 }
