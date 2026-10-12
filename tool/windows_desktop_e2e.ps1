@@ -96,9 +96,13 @@ if ([Security.Principal.WindowsPrincipal]::new($identity).IsInRole([Security.Pri
 }
 $create = [Environment+SpecialFolderOption]::Create
 $profile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile, $create)
-$roaming = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData, $create)
-$local = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData, $create)
-if (-not $profile -or -not $roaming -or -not $local) { throw 'Probe known folders could not be created.' }
+if (-not $profile) { throw 'Probe profile directory could not be located.' }
+# The secondary logon inherits runneradmin's APPDATA/LOCALAPPDATA values.
+# Derive these fixture folders from the actual token's profile, then pass
+# them as environment overrides when launching the ordinary-user GUI.
+$roaming = Join-Path $profile 'AppData\Roaming'
+$local = Join-Path $profile 'AppData\Local'
+New-Item -ItemType Directory -Force $roaming, $local | Out-Null
 $temporary = Join-Path $local 'Temp'
 New-Item -ItemType Directory -Force $temporary | Out-Null
 @{ USERPROFILE=$profile; APPDATA=$roaming; LOCALAPPDATA=$local; TEMP=$temporary; TMP=$temporary } |
