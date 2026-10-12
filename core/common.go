@@ -33,6 +33,7 @@ var (
 	currentConfig           *config.Config
 	version                 atomic.Int32
 	isRunning               = false
+	startedAtMillis         int64
 	runLock                 sync.Mutex
 	testDelaySem            = semaphore.NewWeighted(50)
 	proxyDescMu             sync.RWMutex
@@ -533,10 +534,11 @@ func handleRuntimeSnapshot() *RuntimeSnapshot {
 	runLock.Lock()
 	defer runLock.Unlock()
 	return &RuntimeSnapshot{
-		Config:    cloneRuntimeRawConfig(currentRuntimeRawConfig),
-		Listeners: listener.GetPorts(),
-		Running:   isRunning,
-		TunUp:     tunUp.Load() || (runtime.GOOS == "windows" && isRunning && listener.GetTunConf().Enable),
+		Config:          cloneRuntimeRawConfig(currentRuntimeRawConfig),
+		Listeners:       listener.GetPorts(),
+		Running:         isRunning,
+		StartedAtMillis: startedAtMillis,
+		TunUp:           tunUp.Load() || (runtime.GOOS == "windows" && isRunning && listener.GetTunConf().Enable),
 	}
 }
 

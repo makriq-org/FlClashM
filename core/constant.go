@@ -64,10 +64,11 @@ type TunnelHTTPResponse struct {
 }
 
 type RuntimeSnapshot struct {
-	Config    map[string]any `json:"config"`
-	Listeners any            `json:"listeners"`
-	Running   bool           `json:"running"`
-	TunUp     bool           `json:"tun-up"`
+	StartedAtMillis int64          `json:"started-at-millis"`
+	Config          map[string]any `json:"config"`
+	Listeners       any            `json:"listeners"`
+	Running         bool           `json:"running"`
+	TunUp           bool           `json:"tun-up"`
 }
 
 type tunSchema struct {

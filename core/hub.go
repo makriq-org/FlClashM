@@ -132,6 +132,7 @@ func handleStartListener() bool {
 		runLock.Unlock()
 		return false
 	}
+	startedAtMillis = time.Now().UnixMilli()
 	runLock.Unlock()
 
 	go func() {
@@ -162,6 +163,7 @@ func handleStopListener() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	isRunning = false
+	startedAtMillis = 0
 	// Keep health-check forwarder running so proxy pings stay fresh in the UI
 	// while the VPN is off. It is torn down only on full shutdown.
 	stopRequestForwarder()
@@ -194,6 +196,7 @@ func handleShutdown() bool {
 	runtime.GC()
 	isInit.Store(false)
 	isRunning = false
+	startedAtMillis = 0
 	tunUp.Store(false)
 	currentConfig = nil
 	currentRuntimeRawConfig = map[string]any{}
@@ -1050,7 +1053,9 @@ func handleSetupConfig(bytes []byte) string {
 	err := UnmarshalJson(bytes, params)
 	if err != nil {
 		log.Errorln("unmarshalRawConfig error %v", err)
-		_ = setupConfig(defaultSetupParams())
+		if serviceHome() == "" {
+			_ = setupConfig(defaultSetupParams())
+		}
 		return err.Error()
 	}
 	if serviceHome() != "" {
