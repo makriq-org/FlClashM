@@ -1,7 +1,7 @@
 name: flclashx
 description: FlClashM is an Android-only fork of FlClashX, with preserved Android package continuity from makriq.
 publish_to: "none"
-version: 0.3.0+2026100601
+version: 0.3.1-pre1+2026101301
 
 environment:
   sdk: ">=3.13.0 <4.0.0"
