@@ -21,6 +21,11 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv("FLCLASHM_TRANSPORT_HELPER") == "1" {
+		if os.Getenv("FLCLASHM_TRANSPORT_FAIL") == "1" {
+			fmt.Fprintln(os.Stdout, "helper stdout")
+			fmt.Fprint(os.Stderr, "configuration rejected")
+			os.Exit(23)
+		}
 		if len(os.Args) > 3 && os.Args[1] == "--backend-parent" {
 			executable, _ := os.Executable()
 			port, _ := strconv.Atoi(os.Args[3])
@@ -58,6 +63,60 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+func TestProcessDiagnosticsCaptureBothStreamsAndExitStatus(t *testing.T) {
+	t.Setenv("FLCLASHM_TRANSPORT_HELPER", "1")
+	t.Setenv("FLCLASHM_TRANSPORT_FAIL", "1")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := make(chan string, 8)
+	adapter := &ProcessAdapter{Home: t.TempDir(), ABI: "host", Executables: map[string]string{"byedpi": executable}, Log: func(kind, line string) {
+		if kind != "byedpi" {
+			t.Errorf("unexpected source: %s", kind)
+		}
+		lines <- line
+	}}
+	defer adapter.StopAll(context.Background())
+	port, err := adapter.AllocatePort(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := testNode(t, "byedpi", port)
+	if err = adapter.Prepare(context.Background(), node); err != nil {
+		t.Fatal(err)
+	}
+	if err = adapter.Start(context.Background(), backend.NodeLaunch{Node: node}); err != nil {
+		t.Fatal(err)
+	}
+	var output []string
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case line := <-lines:
+			output = append(output, line)
+			if line == "process exited: exit status 23" {
+				text := strings.Join(output, "\n")
+				if !strings.Contains(text, "helper stdout") || !strings.Contains(text, "configuration rejected") {
+					t.Fatalf("lost child output: %q", text)
+				}
+				// The exit diagnostic may be delivered just before done closes.
+				adapter.mu.Lock()
+				done := adapter.processes[node.ID].done
+				adapter.mu.Unlock()
+				<-done
+				observation, err := adapter.Observe(context.Background(), node.ID)
+				if err != nil || observation.State != "degraded" || !strings.Contains(observation.Message, "exit status 23") {
+					t.Fatal("exit status missing from observation", observation, err)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatalf("missing child diagnostics: %q", output)
+		}
+	}
 }
 func testNode(t *testing.T, kind string, port int) backend.NodePlan {
 	t.Helper()

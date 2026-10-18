@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.VpnService
 import android.os.Process
 import android.util.Base64
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.delay
@@ -135,6 +136,16 @@ class AndroidRuntimeE2eTest {
             assertTrue(snapshot().getLong("appliedGeneration") > generation)
         } finally {
             Service.backendCommand("runtime.stop")
+            await("persisted external transport exit diagnostics") {
+                DiagnosticLog.requestOtherProcessesFlush(context)
+                File(context.filesDir, "diagnostics").listFiles()
+                    ?.filter { it.name.startsWith("android-remote.") && it.extension == "log" }
+                    ?.any { file ->
+                        runCatching {
+                            file.readLines().any { it.contains("runtime-byedpi") && it.contains("process exited:") }
+                        }.getOrDefault(false)
+                    } == true
+            }
             Service.backendCommand("runtime.recover")
             assertFalse(snapshot().getBoolean("desiredRunning"))
             assertEquals("stopped", snapshot().getJSONObject("observed").getString("state"))

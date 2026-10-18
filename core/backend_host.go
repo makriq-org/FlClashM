@@ -211,7 +211,11 @@ func openApplicationBackend(options backendHostOptions) error {
 		},
 	}
 	probe := &transport.SOCKSProbe{RootCAs: roots}
-	nodes := &transport.ProcessAdapter{Home: options.Home, ABI: options.ABI, Executables: options.Executables, ProbeRequest: probe.Probe, PhysicalDNS: func(ctx context.Context) ([]netip.Addr, error) {
+	nodes := &transport.ProcessAdapter{Home: options.Home, ABI: options.ABI, Executables: options.Executables, ProbeRequest: probe.Probe, Log: func(kind, line string) {
+		// The trusted Android host redacts and persists this event without
+		// forwarding raw transport output to Flutter or runtime subscribers.
+		sendMessage(Message{Type: "runtimeLog", Data: map[string]string{"type": kind, "line": line}})
+	}, PhysicalDNS: func(ctx context.Context) ([]netip.Addr, error) {
 		var values []string
 		if err := platformBroker.Call(ctx, "network.dns", nil, &values); err != nil {
 			return nil, err

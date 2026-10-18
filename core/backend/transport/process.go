@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/netip"
 	"os"
@@ -29,6 +28,7 @@ import (
 type process struct {
 	command *exec.Cmd
 	done    chan struct{}
+	exitErr error // Written before closing done; readers synchronize on done.
 }
 type ProcessAdapter struct {
 	epoch       uint64
@@ -40,8 +40,11 @@ type ProcessAdapter struct {
 	PhysicalDNS func(context.Context) ([]netip.Addr, error)
 	// ProbeRequest is supplied by the host's HTTP/SOCKS mechanism.
 	ProbeRequest func(context.Context, backend.NodeProbe) (bool, error)
-	mu           sync.Mutex
-	processes    map[string]*process
+	// Log is a trusted host sink. The host must redact output before persistence.
+	// A bounded queue isolates process I/O and lifecycle from slow diagnostics.
+	Log       func(kind, line string)
+	mu        sync.Mutex
+	processes map[string]*process
 }
 
 var nodeID = regexp.MustCompile(`^(naiveproxy|olcrtc|byedpi|stormdns)-[0-9a-f]{32}(?:-probe-[0-9a-f]{32})?$`)
@@ -275,8 +278,9 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command := exec.Command(executable, arguments...)
 	command.Dir = directory
 	command.Stdin = nil
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
+	output := newProcessOutput(node.Type, a.Log)
+	command.Stdout = output
+	command.Stderr = output
 	p := &process{command: command, done: make(chan struct{})}
 	started := make(chan error, 1)
 	pin := bindChildLifetime(command)
@@ -286,12 +290,14 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 			defer runtime.UnlockOSThread()
 		}
 		if err := command.Start(); err != nil {
+			output.finish(err)
 			started <- err
 			close(p.done)
 			return
 		}
 		started <- nil
-		_ = command.Wait()
+		p.exitErr = command.Wait()
+		output.finish(p.exitErr)
 		close(p.done)
 	}()
 	if err = <-started; err != nil {
@@ -367,7 +373,11 @@ func (a *ProcessAdapter) Observe(ctx context.Context, id string) (backend.Observ
 	}
 	select {
 	case <-p.done:
-		return backend.Observation{State: "degraded", Message: "external process exited"}, nil
+		message := "external process exited"
+		if p.exitErr != nil {
+			message += ": " + p.exitErr.Error()
+		}
+		return backend.Observation{State: "degraded", Message: message}, nil
 	default:
 		return backend.Observation{State: "running"}, nil
 	}
