@@ -309,7 +309,11 @@ class GlobalState {
       final next = decoded.copyWith(
         profiles: [
           for (final profile in decoded.profiles)
-            profile.copyWith(lastUpdateDate: profile.lastUpdateDate?.toLocal()),
+            profile.copyWith(
+              lastUpdateDate: profile.lastUpdateDate?.toLocal(),
+              isUpdating:
+                  _config.profiles.getProfile(profile.id)?.isUpdating ?? false,
+            ),
         ],
       );
       _projectingBackend = true;

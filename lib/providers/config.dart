@@ -93,6 +93,18 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
     globalState.config = globalState.config.copyWith(profiles: value);
   }
 
+  /// UI replica update; metadata normalization and persistence belong to Go.
+  void setProfile(Profile profile) {
+    final next = List<Profile>.from(state);
+    final index = next.indexWhere((value) => value.id == profile.id);
+    if (index < 0) {
+      next.add(profile);
+    } else {
+      next[index] = profile;
+    }
+    state = next;
+  }
+
   void updateProfile(
     String profileId,
     Profile Function(Profile profile) builder,
