@@ -1,0 +1,86 @@
+{
+  "mixed-port": 7890,
+  "socks-port": 0,
+  "port": 0,
+  "redir-port": 0,
+  "tproxy-port": 0,
+  "mode": "rule",
+  "allow-lan": false,
+  "log-level": "error",
+  "ipv6": true,
+  "find-process-mode": "always",
+  "keep-alive-interval": 30,
+  "unified-delay": true,
+  "tcp-concurrent": true,
+  "tun": {
+    "enable": true,
+    "device": "FlClashM",
+    "auto-route": false,
+    "stack": "mixed",
+    "dns-hijack": [
+      "any:53"
+    ],
+    "route-address": []
+  },
+  "dns": {
+    "enable": true,
+    "listen": "0.0.0.0:1053",
+    "prefer-h3": false,
+    "use-hosts": true,
+    "use-system-hosts": true,
+    "respect-rules": false,
+    "ipv6": true,
+    "default-nameserver": [
+      "223.5.5.5"
+    ],
+    "enhanced-mode": "fake-ip",
+    "fake-ip-range": "198.18.0.1/16",
+    "fake-ip-filter": [
+      "*.lan",
+      "localhost.ptlogin2.qq.com"
+    ],
+    "nameserver-policy": {
+      "www.baidu.com": "114.114.114.114",
+      "+.internal.crop.com": "10.0.0.1",
+      "geosite:cn": "https://doh.pub/dns-query"
+    },
+    "nameserver": [
+      "https://doh.pub/dns-query",
+      "https://dns.alidns.com/dns-query"
+    ],
+    "fallback": [
+      "tls://8.8.4.4",
+      "tls://1.1.1.1"
+    ],
+    "proxy-server-nameserver": [
+      "https://doh.pub/dns-query"
+    ],
+    "fallback-filter": {
+      "geoip": true,
+      "geoip-code": "CN",
+      "geosite": [
+        "gfw"
+      ],
+      "ipcidr": [
+        "240.0.0.0/4"
+      ],
+      "domain": [
+        "+.google.com",
+        "+.facebook.com",
+        "+.youtube.com"
+      ]
+    }
+  },
+  "geox-url": {
+    "geoip": "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat",
+    "geosite": "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
+    "mmdb": "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
+    "asn": "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb"
+  },
+  "geodata-loader": "memconservative",
+  "proxy-groups": [],
+  "rule": [],
+  "global-ua": null,
+  "external-controller": "",
+  "hosts": {}
+}

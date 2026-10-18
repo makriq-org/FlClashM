@@ -112,3 +112,10 @@ type PlatformAdapter interface {
 	Stop(context.Context) error
 	Observe(context.Context) (Observation, error)
 }
+
+// SelectionAdapter changes selectors and display metadata without replacing
+// engine configuration or platform resources. The coordinator only invokes it
+// after proving that all other plan fields are identical.
+type SelectionAdapter interface {
+	ApplySelection(context.Context, *RuntimePlan, *RuntimePlan) error
+}

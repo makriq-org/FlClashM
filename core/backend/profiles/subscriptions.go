@@ -24,14 +24,15 @@ type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 type Subscriptions struct {
-	UserAgent     string
-	Repository    *Repository
-	Client        HTTPClient
-	DeviceHeaders func(context.Context) (map[string]string, error)
-	Now           func() time.Time
-	OnUpdated     func(context.Context, string, uint64) error
-	mu            sync.Mutex
-	inflight      map[string]bool
+	UserAgent      string
+	LegacyTimeZone *time.Location
+	Repository     *Repository
+	Client         HTTPClient
+	DeviceHeaders  func(context.Context) (map[string]string, error)
+	Now            func() time.Time
+	OnUpdated      func(context.Context, string, uint64) error
+	mu             sync.Mutex
+	inflight       map[string]bool
 }
 
 func (s *Subscriptions) now() time.Time {
@@ -41,6 +42,16 @@ func (s *Subscriptions) now() time.Time {
 	return time.Now()
 }
 func (s *Subscriptions) Update(ctx context.Context, id string, sendDeviceHeaders bool) (Record, error) {
+	return s.update(ctx, id, nil, sendDeviceHeaders)
+}
+func (s *Subscriptions) Import(ctx context.Context, metadata Object, sendDeviceHeaders bool) (Record, error) {
+	id, err := profileID(metadata)
+	if err != nil {
+		return Record{}, err
+	}
+	return s.update(ctx, id, clone(metadata), sendDeviceHeaders)
+}
+func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Object, sendDeviceHeaders bool) (Record, error) {
 	if s.Repository == nil || s.Client == nil {
 		return Record{}, errors.New("subscription dependencies are required")
 	}
@@ -56,6 +67,16 @@ func (s *Subscriptions) Update(ctx context.Context, id string, sendDeviceHeaders
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); delete(s.inflight, id); s.mu.Unlock() }()
 	profile, err := s.Repository.metadata(id)
+	if newMetadata != nil {
+		if err == nil {
+			return Record{}, ErrConflict
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return Record{}, err
+		}
+		profile = Record{Metadata: newMetadata}
+		err = nil
+	}
 	if err != nil {
 		return Record{}, err
 	}
@@ -72,12 +93,15 @@ func (s *Subscriptions) Update(ctx context.Context, id string, sendDeviceHeaders
 		return Record{}, err
 	}
 	userAgent := s.UserAgent
+	explicitUserAgent := false
 	var patch Object
 	_ = json.Unmarshal(s.Repository.Snapshot().Settings["patchClashConfig"], &patch)
 	if value, ok := patch["global-ua"]; ok && string(value) != "null" {
-		_ = json.Unmarshal(value, &userAgent)
+		if json.Unmarshal(value, &userAgent) == nil {
+			explicitUserAgent = true
+		}
 	}
-	if userAgent == "" {
+	if userAgent == "" && !explicitUserAgent {
 		userAgent = "FlClashM"
 	}
 	request.Header.Set("User-Agent", userAgent)
@@ -243,6 +267,13 @@ func (s *Subscriptions) Due(now time.Time) []string {
 		var last string
 		_ = json.Unmarshal(profile.Metadata["lastUpdateDate"], &last)
 		parsed, err := time.Parse(time.RFC3339Nano, last)
+		if err != nil {
+			zone := s.LegacyTimeZone
+			if zone == nil {
+				zone = time.Local
+			}
+			parsed, err = time.ParseInLocation("2006-01-02T15:04:05.999999999", last, zone)
+		}
 		// Avoid overflow of time.Duration for a corrupt legacy interval.
 		if micros < 0 {
 			continue

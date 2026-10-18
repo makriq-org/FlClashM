@@ -13,6 +13,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -304,6 +306,12 @@ func (r *Repository) Put(ctx context.Context, metadata Object, source string, ex
 		record.Metadata = mergeObjects(next.Profiles[index].Metadata, record.Metadata)
 		next.Profiles[index] = record
 	}
+	record.Metadata = uniqueLabel(record.Metadata, id, r.state.Profiles)
+	if index < 0 {
+		next.Profiles[len(next.Profiles)-1] = record
+	} else {
+		next.Profiles[index] = record
+	}
 	if err = r.persist(next); err != nil {
 		return Record{}, err
 	}
@@ -504,4 +512,202 @@ func (r *Repository) pruneSources() {
 			_ = os.Remove(filepath.Join(directory, f.Name()))
 		}
 	}
+}
+
+func (r *Repository) Reorder(ctx context.Context, ids []string, expected uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if expected != r.state.Revision || len(ids) != len(r.state.Profiles) {
+		return ErrConflict
+	}
+	byID := map[string]Record{}
+	for _, record := range r.state.Profiles {
+		id, _ := profileID(record.Metadata)
+		byID[id] = record
+	}
+	next := clone(r.state)
+	next.Profiles = make([]Record, 0, len(ids))
+	for _, id := range ids {
+		record, ok := byID[id]
+		if !ok {
+			return errors.New("profile ordering must be a permutation")
+		}
+		delete(byID, id)
+		next.Profiles = append(next.Profiles, record)
+	}
+	return r.persist(next)
+}
+
+// UpdateMetadata preserves the source blob and permits editing an offline or
+// invalid legacy profile without implicitly replacing its original text.
+func (r *Repository) UpdateMetadata(ctx context.Context, id string, patch Object, expected uint64) (Record, error) {
+	if err := ctx.Err(); err != nil {
+		return Record{}, err
+	}
+	if value, ok := patch["id"]; ok {
+		var supplied string
+		if json.Unmarshal(value, &supplied) != nil || supplied != id {
+			return Record{}, errors.New("profile id is immutable")
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Record{}, err
+	}
+	next := clone(r.state)
+	for i, record := range next.Profiles {
+		key, _ := profileID(record.Metadata)
+		if key != id {
+			continue
+		}
+		if record.Revision != expected {
+			return Record{}, ErrConflict
+		}
+		record.Metadata = mergeObjects(record.Metadata, patch)
+		if _, changed := patch["label"]; changed {
+			record.Metadata = uniqueLabel(record.Metadata, id, r.state.Profiles)
+		}
+		record.Revision = r.state.Revision + 1
+		next.Profiles[i] = record
+		if err := r.persist(next); err != nil {
+			return Record{}, err
+		}
+		return clone(record), nil
+	}
+	return Record{}, ErrNotFound
+}
+
+var labelSuffix = regexp.MustCompile(`\((\d+)\)$`)
+
+func uniqueLabel(metadata Object, id string, records []Record) Object {
+	var label *string
+	_ = json.Unmarshal(metadata["label"], &label)
+	candidate := id
+	if label != nil {
+		candidate = *label
+	}
+	original := candidate
+	for range len(records) + 1 {
+		duplicate := false
+		for _, record := range records {
+			key, _ := profileID(record.Metadata)
+			if key == id {
+				continue
+			}
+			var existing *string
+			_ = json.Unmarshal(record.Metadata["label"], &existing)
+			if existing != nil && *existing == candidate {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			if candidate != original {
+				metadata["label"] = mustJSON(candidate)
+			}
+			return metadata
+		}
+		parts := labelSuffix.FindStringSubmatchIndex(candidate)
+		if parts != nil {
+			number, err := strconv.ParseUint(candidate[parts[2]:parts[3]], 10, 64)
+			if err == nil && number < ^uint64(0) {
+				candidate = candidate[:parts[0]] + "(" + strconv.FormatUint(number+1, 10) + ")"
+				continue
+			}
+		}
+		candidate += "(1)"
+	}
+	return metadata
+}
+
+// Restore imports a compatible backup as one catalog generation. The original
+// source bytes are staged before the pointer commit, including broken legacy
+// profiles. Runtime adoption is a separate coordinator operation.
+func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource func(string) (string, error), onlyProfiles, replace bool) error {
+	var settings Object
+	if !json.Valid(rawSettings) || json.Unmarshal(rawSettings, &settings) != nil || settings == nil {
+		return errors.New("invalid backup settings")
+	}
+	var metadata []Object
+	if raw := settings["profiles"]; len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &metadata); err != nil {
+			return err
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	next := clone(r.state)
+	if !onlyProfiles {
+		delete(settings, "profiles")
+		next.Settings = settings
+	}
+	if replace {
+		next.Profiles = []Record{}
+	}
+	seen := map[string]bool{}
+	for _, m := range metadata {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		id, err := profileID(m)
+		if err != nil {
+			return err
+		}
+		if seen[id] {
+			return errors.New("duplicate backup profile id")
+		}
+		seen[id] = true
+		source, err := readSource(id)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			source = ""
+		}
+		if len(source) > MaxProfileBytes {
+			return errors.New("backup profile exceeds limit")
+		}
+		if err = r.writeSource(source); err != nil {
+			return err
+		}
+		record := Record{Metadata: m, Digest: digest(source), Revision: r.state.Revision + 1}
+		index := -1
+		for i, old := range next.Profiles {
+			key, _ := profileID(old.Metadata)
+			if key == id {
+				index = i
+				break
+			}
+		}
+		if !replace {
+			record.Metadata = uniqueLabel(record.Metadata, id, next.Profiles)
+		}
+		if index < 0 {
+			next.Profiles = append(next.Profiles, record)
+		} else {
+			next.Profiles[index] = record
+		}
+	}
+	var current string
+	_ = json.Unmarshal(next.Settings["currentProfileId"], &current)
+	exists := false
+	for _, record := range next.Profiles {
+		id, _ := profileID(record.Metadata)
+		exists = exists || id == current
+	}
+	if !exists {
+		if len(next.Profiles) > 0 {
+			next.Settings["currentProfileId"] = next.Profiles[0].Metadata["id"]
+		} else {
+			next.Settings["currentProfileId"] = json.RawMessage("null")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.persist(next)
 }

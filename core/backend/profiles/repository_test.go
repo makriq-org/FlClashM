@@ -433,3 +433,43 @@ func TestSubscriptionReplacementHostRetainsCredentialsPathAndQuery(t *testing.T)
 		})
 	}
 }
+
+func TestSubscriptionExplicitEmptyUserAgent(t *testing.T) {
+	received := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte("proxies: []\n"))
+	}))
+	defer server.Close()
+	repository := openRepository(t)
+	create(t, repository, "one", server.URL)
+	err := repository.UpdateSettings(Object{"patchClashConfig": mustJSON(map[string]any{"global-ua": ""})}, repository.Snapshot().Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Subscriptions{Repository: repository, Client: server.Client(), UserAgent: "Default/version"}
+	if _, err = service.Update(context.Background(), "one", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-received; got != "" {
+		t.Fatal("explicit empty override replaced with default", got)
+	}
+}
+
+func TestSubscriptionLegacyLocalUpdateDateKeepsSchedule(t *testing.T) {
+	repository := openRepository(t)
+	profile := create(t, repository, "one", "https://example.com/profile")
+	profile.Metadata["autoUpdate"] = mustJSON(true)
+	profile.Metadata["autoUpdateDuration"] = mustJSON(int64(time.Hour / time.Microsecond))
+	profile.Metadata["lastUpdateDate"] = mustJSON("2026-10-18T15:00:00.000")
+	if _, err := repository.Put(context.Background(), profile.Metadata, profile.Source, profile.Revision); err != nil {
+		t.Fatal(err)
+	}
+	service := Subscriptions{Repository: repository, LegacyTimeZone: time.FixedZone("legacy", 3*60*60)}
+	if due := service.Due(time.Date(2026, 10, 18, 12, 30, 0, 0, time.UTC)); len(due) != 0 {
+		t.Fatal("legacy local timestamp caused early update", due)
+	}
+	if due := service.Due(time.Date(2026, 10, 18, 13, 0, 0, 1000, time.UTC)); len(due) != 1 {
+		t.Fatal("legacy due update missed", due)
+	}
+}

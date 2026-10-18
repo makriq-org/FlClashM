@@ -924,6 +924,256 @@
       "path": "core/backend/profiles/subscriptions.go",
       "bucket": "budget",
       "reason": "Go backend владеет оригиналами профилей и совместимыми настройками, миграцией и обновлением подписок независимо от Flutter."
+    },
+    {
+      "path": "core/backend/compile/byebyeedpi-strategies.list",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/byedpi.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/bypass_routes.json",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/cli.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/cli_schema.json",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/compiler.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/compiler_test.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/default_patch.json",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/defaults.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/lists.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/lists_test.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/naive.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/node_schema.json",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/nodes.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/normalize.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/olcrtc.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/packages.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/packages_test.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/resolvers.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/schema.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/scripts.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/security.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/storm_schema.json",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/stormdns.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/yaml.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
+    },
+    {
+      "path": "core/backend/compile/scalars.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/netpolicy/policy.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/node_contracts.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/node_policy.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/node_policy_test.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/cache.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/cache_test.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/child_linux.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/child_other.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/probe.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/probe_test.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/process.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/transport/process_test.go",
+      "bucket": "budget",
+      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+    },
+    {
+      "path": "core/backend/node_operations.go",
+      "bucket": "budget",
+      "reason": "Версионированные команды и журнал автономных операций внешних узлов принадлежат единому Go RuntimeCoordinator."
+    },
+    {
+      "path": "core/backend/reconfigure.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/api.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/backup.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/backup_test.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/blob.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/commands.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/customization.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/customization_test.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/operations.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/service.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "core/backend/service/service_test.go",
+      "bucket": "budget",
+      "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
     }
   ]
 }

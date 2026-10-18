@@ -88,3 +88,16 @@ func (b *Backend) Handle(raw []byte) []byte {
 	result, _ := json.Marshal(response)
 	return result
 }
+
+// Applied returns immutable copies for backend application services. Source
+// input and compiled credentials are never included in public runtime events.
+func (b *Backend) Applied() (*RuntimePlan, Input, error) {
+	c := b.coordinator
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.document.Applied == nil {
+		return nil, nil, nil
+	}
+	plan, err := RestorePlan(c.document.Applied.Plan)
+	return plan, bytes.Clone(c.document.Applied.Input), err
+}
