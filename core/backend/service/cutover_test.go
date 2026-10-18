@@ -169,3 +169,21 @@ func TestLastProfileDeleteDoesNotWaitForInputCaptureLock(t *testing.T) {
 		t.Fatal("last profile kept a runnable intent")
 	}
 }
+
+func TestClearingSelectionStopsInsteadOfCreatingADirectVPN(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "fixture", "profile.put", map[string]any{"metadata": map[string]any{"id": "one"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "fixture")
+	request(t, app, "start", "runtime.start", nil)
+	waitRuntime(t, app, "start")
+	request(t, app, "unselect", "profile.select", map[string]any{"profileId": nil})
+	waitDomain(t, app, "unselect")
+	if app.Snapshot().Runtime.DesiredRunning || app.Snapshot().Runtime.Observed.State != "stopped" {
+		t.Fatal("empty selection created a direct tunnel")
+	}
+	request(t, app, "recover", "runtime.recover", nil)
+	waitRuntime(t, app, "recover")
+	if app.Snapshot().Runtime.DesiredRunning {
+		t.Fatal("unselected profile recovered")
+	}
+}

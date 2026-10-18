@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"core/backend"
+	"core/backend/compile"
 	"core/backend/profiles"
 )
 
@@ -227,8 +228,18 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 	if err != nil {
 		return "", err
 	}
+	method := "restart"
+	var captured compile.Input
+	_ = json.Unmarshal(input, &captured)
+	if captured.Profile == nil {
+		if err = a.operations.disableBootstrap(); err != nil {
+			return "", err
+		}
+		method = "stop"
+		input = nil
+	}
 	operationID := newID("restore")
-	_, err = a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: "restart", Input: input}, generation)
+	_, err = a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: method, Input: input}, generation)
 	return operationID, err
 }
 

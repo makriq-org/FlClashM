@@ -376,6 +376,15 @@ func (a *App) applyCurrent(id string, connect bool) (backend.Receipt, error) {
 	if connect {
 		method = "connect"
 	}
+	var captured compile.Input
+	_ = json.Unmarshal(input, &captured)
+	if captured.Profile == nil && a.runtime.Snapshot().DesiredRunning {
+		if err := a.operations.disableBootstrap(); err != nil {
+			return backend.Receipt{}, err
+		}
+		method = "stop"
+		input = nil
+	}
 	return a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: id, Method: method, Input: input}, generation)
 }
 func (a *App) Close() error {

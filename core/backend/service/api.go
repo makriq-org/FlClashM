@@ -193,8 +193,6 @@ func (a *App) profileResult(id string) (any, error) {
 	}{record.Metadata, record.Source, record.Revision, record.Digest}, nil
 }
 func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
-	a.runtimeMu.Lock()
-	defer a.runtimeMu.Unlock()
 	if a.resetting.Load() {
 		return backend.Receipt{}, errors.New("data reset in progress")
 	}
@@ -247,7 +245,7 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 		if err != nil {
 			return backend.Receipt{}, err
 		}
-		if method == "connect" {
+		if method == "connect" || a.runtime.Snapshot().DesiredRunning {
 			var captured compile.Input
 			_ = json.Unmarshal(input, &captured)
 			if captured.Profile == nil {
