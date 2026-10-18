@@ -20,6 +20,7 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -53,6 +54,10 @@ object BackendHost {
         })
         val preferences = application.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val legacy = JSONObject(preferences.getString("flutter.config", "{}") ?: "{}")
+        preferences.getString("flutter.clash_config", null)?.let {
+            legacy.put("patchClashConfig", JSONObject(it))
+        }
+        installBundledGeo()
         // This privacy preference historically lived outside Config.
         if (preferences.contains("flutter.sendDeviceHeaders")) {
             legacy.put("sendDeviceHeaders", preferences.getBoolean("flutter.sendDeviceHeaders", true))
@@ -184,5 +189,19 @@ object BackendHost {
             else -> StateHub.STOPPING
         }
         StateHub.publish(state, runtime.optLong("startedAt"))
+    }
+
+    private fun installBundledGeo() {
+        for (name in listOf("geoip.metadb", "ASN.mmdb", "GeoIP.dat", "GeoSite.dat")) {
+            val target = File(application.filesDir, name)
+            if (target.exists()) continue
+            val temporary = File.createTempFile("geo-", ".tmp", application.filesDir)
+            try {
+                application.assets.open("flutter_assets/assets/data/$name").use { input ->
+                    FileOutputStream(temporary).use { output -> input.copyTo(output); output.fd.sync() }
+                }
+                check(temporary.renameTo(target)) { "bundled geo installation failed" }
+            } finally { temporary.delete() }
+        }
     }
 }

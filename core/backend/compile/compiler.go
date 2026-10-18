@@ -293,7 +293,11 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	if name == "" {
 		name = profileID
 	}
-	state := Object{"vpn-props": vpn, "current-profile-name": name, "bypass-domain": object(settings["networkProps"])["bypassDomain"]}
+	bypass := object(settings["networkProps"])["bypassDomain"]
+	if bypass == nil {
+		bypass = defaultBypassDomains()
+	}
+	state := Object{"vpn-props": vpn, "current-profile-name": name, "bypass-domain": bypass}
 	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics})
 }
 func text(value any) string { v, _ := value.(string); return v }

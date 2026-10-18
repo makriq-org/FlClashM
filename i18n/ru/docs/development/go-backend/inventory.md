@@ -31,6 +31,7 @@
 | UI attach/detach, traffic/logs/groups, start time | Dart/Kotlin StateHub + core | Go snapshot/events; UI projection | Snapshot+seq, потеря UI не останавливает runtime | Slow subscriber, overflow/resync, reconnect без потери VPN |
 | Выбор прокси, mode, health check, providers, connections, tunnel HTTP | Dart core action bridge + Go handlers | Backend API → EngineAdapter | Закрыть обход координатора для mutations | Совместимые ответы UI, persist/recover выбора, concurrent command checks |
 | Настройки/бэкап и round trip | Dart Config/preferences | Backend domain storage; UI prefs остаются UI | Сохранить legacy формат импорта/экспорта и неизвестные поля | Import/export/reopen, unknown schema fail closed |
+| Android DocumentsProvider и экспорт исходников | FilesProvider + profile files | Go repository; Android — дескрипторы | Виртуальные профили, запись через API с ревизией, скрыть внутренний journal | Round trip исходных байтов, stale editor, запрет записи внутренних файлов |
 | Диагностика и редактирование секретов | Dart/Kotlin/core diagnostics | Все границы используют существующий redaction contract | Не публиковать секреты в новых событиях | Общие redaction vectors, лимиты buffers |
 
 Завершение строки требует фактического теста или ссылки на CI evidence. Проверки

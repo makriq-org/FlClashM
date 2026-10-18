@@ -23,6 +23,27 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   final MethodChannel _channel =
       const MethodChannel('com.makriq.flclash/service');
+  final _backendEvents =
+      StreamController<Map<String, dynamic>>.broadcast(sync: true);
+  Stream<Map<String, dynamic>> get backendEvents => _backendEvents.stream;
+
+  Future<Map<String, dynamic>> invokeBackend(
+      Map<String, dynamic> request) async {
+    if (!await preload())
+      throw StateError('Android backend connection is unavailable');
+    final raw = await _channel.invokeMethod<String>(
+        'invokeAction',
+        jsonEncode({
+          'id': request['operationId'],
+          'method': 'backend',
+          'data': request,
+        }));
+    if (raw == null || raw.isEmpty) throw StateError('Empty backend response');
+    final envelope = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    if (envelope['code'] != 0) throw StateError('${envelope['data']}');
+    return Map<String, dynamic>.from(envelope['data'] as Map);
+  }
+
   Completer<bool> _initCompleter = Completer<bool>();
   // Guards against launching a second concurrent native `init` while a prior
   // _init() is still awaiting (its completer not yet settled).
@@ -88,6 +109,13 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         final raw = call.arguments as String?;
         if (raw == null || raw.isEmpty) return null;
         try {
+          final envelope = json.decode(raw) as Map;
+          final message = envelope['data'];
+          if (message is Map && message['type'] == 'backend') {
+            _backendEvents
+                .add(Map<String, dynamic>.from(message['data'] as Map));
+            return null;
+          }
           handleResult(ActionResult.fromJson(json.decode(raw)));
         } catch (e) {
           commonPrint.log('event parse err: $e raw=$raw');
@@ -184,7 +212,8 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         if (id != null) {
           final completer = callbackCompleterMap.remove(id);
           if (completer != null && !completer.isCompleted) {
-            commonPrint.log('_failPendingCompleter: method=$method reason=$reason');
+            commonPrint
+                .log('_failPendingCompleter: method=$method reason=$reason');
             // Complete with the typed default (not null) so a Completer<bool/String/Map>
             // resolves immediately instead of throwing TypeError and hanging to timeout.
             completer.complete(callbackDefaultMap.remove(id));
@@ -281,9 +310,9 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
     // Defensive backstop: the native side always replies (even on permission
     // denial -> 0), but never block the start flow indefinitely if it doesn't.
-    final res = await _channel
-        .invokeMethod('start', {'data': payload})
-        .timeout(const Duration(seconds: 60), onTimeout: () => 0);
+    final res = await _channel.invokeMethod('start', {'data': payload}).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () => 0);
     return (res is int) ? res : int.tryParse('$res') ?? 0;
   }
 
@@ -312,11 +341,10 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }) async {
     final res = await _channel
         .invokeMethod<String>('quickStart', <String, String>{
-          'init': json.encode(initParams),
-          'params': json.encode(setupParams),
-          'state': json.encode(state),
-        })
-        .timeout(const Duration(seconds: 60),
+      'init': json.encode(initParams),
+      'params': json.encode(setupParams),
+      'state': json.encode(state),
+    }).timeout(const Duration(seconds: 60),
             onTimeout: () => 'quickStart timed out');
     return res ?? '';
   }
@@ -331,11 +359,13 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }) async {
     try {
       await _channel
-          .invokeMethod('updateNotificationParams', json.encode({
-            'title': title,
-            'stopText': server,
-            'onlyStatisticsProxy': onlyStatisticsProxy,
-          }))
+          .invokeMethod(
+              'updateNotificationParams',
+              json.encode({
+                'title': title,
+                'stopText': server,
+                'onlyStatisticsProxy': onlyStatisticsProxy,
+              }))
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       commonPrint.log('updateNotificationParams error: $e');
@@ -350,13 +380,11 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     required CoreState state,
   }) async {
     try {
-      await _channel
-          .invokeMethod('saveParams', <String, String>{
-            'init': json.encode(initParams),
-            'params': json.encode(setupParams),
-            'state': json.encode(state),
-          })
-          .timeout(const Duration(seconds: 15));
+      await _channel.invokeMethod('saveParams', <String, String>{
+        'init': json.encode(initParams),
+        'params': json.encode(setupParams),
+        'state': json.encode(state),
+      }).timeout(const Duration(seconds: 15));
     } catch (e) {
       commonPrint.log('saveParamsForColdStart error: $e');
     }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"strconv"
 	"time"
 
@@ -19,6 +20,31 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	apply := false
 	switch method {
+	case "profile.export":
+		var request struct {
+			ProfileID string `json:"profileId"`
+		}
+		if err := decodeParams(params, &request); err != nil {
+			return result, err
+		}
+		record, err := a.profiles.Get(request.ProfileID)
+		if err != nil {
+			return result, err
+		}
+		blob, err := a.newBlob()
+		if err != nil {
+			return result, err
+		}
+		name, _ := a.blobPath(blob.Token)
+		if err = os.WriteFile(name, []byte(record.Source), 0600); err != nil {
+			_ = a.removeBlob(blob.Token)
+			return result, err
+		}
+		blob.Size = int64(len(record.Source))
+		result.Blob = &blob
+		result.ProfileID = request.ProfileID
+		result.Revision = record.Revision
+		return result, ctx.Err()
 	case "backup.export":
 		blob, err := a.exportBackup(ctx)
 		result.Blob = &blob
@@ -38,9 +64,10 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		return result, err
 	case "profile.import.file":
 		var request struct {
-			Token    string          `json:"token"`
-			Metadata profiles.Object `json:"metadata"`
-			Select   bool            `json:"select"`
+			Token            string          `json:"token"`
+			Metadata         profiles.Object `json:"metadata"`
+			Select           bool            `json:"select"`
+			ExpectedRevision uint64          `json:"expectedRevision"`
 		}
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
@@ -53,7 +80,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
-		nested, _ := json.Marshal(map[string]any{"metadata": request.Metadata, "source": string(source), "select": request.Select})
+		nested, _ := json.Marshal(map[string]any{"metadata": request.Metadata, "source": string(source), "select": request.Select, "expectedRevision": request.ExpectedRevision})
 		return a.perform(ctx, "profile.put", nested, operationID)
 	case "settings.patch":
 		var request struct {
@@ -99,6 +126,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Source == nil {
 			record, err = a.profiles.UpdateMetadata(ctx, id, request.Metadata, request.ExpectedRevision)
 		} else {
+			request.Metadata["lastUpdateDate"] = jsonValue(time.Now().UTC())
 			if request.ExpectedRevision == 0 {
 				defaultProfileMetadata(request.Metadata)
 			}

@@ -1254,6 +1254,36 @@
       "path": "core/backend/platform_policy_test.go",
       "bucket": "budget",
       "reason": "Координатор Go владеет сетевой политикой, проверками и сном; Android передаёт только события ОС и механизмы."
+    },
+    {
+      "path": "core/backend/compile/inspect.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend/profiles/compatibility.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend/profiles/compatibility_test.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend/reconfigure_test.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend_platform_android.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend_platform_other.go",
+      "bucket": "budget",
+      "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
     }
   ]
 }

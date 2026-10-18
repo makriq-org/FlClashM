@@ -28,7 +28,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/dns"
+	"github.com/metacubex/mihomo/listener"
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/tunnel/statistic"
@@ -299,6 +299,42 @@ func validateIsolatedFile(home, path string) string {
 
 type backendEngine struct{ probe *transport.SOCKSProbe }
 
+func (backendEngine) ApplyLiveSettings(ctx context.Context, _, next *backend.RuntimePlan) error {
+	var payload struct {
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(next.Payload(), &payload); err != nil {
+		return err
+	}
+	var params UpdateParams
+	if err := json.Unmarshal(payload.Config, &params); err != nil {
+		return err
+	}
+	params.Tun = nil
+	controller := params.ExternalController
+	params.ExternalController = nil
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	updateConfig(&params)
+	runLock.Lock()
+	defer runLock.Unlock()
+	if currentConfig == nil {
+		return errors.New("no applied engine configuration")
+	}
+	if controller != nil {
+		currentConfig.Controller.ExternalController = *controller
+		if err := applyBackendController(ctx, currentConfig.Controller); err != nil {
+			return err
+		}
+		currentRuntimeRawConfig["external-controller"] = *controller
+	}
+	if isRunning && listener.GetPorts().MixedPort != currentConfig.General.MixedPort {
+		return errors.New("mixed listener did not bind")
+	}
+	return ctx.Err()
+}
+
 func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error {
 	var payload struct {
 		Config   json.RawMessage   `json:"config"`
@@ -409,14 +445,6 @@ func (backendPlatform) Observe(ctx context.Context) (backend.Observation, error)
 
 type backendInspection struct{}
 
-func (backendEngine) SystemDNS(ctx context.Context, addresses []string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	dns.UpdateSystemDNS(normalizeSystemDNSServersPortable(addresses))
-	dns.FlushCacheWithDefaultResolver()
-	return ctx.Err()
-}
 func normalizeSystemDNSServersPortable(addresses []string) []string {
 	result := []string{}
 	for _, address := range addresses {

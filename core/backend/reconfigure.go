@@ -81,3 +81,67 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 	}
 	return true, c.observe(e.ctx, running)
 }
+
+func liveSettingsOnly(previous, next *RuntimePlan) bool {
+	keys := []string{"mode", "log-level", "tcp-concurrent", "unified-delay", "find-process-mode", "allow-lan", "mixed-port", "external-controller"}
+	strip := func(plan *RuntimePlan) ([]byte, bool) {
+		var payload map[string]json.RawMessage
+		if json.Unmarshal(plan.Payload(), &payload) != nil {
+			return nil, false
+		}
+		var state struct {
+			VPN struct {
+				SystemProxy bool `json:"systemProxy"`
+			} `json:"vpn-props"`
+		}
+		_ = json.Unmarshal(payload["coreState"], &state)
+		for _, section := range []string{"config", "patch"} {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(payload[section], &fields) != nil {
+				return nil, false
+			}
+			for _, key := range keys {
+				// A system proxy endpoint is baked into VpnService.Builder.
+				if key == "mixed-port" && state.VPN.SystemProxy {
+					continue
+				}
+				delete(fields, key)
+			}
+			payload[section], _ = json.Marshal(fields)
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return nil, false
+		}
+		return raw, true
+	}
+	left, ok := strip(previous)
+	if !ok {
+		return false
+	}
+	right, ok := strip(next)
+	return ok && bytes.Equal(left, right)
+}
+func (c *runtimeCoordinator) tryLiveSettings(e *execution, previous Document, next *RuntimePlan, running bool) (bool, error) {
+	adapter, ok := c.engine.(LiveSettingsAdapter)
+	if !ok || previous.Applied == nil || previous.Applied.Running != running || next == nil || e.request.Method == "restart" {
+		return false, nil
+	}
+	old, err := RestorePlan(previous.Applied.Plan)
+	if err != nil {
+		return false, err
+	}
+	if !liveSettingsOnly(old, next) {
+		return false, nil
+	}
+	if err = c.current(e); err != nil {
+		return true, err
+	}
+	if err = adapter.ApplyLiveSettings(e.ctx, old, next); err != nil {
+		return true, err
+	}
+	if err = c.current(e); err != nil {
+		return true, err
+	}
+	return true, c.observe(e.ctx, running)
+}

@@ -581,6 +581,9 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		}
 		if !unchanged {
 			patched, patchErr := c.trySelection(e, previous, plan, next.Desired.Running)
+			if !patched && patchErr == nil {
+				patched, patchErr = c.tryLiveSettings(e, previous, plan, next.Desired.Running)
+			}
 			if patched {
 				touched = true
 				err = patchErr

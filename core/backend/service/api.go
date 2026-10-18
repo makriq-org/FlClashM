@@ -64,6 +64,18 @@ func (a *App) Handle(raw []byte) []byte {
 			value, err = a.profileResult(params.ProfileID)
 			response.Result = value
 		}
+	case "profile.inspect":
+		var params struct {
+			ProfileID string `json:"profileId"`
+		}
+		if err = decodeParams(request.Input, &params); err == nil {
+			record, readErr := a.profiles.Get(params.ProfileID)
+			if readErr != nil {
+				err = readErr
+			} else {
+				response.Result, err = a.compiler.Inspect(a.ctx, record.Source, params.ProfileID)
+			}
+		}
 	case "operation.get", "operation.cancel":
 		var params struct {
 			OperationID string `json:"operationId"`
@@ -215,7 +227,7 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 }
 func (a *App) submit(request backend.Request) (Receipt, error) {
 	switch request.Method {
-	case "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

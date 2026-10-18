@@ -31,3 +31,7 @@ func bypassPrivateRoutes() []any {
 	}
 	return value
 }
+
+func defaultBypassDomains() []string {
+	return []string{"*zhihu.com", "*zhimg.com", "*jd.com", "100ime-iat-api.xfyun.cn", "*360buyimg.com", "localhost", "*.local", "127.*", "10.*", "172.16.*", "172.17.*", "172.18.*", "172.19.*", "172.2*", "172.30.*", "172.31.*", "192.168.*"}
+}

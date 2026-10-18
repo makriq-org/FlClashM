@@ -120,6 +120,10 @@ type SelectionAdapter interface {
 	ApplySelection(context.Context, *RuntimePlan, *RuntimePlan) error
 }
 
+type LiveSettingsAdapter interface {
+	ApplyLiveSettings(context.Context, *RuntimePlan, *RuntimePlan) error
+}
+
 // EngineCommandAdapter exposes bounded engine mechanisms such as closing a
 // connection or refreshing a provider. The coordinator serializes these effects
 // with plan changes; adapters never receive another runtime owner.

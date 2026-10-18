@@ -214,6 +214,7 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 	if !json.Valid(rawSettings) || json.Unmarshal(rawSettings, &settings) != nil || settings == nil {
 		return errors.New("invalid legacy settings")
 	}
+	compatibleSettings(settings)
 	var metadata []Object
 	if raw, ok := settings["profiles"]; ok && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &metadata); err != nil {
@@ -632,6 +633,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 	if !json.Valid(rawSettings) || json.Unmarshal(rawSettings, &settings) != nil || settings == nil {
 		return errors.New("invalid backup settings")
 	}
+	compatibleSettings(settings)
 	var metadata []Object
 	if raw := settings["profiles"]; len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &metadata); err != nil {
