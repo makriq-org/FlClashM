@@ -89,9 +89,11 @@ class AndroidRuntimeE2eTest {
             Service.unbind()
             return@runBlocking
         }
+        if (scenario == "seed") await("Flutter engine attachment") { GlobalState.flutterEngine != null }
         Service.backendCommand("data.reset")
         Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
-            .put("appSetting", JSONObject().put("testUrl", "").put("overrideNetworkSettings", true))
+            .put("appSetting", JSONObject().put("testUrl", "").put("overrideNetworkSettings", true)
+                .put("autoCheckUpdate", false).put("dashboardWidgets", org.json.JSONArray()))
             .put("patchClashConfig", JSONObject().put("mixed-port", 17890).put("ipv6", false))
             .put("vpnProps", JSONObject().put("enable", true).put("ipv6", false))))
         // Original source is larger than Binder's transaction limit. Chunking is
@@ -149,6 +151,13 @@ class AndroidRuntimeE2eTest {
             assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             assertFalse(JSONObject(Service.getAndroidVpnOptions()).getBoolean("enable"))
         } finally { Service.backendCommand("runtime.stop"); Service.unbind() }
+        Service.bind()
+        Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject()
+            .put("external-controller", "127.0.0.1:17892").put("secret", "fixture-secret"))))
+        assertTrue("Controller did not open", canConnect(17892))
+        Service.backendCommand("data.reset")
+        await("reset closed the old controller") { !canConnect(17892) }
+        Service.unbind()
     }
     private fun remotePid(): Int {
         val manager = context.getSystemService(android.app.ActivityManager::class.java)

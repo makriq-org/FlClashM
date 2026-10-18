@@ -31,9 +31,10 @@ grep -q '^OK (1 test)$' "$artifacts/instrumentation.txt"
 ! grep -Eq 'FAILURES!!!|INSTRUMENTATION_ABORTED|Process crashed|shortMsg=' \
   "$artifacts/instrumentation.txt"
 
-# Finish the instrumentation process, then kill the real UI PID while the
-# process-owned backend and transport continue running under the VPN service.
-adb shell am instrument -w -r -e scenario seed \
+# Run a real Flutter activity. --no-restart avoids instrumentation's package
+# force-stop both on entry and on finish; that would also kill the VPN service.
+adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+adb shell am instrument --no-restart -w -r -e scenario seed \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-seed.txt"
 grep -q '^OK (1 test)$' "$artifacts/headless-seed.txt"
@@ -44,15 +45,29 @@ if [ -n "$main_pid" ]; then adb shell run-as com.makriq.flclash.dev kill -9 "$ma
 sleep 3
 remote_after=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
 test "$remote_before" = "$remote_after"
-adb shell am instrument -w -r -e scenario observe \
+adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+adb shell am instrument --no-restart -w -r -e scenario observe \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-observe.txt"
 grep -q '^OK (1 test)$' "$artifacts/headless-observe.txt"
-# Unexpected native process death: Android's sticky service and the same Go
-# recovery executor must rebuild the committed generation, without Flutter.
+# Remove Flutter again before killing :remote. Recovery must commit a new
+# applied generation while no UI exists, before observation instrumentation.
+main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r' || true)
+if [ -n "$main_pid" ]; then adb shell run-as com.makriq.flclash.dev kill -9 "$main_pid"; fi
+generation_before=$(adb exec-out run-as com.makriq.flclash.dev cat files/backend/backend-v1.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["applied"]["plan"]["generation"])')
 adb shell run-as com.makriq.flclash.dev kill -9 "$remote_after"
-sleep 5
-adb shell am instrument -w -r -e scenario recovered \
+headless_ready=false
+for attempt in $(seq 1 60); do
+  if adb exec-out run-as com.makriq.flclash.dev cat files/backend/backend-v1.json | \
+    python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("applied") or {}; sys.exit(0 if a.get("running") and d["desired"]["running"] and a.get("plan",{}).get("generation",0)>int(sys.argv[1]) and d.get("pending") is None else 1)' "$generation_before"; then
+    headless_ready=true
+    break
+  fi
+  sleep 1
+done
+test "$headless_ready" = true
+adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+adb shell am instrument --no-restart -w -r -e scenario recovered \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/recovered.txt"
 grep -q '^OK (1 test)$' "$artifacts/recovered.txt"
