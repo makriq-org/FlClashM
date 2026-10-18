@@ -424,7 +424,7 @@ void main() {
         ..createSync(recursive: true);
       const networkUrl = 'https://example.com/include.txt';
       final refreshStarted = Completer<void>();
-      File(
+      final cacheFile = File(
         path.join(
           profilesDir.path,
           'providers',
@@ -479,7 +479,7 @@ void main() {
           ],
           readSplitTunnelingRemoteSource: (_) async {
             refreshStarted.complete();
-            return 'com.network.app\n';
+            return 'com.network.app\n# refreshed\n';
           },
         ),
         securedProfile: SecuredProfilePatch(
@@ -525,7 +525,13 @@ void main() {
         isNot(contains('include-package-url')),
       );
       await refreshStarted.future;
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final refreshDeadline = DateTime.now().add(const Duration(seconds: 5));
+      while (!(await cacheFile.readAsString()).contains('# refreshed')) {
+        if (DateTime.now().isAfter(refreshDeadline)) {
+          fail('Background package cache refresh did not finish.');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
       await tempDir.delete(recursive: true);
     });
 
