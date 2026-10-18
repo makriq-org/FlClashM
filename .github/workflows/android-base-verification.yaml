@@ -153,12 +153,6 @@ jobs:
           yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
           echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
-
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -184,6 +178,12 @@ jobs:
             -Ptarget=lib/main.dart \
             :app:testDebugUnitTest \
             :service:testDebugUnitTest
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: core/go.sum
 
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch arm64 --out core
@@ -237,12 +237,6 @@ jobs:
           yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
           echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
-
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -251,6 +245,12 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: core/go.sum
 
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch ${{ matrix.arch }} --out core
@@ -301,12 +301,6 @@ jobs:
           yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
           echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
-
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -315,6 +309,12 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: core/go.sum
 
       - name: Build x86_64 core and runtime assets
         run: dart setup.dart android --arch amd64 --out core
