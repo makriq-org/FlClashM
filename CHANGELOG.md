@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.3.1
+
+- Обновлены Mihomo, NaiveProxy, OlcRTC, StormDNS и список стратегий ByeDPI.
+- Исправлены уязвимости сетевых библиотек и выбора файлов.
+- Исправлено зацикливание Mieru после таймаута закрытого QUIC-соединения.
+
 ## v0.3.1-pre1
 
 - Обновлены Mihomo, NaiveProxy, OlcRTC, StormDNS и список стратегий ByeDPI.
