@@ -39,6 +39,9 @@ internal object AndroidBackendPlatform {
             active = service
             coroutineContext.ensureActive()
             service.handleStart(options)
+            // A normal sticky host survives the system's VPN unbind when the
+            // TUN disappears on process death. It has no separate runtime intent.
+            BackendForegroundHold.retainRuntime(request)
             coroutineContext.ensureActive()
         } catch (error: Throwable) {
             withContext(NonCancellable) { stopLocked() }

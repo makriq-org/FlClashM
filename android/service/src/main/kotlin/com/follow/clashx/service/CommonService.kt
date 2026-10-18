@@ -10,7 +10,8 @@ import com.follow.clashx.service.modules.NotificationModule
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Foreground resource for proxy-only execution. No runtime policy. */
+/** Foreground lifetime for backend operations and execution, independently of
+ * the VPN system binding. Also provides the proxy-only platform resource. */
 class CommonService : Service(), BackendForegroundResource {
     private val resources = Any()
     @Volatile override var destroyed = false
@@ -27,7 +28,16 @@ class CommonService : Service(), BackendForegroundResource {
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!promoteToForeground(R.drawable.ic_notification, "FlClashM")) { stopSelf(); return START_NOT_STICKY }
+        val promoted = promoteToForeground(R.drawable.ic_notification, "FlClashM")
+        if (intent?.action == BackendForegroundHold.ACTION_HOLD) {
+            BackendForegroundHold.acknowledge(intent.getStringExtra("operationId"), promoted)
+            return START_NOT_STICKY
+        }
+        if (intent?.action == BackendForegroundHold.ACTION_RUNTIME) {
+            BackendForegroundHold.acknowledgeRuntime(intent.getStringExtra("operationId"), promoted)
+            return if (promoted) START_STICKY else START_NOT_STICKY
+        }
+        if (!promoted) { stopSelf(); return START_NOT_STICKY }
         if (intent?.action != AndroidBackendPlatform.ACTION_APPLY) {
             GlobalState.launch { BackendHost.initialize(); BackendHost.command("runtime.recover") }
         }
@@ -61,5 +71,5 @@ class CommonService : Service(), BackendForegroundResource {
         }
         finishIfIdle()
     }
-    override fun finishIfIdle() { if (!active && !BackendForegroundHold.held) stopSelf() }
+    override fun finishIfIdle() { if (!active && State.runTime == 0L && !BackendForegroundHold.held) stopSelf() }
 }

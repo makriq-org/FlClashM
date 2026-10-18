@@ -33,7 +33,7 @@
             android:process=":remote">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FlClashM proxy core running without VPN tunnel" />
+                android:value="FlClashM backend lifetime independent of the VPN interface" />
         </service>
 
         <service

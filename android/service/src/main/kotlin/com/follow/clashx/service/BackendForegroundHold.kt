@@ -16,8 +16,10 @@ interface BackendForegroundResource : IBaseService {
 /** A resource reference count controlled exclusively by Go operation IDs. */
 internal object BackendForegroundHold {
     const val ACTION_HOLD = "com.makriq.flclash.backend.HOLD"
+    const val ACTION_RUNTIME = "com.makriq.flclash.backend.RUNTIME_RESOURCE"
     private val lock = Any()
     private val holds = mutableMapOf<String, CompletableDeferred<Unit>>()
+    private val runtimeStarts = mutableMapOf<String, CompletableDeferred<Unit>>()
     private val services = mutableSetOf<BackendForegroundResource>()
     private val available = MutableStateFlow<List<BackendForegroundResource>>(emptyList())
     val held: Boolean get() = synchronized(lock) { holds.isNotEmpty() }
@@ -32,13 +34,29 @@ internal object BackendForegroundHold {
             if (!ready.isCompleted) {
                 val context = GlobalState.application
                 ContextCompat.startForegroundService(context,
-                    Intent(context, FlVpnService::class.java).setAction(ACTION_HOLD).putExtra("operationId", id))
+                    Intent(context, CommonService::class.java).setAction(ACTION_HOLD).putExtra("operationId", id))
             }
             withTimeout(10_000L) { ready.await() }
         } catch (error: Throwable) {
             release(id)
             throw error
         }
+    }
+
+    suspend fun retainRuntime(id: String) {
+        val ready = CompletableDeferred<Unit>()
+        synchronized(lock) { check(runtimeStarts.putIfAbsent(id, ready) == null) }
+        try {
+            val context = GlobalState.application
+            ContextCompat.startForegroundService(context,
+                Intent(context, CommonService::class.java).setAction(ACTION_RUNTIME).putExtra("operationId", id))
+            withTimeout(10_000L) { ready.await() }
+        } finally { synchronized(lock) { runtimeStarts.remove(id) } }
+    }
+    fun acknowledgeRuntime(id: String?, promoted: Boolean) {
+        val waiter = synchronized(lock) { runtimeStarts[id] }
+        if (promoted) waiter?.complete(Unit)
+        else waiter?.completeExceptionally(IllegalStateException("foreground host promotion failed"))
     }
 
     fun created(service: BackendForegroundResource) = synchronized(lock) {

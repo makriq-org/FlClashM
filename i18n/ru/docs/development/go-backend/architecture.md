@@ -127,8 +127,10 @@ config paths, upgrade и legacy runtime setters закрыты.
 
 BackendHost открывается в существующем `:remote` процессе независимо от Flutter.
 RemoteService — Binder-мост, его unbind/death отсоединяет только UI. Постоянный Go
-listener и автоматические задачи остаются активными. Обычная VPN-служба и proxy-only
-служба держат foreground-ресурс; OS cold-start/boot вызывает Go recovery.
+listener и автоматические задачи остаются активными. Обычная foreground-служба
+держит backend и при VPN, и при proxy-only исполнении; VpnService владеет интерфейсом.
+Это сохраняет sticky host при системном unbind VPN после смерти процесса.
+OS cold-start/boot вызывает Go recovery.
 
 OperationLifetime удерживает foreground-ресурс во время подготовки и замены плана,
 до появления TUN. Лизинг привязан к operationId; освобождение и late Intent
