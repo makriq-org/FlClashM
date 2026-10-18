@@ -3,6 +3,7 @@ package main
 import (
 	"core/backend"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -36,14 +37,23 @@ func TestBackendHostIdentity(t *testing.T) {
 	}{
 		{"/data/user/0/com.makriq.flclash/files", "com.makriq.flclash", true},
 		{"/data/user/0/com.makriq.flclash.dev/files", "com.makriq.flclash.dev", true},
+		{"/data/user/0/com.makriq.flclash.backendtest/files", "com.makriq.flclash.backendtest", true},
 		{"relative/files", "com.makriq.flclash", false},
 		{"", "com.makriq.flclash.dev", false},
 		{"/private/files", "com.makriq.flclash.other", false},
 		{"/private/files", "com.makriq.flclash.dev.dev", false},
+		{"/private/files", "com.makriq.flclash.backendtest.dev", false},
 	} {
 		if got := validBackendHost(test.home, test.packageName); got != test.allowed {
 			t.Errorf("host %q / %q: allowed=%t, want %t", test.home, test.packageName, got, test.allowed)
 		}
+	}
+}
+
+func TestBackendTestSelfBypass(t *testing.T) {
+	packages := backendSelfPackages("com.makriq.flclash.backendtest")
+	if strings.Join(packages, ",") != "com.makriq.flclash,com.makriq.flclash.dev,com.makriq.flclash.backendtest" {
+		t.Fatalf("test package self bypass: %v", packages)
 	}
 }
 

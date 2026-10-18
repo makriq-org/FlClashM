@@ -153,7 +153,7 @@ func handleBackendAction(action *Action, result ActionResult) bool {
 }
 
 func validBackendHost(home, packageName string) bool {
-	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev")
+	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev" || packageName == "com.makriq.flclash.backendtest")
 }
 
 func openApplicationBackend(options backendHostOptions) error {
@@ -636,7 +636,10 @@ func (backendPlatform) NotifySubscription(ctx context.Context, notice applicatio
 }
 
 func backendSelfPackages(packageName string) []string {
-	base := strings.TrimSuffix(packageName, ".dev")
+	base := strings.TrimSuffix(strings.TrimSuffix(packageName, ".backendtest"), ".dev")
+	if strings.HasSuffix(packageName, ".backendtest") {
+		return []string{base, base + ".dev", packageName}
+	}
 	return []string{base, base + ".dev"}
 }
 
