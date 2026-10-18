@@ -40,6 +40,8 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	var err error
 	switch request.Method {
+	case "presentation":
+		response.Result = a.Presentation()
 	case "snapshot":
 		response.Result = a.Snapshot()
 	case "settings.get":
@@ -180,15 +182,27 @@ func (a *App) profileResult(id string) (any, error) {
 	}{record.Metadata, record.Source, record.Revision, record.Digest}, nil
 }
 func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
+	a.runtimeMu.Lock()
+	defer a.runtimeMu.Unlock()
+	if a.resetting.Load() {
+		return backend.Receipt{}, errors.New("data reset in progress")
+	}
 	if _, err := a.operations.get(request.OperationID); err == nil {
 		return backend.Receipt{}, errors.New("operationId belongs to an application command")
 	}
 	if err := decodeParams(request.Input, &struct{}{}); err != nil {
 		return backend.Receipt{}, err
 	}
+	generation := a.runtime.Snapshot().Generation
 	method := ""
 	var input backend.Input
 	switch request.Method {
+	case "runtime.toggle":
+		if a.runtime.Snapshot().DesiredRunning {
+			method = "stop"
+		} else {
+			method = "connect"
+		}
 	case "runtime.start":
 		method = "connect"
 	case "runtime.apply":
@@ -206,7 +220,7 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 	// A retry must return the original outcome even if subscriptions changed the
 	// current source after that command accepted its immutable input.
 	if receipt, err := a.runtime.Operation(request.OperationID); err == nil {
-		if receipt.Method != "" && receipt.Method != method {
+		if receipt.Method != "" && receipt.Method != method && request.Method != "runtime.toggle" {
 			return backend.Receipt{}, errors.New("operationId reused for a different command")
 		}
 		return receipt, nil
@@ -223,11 +237,17 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 			return backend.Receipt{}, err
 		}
 	}
+	if request.Method == "runtime.toggle" {
+		return a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: request.OperationID, Method: method, Input: input}, generation)
+	}
 	return a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: request.OperationID, Method: method, Input: input})
 }
 func (a *App) submit(request backend.Request) (Receipt, error) {
+	if a.resetting.Load() {
+		return Receipt{}, errors.New("data reset in progress")
+	}
 	switch request.Method {
-	case "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "ui.attach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

@@ -21,6 +21,93 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	apply := false
 	switch method {
+	case "data.reset":
+		if err := decodeParams(params, &struct{}{}); err != nil {
+			return result, err
+		}
+		if !a.resetting.CompareAndSwap(false, true) {
+			return result, errors.New("data reset in progress")
+		}
+		defer a.resetting.Store(false)
+		a.operations.mu.Lock()
+		var pending []*operation
+		for id, op := range a.operations.running {
+			if id != operationID {
+				op.cancel()
+				pending = append(pending, op)
+			}
+		}
+		a.operations.mu.Unlock()
+		for _, op := range pending {
+			select {
+			case <-op.done:
+			case <-ctx.Done():
+				return result, ctx.Err()
+			}
+		}
+		a.runtimeMu.Lock()
+		defer a.runtimeMu.Unlock()
+		if err := a.operations.disableBootstrap(); err != nil {
+			return result, err
+		}
+		receipt, err := a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "forget"})
+		if err != nil {
+			return result, err
+		}
+		completed, err := a.runtime.Await(ctx, receipt.OperationID)
+		if err != nil {
+			return result, err
+		}
+		if completed.Status != "succeeded" {
+			return result, errors.New(completed.Error)
+		}
+		if err = a.profiles.Reset(); err != nil {
+			return result, err
+		}
+		a.presentationMu.Lock()
+		a.presentationGeneration = 0
+		a.presentationMu.Unlock()
+		result.RuntimeOperationID = receipt.OperationID
+		return result, nil
+	case "ui.attach":
+		if err := decodeParams(params, &struct{}{}); err != nil {
+			return result, err
+		}
+		catalog := a.profiles.Snapshot()
+		var app struct {
+			AutoRun bool `json:"autoRun"`
+		}
+		_ = json.Unmarshal(catalog.Settings["appSetting"], &app)
+		snapshot := a.runtime.Snapshot()
+		if !app.AutoRun || snapshot.DesiredRunning {
+			return result, nil
+		}
+		var id string
+		_ = json.Unmarshal(catalog.Settings["currentProfileId"], &id)
+		if _, err := a.profiles.Get(id); err != nil {
+			return result, nil
+		}
+		if permissions, ok := a.platform.(backend.VPNPermissionReader); ok {
+			granted, err := permissions.VPNPermission(ctx)
+			if err != nil {
+				return result, err
+			}
+			if !granted {
+				result.PermissionRequired = true
+				return result, nil
+			}
+		}
+		input, err := a.captureInput()
+		if err != nil {
+			return result, err
+		}
+		receipt, err := a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "connect", Input: input}, snapshot.Generation)
+		if errors.Is(err, backend.ErrSuperseded) {
+			return result, nil
+		}
+		result.RuntimeOperationID = receipt.OperationID
+		return result, err
+
 	case "profile.export":
 		var request struct {
 			ProfileID string `json:"profileId"`
@@ -165,26 +252,18 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
 		}
-		apply = a.isCurrent(request.ProfileID)
-		if err := a.profiles.Delete(request.ProfileID, request.ExpectedRevision); err != nil {
+		var err error
+		apply, err = a.profiles.DeleteWithSelection(request.ProfileID, request.ExpectedRevision, func() error {
+			receipt, stopErr := a.runtimeCommand(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "runtime.stop"})
+			result.RuntimeOperationID = receipt.OperationID
+			return stopErr
+		})
+		if err != nil {
 			return result, err
 		}
 		result.ProfileID = request.ProfileID
-		if apply {
-			catalog := a.profiles.Snapshot()
-			if len(catalog.Profiles) == 0 {
-				receipt, err := a.runtimeCommand(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "runtime.stop"})
-				result.RuntimeOperationID = receipt.OperationID
-				return result, err
-			}
-			var firstID string
-			_ = json.Unmarshal(catalog.Profiles[0].Metadata["id"], &firstID)
-			if err := a.customize(ctx, catalog.Profiles[0].Metadata, false); err != nil {
-				return result, err
-			}
-			if err := a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(firstID)}, 0); err != nil {
-				return result, err
-			}
+		if result.RuntimeOperationID != "" {
+			return result, nil
 		}
 	case "profile.select":
 		var request struct {
@@ -263,9 +342,21 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	case "profile.validate":
 		var request struct {
 			Source string `json:"source"`
+			Token  string `json:"token"`
 		}
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
+		}
+		if request.Token != "" {
+			name, err := a.blobPath(request.Token)
+			if err != nil {
+				return result, err
+			}
+			bytes, err := readBounded(name, profiles.MaxProfileBytes)
+			if err != nil {
+				return result, err
+			}
+			request.Source = string(bytes)
 		}
 		return result, a.validateSource(ctx, request.Source)
 	case "subscription.refresh":

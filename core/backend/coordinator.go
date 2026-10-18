@@ -242,7 +242,7 @@ func fingerprint(r Request) (string, error) {
 			return "", err
 		}
 		r.Input = input
-	case "start", "stop", "recover":
+	case "start", "stop", "recover", "forget":
 		if len(r.Input) > 0 {
 			return "", errors.New("method does not accept input")
 		}
@@ -258,6 +258,16 @@ func fingerprint(r Request) (string, error) {
 // Submit returns immediately. Operation contexts belong to the backend and are
 // independent of any request, binder callback, Flutter engine or UI lifetime.
 func (b *Backend) Submit(r Request) (Receipt, error) {
+	return b.submit(r, nil)
+}
+
+// SubmitAtGeneration rejects an observation-derived command if a newer user
+// intent arrived while the host was being inspected.
+func (b *Backend) SubmitAtGeneration(r Request, generation uint64) (Receipt, error) {
+	return b.submit(r, &generation)
+}
+
+func (b *Backend) submit(r Request, expected *uint64) (Receipt, error) {
 	fp, err := fingerprint(r)
 	if err != nil {
 		return Receipt{}, err
@@ -269,6 +279,9 @@ func (b *Backend) Submit(r Request) (Receipt, error) {
 	defer c.mu.Unlock()
 	if c.closed {
 		return Receipt{}, ErrClosed
+	}
+	if expected != nil && c.epoch != *expected {
+		return Receipt{}, ErrSuperseded
 	}
 	if e := c.executions[r.OperationID]; e != nil {
 		if e.fingerprint != fp {
@@ -306,6 +319,9 @@ func (b *Backend) Submit(r Request) (Receipt, error) {
 		}
 	case "start":
 		next.Desired.Running = true
+	case "forget":
+		next.Desired = Desired{}
+		next.Applied = nil
 	case "stop":
 		next.Desired.Running = false
 		if next.Applied != nil {
@@ -424,6 +440,19 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	defer e.cancel()
 	err := c.current(e)
 	if err == nil {
+		c.mu.Lock()
+		hold := c.document.Desired.Running
+		c.mu.Unlock()
+		if lifetime, ok := c.platform.(OperationLifetime); ok && hold {
+			err = lifetime.BeginOperation(e.ctx, e.request.OperationID)
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
+				defer cancel()
+				_ = lifetime.EndOperation(ctx, e.request.OperationID)
+			}()
+		}
+	}
+	if err == nil {
 		err = c.perform(e)
 	}
 	c.activateNodeLoop(e.epoch)
@@ -494,6 +523,9 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		}
 	case "start":
 		next.Desired.Running = true
+	case "forget":
+		next.Desired = Desired{}
+		next.Applied = nil
 	case "stop":
 		next.Desired.Running = false
 		if previous.Applied != nil {
@@ -532,7 +564,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	c.publishLocked()
 	c.mu.Unlock()
 
-	if e.request.Method == "stop" {
+	if e.request.Method == "stop" || e.request.Method == "forget" {
 		err := c.cleanup()
 		if err == nil {
 			err = c.current(e)

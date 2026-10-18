@@ -106,3 +106,47 @@ func TestPlatformPolicyRetainsHeadlessScreenAndNetworkBehavior(t *testing.T) {
 		t.Fatal("normal start ignored retained Doze observation")
 	}
 }
+
+// The host reports facts only. A late service teardown cannot override a new
+// user stop; permission loss durably stops instead of looping recovery.
+type permissionPlatform struct {
+	hostPlatform
+	allowed bool
+}
+
+func (p permissionPlatform) VPNPermission(context.Context) (bool, error) { return p.allowed, nil }
+func TestServiceLossAndRevocationUseCommonRecoveryAndRespectStop(t *testing.T) {
+	h := newHost()
+	platform := permissionPlatform{hostPlatform{h}, false}
+	b, err := Open(newStore(t), h, policyHostEngine{commandHostEngine{hostEngine{h}}}, hostTransports{h}, platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	run(t, b, "start", "connect", `{"nodes":[]}`)
+	h.mu.Lock()
+	h.states["platform"] = false
+	h.mu.Unlock()
+	if err = b.coordinator.platformLost(context.Background(), b, "lost-service", false); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Observed.State != "running" {
+		t.Fatal("service loss did not rebuild committed plan")
+	}
+	h.mu.Lock()
+	h.states["platform"] = false
+	h.mu.Unlock()
+	if err = b.coordinator.platformLost(context.Background(), b, "revoked", true); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().DesiredRunning || b.Snapshot().Observed.State != "stopped" {
+		t.Fatal("permission loss did not persist stop")
+	}
+	generation := b.Snapshot().Generation
+	if err = b.coordinator.platformLost(context.Background(), b, "late-destroy", false); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Generation != generation {
+		t.Fatal("late destruction resurrected stopped runtime")
+	}
+}

@@ -22,14 +22,23 @@ class BackendClient {
   Map<String, dynamic> _view = {};
   String _instance = '';
   int _sequence = -1;
+  int _viewGeneration = 0;
 
   Stream<Map<String, dynamic>> get changes => _changes.stream;
   Map<String, dynamic> get snapshot => _copy(_snapshot);
   Map<String, dynamic> get runtimeView => _copy(_view);
+  int get runtimeViewGeneration => _viewGeneration;
   bool get attached => _subscription != null;
 
   String operationId() =>
       'ui-${List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
+
+  late final String _uiSession = operationId();
+
+  Future<Map<String, dynamic>> openUI() async {
+    final receipt = _map(await request('ui.attach', null, _uiSession));
+    return wait(_uiSession, initial: receipt);
+  }
 
   Future<void> attach() async {
     _subscription ??= _events.listen(_event);
@@ -146,6 +155,8 @@ class BackendClient {
       _sequence = sequence;
       _snapshot = _copy(second);
       _view = _copy(view);
+      _viewGeneration =
+          (nextRuntime['appliedGeneration'] as num?)?.toInt() ?? 0;
       _changes.add(snapshot);
     } while (_refreshAgain);
   }
@@ -161,12 +172,14 @@ class BackendClient {
     if (sequence <= _sequence) {
       return;
     }
+    final missed = sequence != _sequence + 1;
     _sequence = sequence;
     final previous = _map(_snapshot['runtime']);
     _snapshot = {..._snapshot, 'runtime': _copy(runtime), 'seq': sequence};
     _changes.add(snapshot);
     final catalog = _map(_snapshot['catalog']);
-    if (event['resyncRequired'] == true ||
+    if (missed ||
+        event['resyncRequired'] == true ||
         event['catalogRevision'] != catalog['revision'] ||
         runtime['appliedGeneration'] != previous['appliedGeneration']) {
       _resync();

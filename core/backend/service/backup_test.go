@@ -105,16 +105,17 @@ func TestCompatibleBackupRoundTripAndUnsafeArchive(t *testing.T) {
 	entry, _ = writer.Create("../outside")
 	_, _ = entry.Write([]byte("bad"))
 	_ = writer.Close()
-	bad := upload(t, restored, malicious.Bytes())
-	revision := restored.Snapshot().Catalog.Revision
-	request(t, restored, "unsafe", "backup.restore", map[string]any{"token": bad.Token, "replace": true})
+	unsafeTarget := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	bad := upload(t, unsafeTarget, malicious.Bytes())
+	revision := unsafeTarget.Snapshot().Catalog.Revision
+	request(t, unsafeTarget, "unsafe", "backup.restore", map[string]any{"token": bad.Token, "replace": true})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	result, err := restored.Await(ctx, "unsafe")
-	if err != nil || result.Status != "failed" || restored.Snapshot().Catalog.Revision != revision {
+	result, err := unsafeTarget.Await(ctx, "unsafe")
+	if err != nil || result.Status != "failed" || unsafeTarget.Snapshot().Catalog.Revision != revision {
 		t.Fatal("unsafe archive adopted", result, err)
 	}
-	if _, err = os.Stat(filepath.Join(restored.directory, "outside")); !os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(unsafeTarget.directory, "outside")); !os.IsNotExist(err) {
 		t.Fatal("archive escaped its root")
 	}
 }

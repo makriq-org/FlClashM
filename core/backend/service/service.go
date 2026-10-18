@@ -12,6 +12,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 	_ "time/tzdata"
 
@@ -39,22 +40,31 @@ type Options struct {
 	Now              func() time.Time
 }
 type App struct {
-	directory      string
-	transferMu     sync.Mutex
-	validateSource profiles.Validator
-	runtime        *backend.Backend
-	profiles       *profiles.Repository
-	compiler       *compile.Compiler
-	operations     *operationStore
-	subscriptions  *profiles.Subscriptions
-	ctx            context.Context
-	cancel         context.CancelFunc
-	workers        sync.WaitGroup
-	dataMu         sync.Mutex
-	eventMu        sync.Mutex
-	eventSequence  uint64
-	subscribers    map[uint64]chan Event
-	subscriberID   uint64
+	runtimeMu                           sync.Mutex
+	resetting                           atomic.Bool
+	platform                            backend.PlatformAdapter
+	presentationMu                      sync.Mutex
+	presentationGeneration              uint64
+	presentationTitle, presentationMode string
+	presentationGroups                  []string
+	presentationSelected                map[string]string
+	inspection                          backend.RuntimeInspection
+	directory                           string
+	transferMu                          sync.Mutex
+	validateSource                      profiles.Validator
+	runtime                             *backend.Backend
+	profiles                            *profiles.Repository
+	compiler                            *compile.Compiler
+	operations                          *operationStore
+	subscriptions                       *profiles.Subscriptions
+	ctx                                 context.Context
+	cancel                              context.CancelFunc
+	workers                             sync.WaitGroup
+	dataMu                              sync.Mutex
+	eventMu                             sync.Mutex
+	eventSequence                       uint64
+	subscribers                         map[uint64]chan Event
+	subscriberID                        uint64
 }
 type Snapshot struct {
 	APIVersion int               `json:"apiVersion"`
@@ -108,7 +118,7 @@ func Open(options Options) (*App, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	app := &App{directory: options.Directory, runtime: runtime, profiles: repository, compiler: options.Compiler, validateSource: options.ValidateSource, operations: operations, ctx: ctx, cancel: cancel, subscribers: map[uint64]chan Event{}}
+	app := &App{directory: options.Directory, platform: options.Platform, inspection: options.Nodes.Inspection, runtime: runtime, profiles: repository, compiler: options.Compiler, validateSource: options.ValidateSource, operations: operations, ctx: ctx, cancel: cancel, subscribers: map[uint64]chan Event{}}
 	client := options.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 2 * time.Minute}

@@ -28,6 +28,9 @@ type PlatformEffects interface {
 	Awake(context.Context, bool) error
 	ProbeHealth(context.Context) (bool, error)
 }
+type VPNPermissionReader interface {
+	VPNPermission(context.Context) (bool, error)
+}
 type platformPolicy struct {
 	wake                 chan struct{}
 	cancel               context.CancelFunc
@@ -40,7 +43,7 @@ type platformPolicy struct {
 }
 
 func (b *Backend) NotifyPlatform(event PlatformEvent) error {
-	if event.Kind != "network" && event.Kind != "screen" {
+	if event.Kind != "network" && event.Kind != "screen" && event.Kind != "service" && event.Kind != "revoked" {
 		return errors.New("unsupported platform event")
 	}
 	if event.Sequence == 0 || len(event.DNS) > 16 || len(event.Scope) > 128 {
@@ -107,7 +110,7 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 		p := c.policy
 		var event *PlatformEvent
 		if c.active == nil {
-			for _, kind := range []string{"screen", "network"} {
+			for _, kind := range []string{"revoked", "service", "screen", "network"} {
 				if value, ok := p.pending[kind]; ok {
 					copy := value
 					event = &copy
@@ -134,9 +137,14 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 		}
 		if event != nil || (!due.IsZero() && !c.now().Before(due)) {
 			id := "system-" + rand.Text()
-			_, err := b.SubmitEngineCommand(id, EngineCommand{Method: method, Params: input})
-			if err == nil {
-				_, err = b.Await(ctx, id)
+			var err error
+			if event != nil && (event.Kind == "service" || event.Kind == "revoked") {
+				err = c.platformLost(ctx, b, id, event.Kind == "revoked")
+			} else {
+				_, err = b.SubmitEngineCommand(id, EngineCommand{Method: method, Params: input})
+				if err == nil {
+					_, err = b.Await(ctx, id)
+				}
 			}
 			if err == nil && event != nil {
 				c.mu.Lock()
@@ -175,6 +183,40 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 			timer.Stop()
 		}
 	}
+}
+
+func (c *runtimeCoordinator) platformLost(ctx context.Context, b *Backend, id string, revoked bool) error {
+	c.mu.Lock()
+	generation, wanted := c.epoch, c.document.Desired.Running
+	c.mu.Unlock()
+	if !wanted {
+		return nil
+	}
+	observed, err := c.platform.Observe(ctx)
+	if err != nil {
+		return err
+	}
+	if observed.State == "running" {
+		return nil
+	}
+	method := "recover"
+	if revoked {
+		allowed := false
+		if permissions, ok := c.platform.(VPNPermissionReader); ok {
+			allowed, err = permissions.VPNPermission(ctx)
+			if err != nil {
+				return err
+			}
+		}
+		if !allowed {
+			method = "stop"
+		}
+	}
+	if _, err = b.SubmitAtGeneration(Request{APIVersion: APIVersion, OperationID: id, Method: method}, generation); err != nil {
+		return err
+	}
+	_, err = b.Await(ctx, id)
+	return err
 }
 
 // Caller holds commands. Bookkeeping is protected by mu for the timer worker;

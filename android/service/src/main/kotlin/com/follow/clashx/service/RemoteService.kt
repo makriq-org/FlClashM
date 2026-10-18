@@ -1,40 +1,25 @@
 package com.follow.clashx.service
 
-import android.app.NotificationManager
 import android.app.Service
-import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.os.RemoteException
-import android.os.SystemClock
 import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.ServiceDelegate
 import com.follow.clashx.common.chunkedForAidl
-import com.follow.clashx.common.intent
 import com.follow.clashx.core.Core
 import com.follow.clashx.core.InvokeInterface
 import com.follow.clashx.service.models.NotificationParams
-import com.follow.clashx.service.models.VpnOptions
 import com.google.gson.Gson
-import kotlinx.coroutines.sync.withLock
-import org.json.JSONArray
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
+/** IPC lifetime only. BackendHost and the VPN survive a Flutter binder death. */
 class RemoteService : Service() {
-
-    private val gson = Gson()
-
-    private val eventListener = AtomicReference<com.follow.clashx.service.IEventInterface?>(null)
-    private val eventDeathRecipient = AtomicReference<IBinder.DeathRecipient?>(null)
-    // Serializes the listener/death-recipient swap. The two refs must move together;
-    // without this, concurrent setEventListener (or onDestroy / the death callback)
-    // could leak a DeathRecipient or leave Core bound to a stale listener.
     private val eventLock = Any()
+    private var eventListener: IEventInterface? = null
+    private var eventDeath: IBinder.DeathRecipient? = null
 
     private suspend fun dispatchChunked(
         data: String,
@@ -80,373 +65,93 @@ class RemoteService : Service() {
         }
     }
 
-    private val stub = object : IRemoteInterface.Stub() {
+    private val allowed = setOf(
+        "backend", "getIsInit", "forceGc", "getProxies", "getTraffic", "getTotalTraffic",
+        "asyncTestDelay", "getConnections", "getExternalProviders", "getExternalProvider",
+        "getCountryCode", "getMemory", "getCoreVersion", "healthCheck", "healthProbe",
+        "setUiActive", "startLog", "stopLog", "tunnelHTTPRequest", "cancelTunnelHTTPRequest",
+        "getRuntimeSnapshot", "getAndroidVpnOptions", "getRunTime", "getCurrentProfileName",
+    )
 
+    private val stub = object : IRemoteInterface.Stub() {
         override fun invokeAction(data: String, callback: ICallbackInterface) {
             GlobalState.launch {
-                Core.invokeAction(data, object : InvokeInterface {
-                    override fun onResult(result: String) {
-                        GlobalState.launch {
-                            dispatchChunked(result) { bytes, isSuccess, ack ->
-                                callback.onResult(bytes, isSuccess, ack)
-                            }
-                        }
-                    }
-                })
-            }
-        }
-
-        override fun quickStart(
-            initParamsString: String,
-            paramsString: String,
-            stateParamsString: String,
-            callback: ICallbackInterface,
-            onStarted: IVoidInterface,
-        ) {
-            GlobalState.launch {
-                com.follow.clashx.common.SavedParams.saveQuickStartParams(
-                    initParamsString, paramsString, stateParamsString,
-                )
-                runCatching { onStarted.invoke() }
-                Core.quickStart(
-                    initParamsString,
-                    paramsString,
-                    stateParamsString,
-                    object : InvokeInterface {
+                val request = runCatching { JSONObject(data) }.getOrNull()
+                if (request == null || request.optString("method") !in allowed) {
+                    val failure = JSONObject().put("id", request?.optString("id") ?: "")
+                        .put("method", request?.optString("method") ?: "")
+                        .put("code", -1).put("data", "unsupported UI action")
+                    dispatchChunked(failure.toString()) { bytes, last, ack -> callback.onResult(bytes, last, ack) }
+                    return@launch
+                }
+                try {
+                    BackendHost.initialize()
+                    Core.invokeAction(data, object : InvokeInterface {
                         override fun onResult(result: String) {
-                            GlobalState.launch {
-                                dispatchChunked(result) { bytes, isSuccess, ack ->
-                                    callback.onResult(bytes, isSuccess, ack)
-                                }
-                            }
+                            GlobalState.launch { dispatchChunked(result) { bytes, last, ack -> callback.onResult(bytes, last, ack) } }
                         }
-                    },
-                )
-            }
-        }
-
-        override fun updateNotificationParams(params: NotificationParams) {
-            if (State.notificationParamsFlow.value != params) {
-                State.notificationParamsFlow.value = params
-            }
-            com.follow.clashx.common.SavedParams.saveNotificationTitle(params.title)
-        }
-
-        override fun startService(options: VpnOptions, runTime: Long, result: IResultInterface) {
-            GlobalState.launch {
-                State.runLock.withLock {
-                    if (State.runTime != 0L) {
-                        runCatching { result.onResult(State.runTime) }
-                        return@withLock
-                    }
-                    StateHub.publish(StateHub.STARTING)
-
-                    runCatching { State.delegate?.unbind() }
-                    State.delegate = null
-
-                    val serviceClass: Class<out Service> =
-                        if (options.enable) FlVpnService::class.java else CommonService::class.java
-                    val serviceIntent = Intent(this@RemoteService, serviceClass)
-
-                    val delegate = ServiceDelegate<IBaseService>(
-                        serviceIntent,
-                        onDisconnected = { GlobalState.log("inner service disconnected: $it") },
-                    ) { binder ->
-                        when (val b = binder) {
-                            is CommonService.LocalBinder -> b.service as IBaseService
-                            is FlVpnService.LocalBinder -> b.service as IBaseService
-                            else -> null
-                        }
-                    }
-                    State.delegate = delegate
-                    delegate.bind()
-
-                    val fgsResult = runCatching {
-                        androidx.core.content.ContextCompat.startForegroundService(
-                            this@RemoteService,
-                            serviceIntent,
-                        )
-                    }
-                    if (fgsResult.isFailure) {
-                        // FGS start can be rejected (e.g. ForegroundServiceStartNotAllowed
-                        // when the UID races to background on Android 12+). Fail fast and
-                        // unwind instead of letting the Dart caller hang for the full
-                        // timeout while an empty auto-created foreground service lingers.
-                        GlobalState.log("startService: startForegroundService failed: ${fgsResult.exceptionOrNull()?.message}")
-                        runCatching { delegate.unbind() }
-                        State.delegate = null
-                        State.clearAppliedVpnOptions()
-                        com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        StateHub.publish(StateHub.STOPPED, message = "fgs start rejected")
-                        runCatching { result.onResult(0L) }
-                        return@withLock
-                    }
-                    // 30s, not 10s: Core.startTun is a blocking JNI call that on a
-                    // slow device / contended core legitimately takes tens of seconds.
-                    // A 10s timeout reported a still-succeeding start as failed while
-                    // the tunnel came up anyway (orphaned), and the Dart side waits up
-                    // to 60s, so keep native < Dart but generous enough to not false-fail.
-                    val startResult = delegate.useService(timeoutMillis = 30_000L) { proxy ->
-                        proxy.handleStart(options)
-                    }
-                    if (startResult.isFailure) {
-                        GlobalState.log("startService: handleStart failed: ${startResult.exceptionOrNull()?.message}")
-                        // The timed-out handleStart may still complete Core.startTun on
-                        // a blocked (non-interruptible) JNI thread, bringing the tunnel
-                        // up after we've given up. Queue an explicit STOP so it's torn
-                        // down deterministically instead of orphaned. ACTION_STOP's
-                        // handleStop waits on runLock — held here — so it runs strictly
-                        // after this start unwinds.
-                        runCatching {
-                            val stop = Intent(this@RemoteService, serviceClass)
-                                .setAction(FlVpnService.ACTION_STOP)
-                            androidx.core.content.ContextCompat.startForegroundService(this@RemoteService, stop)
-                        }
-                        // Defensively tear down any tunnel the orphaned startTun may have
-                        // already brought up, now, rather than only via the queued STOP
-                        // (which depends on intent delivery + processing). stopTun is
-                        // idempotent and the native tunLock serializes it against an
-                        // in-flight startTun — no-op if the tun isn't up yet; the queued
-                        // STOP stays the deterministic backstop.
-                        runCatching { Core.stopTun() }
-                        runCatching { delegate.unbind() }
-                        State.delegate = null
-                        State.clearAppliedVpnOptions()
-                        com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        StateHub.publish(StateHub.STOPPED, message = "handleStart failed")
-                        runCatching { result.onResult(0L) }
-                        return@withLock
-                    }
-
-                    val baseRunTime = if (runTime > 0) runTime else SystemClock.uptimeMillis()
-                    if (!options.enable) {
-                        State.clearAppliedVpnOptions()
-                    }
-                    State.runTime = baseRunTime
-                    if (options.enable) com.follow.clashx.common.SavedParams.setVpnActive(true)
-                    StateHub.publishRunning()
-                    runCatching { result.onResult(State.runTime) }
+                    })
+                } catch (error: Exception) {
+                    val failure = JSONObject().put("id", request.optString("id"))
+                        .put("method", request.optString("method"))
+                        .put("code", -1).put("data", error.message ?: "backend initialization failed")
+                    dispatchChunked(failure.toString()) { bytes, last, ack -> callback.onResult(bytes, last, ack) }
                 }
             }
         }
 
-        override fun stopService(result: IResultInterface) {
-            GlobalState.launch {
-                State.runLock.withLock {
-                    val delegate = State.delegate
-                    if (delegate == null) {
-                        // A headless cold-start (tile/widget/Always-on) brings the tunnel up
-                        // without ever assigning State.delegate. If something is still running,
-                        // signal FlVpnService to tear itself down so an in-app stop actually
-                        // kills the TUN/core instead of just zeroing the UI state. Only
-                        // FlVpnService: CommonService never runs headless (proxy-only mode has
-                        // no cold-start path), and starting it here just flashed an extra
-                        // foreground notification on the shared notification id.
-                        if (State.runTime != 0L) {
-                            StateHub.publish(StateHub.STOPPING)
-                            runCatching {
-                                val stop = Intent(this@RemoteService, FlVpnService::class.java)
-                                    .setAction(FlVpnService.ACTION_STOP)
-                                androidx.core.content.ContextCompat.startForegroundService(this@RemoteService, stop)
-                            }
-                        }
-                        State.runTime = 0L
-                        State.clearAppliedVpnOptions()
-                        com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        StateHub.publish(StateHub.STOPPED)
-                        RuntimeNodeProcessManager.stopIfIdle(vpnActive = false)
-                        runCatching { result.onResult(0L) }
-                        return@withLock
-                    }
-                    StateHub.publish(StateHub.STOPPING)
-                    runCatching {
-                        delegate.useService(timeoutMillis = 10_000L) { proxy ->
-                            proxy.handleStop()
-                        }
-                    }
-                    delegate.unbind()
-                    State.delegate = null
-                    State.runTime = 0L
-                    State.clearAppliedVpnOptions()
-                    com.follow.clashx.common.SavedParams.setVpnActive(false)
-                    StateHub.publish(StateHub.STOPPED)
-                    RuntimeNodeProcessManager.stopIfIdle(vpnActive = false)
-                    runCatching { result.onResult(0L) }
-                }
-            }
-        }
-
-        override fun setEventListener(event: com.follow.clashx.service.IEventInterface?) {
-            synchronized(eventLock) {
-                val prev = eventListener.getAndSet(event)
-                // Release the death recipient linked to the previous listener's binder.
-                eventDeathRecipient.getAndSet(null)?.let { r ->
-                    runCatching { prev?.asBinder()?.unlinkToDeath(r, 0) }
-                }
-                if (event == null) {
-                    Core.setEventListener(null)
-                    return
-                }
-                // Proactively stop dispatching the instant the :app proxy dies instead of
-                // waiting for RemoteService.onDestroy. Clears BOTH refs (under the same
-                // lock) so a later setEventListener doesn't find a stale recipient.
-                val recipient = IBinder.DeathRecipient {
-                    synchronized(eventLock) {
-                        if (eventListener.compareAndSet(event, null)) {
-                            eventDeathRecipient.set(null)
-                            runCatching { Core.setEventListener(null) }
-                            RuntimeNodeClientRegistry.clear()
-                            GlobalState.launch {
-                                RuntimeNodeProcessManager.stopIfIdle(
-                                    vpnActive = State.runTime != 0L,
-                                )
-                            }
-                        }
-                    }
-                }
-                eventDeathRecipient.set(recipient)
-                runCatching { event.asBinder().linkToDeath(recipient, 0) }
-                Core.setEventListener(object : InvokeInterface {
-                    override fun onResult(result: String) {
-                        val id = UUID.randomUUID().toString()
-                        GlobalState.launch {
-                            dispatchChunked(result) { bytes, isSuccess, ack ->
-                                event.onEvent(id, bytes, isSuccess, ack)
-                            }
-                        }
-                    }
-                })
-            }
-        }
-
-        override fun registerStateCallback(callback: IStateCallback?) {
-            StateHub.register(callback ?: return)
-        }
-
-        override fun unregisterStateCallback(callback: IStateCallback?) {
-            StateHub.unregister(callback ?: return)
-        }
-
+        override fun setEventListener(event: IEventInterface?) = replaceListener(event)
+        override fun registerStateCallback(callback: IStateCallback?) { callback?.let(StateHub::register) }
+        override fun unregisterStateCallback(callback: IStateCallback?) { callback?.let(StateHub::unregister) }
         override fun getServiceState(): String = StateHub.snapshotJson()
-
-        override fun setState(state: String) {
-            Core.setState(state)
-        }
-
-        override fun updateDns(dns: String) {
-            Core.updateDns(dns)
-        }
-
         override fun getAndroidVpnOptions(): String = Core.getAndroidVpnOptions()
-        override fun getAppliedAndroidVpnOptions(): String {
-            val options = State.readAppliedVpnOptions() ?: return ""
-            if (State.runTime == 0L || !options.enable) return ""
-            return runCatching { gson.toJson(options) }.getOrDefault("")
-        }
+        override fun getAppliedAndroidVpnOptions(): String = State.readAppliedVpnOptions()?.let { Gson().toJson(it) } ?: ""
         override fun getCurrentProfileName(): String = Core.getCurrentProfileName()
         override fun getRunTime(): String = Core.getRunTime()
         override fun getTraffic(): String = Core.getTraffic()
         override fun getTotalTraffic(): String = Core.getTotalTraffic()
-
-        override fun applyRuntimeNodePlan(plan: String, callback: ICallbackInterface) {
-            GlobalState.launch {
-                val state = runCatching { RuntimeNodeProcessManager.applyPlan(plan) }
-                    .getOrElse { error ->
-                        JSONObject()
-                            .put("generation", 0L)
-                            .put("status", "failed")
-                            .put("message", error.message ?: error.toString())
-                            .put("optionalCheckActive", false)
-                            .put("nodes", JSONArray())
-                            .toString()
-                    }
-                callback.onResult(state.toByteArray(Charsets.UTF_8), true, null)
-            }
-        }
-
-        override fun getRuntimeNodePlanState(): String =
-            RuntimeNodeProcessManager.readPlanState()
-
-        override fun stopRuntimeNodePlan(result: IResultInterface) {
-            GlobalState.launch {
-                RuntimeNodeProcessManager.stopAll()
-                result.onResult(0L)
-            }
-        }
-
-        override fun probeRuntimeNode(node: String, result: IResultInterface) {
-            GlobalState.launch {
-                val passed = runCatching { RuntimeNodeProcessManager.probeNode(node) }
-                    .onFailure {
-                        GlobalState.log("Runtime-node probe failed: ${it.message}")
-                    }
-                    .getOrDefault(false)
-                result.onResult(if (passed) 1L else 0L)
-            }
-        }
-
-        override fun probeRuntimeNodes(request: String, result: IResultInterface) {
-            GlobalState.launch {
-                val selectedIndex = runCatching {
-                    RuntimeNodeProcessManager.probeNodes(request)
-                }.onFailure {
-                    GlobalState.log("Runtime-node batch probe failed: ${it.message}")
-                }.getOrDefault(-1)
-                result.onResult(selectedIndex.toLong())
-            }
-        }
-
-        override fun attachRuntimeNodeClient() {
-            RuntimeNodeClientRegistry.attach()
-        }
-
-        override fun detachRuntimeNodeClient() {
-            RuntimeNodeClientRegistry.detach()
-            GlobalState.launch {
-                RuntimeNodeProcessManager.stopIfIdle(vpnActive = State.runTime != 0L)
-            }
-        }
-
-        override fun startListener() {
-            Core.startListener()
-        }
-
-        override fun stopListener() {
-            Core.stopListener()
+        override fun updateNotificationParams(params: NotificationParams) {
+            // UI supplies only localized presentation strings. The profile title
+            // is always read from the running Go engine, including headless use.
+            State.notificationParamsFlow.value = params.copy(title = State.notificationParamsFlow.value.title)
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder = stub
+    private fun replaceListener(event: IEventInterface?) = synchronized(eventLock) {
+        val previous = eventListener
+        eventDeath?.let { runCatching { previous?.asBinder()?.unlinkToDeath(it, 0) } }
+        eventListener = event
+        eventDeath = null
+        if (event == null) {
+            BackendHost.onEvent = null
+            Core.invokeAction("""{"id":"ui-detached","method":"setUiActive","data":false}""", object : InvokeInterface { override fun onResult(result: String) {} })
+            return@synchronized
+        }
+        val death = IBinder.DeathRecipient {
+            synchronized(eventLock) { if (eventListener === event) replaceListener(null) }
+        }
+        eventDeath = death
+        try { event.asBinder().linkToDeath(death, 0) }
+        catch (_: RemoteException) { replaceListener(null); return@synchronized }
+        BackendHost.onEvent = { result ->
+            GlobalState.launch {
+                val id = UUID.randomUUID().toString()
+                dispatchChunked(result) { bytes, last, ack -> event.onEvent(id, bytes, last, ack) }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
-        runCatching { Core.getRunTime() }
-            .onFailure { GlobalState.log("RemoteService: native library load failed: ${it.message}") }
-        deleteStaleChannels()
-        GlobalState.lifecycle("RemoteService created")
-    }
-
-    override fun onDestroy() {
-        GlobalState.lifecycle("RemoteService destroying")
-        synchronized(eventLock) {
-            val ev = eventListener.getAndSet(null)
-            eventDeathRecipient.getAndSet(null)?.let { r ->
-                runCatching { ev?.asBinder()?.unlinkToDeath(r, 0) }
-            }
-            runCatching { Core.setEventListener(null) }
-        }
-        RuntimeNodeClientRegistry.clear()
         GlobalState.launch {
-            RuntimeNodeProcessManager.stopIfIdle(vpnActive = State.runTime != 0L)
+            runCatching { BackendHost.initialize() }
+                .onFailure { GlobalState.log("backend initialization failed: ${it.message}") }
         }
-        super.onDestroy()
     }
-
-    private fun deleteStaleChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        runCatching { mgr.deleteNotificationChannel("FlClashX") }
-        runCatching { mgr.deleteNotificationChannel("FlClashX_Subscription") }
-        runCatching { mgr.deleteNotificationChannel("FlClashX_Core") }
+    override fun onBind(intent: Intent?): IBinder = stub
+    override fun onDestroy() {
+        replaceListener(null)
+        // Do not close the process-owned backend when a UI unbinds this bridge.
+        super.onDestroy()
     }
 }

@@ -1289,6 +1289,96 @@
       "path": "core/backend/service/applied_settings.go",
       "bucket": "budget",
       "reason": "После применённого плана Go сохраняет совместимые network hints с защитой ревизии каталога от устаревших результатов."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/TilePlugin.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/LegacyBackendMigration.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/core/src/main/cpp/core.cpp",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/core/src/main/java/com/follow/clashx/core/Core.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/BackendForegroundHold.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/IBaseService.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/StateHub.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/SystemDnsReader.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/HealthCheckModule.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NotificationModule.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/SuspendModule.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/SystemDnsReaderTest.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "core/backend/lifecycle_test.go",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "core/backend/service/cutover_test.go",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "core/backend/service/presentation.go",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "lib/common/common.dart",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "lib/common/preferences.dart",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "lib/plugins/service.dart",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
     }
   ]
 }

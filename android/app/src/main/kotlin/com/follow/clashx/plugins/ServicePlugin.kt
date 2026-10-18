@@ -15,11 +15,8 @@ import com.follow.clashx.RunState
 import com.follow.clashx.Service
 import com.follow.clashx.common.Components
 import com.follow.clashx.common.GlobalState as CommonGlobalState
-import com.follow.clashx.common.SavedParams
 import com.follow.clashx.common.diagnostics.DiagnosticLog
 import com.follow.clashx.service.models.NotificationParams
-import com.follow.clashx.service.models.VpnOptions
-import com.follow.clashx.service.models.gsonSanitized
 import com.google.gson.Gson
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -28,9 +25,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import java.io.File
 
 class ServicePlugin :
     FlutterPlugin,
@@ -45,13 +42,13 @@ class ServicePlugin :
 
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
-    private val eventChannel = Channel<String?>(Channel.UNLIMITED)
+    private var eventChannel = Channel<String?>(256, BufferOverflow.DROP_OLDEST)
     private val gson = Gson()
     @Volatile private var attached = false
-    @Volatile private var runtimeClientAttached = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
+        eventChannel = Channel(256, BufferOverflow.DROP_OLDEST)
         context = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
@@ -69,6 +66,7 @@ class ServicePlugin :
         attached = false
         channel.setMethodCallHandler(null)
         job.cancel()
+        eventChannel.cancel()
         // The engine is gone, so nothing consumes events anymore — drop OUR remote
         // listener so a dead engine doesn't keep the cross-process pipe pumping into
         // an unconsumed channel. Owner-guarded: if a recreated activity's new engine
@@ -76,7 +74,6 @@ class ServicePlugin :
         // scope — the plugin's own job was cancelled above.
         CommonGlobalState.launch {
             Service.clearEventListener(this@ServicePlugin)
-            detachRuntimeClient()
         }
     }
 
@@ -85,83 +82,20 @@ class ServicePlugin :
             "init" -> handleInit(result)
             "shutdown" -> handleShutdown(result)
             "invokeAction" -> handleInvokeAction(call, result)
-            "quickStart" -> handleQuickStart(call, result)
-            "syncState" -> handleSyncState(call, result)
+            "requestVpnPermission" -> {
+                if (android.net.VpnService.prepare(context) == null) result.successOnMain(true)
+                else GlobalState.getCurrentAppPlugin()?.requestVpnPermission { result.successOnMain(it) }
+                    ?: result.successOnMain(false)
+            }
+            "syncState" -> launch { GlobalState.handleSyncState(); result.successOnMain(true) }
             "updateNotificationParams" -> handleUpdateNotificationParams(call, result)
-            "start" -> handleStart(call, result)
-            "stop" -> handleStop(result)
-            "startVpn" -> handleStart(call, result)
-            "stopVpn" -> handleStop(result)
             "getRunTime" -> handleGetRunTime(result)
-            "startListener" -> launch { Service.startListener(); result.successOnMain(true) }
-            "stopListener" -> launch { Service.stopListener(); result.successOnMain(true) }
-            "setState" -> launch {
-                val data = call.arguments<String>() ?: ""
-                Service.setState(data)
-                result.successOnMain(true)
-            }
-            "updateDns" -> launch {
-                val data = call.arguments<String>() ?: ""
-                Service.updateDns(data)
-                result.successOnMain(true)
-            }
             "getAndroidVpnOptions" -> launch { result.successOnMain(Service.getAndroidVpnOptions()) }
-            "getAppliedAndroidVpnOptions" -> launch {
-                result.successOnMain(Service.getAppliedAndroidVpnOptions())
-            }
+            "getAppliedAndroidVpnOptions" -> launch { result.successOnMain(Service.getAppliedAndroidVpnOptions()) }
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
-            "applyRuntimeNodePlan" -> launch {
-                val plan = call.argument<String>("plan") ?: "{\"nodes\":[]}"
-                result.successOnMain(Service.applyRuntimeNodePlan(plan))
-            }
-            "getRuntimeNodePlanState" -> launch {
-                result.successOnMain(Service.getRuntimeNodePlanState())
-            }
-            "getPhysicalNetworkScope" -> {
-                result.success(PhysicalNetworkScope.read(context))
-            }
-            "stopRuntimeNodePlan" -> launch {
-                Service.stopRuntimeNodePlan()
-                result.successOnMain(true)
-            }
-            "probeRuntimeNode" -> launch {
-                val node = call.argument<String>("node") ?: "{}"
-                result.successOnMain(Service.probeRuntimeNode(node))
-            }
-            "probeRuntimeNodes" -> launch {
-                val request = call.argument<String>("request") ?: "{}"
-                result.successOnMain(Service.probeRuntimeNodes(request))
-            }
-            "resolveNativeRuntimeLibrary" -> {
-                val name = call.argument<String>("name") ?: ""
-                val file = File(context.applicationInfo.nativeLibraryDir, name)
-                result.successOnMain(if (name.isNotBlank() && file.exists()) file.absolutePath else "")
-            }
-            "clearQuickStartParams" -> {
-                com.follow.clashx.common.SavedParams.clearQuickStartParams()
-                result.successOnMain(true)
-            }
-            "saveRuntimeNodesState" -> {
-                val args = call.arguments as? Map<*, *>
-                val nodes = args?.get("nodes") as? String ?: ""
-                com.follow.clashx.common.SavedParams.saveRuntimeNodesState(nodes)
-                result.successOnMain(true)
-            }
-            "clearRuntimeNodesState" -> {
-                com.follow.clashx.common.SavedParams.clearRuntimeNodesState()
-                result.successOnMain(true)
-            }
             "showSubscriptionNotification" -> handleShowSubscriptionNotification(call, result)
-            "saveParams" -> {
-                val args = call.arguments as? Map<*, *>
-                val init = args?.get("init") as? String ?: ""
-                val params = args?.get("params") as? String ?: ""
-                val state = args?.get("state") as? String ?: ""
-                com.follow.clashx.common.SavedParams.saveQuickStartParams(init, params, state)
-                result.successOnMain(true)
-            }
             else -> result.notImplemented()
         }
     }
@@ -172,17 +106,6 @@ class ServicePlugin :
         }
         Service.onServiceDisconnected = ::onServiceDisconnected
         launch {
-            if (!runtimeClientAttached) {
-                Service.attachRuntimeNodeClient()
-                    .onSuccess { runtimeClientAttached = true }
-                    .onFailure {
-                        DiagnosticLog.e(
-                            "ServicePlugin",
-                            "attachRuntimeNodeClient failed: ${it.message}",
-                            it,
-                        )
-                    }
-            }
             Service.setEventListener({ value -> dispatchEvent(value) }, owner = this@ServicePlugin)
                 .onSuccess { result.successOnMain("") }
                 .onFailure {
@@ -209,33 +132,15 @@ class ServicePlugin :
     private fun handleShutdown(result: MethodChannel.Result) {
         launch {
             Service.setEventListener(null)
-            detachRuntimeClient()
             Service.unbind()
             result.successOnMain(true)
         }
     }
 
-    private suspend fun detachRuntimeClient() {
-        if (!runtimeClientAttached) return
-        runtimeClientAttached = false
-        Service.detachRuntimeNodeClient()
-    }
-
     private fun onServiceDisconnected(message: String) {
-        runtimeClientAttached = false
         DiagnosticLog.w("ServicePlugin", "remote service disconnected: $message")
-        // A RemoteService binder drop means the IPC bridge (the :remote process) was
-        // recycled — NOT that the tunnel died. FlVpnService is START_STICKY + foreground
-        // and recovers itself via coldStart as long as the persistent isVpnActive flag
-        // stays set. Clearing that flag / forcing STOP here was exactly what dropped the
-        // VPN on some phones when the app was reopened from background: the disconnect
-        // queued while :main was frozen fired on resume and sabotaged the sticky recovery
-        // (coldStart then saw isVpnActive == false and stopped itself). Instead, re-derive
-        // the real state from the StateHub snapshot — handleSyncState keeps START while
-        // the tunnel is genuinely up (recovery bias included) and genuine teardowns arrive
-        // as pushed STOPPED transitions once the connection re-establishes. The "crash"
-        // signal makes Dart re-bind and re-register its event listener against the
-        // reconnected service.
+        // Reconnect IPC and project a fresh Go snapshot. This callback never
+        // derives runtime intent from UI state or SharedPreferences.
         CommonGlobalState.launch { GlobalState.handleSyncState() }
         invokeOnMain("crash", message)
     }
@@ -253,93 +158,6 @@ class ServicePlugin :
                         it,
                     )
                 }
-        }
-    }
-
-    private fun handleQuickStart(call: MethodCall, result: MethodChannel.Result) {
-        val args = call.arguments as? Map<*, *>
-        val initParams = args?.get("init") as? String ?: ""
-        val params = args?.get("params") as? String ?: ""
-        val state = args?.get("state") as? String ?: ""
-        launch {
-            // Service.quickStart completes onResult exactly once (real result /
-            // registration failure / watchdog), so don't also complete here.
-            Service.quickStart(
-                initParams,
-                params,
-                state,
-                onStarted = { invokeOnMain("onStarted", null) },
-                onResult = { payload -> result.successOnMain(payload) },
-            ).onFailure {
-                DiagnosticLog.e(
-                    "ServicePlugin",
-                    "quickStart failed: ${it.message}",
-                    it,
-                )
-            }
-        }
-    }
-
-    private fun handleStart(call: MethodCall, result: MethodChannel.Result) {
-        val json = call.argument<String>("data") ?: call.arguments as? String
-        val options = try {
-            if (json.isNullOrBlank()) VpnOptions() else gson.fromJson(json, VpnOptions::class.java).gsonSanitized()
-        } catch (e: Exception) {
-            DiagnosticLog.e(
-                "ServicePlugin",
-                "VpnOptions parse failed, using defaults: ${e.message}",
-                e,
-            )
-            VpnOptions()
-        }
-        if (options.enable && GlobalState.runStateFlow.value != RunState.START) {
-            val plugin = GlobalState.getCurrentAppPlugin()
-            if (plugin != null) {
-                plugin.requestVpnPermission { granted ->
-                    if (granted) {
-                        doStartService(options, result)
-                    } else {
-                        // User denied/cancelled the VPN consent dialog: resolve the
-                        // pending Flutter call with rt=0 instead of leaving it hanging.
-                        com.follow.clashx.common.SavedParams.setVpnActive(false)
-                        GlobalState.runStateFlow.tryEmit(RunState.STOP)
-                        result.successOnMain(0L)
-                    }
-                }
-            } else {
-                doStartService(options, result)
-            }
-        } else {
-            doStartService(options, result)
-        }
-    }
-
-    private fun doStartService(options: VpnOptions, result: MethodChannel.Result) {
-        launch {
-            val rt = Service.startService(options, GlobalState.runTime)
-            GlobalState.runTime = rt
-            if (rt == 0L) {
-                com.follow.clashx.common.SavedParams.setVpnActive(false)
-            }
-            GlobalState.runStateFlow.tryEmit(if (rt == 0L) RunState.STOP else RunState.START)
-            result.successOnMain(rt)
-        }
-    }
-
-    private fun handleStop(result: MethodChannel.Result) {
-        launch {
-            runCatching { Service.stopService() }
-                .onFailure {
-                    DiagnosticLog.e(
-                        "ServicePlugin",
-                        "stopService failed: ${it.message}",
-                        it,
-                    )
-                }
-            GlobalState.runTime = 0L
-            com.follow.clashx.common.SavedParams.setVpnActive(false)
-            GlobalState.runStateFlow.tryEmit(RunState.STOP)
-            result.successOnMain(true)
         }
     }
 
@@ -369,17 +187,6 @@ class ServicePlugin :
                     )
                 }
             result.successOnMain(true)
-        }
-    }
-
-    private fun handleSyncState(call: MethodCall, result: MethodChannel.Result) {
-        launch {
-            val stateJson = call.arguments<String>() ?: ""
-            if (stateJson.isNotBlank()) {
-                Service.setState(stateJson)
-            }
-            GlobalState.handleSyncState()
-            result.successOnMain("")
         }
     }
 

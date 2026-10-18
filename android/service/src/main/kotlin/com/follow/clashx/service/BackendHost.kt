@@ -7,11 +7,12 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Base64
 import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.SavedParams
+import com.follow.clashx.common.LegacyBackendMigration
 import com.follow.clashx.core.Core
 import com.follow.clashx.core.InvokeInterface
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -37,6 +38,22 @@ object BackendHost {
     private val validator by lazy { BackendValidatorHost(application) }
     @Volatile var onEvent: ((String) -> Unit)? = null
 
+    private val presentations = Channel<Unit>(Channel.CONFLATED)
+    private val projectionWorker = GlobalState.scope.launch {
+        for (signal in presentations) {
+            runCatching {
+                val view = command("presentation").getJSONObject("result")
+                val runtime = command("snapshot").getJSONObject("result").getJSONObject("runtime")
+                projectRuntime(runtime)
+                if (view.optLong("appliedGeneration") == runtime.optLong("appliedGeneration")) {
+                    StateHub.projectPresentation(view)
+                    val previous = State.notificationParamsFlow.value
+                    State.notificationParamsFlow.value = previous.copy(title = view.optString("notificationTitle", "FlClashM"))
+                }
+            }.onFailure { GlobalState.log("backend presentation unavailable: ${it.message}") }
+        }
+    }
+
     suspend fun initialize() = initialization.withLock {
         if (active) return@withLock
         Core.setEventListener(object : InvokeInterface {
@@ -48,6 +65,7 @@ object BackendHost {
                     if (message?.optString("type") == "backend") {
                         projectRuntime(message.getJSONObject("data").getJSONObject("runtime"))
                     }
+                    presentations.trySend(Unit)
                     onEvent?.invoke(result)
                 }
             }
@@ -79,20 +97,22 @@ object BackendHost {
         val options = JSONObject()
             .put("home", application.filesDir.absolutePath)
             .put("sdk", Build.VERSION.SDK_INT)
-            .put("abi", Build.SUPPORTED_ABIS.first())
+            .put("abi", if (android.os.Process.is64Bit()) Build.SUPPORTED_64_BIT_ABIS.first() else Build.SUPPORTED_32_BIT_ABIS.first())
             .put("package", application.packageName)
             .put("executables", executables)
             .put("legacy", legacy)
-            .put("legacyRunning", SavedParams.isVpnActive())
+            .put("legacyRunning", LegacyBackendMigration.wasRunning())
             .put("timeZone", zone.id)
             .put("utcOffset", zone.getOffset(System.currentTimeMillis()) / 1000)
             .put("userAgent", "FlClash X/v$version core/v1.19.32 Platform/android")
             .put("certificates", certificates)
         invoke("backend.open", options)
+        LegacyBackendMigration.removeReplacedRuntimeState()
         active = true
         BackendOSObserver.install()
         val snapshot = command("snapshot").getJSONObject("result")
         projectRuntime(snapshot.getJSONObject("runtime"))
+        presentations.trySend(Unit)
     }
 
     suspend fun invoke(method: String, data: Any?): Any? = withTimeout(90_000L) {
@@ -126,6 +146,9 @@ object BackendHost {
             val result = JSONObject().put("id", id)
             try {
                 val value: Any? = when (request.getString("method")) {
+					"permission.vpn" -> android.net.VpnService.prepare(application) == null
+					"service.hold" -> { BackendForegroundHold.acquire(request.getJSONObject("input").getString("operationId")); true }
+					"service.release" -> { BackendForegroundHold.release(request.getJSONObject("input").getString("operationId")); true }
                     "engine.validate" -> { validator.validate(request.getJSONObject("input").getString("path")); true }
                     "vpn.start" -> { AndroidBackendPlatform.start(id); true }
                     "vpn.stop" -> { AndroidBackendPlatform.stop(); true }

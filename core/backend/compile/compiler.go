@@ -56,14 +56,15 @@ type Node struct {
 	Activation Object            `json:"activation,omitempty"`
 }
 type Prepared struct {
-	Config               Object   `json:"config"`
-	Selected             Object   `json:"selected-map"`
-	TestURL              string   `json:"test-url"`
-	Nodes                []Node   `json:"nodes"`
-	CoreState            Object   `json:"coreState"`
-	Patch                Object   `json:"patch"`
-	Diagnostics          []string `json:"diagnostics"`
-	ProfileAccessControl Object   `json:"profileAccessControl,omitempty"`
+	Config                   Object   `json:"config"`
+	Selected                 Object   `json:"selected-map"`
+	TestURL                  string   `json:"test-url"`
+	Nodes                    []Node   `json:"nodes"`
+	CoreState                Object   `json:"coreState"`
+	Patch                    Object   `json:"patch"`
+	Diagnostics              []string `json:"diagnostics"`
+	ProfileAccessControl     Object   `json:"profileAccessControl,omitempty"`
+	CloseConnectionsOnSelect bool     `json:"closeConnectionsOnSelect"`
 }
 type Compiler struct {
 	Capabilities Capabilities
@@ -274,9 +275,6 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := c.Validate(ctx, config); err != nil {
-		return nil, err
-	}
 	vpn := copyObject(object(settings["vpnProps"]))
 	if _, ok := vpn["enable"]; !ok {
 		vpn["enable"] = true
@@ -301,8 +299,29 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	state := Object{"vpn-props": vpn, "current-profile-name": name, "bypass-domain": bypass}
 	if profileAccess != nil {
 		profileAccess = c.Policy.AccessControl(profileAccess, c.Capabilities)
+		actual := object(config["tun"])
+		if profileAccess["mode"] == "acceptSelected" {
+			actual["include-package"] = profileAccess["acceptList"]
+			delete(actual, "exclude-package")
+		} else {
+			actual["exclude-package"] = profileAccess["rejectList"]
+			delete(actual, "include-package")
+		}
+		config["tun"] = actual
 	}
-	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess})
+	for _, value := range selected {
+		if _, ok := value.(string); !ok {
+			return nil, errors.New("profile selections must contain proxy names")
+		}
+	}
+	if err := c.Validate(ctx, config); err != nil {
+		return nil, err
+	}
+	closeOnSelect := true
+	if value, ok := app["closeConnections"].(bool); ok {
+		closeOnSelect = value
+	}
+	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect})
 }
 func text(value any) string { v, _ := value.(string); return v }
 func list(value any) []any {

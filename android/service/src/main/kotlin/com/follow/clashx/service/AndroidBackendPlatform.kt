@@ -67,5 +67,6 @@ internal object AndroidBackendPlatform {
         Core.stopTun()
         State.runTime = 0L
         State.clearAppliedVpnOptions()
+        BackendForegroundHold.finishIdle()
     }
 }

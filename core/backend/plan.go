@@ -113,6 +113,13 @@ type PlatformAdapter interface {
 	Observe(context.Context) (Observation, error)
 }
 
+// OperationLifetime keeps a service host alive during preparation and plan
+// replacement, before a VPN descriptor exists. It grants no execution rights.
+type OperationLifetime interface {
+	BeginOperation(context.Context, string) error
+	EndOperation(context.Context, string) error
+}
+
 // SelectionAdapter changes selectors and display metadata without replacing
 // engine configuration or platform resources. The coordinator only invokes it
 // after proving that all other plan fields are identical.

@@ -68,6 +68,9 @@ internal object BackendOSObserver {
         emit(JSONObject().put("kind", "screen").put("seq", sequence.incrementAndGet())
             .put("screenOn", power.isInteractive).put("dozing", dozing))
     }
+    fun service(kind: String) {
+        emit(JSONObject().put("kind", kind).put("seq", sequence.incrementAndGet()))
+    }
     private fun emit(event: JSONObject) {
         GlobalState.launch {
             runCatching { BackendHost.invoke("backend.host.event", event) }

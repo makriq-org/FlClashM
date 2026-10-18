@@ -259,8 +259,12 @@ func (backendEngine) Command(ctx context.Context, command backend.EngineCommand)
 		return err
 	}
 	var params struct {
-		Token string `json:"token"`
-		ID    string `json:"id"`
+		Token   string `json:"token"`
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Data    string `json:"data"`
+		GeoType string `json:"geo-type"`
+		GeoName string `json:"geo-name"`
 	}
 	if len(command.Params) > 0 && json.Unmarshal(command.Params, &params) != nil {
 		return errors.New("invalid engine command parameters")
@@ -274,6 +278,28 @@ func (backendEngine) Command(ctx context.Context, command backend.EngineCommand)
 		work := value.(controllerWork)
 		work.handler.ServeHTTP(work.response, work.request.WithContext(ctx))
 		return ctx.Err()
+	case "provider.refresh", "provider.sideload", "geo.update":
+		// Legacy library operations have no context API. Keep the coordinator's
+		// effect lock until completion, including after cancellation: an old
+		// provider must never finish mutating a replacement generation.
+		completed := make(chan string, 1)
+		done := func(value string) { completed <- value }
+		switch command.Method {
+		case "provider.refresh":
+			handleUpdateExternalProvider(params.Name, done)
+		case "provider.sideload":
+			handleSideLoadExternalProvider(params.Name, []byte(params.Data), done)
+		case "geo.update":
+			switch params.GeoType {
+			case "MMDB", "ASN", "GeoIp", "GeoSite":
+			default:
+				return errors.New("unsupported geo type")
+			}
+			handleUpdateGeoData(params.GeoType, params.GeoName, done)
+		}
+		if message := <-completed; message != "" {
+			return errors.New(message)
+		}
 	case "connections.close":
 		handleCloseConnections()
 	case "connection.close":

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
 )
 
 func selectionOnly(previous, next *RuntimePlan) bool {
@@ -13,6 +14,7 @@ func selectionOnly(previous, next *RuntimePlan) bool {
 			return nil, err
 		}
 		delete(data, "selected-map")
+		delete(data, "closeConnectionsOnSelect")
 		if raw, ok := data["coreState"]; ok {
 			var state map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &state); err != nil {
@@ -75,6 +77,19 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 	}
 	if err = updater.ApplySelection(e.ctx, old, next); err != nil {
 		return true, err
+	}
+	var before, after struct {
+		Selected map[string]string `json:"selected-map"`
+		Close    bool              `json:"closeConnectionsOnSelect"`
+	}
+	_ = json.Unmarshal(old.Payload(), &before)
+	_ = json.Unmarshal(next.Payload(), &after)
+	if after.Close && !reflect.DeepEqual(before.Selected, after.Selected) {
+		if commands, ok := c.engine.(EngineCommandAdapter); ok {
+			if err = commands.Command(e.ctx, EngineCommand{Method: "connections.close"}); err != nil {
+				return true, err
+			}
+		}
 	}
 	if err = c.current(e); err != nil {
 		return true, err

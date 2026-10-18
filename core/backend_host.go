@@ -190,7 +190,7 @@ func openApplicationBackend(options backendHostOptions) error {
 	}}
 	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots}
 	compiler := &prepare.Compiler{
-		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: []string{options.Package}, InstalledPackages: func(ctx context.Context) ([]string, error) {
+		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: []string{options.Package, options.Package + ".dev"}, InstalledPackages: func(ctx context.Context) ([]string, error) {
 			var packages []string
 			err := platformBroker.Call(ctx, "packages.list", nil, &packages)
 			return packages, err
@@ -443,6 +443,19 @@ func (backendEngine) Observe(context.Context) (backend.Observation, error) {
 
 type backendPlatform struct{}
 
+func (backendPlatform) VPNPermission(ctx context.Context) (bool, error) {
+	var allowed bool
+	err := platformBroker.Call(ctx, "permission.vpn", nil, &allowed)
+	return allowed, err
+}
+
+func (backendPlatform) BeginOperation(ctx context.Context, id string) error {
+	return platformBroker.Call(ctx, "service.hold", map[string]string{"operationId": id}, nil)
+}
+func (backendPlatform) EndOperation(ctx context.Context, id string) error {
+	return platformBroker.Call(ctx, "service.release", map[string]string{"operationId": id}, nil)
+}
+
 func (backendPlatform) Start(ctx context.Context, plan *backend.RuntimePlan) error {
 	return platformBroker.Call(ctx, "vpn.start", map[string]uint64{"generation": plan.Generation()}, nil)
 }
@@ -517,7 +530,13 @@ func (backendInspection) Selected(ctx context.Context, names []string) (map[stri
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	runLock.Lock()
+	for !runLock.TryLock() {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 	defer runLock.Unlock()
 	result := map[string]string{}
 	proxies := proxiesWithProviders()

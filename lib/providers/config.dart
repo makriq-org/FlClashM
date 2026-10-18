@@ -15,9 +15,7 @@ class AppSetting extends _$AppSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(AppSettingProps value) {
-    globalState.config = globalState.config.copyWith(
-      appSetting: value,
-    );
+    globalState.config = globalState.config.copyWith(appSetting: value);
   }
 
   void updateState(AppSettingProps Function(AppSettingProps state) builder) {
@@ -32,9 +30,7 @@ class WindowSetting extends _$WindowSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(WindowProps value) {
-    globalState.config = globalState.config.copyWith(
-      windowProps: value,
-    );
+    globalState.config = globalState.config.copyWith(windowProps: value);
   }
 
   void updateState(WindowProps Function(WindowProps state) builder) {
@@ -49,9 +45,7 @@ class VpnSetting extends _$VpnSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(VpnProps value) {
-    globalState.config = globalState.config.copyWith(
-      vpnProps: value,
-    );
+    globalState.config = globalState.config.copyWith(vpnProps: value);
   }
 
   void updateState(VpnProps Function(VpnProps state) builder) {
@@ -66,9 +60,7 @@ class NetworkSetting extends _$NetworkSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(NetworkProps value) {
-    globalState.config = globalState.config.copyWith(
-      networkProps: value,
-    );
+    globalState.config = globalState.config.copyWith(networkProps: value);
   }
 
   void updateState(NetworkProps Function(NetworkProps state) builder) {
@@ -83,9 +75,7 @@ class ThemeSetting extends _$ThemeSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(ThemeProps value) {
-    globalState.config = globalState.config.copyWith(
-      themeProps: value,
-    );
+    globalState.config = globalState.config.copyWith(themeProps: value);
   }
 
   void updateState(ThemeProps Function(ThemeProps state) builder) {
@@ -100,15 +90,15 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(List<Profile> value) {
-    globalState.config = globalState.config.copyWith(
-      profiles: value,
-    );
+    globalState.config = globalState.config.copyWith(profiles: value);
   }
 
   String? _getLabel(String? label, String id) {
     final realLabel = label ?? id;
-    final hasDup = state.indexWhere(
-            (element) => element.label == realLabel && element.id != id) !=
+    final hasDup =
+        state.indexWhere(
+          (element) => element.label == realLabel && element.id != id,
+        ) !=
         -1;
     if (hasDup) {
       return _getLabel(utils.getOverwriteLabel(realLabel), id);
@@ -119,8 +109,9 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
 
   void setProfile(Profile profile) {
     final profilesTemp = List<Profile>.from(state);
-    final index =
-        profilesTemp.indexWhere((element) => element.id == profile.id);
+    final index = profilesTemp.indexWhere(
+      (element) => element.id == profile.id,
+    );
     final updateProfile = profile.copyWith(
       label: _getLabel(profile.label, profile.id),
     );
@@ -133,7 +124,9 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
   }
 
   void updateProfile(
-      String profileId, Profile Function(Profile profile) builder) {
+    String profileId,
+    Profile Function(Profile profile) builder,
+  ) {
     final profilesTemp = List<Profile>.from(state);
     final index = profilesTemp.indexWhere((element) => element.id == profileId);
     if (index != -1) {
@@ -155,16 +148,14 @@ class CurrentProfileId extends _$CurrentProfileId
 
   @override
   void onUpdate(String? value) {
-    globalState.config = globalState.config.copyWith(
-      currentProfileId: value,
-    );
+    globalState.config = globalState.config.copyWith(currentProfileId: value);
     unawaited(_syncTileForProfileChange());
   }
 
   Future<void> _syncTileForProfileChange() async {
     // Native tile availability reads the persisted config, so refresh it only
     // after the current profile selection has been flushed to preferences.
-    await preferences.saveConfig(globalState.config);
+    await globalState.flushEdits();
     await productServices.androidShell.syncTileForProfileChange();
   }
 }
@@ -176,9 +167,7 @@ class AppDAVSetting extends _$AppDAVSetting with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(DAV? value) {
-    globalState.config = globalState.config.copyWith(
-      dav: value,
-    );
+    globalState.config = globalState.config.copyWith(dav: value);
   }
 
   void updateState(DAV? Function(DAV? state) builder) {
@@ -193,9 +182,7 @@ class OverrideDns extends _$OverrideDns with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(bool value) {
-    globalState.config = globalState.config.copyWith(
-      overrideDns: value,
-    );
+    globalState.config = globalState.config.copyWith(overrideDns: value);
   }
 }
 
@@ -206,9 +193,7 @@ class HotKeyActions extends _$HotKeyActions with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(List<HotKeyAction> value) {
-    globalState.config = globalState.config.copyWith(
-      hotKeyActions: value,
-    );
+    globalState.config = globalState.config.copyWith(hotKeyActions: value);
   }
 }
 
@@ -220,9 +205,7 @@ class ProxiesStyleSetting extends _$ProxiesStyleSetting
 
   @override
   void onUpdate(ProxiesStyle value) {
-    globalState.config = globalState.config.copyWith(
-      proxiesStyle: value,
-    );
+    globalState.config = globalState.config.copyWith(proxiesStyle: value);
   }
 
   void updateState(ProxiesStyle Function(ProxiesStyle state) builder) {
@@ -237,9 +220,7 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
 
   @override
   void onUpdate(ScriptProps value) {
-    globalState.config = globalState.config.copyWith(
-      scriptProps: value,
-    );
+    globalState.config = globalState.config.copyWith(scriptProps: value);
   }
 
   void setScript(Script script) {
@@ -250,15 +231,11 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
     } else {
       list.add(script);
     }
-    state = state.copyWith(
-      scripts: list,
-    );
+    state = state.copyWith(scripts: list);
   }
 
   void setId(String id) {
-    state = state.copyWith(
-      currentId: state.currentId != id ? id : null,
-    );
+    state = state.copyWith(currentId: state.currentId != id ? id : null);
   }
 
   void del(String id) {
@@ -268,10 +245,7 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
       list.removeAt(index);
     }
     final nextId = id == state.currentId ? null : state.currentId;
-    state = state.copyWith(
-      scripts: list,
-      currentId: nextId,
-    );
+    state = state.copyWith(scripts: list, currentId: nextId);
   }
 
   bool isExits(String label) =>
@@ -294,8 +268,6 @@ class PatchClashConfig extends _$PatchClashConfig
 
   @override
   void onUpdate(ClashConfig value) {
-    globalState.config = globalState.config.copyWith(
-      patchClashConfig: value,
-    );
+    globalState.config = globalState.config.copyWith(patchClashConfig: value);
   }
 }

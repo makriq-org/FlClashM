@@ -319,6 +319,14 @@ func (r *Repository) Put(ctx context.Context, metadata Object, source string, ex
 	return cloneRecord(record), nil
 }
 func (r *Repository) Delete(id string, expected uint64) error {
+	_, err := r.DeleteWithSelection(id, expected, nil)
+	return err
+}
+
+// DeleteWithSelection commits removal and its replacement selection together.
+// beforeLast must durably stop runtime before the last recoverable source is
+// removed. It runs under the catalog lock and must not read the repository.
+func (r *Repository) DeleteWithSelection(id string, expected uint64, beforeLast func() error) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	next := clone(r.state)
@@ -328,17 +336,26 @@ func (r *Repository) Delete(id string, expected uint64) error {
 			continue
 		}
 		if p.Revision != expected {
-			return ErrConflict
+			return false, ErrConflict
 		}
 		next.Profiles = append(next.Profiles[:i], next.Profiles[i+1:]...)
 		var current string
 		_ = json.Unmarshal(next.Settings["currentProfileId"], &current)
-		if current == id {
+		changed := current == id
+		if changed {
 			next.Settings["currentProfileId"] = json.RawMessage("null")
+			if len(next.Profiles) > 0 {
+				next.Settings["currentProfileId"] = bytes.Clone(next.Profiles[0].Metadata["id"])
+			}
 		}
-		return r.persist(next)
+		if len(next.Profiles) == 0 && beforeLast != nil {
+			if err := beforeLast(); err != nil {
+				return false, err
+			}
+		}
+		return changed, r.persist(next)
 	}
-	return ErrNotFound
+	return false, ErrNotFound
 }
 func (r *Repository) UpdateSettings(settings Object, expected uint64) error {
 	r.mu.Lock()
@@ -712,4 +729,12 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		return err
 	}
 	return r.persist(next)
+}
+
+// Reset keeps the migration marker and monotonic catalog generation: legacy
+// SharedPreferences must never repopulate data after an explicit reset.
+func (r *Repository) Reset() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.persist(Document{Version: Version, Revision: r.state.Revision, Migrated: true, Settings: Object{}, Profiles: []Record{}})
 }

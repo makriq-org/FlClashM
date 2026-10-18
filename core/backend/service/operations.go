@@ -17,6 +17,7 @@ const dataVersion = 1
 const maxLedgerBytes = 2 << 20
 
 type Receipt struct {
+	PermissionRequired bool   `json:"permissionRequired,omitempty"`
 	OperationID        string `json:"operationId"`
 	Fingerprint        string `json:"fingerprint"`
 	Method             string `json:"method"`

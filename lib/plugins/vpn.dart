@@ -41,29 +41,17 @@ class Vpn {
     required String actionUrl,
   }) async {
     try {
-      return await const MethodChannelShim().invoke<bool>(
-        'showSubscriptionNotification',
-        <String, String>{
-          'title': title,
-          'message': message,
-          'actionLabel': actionLabel,
-          'actionUrl': actionUrl,
-        },
-      );
+      return await const MethodChannelShim()
+          .invoke<bool>('showSubscriptionNotification', <String, String>{
+            'title': title,
+            'message': message,
+            'actionLabel': actionLabel,
+            'actionUrl': actionUrl,
+          });
     } catch (e) {
       commonPrint.log('showSubscriptionNotification (not wired): $e');
       return false;
     }
-  }
-
-  Future<bool> start({String? optionsJson}) async {
-    final rt = await clashLib?.startVpn(optionsJson: optionsJson) ?? 0;
-    return rt != 0;
-  }
-
-  Future<bool> stop() async {
-    await clashLib?.stopVpn();
-    return true;
   }
 
   final ObserverList<VpnListener> _listeners = ObserverList<VpnListener>();

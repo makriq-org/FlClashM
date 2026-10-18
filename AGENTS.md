@@ -22,16 +22,26 @@
 Главная цепочка:
 
 ```
-RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineManager → EngineAdapter
+RawProfile + настройки + capabilities → Go Compiler + SecurityPolicy
+→ неизменяемый RuntimePlan → внутренний RuntimeCoordinator → EngineAdapter
 ```
 
 Слои:
 
-1. **FlClashX Base** — интерфейс, навигация, базовый runtime path.
-2. **Product Layer** (`lib/product/**`) — форковая логика, политика безопасности,
-   обновления, fork-only страницы.
-3. **Runtime Layer** — `mihomo` (базовый) + встроенные узлы `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
-4. **Platform Layer** — Android VPN, foreground service, installer bridge.
+1. **Flutter** — интерфейс, навигация, пользовательские действия, снимки и события Go API v1.
+2. **Go backend** (`core/backend/**`) — профили, подписки, настройки, компиляция,
+   SecurityPolicy, исполнение и восстановление. RuntimeCoordinator — единственный
+   владелец изменяемого состояния runtime. Пакет проверяется host-тестами без Android.
+3. **Engine/Transport adapters** — mihomo и отдельные внешние процессы
+   `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`; транспорты не встраиваются в mihomo.
+4. **Android host** (`:remote`) — независимый от Flutter процесс backend, разрешения,
+   foreground service, VPN/TUN, события ОС. `:validator` изолирует разбор mihomo.
+5. **Product UI** (`lib/product/**`) — тонкий клиент backend, представление,
+   обновления APK, диагностика и fork-only страницы.
+
+Контракты и миграция: `i18n/ru/docs/development/go-backend/architecture.md`.
+Новые пути не должны возвращать управление runtime в Dart/Kotlin или читать
+legacy SharedPreferences после однократной миграции как источник истины.
 
 **Граница base ↔ product (⚙️ CI):**
 
@@ -199,8 +209,8 @@ chore: обновлён Go до 1.26 и зависимости ядра
 ## Ограничения
 
 - В дереве ещё есть legacy desktop/base код — не цель релизов.
-- Часть UI/lifecycle wiring идёт через legacy `GlobalState`/controller — не ломать baseline
-  при чистке.
+- `GlobalState`/controller и Android StateHub — проекции Go-снимков и команды UI;
+  бизнес-координацию, cold-start параметры и автоматику узлов в них не возвращать.
 - Cold-start и runtime-node path проверять на реальных Android ABI после каждой новой
   встроенной ноды.
 

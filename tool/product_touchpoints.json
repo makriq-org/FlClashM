@@ -9,6 +9,14 @@
       ]
     },
     {
+      "path": "lib/clash/core.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
       "path": "lib/common/android.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
@@ -45,9 +53,8 @@
       "boundary": "runtime-orchestration",
       "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts, including the existing log-export action.",
       "targets": [
-        "lib/product/compile/product_compile.dart",
+        "lib/product/backend/backend.dart",
         "lib/product/diagnostics/product_diagnostics.dart",
-        "lib/product/runtime/product_runtime.dart",
         "lib/product/services/product_services.dart",
         "lib/product/subscription/product_subscription.dart"
       ]
@@ -74,6 +81,14 @@
       "reason": "AppStateManager may forward runtime mode and global-mode changes into AndroidShellService.",
       "targets": [
         "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/models/profile.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
       ]
     },
     {
@@ -106,9 +121,7 @@
       "boundary": "global-runtime-wiring",
       "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
       "targets": [
-        "lib/product/compile/product_compile.dart",
-        "lib/product/runtime/product_runtime.dart",
-        "lib/product/security/product_security.dart"
+        "lib/product/backend/backend.dart"
       ]
     },
     {
@@ -133,6 +146,22 @@
       "reason": "Settings items ask the product layer which switches the subscription provider actually manages, instead of hardcoding the lock in base UI.",
       "targets": [
         "lib/product/subscription/provider_managed_app_settings.dart"
+      ]
+    },
+    {
+      "path": "lib/views/config/general.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/edit_profile.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
       ]
     },
     {
