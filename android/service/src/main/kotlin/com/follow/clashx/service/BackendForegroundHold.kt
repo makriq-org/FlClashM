@@ -57,6 +57,8 @@ internal object BackendForegroundHold {
         val waiter = synchronized(lock) { runtimeStarts[id] }
         if (promoted) waiter?.complete(Unit)
         else waiter?.completeExceptionally(IllegalStateException("foreground host promotion failed"))
+        // A delayed Intent cannot retain an idle host after Stop/cancellation.
+        finishIdle()
     }
 
     fun created(service: BackendForegroundResource) = synchronized(lock) {
