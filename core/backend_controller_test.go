@@ -1,6 +1,8 @@
 package main
 
 import (
+	"core/backend"
+	"encoding/json"
 	"sync/atomic"
 	"testing"
 
@@ -8,6 +10,24 @@ import (
 	"github.com/metacubex/http/httptest"
 	"github.com/metacubex/mihomo/hub/route"
 )
+
+func TestBackendActionPreservesJSONParams(t *testing.T) {
+	var action Action
+	if err := json.Unmarshal([]byte(`{"id":"native","method":"backend","data":{"apiVersion":1,"operationId":"native","method":"settings.patch","params":{"patch":{"unknown":9007199254740993}}}}`), &action); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(action.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request backend.Request
+	if err = json.Unmarshal(raw, &request); err != nil {
+		t.Fatal(err)
+	}
+	if string(request.Input) != `{"patch":{"unknown":9007199254740993}}` {
+		t.Fatalf("native bridge changed params: %s", request.Input)
+	}
+}
 
 func TestBackendHostIdentity(t *testing.T) {
 	for _, test := range []struct {

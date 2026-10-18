@@ -138,7 +138,15 @@ func request(t *testing.T, app *App, id, method string, params any) json.RawMess
 	if params == nil {
 		raw = nil
 	}
-	encoded, _ := json.Marshal(backend.Request{APIVersion: 1, OperationID: id, Method: method, Input: backend.Input(raw)})
+	// Match Kotlin/Flutter's literal wire request, independently of Go DTO encoding.
+	wire := map[string]any{"apiVersion": 1, "operationId": id, "method": method}
+	if params != nil {
+		wire["params"] = json.RawMessage(raw)
+	}
+	encoded, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var response struct {
 		Result json.RawMessage   `json:"result"`
 		Error  *backend.APIError `json:"error"`

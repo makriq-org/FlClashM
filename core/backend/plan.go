@@ -18,7 +18,7 @@ const PlanVersion = 1
 
 // Input is the complete, persisted preparation input. The compiler owns its
 // interpretation. It must contain source data, never an executable client plan.
-type Input json.RawMessage
+type Input = json.RawMessage
 
 // PlanData is the on-disk representation, not an execution capability. Loading
 // it requires digest and version verification before constructing RuntimePlan.
