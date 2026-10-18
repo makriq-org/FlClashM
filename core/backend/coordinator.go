@@ -456,6 +456,11 @@ func (c *runtimeCoordinator) execute(e *execution) {
 		err = c.perform(e)
 	}
 	c.activateNodeLoop(e.epoch)
+	if err != nil && e.ctx.Err() == nil {
+		if diagnostics, ok := c.engine.(RuntimeDiagnostics); ok {
+			diagnostics.RuntimeFailure(e.request.Method, err)
+		}
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err != nil && e.ctx.Err() != nil {
@@ -605,7 +610,17 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	var plan *RuntimePlan
 	var err error
 	if len(next.Desired.Input) > 0 {
-		plan, err = c.compile(e.ctx, bytes.Clone(next.Desired.Input), e.epoch)
+		if compiler, ok := c.compiler.(SelectionCompiler); ok && e.request.Method == "apply" && previous.Applied != nil {
+			old, restoreErr := RestorePlan(previous.Applied.Plan)
+			if restoreErr != nil {
+				err = restoreErr
+			} else {
+				plan, err = compiler.CompileSelection(e.ctx, next.Desired.Input, previous.Applied.Input, old, e.epoch)
+			}
+		}
+		if err == nil && plan == nil {
+			plan, err = c.compile(e.ctx, bytes.Clone(next.Desired.Input), e.epoch)
+		}
 		if err == nil && (plan == nil || plan.Generation() != e.epoch) {
 			err = errors.New("compiler returned invalid generation")
 		}

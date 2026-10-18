@@ -8,6 +8,9 @@ import (
 )
 
 func (a *App) clearProfileArtifacts() error {
+	if lists, ok := a.compiler.Lists.(interface{ Reset() }); ok {
+		lists.Reset()
+	}
 	home := filepath.Clean(a.compiler.Capabilities.HomeDir)
 	if !filepath.IsAbs(home) || home == string(filepath.Separator) {
 		return errors.New("invalid private application directory")

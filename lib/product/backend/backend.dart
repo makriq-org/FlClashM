@@ -3,6 +3,7 @@ import 'backend_client.dart';
 
 export 'backend_client.dart';
 export 'backend_edits.dart';
+export 'profile_refresh.dart';
 
 final backendClient = BackendClient(
   transport: (request) {

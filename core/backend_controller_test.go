@@ -38,6 +38,7 @@ func TestBackendHostIdentity(t *testing.T) {
 		{"/data/user/0/com.makriq.flclash/files", "com.makriq.flclash", true},
 		{"/data/user/0/com.makriq.flclash.dev/files", "com.makriq.flclash.dev", true},
 		{"/data/user/0/com.makriq.flclash.backendtest/files", "com.makriq.flclash.backendtest", true},
+		{"/data/user/0/com.makriq.flclash.backendcheck/files", "com.makriq.flclash.backendcheck", true},
 		{"relative/files", "com.makriq.flclash", false},
 		{"", "com.makriq.flclash.dev", false},
 		{"/private/files", "com.makriq.flclash.other", false},
@@ -52,8 +53,24 @@ func TestBackendHostIdentity(t *testing.T) {
 
 func TestBackendTestSelfBypass(t *testing.T) {
 	packages := backendSelfPackages("com.makriq.flclash.backendtest")
-	if strings.Join(packages, ",") != "com.makriq.flclash,com.makriq.flclash.dev,com.makriq.flclash.backendtest" {
+	if strings.Join(packages, ",") != "com.makriq.flclash,com.makriq.flclash.dev,com.makriq.flclash.backendtest,com.makriq.flclash.backendcheck" {
 		t.Fatalf("test package self bypass: %v", packages)
+	}
+}
+
+func TestAndroidInstallationsHaveDisjointTransportPorts(t *testing.T) {
+	seen := map[int]bool{}
+	for _, name := range []string{"com.makriq.flclash", "com.makriq.flclash.dev", "com.makriq.flclash.backendtest", "com.makriq.flclash.backendcheck"} {
+		offset := backendNodePortOffset(name)
+		for port := 35000 + offset; port < 36456+offset; port++ {
+			if seen[port] {
+				t.Fatalf("installations share transport port %d", port)
+			}
+			seen[port] = true
+		}
+		if strings.Join(backendSelfPackages(name), ",") != "com.makriq.flclash,com.makriq.flclash.dev,com.makriq.flclash.backendtest,com.makriq.flclash.backendcheck" {
+			t.Fatal("installation can route a sibling transport back into its own VPN", name)
+		}
 	}
 }
 

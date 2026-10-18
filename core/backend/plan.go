@@ -87,6 +87,12 @@ type Compiler interface {
 	Compile(context.Context, Input, uint64) (*RuntimePlan, error)
 }
 
+// RuntimeDiagnostics is a trusted host sink, never a public API error. The host
+// must redact messages before persisting them, just like transport stderr.
+type RuntimeDiagnostics interface {
+	RuntimeFailure(string, error)
+}
+
 type Observation struct {
 	State   string `json:"state"` // stopped, running, unknown, degraded
 	Message string `json:"message,omitempty"`

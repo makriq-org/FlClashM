@@ -118,6 +118,27 @@ func TestProcessDiagnosticsCaptureBothStreamsAndExitStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessCannotBorrowAnExistingListener(t *testing.T) {
+	t.Setenv("FLCLASHM_TRANSPORT_HELPER", "1")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	executable, _ := os.Executable()
+	adapter := &ProcessAdapter{Home: t.TempDir(), ABI: "host", Executables: map[string]string{"byedpi": executable}}
+	node := testNode(t, "byedpi", listener.Addr().(*net.TCPAddr).Port)
+	if err = adapter.Prepare(context.Background(), node); err != nil {
+		t.Fatal(err)
+	}
+	if err = adapter.Start(context.Background(), backend.NodeLaunch{Node: node}); err == nil {
+		t.Fatal("foreign listener was accepted as transport readiness")
+	}
+	if observed, err := adapter.Observe(context.Background(), node.ID); err != nil || observed.State != "stopped" {
+		t.Fatal("failed bind left a managed process", observed, err)
+	}
+}
 func testNode(t *testing.T, kind string, port int) backend.NodePlan {
 	t.Helper()
 	id := kind + "-" + strings.Repeat("a", 32)

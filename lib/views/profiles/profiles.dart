@@ -45,14 +45,10 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
     final messages = [];
     final updateProfiles = profiles.map<Future>((profile) async {
       if (profile.type == ProfileType.file) return;
-      globalState.appController.setProfile(profile.copyWith(isUpdating: true));
       try {
         await globalState.appController.updateProfile(profile);
       } catch (e) {
         messages.add("${profile.label ?? profile.id}: $e \n");
-        globalState.appController.setProfile(
-          profile.copyWith(isUpdating: false),
-        );
       }
     });
     final titleMedium = context.textTheme.titleMedium;

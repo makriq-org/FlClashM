@@ -133,13 +133,13 @@ func TestScriptPreparationAndRuleOverride(t *testing.T) {
 	c := Compiler{Scripts: JavaScript{}, Validate: func(context.Context, Object) error { return nil }}
 	request := Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "rules: [old]\n", Metadata: Object{"overrideData": Object{"enable": true, "rule": Object{"type": "added", "addedRules": []any{Object{"value": "new"}}}}}}, Settings: Object{}}
 	result := prepared(t, c, request)
-	if !reflect.DeepEqual(result.Config["rule"], []any{"new", "old"}) {
-		t.Fatalf("rules %#v", result.Config["rule"])
+	if !reflect.DeepEqual(result.Config["rules"], []any{"new", "old"}) {
+		t.Fatalf("rules %#v", result.Config["rules"])
 	}
 	request.Settings["scriptProps"] = Object{"currentId": "js", "scripts": []any{Object{"id": "js", "content": `async function main(config) { config.rules=['script']; delete config['proxy-providers']; return config; }`}}}
 	result = prepared(t, c, request)
-	if !reflect.DeepEqual(result.Config["rule"], []any{"script"}) {
-		t.Fatalf("script not authoritative %#v", result.Config["rule"])
+	if !reflect.DeepEqual(result.Config["rules"], []any{"script"}) {
+		t.Fatalf("script not authoritative %#v", result.Config["rules"])
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

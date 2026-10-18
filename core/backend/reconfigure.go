@@ -2,10 +2,17 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 )
+
+// SelectionCompiler may reuse a validated committed plan when only proxy
+// selections changed. A nil plan requests ordinary preparation instead.
+type SelectionCompiler interface {
+	CompileSelection(context.Context, Input, Input, *RuntimePlan, uint64) (*RuntimePlan, error)
+}
 
 func selectionOnly(previous, next *RuntimePlan) bool {
 	strip := func(plan *RuntimePlan) ([]byte, error) {

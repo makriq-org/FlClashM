@@ -15,6 +15,7 @@ class ClientHost {
   bool running = true;
   final blobs = <int>[];
   final operations = <String, Map<String, dynamic>>{};
+  Map<String, dynamic> extraSettings = {};
   Map<String, dynamic> get runtime => {
     'instanceId': instance,
     'appliedGeneration': generation,
@@ -27,7 +28,11 @@ class ClientHost {
     'runtime': runtime,
     'catalog': {
       'revision': revision,
-      'settings': {'unknown': 9007199254740993, 'currentProfileId': 'one'},
+      'settings': {
+        'unknown': 9007199254740993,
+        'currentProfileId': 'one',
+        ...extraSettings,
+      },
       'profiles': [
         {
           'metadata': {'id': 'one', 'label': 'Original'},
@@ -83,6 +88,28 @@ class ClientHost {
 }
 
 void main() {
+  test('custom controller endpoints project their enabled state without changing backend data', () async {
+    final host = ClientHost()
+      ..extraSettings = {
+        'patchClashConfig': {'external-controller': '127.0.0.1:17892'},
+      };
+    final client = BackendClient(
+      transport: host.call,
+      events: host.events.stream,
+    );
+    await client.attach();
+    expect(
+      (client.settings['patchClashConfig'] as Map)['external-controller'],
+      '127.0.0.1:9090',
+    );
+    final settings = (client.snapshot['catalog'] as Map)['settings'] as Map;
+    expect(
+      (settings['patchClashConfig'] as Map)['external-controller'],
+      '127.0.0.1:17892',
+    );
+    await client.detach();
+    await host.close();
+  });
   test(
     'snapshot and events reject stale state and resync after process replacement',
     () async {

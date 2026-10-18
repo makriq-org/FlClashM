@@ -67,7 +67,7 @@ class AppController {
         proxyName: proxyName,
       );
       await updateGroups();
-    }, args: [groupName, proxyName]);
+    }, args: [groupName, proxyName], duration: const Duration(milliseconds: 50));
   }
 
   Future<void> syncAndroidForegroundNotification() async {
@@ -248,13 +248,24 @@ class AppController {
     if (context.mounted) _ref.read(localIpProvider.notifier).value = address;
   }
 
-  Future<void> updateProfile(Profile profile) async {
-    await backendClient.command('subscription.refresh', {
-      'profileId': profile.id,
-    });
-    final current = globalState.config.profiles.getProfile(profile.id);
-    if (current != null) _showProductNotices(current);
-  }
+  final _profileRefreshes = ProfileRefreshes();
+
+  Future<void> updateProfile(Profile profile) => _profileRefreshes.run(
+    profile.id,
+    setLoading: ({required loading}) {
+      final current = globalState.config.profiles.getProfile(profile.id);
+      if (current != null && context.mounted) {
+        setProfile(current.copyWith(isUpdating: loading));
+      }
+    },
+    refresh: () async {
+      await backendClient.command('subscription.refresh', {
+        'profileId': profile.id,
+      });
+      final current = globalState.config.profiles.getProfile(profile.id);
+      if (current != null) _showProductNotices(current);
+    },
+  );
 
   void _showProductNotices(Profile profile) {
     final advisory = ProductProviderAdvisory.fromProfile(profile);
