@@ -4,6 +4,9 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.follow.clashx.common.GlobalState
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withTimeout
 
 interface BackendForegroundResource : IBaseService {
@@ -16,6 +19,7 @@ internal object BackendForegroundHold {
     private val lock = Any()
     private val holds = mutableMapOf<String, CompletableDeferred<Unit>>()
     private val services = mutableSetOf<BackendForegroundResource>()
+    private val available = MutableStateFlow<List<BackendForegroundResource>>(emptyList())
     val held: Boolean get() = synchronized(lock) { holds.isNotEmpty() }
 
     suspend fun acquire(id: String) {
@@ -37,8 +41,17 @@ internal object BackendForegroundHold {
         }
     }
 
-    fun created(service: BackendForegroundResource) = synchronized(lock) { services.add(service); Unit }
-    fun destroyed(service: BackendForegroundResource) = synchronized(lock) { services.remove(service); Unit }
+    fun created(service: BackendForegroundResource) = synchronized(lock) {
+        services.add(service)
+        available.value = services.toList()
+    }
+    fun destroyed(service: BackendForegroundResource) = synchronized(lock) {
+        services.remove(service)
+        available.value = services.toList()
+    }
+    suspend fun awaitService(type: Class<out android.app.Service>): BackendForegroundResource = withTimeout(30_000L) {
+        available.mapNotNull { values -> values.firstOrNull { !it.destroyed && type.isInstance(it) } }.first()
+    }
     fun acknowledge(id: String?, promoted: Boolean) {
         val waiter = synchronized(lock) { holds[id] }
         if (promoted) waiter?.complete(Unit)

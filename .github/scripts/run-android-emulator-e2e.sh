@@ -11,6 +11,9 @@ capture_diagnostics() {
   adb shell dumpsys notification --noredact > "$artifacts/notifications.txt" 2>&1 || true
   adb shell ps -A > "$artifacts/processes.txt" 2>&1 || true
   adb shell cmd appops get com.makriq.flclash.dev > "$artifacts/appops.txt" 2>&1 || true
+  adb exec-out run-as com.makriq.flclash.dev cat files/backend/backend-v1.json | \
+    python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("applied") or {}; print(json.dumps({"desiredRunning":d["desired"]["running"],"appliedRunning":a.get("running"),"generation":a.get("plan",{}).get("generation"),"pending":d.get("pending"),"receipts":d.get("receipts",[])}))' \
+    > "$artifacts/journal-summary.json" 2>&1 || true
 }
 trap capture_diagnostics EXIT
 

@@ -5,9 +5,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.ProxyInfo
 import android.net.VpnService
-import android.os.Binder
 import android.os.Build
-import android.os.IBinder
 import android.os.PowerManager
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.promoteToForeground
@@ -20,8 +18,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** VPN descriptors and Android resources only; Go owns every runtime intent. */
 class FlVpnService : VpnService(), BackendForegroundResource {
-    inner class LocalBinder : Binder() { val service: FlVpnService = this@FlVpnService }
-    private val binder = LocalBinder()
     private val resources = Any()
     @Volatile private var tunActive = false
     @Volatile private var revoked = false
@@ -38,9 +34,6 @@ class FlVpnService : VpnService(), BackendForegroundResource {
             GlobalState.launch { notifications.install() }
         } else { stopSelf() }
     }
-    override fun onBind(intent: Intent?): IBinder =
-        if (intent?.action == SERVICE_INTERFACE) super.onBind(intent) ?: binder else binder
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val promoted = promoteToForeground(R.drawable.ic_notification, "FlClashM")
         if (intent?.action == BackendForegroundHold.ACTION_HOLD) {

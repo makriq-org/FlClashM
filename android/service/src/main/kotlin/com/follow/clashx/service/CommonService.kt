@@ -2,7 +2,6 @@ package com.follow.clashx.service
 
 import android.app.Service
 import android.content.Intent
-import android.os.Binder
 import android.os.IBinder
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.promoteToForeground
@@ -13,8 +12,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** Foreground resource for proxy-only execution. No runtime policy. */
 class CommonService : Service(), BackendForegroundResource {
-    inner class LocalBinder : Binder() { val service: CommonService = this@CommonService }
-    private val binder = LocalBinder()
     private val resources = Any()
     @Volatile override var destroyed = false
     @Volatile private var active = false
@@ -28,7 +25,7 @@ class CommonService : Service(), BackendForegroundResource {
             GlobalState.launch { notifications.install() }
         } else stopSelf()
     }
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!promoteToForeground(R.drawable.ic_notification, "FlClashM")) { stopSelf(); return START_NOT_STICKY }
         if (intent?.action != AndroidBackendPlatform.ACTION_APPLY) {

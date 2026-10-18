@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
 import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.ServiceDelegate
 import com.follow.clashx.core.Core
 import com.follow.clashx.service.models.VpnOptions
 import com.follow.clashx.service.models.gsonSanitized
@@ -21,6 +20,7 @@ import kotlin.coroutines.coroutineContext
 internal object AndroidBackendPlatform {
     const val ACTION_APPLY = "com.makriq.flclash.backend.APPLY"
     private val lock = Mutex()
+    private var active: BackendForegroundResource? = null
 
     suspend fun start(request: String) = lock.withLock {
         val context = GlobalState.application
@@ -29,22 +29,16 @@ internal object AndroidBackendPlatform {
         coroutineContext.ensureActive()
         val serviceClass: Class<out Service> = if (options.enable) FlVpnService::class.java else CommonService::class.java
         val intent = Intent(context, serviceClass).setAction(ACTION_APPLY)
-        val delegate = ServiceDelegate<IBaseService>(intent, onDisconnected = {}) { binder ->
-            when (binder) {
-                is FlVpnService.LocalBinder -> binder.service
-                is CommonService.LocalBinder -> binder.service
-                else -> null
-            }
-        }
         try {
-            check(State.delegate == null) { "platform resources were not released" }
-            State.delegate = delegate
+            check(active == null) { "platform resources were not released" }
             ContextCompat.startForegroundService(context, intent)
-            delegate.bind()
-            delegate.useService(timeoutMillis = 30_000L) { service ->
-                coroutineContext.ensureActive()
-                service.handleStart(options)
-            }.getOrThrow()
+            // Both objects live in :remote. Self-binding a service makes Android
+            // unbind a dead client from itself during process cleanup, which can
+            // remove the sticky service from the restart list before scheduling.
+            val service = BackendForegroundHold.awaitService(serviceClass)
+            active = service
+            coroutineContext.ensureActive()
+            service.handleStart(options)
             coroutineContext.ensureActive()
         } catch (error: Throwable) {
             withContext(NonCancellable) { stopLocked() }
@@ -55,17 +49,19 @@ internal object AndroidBackendPlatform {
     suspend fun stop() = lock.withLock { stopLocked() }
 
     private suspend fun stopLocked() {
-        val delegate = State.delegate
-        if (delegate != null) {
-            try { delegate.useService(timeoutMillis = 15_000L) { it.handleStop() }.getOrThrow() }
-            finally { delegate.unbind(); State.delegate = null }
-        } else {
-            State.tunOwner.get()?.handleStop()
-            State.commonOwner.get()?.handleStop()
+        val service = active
+        active = null
+        try {
+            if (service != null) service.handleStop()
+            else {
+                State.tunOwner.get()?.handleStop()
+                State.commonOwner.get()?.handleStop()
+            }
+        } finally {
+            Core.stopTun()
+            State.runTime = 0L
+            State.clearAppliedVpnOptions()
+            BackendForegroundHold.finishIdle()
         }
-        Core.stopTun()
-        State.runTime = 0L
-        State.clearAppliedVpnOptions()
-        BackendForegroundHold.finishIdle()
     }
 }
