@@ -884,6 +884,31 @@
       "path": "android/build.gradle.kts",
       "bucket": "budget",
       "reason": "Добавлены узкие настройки Kotlin для flutter_js и file_picker: согласованные JVM-цели и компиляция в режиме совместимости AGP 9."
+    },
+    {
+      "path": "core/backend/api.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
+    },
+    {
+      "path": "core/backend/coordinator.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
+    },
+    {
+      "path": "core/backend/coordinator_test.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
+    },
+    {
+      "path": "core/backend/plan.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
+    },
+    {
+      "path": "core/backend/store.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
     }
   ]
 }
