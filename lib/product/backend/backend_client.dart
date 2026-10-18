@@ -18,6 +18,7 @@ class BackendClient {
   StreamSubscription<Map<String, dynamic>>? _subscription;
   Future<void>? _refreshing;
   bool _refreshAgain = false;
+  (String, Future<Map<String, dynamic>>)? _runCommand;
   Map<String, dynamic> _snapshot = {};
   Map<String, dynamic> _view = {};
   String _instance = '';
@@ -77,7 +78,27 @@ class BackendClient {
     String method, [
     Map<String, dynamic>? params,
     String? id,
-  ]) async {
+  ]) {
+    if (id != null ||
+        (params != null && params.isNotEmpty) ||
+        (method != 'runtime.start' && method != 'runtime.stop')) {
+      return _command(method, params, id);
+    }
+    final pending = _runCommand;
+    if (pending?.$1 == method) return pending!.$2;
+    late final Future<Map<String, dynamic>> task;
+    task = _command(method, params, id).whenComplete(() {
+      if (identical(_runCommand?.$2, task)) _runCommand = null;
+    });
+    _runCommand = (method, task);
+    return task;
+  }
+
+  Future<Map<String, dynamic>> _command(
+    String method,
+    Map<String, dynamic>? params,
+    String? id,
+  ) async {
     final operation = id ?? operationId();
     final receipt = _map(await request(method, params, operation));
     final completed = await wait(operation, initial: receipt);

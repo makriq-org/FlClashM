@@ -163,6 +163,14 @@
       "targets": [
         "lib/product/subscription/provider_advisory.dart"
       ]
+    },
+    {
+      "path": "lib/clash/lib.dart",
+      "boundary": "backend-ui-connection",
+      "reason": "Тонкий Android bridge восстанавливает IPC через UI-клиент, не управляя runtime.",
+      "targets": [
+        "lib/product/backend/backend_connection.dart"
+      ]
     }
   ],
   "allowedProductUi": [

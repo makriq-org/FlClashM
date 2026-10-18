@@ -1449,6 +1449,11 @@
       "path": "core/backend/compile/package_cache_test.go",
       "bucket": "budget",
       "reason": "Проверены работа без сети, проверка содержимого и отмена записи кэша после сброса."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Service.kt",
+      "bucket": "budget",
+      "reason": "После выгрузки процесса Android создаётся новое IPC-подключение с ограниченными повторами."
     }
   ]
 }

@@ -53,6 +53,7 @@ class ClientHost {
           'config': {'mode': 'rule'},
         };
       case 'runtime.start':
+      case 'runtime.stop':
         result = {'operationId': request['operationId'], 'status': 'accepted'};
         operations[request['operationId'] as String] = {
           'operationId': request['operationId'],
@@ -88,6 +89,35 @@ class ClientHost {
 }
 
 void main() {
+  test('repeated Start shares one operation while Stop remains immediate', () async {
+    final host = ClientHost();
+    final gate = Completer<void>();
+    var starts = 0;
+    final client = BackendClient(
+      transport: (request) async {
+        if (request['method'] == 'runtime.start') {
+          starts++;
+          await gate.future;
+        }
+        return host.call(request);
+      },
+      events: host.events.stream,
+    );
+    final start = client.command('runtime.start');
+    expect(identical(start, client.command('runtime.start')), isTrue);
+    expect(starts, 1);
+    await client.command('runtime.stop');
+    expect(host.requests.where((r) => r['method'] == 'runtime.stop'), hasLength(1));
+    // A deliberate Start after Stop is a new intent, even while the old Start waits.
+    final again = client.command('runtime.start');
+    expect(starts, 2);
+    gate.complete();
+    await Future.wait([start, again]);
+    await client.command('runtime.start');
+    expect(starts, 3);
+    await host.close();
+  });
+
   test('custom controller endpoints project their enabled state without changing backend data', () async {
     final host = ClientHost()
       ..extraSettings = {

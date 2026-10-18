@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter/services.dart';
+import 'package:flclashx/product/backend/backend_connection.dart';
 
 import 'interface.dart';
 
@@ -51,28 +52,25 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     return Map<String, dynamic>.from(envelope['data'] as Map);
   }
 
-  Completer<bool> _initCompleter = Completer<bool>();
-  // Guards against launching a second concurrent native `init` while a prior
-  // _init() is still awaiting (its completer not yet settled).
-  bool _initInFlight = false;
+  late final _connection = BackendConnection(connect: _connect);
+  bool get _initInFlight => _connection.connecting;
 
   static const int _maxCrashRetries = 5;
   int _crashCount = 0;
   DateTime? _lastCrashTime;
 
-  Future<void> _init() async {
-    _initInFlight = true;
+  Future<void> _init() async => _connection.ensure().then((_) {});
+
+  Future<bool> _connect() async {
     try {
       await _channel
           .invokeMethod<String>('init')
           .timeout(const Duration(seconds: 15));
       _crashCount = 0;
-      if (!_initCompleter.isCompleted) _initCompleter.complete(true);
+      return true;
     } catch (e) {
       commonPrint.log('ClashLib init failed: $e');
-      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
-    } finally {
-      _initInFlight = false;
+      return false;
     }
   }
 
@@ -90,7 +88,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         'service crash loop: $_crashCount crashes, giving up. '
         'Restart the app to retry.',
       );
-      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
       return;
     }
 
@@ -106,7 +103,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
       commonPrint.log('service crash restart skipped: init already in flight');
       return;
     }
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
   }
 
@@ -130,6 +126,7 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         }
         return null;
       case 'crash':
+        _connection.invalidate();
         commonPrint.log('service crash: ${call.arguments}');
         unawaited(_handleCrashRestart());
         return null;
@@ -141,47 +138,34 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   @override
-  Future<bool> preload() => _initCompleter.future;
+  Future<bool> preload() => _crashCount > _maxCrashRetries
+      ? Future.value(false)
+      : _connection.ensure();
 
   @override
   Future<bool> destroy() async {
+    _connection.invalidate();
     try {
       await _channel.invokeMethod<bool>('shutdown');
     } catch (_) {}
-    // shutdown unbinds the remote service; re-arm init state so a later preload()/
-    // reconnectIfNeeded() forces a fresh bind + event-listener registration instead
-    // of reporting "ready" against a dead service.
+    // The next request establishes a new binding and event listener.
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     return true;
   }
 
   @override
   void reStart() {
+    _connection.invalidate();
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
   }
 
   void reconnectIfNeeded() {
-    // An init is already running (completer not yet settled); let it finish
-    // rather than spawning a second concurrent native init.
-    if (_initInFlight) {
-      return;
-    }
-    // Re-register on EVERY resume (no _initSucceeded short-circuit): the event pipe is
-    // registered once per Flutter engine, but a warm app-open after a headless tile
-    // start keeps this engine alive while the :remote core it registered against has
-    // been recycled (eventListener==nil) — so logs/journal/delays silently stop
-    // arriving even though the polled traffic keeps working. Re-invoking init re-binds
-    // and re-registers the listener idempotently (Service.bind no-ops if bound;
-    // setEventListener swaps the listener under a lock). Still respect the crash budget
-    // so a genuine crash-loop doesn't spin.
-    if (_crashCount > _maxCrashRetries) {
-      return;
-    }
+    if (_initInFlight || _crashCount > _maxCrashRetries) return;
+    // Re-arm the event pipe on foreground entry, even when the old remote
+    // process was replaced while this Flutter engine remained alive.
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
+    _connection.invalidate();
     unawaited(_init());
   }
 

@@ -97,6 +97,21 @@ class AndroidRuntimeE2eTest {
         rules: ['MATCH,REJECT']
     """.trimIndent()
 
+    @Test fun packagedBinderReconnect() = runBlocking {
+        Service.bind()
+        val previous = snapshot().getString("instanceId")
+        val process = remotePid()
+        assertTrue("Remote process not found", process > 0)
+        Process.killProcess(process)
+        withTimeout(12_000L) {
+            await("fresh binding after process eviction") {
+                runCatching { snapshot().getString("instanceId") != previous }.getOrDefault(false)
+            }
+        }
+        // The foreground UI can now issue requests without recreating its own process.
+        assertNotEquals(previous, snapshot().getString("instanceId"))
+    }
+
     @Test fun packagedBackendLifecycle() = runBlocking {
         assertTrue("Packaged Android ABI required", android.os.Build.SUPPORTED_ABIS.any {
             it in listOf("x86_64", "arm64-v8a", "armeabi-v7a")

@@ -16,46 +16,55 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 fun Context.bindServiceFlow(
     intent: Intent,
     flags: Int = Context.BIND_AUTO_CREATE,
     maxRetries: Int = 5,
     initialDelayMillis: Long = 500L,
-): Flow<IBinder?> = callbackFlow {
-    val connection = object : ServiceConnection {
-        // No linkToDeath: the framework already delivers onServiceDisconnected when
-        // the :remote process dies. A DeathRecipient here only duplicated the signal
-        // (inflating the Dart crash counter) and leaked recipients across rebinds.
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            trySend(binder)
-        }
+): Flow<IBinder?> {
+    val failures = AtomicInteger()
+    return callbackFlow {
+        val connection = object : ServiceConnection {
+            // No linkToDeath: the framework already delivers onServiceDisconnected when
+            // the :remote process dies. A DeathRecipient here only duplicated the signal
+            // (inflating the Dart crash counter) and leaked recipients across rebinds.
+            override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                failures.set(0)
+                trySend(binder)
+            }
 
-        override fun onServiceDisconnected(name: ComponentName?) {
-            trySend(null)
-        }
+            override fun onServiceDisconnected(name: ComponentName?) {
+                trySend(null)
+                // A fresh bind avoids waiting indefinitely for Android to recreate
+                // an old binding after a cached process is evicted under pressure.
+                close(IllegalStateException("service disconnected: $name"))
+            }
 
-        override fun onBindingDied(name: ComponentName?) {
-            close(IllegalStateException("binding died for $name"))
-        }
+            override fun onBindingDied(name: ComponentName?) {
+                close(IllegalStateException("binding died for $name"))
+            }
 
-        override fun onNullBinding(name: ComponentName?) {
-            close(IllegalStateException("null binding for $name"))
+            override fun onNullBinding(name: ComponentName?) {
+                close(IllegalStateException("null binding for $name"))
+            }
         }
+        val bound = bindService(intent, connection, flags)
+        if (!bound) {
+            close(IllegalStateException("bindService returned false for ${intent.component}"))
+            return@callbackFlow
+        }
+        awaitClose { runCatching { unbindService(connection) } }
+    }.retryWhen { cause, _ ->
+        val attempt = failures.getAndIncrement()
+        val retry = attempt < maxRetries && cause is Exception
+        if (retry) {
+            val backoff = initialDelayMillis * (1L shl attempt.coerceAtMost(4))
+            delay(backoff)
+        }
+        retry
     }
-    val bound = bindService(intent, connection, flags)
-    if (!bound) {
-        close(IllegalStateException("bindService returned false for ${intent.component}"))
-        return@callbackFlow
-    }
-    awaitClose { runCatching { unbindService(connection) } }
-}.retryWhen { cause, attempt ->
-    val retry = attempt < maxRetries && cause is Exception
-    if (retry) {
-        val backoff = initialDelayMillis * (1L shl attempt.toInt().coerceAtMost(4))
-        delay(backoff)
-    }
-    retry
 }
 
 class ServiceDelegate<T : Any>(
