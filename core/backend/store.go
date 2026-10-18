@@ -13,27 +13,32 @@ import (
 
 var ErrNoState = errors.New("backend state does not exist")
 
-const maxStateBytes = 32 << 20
+// Desired input, committed input and compiled artifacts share one atomic file.
+// Reserve room for two compatible 16 MiB source profiles plus their JSON plans.
+const maxStateBytes = 128 << 20
 
 type Desired struct {
 	Running bool  `json:"running"`
 	Input   Input `json:"input,omitempty"`
 }
 type Applied struct {
-	Plan    PlanData `json:"plan"`
-	Input   Input    `json:"input"`
-	Running bool     `json:"running"`
+	Plan    PlanData                 `json:"plan"`
+	Input   Input                    `json:"input"`
+	Running bool                     `json:"running"`
+	Nodes   map[string]NodePersisted `json:"nodes,omitempty"`
 }
 type Pending struct {
 	Fingerprint string `json:"fingerprint"`
 	OperationID string `json:"operationId"`
 	Method      string `json:"method"`
+	NodeID      string `json:"nodeId,omitempty"`
 	Generation  uint64 `json:"generation"`
 }
 type Receipt struct {
 	OperationID string `json:"operationId"`
 	Fingerprint string `json:"fingerprint"`
 	Status      string `json:"status"`
+	Method      string `json:"method,omitempty"`
 	Generation  uint64 `json:"generation"`
 	Error       string `json:"error,omitempty"`
 }
@@ -108,6 +113,13 @@ func (s *FileStore) load() (Document, error) {
 		return Document{}, err
 	}
 	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return Document{}, err
+	}
+	if info.Size() > maxStateBytes {
+		return Document{}, errors.New("backend state exceeds size limit")
+	}
 	raw, err := io.ReadAll(io.LimitReader(f, maxStateBytes+1))
 	if err != nil {
 		return Document{}, err

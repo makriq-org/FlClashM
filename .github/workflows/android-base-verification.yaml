@@ -126,6 +126,9 @@ jobs:
       - name: Run product and tool tests
         run: flutter test test/product test/tool
 
+      - name: Analyze application compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib
+
       - name: Run targeted analyze
         run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
@@ -178,6 +181,7 @@ jobs:
             -Ptarget-platform=android-arm64 \
             -Ptarget=lib/main.dart \
             :app:testDebugUnitTest \
+            :common:testDebugUnitTest \
             :service:testDebugUnitTest
 
       - name: Setup Go
@@ -199,10 +203,6 @@ jobs:
             --target-platform android-arm64 \
             --dart-define=APP_ENV=pre \
             --dart-define=CORE_VERSION="$core_version"
-
-      - name: Run Android unit tests
-        working-directory: android
-        run: ./gradlew :common:testDebugUnitTest :service:testDebugUnitTest
 
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk

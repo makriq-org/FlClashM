@@ -1,0 +1,322 @@
+{
+  "aliases": {
+    "arq.initial-rto": {
+      "key": "ARQ_INITIAL_RTO_SECONDS",
+      "duration": true
+    },
+    "arq.max-rto": {
+      "key": "ARQ_MAX_RTO_SECONDS",
+      "duration": true
+    },
+    "arq.control-initial-rto": {
+      "key": "ARQ_CONTROL_INITIAL_RTO_SECONDS",
+      "duration": true
+    },
+    "arq.control-max-rto": {
+      "key": "ARQ_CONTROL_MAX_RTO_SECONDS",
+      "duration": true
+    },
+    "arq.inactivity-timeout": {
+      "key": "ARQ_INACTIVITY_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "arq.data-packet-ttl": {
+      "key": "ARQ_DATA_PACKET_TTL_SECONDS",
+      "duration": true
+    },
+    "arq.control-packet-ttl": {
+      "key": "ARQ_CONTROL_PACKET_TTL_SECONDS",
+      "duration": true
+    },
+    "arq.nack-initial-delay": {
+      "key": "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS",
+      "duration": true
+    },
+    "arq.nack-repeat": {
+      "key": "ARQ_DATA_NACK_REPEAT_SECONDS",
+      "duration": true
+    },
+    "arq.terminal-drain-timeout": {
+      "key": "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "arq.terminal-ack-wait-timeout": {
+      "key": "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "arq.window": {
+      "key": "ARQ_WINDOW_SIZE",
+      "duration": false
+    },
+    "arq.max-control-retries": {
+      "key": "ARQ_MAX_CONTROL_RETRIES",
+      "duration": false
+    },
+    "arq.max-data-retries": {
+      "key": "ARQ_MAX_DATA_RETRIES",
+      "duration": false
+    },
+    "arq.nack-max-gap": {
+      "key": "ARQ_DATA_NACK_MAX_GAP",
+      "duration": false
+    },
+    "ping.aggressive-interval": {
+      "key": "PING_AGGRESSIVE_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "ping.lazy-interval": {
+      "key": "PING_LAZY_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "ping.cooldown-interval": {
+      "key": "PING_COOLDOWN_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "ping.cold-interval": {
+      "key": "PING_COLD_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "ping.warm-threshold": {
+      "key": "PING_WARM_THRESHOLD_SECONDS",
+      "duration": true
+    },
+    "ping.cool-threshold": {
+      "key": "PING_COOL_THRESHOLD_SECONDS",
+      "duration": true
+    },
+    "ping.cold-threshold": {
+      "key": "PING_COLD_THRESHOLD_SECONDS",
+      "duration": true
+    },
+    "ping.watchdog-timeout": {
+      "key": "PING_WATCHDOG_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "runtime.packet-timeout": {
+      "key": "TUNNEL_PACKET_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "runtime.idle-poll-interval": {
+      "key": "DISPATCHER_IDLE_POLL_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "runtime.fragment-timeout": {
+      "key": "DNS_RESPONSE_FRAGMENT_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "runtime.udp-associate-read-timeout": {
+      "key": "SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS",
+      "duration": true
+    },
+    "runtime.terminal-stream-retention": {
+      "key": "CLIENT_TERMINAL_STREAM_RETENTION_SECONDS",
+      "duration": true
+    },
+    "runtime.cancelled-setup-retention": {
+      "key": "CLIENT_CANCELLED_SETUP_RETENTION_SECONDS",
+      "duration": true
+    },
+    "runtime.session-retry-base": {
+      "key": "SESSION_INIT_RETRY_BASE_SECONDS",
+      "duration": true
+    },
+    "runtime.session-retry-step": {
+      "key": "SESSION_INIT_RETRY_STEP_SECONDS",
+      "duration": true
+    },
+    "runtime.session-retry-max": {
+      "key": "SESSION_INIT_RETRY_MAX_SECONDS",
+      "duration": true
+    },
+    "runtime.session-busy-retry-interval": {
+      "key": "SESSION_INIT_BUSY_RETRY_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "runtime.failover-cooldown": {
+      "key": "STREAM_RESOLVER_FAILOVER_COOLDOWN",
+      "duration": true
+    },
+    "runtime.stats-interval": {
+      "key": "STATS_REPORT_INTERVAL_SECONDS",
+      "duration": true
+    },
+    "runtime.workers": {
+      "key": "RX_TX_WORKERS",
+      "duration": false
+    },
+    "runtime.process-workers": {
+      "key": "TUNNEL_PROCESS_WORKERS",
+      "duration": false
+    },
+    "runtime.tx-channel-size": {
+      "key": "TX_CHANNEL_SIZE",
+      "duration": false
+    },
+    "runtime.rx-channel-size": {
+      "key": "RX_CHANNEL_SIZE",
+      "duration": false
+    },
+    "runtime.resolver-pool-size": {
+      "key": "RESOLVER_UDP_CONNECTION_POOL_SIZE",
+      "duration": false
+    },
+    "runtime.stream-queue-capacity": {
+      "key": "STREAM_QUEUE_INITIAL_CAPACITY",
+      "duration": false
+    },
+    "runtime.orphan-queue-capacity": {
+      "key": "ORPHAN_QUEUE_INITIAL_CAPACITY",
+      "duration": false
+    },
+    "runtime.fragment-store-capacity": {
+      "key": "DNS_RESPONSE_FRAGMENT_STORE_CAPACITY",
+      "duration": false
+    },
+    "runtime.session-retry-linear-after": {
+      "key": "SESSION_INIT_RETRY_LINEAR_AFTER",
+      "duration": false
+    },
+    "runtime.max-packets-per-batch": {
+      "key": "MAX_PACKETS_PER_BATCH",
+      "duration": false
+    },
+    "runtime.failover-resend-threshold": {
+      "key": "STREAM_RESOLVER_FAILOVER_RESEND_THRESHOLD",
+      "duration": false
+    }
+  },
+  "durations": {
+    "arq.initial-rto": [
+      "50ms",
+      "60s"
+    ],
+    "arq.max-rto": [
+      "50ms",
+      "120s"
+    ],
+    "arq.control-initial-rto": [
+      "50ms",
+      "60s"
+    ],
+    "arq.control-max-rto": [
+      "50ms",
+      "120s"
+    ],
+    "arq.inactivity-timeout": [
+      "30s",
+      "24h"
+    ],
+    "arq.data-packet-ttl": [
+      "30s",
+      "24h"
+    ],
+    "arq.control-packet-ttl": [
+      "30s",
+      "24h"
+    ],
+    "arq.nack-initial-delay": [
+      "50ms",
+      "30s"
+    ],
+    "arq.nack-repeat": [
+      "80ms",
+      "30s"
+    ],
+    "arq.terminal-drain-timeout": [
+      "10s",
+      "1h"
+    ],
+    "arq.terminal-ack-wait-timeout": [
+      "5s",
+      "1h"
+    ],
+    "ping.aggressive-interval": [
+      "50ms",
+      "30s"
+    ],
+    "ping.lazy-interval": [
+      "50ms",
+      "60s"
+    ],
+    "ping.cooldown-interval": [
+      "50ms",
+      "300s"
+    ],
+    "ping.cold-interval": [
+      "50ms",
+      "1h"
+    ],
+    "ping.warm-threshold": [
+      "100ms",
+      "600s"
+    ],
+    "ping.cool-threshold": [
+      "100ms",
+      "1800s"
+    ],
+    "ping.cold-threshold": [
+      "100ms",
+      "1h"
+    ],
+    "ping.watchdog-timeout": [
+      "10s",
+      "1h"
+    ],
+    "runtime.packet-timeout": [
+      "500ms",
+      "120s"
+    ],
+    "runtime.idle-poll-interval": [
+      "1ms",
+      "1s"
+    ],
+    "runtime.fragment-timeout": [
+      "1s",
+      "600s"
+    ],
+    "runtime.udp-associate-read-timeout": [
+      "1s",
+      "1h"
+    ],
+    "runtime.terminal-stream-retention": [
+      "1s",
+      "1h"
+    ],
+    "runtime.cancelled-setup-retention": [
+      "1s",
+      "1h"
+    ],
+    "runtime.session-retry-base": [
+      "100ms",
+      "60s"
+    ],
+    "runtime.session-retry-step": [
+      "0s",
+      "60s"
+    ],
+    "runtime.session-retry-max": [
+      "100ms",
+      "1h"
+    ],
+    "runtime.session-busy-retry-interval": [
+      "1s",
+      "1h"
+    ],
+    "runtime.failover-cooldown": [
+      "100ms",
+      "120s"
+    ],
+    "runtime.stats-interval": [
+      "1s",
+      "1h"
+    ],
+    "resolver-policy.refresh": [
+      "1m",
+      "365d"
+    ],
+    "startup.max-age": [
+      "0s",
+      "365d"
+    ]
+  }
+}

@@ -19,12 +19,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class NotificationModule(service: Service) : Module(service) {
+    private val lifecycle = Mutex()
+    private var closed = false
     private var scope = CoroutineScope(SupervisorJob())
     private var paramsJob: Job? = null
 
-    override suspend fun install() {
+    override suspend fun install() = lifecycle.withLock {
+        if (closed) return@withLock
         scope = CoroutineScope(SupervisorJob())
         ensureChannel()
         val params = State.notificationParamsFlow.value
@@ -45,10 +50,14 @@ class NotificationModule(service: Service) : Module(service) {
         }
     }
 
-    override suspend fun uninstall() {
+    override suspend fun uninstall() = lifecycle.withLock {
+        closed = true
         paramsJob?.cancel()
         scope.cancel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (State.runTime != 0L) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) service.stopForeground(Service.STOP_FOREGROUND_DETACH)
+            else { @Suppress("DEPRECATION") service.stopForeground(false) }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION")

@@ -1,13 +1,11 @@
 // ignore_for_file: invalid_annotation_target
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flclashx/clash/core.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
-import 'package:flclashx/utils/device_info_service.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:flclashx/product/backend/backend.dart';
 
 import 'clash_config.dart';
 
@@ -15,15 +13,8 @@ part 'generated/profile.freezed.dart';
 part 'generated/profile.g.dart';
 
 typedef SelectedMap = Map<String, String>;
-typedef ValidateProfileConfigCallback = Future<String> Function(
-  String configText,
-);
-
-bool isFlClashProviderHeader(String name) {
-  final normalized = name.toLowerCase();
-  return normalized.startsWith('flclashm-') ||
-      normalized.startsWith('flclashx-');
-}
+typedef ValidateProfileConfigCallback =
+    Future<String> Function(String configText);
 
 String? resolveFlClashProviderHeader(
   Map<String, String> headers,
@@ -87,16 +78,12 @@ abstract class Profile with _$Profile {
   factory Profile.fromJson(Map<String, Object?> json) =>
       _$ProfileFromJson(json);
 
-  factory Profile.normal({
-    String? label,
-    String url = '',
-  }) =>
-      Profile(
-        label: label,
-        url: url,
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        autoUpdateDuration: defaultUpdateDuration,
-      );
+  factory Profile.normal({String? label, String url = ''}) => Profile(
+    label: label,
+    url: url,
+    id: DateTime.now().millisecondsSinceEpoch.toString(),
+    autoUpdateDuration: defaultUpdateDuration,
+  );
 }
 
 @freezed
@@ -133,9 +120,9 @@ abstract class OverrideRule with _$OverrideRule {
 
 extension OverrideRuleExt on OverrideRule {
   List<Rule> get rules => switch (type == OverrideRuleType.override) {
-        true => overrideRules,
-        false => addedRules,
-      };
+    true => overrideRules,
+    false => addedRules,
+  };
 
   OverrideRule updateRules(List<Rule> Function(List<Rule> rules) builder) {
     if (type == OverrideRuleType.added) {
@@ -158,143 +145,71 @@ extension ProfileExtension on Profile {
 
   bool get realAutoUpdate => url.isEmpty == true ? false : autoUpdate;
 
-  Future<void> checkAndUpdate() async {
-    final isExists = await check();
-    if (!isExists) {
-      if (url.isNotEmpty && realAutoUpdate) {
-        await update();
-      }
-    }
+  Map<String, dynamic> toBackendMetadata() {
+    final result = Map<String, dynamic>.from(
+      jsonDecode(jsonEncode(toJson())) as Map,
+    );
+    final date = lastUpdateDate;
+    if (date != null) result['lastUpdateDate'] = date.toUtc().toIso8601String();
+    return result;
   }
 
-  Future<bool> check() async {
-    final profilePath = await appPath.getProfilePath(id);
-    return File(profilePath).exists();
-  }
+  Future<Uint8List> exportBytes() => backendClient.exportProfile(id);
 
-  Future<File> getFile() async {
-    final path = await appPath.getProfilePath(id);
-    final file = File(path);
-    final isExists = await file.exists();
-    if (!isExists) {
-      await file.create(recursive: true);
-    }
-    return file;
-  }
-
-  Future<int> get profileLastModified async {
-    final file = await getFile();
-    return (await file.lastModified()).microsecondsSinceEpoch;
+  Future<Profile> _readBackend() async {
+    final record = await backendClient.profile(id);
+    final profile = Profile.fromJson(
+      Map<String, dynamic>.from(record['metadata'] as Map),
+    );
+    return profile.copyWith(lastUpdateDate: profile.lastUpdateDate?.toLocal());
   }
 
   Future<Profile> update({
     bool shouldSendHeaders = true,
     ValidateProfileConfigCallback? validateConfig,
   }) async {
-    final headers = <String, dynamic>{};
-
-    if (shouldSendHeaders) {
-      final deviceInfoService = DeviceInfoService();
-      final details = await deviceInfoService.getDeviceDetails();
-
-      if (details.hwid != null) headers['x-hwid'] = details.hwid;
-      if (details.os != null) headers['x-device-os'] = details.os;
-      if (details.osVersion != null) headers['x-ver-os'] = details.osVersion;
-      if (details.model != null) headers['x-device-model'] = details.model;
-    }
-
-    final response = await request.getFileResponseForUrl(
-      url,
-      headers: headers.isNotEmpty ? headers : null,
-    );
-
-    final disposition = response.headers.value("content-disposition");
-    final userinfo = response.headers.value('subscription-userinfo');
-
-    final responseData = response.data;
-    if (responseData == null) {
-      throw Exception("Failed to get profile data from response.");
-    }
-
-    final providerHeaders = <String, String>{};
-
-    final headersToCollect = [
-      'announce',
-      'support-url',
-      'profile-update-interval',
-      'x-hwid-max-devices-reached',
-      'x-hwid-not-supported',
-    ];
-
-    for (final headerName in headersToCollect) {
-      final value = response.headers.value(headerName);
-      if (value != null && value.isNotEmpty) {
-        providerHeaders[headerName] = value;
+    final revision = backendClient.profileRevision(id);
+    if (revision == 0) {
+      await backendClient.command('profile.import.url', {
+        'metadata': toBackendMetadata(),
+        'deviceHeaders': shouldSendHeaders,
+      });
+    } else {
+      final current = await backendClient.profile(id);
+      final stored = Map<String, dynamic>.from(current['metadata'] as Map);
+      if (stored['url'] != url) {
+        await backendClient.command('profile.put', {
+          'metadata': {'id': id, 'url': url},
+          'expectedRevision': revision,
+        });
       }
+      await backendClient.command('subscription.refresh', {
+        'profileId': id,
+        'deviceHeaders': shouldSendHeaders,
+      });
     }
-
-    response.headers.forEach((name, values) {
-      if (isFlClashProviderHeader(name) && values.isNotEmpty) {
-        providerHeaders[name.toLowerCase()] = values.first;
-      }
-    });
-
-    Duration? durationFromHeader;
-    final updateIntervalHeader = providerHeaders['profile-update-interval'];
-    if (updateIntervalHeader != null) {
-      final hours = int.tryParse(updateIntervalHeader);
-      if (hours != null && hours > 0) {
-        durationFromHeader = Duration(hours: hours);
-      }
-    }
-
-    String updatedUrl = url;
-    final newDomain =
-        resolveFlClashProviderHeader(providerHeaders, 'newdomain');
-    if (newDomain != null && newDomain.isNotEmpty) {
-      final currentUri = Uri.tryParse(url);
-      if (currentUri != null && currentUri.host != newDomain) {
-        updatedUrl = currentUri.replace(host: newDomain).toString();
-      }
-    }
-
-    return copyWith(
-      url: updatedUrl,
-      label: label ?? utils.getFileNameForDisposition(disposition) ?? id,
-      subscriptionInfo: SubscriptionInfo.formHString(userinfo),
-      autoUpdateDuration: durationFromHeader ?? autoUpdateDuration,
-      providerHeaders: providerHeaders,
-    ).saveFile(
-      responseData,
-      validateConfig: validateConfig,
-    );
+    return _readBackend();
   }
 
   Future<Profile> saveFile(
     Uint8List bytes, {
     ValidateProfileConfigCallback? validateConfig,
+    int? expectedRevision,
   }) async {
-    final validator = validateConfig ?? clashCore.validateConfig;
-    final message = await validator(utf8.decode(bytes));
-    if (message.isNotEmpty) {
-      throw message;
-    }
-    final file = await getFile();
-    await file.writeAsBytes(bytes);
-    return copyWith(lastUpdateDate: DateTime.now());
+    await backendClient.saveSource(
+      toBackendMetadata(),
+      bytes,
+      expectedRevision: expectedRevision ?? backendClient.profileRevision(id),
+    );
+    return _readBackend();
   }
 
   Future<Profile> saveFileWithString(
     String value, {
     ValidateProfileConfigCallback? validateConfig,
-  }) async {
-    final validator = validateConfig ?? clashCore.validateConfig;
-    final message = await validator(value);
-    if (message.isNotEmpty) {
-      throw message;
-    }
-    final file = await getFile();
-    await file.writeAsString(value);
-    return copyWith(lastUpdateDate: DateTime.now());
-  }
+    int? expectedRevision,
+  }) => saveFile(
+    Uint8List.fromList(utf8.encode(value)),
+    expectedRevision: expectedRevision,
+  );
 }

@@ -11,6 +11,7 @@ import '../../clash/clash.dart';
 import '../../common/common.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
+import '../backend/backend.dart';
 import '../services/app_update_manifest.dart';
 import '../services/app_update_manifest_release.dart';
 import '../services/app_update_manifest_rollback.dart';
@@ -179,7 +180,8 @@ abstract interface class AppUpdatePlatformBridge {
     required Future<T> Function(
       void Function(int received, int total) onReceiveProgress,
       AppUpdateDownloadCancellation cancellation,
-    ) downloadTask,
+    )
+    downloadTask,
   });
 
   Future<String> getUpdateDirectoryPath();
@@ -191,11 +193,7 @@ abstract interface class AppUpdatePlatformBridge {
   Future<bool> installPackage(String path);
 }
 
-enum AppUpdatePromptAction {
-  download,
-  later,
-  skip,
-}
+enum AppUpdatePromptAction { download, later, skip }
 
 class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   const AndroidUpdateBridge({
@@ -248,9 +246,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   }
 
   Future<({List<AppRelease> releases, bool complete})>
-      _readSourceForgeReleases({
-    required bool includePrerelease,
-  }) async {
+  _readSourceForgeReleases({required bool includePrerelease}) async {
     final channels = <AppUpdateChannel>[
       AppUpdateChannel.stable,
       if (includePrerelease) AppUpdateChannel.prerelease,
@@ -378,12 +374,14 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
       ),
     );
 
-    unawaited(dialogFuture.whenComplete(() {
-      closed = true;
-      if (!action.isCompleted) {
-        action.complete(null);
-      }
-    }));
+    unawaited(
+      dialogFuture.whenComplete(() {
+        closed = true;
+        if (!action.isCompleted) {
+          action.complete(null);
+        }
+      }),
+    );
 
     final result = await action.future;
     if (result == AppUpdatePromptAction.download && !closed) {
@@ -486,7 +484,8 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     required Future<T> Function(
       void Function(int received, int total) onReceiveProgress,
       AppUpdateDownloadCancellation cancellation,
-    ) downloadTask,
+    )
+    downloadTask,
   }) async {
     final cancellation = AppUpdateDownloadCancellation();
     // Окно с описанием версии остаётся на экране и превращается в прогресс.
@@ -576,45 +575,7 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
       return;
     }
 
-    final runtimeBeforeInstall = await clashLib?.getRunTime();
-    final shouldStopRuntime =
-        runtimeBeforeInstall != null || globalState.isStart;
-    if (!shouldStopRuntime) {
-      return;
-    }
-
-    commonPrint
-        .log('Stopping Android runtime before launching in-app installer');
-    try {
-      await globalState.engineManager.stop();
-    } catch (error) {
-      commonPrint.log(
-        'Failed to stop Android runtime through EngineManager before '
-        'installer handoff: $error',
-      );
-      try {
-        await clashLib?.stopVpn();
-      } catch (fallbackError) {
-        commonPrint.log(
-          'Fallback Android VPN stop before installer handoff also failed: '
-          '$fallbackError',
-        );
-      }
-    }
-
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      final runtime = await clashLib?.getRunTime();
-      if (runtime == null) {
-        return;
-      }
-    }
-
-    commonPrint.log(
-      'Android runtime was still reported as active before installer launch; '
-      'continuing with best-effort update flow.',
-    );
+    await backendClient.command('runtime.stop');
   }
 
   @visibleForTesting
@@ -630,9 +591,9 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
 /// затем превращается в прогресс загрузки.
 class _UpdateDialogModel {
   const _UpdateDialogModel.prompt()
-      : asset = null,
-        progress = null,
-        onCancel = null;
+    : asset = null,
+      progress = null,
+      onCancel = null;
 
   const _UpdateDialogModel.downloading({
     required ReleaseAsset this.asset,
@@ -694,8 +655,9 @@ class _AppUpdateDialog extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
-              child:
-                  value.isDownloading ? _cancelAction(value) : _promptActions(),
+              child: value.isDownloading
+                  ? _cancelAction(value)
+                  : _promptActions(),
             ),
           ],
           child: AnimatedSize(
@@ -748,49 +710,47 @@ class _AppUpdateDialog extends StatelessWidget {
       );
 
   Widget _cancelAction(_UpdateDialogModel value) => SizedBox(
-        width: double.infinity,
-        // Окно закрывает сам поток загрузки, когда задача упадёт с отменой:
-        // иначе кнопка сняла бы маршрут раньше и pop ушёл бы не туда.
-        child: OutlinedButton(
-          onPressed: value.onCancel,
-          child: Text(appLocalizations.cancel),
-        ),
-      );
+    width: double.infinity,
+    // Окно закрывает сам поток загрузки, когда задача упадёт с отменой:
+    // иначе кнопка сняла бы маршрут раньше и pop ушёл бы не туда.
+    child: OutlinedButton(
+      onPressed: value.onCancel,
+      child: Text(appLocalizations.cancel),
+    ),
+  );
 
   Widget _promptBody(BuildContext context) => SelectionArea(
-        key: const ValueKey('prompt'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (release.prerelease) ...[
-              _preReleaseChip(context),
-              const SizedBox(height: 16),
-            ],
-            for (final submit in submits)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Icon(
-                        Icons.check,
-                        size: 16,
-                        color: context.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(submit, style: _updateBodyStyle(context)),
-                    ),
-                  ],
+    key: const ValueKey('prompt'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (release.prerelease) ...[
+          _preReleaseChip(context),
+          const SizedBox(height: 16),
+        ],
+        for (final submit in submits)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.check,
+                    size: 16,
+                    color: context.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-          ],
-        ),
-      );
+                const SizedBox(width: 10),
+                Expanded(child: Text(submit, style: _updateBodyStyle(context))),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget _downloadBody(BuildContext context, _UpdateDialogModel value) {
     final bodyStyle = _updateBodyStyle(context);
@@ -859,13 +819,13 @@ TextStyle _updateBodyStyle(BuildContext context) =>
 /// Метка, а не действие: CommonChip построен на ActionChip и всегда
 /// откликается на нажатие.
 Widget _preReleaseChip(BuildContext context) => Chip(
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      clipBehavior: Clip.antiAlias,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-      side: BorderSide(color: Theme.of(context).dividerColor.opacity15),
-      labelStyle: Theme.of(context).textTheme.bodyMedium,
-      label: Text(appLocalizations.preReleaseLabel),
-    );
+  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  clipBehavior: Clip.antiAlias,
+  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+  side: BorderSide(color: Theme.of(context).dividerColor.opacity15),
+  labelStyle: Theme.of(context).textTheme.bodyMedium,
+  label: Text(appLocalizations.preReleaseLabel),
+);
 
 class _DownloadProgress {
   const _DownloadProgress({
@@ -883,10 +843,12 @@ class _DownloadProgress {
   /// подпись, появляющаяся не сразу, читается как рывок вёрстки. Нижняя
   /// граница знаменателя гасит бессмысленно большие числа на старте.
   String get speedText {
-    final milliseconds =
-        elapsed.inMilliseconds < 200 ? 200 : elapsed.inMilliseconds;
-    final bytesPerSecond =
-        received <= 0 ? 0 : (received / (milliseconds / 1000)).round();
+    final milliseconds = elapsed.inMilliseconds < 200
+        ? 200
+        : elapsed.inMilliseconds;
+    final bytesPerSecond = received <= 0
+        ? 0
+        : (received / (milliseconds / 1000)).round();
     return '${_formatBytes(bytesPerSecond)}/s';
   }
 

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Настройки приложения, которые способен переписать провайдер подписки.
 ///
 /// Список должен совпадать с полями, которые действительно проставляет
-/// `ProductProviderCustomization.buildPatch` в `provider_advisory.dart`.
+/// Go policy в `core/backend/service/customization.go`.
 /// Всё, чего здесь нет, провайдер не трогает — и запирать это в интерфейсе
 /// незачем.
 enum ProductManagedAppSetting {
@@ -33,13 +33,13 @@ final productProviderManagesAppSettingsProvider = Provider.autoDispose<bool>(
 ///
 /// Замок навешивается, только когда провайдер этой настройкой действительно
 /// управляет и пользователь не включил переопределение.
-final productAppSettingLockedProvider =
-    Provider.autoDispose.family<bool, ProductManagedAppSetting>((ref, setting) {
-  if (!ref.watch(productProviderManagesAppSettingsProvider)) {
-    return false;
-  }
-  final overrideProviderSettings = ref.watch(
-    appSettingProvider.select((state) => state.overrideProviderSettings),
-  );
-  return !overrideProviderSettings;
-});
+final productAppSettingLockedProvider = Provider.autoDispose
+    .family<bool, ProductManagedAppSetting>((ref, setting) {
+      if (!ref.watch(productProviderManagesAppSettingsProvider)) {
+        return false;
+      }
+      final overrideProviderSettings = ref.watch(
+        appSettingProvider.select((state) => state.overrideProviderSettings),
+      );
+      return !overrideProviderSettings;
+    });

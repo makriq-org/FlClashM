@@ -398,7 +398,7 @@ func TestFileStoreVersionsCorruptionAndPlanImmutability(t *testing.T) {
 			t.Fatal("accepted tampered plan")
 		}
 	})
-	for _, raw := range []string{`{"version":99}`, `{"version":1,`, strings.Repeat("x", maxStateBytes+1)} {
+	for _, raw := range []string{`{"version":99}`, `{"version":1,`} {
 		t.Run(fmt.Sprint(len(raw)), func(t *testing.T) {
 			s := newStore(t)
 			if err := os.WriteFile(s.path, []byte(raw), 0600); err != nil {
@@ -416,6 +416,28 @@ func TestFileStoreVersionsCorruptionAndPlanImmutability(t *testing.T) {
 			}
 		})
 	}
+	t.Run("oversized", func(t *testing.T) {
+		store := newStore(t)
+		file, err := os.OpenFile(store.path, os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = file.Truncate(maxStateBytes + 1); err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+		file.Close()
+		if _, err = store.Load(); err == nil {
+			t.Fatal("oversized store accepted")
+		}
+		if err = store.Save(newDocument()); err == nil {
+			t.Fatal("oversized store overwritten")
+		}
+		info, err := os.Stat(store.path)
+		if err != nil || info.Size() != maxStateBytes+1 {
+			t.Fatal("oversized store changed", err)
+		}
+	})
 	t.Run("atomic", func(t *testing.T) {
 		s := newStore(t)
 		doc := newDocument()
@@ -659,5 +681,107 @@ func TestStopDoesNotWaitForNonCooperativePreparation(t *testing.T) {
 	}
 	if _, err = b.Await(ctx, "parser"); err == nil {
 		t.Fatal("accepted stale parser result")
+	}
+}
+
+type cancelledEngine struct {
+	hostEngine
+	entered chan struct{}
+}
+
+func (h cancelledEngine) Apply(ctx context.Context, plan *RuntimePlan) error {
+	if strings.Contains(string(plan.Payload()), "cancel-target") {
+		close(h.entered)
+		<-ctx.Done()
+		return errors.New("engine aborted")
+	}
+	return h.hostEngine.Apply(ctx, plan)
+}
+func TestCancellationClassifiesAdapterAbortAsCancelled(t *testing.T) {
+	h := newHost()
+	engine := cancelledEngine{hostEngine{h}, make(chan struct{})}
+	b, err := Open(newStore(t), h, engine, hostTransports{h}, hostPlatform{h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	run(t, b, "configure", "apply", `{"profile":"old"}`)
+	run(t, b, "start", "start", "")
+	if _, err = b.Submit(Request{APIVersion: 1, OperationID: "cancel", Method: "apply", Input: Input(`{"profile":"cancel-target"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	<-engine.entered
+	if !b.Cancel("cancel") {
+		t.Fatal("cancel rejected")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	receipt, err := b.Await(ctx, "cancel")
+	if !errors.Is(err, context.Canceled) || receipt.Status != "cancelled" {
+		t.Fatalf("incorrect cancellation result: %+v %v", receipt, err)
+	}
+	if b.Snapshot().Observed.State != "running" {
+		t.Fatal("previous plan was not restored")
+	}
+}
+
+func TestAcceptedStopSurvivesLaterApplyBeforeExecution(t *testing.T) {
+	store := newStore(t)
+	b := openHost(t, store, newHost())
+	run(t, b, "initial", "apply", `{"profile":"old"}`)
+	run(t, b, "start", "start", "")
+	b.coordinator.commands.Lock()
+	_, err := b.Submit(Request{APIVersion: 1, OperationID: "stop", Method: "stop"})
+	if err != nil {
+		b.coordinator.commands.Unlock()
+		t.Fatal(err)
+	}
+	doc, err := store.Load()
+	if err != nil || doc.Desired.Running {
+		b.coordinator.commands.Unlock()
+		t.Fatal("stop not durable at acceptance", err)
+	}
+	_, err = b.Submit(Request{APIVersion: 1, OperationID: "update", Method: "apply", Input: Input(`{"profile":"new"}`)})
+	b.coordinator.commands.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err = b.Await(ctx, "update"); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot := b.Snapshot(); snapshot.DesiredRunning || snapshot.AppliedRunning || snapshot.Observed.State != "stopped" {
+		t.Fatalf("later profile update lost stop: %#v", snapshot)
+	}
+}
+func TestAcceptedOperationHasDurableInterruptedOutcome(t *testing.T) {
+	store := newStore(t)
+	b := openHost(t, store, newHost())
+	b.coordinator.commands.Lock()
+	_, err := b.Submit(Request{APIVersion: 1, OperationID: "configure", Method: "apply", Input: Input(`{"profile":"uncommitted"}`)})
+	if err != nil {
+		b.coordinator.commands.Unlock()
+		t.Fatal(err)
+	}
+	doc, err := store.Load()
+	b.coordinator.commands.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The captured store is the exact boundary after acknowledgement and before
+	// execution. Reopen it with an independent host, as after process death.
+	copyStore := newStore(t)
+	if err = copyStore.Save(doc); err != nil {
+		t.Fatal(err)
+	}
+	reopened := openHost(t, copyStore, newHost())
+	receipt, err := reopened.Operation("configure")
+	if err != nil || receipt.Status != "interrupted" {
+		t.Fatalf("orphan accepted operation: %#v %v", receipt, err)
+	}
+	run(t, reopened, "recover", "recover", "")
+	if reopened.Snapshot().AppliedGeneration != 0 || reopened.Snapshot().DesiredRunning {
+		t.Fatal("uncommitted first profile replayed")
 	}
 }

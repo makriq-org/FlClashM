@@ -23,37 +23,49 @@ type Request struct {
 	Input       Input  `json:"params,omitempty"`
 }
 type Snapshot struct {
-	InstanceID        string      `json:"instanceId"`
-	APIVersion        int         `json:"apiVersion"`
-	Sequence          uint64      `json:"seq"`
-	Generation        uint64      `json:"generation"`
-	AppliedGeneration uint64      `json:"appliedGeneration"`
-	DesiredRunning    bool        `json:"desiredRunning"`
-	AppliedRunning    bool        `json:"appliedRunning"`
-	Observed          Observation `json:"observed"`
-	OperationID       string      `json:"operationId,omitempty"`
-	StartedAt         int64       `json:"startedAt,omitempty"`
+	InstanceID        string         `json:"instanceId"`
+	APIVersion        int            `json:"apiVersion"`
+	Sequence          uint64         `json:"seq"`
+	Nodes             []NodeSnapshot `json:"nodes,omitempty"`
+	Generation        uint64         `json:"generation"`
+	AppliedGeneration uint64         `json:"appliedGeneration"`
+	DesiredRunning    bool           `json:"desiredRunning"`
+	AppliedRunning    bool           `json:"appliedRunning"`
+	Observed          Observation    `json:"observed"`
+	OperationID       string         `json:"operationId,omitempty"`
+	StartedAt         int64          `json:"startedAt,omitempty"`
 }
 type Event struct {
 	Snapshot       Snapshot `json:"snapshot"`
 	ResyncRequired bool     `json:"resyncRequired,omitempty"`
 }
 type execution struct {
-	request     Request
-	fingerprint string
-	epoch       uint64
-	cancel      context.CancelFunc
-	ctx         context.Context
-	done        chan struct{}
-	receipt     Receipt
-	err         error
+	request      Request
+	fingerprint  string
+	epoch        uint64
+	cancel       context.CancelFunc
+	ctx          context.Context
+	done         chan struct{}
+	receipt      Receipt
+	priorDesired Desired
+	err          error
 }
 
 // RuntimeCoordinator is private to Backend. Only this owner may invoke mutating
 // adapter methods. The command lock fences side effects, the state lock protects
 // snapshots/acceptance, and epochs fence results from non-cooperative adapters.
 type runtimeCoordinator struct {
+	policy         *platformPolicy
 	compileSlots   chan struct{}
+	eventSequence  uint64
+	nodeOptions    *NodeOptions
+	nodes          map[string]*nodeRuntime
+	nodeOrder      []string
+	nodeSnapshot   []NodeSnapshot
+	nodeCancel     context.CancelFunc
+	nodeContext    context.Context
+	nodesExecuting bool
+	nodeMutation   *execution
 	instanceID     string
 	commands       sync.Mutex
 	mu             sync.Mutex
@@ -76,9 +88,15 @@ type runtimeCoordinator struct {
 
 type Backend struct{ coordinator *runtimeCoordinator }
 
-func Open(store Store, compiler Compiler, engine EngineAdapter, transports TransportAdapter, platform PlatformAdapter) (*Backend, error) {
-	if store == nil || compiler == nil || engine == nil || transports == nil || platform == nil {
+func Open(store Store, compiler Compiler, engine EngineAdapter, transports TransportAdapter, platform PlatformAdapter, nodeOptions ...NodeOptions) (*Backend, error) {
+	if store == nil || compiler == nil || engine == nil || (transports == nil && len(nodeOptions) != 1) || platform == nil {
 		return nil, errors.New("backend dependencies are required")
+	}
+	if len(nodeOptions) > 1 {
+		return nil, errors.New("one node host is required")
+	}
+	if len(nodeOptions) == 1 && (transports != nil || nodeOptions[0].Adapter == nil || nodeOptions[0].Inspection == nil || nodeOptions[0].Cache == nil) {
+		return nil, errors.New("exclusive node host dependencies are required")
 	}
 	doc, err := store.Load()
 	if errors.Is(err, ErrNoState) {
@@ -90,6 +108,32 @@ func Open(store Store, compiler Compiler, engine EngineAdapter, transports Trans
 	if err = validateDocument(doc); err != nil {
 		return nil, err
 	}
+	orphaned := false
+	if doc.Pending != nil {
+		found := false
+		for _, receipt := range doc.Receipts {
+			found = found || receipt.OperationID == doc.Pending.OperationID
+		}
+		if !found {
+			p := doc.Pending
+			doc.Receipts = appendReceipt(doc.Receipts, Receipt{OperationID: p.OperationID, Fingerprint: p.Fingerprint, Generation: p.Generation, Status: "interrupted", Error: "operation interrupted before commit"})
+			orphaned = true
+		}
+	}
+
+	for i := range doc.Receipts {
+		if doc.Receipts[i].Status == "accepted" {
+			doc.Receipts[i].Status = "interrupted"
+			doc.Receipts[i].Error = "operation interrupted before commit"
+			orphaned = true
+		}
+	}
+	if orphaned {
+		doc.Sequence++
+		if err = store.Save(doc); err != nil {
+			return nil, err
+		}
+	}
 	instance := make([]byte, 16)
 	if _, err := rand.Read(instance); err != nil {
 		return nil, err
@@ -97,6 +141,14 @@ func Open(store Store, compiler Compiler, engine EngineAdapter, transports Trans
 	c := &runtimeCoordinator{compileSlots: make(chan struct{}, 1), instanceID: hex.EncodeToString(instance), store: store, compiler: compiler, engine: engine, transports: transports, platform: platform,
 		document: cloneDocument(doc), observed: Observation{State: "unknown"}, epoch: doc.Generation,
 		executions: make(map[string]*execution), subscribers: make(map[uint64]chan Event), cleanupTimeout: 15 * time.Second}
+	c.eventSequence = doc.Sequence
+	if len(nodeOptions) == 1 {
+		options := nodeOptions[0]
+		c.nodeOptions = &options
+		c.transports = coordinatedTransports{c}
+		c.nodes = map[string]*nodeRuntime{}
+	}
+	c.openPlatformPolicy()
 	return &Backend{c}, nil
 }
 
@@ -107,7 +159,7 @@ func (b *Backend) Snapshot() Snapshot {
 	return c.snapshotLocked()
 }
 func (c *runtimeCoordinator) snapshotLocked() Snapshot {
-	s := Snapshot{InstanceID: c.instanceID, APIVersion: APIVersion, Sequence: c.document.Sequence, Generation: c.document.Generation,
+	s := Snapshot{InstanceID: c.instanceID, APIVersion: APIVersion, Sequence: c.eventSequence, Nodes: append([]NodeSnapshot(nil), c.nodeSnapshot...), Generation: c.document.Generation,
 		DesiredRunning: c.document.Desired.Running, Observed: c.observed, StartedAt: c.startedAt}
 	if a := c.document.Applied; a != nil {
 		s.AppliedGeneration = a.Plan.Generation
@@ -119,6 +171,13 @@ func (c *runtimeCoordinator) snapshotLocked() Snapshot {
 	return s
 }
 func (c *runtimeCoordinator) publishLocked() {
+	if c.policy != nil {
+		select {
+		case c.policy.wake <- struct{}{}:
+		default:
+		}
+	}
+	c.eventSequence++
 	event := Event{Snapshot: c.snapshotLocked()}
 	for _, ch := range c.subscribers {
 		select {
@@ -177,13 +236,13 @@ func fingerprint(r Request) (string, error) {
 		return "", errors.New("operationId must contain 1..128 bytes")
 	}
 	switch r.Method {
-	case "apply":
+	case "apply", "connect", "restart", "engine.command":
 		input, err := canonicalJSON(r.Input)
 		if err != nil {
 			return "", err
 		}
 		r.Input = input
-	case "start", "stop", "recover":
+	case "start", "stop", "recover", "forget":
 		if len(r.Input) > 0 {
 			return "", errors.New("method does not accept input")
 		}
@@ -199,6 +258,16 @@ func fingerprint(r Request) (string, error) {
 // Submit returns immediately. Operation contexts belong to the backend and are
 // independent of any request, binder callback, Flutter engine or UI lifetime.
 func (b *Backend) Submit(r Request) (Receipt, error) {
+	return b.submit(r, nil)
+}
+
+// SubmitAtGeneration rejects an observation-derived command if a newer user
+// intent arrived while the host was being inspected.
+func (b *Backend) SubmitAtGeneration(r Request, generation uint64) (Receipt, error) {
+	return b.submit(r, &generation)
+}
+
+func (b *Backend) submit(r Request, expected *uint64) (Receipt, error) {
 	fp, err := fingerprint(r)
 	if err != nil {
 		return Receipt{}, err
@@ -210,6 +279,9 @@ func (b *Backend) Submit(r Request) (Receipt, error) {
 	defer c.mu.Unlock()
 	if c.closed {
 		return Receipt{}, ErrClosed
+	}
+	if expected != nil && c.epoch != *expected {
+		return Receipt{}, ErrSuperseded
 	}
 	if e := c.executions[r.OperationID]; e != nil {
 		if e.fingerprint != fp {
@@ -234,13 +306,61 @@ func (b *Backend) Submit(r Request) (Receipt, error) {
 	if pending >= 8 {
 		return Receipt{}, errors.New("backend command queue is full")
 	}
-	c.epoch++
+	nextEpoch := c.epoch + 1
+	next := cloneDocument(c.document)
+	priorDesired := next.Desired
+	priorDesired.Input = bytes.Clone(priorDesired.Input)
+	next.Generation = nextEpoch
+	switch r.Method {
+	case "apply", "connect", "restart":
+		next.Desired.Input = bytes.Clone(r.Input)
+		if r.Method == "connect" {
+			next.Desired.Running = true
+		}
+	case "start":
+		next.Desired.Running = true
+	case "forget":
+		next.Desired = Desired{}
+		next.Applied = nil
+	case "stop":
+		next.Desired.Running = false
+		if next.Applied != nil {
+			next.Desired.Input = bytes.Clone(next.Applied.Input)
+		}
+	case "recover":
+		if next.Applied != nil {
+			next.Desired.Input = bytes.Clone(next.Applied.Input)
+		} else {
+			next.Desired = Desired{}
+		}
+	}
+	if next.Desired.Running && len(next.Desired.Input) == 0 {
+		return Receipt{}, errors.New("no profile configured")
+	}
+	receipt := Receipt{OperationID: r.OperationID, Fingerprint: fp, Method: r.Method, Status: "accepted", Generation: nextEpoch}
+	next.Pending = &Pending{Fingerprint: fp, OperationID: r.OperationID, Method: r.Method, Generation: nextEpoch}
+	next.Receipts = appendReceipt(next.Receipts, receipt)
+	// Acceptance is durable before a request can detach or preempt its predecessor.
+	// A later apply inherits a previously accepted Stop even before Stop executes.
+	if err := c.saveLocked(next); err != nil {
+		return Receipt{}, err
+	}
+	c.epoch = nextEpoch
+	if c.nodeCancel != nil {
+		c.nodeCancel()
+		c.nodeCancel = nil
+	}
 	if c.active != nil {
 		c.active.cancel()
 	}
+	for _, queued := range c.executions {
+		if queued.request.Method == "engine.command" && queued.receipt.Status == "accepted" {
+			queued.cancel()
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	e := &execution{request: r, fingerprint: fp, epoch: c.epoch, ctx: ctx, cancel: cancel, done: make(chan struct{}),
-		receipt: Receipt{OperationID: r.OperationID, Fingerprint: fp, Status: "accepted", Generation: c.epoch}}
+	e := &execution{request: r, fingerprint: fp, epoch: nextEpoch, ctx: ctx, cancel: cancel, done: make(chan struct{}), receipt: receipt, priorDesired: priorDesired}
+	c.publishLocked()
 	c.executions[r.OperationID] = e
 	c.active = e
 	go c.execute(e)
@@ -282,6 +402,11 @@ func (b *Backend) Cancel(id string) bool {
 	if e == nil || e.receipt.Status != "accepted" {
 		return false
 	}
+	for _, receipt := range c.document.Receipts {
+		if receipt.OperationID == id && receipt.Status != "accepted" {
+			return false
+		}
+	}
 	e.cancel()
 	return true
 }
@@ -300,11 +425,12 @@ func (c *runtimeCoordinator) current(e *execution) error {
 	return nil
 }
 func (c *runtimeCoordinator) saveLocked(next Document) error {
-	next.Sequence = c.document.Sequence + 1
+	next.Sequence = max(c.document.Sequence, c.eventSequence) + 1
 	if err := c.store.Save(next); err != nil {
 		return err
 	}
 	c.document = cloneDocument(next)
+	c.eventSequence = next.Sequence
 	return nil
 }
 
@@ -314,16 +440,33 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	defer e.cancel()
 	err := c.current(e)
 	if err == nil {
+		c.mu.Lock()
+		hold := c.document.Desired.Running
+		c.mu.Unlock()
+		if lifetime, ok := c.platform.(OperationLifetime); ok && hold {
+			err = lifetime.BeginOperation(e.ctx, e.request.OperationID)
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
+				defer cancel()
+				_ = lifetime.EndOperation(ctx, e.request.OperationID)
+			}()
+		}
+	}
+	if err == nil {
 		err = c.perform(e)
 	}
+	c.activateNodeLoop(e.epoch)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err != nil && e.ctx.Err() != nil {
+		err = errors.Join(err, e.ctx.Err())
+	}
 	e.err = err
 	e.receipt.Status = "succeeded"
 	if err != nil {
 		e.receipt.Status = "failed"
 		e.receipt.Error = "operation failed"
-		if errors.Is(err, context.Canceled) || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
+		if e.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
 			e.receipt.Status = "cancelled"
 			e.receipt.Error = "operation cancelled"
 		}
@@ -349,6 +492,7 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	}
 	c.publishLocked()
 	e.request.Input = nil
+	e.priorDesired.Input = nil
 	close(e.done)
 	// Only completed receipts need durability; avoid retaining unbounded requests.
 	if len(c.executions) > 128 {
@@ -363,14 +507,25 @@ func (c *runtimeCoordinator) execute(e *execution) {
 
 func (c *runtimeCoordinator) perform(e *execution) error {
 	c.mu.Lock()
+	if c.epoch != e.epoch || e.ctx.Err() != nil {
+		c.mu.Unlock()
+		return ErrSuperseded
+	}
 	previous := cloneDocument(c.document)
+	previous.Desired = e.priorDesired
 	next := cloneDocument(c.document)
 	next.Generation = e.epoch
 	switch e.request.Method {
-	case "apply":
+	case "apply", "connect", "restart":
 		next.Desired.Input = bytes.Clone(e.request.Input)
+		if e.request.Method == "connect" {
+			next.Desired.Running = true
+		}
 	case "start":
 		next.Desired.Running = true
+	case "forget":
+		next.Desired = Desired{}
+		next.Applied = nil
 	case "stop":
 		next.Desired.Running = false
 		if previous.Applied != nil {
@@ -409,8 +564,25 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	c.publishLocked()
 	c.mu.Unlock()
 
-	if e.request.Method == "stop" {
+	if e.request.Method == "stop" || e.request.Method == "forget" {
 		err := c.cleanup()
+		if err == nil && e.request.Method == "forget" {
+			// Erasure waits for cancelled preparation to leave its cache files;
+			// ordinary Stop still returns without waiting for a slow parser.
+			wait, cancel := context.WithTimeout(e.ctx, 30*time.Second)
+			select {
+			case c.compileSlots <- struct{}{}:
+				<-c.compileSlots
+			case <-wait.Done():
+				err = wait.Err()
+			}
+			cancel()
+		}
+		if err == nil && e.request.Method == "forget" {
+			if eraser, ok := c.engine.(EngineEraser); ok {
+				err = eraser.Forget(e.ctx)
+			}
+		}
 		if err == nil {
 			err = c.current(e)
 		}
@@ -427,7 +599,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			committed.Applied.Running = false
 		}
 		committed.Pending = nil
-		committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Status: "succeeded", Generation: e.epoch})
+		committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Method: e.request.Method, Status: "succeeded", Generation: e.epoch})
 		return c.saveLocked(committed)
 	}
 	var plan *RuntimePlan
@@ -443,8 +615,44 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	}
 	touched := false
 	if err == nil {
-		touched = true
-		err = c.install(e, plan, next.Desired.Running)
+		_, hasSelection := c.engine.(SelectionAdapter)
+		_, hasLiveSettings := c.engine.(LiveSettingsAdapter)
+		samePlan := plan != nil && previous.Applied != nil && plan.Digest() == previous.Applied.Plan.Digest
+		resident := previous.Applied != nil && previous.Applied.Running == next.Desired.Running && e.request.Method != "restart" && (samePlan || hasSelection || hasLiveSettings)
+		if resident {
+			c.mu.Lock()
+			expected := "stopped"
+			if next.Desired.Running {
+				expected = "running"
+			}
+			resident = c.observed.State == expected
+			c.mu.Unlock()
+		}
+		if resident {
+			resident = c.observe(e.ctx, next.Desired.Running) == nil
+		}
+		// Persisted Applied describes the last commit, not an engine resident in
+		// this process. Every in-place optimization requires fresh observations.
+		unchanged := resident && samePlan
+		if err = c.current(e); err == nil && !unchanged {
+			var patched bool
+			var patchErr error
+			if resident {
+				patched, patchErr = c.trySelection(e, previous, plan, next.Desired.Running)
+				if !patched && patchErr == nil {
+					patched, patchErr = c.tryLiveSettings(e, previous, plan, next.Desired.Running)
+				}
+			}
+			if patched {
+				touched = true
+				err = patchErr
+			} else if patchErr != nil {
+				err = patchErr
+			} else {
+				touched = true
+				err = c.install(e, plan, next.Desired.Running)
+			}
+		}
 	}
 	if err == nil {
 		c.mu.Lock()
@@ -454,10 +662,10 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		} else {
 			committed := cloneDocument(c.document)
 			if plan != nil {
-				committed.Applied = &Applied{Plan: plan.Data(), Input: bytes.Clone(next.Desired.Input), Running: next.Desired.Running}
+				committed.Applied = &Applied{Plan: plan.Data(), Input: bytes.Clone(next.Desired.Input), Running: next.Desired.Running, Nodes: c.persistedNodes()}
 			}
 			committed.Pending = nil
-			committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Status: "succeeded", Generation: e.epoch})
+			committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Method: e.request.Method, Status: "succeeded", Generation: e.epoch})
 			err = c.saveLocked(committed)
 		}
 		c.mu.Unlock()
@@ -492,11 +700,12 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 		return err
 	}
 	if plan != nil {
-		for _, step := range []func() error{
-			func() error { return c.transports.Prepare(e.ctx, plan) },
-			func() error { return c.transports.Start(e.ctx, plan) },
-			func() error { return c.engine.Apply(e.ctx, plan) },
-		} {
+		steps := []func() error{func() error { return c.transports.Prepare(e.ctx, plan) }}
+		if running {
+			steps = append(steps, func() error { return c.transports.Start(e.ctx, plan) })
+		}
+		steps = append(steps, func() error { return c.engine.Apply(e.ctx, plan) })
+		for _, step := range steps {
 			if err := step(); err != nil {
 				return err
 			}
@@ -515,6 +724,9 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 		if err := c.platform.Start(e.ctx, plan); err != nil {
 			return err
 		}
+		if err := c.platformStarted(e.ctx); err != nil {
+			return err
+		}
 		if err := c.current(e); err != nil {
 			return err
 		}
@@ -527,6 +739,12 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 	return c.observe(e.ctx, running)
 }
 func (c *runtimeCoordinator) cleanup() error {
+	c.mu.Lock()
+	if c.nodeCancel != nil {
+		c.nodeCancel()
+		c.nodeCancel = nil
+	}
+	c.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
 	defer cancel()
 	// Run every cleanup step even if an earlier adapter fails.
@@ -559,7 +777,7 @@ func (c *runtimeCoordinator) observe(ctx context.Context, running bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.observed = Observation{State: expected}
-	if running {
+	if running && c.startedAt == 0 {
 		c.startedAt = time.Now().UnixMilli()
 	}
 	return nil
@@ -598,6 +816,18 @@ func (b *Backend) Close() error {
 		return nil
 	}
 	c.closed = true
+	if c.policy != nil {
+		c.policy.cancel()
+	}
+	for _, e := range c.executions {
+		if e.receipt.Status == "accepted" {
+			e.cancel()
+		}
+	}
+	if c.nodeCancel != nil {
+		c.nodeCancel()
+		c.nodeCancel = nil
+	}
 	if c.active != nil {
 		c.active.cancel()
 	}
@@ -615,6 +845,12 @@ func (b *Backend) Close() error {
 }
 
 func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
+	for i := range receipts {
+		if receipts[i].OperationID == receipt.OperationID {
+			receipts[i] = receipt
+			return receipts
+		}
+	}
 	receipts = append(receipts, receipt)
 	if len(receipts) > 128 {
 		receipts = receipts[len(receipts)-128:]
@@ -626,8 +862,15 @@ func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
 // block Stop; its late result is discarded, while a single slot bounds retained
 // inputs and prevents parallel use of an engine parser with shared caches.
 func (c *runtimeCoordinator) compile(ctx context.Context, input Input, generation uint64) (*RuntimePlan, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	select {
 	case c.compileSlots <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-c.compileSlots
+			return nil, err
+		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

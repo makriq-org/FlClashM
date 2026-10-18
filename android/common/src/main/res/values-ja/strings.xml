@@ -3,4 +3,8 @@
     <string name="notification_stop">停止</string>
     <string name="subscription_notification_channel_name">サブスクリプション更新</string>
     <string name="notification_open">開く</string>
+    <string name="subscription_expired">サブスクリプションが期限切れになりました</string>
+    <string name="subscription_expires_today">サブスクリプションは本日期限切れになります</string>
+    <string name="subscription_expires_in_days">サブスクリプションは%1$s日後に期限切れになります</string>
+    <string name="subscription_renew">更新</string>
 </resources>

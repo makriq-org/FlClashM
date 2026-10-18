@@ -1,27 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show DynamicSchemeVariant;
 
-import '../../enum/enum.dart';
 import '../../models/models.dart';
 
 const _announceHeader = 'announce';
 const _supportUrlHeader = 'support-url';
 const _hwidLimitReachedHeader = 'x-hwid-max-devices-reached';
 const _hwidNotSupportedHeader = 'x-hwid-not-supported';
-const _clearedOnMissingRefreshHeaders = {
-  _announceHeader,
-  _supportUrlHeader,
-  _hwidLimitReachedHeader,
-  _hwidNotSupportedHeader,
-};
-
-enum ProductCustomizationTrigger {
-  none,
-  add,
-  update,
-}
 
 @immutable
 class ProductProviderAdvisory {
@@ -42,40 +28,39 @@ class ProductProviderAdvisory {
         display: ProductDisplayHints(
           announcement: _decodeAnnouncement(headers[_announceHeader]),
           supportUrl: _trimmedHeader(headers[_supportUrlHeader]),
-          serviceName:
-              _decodeBase64Header(_providerHeader(headers, 'servicename')),
-          serviceLogoUrl:
-              _decodeBase64Header(_providerHeader(headers, 'servicelogo')),
-          serverInfoGroupName:
-              _decodeBase64Header(_providerHeader(headers, 'serverinfo')),
+          serviceName: _decodeBase64Header(
+            _providerHeader(headers, 'servicename'),
+          ),
+          serviceLogoUrl: _decodeBase64Header(
+            _providerHeader(headers, 'servicelogo'),
+          ),
+          serverInfoGroupName: _decodeBase64Header(
+            _providerHeader(headers, 'serverinfo'),
+          ),
           backgroundUrl: _trimmedHeader(_providerHeader(headers, 'background')),
           buyPlanUrl: _trimmedHeader(_providerHeader(headers, 'buyplan')),
           buyTrafficUrl: _trimmedHeader(_providerHeader(headers, 'buytraffic')),
           globalModeEnabled:
-              _trimmedHeader(_providerHeader(headers, 'globalmode'))
-                      .toLowerCase() !=
-                  'false',
+              _trimmedHeader(
+                _providerHeader(headers, 'globalmode'),
+              ).toLowerCase() !=
+              'false',
           newDashboard: _parseBoolHeader(_providerHeader(headers, 'newboard')),
-          denyDashboardEditing:
-              _parseBoolHeader(_providerHeader(headers, 'denywidgets')),
+          denyDashboardEditing: _parseBoolHeader(
+            _providerHeader(headers, 'denywidgets'),
+          ),
         ),
         customization: ProductCustomizationHints(
-          trigger:
-              _parseCustomizationTrigger(_providerHeader(headers, 'custom')),
           subscriptionSettings: _parseSubscriptionSettings(headers),
-          theme: ProductThemeHint.parse(_providerHeader(headers, 'hex')),
-          dashboardWidgets:
-              _parseDashboardWidgets(_providerHeader(headers, 'widgets')),
-          proxiesView:
-              ProductProxiesViewHint.parse(_providerHeader(headers, 'view')),
         ),
         notices: ProductNoticeHints(
           hwidLimitReached: _parseBoolHeader(headers[_hwidLimitReachedHeader]),
           hwidNotSupported: _parseBoolHeader(headers[_hwidNotSupportedHeader]),
         ),
         behavior: ProductBehaviorHints(
-          androidSecure:
-              _parseBoolHeader(_providerHeader(headers, 'androidsecure')),
+          androidSecure: _parseBoolHeader(
+            _providerHeader(headers, 'androidsecure'),
+          ),
         ),
       );
 
@@ -83,30 +68,6 @@ class ProductProviderAdvisory {
   final ProductCustomizationHints customization;
   final ProductNoticeHints notices;
   final ProductBehaviorHints behavior;
-
-  static Map<String, String> mergeForRefresh({
-    required Map<String, String> previous,
-    required Map<String, String> incoming,
-  }) {
-    final merged = Map<String, String>.from(previous);
-    for (final key in incoming.keys.where(isFlClashProviderHeader)) {
-      final separator = key.indexOf('-');
-      if (separator == -1 || separator == key.length - 1) {
-        continue;
-      }
-      final suffix = key.substring(separator + 1).toLowerCase();
-      merged
-        ..remove('flclashm-$suffix')
-        ..remove('flclashx-$suffix');
-    }
-    merged.addAll(incoming);
-    for (final key in _clearedOnMissingRefreshHeaders) {
-      if (!incoming.containsKey(key)) {
-        merged.remove(key);
-      }
-    }
-    return merged;
-  }
 
   static Set<String>? _parseSubscriptionSettings(Map<String, String> headers) {
     final value = _providerHeader(headers, 'settings');
@@ -120,26 +81,10 @@ class ProductProviderAdvisory {
         .toSet();
   }
 
-  static List<DashboardWidget>? _parseDashboardWidgets(String? value) {
-    final widgets = DashboardWidgetParser.parseLayout(value);
-    return widgets.isEmpty ? null : widgets;
-  }
-
-  static ProductCustomizationTrigger _parseCustomizationTrigger(
-          String? value) =>
-      switch (_trimmedHeader(value).toLowerCase()) {
-        'add' => ProductCustomizationTrigger.add,
-        'update' => ProductCustomizationTrigger.update,
-        _ => ProductCustomizationTrigger.none,
-      };
-
   static bool _parseBoolHeader(String? value) =>
       _trimmedHeader(value).toLowerCase() == 'true';
 
-  static String? _providerHeader(
-    Map<String, String> headers,
-    String suffix,
-  ) =>
+  static String? _providerHeader(Map<String, String> headers, String suffix) =>
       resolveFlClashProviderHeader(headers, suffix);
 
   static String _trimmedHeader(String? value) => value?.trim() ?? '';
@@ -215,294 +160,16 @@ class ProductDisplayHints {
 
 @immutable
 class ProductBehaviorHints {
-  const ProductBehaviorHints({
-    this.androidSecure = false,
-  });
+  const ProductBehaviorHints({this.androidSecure = false});
 
   final bool androidSecure;
 }
 
+/// Read-only hint used to render provider-managed settings controls.
 @immutable
 class ProductCustomizationHints {
-  const ProductCustomizationHints({
-    this.trigger = ProductCustomizationTrigger.none,
-    this.subscriptionSettings,
-    this.theme,
-    this.dashboardWidgets,
-    this.proxiesView,
-  });
-
-  final ProductCustomizationTrigger trigger;
+  const ProductCustomizationHints({this.subscriptionSettings});
   final Set<String>? subscriptionSettings;
-  final ProductThemeHint? theme;
-  final List<DashboardWidget>? dashboardWidgets;
-  final ProductProxiesViewHint? proxiesView;
-
-  bool appliesToProfile({required bool isNewProfile}) => switch (trigger) {
-        ProductCustomizationTrigger.add => isNewProfile,
-        ProductCustomizationTrigger.update => true,
-        ProductCustomizationTrigger.none => false,
-      };
-
-  ProductCustomizationPatch buildPatch({
-    required bool isNewProfile,
-    required AppSettingProps appSetting,
-    required ThemeProps themeProps,
-    required ProxiesStyle proxiesStyle,
-    required bool overrideProviderSettings,
-  }) {
-    if (!appliesToProfile(isNewProfile: isNewProfile)) {
-      return const ProductCustomizationPatch();
-    }
-
-    var nextAppSetting = appSetting;
-    var nextThemeProps = themeProps;
-    var nextProxiesStyle = proxiesStyle;
-    var appSettingChanged = false;
-    var themeChanged = false;
-    var proxiesStyleChanged = false;
-
-    if (subscriptionSettings != null && !overrideProviderSettings) {
-      final updatedAppSetting = nextAppSetting.copyWith(
-        minimizeOnExit: subscriptionSettings!.contains('minimize'),
-        autoLaunch: subscriptionSettings!.contains('autorun'),
-        silentLaunch: subscriptionSettings!.contains('shadowstart'),
-        autoRun: subscriptionSettings!.contains('autostart'),
-        autoCheckUpdate: subscriptionSettings!.contains('autoupdate'),
-      );
-      if (updatedAppSetting != nextAppSetting) {
-        nextAppSetting = updatedAppSetting;
-        appSettingChanged = true;
-      }
-    }
-
-    final dashboardWidgets = this.dashboardWidgets;
-    if (dashboardWidgets != null && dashboardWidgets.isNotEmpty) {
-      final updatedAppSetting = nextAppSetting.copyWith(
-        dashboardWidgets: dashboardWidgets,
-      );
-      if (updatedAppSetting != nextAppSetting) {
-        nextAppSetting = updatedAppSetting;
-        appSettingChanged = true;
-      }
-    }
-
-    if (theme != null) {
-      final updatedTheme = theme!.applyTo(nextThemeProps);
-      if (updatedTheme != nextThemeProps) {
-        nextThemeProps = updatedTheme;
-        themeChanged = true;
-      }
-    }
-
-    if (proxiesView != null) {
-      final updatedProxiesStyle = proxiesView!.applyTo(nextProxiesStyle);
-      if (updatedProxiesStyle != nextProxiesStyle) {
-        nextProxiesStyle = updatedProxiesStyle;
-        proxiesStyleChanged = true;
-      }
-    }
-
-    return ProductCustomizationPatch(
-      appSetting: appSettingChanged ? nextAppSetting : null,
-      themeProps: themeChanged ? nextThemeProps : null,
-      proxiesStyle: proxiesStyleChanged ? nextProxiesStyle : null,
-    );
-  }
-}
-
-@immutable
-class ProductCustomizationPatch {
-  const ProductCustomizationPatch({
-    this.appSetting,
-    this.themeProps,
-    this.proxiesStyle,
-  });
-
-  final AppSettingProps? appSetting;
-  final ThemeProps? themeProps;
-  final ProxiesStyle? proxiesStyle;
-
-  bool get isEmpty =>
-      appSetting == null && themeProps == null && proxiesStyle == null;
-}
-
-@immutable
-class ProductThemeHint {
-  const ProductThemeHint({
-    required this.primaryColor,
-    this.variant,
-    required this.pureBlack,
-  });
-
-  static ProductThemeHint? parse(String? value) {
-    final normalizedValue = value?.trim() ?? '';
-    if (normalizedValue.isEmpty) {
-      return null;
-    }
-
-    final parts = normalizedValue.split(':');
-    final hexString = parts.first.trim().replaceAll('#', '');
-    if (hexString.length != 6 && hexString.length != 8) {
-      return null;
-    }
-
-    final colorValue = int.tryParse(
-      hexString.length == 6 ? 'FF$hexString' : hexString,
-      radix: 16,
-    );
-    if (colorValue == null) {
-      return null;
-    }
-
-    var variantName = parts.length > 1 ? parts[1].trim() : '';
-    if (variantName.toLowerCase() == 'pureblack') {
-      variantName = '';
-    }
-
-    DynamicSchemeVariant? variant;
-    if (variantName.isNotEmpty) {
-      for (final item in DynamicSchemeVariant.values) {
-        if (item.name.toLowerCase() == variantName.toLowerCase()) {
-          variant = item;
-          break;
-        }
-      }
-    }
-
-    final pureBlack = parts
-        .skip(1)
-        .map((part) => part.trim().toLowerCase())
-        .contains('pureblack');
-
-    return ProductThemeHint(
-      primaryColor: colorValue,
-      variant: variant,
-      pureBlack: pureBlack,
-    );
-  }
-
-  final int primaryColor;
-  final DynamicSchemeVariant? variant;
-  final bool pureBlack;
-
-  ThemeProps applyTo(ThemeProps current) {
-    final primaryColors = [...current.primaryColors];
-    if (!primaryColors.contains(primaryColor)) {
-      primaryColors.add(primaryColor);
-    }
-    return current.copyWith(
-      primaryColor: primaryColor,
-      primaryColors: primaryColors,
-      schemeVariant: variant ?? current.schemeVariant,
-      pureBlack: pureBlack,
-    );
-  }
-}
-
-@immutable
-class ProductProxiesViewHint {
-  const ProductProxiesViewHint({
-    this.type,
-    this.sortType,
-    this.layout,
-    this.iconStyle,
-    this.cardType,
-  });
-
-  static ProductProxiesViewHint? parse(String? value) {
-    final normalizedValue = value?.trim() ?? '';
-    if (normalizedValue.isEmpty) {
-      return null;
-    }
-
-    ProxiesType? type;
-    ProxiesSortType? sortType;
-    ProxiesLayout? layout;
-    ProxiesIconStyle? iconStyle;
-    ProxyCardType? cardType;
-
-    final settings = normalizedValue.split(';');
-    for (final setting in settings) {
-      final parts = setting.split(':');
-      if (parts.length != 2) {
-        continue;
-      }
-      final key = parts[0].trim().toLowerCase();
-      final option = parts[1].trim().toLowerCase();
-      switch (key) {
-        case 'type':
-          type = switch (option) {
-            'list' => ProxiesType.list,
-            'tab' => ProxiesType.tab,
-            _ => type,
-          };
-          break;
-        case 'sort':
-          sortType = switch (option) {
-            'none' => ProxiesSortType.none,
-            'delay' => ProxiesSortType.delay,
-            'name' => ProxiesSortType.name,
-            _ => sortType,
-          };
-          break;
-        case 'layout':
-          layout = switch (option) {
-            'loose' => ProxiesLayout.loose,
-            'standard' => ProxiesLayout.standard,
-            'tight' => ProxiesLayout.tight,
-            _ => layout,
-          };
-          break;
-        case 'icon':
-          iconStyle = switch (option) {
-            'icon' || 'standard' => ProxiesIconStyle.icon,
-            'none' => ProxiesIconStyle.none,
-            _ => iconStyle,
-          };
-          break;
-        case 'card':
-          cardType = switch (option) {
-            'expand' => ProxyCardType.expand,
-            'shrink' => ProxyCardType.shrink,
-            'min' => ProxyCardType.min,
-            'oneline' => ProxyCardType.oneline,
-            _ => cardType,
-          };
-          break;
-      }
-    }
-
-    if (type == null &&
-        sortType == null &&
-        layout == null &&
-        iconStyle == null &&
-        cardType == null) {
-      return null;
-    }
-
-    return ProductProxiesViewHint(
-      type: type,
-      sortType: sortType,
-      layout: layout,
-      iconStyle: iconStyle,
-      cardType: cardType,
-    );
-  }
-
-  final ProxiesType? type;
-  final ProxiesSortType? sortType;
-  final ProxiesLayout? layout;
-  final ProxiesIconStyle? iconStyle;
-  final ProxyCardType? cardType;
-
-  ProxiesStyle applyTo(ProxiesStyle current) => current.copyWith(
-        type: type ?? current.type,
-        sortType: sortType ?? current.sortType,
-        layout: layout ?? current.layout,
-        iconStyle: iconStyle ?? current.iconStyle,
-        cardType: cardType ?? current.cardType,
-      );
 }
 
 @immutable

@@ -13,10 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AppStateManager extends ConsumerStatefulWidget {
-  const AppStateManager({
-    super.key,
-    required this.child,
-  });
+  const AppStateManager({super.key, required this.child});
   final Widget child;
 
   @override
@@ -51,72 +48,42 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         }
       });
     });
-    ref.listenManual(
-      checkIpProvider,
-      (prev, next) {
-        if (prev != next && next.b) {
-          detectionState.startCheck();
-        }
-      },
-      fireImmediately: true,
-    );
+    ref.listenManual(checkIpProvider, (prev, next) {
+      if (prev != next && next.b) {
+        detectionState.startCheck();
+      }
+    }, fireImmediately: true);
     ref.listenManual(configStateProvider, (prev, next) {
       if (prev != next) {
         globalState.appController.savePreferencesDebounce();
       }
     });
-    ref.listenManual(
-      autoSetSystemDnsStateProvider,
-      (prev, next) {
-        if (prev == next) {
-          return;
-        }
-        final restore = !(next.a == true && next.b == true);
-        // Chain through _dnsOp so set/restore never overlap; catchError keeps the
-        // chain alive if one networksetup invocation throws.
-        _dnsOp = _dnsOp
-            .then((_) => system.setMacOSDns(restore))
-            .catchError((_) {});
-      },
-    );
-    ref.listenManual(
-      patchClashConfigProvider.select((state) => state.mode),
-      (prev, next) {
-        if (prev != next) {
-          unawaited(productServices.androidShell.syncTileMode(next));
-        }
-      },
-      fireImmediately: true,
-    );
-    ref.listenManual(
-      globalModeEnabledProvider,
-      (prev, next) {
-        if (prev != next) {
-          unawaited(
-            productServices.androidShell.syncGlobalModeEnabled(enabled: next),
-          );
-        }
-      },
-      fireImmediately: true,
-    );
-    ref.listenManual(
-      globalModeEnabledProvider,
-      (prev, next) {
-        if (next) {
-          return;
-        }
-        final currentMode = ref.read(
-          patchClashConfigProvider.select((state) => state.mode),
+    ref.listenManual(autoSetSystemDnsStateProvider, (prev, next) {
+      if (prev == next) {
+        return;
+      }
+      final restore = !(next.a == true && next.b == true);
+      // Chain through _dnsOp so set/restore never overlap; catchError keeps the
+      // chain alive if one networksetup invocation throws.
+      _dnsOp = _dnsOp
+          .then((_) => system.setMacOSDns(restore))
+          .catchError((_) {});
+    });
+    ref.listenManual(patchClashConfigProvider.select((state) => state.mode), (
+      prev,
+      next,
+    ) {
+      if (prev != next) {
+        unawaited(productServices.androidShell.syncTileMode(next));
+      }
+    }, fireImmediately: true);
+    ref.listenManual(globalModeEnabledProvider, (prev, next) {
+      if (prev != next) {
+        unawaited(
+          productServices.androidShell.syncGlobalModeEnabled(enabled: next),
         );
-        if (currentMode != Mode.global) {
-          return;
-        }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          globalState.appController.changeMode(Mode.rule);
-        });
-      },
-      fireImmediately: true,
-    );
+      }
+    }, fireImmediately: true);
   }
 
   @override
@@ -140,7 +107,6 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         state == AppLifecycleState.inactive) {
       globalState.appController.savePreferences();
       if (Platform.isAndroid) {
-        globalState.engineManager.pauseUpdateTasks();
         globalState.appController.stopRunTimeTimer();
         globalState.stopGroupsUpdateTask();
         // Tell the core the UI is backgrounded: it pauses the request forwarder
@@ -177,7 +143,6 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         // Optimistically restart timers from the cached state so the runtime
         // display doesn't stall while the probe below is in flight...
         if (globalState.isStart) {
-          await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();
         }
         // ...then align with the native truth: STOP/START events are lost
@@ -197,18 +162,15 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
 
   @override
   Widget build(BuildContext context) => Listener(
-        onPointerHover: (_) {
-          render?.resume();
-        },
-        child: widget.child,
-      );
+    onPointerHover: (_) {
+      render?.resume();
+    },
+    child: widget.child,
+  );
 }
 
 class AppEnvManager extends StatelessWidget {
-  const AppEnvManager({
-    super.key,
-    required this.child,
-  });
+  const AppEnvManager({super.key, required this.child});
   final Widget child;
 
   @override

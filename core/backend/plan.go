@@ -18,7 +18,7 @@ const PlanVersion = 1
 
 // Input is the complete, persisted preparation input. The compiler owns its
 // interpretation. It must contain source data, never an executable client plan.
-type Input json.RawMessage
+type Input = json.RawMessage
 
 // PlanData is the on-disk representation, not an execution capability. Loading
 // it requires digest and version verification before constructing RuntimePlan.
@@ -107,8 +107,42 @@ type TransportAdapter interface {
 	Stop(context.Context) error
 	Observe(context.Context) (Observation, error)
 }
+
+// EngineEraser clears resident configuration and auxiliary controllers after
+// Stop when the user explicitly resets application data.
+type EngineEraser interface{ Forget(context.Context) error }
+
 type PlatformAdapter interface {
 	Start(context.Context, *RuntimePlan) error
 	Stop(context.Context) error
 	Observe(context.Context) (Observation, error)
+}
+
+// OperationLifetime keeps a service host alive during preparation and plan
+// replacement, before a VPN descriptor exists. It grants no execution rights.
+type OperationLifetime interface {
+	BeginOperation(context.Context, string) error
+	EndOperation(context.Context, string) error
+}
+
+// SelectionAdapter changes selectors and display metadata without replacing
+// engine configuration or platform resources. The coordinator only invokes it
+// after proving that all other plan fields are identical.
+type SelectionAdapter interface {
+	ApplySelection(context.Context, *RuntimePlan, *RuntimePlan) error
+}
+
+type LiveSettingsAdapter interface {
+	ApplyLiveSettings(context.Context, *RuntimePlan, *RuntimePlan) error
+}
+
+// EngineCommandAdapter exposes bounded engine mechanisms such as closing a
+// connection or refreshing a provider. The coordinator serializes these effects
+// with plan changes; adapters never receive another runtime owner.
+type EngineCommand struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
+}
+type EngineCommandAdapter interface {
+	Command(context.Context, EngineCommand) error
 }
