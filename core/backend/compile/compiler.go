@@ -17,10 +17,11 @@ import (
 )
 
 type RawProfile struct {
-	ID       string `json:"id"`
-	Revision uint64 `json:"revision,omitempty"`
-	Text     string `json:"text"`
-	Metadata Object `json:"metadata"`
+	SourceMissing bool   `json:"sourceMissing,omitempty"`
+	ID            string `json:"id"`
+	Revision      uint64 `json:"revision,omitempty"`
+	Text          string `json:"text"`
+	Metadata      Object `json:"metadata"`
 }
 type Input struct {
 	Version         int         `json:"version"`
@@ -90,6 +91,9 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	}
 	if c.Validate == nil {
 		return nil, errors.New("engine validator is required")
+	}
+	if request.Profile != nil && request.Profile.SourceMissing {
+		return nil, errors.New("profile source is unavailable")
 	}
 	settings := request.Settings
 	patch := defaults()

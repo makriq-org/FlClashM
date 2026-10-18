@@ -95,6 +95,9 @@ func (a *App) Handle(raw []byte) []byte {
 			}
 		} else {
 			cancelled := a.operations.cancel(params.OperationID)
+			if receipt, lookupErr := a.operations.get(params.OperationID); lookupErr == nil && receipt.RuntimeOperationID != "" {
+				cancelled = a.runtime.Cancel(receipt.RuntimeOperationID) || cancelled
+			}
 			if !cancelled {
 				cancelled = a.runtime.Cancel(params.OperationID)
 			}
@@ -134,7 +137,11 @@ func (a *App) Handle(raw []byte) []byte {
 		response.Result, err = a.RuntimeView()
 	default:
 		if strings.HasPrefix(request.Method, "runtime.") {
-			response.Result, err = a.runtimeCommand(request)
+			if a.shouldDeferRuntime(request) {
+				response.Result, err = a.deferredRuntime(request)
+			} else {
+				response.Result, err = a.runtimeCommand(request)
+			}
 		} else {
 			response.Result, err = a.submit(request)
 		}

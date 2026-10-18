@@ -106,6 +106,10 @@ func TestCompatibleBackupRoundTripAndUnsafeArchive(t *testing.T) {
 	_, _ = entry.Write([]byte("bad"))
 	_ = writer.Close()
 	unsafeTarget := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	// Startup may retain resolved defaults. Settle that legitimate update
+	// before attributing a catalog change to a rejected restore.
+	waitCondition(t, func() bool { return unsafeTarget.Snapshot().Runtime.AppliedGeneration > 0 })
+	unsafeTarget.retainAppliedSettings(context.Background())
 	bad := upload(t, unsafeTarget, malicious.Bytes())
 	revision := unsafeTarget.Snapshot().Catalog.Revision
 	request(t, unsafeTarget, "unsafe", "backup.restore", map[string]any{"token": bad.Token, "replace": true})

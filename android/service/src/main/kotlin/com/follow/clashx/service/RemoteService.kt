@@ -117,7 +117,7 @@ class RemoteService : Service() {
         }
     }
 
-    private fun replaceListener(event: IEventInterface?) = synchronized(eventLock) {
+    private fun replaceListener(event: IEventInterface?): Unit = synchronized(eventLock) {
         val previous = eventListener
         eventDeath?.let { runCatching { previous?.asBinder()?.unlinkToDeath(it, 0) } }
         eventListener = event

@@ -189,6 +189,19 @@ func Open(options Options) (*App, error) {
 		_ = app.Close()
 		return nil, err
 	}
+	if plan == nil && bootstrap && app.currentSourceMissing() {
+		// Consume the one-time legacy resume before starting network work. An
+		// interrupted download is reported, never replayed as a pending command.
+		if err = operations.disableBootstrap(); err != nil {
+			_ = app.Close()
+			return nil, err
+		}
+		if _, err = app.deferredRuntime(backend.Request{APIVersion: backend.APIVersion, OperationID: newID("boot"), Method: "runtime.start"}); err != nil {
+			_ = app.Close()
+			return nil, err
+		}
+		return app, nil
+	}
 	method := "recover"
 	var input backend.Input
 	if plan == nil {
@@ -243,7 +256,7 @@ func (a *App) captureInput() (backend.Input, error) {
 				decoder.UseNumber()
 				var metadata compile.Object
 				_ = decoder.Decode(&metadata)
-				request.Profile = &compile.RawProfile{ID: id, Text: record.Source, Metadata: metadata, Revision: record.Revision}
+				request.Profile = &compile.RawProfile{ID: id, Text: record.Source, Metadata: metadata, Revision: record.Revision, SourceMissing: record.SourceMissing}
 			}
 		}
 		if a.profiles.Snapshot().Revision != catalog.Revision {

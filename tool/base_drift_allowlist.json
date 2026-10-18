@@ -1379,6 +1379,11 @@
       "path": "lib/plugins/service.dart",
       "bucket": "budget",
       "reason": "Переключён единый Go backend: удалена прежняя координация, Android предоставляет механизмы, Flutter отображает снимки и отправляет действия."
+    },
+    {
+      "path": "core/backend/service/missing_source.go",
+      "bucket": "budget",
+      "reason": "Отсутствующий исходник URL-профиля восстанавливается отменяемой операцией Go с защитой от позднего запуска после Stop."
     }
   ]
 }

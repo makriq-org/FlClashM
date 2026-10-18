@@ -30,10 +30,11 @@ var ErrNotFound = errors.New("profile not found")
 type Object map[string]json.RawMessage
 
 type Record struct {
-	Metadata Object `json:"metadata"`
-	Source   string `json:"-"`
-	Revision uint64 `json:"revision"`
-	Digest   string `json:"digest"`
+	SourceMissing bool   `json:"sourceMissing,omitempty"`
+	Metadata      Object `json:"metadata"`
+	Source        string `json:"-"`
+	Revision      uint64 `json:"revision"`
+	Digest        string `json:"digest"`
 }
 type Document struct {
 	Version  int      `json:"version"`
@@ -239,6 +240,7 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		}
 		seen[id] = true
 		source, err := readSource(id)
+		missing := errors.Is(err, os.ErrNotExist)
 		if errors.Is(err, os.ErrNotExist) {
 			source = ""
 			err = nil
@@ -254,7 +256,7 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		if err = r.writeSource(source); err != nil {
 			return err
 		}
-		next.Profiles = append(next.Profiles, Record{Metadata: m, Source: source, Revision: r.state.Revision + 1, Digest: digest(source)})
+		next.Profiles = append(next.Profiles, Record{SourceMissing: missing, Metadata: m, Source: source, Revision: r.state.Revision + 1, Digest: digest(source)})
 	}
 	return r.persist(next)
 }
@@ -681,6 +683,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		}
 		seen[id] = true
 		source, err := readSource(id)
+		missing := errors.Is(err, os.ErrNotExist)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return err
@@ -693,7 +696,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		if err = r.writeSource(source); err != nil {
 			return err
 		}
-		record := Record{Metadata: m, Digest: digest(source), Revision: r.state.Revision + 1}
+		record := Record{SourceMissing: missing, Metadata: m, Digest: digest(source), Revision: r.state.Revision + 1}
 		index := -1
 		for i, old := range next.Profiles {
 			key, _ := profileID(old.Metadata)

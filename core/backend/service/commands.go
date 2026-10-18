@@ -97,6 +97,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 				return result, nil
 			}
 		}
+		if err := a.ensureCurrentSource(ctx); err != nil {
+			return result, err
+		}
 		input, err := a.captureInput()
 		if err != nil {
 			return result, err
@@ -411,6 +414,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	a.publish()
 	if apply {
+		if err := a.ensureCurrentSource(ctx); err != nil {
+			return result, err
+		}
 		receipt, err := a.applyCurrent(runtimeID(operationID), false)
 		result.RuntimeOperationID = receipt.OperationID
 		if err != nil {

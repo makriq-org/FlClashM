@@ -1,8 +1,12 @@
 package service
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -71,5 +75,50 @@ func TestResetKeepsMigrationMarkerAndFencesOldSource(t *testing.T) {
 	plan, input, err := app.runtime.Applied()
 	if err != nil || plan != nil || len(input) != 0 {
 		t.Fatal("reset retained source", err)
+	}
+}
+
+func TestMissingLegacyURLSourceDownloadsAsCancellableFencedOperation(t *testing.T) {
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		select {
+		case <-release:
+			_, _ = w.Write([]byte("rules: ['MATCH,DIRECT']"))
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	opt := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opt.LegacySettings = []byte(`{"appSetting":{"testUrl":""},"profiles":[{"id":"missing","url":"` + server.URL + `","autoUpdate":false}],"currentProfileId":"missing"}`)
+	opt.ReadLegacySource = func(string) (string, error) { return "", os.ErrNotExist }
+	app := openTestApp(t, opt)
+	request(t, app, "fetch-start", "runtime.start", nil)
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("start did not fetch original source")
+	}
+	request(t, app, "stop-during-fetch", "runtime.stop", nil)
+	waitRuntime(t, app, "stop-during-fetch")
+	close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	receipt, err := app.Await(ctx, "fetch-start")
+	if err != nil || receipt.Status != "failed" {
+		t.Fatal("stale download accepted", receipt, err)
+	}
+	if app.Snapshot().Runtime.DesiredRunning {
+		t.Fatal("late subscription resurrected VPN")
+	}
+	record, err := app.ProfileSource("missing")
+	if err != nil || record.SourceMissing || record.Source != "rules: ['MATCH,DIRECT']" {
+		t.Fatal("source recovery lost original", record, err)
+	}
+	request(t, app, "retry", "runtime.start", nil)
+	waitRuntime(t, app, "retry")
+	if app.Snapshot().Runtime.Observed.State != "running" {
+		t.Fatal("cached source did not start")
 	}
 }

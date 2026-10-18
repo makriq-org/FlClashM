@@ -1,4 +1,3 @@
-import '../backend/backend.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,6 +11,7 @@ import '../../clash/clash.dart';
 import '../../common/common.dart';
 import '../../state.dart';
 import '../../widgets/dialog.dart';
+import '../backend/backend.dart';
 import '../services/app_update_manifest.dart';
 import '../services/app_update_manifest_release.dart';
 import '../services/app_update_manifest_rollback.dart';

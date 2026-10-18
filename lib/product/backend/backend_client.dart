@@ -187,11 +187,7 @@ class BackendClient {
   }
 
   void _resync() {
-    unawaited(
-      refresh().catchError((Object error, StackTrace stack) {
-        _changes.addError(error, stack);
-      }),
-    );
+    unawaited(refresh().catchError(_changes.addError));
   }
 
   Map<String, dynamic> get settings {
