@@ -53,6 +53,7 @@ type execution struct {
 // adapter methods. The command lock fences side effects, the state lock protects
 // snapshots/acceptance, and epochs fence results from non-cooperative adapters.
 type runtimeCoordinator struct {
+	compileSlots   chan struct{}
 	instanceID     string
 	commands       sync.Mutex
 	mu             sync.Mutex
@@ -93,7 +94,7 @@ func Open(store Store, compiler Compiler, engine EngineAdapter, transports Trans
 	if _, err := rand.Read(instance); err != nil {
 		return nil, err
 	}
-	c := &runtimeCoordinator{instanceID: hex.EncodeToString(instance), store: store, compiler: compiler, engine: engine, transports: transports, platform: platform,
+	c := &runtimeCoordinator{compileSlots: make(chan struct{}, 1), instanceID: hex.EncodeToString(instance), store: store, compiler: compiler, engine: engine, transports: transports, platform: platform,
 		document: cloneDocument(doc), observed: Observation{State: "unknown"}, epoch: doc.Generation,
 		executions: make(map[string]*execution), subscribers: make(map[uint64]chan Event), cleanupTimeout: 15 * time.Second}
 	return &Backend{c}, nil
@@ -432,7 +433,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	var plan *RuntimePlan
 	var err error
 	if len(next.Desired.Input) > 0 {
-		plan, err = c.compiler.Compile(e.ctx, bytes.Clone(next.Desired.Input), e.epoch)
+		plan, err = c.compile(e.ctx, bytes.Clone(next.Desired.Input), e.epoch)
 		if err == nil && (plan == nil || plan.Generation() != e.epoch) {
 			err = errors.New("compiler returned invalid generation")
 		}
@@ -619,4 +620,31 @@ func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
 		receipts = receipts[len(receipts)-128:]
 	}
 	return receipts
+}
+
+// Preparation has no runtime side effects. A non-cooperative parser must not
+// block Stop; its late result is discarded, while a single slot bounds retained
+// inputs and prevents parallel use of an engine parser with shared caches.
+func (c *runtimeCoordinator) compile(ctx context.Context, input Input, generation uint64) (*RuntimePlan, error) {
+	select {
+	case c.compileSlots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	type result struct {
+		plan *RuntimePlan
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		defer func() { <-c.compileSlots }()
+		plan, err := c.compiler.Compile(ctx, input, generation)
+		done <- result{plan, err}
+	}()
+	select {
+	case outcome := <-done:
+		return outcome.plan, outcome.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

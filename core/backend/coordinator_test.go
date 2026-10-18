@@ -626,3 +626,38 @@ func TestRecoveryDoesNotReplayFirstUncommittedProfile(t *testing.T) {
 		t.Fatal("compiled an uncommitted first profile")
 	}
 }
+
+func TestStopDoesNotWaitForNonCooperativePreparation(t *testing.T) {
+	h := newHost()
+	b := openHost(t, newStore(t), h)
+	run(t, b, "configure", "apply", `{"profile":"old"}`)
+	run(t, b, "start", "start", "")
+	h.mu.Lock()
+	h.block = "compile"
+	h.entered = make(chan struct{})
+	h.release = make(chan struct{})
+	h.mu.Unlock()
+	_, err := b.Submit(Request{APIVersion: 1, OperationID: "parser", Method: "apply", Input: Input(`{"profile":"late-parser"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-h.entered
+	_, err = b.Submit(Request{APIVersion: 1, OperationID: "stop-parser", Method: "stop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	// Stop must finish while the old parser is still blocked.
+	_, err = b.Await(ctx, "stop-parser")
+	close(h.release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Observed.State != "stopped" || b.Snapshot().AppliedRunning {
+		t.Fatal(b.Snapshot())
+	}
+	if _, err = b.Await(ctx, "parser"); err == nil {
+		t.Fatal("accepted stale parser result")
+	}
+}
