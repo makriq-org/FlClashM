@@ -9,6 +9,63 @@ import (
 
 type liveHostEngine struct{ hostEngine }
 
+type selectionHostEngine struct{ hostEngine }
+
+func (h selectionHostEngine) ApplySelection(ctx context.Context, _, next *RuntimePlan) error {
+	if err := h.step(ctx, "engine.selection"); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	h.applied = next.Payload()
+	h.mu.Unlock()
+	return nil
+}
+
+func TestRecoveryInstallsAbsentRuntimeWithLiveAdapters(t *testing.T) {
+	for name, adapter := range map[string]func(*host) EngineAdapter{
+		"selection":     func(h *host) EngineAdapter { return selectionHostEngine{hostEngine{h}} },
+		"live-settings": func(h *host) EngineAdapter { return liveHostEngine{hostEngine{h}} },
+	} {
+		for _, reopen := range []bool{false, true} {
+			mode := "resource-loss"
+			if reopen {
+				mode = "new-process"
+			}
+			t.Run(name+"/"+mode, func(t *testing.T) {
+				store := newStore(t)
+				h := newHost()
+				open := func() *Backend {
+					b, err := Open(store, h, adapter(h), hostTransports{h}, hostPlatform{h})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return b
+				}
+				b := open()
+				run(t, b, "connect", "connect", `{"config":{"mode":"rule"},"patch":{"mode":"rule"},"nodes":[]}`)
+				generation := b.Snapshot().AppliedGeneration
+				if reopen {
+					if err := b.Close(); err != nil {
+						t.Fatal(err)
+					}
+					h = newHost()
+					b = open()
+				} else {
+					h.mu.Lock()
+					h.states = map[string]bool{}
+					h.applied = nil
+					h.mu.Unlock()
+				}
+				defer b.Close()
+				run(t, b, "recover", "recover", "")
+				if snapshot := b.Snapshot(); snapshot.Observed.State != "running" || snapshot.AppliedGeneration <= generation {
+					t.Fatal("recovery did not commit a newly installed plan", snapshot)
+				}
+			})
+		}
+	}
+}
+
 func (h liveHostEngine) ApplyLiveSettings(ctx context.Context, _, next *RuntimePlan) error {
 	if err := h.step(ctx, "engine.live"); err != nil {
 		return err

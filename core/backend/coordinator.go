@@ -615,23 +615,33 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	}
 	touched := false
 	if err == nil {
-		unchanged := plan != nil && previous.Applied != nil && plan.Digest() == previous.Applied.Plan.Digest && previous.Applied.Running == next.Desired.Running && e.request.Method != "restart"
-		if unchanged {
+		_, hasSelection := c.engine.(SelectionAdapter)
+		_, hasLiveSettings := c.engine.(LiveSettingsAdapter)
+		samePlan := plan != nil && previous.Applied != nil && plan.Digest() == previous.Applied.Plan.Digest
+		resident := previous.Applied != nil && previous.Applied.Running == next.Desired.Running && e.request.Method != "restart" && (samePlan || hasSelection || hasLiveSettings)
+		if resident {
 			c.mu.Lock()
 			expected := "stopped"
 			if next.Desired.Running {
 				expected = "running"
 			}
-			unchanged = c.observed.State == expected
+			resident = c.observed.State == expected
 			c.mu.Unlock()
 		}
-		if unchanged {
-			unchanged = c.observe(e.ctx, next.Desired.Running) == nil
+		if resident {
+			resident = c.observe(e.ctx, next.Desired.Running) == nil
 		}
-		if !unchanged {
-			patched, patchErr := c.trySelection(e, previous, plan, next.Desired.Running)
-			if !patched && patchErr == nil {
-				patched, patchErr = c.tryLiveSettings(e, previous, plan, next.Desired.Running)
+		// Persisted Applied describes the last commit, not an engine resident in
+		// this process. Every in-place optimization requires fresh observations.
+		unchanged := resident && samePlan
+		if err = c.current(e); err == nil && !unchanged {
+			var patched bool
+			var patchErr error
+			if resident {
+				patched, patchErr = c.trySelection(e, previous, plan, next.Desired.Running)
+				if !patched && patchErr == nil {
+					patched, patchErr = c.tryLiveSettings(e, previous, plan, next.Desired.Running)
+				}
 			}
 			if patched {
 				touched = true
