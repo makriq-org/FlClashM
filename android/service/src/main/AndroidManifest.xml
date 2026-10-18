@@ -12,6 +12,11 @@
     <application>
 
         <service
+            android:name=".BackendValidatorService"
+            android:exported="false"
+            android:process=":validator" />
+
+        <service
             android:name=".RemoteService"
             android:exported="false"
             android:foregroundServiceType="specialUse"

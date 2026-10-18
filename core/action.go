@@ -39,6 +39,9 @@ func (result ActionResult) error(data interface{}) {
 }
 
 func handleAction(action *Action, result ActionResult) {
+	if handleBackendAction(action, result) {
+		return
+	}
 	switch action.Method {
 	case initClashMethod:
 		paramsString, ok := action.Data.(string)

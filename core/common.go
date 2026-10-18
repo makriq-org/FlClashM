@@ -2,6 +2,7 @@ package main
 
 import (
 	b "bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -387,8 +388,15 @@ func updateConfig(params *UpdateParams) {
 }
 
 func setupConfig(params *SetupParams) error {
+	return setupConfigWithContext(context.Background(), params, true)
+}
+
+func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback bool) error {
 	runLock.Lock()
 	defer runLock.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	var err error
 
 	extractProxyDescriptionsFromRaw(params.Config)
@@ -399,13 +407,20 @@ func setupConfig(params *SetupParams) error {
 	}
 
 	parseStart := time.Now()
-	currentConfig, err = config.ParseRawConfig(params.Config)
+	parsedConfig, err := config.ParseRawConfig(params.Config)
 	effectiveRawConfig := params.Config
 	if err != nil {
+		if !fallback {
+			return err
+		}
 		log.Errorln("[Config] ParseRawConfig failed, falling back to default: %v", err)
 		effectiveRawConfig = config.DefaultRawConfig()
-		currentConfig, _ = config.ParseRawConfig(effectiveRawConfig)
+		parsedConfig, _ = config.ParseRawConfig(effectiveRawConfig)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	currentConfig = parsedConfig
 	log.Infoln("[Setup] ParseRawConfig took %s", time.Since(parseStart))
 	currentRuntimeRawConfig = rawConfigMap(effectiveRawConfig)
 	pendingTunEnable = currentConfig.General.Tun.Enable
@@ -413,7 +428,34 @@ func setupConfig(params *SetupParams) error {
 		currentConfig.General.Tun.Enable = false
 	}
 	applyStart := time.Now()
+	// Closing incoming providers cancels their HTTP fetchers, including the
+	// Initial calls awaited inside ApplyConfig. Wait for the whole application
+	// before returning so an obsolete apply cannot outlive coordinator fencing.
+	applyFinished := make(chan struct{})
+	cancelFinished := make(chan struct{})
+	go func() {
+		defer close(cancelFinished)
+		select {
+		case <-applyFinished:
+		case <-ctx.Done():
+			for _, p := range parsedConfig.Providers {
+				if closer, ok := p.(interface{ Close() error }); ok {
+					_ = closer.Close()
+				}
+			}
+			for _, p := range parsedConfig.RuleProviders {
+				if closer, ok := p.(interface{ Close() error }); ok {
+					_ = closer.Close()
+				}
+			}
+		}
+	}()
 	executor.ApplyConfig(currentConfig, true)
+	close(applyFinished)
+	<-cancelFinished
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	log.Infoln("[Setup] executor.ApplyConfig took %s", time.Since(applyStart))
 	go runtime.GC()
 	currentConfig.General.Tun.Enable = pendingTunEnable

@@ -94,8 +94,8 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	merge(patch, object(settings["patchClashConfig"]))
 	app := object(settings["appSetting"])
 	override := app["overrideNetworkSettings"] == true
-	testURL := text(app["testUrl"])
-	if testURL == "" {
+	testURL, hasTestURL := app["testUrl"].(string)
+	if !hasTestURL {
 		testURL = "https://www.gstatic.com/generate_204"
 	}
 	config := Object{}

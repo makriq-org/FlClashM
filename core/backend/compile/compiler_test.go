@@ -61,6 +61,20 @@ func prepared(t *testing.T, c Compiler, request Input) Prepared {
 	}
 	return p
 }
+
+func TestExplicitEmptyTestURLDisablesInheritedConnectivityProbes(t *testing.T) {
+	c := Compiler{Nodes: &ExternalCompiler{}, Validate: func(context.Context, Object) error { return nil }}
+	request := Input{Version: 1, Profile: &RawProfile{ID: "manual", Text: "proxies: [{name: Bye, type: byedpi, mode: manual, args: '--disorder 1'}]"}, Settings: Object{"appSetting": Object{"testUrl": ""}}}
+	result := prepared(t, c, request)
+	if result.TestURL != "" || len(list(result.Nodes[0].Check["urls"])) != 0 {
+		t.Fatalf("explicit empty URL introduced network work: %#v", result)
+	}
+	delete(object(request.Settings["appSetting"]), "testUrl")
+	result = prepared(t, c, request)
+	if result.TestURL != "https://www.gstatic.com/generate_204" || len(list(result.Nodes[0].Check["urls"])) != 1 {
+		t.Fatal("missing setting did not retain legacy default")
+	}
+}
 func TestProfileSettingsSecurityAndOverrides(t *testing.T) {
 	c := Compiler{Capabilities: Capabilities{Platform: "android", HomeDir: "/home/test", ProfilesDir: "/home/test/profiles"}, Validate: func(ctx context.Context, value Object) error { return ctx.Err() }}
 	request := Input{Version: 1, Profile: &RawProfile{ID: "profile-1", Text: `mixed-port: 9091

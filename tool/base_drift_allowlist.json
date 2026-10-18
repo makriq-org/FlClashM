@@ -1174,6 +1174,51 @@
       "path": "core/backend/service/service_test.go",
       "bucket": "budget",
       "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/PhysicalNetworkScope.kt",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IBackendValidator.aidl",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/AndroidBackendPlatform.kt",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/BackendHost.kt",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/BackendValidatorHost.kt",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/BackendValidatorService.kt",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "core/backend/host/broker.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "core/backend/host/broker_test.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "core/backend_host.go",
+      "bucket": "budget",
+      "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
     }
   ]
 }
