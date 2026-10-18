@@ -1384,6 +1384,26 @@
       "path": "core/backend/service/missing_source.go",
       "bucket": "budget",
       "reason": "Отсутствующий исходник URL-профиля восстанавливается отменяемой операцией Go с защитой от позднего запуска после Stop."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/SubscriptionNotifications.kt",
+      "bucket": "budget",
+      "reason": "Go сохраняет семантику уведомлений, ограничения переносов и очистку данных; Android предоставляет локализованное отображение без участия Flutter."
+    },
+    {
+      "path": "core/backend/service/notifications.go",
+      "bucket": "budget",
+      "reason": "Go сохраняет семантику уведомлений, ограничения переносов и очистку данных; Android предоставляет локализованное отображение без участия Flutter."
+    },
+    {
+      "path": "core/backend/service/notifications_test.go",
+      "bucket": "budget",
+      "reason": "Go сохраняет семантику уведомлений, ограничения переносов и очистку данных; Android предоставляет локализованное отображение без участия Flutter."
+    },
+    {
+      "path": "core/backend/service/reset.go",
+      "bucket": "budget",
+      "reason": "Go сохраняет семантику уведомлений, ограничения переносов и очистку данных; Android предоставляет локализованное отображение без участия Flutter."
     }
   ]
 }

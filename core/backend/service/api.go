@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"core/backend"
+	"core/backend/compile"
 )
 
 func (a *App) Handle(raw []byte) []byte {
@@ -34,6 +35,9 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	if len(request.OperationID) < 1 || len(request.OperationID) > 128 {
 		return fail("invalid_request", "operationId must contain 1..128 bytes")
+	}
+	if a.resetting.Load() && (strings.HasPrefix(request.Method, "blob.") && request.Method != "blob.read" || request.Method == "engine.command") {
+		return fail("reset_in_progress", "data reset in progress")
 	}
 	if a.ctx.Err() != nil {
 		return fail("backend_closed", "backend is closing")
@@ -242,6 +246,13 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 		input, err = a.captureInput()
 		if err != nil {
 			return backend.Receipt{}, err
+		}
+		if method == "connect" {
+			var captured compile.Input
+			_ = json.Unmarshal(input, &captured)
+			if captured.Profile == nil {
+				return backend.Receipt{}, errors.New("no profile selected")
+			}
 		}
 	}
 	if request.Method == "runtime.toggle" {

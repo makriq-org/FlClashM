@@ -338,6 +338,8 @@ func TestHeadlessSubscriptionAndStopDuringResponse(t *testing.T) {
 func TestIdenticalRuntimePlanKeepsStartTimeAndService(t *testing.T) {
 	engine := &testEngine{}
 	app := openTestApp(t, options(t, t.TempDir(), engine, make(chan time.Time)))
+	request(t, app, "fixture", "profile.put", map[string]any{"metadata": map[string]any{"id": "one"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "fixture")
 	request(t, app, "start-1", "runtime.start", nil)
 	waitRuntime(t, app, "start-1")
 	first := app.Snapshot().Runtime

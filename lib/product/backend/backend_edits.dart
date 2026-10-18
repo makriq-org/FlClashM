@@ -91,8 +91,12 @@ class BackendEdits {
           var expected = params['expectedRevision'] as int?;
           if (profileId != null && expected != null) {
             final advances = _ownRevisions[profileId];
-            while (advances?.containsKey(expected) == true) {
-              expected = advances[expected]!;
+            while (true) {
+              final next = advances?[expected];
+              if (next == null) {
+                break;
+              }
+              expected = next;
             }
             params['expectedRevision'] = expected;
           }

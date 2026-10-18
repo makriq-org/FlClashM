@@ -109,14 +109,6 @@
       ]
     },
     {
-      "path": "lib/services/subscription_notification_service.dart",
-      "boundary": "subscription-and-platform-selectors",
-      "reason": "Subscription notifications stay a thin base consumer of product display policy and do not parse provider headers locally.",
-      "targets": [
-        "lib/product/subscription/product_subscription.dart"
-      ]
-    },
-    {
       "path": "lib/state.dart",
       "boundary": "global-runtime-wiring",
       "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",

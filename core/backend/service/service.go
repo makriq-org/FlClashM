@@ -40,6 +40,8 @@ type Options struct {
 	Now              func() time.Time
 }
 type App struct {
+	noticeMu                            sync.Mutex
+	now                                 func() time.Time
 	runtimeMu                           sync.Mutex
 	resetting                           atomic.Bool
 	platform                            backend.PlatformAdapter
@@ -119,6 +121,16 @@ func Open(options Options) (*App, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{directory: options.Directory, platform: options.Platform, inspection: options.Nodes.Inspection, runtime: runtime, profiles: repository, compiler: options.Compiler, validateSource: options.ValidateSource, operations: operations, ctx: ctx, cancel: cancel, subscribers: map[uint64]chan Event{}}
+	app.now = options.Now
+	if app.now == nil {
+		app.now = time.Now
+	}
+	if err = app.migrateNotices(options.LegacySettings); err != nil {
+		cancel()
+		_ = runtime.Close()
+		return nil, err
+	}
+	app.workers.Go(func() { app.checkNotices(ctx, app.now()) })
 	client := options.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 2 * time.Minute}
@@ -175,6 +187,7 @@ func Open(options Options) (*App, error) {
 				if !ok {
 					return
 				}
+				app.checkNotices(ctx, now)
 				for _, id := range app.subscriptions.Due(now) {
 					_, _ = app.submitInternal("subscription.refresh", map[string]any{"profileId": id, "deviceHeaders": true})
 				}
@@ -317,6 +330,7 @@ func (a *App) Subscribe(capacity int) (Snapshot, <-chan Event, func()) {
 	}
 }
 func (a *App) profileUpdated(ctx context.Context, id string, revision uint64) error {
+	a.checkNotices(ctx, a.now())
 	if a.isCurrent(id) {
 		record, err := a.profiles.Get(id)
 		if err != nil {

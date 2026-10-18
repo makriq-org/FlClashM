@@ -95,7 +95,6 @@ class ServicePlugin :
             "getCurrentProfileName" -> launch { result.successOnMain(Service.getCurrentProfileName()) }
             "getTraffic" -> launch { result.successOnMain(Service.getTraffic()) }
             "getTotalTraffic" -> launch { result.successOnMain(Service.getTotalTraffic()) }
-            "showSubscriptionNotification" -> handleShowSubscriptionNotification(call, result)
             else -> result.notImplemented()
         }
     }
@@ -187,60 +186,6 @@ class ServicePlugin :
                     )
                 }
             result.successOnMain(true)
-        }
-    }
-
-    private fun handleShowSubscriptionNotification(call: MethodCall, result: MethodChannel.Result) {
-        val args = call.arguments as? Map<*, *> ?: run { result.successOnMain(false); return }
-        val title = args["title"] as? String ?: ""
-        val message = args["message"] as? String ?: ""
-        val actionLabel = args["actionLabel"] as? String ?: ""
-        val actionUrl = args["actionUrl"] as? String ?: ""
-
-        // Channel creation / Builder.build() / notify can throw (bad icon res, OEM
-        // notification quirks); wrap so a throw never strands the Flutter result.
-        runCatching {
-            val ctx = CommonGlobalState.application
-            val manager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (manager.getNotificationChannel(GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL) == null) {
-                    val ch = NotificationChannel(
-                        GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL,
-                        "Subscription Updates",
-                        NotificationManager.IMPORTANCE_HIGH,
-                    )
-                    manager.createNotificationChannel(ch)
-                }
-            }
-
-            val builder = NotificationCompat.Builder(ctx, GlobalState.SUBSCRIPTION_NOTIFICATION_CHANNEL)
-                .setSmallIcon(com.follow.clashx.service.R.drawable.ic_notification)
-                .setContentTitle(title)
-                .setContentText(message)
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-
-            if (actionUrl.isNotBlank()) {
-                val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(actionUrl))
-                val pi = PendingIntent.getActivity(
-                    ctx, 0, openIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-                builder.addAction(0, actionLabel.ifBlank { "Open" }, pi)
-                builder.setContentIntent(pi)
-            }
-
-            manager.notify(GlobalState.SUBSCRIPTION_NOTIFICATION_ID, builder.build())
-        }.onSuccess {
-            result.successOnMain(true)
-        }.onFailure {
-            DiagnosticLog.e(
-                "ServicePlugin",
-                "showSubscriptionNotification failed: ${it.message}",
-                it,
-            )
-            result.errorOnMain("subscription_notification_failed", it.message, null)
         }
     }
 

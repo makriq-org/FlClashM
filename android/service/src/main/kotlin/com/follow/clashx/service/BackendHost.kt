@@ -80,6 +80,11 @@ object BackendHost {
         if (preferences.contains("flutter.sendDeviceHeaders")) {
             legacy.put("sendDeviceHeaders", preferences.getBoolean("flutter.sendDeviceHeaders", true))
         }
+        val notified = JSONObject()
+        for ((key, value) in preferences.all) {
+            if (key.startsWith("flutter.subscription_notified_") && value is Number) notified.put(key.removePrefix("flutter."), value.toLong())
+        }
+        legacy.put("subscriptionNotifications", notified)
         val version = application.packageManager.getPackageInfo(application.packageName, 0).versionName ?: ""
         val libraries = application.applicationInfo.nativeLibraryDir
         val executables = JSONObject()
@@ -146,7 +151,8 @@ object BackendHost {
             val result = JSONObject().put("id", id)
             try {
                 val value: Any? = when (request.getString("method")) {
-					"permission.vpn" -> android.net.VpnService.prepare(application) == null
+					"notification.subscription" -> SubscriptionNotifications.show(application, request.getJSONObject("input"))
+                    "permission.vpn" -> android.net.VpnService.prepare(application) == null
 					"service.hold" -> { BackendForegroundHold.acquire(request.getJSONObject("input").getString("operationId")); true }
 					"service.release" -> { BackendForegroundHold.release(request.getJSONObject("input").getString("operationId")); true }
                     "engine.validate" -> { validator.validate(request.getJSONObject("input").getString("path")); true }

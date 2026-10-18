@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -151,5 +152,34 @@ func TestTransferRetryAndRangeGuards(t *testing.T) {
 	}
 	if _, err = app.readBlob("../../outside", 0, 10); err == nil {
 		t.Fatal("unsafe transfer path accepted")
+	}
+}
+
+func TestAggregateQuotaAppliesToReservedUploadsAndExports(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	blobs := make([]Blob, 5)
+	for index := range blobs {
+		var err error
+		blobs[index], err = app.newBlob()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, blob := range blobs[:4] {
+		name, _ := app.blobPath(blob.Token)
+		// Sparse fixtures account for logical bytes without allocating 512 MiB.
+		if err := os.Truncate(name, maxBlobBytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	last := blobs[4]
+	if _, err := app.appendBlob(context.Background(), last.Token, 0, base64.StdEncoding.EncodeToString([]byte("x"))); err == nil {
+		t.Fatal("reserved upload escaped aggregate quota")
+	}
+	if _, err := app.writeBlob(context.Background(), last.Token, func(writer io.Writer) error { _, err := writer.Write([]byte("x")); return err }); err == nil {
+		t.Fatal("export escaped aggregate quota")
+	}
+	for _, blob := range blobs {
+		_ = app.removeBlob(blob.Token)
 	}
 }

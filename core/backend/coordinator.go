@@ -566,6 +566,18 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 
 	if e.request.Method == "stop" || e.request.Method == "forget" {
 		err := c.cleanup()
+		if err == nil && e.request.Method == "forget" {
+			// Erasure waits for cancelled preparation to leave its cache files;
+			// ordinary Stop still returns without waiting for a slow parser.
+			wait, cancel := context.WithTimeout(e.ctx, 30*time.Second)
+			select {
+			case c.compileSlots <- struct{}{}:
+				<-c.compileSlots
+			case <-wait.Done():
+				err = wait.Err()
+			}
+			cancel()
+		}
 		if err == nil {
 			err = c.current(e)
 		}
@@ -835,8 +847,15 @@ func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
 // block Stop; its late result is discarded, while a single slot bounds retained
 // inputs and prevents parallel use of an engine parser with shared caches.
 func (c *runtimeCoordinator) compile(ctx context.Context, input Input, generation uint64) (*RuntimePlan, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	select {
 	case c.compileSlots <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-c.compileSlots
+			return nil, err
+		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

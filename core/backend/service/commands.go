@@ -6,8 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
+	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"core/backend"
@@ -62,6 +63,19 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			return result, errors.New(completed.Error)
 		}
 		if err = a.profiles.Reset(); err != nil {
+			return result, err
+		}
+		if err = a.clearProfileArtifacts(); err != nil {
+			return result, err
+		}
+		a.noticeMu.Lock()
+		a.operations.mu.Lock()
+		cleared := a.operations.document
+		cleared.SubscriptionNotices = nil
+		err = a.operations.saveLocked(cleared)
+		a.operations.mu.Unlock()
+		a.noticeMu.Unlock()
+		if err != nil {
 			return result, err
 		}
 		a.presentationMu.Lock()
@@ -126,9 +140,8 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
-		name, _ := a.blobPath(blob.Token)
-		if err = os.WriteFile(name, []byte(record.Source), 0600); err != nil {
-			_ = a.removeBlob(blob.Token)
+		_, err = a.writeBlob(ctx, blob.Token, func(writer io.Writer) error { _, err := io.Copy(writer, strings.NewReader(record.Source)); return err })
+		if err != nil {
 			return result, err
 		}
 		blob.Size = int64(len(record.Source))

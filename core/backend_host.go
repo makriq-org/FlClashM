@@ -615,3 +615,9 @@ func (l backendPackageLists) Read(ctx context.Context, _, address string) (strin
 	}
 	return string(bytes.ToValidUTF8(body, []byte("�"))), nil
 }
+
+func (backendPlatform) NotifySubscription(ctx context.Context, notice application.SubscriptionNotice) (bool, error) {
+	var shown bool
+	err := platformBroker.Call(ctx, "notification.subscription", notice, &shown)
+	return shown, err
+}

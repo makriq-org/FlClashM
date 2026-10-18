@@ -29,93 +29,84 @@ func (a *App) exportBackup(ctx context.Context) (Blob, error) {
 		if err != nil {
 			return Blob{}, err
 		}
-		name, _ := a.blobPath(blob.Token)
-		file, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC, 0600)
-		if err != nil {
-			return Blob{}, err
-		}
-		writer := zip.NewWriter(file)
-		write := func(name string, reader io.Reader) error {
-			if err := ctx.Err(); err != nil {
-				return err
+		size, writeErr := a.writeBlob(ctx, blob.Token, func(output io.Writer) error {
+			writer := zip.NewWriter(output)
+			var uncompressed int64
+			write := func(name string, reader io.Reader) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				entry, err := writer.Create(name)
+				if err != nil {
+					return err
+				}
+				n, copyErr := io.Copy(entry, io.LimitReader(reader, min(maxBlobBytes, 512<<20-uncompressed)+1))
+				uncompressed += n
+				if n > maxBlobBytes || uncompressed > 512<<20 {
+					return errors.New("backup exceeds uncompressed limit")
+				}
+				return copyErr
 			}
-			entry, err := writer.Create(name)
-			if err != nil {
-				return err
+			err = write("config.json", strings.NewReader(string(settings)))
+			for _, record := range catalog.Profiles {
+				if err != nil {
+					break
+				}
+				var id string
+				_ = json.Unmarshal(record.Metadata["id"], &id)
+				profile, readErr := a.profiles.Get(id)
+				if readErr != nil {
+					err = readErr
+					break
+				}
+				err = write(path.Join("profiles", id+".yaml"), strings.NewReader(profile.Source))
 			}
-			_, err = io.Copy(entry, reader)
+			cacheRoot := filepath.Join(a.compiler.Capabilities.ProfilesDir, "providers")
+			if err == nil {
+				err = filepath.WalkDir(cacheRoot, func(name string, entry fs.DirEntry, walkErr error) error {
+					if os.IsNotExist(walkErr) {
+						return nil
+					}
+					if walkErr != nil {
+						return walkErr
+					}
+					if entry.IsDir() {
+						return nil
+					}
+					info, e := entry.Info()
+					if e != nil {
+						return e
+					}
+					if !info.Mode().IsRegular() {
+						return nil
+					}
+					relative, e := filepath.Rel(a.compiler.Capabilities.ProfilesDir, name)
+					if e != nil {
+						return e
+					}
+					source, e := os.Open(name)
+					if e != nil {
+						return e
+					}
+					defer source.Close()
+					return write(path.Join("profiles", filepath.ToSlash(relative)), io.LimitReader(source, maxBlobBytes+1))
+				})
+			}
+			closeErr := writer.Close()
+			if err == nil {
+				err = closeErr
+			}
 			return err
-		}
-		err = write("config.json", strings.NewReader(string(settings)))
-		for _, record := range catalog.Profiles {
-			if err != nil {
-				break
-			}
-			var id string
-			_ = json.Unmarshal(record.Metadata["id"], &id)
-			profile, readErr := a.profiles.Get(id)
-			if readErr != nil {
-				err = readErr
-				break
-			}
-			err = write(path.Join("profiles", id+".yaml"), strings.NewReader(profile.Source))
-		}
-		cacheRoot := filepath.Join(a.compiler.Capabilities.ProfilesDir, "providers")
-		if err == nil {
-			err = filepath.WalkDir(cacheRoot, func(name string, entry fs.DirEntry, walkErr error) error {
-				if os.IsNotExist(walkErr) {
-					return nil
-				}
-				if walkErr != nil {
-					return walkErr
-				}
-				if entry.IsDir() {
-					return nil
-				}
-				info, e := entry.Info()
-				if e != nil {
-					return e
-				}
-				if !info.Mode().IsRegular() {
-					return nil
-				}
-				relative, e := filepath.Rel(a.compiler.Capabilities.ProfilesDir, name)
-				if e != nil {
-					return e
-				}
-				source, e := os.Open(name)
-				if e != nil {
-					return e
-				}
-				defer source.Close()
-				return write(path.Join("profiles", filepath.ToSlash(relative)), io.LimitReader(source, maxBlobBytes+1))
-			})
-		}
-		closeErr := writer.Close()
-		if err == nil {
-			err = closeErr
-		}
-		if err == nil {
-			err = file.Sync()
-		}
-		info, statErr := file.Stat()
-		if err == nil {
-			err = statErr
-		}
-		_ = file.Close()
-		if err != nil {
+		})
+		if writeErr != nil {
 			_ = a.removeBlob(blob.Token)
-			return Blob{}, err
-		}
-		if info.Size() > maxBlobBytes {
-			_ = a.removeBlob(blob.Token)
-			return Blob{}, errors.New("backup exceeds transfer limit")
+			return Blob{}, writeErr
 		}
 		if a.profiles.Snapshot().Revision != catalog.Revision {
 			_ = a.removeBlob(blob.Token)
 			continue
 		}
-		blob.Size = info.Size()
+		blob.Size = size
 		return blob, nil
 	}
 	return Blob{}, profiles.ErrConflict
@@ -219,7 +210,7 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 		if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 			return "", err
 		}
-		if err = os.WriteFile(target, raw, 0600); err != nil {
+		if err = atomicCacheFile(target, raw); err != nil {
 			return "", err
 		}
 	}
@@ -230,4 +221,34 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 	operationID := newID("restore")
 	_, err = a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: "restart", Input: input})
 	return operationID, err
+}
+
+func atomicCacheFile(target string, data []byte) error {
+	file, err := os.CreateTemp(filepath.Dir(target), ".restore-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if err = file.Chmod(0600); err == nil {
+		_, err = file.Write(data)
+	}
+	if err == nil {
+		err = file.Sync()
+	}
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err = os.Rename(file.Name(), target); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(target))
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
 }

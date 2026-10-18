@@ -3,4 +3,8 @@
     <string name="notification_stop">Остановить</string>
     <string name="subscription_notification_channel_name">Обновления подписки</string>
     <string name="notification_open">Открыть</string>
+    <string name="subscription_expired">Ваша подписка истекла</string>
+    <string name="subscription_expires_today">Ваша подписка истекает сегодня</string>
+    <string name="subscription_expires_in_days">Ваша подписка истекает через %1$s дн.</string>
+    <string name="subscription_renew">Продлить</string>
 </resources>

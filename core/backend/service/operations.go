@@ -29,12 +29,14 @@ type Receipt struct {
 	Blob               *Blob  `json:"blob,omitempty"`
 }
 type appDocument struct {
-	Version           int       `json:"version"`
-	BootstrapComplete bool      `json:"bootstrapComplete"`
-	LegacyResume      bool      `json:"legacyResume"`
-	LegacyTimeZone    string    `json:"legacyTimeZone"`
-	LegacyUTCOffset   int       `json:"legacyUtcOffset"`
-	Receipts          []Receipt `json:"receipts,omitempty"`
+	NoticesMigrated     bool             `json:"noticesMigrated,omitempty"`
+	SubscriptionNotices map[string]int64 `json:"subscriptionNotices,omitempty"`
+	Version             int              `json:"version"`
+	BootstrapComplete   bool             `json:"bootstrapComplete"`
+	LegacyResume        bool             `json:"legacyResume"`
+	LegacyTimeZone      string           `json:"legacyTimeZone"`
+	LegacyUTCOffset     int              `json:"legacyUtcOffset"`
+	Receipts            []Receipt        `json:"receipts,omitempty"`
 }
 type operation struct {
 	receipt Receipt
