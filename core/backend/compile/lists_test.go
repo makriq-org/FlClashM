@@ -3,6 +3,7 @@ package compile
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -15,6 +16,56 @@ import (
 	"testing"
 	"time"
 )
+
+func TestLegacyRemoteListCacheDates(t *testing.T) {
+	zone := time.FixedZone("legacy", 3*60*60)
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"stormdns", "byedpi"} {
+		for _, timestamp := range []string{
+			"2026-10-18T14:30:00.123456", // Dart local time: 11:30 UTC, still fresh.
+			"2026-10-18T11:30:00.123456Z",
+			"2026-10-18T14:30:00.123456+03:00",
+			"2026-10-17T14:30:00.000", // An expired legacy entry still works offline.
+		} {
+			t.Run(kind+"/"+timestamp, func(t *testing.T) {
+				var dials int
+				store := &ListStore{Home: t.TempDir(), LegacyTimeZone: zone, Now: func() time.Time { return now }, DialContext: func(context.Context, string, string) (net.Conn, error) {
+					dials++
+					return nil, errors.New("offline")
+				}}
+				request := RemoteListRequest{kind, "https://1.1.1.1/list", time.Hour}
+				body := "8.8.8.8\n"
+				if kind == "byedpi" {
+					body = "-d1 -s2\n"
+				}
+				name := store.cachePath(request)
+				if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+					t.Fatal(err)
+				}
+				raw, _ := json.Marshal(map[string]string{"url": request.URL, "body": body, "fetchedAt": timestamp})
+				if err := os.WriteFile(name, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+				result, err := store.Resolve(context.Background(), []RemoteListRequest{request})
+				if err != nil || result[listKey(kind, request.URL)] != body {
+					t.Fatalf("compatible cache discarded: %v %v", result, err)
+				}
+				if strings.HasPrefix(timestamp, "2026-10-18") && dials != 0 {
+					t.Fatal("fresh cache was interpreted in the wrong time zone")
+				}
+				if strings.HasPrefix(timestamp, "2026-10-17") && dials == 0 {
+					t.Fatal("expired cache did not attempt refresh")
+				}
+			})
+		}
+	}
+	for _, invalid := range []string{"not-a-date", "", "2026-15-18T12:00:00"} {
+		raw, _ := json.Marshal(map[string]string{"fetchedAt": invalid})
+		if _, err := decodeCachedList(raw, zone); err == nil {
+			t.Fatalf("accepted invalid date %q", invalid)
+		}
+	}
+}
 
 func TestRemoteListsNetworkPolicyAndStaleCache(t *testing.T) {
 	var requests atomic.Int32

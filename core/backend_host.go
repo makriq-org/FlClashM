@@ -194,7 +194,11 @@ func openApplicationBackend(options backendHostOptions) error {
 		},
 		TLSClientConfig: backendTLSConfig(roots),
 	}}
-	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots}
+	zone, err := time.LoadLocation(options.TimeZone)
+	if err != nil {
+		zone = time.FixedZone("legacy", options.UTCOffset)
+	}
+	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots, LegacyTimeZone: zone}
 	compiler := &prepare.Compiler{
 		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: backendSelfPackages(options.Package), InstalledPackages: func(ctx context.Context) ([]string, error) {
 			var packages []string
@@ -220,10 +224,6 @@ func openApplicationBackend(options backendHostOptions) error {
 		}
 		return addresses, nil
 	}}
-	zone, err := time.LoadLocation(options.TimeZone)
-	if err != nil {
-		zone = time.FixedZone("legacy", options.UTCOffset)
-	}
 	backendManaged.Store(true)
 	app, err := application.Open(application.Options{
 		Directory: filepath.Join(options.Home, "backend"), LegacySettings: options.Legacy, LegacyRunning: options.LegacyRunning, LegacyTimeZone: options.TimeZone, LegacyUTCOffset: options.UTCOffset,
