@@ -236,14 +236,16 @@ class AppController {
   }
 
   Future<void> updateProviders() async {
-    _ref.read(providersProvider.notifier).value = await clashCore
-        .getExternalProviders();
+    final providers = await clashCore.getExternalProviders();
+    if (context.mounted)
+      _ref.read(providersProvider.notifier).value = providers;
   }
 
   Future<void> updateLocalIp() async {
     _ref.read(localIpProvider.notifier).value = null;
     await Future.delayed(commonDuration);
-    _ref.read(localIpProvider.notifier).value = await utils.getLocalIpAddress();
+    final address = await utils.getLocalIpAddress();
+    if (context.mounted) _ref.read(localIpProvider.notifier).value = address;
   }
 
   Future<void> updateProfile(Profile profile) async {
