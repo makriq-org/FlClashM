@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.util.Base64
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.LegacyBackendMigration
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import com.follow.clashx.core.Core
 import com.follow.clashx.core.InvokeInterface
 import kotlinx.coroutines.CompletableDeferred
@@ -59,7 +60,10 @@ object BackendHost {
         Core.setEventListener(object : InvokeInterface {
             override fun onResult(result: String) {
                 val message = runCatching { JSONObject(result).optJSONObject("data") }.getOrNull()
-                if (message?.optString("type") == "backendPlatform") {
+                if (message?.optString("type") == "runtimeLog") {
+                    val output = message.getJSONObject("data")
+                    DiagnosticLog.runtimeNode(output.getString("type"), output.getString("line"))
+                } else if (message?.optString("type") == "backendPlatform") {
                     dispatch(message.getJSONObject("data"))
                 } else {
                     if (message?.optString("type") == "backend") {

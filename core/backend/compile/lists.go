@@ -37,16 +37,38 @@ func listKey(kind, address string) string { return kind + ":" + address }
 // stale-on-error fallback, public-address pinning and no redirects. DialContext
 // can protect sockets on Android; ResolveIPs can use the platform's physical DNS.
 type ListStore struct {
-	RootCAs     *x509.CertPool
-	Home        string
-	Now         func() time.Time
-	ResolveIPs  func(context.Context, string) ([]netip.Addr, error)
-	DialContext func(context.Context, string, string) (net.Conn, error)
+	RootCAs        *x509.CertPool
+	Home           string
+	LegacyTimeZone *time.Location
+	Now            func() time.Time
+	ResolveIPs     func(context.Context, string) ([]netip.Addr, error)
+	DialContext    func(context.Context, string, string) (net.Conn, error)
 }
 type cachedList struct {
 	URL       string    `json:"url"`
 	Body      string    `json:"body"`
 	FetchedAt time.Time `json:"fetchedAt"`
+}
+
+// Dart's DateTime.now().toIso8601String() stored local timestamps without an
+// offset. Read those in the migration zone; new cache writes remain RFC3339 UTC.
+func decodeCachedList(raw []byte, zone *time.Location) (cachedList, error) {
+	var stored struct {
+		URL       string `json:"url"`
+		Body      string `json:"body"`
+		FetchedAt string `json:"fetchedAt"`
+	}
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		return cachedList{}, err
+	}
+	fetchedAt, err := time.Parse(time.RFC3339Nano, stored.FetchedAt)
+	if err != nil {
+		if zone == nil {
+			zone = time.Local
+		}
+		fetchedAt, err = time.ParseInLocation("2006-01-02T15:04:05.999999999", stored.FetchedAt, zone)
+	}
+	return cachedList{URL: stored.URL, Body: stored.Body, FetchedAt: fetchedAt}, err
 }
 
 func (s *ListStore) Resolve(ctx context.Context, requests []RemoteListRequest) (map[string]string, error) {
@@ -102,8 +124,9 @@ func (s *ListStore) read(ctx context.Context, req RemoteListRequest) (string, bo
 		if f, err := os.Open(s.cachePath(req)); err == nil {
 			body, e := io.ReadAll(io.LimitReader(f, (2<<20)+1))
 			_ = f.Close()
-			if e == nil && len(body) <= 2<<20 && json.Unmarshal(body, &cached) == nil && cached.URL == req.URL && validRemoteBody(req.Kind, cached.Body) == nil && !cached.FetchedAt.IsZero() {
-				hasCached = true
+			if e == nil && len(body) <= 2<<20 {
+				cached, e = decodeCachedList(body, s.LegacyTimeZone)
+				hasCached = e == nil && cached.URL == req.URL && validRemoteBody(req.Kind, cached.Body) == nil && !cached.FetchedAt.IsZero()
 			}
 		}
 	}

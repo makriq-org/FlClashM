@@ -7,6 +7,11 @@ on:
       - main
       - refactor/go-backend
   workflow_dispatch:
+    inputs:
+      backend_test:
+        description: "Собрать ARM64 APK в отдельном пакете .backendtest"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -194,6 +199,8 @@ jobs:
         run: dart setup.dart android --arch arm64 --out core
 
       - name: Build Android arm64 release smoke APK
+        env:
+          ORG_GRADLE_PROJECT_backendTest: ${{ (inputs.backend_test || github.ref == 'refs/heads/refactor/go-backend') && 'true' || 'false' }}
         shell: bash
         run: |
           core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\\(.*\\)';$/\\1/p" lib/core_version.dart)
@@ -206,6 +213,32 @@ jobs:
 
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Verify and collect installable ARM64 test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          destination="$RUNNER_TEMP/android-arm64-apk"
+          mkdir -p "$destination"
+          expected_package=com.makriq.flclash.dev
+          if [ "${{ inputs.backend_test || github.ref == 'refs/heads/refactor/go-backend' }}" = true ]; then
+            expected_package=com.makriq.flclash.backendtest
+          fi
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2" dump badging "$apk" > "$destination/package.txt"
+          grep -F "package: name='$expected_package' " "$destination/package.txt"
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify --print-certs "$apk" > "$destination/signature.txt"
+          cp "$apk" "$destination/FlClashM-arm64.apk"
+          cd "$destination"
+          sha256sum FlClashM-arm64.apk > SHA256SUMS
+
+      - name: Upload installable ARM64 test APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-arm64-test-apk
+          path: ${{ runner.temp }}/android-arm64-apk
+          if-no-files-found: error
+          retention-days: 7
 
   android-extra-abi-smoke:
     needs: detect-changes

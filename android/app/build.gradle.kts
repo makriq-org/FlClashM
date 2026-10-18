@@ -23,6 +23,7 @@ val isRelease = mStoreFile.exists()
         && !mKeyAlias.isNullOrBlank()
         && !mKeyPassword.isNullOrBlank()
         && mStoreType != null
+val isBackendTest = providers.gradleProperty("backendTest").orNull == "true"
 
 android {
     namespace = "com.follow.clashx"
@@ -42,6 +43,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["appLabel"] = if (isBackendTest) "FlClashM Backend Test" else "FlClashM"
     }
 
     signingConfigs {
@@ -65,7 +67,7 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".dev"
+            applicationIdSuffix = if (isBackendTest) ".backendtest" else ".dev"
         }
 
         release {
@@ -73,7 +75,10 @@ android {
             isShrinkResources = true
             isDebuggable = false
 
-            if (isRelease) {
+            if (isBackendTest) {
+                signingConfig = signingConfigs.getByName("debug")
+                applicationIdSuffix = ".backendtest"
+            } else if (isRelease) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
                 signingConfig = signingConfigs.getByName("debug")

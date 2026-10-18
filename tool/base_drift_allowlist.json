@@ -1116,6 +1116,16 @@
       "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
     },
     {
+      "path": "core/backend/transport/output.go",
+      "bucket": "budget",
+      "reason": "Ограниченный вывод внешних транспортов передаётся Android-журналу без блокировки runtime."
+    },
+    {
+      "path": "core/backend/transport/output_test.go",
+      "bucket": "budget",
+      "reason": "Проверки защищают диагностику транспортов от огромных строк и медленного получателя."
+    },
+    {
       "path": "core/backend/node_operations.go",
       "bucket": "budget",
       "reason": "Версионированные команды и журнал автономных операций внешних узлов принадлежат единому Go RuntimeCoordinator."

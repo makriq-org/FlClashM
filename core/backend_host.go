@@ -153,7 +153,7 @@ func handleBackendAction(action *Action, result ActionResult) bool {
 }
 
 func validBackendHost(home, packageName string) bool {
-	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev")
+	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev" || packageName == "com.makriq.flclash.backendtest")
 }
 
 func openApplicationBackend(options backendHostOptions) error {
@@ -194,7 +194,11 @@ func openApplicationBackend(options backendHostOptions) error {
 		},
 		TLSClientConfig: backendTLSConfig(roots),
 	}}
-	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots}
+	zone, err := time.LoadLocation(options.TimeZone)
+	if err != nil {
+		zone = time.FixedZone("legacy", options.UTCOffset)
+	}
+	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots, LegacyTimeZone: zone}
 	compiler := &prepare.Compiler{
 		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: backendSelfPackages(options.Package), InstalledPackages: func(ctx context.Context) ([]string, error) {
 			var packages []string
@@ -207,7 +211,11 @@ func openApplicationBackend(options backendHostOptions) error {
 		},
 	}
 	probe := &transport.SOCKSProbe{RootCAs: roots}
-	nodes := &transport.ProcessAdapter{Home: options.Home, ABI: options.ABI, Executables: options.Executables, ProbeRequest: probe.Probe, PhysicalDNS: func(ctx context.Context) ([]netip.Addr, error) {
+	nodes := &transport.ProcessAdapter{Home: options.Home, ABI: options.ABI, Executables: options.Executables, ProbeRequest: probe.Probe, Log: func(kind, line string) {
+		// The trusted Android host redacts and persists this event without
+		// forwarding raw transport output to Flutter or runtime subscribers.
+		sendMessage(Message{Type: "runtimeLog", Data: map[string]string{"type": kind, "line": line}})
+	}, PhysicalDNS: func(ctx context.Context) ([]netip.Addr, error) {
 		var values []string
 		if err := platformBroker.Call(ctx, "network.dns", nil, &values); err != nil {
 			return nil, err
@@ -220,10 +228,6 @@ func openApplicationBackend(options backendHostOptions) error {
 		}
 		return addresses, nil
 	}}
-	zone, err := time.LoadLocation(options.TimeZone)
-	if err != nil {
-		zone = time.FixedZone("legacy", options.UTCOffset)
-	}
 	backendManaged.Store(true)
 	app, err := application.Open(application.Options{
 		Directory: filepath.Join(options.Home, "backend"), LegacySettings: options.Legacy, LegacyRunning: options.LegacyRunning, LegacyTimeZone: options.TimeZone, LegacyUTCOffset: options.UTCOffset,
@@ -632,7 +636,10 @@ func (backendPlatform) NotifySubscription(ctx context.Context, notice applicatio
 }
 
 func backendSelfPackages(packageName string) []string {
-	base := strings.TrimSuffix(packageName, ".dev")
+	base := strings.TrimSuffix(strings.TrimSuffix(packageName, ".backendtest"), ".dev")
+	if strings.HasSuffix(packageName, ".backendtest") {
+		return []string{base, base + ".dev", packageName}
+	}
 	return []string{base, base + ".dev"}
 }
 

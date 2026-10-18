@@ -191,3 +191,13 @@ checks, Android ABI builds и x86_64 emulator E2E. E2E использует ло
 run URLs фиксируются после завершения проверок. Реальные ARM ABI, Wi-Fi↔mobile/VPN
 handover и энергопотребление **не проверены без физического устройства**. Сборка ARM
 и эмулятор не считаются успешной аппаратной проверкой.
+
+## Отдельная тестовая установка
+
+ARM64 smoke-сборка push в `refactor/go-backend` публикуется артефактом
+`android-arm64-test-apk`. Пакет `com.makriq.flclash.backendtest` имеет название
+`FlClashM Backend Test`, отдельные данные и debug-подпись, включая release-режим
+компиляции. Он устанавливается рядом с обычным и `.dev` клиентами.
+Для ручной сборки workflow поддерживает input `backend_test`; локально достаточно
+`ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64`
+после подготовки Android runtime-артефактов.
