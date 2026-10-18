@@ -23,6 +23,7 @@ adb install -r -t "$app_apk"
 adb install -r -t "$test_apk"
 adb shell cmd appops set com.makriq.flclash.dev ACTIVATE_VPN allow
 adb shell pm grant com.makriq.flclash.dev android.permission.POST_NOTIFICATIONS
+adb shell dumpsys deviceidle whitelist +com.makriq.flclash.dev
 adb logcat -c
 adb shell am instrument -w -r \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
@@ -33,7 +34,18 @@ grep -q '^OK (1 test)$' "$artifacts/instrumentation.txt"
 
 # Run a real Flutter activity. --no-restart avoids instrumentation's package
 # force-stop both on entry and on finish; that would also kill the VPN service.
-adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+launch_ui() {
+  # Clear stale task/activity records after SIGKILL without force-stopping the
+  # package (and its independent :remote service). Wait for the actual process;
+  # --no-restart instrumentation requires it to exist.
+  adb shell am start -W -f 0x10008000 -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+  for attempt in $(seq 1 30); do
+    if adb shell pidof com.makriq.flclash.dev > /dev/null; then return; fi
+    sleep 1
+  done
+  return 1
+}
+launch_ui
 adb shell am instrument --no-restart -w -r -e scenario seed \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-seed.txt"
@@ -45,7 +57,7 @@ if [ -n "$main_pid" ]; then adb shell run-as com.makriq.flclash.dev kill -9 "$ma
 sleep 3
 remote_after=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
 test "$remote_before" = "$remote_after"
-adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+launch_ui
 adb shell am instrument --no-restart -w -r -e scenario observe \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-observe.txt"
@@ -66,8 +78,10 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 test "$headless_ready" = true
-adb shell am start -W -n com.makriq.flclash.dev/com.follow.clashx.MainActivity
+launch_ui
 adb shell am instrument --no-restart -w -r -e scenario recovered \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/recovered.txt"
 grep -q '^OK (1 test)$' "$artifacts/recovered.txt"
+adb logcat -d -v threadtime > "$artifacts/logcat.txt"
+! grep -Eq 'flutter.*Unhandled Exception:' "$artifacts/logcat.txt"

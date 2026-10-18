@@ -72,6 +72,7 @@ class AndroidRuntimeE2eTest {
         }
         Service.bind()
         val scenario = InstrumentationRegistry.getArguments().getString("scenario", "lifecycle")
+        if (scenario != "lifecycle") await("Flutter engine attachment") { GlobalState.flutterEngine != null }
         if (scenario == "observe" || scenario == "recovered") {
             await("headless VPN") { snapshot().getJSONObject("observed").optString("state") == "running" }
             val runtime = snapshot()
@@ -89,7 +90,6 @@ class AndroidRuntimeE2eTest {
             Service.unbind()
             return@runBlocking
         }
-        if (scenario == "seed") await("Flutter engine attachment") { GlobalState.flutterEngine != null }
         Service.backendCommand("data.reset")
         Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
             .put("appSetting", JSONObject().put("testUrl", "").put("overrideNetworkSettings", true)
