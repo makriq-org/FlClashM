@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,5 +51,37 @@ func TestProviderCustomizationPersistsWithoutUI(t *testing.T) {
 	}
 	if app.deviceHeadersRequested(nil) || app.deviceHeadersEnabled(true) {
 		t.Fatal("device-header setting ignored")
+	}
+}
+
+func TestCustomizationTriggerAndLiteralDisplayCompatibility(t *testing.T) {
+	for _, test := range []struct {
+		trigger             string
+		newProfile, applies bool
+	}{{"add", true, true}, {"add", false, false}, {"update", false, true}, {"", true, false}} {
+		t.Run(test.trigger+fmt.Sprint(test.newProfile), func(t *testing.T) {
+			app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+			if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"autoLaunch": false})}, 0); err != nil {
+				t.Fatal(err)
+			}
+			metadata := profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-custom": test.trigger, "flclashm-settings": "autorun"})}
+			if err := app.customize(context.Background(), metadata, test.newProfile); err != nil {
+				t.Fatal(err)
+			}
+			var settings struct {
+				AutoLaunch bool `json:"autoLaunch"`
+			}
+			_ = json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings)
+			if settings.AutoLaunch != test.applies {
+				t.Fatal("customization trigger changed", settings)
+			}
+		})
+	}
+	for _, value := range []string{"Сервис 🛰", "literal service", "test"} {
+		for _, header := range []string{value, base64.StdEncoding.EncodeToString([]byte(value)), base64.RawURLEncoding.EncodeToString([]byte(value))} {
+			if got := decodeProviderHeader(header); got != value {
+				t.Fatalf("display header %q became %q", header, got)
+			}
+		}
 	}
 }

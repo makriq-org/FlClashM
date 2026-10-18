@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"maps"
 	"strconv"
@@ -91,8 +90,8 @@ func (a *App) checkNotices(ctx context.Context, now time.Time) {
 		}
 		var headers map[string]string
 		_ = json.Unmarshal(record.Metadata["providerHeaders"], &headers)
-		if service, err := base64.StdEncoding.DecodeString(profiles.ProviderHeader(headers, "servicename")); err == nil && len(service) > 0 {
-			label = strings.TrimSpace(string(service))
+		if service := decodeProviderHeader(profiles.ProviderHeader(headers, "servicename")); service != "" {
+			label = service
 		}
 		noticeContext, cancel := context.WithTimeout(ctx, 15*time.Second)
 		displayed, err := notifier.NotifySubscription(noticeContext, SubscriptionNotice{Title: label, Days: days, SupportURL: strings.TrimSpace(headers["support-url"]), Locale: app.Locale})

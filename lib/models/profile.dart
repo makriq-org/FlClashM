@@ -16,12 +16,6 @@ typedef SelectedMap = Map<String, String>;
 typedef ValidateProfileConfigCallback =
     Future<String> Function(String configText);
 
-bool isFlClashProviderHeader(String name) {
-  final normalized = name.toLowerCase();
-  return normalized.startsWith('flclashm-') ||
-      normalized.startsWith('flclashx-');
-}
-
 String? resolveFlClashProviderHeader(
   Map<String, String> headers,
   String suffix,

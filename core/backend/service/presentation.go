@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"core/backend/profiles"
 )
@@ -78,17 +80,7 @@ func (a *App) Presentation() Presentation {
 					}
 					var appliedHeaders map[string]string
 					_ = json.Unmarshal(captured.Profile.Metadata["providerHeaders"], &appliedHeaders)
-					decode := func(key string) string {
-						raw := profiles.ProviderHeader(appliedHeaders, key)
-						b, err := base64.StdEncoding.DecodeString(raw)
-						if err != nil {
-							b, err = base64.RawStdEncoding.DecodeString(raw)
-						}
-						if err != nil {
-							return ""
-						}
-						return strings.TrimSpace(string(b))
-					}
+					decode := func(key string) string { return decodeProviderHeader(profiles.ProviderHeader(appliedHeaders, key)) }
 					if service := decode("servicename"); service != "" {
 						title = service
 					}
@@ -155,4 +147,21 @@ func (a *App) requiresVPN() bool {
 	}
 	_ = json.Unmarshal(a.profiles.Snapshot().Settings["vpnProps"], &props)
 	return props.Enable == nil || *props.Enable
+}
+
+// Headers historically accepted base64 (including URL-safe/padding-less forms)
+// and fell back to the literal text when it was not valid UTF-8 base64.
+func decodeProviderHeader(raw string) string {
+	raw = strings.TrimSpace(raw)
+	normalized, err := url.PathUnescape(raw)
+	if err != nil {
+		normalized = raw
+	}
+	for _, encoding := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		decoded, err := encoding.DecodeString(normalized)
+		if err == nil && utf8.Valid(decoded) {
+			return strings.TrimSpace(string(decoded))
+		}
+	}
+	return raw
 }

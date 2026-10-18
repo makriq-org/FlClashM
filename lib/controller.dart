@@ -321,13 +321,6 @@ class AppController {
     _ref.read(profilesProvider.notifier).setProfile(profile);
   }
 
-  void setProfileAndAutoApply(Profile profile) {
-    _ref.read(profilesProvider.notifier).setProfile(profile);
-    if (profile.id == _ref.read(currentProfileIdProvider)) {
-      applyProfileDebounce(silence: true);
-    }
-  }
-
   void setProfiles(List<Profile> profiles) {
     _ref.read(profilesProvider.notifier).value = profiles;
   }

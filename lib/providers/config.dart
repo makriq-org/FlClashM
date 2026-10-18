@@ -93,36 +93,6 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
     globalState.config = globalState.config.copyWith(profiles: value);
   }
 
-  String? _getLabel(String? label, String id) {
-    final realLabel = label ?? id;
-    final hasDup =
-        state.indexWhere(
-          (element) => element.label == realLabel && element.id != id,
-        ) !=
-        -1;
-    if (hasDup) {
-      return _getLabel(utils.getOverwriteLabel(realLabel), id);
-    } else {
-      return label;
-    }
-  }
-
-  void setProfile(Profile profile) {
-    final profilesTemp = List<Profile>.from(state);
-    final index = profilesTemp.indexWhere(
-      (element) => element.id == profile.id,
-    );
-    final updateProfile = profile.copyWith(
-      label: _getLabel(profile.label, profile.id),
-    );
-    if (index == -1) {
-      profilesTemp.add(updateProfile);
-    } else {
-      profilesTemp[index] = updateProfile;
-    }
-    state = profilesTemp;
-  }
-
   void updateProfile(
     String profileId,
     Profile Function(Profile profile) builder,
