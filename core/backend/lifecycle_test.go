@@ -101,3 +101,33 @@ func TestObservationCannotSupersedeNewUserIntentAndForgetCannotRecoverSecrets(t 
 		t.Fatal("reset resurrected old plan")
 	}
 }
+
+type erasingEngine struct{ hostEngine }
+
+func (e erasingEngine) Forget(ctx context.Context) error {
+	e.mu.Lock()
+	e.applied = nil
+	e.calls = append(e.calls, "engine.forget")
+	e.mu.Unlock()
+	return ctx.Err()
+}
+func TestForgetErasesResidentEngineConfiguration(t *testing.T) {
+	h := newHost()
+	b, err := Open(newStore(t), h, erasingEngine{hostEngine{h}}, hostTransports{h}, hostPlatform{h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	run(t, b, "start", "connect", `{"secret":"private"}`)
+	run(t, b, "erase", "forget", "")
+	h.mu.Lock()
+	retained := len(h.applied) > 0
+	h.mu.Unlock()
+	if retained {
+		t.Fatal("reset retained resident engine data")
+	}
+	run(t, b, "fresh", "connect", `{"secret":"new"}`)
+	if b.Snapshot().Observed.State != "running" {
+		t.Fatal("reset made the engine unusable")
+	}
+}

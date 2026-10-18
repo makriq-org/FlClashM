@@ -8,11 +8,13 @@ import (
 	"core/backend/host"
 	application "core/backend/service"
 	"core/backend/transport"
+	"core/state"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	cp "github.com/metacubex/mihomo/constant/provider"
 	"io"
 	"net"
 	"net/http"
@@ -364,6 +366,9 @@ func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error
 	if err = ctx.Err(); err != nil {
 		return err
 	}
+	if err = closeBackendProviders(ctx); err != nil {
+		return err
+	}
 	if err = setupConfigWithContext(ctx, &SetupParams{Config: raw, SelectedMap: payload.Selected, TestURL: payload.TestURL}, false); err != nil {
 		return err
 	}
@@ -625,4 +630,64 @@ func (backendPlatform) NotifySubscription(ctx context.Context, notice applicatio
 func backendSelfPackages(packageName string) []string {
 	base := strings.TrimSuffix(packageName, ".dev")
 	return []string{base, base + ".dev"}
+}
+
+// Provider timers belong to the installed engine configuration. Release every
+// old reference before replacement, including the read-only API's cached map.
+func closeBackendProviders(ctx context.Context) error {
+	runLock.Lock()
+	providers := map[io.Closer]bool{}
+	add := func(value any) {
+		if closer, ok := value.(io.Closer); ok {
+			providers[closer] = true
+		}
+	}
+	for _, p := range tunnel.Providers() {
+		add(p)
+	}
+	for _, p := range tunnel.RuleProviders() {
+		add(p)
+	}
+	for _, p := range externalProviders {
+		add(p)
+	}
+	runLock.Unlock()
+	for provider := range providers {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := provider.Close(); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+func (backendEngine) Forget(ctx context.Context) error {
+	if err := closeBackendProviders(ctx); err != nil {
+		return err
+	}
+	empty := config.DefaultRawConfig()
+	empty.Port = 0
+	empty.SocksPort = 0
+	empty.MixedPort = 0
+	empty.RedirPort = 0
+	empty.TProxyPort = 0
+	empty.ExternalController = ""
+	empty.Secret = ""
+	empty.Tun.Enable = false
+	if err := setupConfigWithContext(ctx, &SetupParams{Config: empty}, false); err != nil {
+		return err
+	}
+	handleResetConnections()
+	handleResetTraffic()
+	runLock.Lock()
+	defer runLock.Unlock()
+	stopHealthCheckForwarder()
+	stopRequestForwarder()
+	currentConfig = nil
+	currentRuntimeRawConfig = map[string]any{}
+	currentTestURL = ""
+	externalProviders = map[string]cp.Provider{}
+	*state.CurrentState = state.State{}
+	return ctx.Err()
 }

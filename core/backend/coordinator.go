@@ -578,6 +578,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			}
 			cancel()
 		}
+		if err == nil && e.request.Method == "forget" {
+			if eraser, ok := c.engine.(EngineEraser); ok {
+				err = eraser.Forget(e.ctx)
+			}
+		}
 		if err == nil {
 			err = c.current(e)
 		}

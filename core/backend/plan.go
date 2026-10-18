@@ -107,6 +107,11 @@ type TransportAdapter interface {
 	Stop(context.Context) error
 	Observe(context.Context) (Observation, error)
 }
+
+// EngineEraser clears resident configuration and auxiliary controllers after
+// Stop when the user explicitly resets application data.
+type EngineEraser interface{ Forget(context.Context) error }
+
 type PlatformAdapter interface {
 	Start(context.Context, *RuntimePlan) error
 	Stop(context.Context) error
