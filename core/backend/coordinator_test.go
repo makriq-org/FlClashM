@@ -661,3 +661,44 @@ func TestStopDoesNotWaitForNonCooperativePreparation(t *testing.T) {
 		t.Fatal("accepted stale parser result")
 	}
 }
+
+type cancelledEngine struct {
+	hostEngine
+	entered chan struct{}
+}
+
+func (h cancelledEngine) Apply(ctx context.Context, plan *RuntimePlan) error {
+	if strings.Contains(string(plan.Payload()), "cancel-target") {
+		close(h.entered)
+		<-ctx.Done()
+		return errors.New("engine aborted")
+	}
+	return h.hostEngine.Apply(ctx, plan)
+}
+func TestCancellationClassifiesAdapterAbortAsCancelled(t *testing.T) {
+	h := newHost()
+	engine := cancelledEngine{hostEngine{h}, make(chan struct{})}
+	b, err := Open(newStore(t), h, engine, hostTransports{h}, hostPlatform{h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	run(t, b, "configure", "apply", `{"profile":"old"}`)
+	run(t, b, "start", "start", "")
+	if _, err = b.Submit(Request{APIVersion: 1, OperationID: "cancel", Method: "apply", Input: Input(`{"profile":"cancel-target"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	<-engine.entered
+	if !b.Cancel("cancel") {
+		t.Fatal("cancel rejected")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	receipt, err := b.Await(ctx, "cancel")
+	if !errors.Is(err, context.Canceled) || receipt.Status != "cancelled" {
+		t.Fatalf("incorrect cancellation result: %+v %v", receipt, err)
+	}
+	if b.Snapshot().Observed.State != "running" {
+		t.Fatal("previous plan was not restored")
+	}
+}

@@ -909,6 +909,21 @@
       "path": "core/backend/store.go",
       "bucket": "budget",
       "reason": "Переносимый Go backend и поведенческий host закрепляют единое владение runtime, атомарную фиксацию и восстановление."
+    },
+    {
+      "path": "core/backend/profiles/repository.go",
+      "bucket": "budget",
+      "reason": "Go backend владеет оригиналами профилей и совместимыми настройками, миграцией и обновлением подписок независимо от Flutter."
+    },
+    {
+      "path": "core/backend/profiles/repository_test.go",
+      "bucket": "budget",
+      "reason": "Go backend владеет оригиналами профилей и совместимыми настройками, миграцией и обновлением подписок независимо от Flutter."
+    },
+    {
+      "path": "core/backend/profiles/subscriptions.go",
+      "bucket": "budget",
+      "reason": "Go backend владеет оригиналами профилей и совместимыми настройками, миграцией и обновлением подписок независимо от Flutter."
     }
   ]
 }

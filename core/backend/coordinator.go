@@ -282,6 +282,11 @@ func (b *Backend) Cancel(id string) bool {
 	if e == nil || e.receipt.Status != "accepted" {
 		return false
 	}
+	for _, receipt := range c.document.Receipts {
+		if receipt.OperationID == id {
+			return false
+		}
+	}
 	e.cancel()
 	return true
 }
@@ -318,12 +323,15 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err != nil && e.ctx.Err() != nil {
+		err = errors.Join(err, e.ctx.Err())
+	}
 	e.err = err
 	e.receipt.Status = "succeeded"
 	if err != nil {
 		e.receipt.Status = "failed"
 		e.receipt.Error = "operation failed"
-		if errors.Is(err, context.Canceled) || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
+		if e.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
 			e.receipt.Status = "cancelled"
 			e.receipt.Error = "operation cancelled"
 		}
