@@ -312,7 +312,7 @@ class GlobalState {
             profile.copyWith(
               lastUpdateDate: profile.lastUpdateDate?.toLocal(),
               isUpdating:
-                  _config.profiles.getProfile(profile.id)?.isUpdating ?? false,
+                  _config?.profiles.getProfile(profile.id)?.isUpdating ?? false,
             ),
         ],
       );
