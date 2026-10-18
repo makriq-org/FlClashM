@@ -55,6 +55,7 @@ type execution struct {
 // adapter methods. The command lock fences side effects, the state lock protects
 // snapshots/acceptance, and epochs fence results from non-cooperative adapters.
 type runtimeCoordinator struct {
+	policy         *platformPolicy
 	compileSlots   chan struct{}
 	eventSequence  uint64
 	nodeOptions    *NodeOptions
@@ -147,6 +148,7 @@ func Open(store Store, compiler Compiler, engine EngineAdapter, transports Trans
 		c.transports = coordinatedTransports{c}
 		c.nodes = map[string]*nodeRuntime{}
 	}
+	c.openPlatformPolicy()
 	return &Backend{c}, nil
 }
 
@@ -169,6 +171,12 @@ func (c *runtimeCoordinator) snapshotLocked() Snapshot {
 	return s
 }
 func (c *runtimeCoordinator) publishLocked() {
+	if c.policy != nil {
+		select {
+		case c.policy.wake <- struct{}{}:
+		default:
+		}
+	}
 	c.eventSequence++
 	event := Event{Snapshot: c.snapshotLocked()}
 	for _, ch := range c.subscribers {
@@ -228,7 +236,7 @@ func fingerprint(r Request) (string, error) {
 		return "", errors.New("operationId must contain 1..128 bytes")
 	}
 	switch r.Method {
-	case "apply", "connect", "restart":
+	case "apply", "connect", "restart", "engine.command":
 		input, err := canonicalJSON(r.Input)
 		if err != nil {
 			return "", err
@@ -328,6 +336,11 @@ func (b *Backend) Submit(r Request) (Receipt, error) {
 	}
 	if c.active != nil {
 		c.active.cancel()
+	}
+	for _, queued := range c.executions {
+		if queued.request.Method == "engine.command" && queued.receipt.Status == "accepted" {
+			queued.cancel()
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e := &execution{request: r, fingerprint: fp, epoch: nextEpoch, ctx: ctx, cancel: cancel, done: make(chan struct{}), receipt: receipt, priorDesired: priorDesired}
@@ -649,6 +662,9 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 		if err := c.platform.Start(e.ctx, plan); err != nil {
 			return err
 		}
+		if err := c.platformStarted(e.ctx); err != nil {
+			return err
+		}
 		if err := c.current(e); err != nil {
 			return err
 		}
@@ -738,6 +754,14 @@ func (b *Backend) Close() error {
 		return nil
 	}
 	c.closed = true
+	if c.policy != nil {
+		c.policy.cancel()
+	}
+	for _, e := range c.executions {
+		if e.receipt.Status == "accepted" {
+			e.cancel()
+		}
+	}
 	if c.nodeCancel != nil {
 		c.nodeCancel()
 		c.nodeCancel = nil

@@ -85,6 +85,7 @@ object BackendHost {
             .put("certificates", certificates)
         invoke("backend.open", options)
         active = true
+        BackendOSObserver.install()
         val snapshot = command("snapshot").getJSONObject("result")
         projectRuntime(snapshot.getJSONObject("runtime"))
     }
@@ -124,6 +125,7 @@ object BackendHost {
                     "vpn.start" -> { AndroidBackendPlatform.start(id); true }
                     "vpn.stop" -> { AndroidBackendPlatform.stop(); true }
                     "vpn.observe" -> JSONObject().put("state", if (State.runTime != 0L) "running" else "stopped")
+                    "vpn.awake" -> { State.tunOwner.get()?.setAwake(request.getJSONObject("input").getBoolean("active")); true }
                     "network.available" -> physicalNetwork() != null
                     "network.dns" -> JSONArray(SystemDnsReader.read())
                     "network.scope" -> networkScope()

@@ -24,9 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/tunnel/statistic"
@@ -112,6 +114,26 @@ func handleBackendAction(action *Action, result ActionResult) bool {
 		}
 		result.success(json.RawMessage(app.Handle(raw)))
 		return true
+	case "backend.host.event":
+		var event backend.PlatformEvent
+		raw, _ := json.Marshal(action.Data)
+		if err := json.Unmarshal(raw, &event); err != nil {
+			result.error(err.Error())
+			return true
+		}
+		applicationMu.Lock()
+		app := applicationBackend
+		applicationMu.Unlock()
+		if app == nil {
+			result.error("backend is not ready")
+			return true
+		}
+		if err := app.NotifyPlatform(event); err != nil {
+			result.error(err.Error())
+		} else {
+			result.success(true)
+		}
+		return true
 	}
 	return false
 }
@@ -194,7 +216,7 @@ func openApplicationBackend(options backendHostOptions) error {
 			_, err := compiler.Compile(ctx, input, 1)
 			return err
 		},
-		Engine: backendEngine{}, Platform: backendPlatform{}, Nodes: backend.NodeOptions{Adapter: nodes, Inspection: backendInspection{}, Cache: &transport.CacheStore{Home: options.Home, ABI: options.ABI, LegacyTimeZone: zone}, ABI: options.ABI},
+		Engine: backendEngine{probe: probe}, Platform: backendPlatform{}, Nodes: backend.NodeOptions{Adapter: nodes, Inspection: backendInspection{}, Cache: &transport.CacheStore{Home: options.Home, ABI: options.ABI, LegacyTimeZone: zone}, ABI: options.ABI},
 		HTTPClient: client, UserAgent: options.UserAgent, DeviceHeaders: func(ctx context.Context) (map[string]string, error) {
 			var values map[string]string
 			err := platformBroker.Call(ctx, "device.headers", nil, &values)
@@ -275,7 +297,7 @@ func validateIsolatedFile(home, path string) string {
 	return ""
 }
 
-type backendEngine struct{}
+type backendEngine struct{ probe *transport.SOCKSProbe }
 
 func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error {
 	var payload struct {
@@ -311,8 +333,43 @@ func (backendEngine) ApplySelection(ctx context.Context, old, next *backend.Runt
 	if err := json.Unmarshal(next.Payload(), &payload); err != nil {
 		return err
 	}
+	var before struct {
+		Selected map[string]string `json:"selected-map"`
+	}
+	if err := json.Unmarshal(old.Payload(), &before); err != nil {
+		return err
+	}
 	runLock.Lock()
-	patchSelectGroup(payload.Selected)
+	proxies := proxiesWithProviders()
+	for group, selected := range payload.Selected {
+		if before.Selected[group] == selected {
+			continue
+		}
+		proxy := proxies[group]
+		if proxy == nil {
+			runLock.Unlock()
+			return errors.New("unknown proxy group")
+		}
+		selector, ok := proxy.Adapter().(outboundgroup.SelectAble)
+		if !ok {
+			runLock.Unlock()
+			return errors.New("proxy group cannot be selected")
+		}
+		if err := selector.Set(selected); err != nil {
+			runLock.Unlock()
+			return err
+		}
+	}
+	for group := range before.Selected {
+		if _, exists := payload.Selected[group]; exists {
+			continue
+		}
+		if proxy := proxies[group]; proxy != nil {
+			if selector, ok := proxy.Adapter().(outboundgroup.SelectAble); ok {
+				selector.ForceSet("")
+			}
+		}
+	}
 	runLock.Unlock()
 	handleSetState(string(payload.State))
 	return ctx.Err()
@@ -351,6 +408,60 @@ func (backendPlatform) Observe(ctx context.Context) (backend.Observation, error)
 }
 
 type backendInspection struct{}
+
+func (backendEngine) SystemDNS(ctx context.Context, addresses []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	dns.UpdateSystemDNS(normalizeSystemDNSServersPortable(addresses))
+	dns.FlushCacheWithDefaultResolver()
+	return ctx.Err()
+}
+func normalizeSystemDNSServersPortable(addresses []string) []string {
+	result := []string{}
+	for _, address := range addresses {
+		if ip, err := netip.ParseAddr(address); err == nil && ip.Zone() == "" {
+			result = append(result, net.JoinHostPort(ip.String(), "53"))
+		}
+	}
+	return result
+}
+func (e backendEngine) ResetNetwork(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e.probe != nil {
+		e.probe.ClearDNSCache()
+	}
+	handleResetConnections()
+	handleCloseConnections()
+	return ctx.Err()
+}
+func (backendEngine) ScreenActive(ctx context.Context, active bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	handleSetScreenActive(active)
+	return ctx.Err()
+}
+func (backendEngine) Awake(ctx context.Context, active bool) error {
+	return platformBroker.Call(ctx, "vpn.awake", map[string]bool{"active": active}, nil)
+}
+func (backendEngine) ProbeHealth(ctx context.Context) (bool, error) {
+	runLock.Lock()
+	target := currentTestURL
+	proxy := proxiesWithProviders()["GLOBAL"]
+	runLock.Unlock()
+	if target == "" {
+		return true, nil
+	}
+	if proxy == nil {
+		return false, errors.New("no active outbound")
+	}
+	expected, _ := utils.NewUnsignedRanges[uint16]("")
+	delay, err := proxy.URLTest(ctx, target, expected)
+	return delay > 0 && err == nil, err
+}
 
 func (backendInspection) HasNetwork(ctx context.Context) (bool, error) {
 	var value bool

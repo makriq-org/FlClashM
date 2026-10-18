@@ -165,6 +165,45 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			return result, err
 		}
 		apply = true
+	case "proxy.select":
+		var request struct {
+			Group string `json:"group"`
+			Proxy string `json:"proxy"`
+			Reset bool   `json:"reset"`
+		}
+		if err := decodeParams(params, &request); err != nil {
+			return result, err
+		}
+		if request.Group == "" || (!request.Reset && request.Proxy == "") {
+			return result, errors.New("group and proxy are required")
+		}
+		var id string
+		_ = json.Unmarshal(a.profiles.Snapshot().Settings["currentProfileId"], &id)
+		if id == "" {
+			return result, errors.New("no active profile")
+		}
+		var err error
+		for range 8 {
+			record, readErr := a.profiles.Get(id)
+			if readErr != nil {
+				return result, readErr
+			}
+			selected := map[string]string{}
+			_ = json.Unmarshal(record.Metadata["selectedMap"], &selected)
+			if request.Reset {
+				delete(selected, request.Group)
+			} else {
+				selected[request.Group] = request.Proxy
+			}
+			_, err = a.profiles.UpdateMetadata(ctx, id, profiles.Object{"selectedMap": jsonValue(selected)}, record.Revision)
+			if !errors.Is(err, profiles.ErrConflict) {
+				break
+			}
+		}
+		if err != nil {
+			return result, err
+		}
+		apply = a.isCurrent(id)
 	case "profile.reorder":
 		var request struct {
 			ProfileIDs       []string `json:"profileIds"`

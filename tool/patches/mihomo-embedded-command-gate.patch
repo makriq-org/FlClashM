@@ -1,0 +1,30 @@
+--- a/vendor/github.com/metacubex/mihomo/hub/route/server.go
++++ b/vendor/github.com/metacubex/mihomo/hub/route/server.go
+@@ -102,7 +102,17 @@
+ 	uiPath = C.Path.Resolve(path)
+ }
+ 
++// NewEmbeddedRouter keeps authentication ahead of the application's command
++// gate. The embedding host owns server lifecycle and serialized mutations.
++func NewEmbeddedRouter(cfg *Config, gate func(http.Handler) http.Handler) http.Handler {
++	return routerWithGate(cfg.IsDebug, cfg.Secret, cfg.DohServer, cfg.Cors, gate)
++}
++
+ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
++	return routerWithGate(isDebug, secret, dohServer, cors, nil)
++}
++
++func routerWithGate(isDebug bool, secret string, dohServer string, cors Cors, gate func(http.Handler) http.Handler) *chi.Mux {
+ 	r := chi.NewRouter()
+ 	cors.Apply(r)
+ 	if isDebug {
+@@ -119,6 +129,9 @@
+ 	r.Group(func(r chi.Router) {
+ 		if secret != "" {
+ 			r.Use(authentication(secret))
++		}
++		if gate != nil {
++			r.Use(gate)
+ 		}
+ 		r.Get("/", hello)
+ 		r.Get("/logs", getLogs)

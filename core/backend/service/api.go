@@ -46,6 +46,15 @@ func (a *App) Handle(raw []byte) []byte {
 		var raw json.RawMessage
 		raw, err = a.ExportSettings()
 		response.Result = raw
+	case "engine.command":
+		var command backend.EngineCommand
+		if err = decodeParams(request.Input, &command); err == nil {
+			if _, exists := a.operations.get(request.OperationID); exists == nil {
+				err = errors.New("operationId belongs to an application command")
+			} else {
+				response.Result, err = a.runtime.SubmitEngineCommand(request.OperationID, command)
+			}
+		}
 	case "profile.get":
 		var params struct {
 			ProfileID string `json:"profileId"`
@@ -107,6 +116,8 @@ func (a *App) Handle(raw []byte) []byte {
 		}
 	case "capabilities":
 		response.Result = map[string]any{"apiVersion": backend.APIVersion, "storageVersion": dataVersion, "platform": a.compiler.Capabilities.Platform, "transports": []string{"naiveproxy", "olcrtc", "byedpi", "stormdns"}}
+	case "runtime.view":
+		response.Result, err = a.RuntimeView()
 	default:
 		if strings.HasPrefix(request.Method, "runtime.") {
 			response.Result, err = a.runtimeCommand(request)
@@ -119,6 +130,19 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	encoded, _ := json.Marshal(response)
 	return encoded
+}
+
+// RuntimeView is a read-only copy of the committed payload for local UI
+// projection. Events deliberately contain no source or engine credentials.
+func (a *App) RuntimeView() (json.RawMessage, error) {
+	plan, _, err := a.runtime.Applied()
+	if err != nil || plan == nil {
+		return nil, err
+	}
+	return plan.Payload(), nil
+}
+func (a *App) AwaitRuntime(ctx context.Context, id string) (backend.Receipt, error) {
+	return a.runtime.Await(ctx, id)
 }
 func decodeParams(raw []byte, out any) error {
 	if len(raw) == 0 {
@@ -191,7 +215,7 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 }
 func (a *App) submit(request backend.Request) (Receipt, error) {
 	switch request.Method {
-	case "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

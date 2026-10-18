@@ -119,3 +119,14 @@ type PlatformAdapter interface {
 type SelectionAdapter interface {
 	ApplySelection(context.Context, *RuntimePlan, *RuntimePlan) error
 }
+
+// EngineCommandAdapter exposes bounded engine mechanisms such as closing a
+// connection or refreshing a provider. The coordinator serializes these effects
+// with plan changes; adapters never receive another runtime owner.
+type EngineCommand struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
+}
+type EngineCommandAdapter interface {
+	Command(context.Context, EngineCommand) error
+}

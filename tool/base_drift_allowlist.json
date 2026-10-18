@@ -1219,6 +1219,41 @@
       "path": "core/backend_host.go",
       "bucket": "budget",
       "reason": "Переносимый Go backend и Android-host механизмов заменяют зависимость runtime от Flutter."
+    },
+    {
+      "path": "core/backend/engine_commands.go",
+      "bucket": "budget",
+      "reason": "Команды внешнего контроллера проходят аутентификацию и единую очередь Go координатора с проверкой поколения."
+    },
+    {
+      "path": "core/backend/engine_commands_test.go",
+      "bucket": "budget",
+      "reason": "Команды внешнего контроллера проходят аутентификацию и единую очередь Go координатора с проверкой поколения."
+    },
+    {
+      "path": "core/backend_controller.go",
+      "bucket": "budget",
+      "reason": "Команды внешнего контроллера проходят аутентификацию и единую очередь Go координатора с проверкой поколения."
+    },
+    {
+      "path": "core/backend_controller_test.go",
+      "bucket": "budget",
+      "reason": "Команды внешнего контроллера проходят аутентификацию и единую очередь Go координатора с проверкой поколения."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/BackendOSObserver.kt",
+      "bucket": "budget",
+      "reason": "Координатор Go владеет сетевой политикой, проверками и сном; Android передаёт только события ОС и механизмы."
+    },
+    {
+      "path": "core/backend/platform_policy.go",
+      "bucket": "budget",
+      "reason": "Координатор Go владеет сетевой политикой, проверками и сном; Android передаёт только события ОС и механизмы."
+    },
+    {
+      "path": "core/backend/platform_policy_test.go",
+      "bucket": "budget",
+      "reason": "Координатор Go владеет сетевой политикой, проверками и сном; Android передаёт только события ОС и механизмы."
     }
   ]
 }

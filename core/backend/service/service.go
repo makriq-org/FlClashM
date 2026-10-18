@@ -70,6 +70,10 @@ type Event struct {
 	ResyncRequired  bool             `json:"resyncRequired,omitempty"`
 }
 
+func (a *App) NotifyPlatform(event backend.PlatformEvent) error {
+	return a.runtime.NotifyPlatform(event)
+}
+
 func Open(options Options) (*App, error) {
 	if options.Compiler == nil || options.ValidateSource == nil {
 		return nil, errors.New("backend compiler and source validator are required")

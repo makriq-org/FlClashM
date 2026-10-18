@@ -402,7 +402,7 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 	extractProxyDescriptionsFromRaw(params.Config)
 	computeMinHealthCheckInterval(params.Config)
 	resetHealthCheckForwarderState()
-	if params.TestURL != "" {
+	if params.TestURL != "" || !fallback {
 		currentTestURL = params.TestURL
 	}
 
@@ -465,9 +465,13 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 	if currentConfig.Controller.ExternalUI != "" {
 		route.SetUIPath(currentConfig.Controller.ExternalUI)
 	}
-	route.ReCreateServer(&route.Config{
-		Addr: currentConfig.Controller.ExternalController,
-	})
+	if backendManaged.Load() {
+		if err := applyBackendController(ctx, currentConfig.Controller); err != nil {
+			return err
+		}
+	} else {
+		route.ReCreateServer(&route.Config{Addr: currentConfig.Controller.ExternalController})
+	}
 	patchSelectGroup(params.SelectedMap)
 	updateListeners()
 
