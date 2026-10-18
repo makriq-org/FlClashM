@@ -212,12 +212,13 @@ func collectProviderHeaders(headers http.Header) map[string]string {
 	result := map[string]string{}
 	for name, values := range headers {
 		key := strings.ToLower(name)
-		collect := strings.HasPrefix(key, "flclashm-") || strings.HasPrefix(key, "flclashx-")
+		namespaced := strings.HasPrefix(key, "flclashm-") || strings.HasPrefix(key, "flclashx-")
+		collect := namespaced
 		switch key {
 		case "announce", "support-url", "profile-update-interval", "x-hwid-max-devices-reached", "x-hwid-not-supported":
 			collect = true
 		}
-		if collect && len(values) > 0 && values[0] != "" {
+		if collect && len(values) > 0 && (namespaced || values[0] != "") {
 			result[key] = values[0]
 		}
 	}

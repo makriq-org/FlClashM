@@ -473,3 +473,18 @@ func TestSubscriptionLegacyLocalUpdateDateKeepsSchedule(t *testing.T) {
 		t.Fatal("legacy due update missed", due)
 	}
 }
+
+func TestEmptyProviderHeaderClearsThePreviousNamespaceValue(t *testing.T) {
+	headers := collectProviderHeaders(http.Header{"Flclashm-Androidsecure": []string{""}, "Announce": []string{""}})
+	merged := MergeProviderHeaders(map[string]string{"flclashx-androidsecure": "true", "announce": "old"}, headers)
+	value, present := merged["flclashm-androidsecure"]
+	if !present || value != "" {
+		t.Fatal("explicit empty provider setting was lost", merged)
+	}
+	if _, exists := merged["flclashx-androidsecure"]; exists {
+		t.Fatal("old namespace survived replacement", merged)
+	}
+	if _, exists := merged["announce"]; exists {
+		t.Fatal("empty volatile notice was retained", merged)
+	}
+}
