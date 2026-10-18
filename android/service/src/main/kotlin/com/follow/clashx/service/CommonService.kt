@@ -33,7 +33,7 @@ class CommonService : Service(), BackendForegroundResource {
         if (intent?.action != AndroidBackendPlatform.ACTION_APPLY) {
             GlobalState.launch { BackendHost.initialize(); BackendHost.command("runtime.recover") }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
     override fun onDestroy() {
         val lost = active

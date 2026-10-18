@@ -57,6 +57,7 @@ object Service {
         val mode: String,
         val globalModeEnabled: Boolean,
         val hasActiveProfile: Boolean,
+        val requiresVpn: Boolean,
     ) {
         val isRunning get() = state == "running"
         val isStarting get() = state == "starting"
@@ -77,6 +78,7 @@ object Service {
             o.optString("mode", "rule"),
             o.optBoolean("globalModeEnabled", true),
             o.optBoolean("hasActiveProfile"),
+            o.optBoolean("requiresVpn", true),
         )
     }.getOrNull()?.takeIf { it.state.isNotBlank() }
 

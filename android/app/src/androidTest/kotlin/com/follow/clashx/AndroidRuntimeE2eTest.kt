@@ -108,6 +108,7 @@ class AndroidRuntimeE2eTest {
         val port = node.getInt("port")
         assertTrue("Packaged external transport did not listen", canConnect(port))
         assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
+        assertTrue("Remote process not found", remotePid() > 0)
         assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
         fixtureState.edit().putLong("startedAt", runtime.getLong("startedAt")).putInt("port", port).commit()
         if (scenario == "seed") { Service.unbind(); return@runBlocking }
@@ -138,6 +139,16 @@ class AndroidRuntimeE2eTest {
             await("transport shutdown") { !canConnect(port) }
             Service.unbind()
         }
+        // Proxy-only execution uses the same coordinator and survives without
+        // a TUN or a VPN-consent decision in Flutter/Kotlin.
+        Service.bind()
+        try {
+            Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("vpnProps", JSONObject().put("enable", false))))
+            assertFalse(Service.backend("presentation").getBoolean("requiresVpn"))
+            Service.backendCommand("runtime.start")
+            assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
+            assertFalse(JSONObject(Service.getAndroidVpnOptions()).getBoolean("enable"))
+        } finally { Service.backendCommand("runtime.stop"); Service.unbind() }
     }
     private fun remotePid(): Int {
         val manager = context.getSystemService(android.app.ActivityManager::class.java)

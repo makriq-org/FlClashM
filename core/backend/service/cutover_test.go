@@ -122,3 +122,29 @@ func TestMissingLegacyURLSourceDownloadsAsCancellableFencedOperation(t *testing.
 		t.Fatal("cached source did not start")
 	}
 }
+
+type deniedPermissionPlatform struct{ testPlatform }
+
+func (deniedPermissionPlatform) VPNPermission(context.Context) (bool, error) { return false, nil }
+func TestProxyOnlyAutorunDoesNotRequestVPNAndEmptyCatalogCannotConnect(t *testing.T) {
+	opt := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opt.Platform = &deniedPermissionPlatform{}
+	opt.LegacySettings = []byte(`{"appSetting":{"autoRun":true,"testUrl":""},"vpnProps":{"enable":false},"profiles":[{"id":"one"}],"currentProfileId":"one"}`)
+	opt.ReadLegacySource = func(string) (string, error) { return "rules: ['MATCH,DIRECT']", nil }
+	app := openTestApp(t, opt)
+	request(t, app, "open", "ui.attach", nil)
+	receipt := waitDomain(t, app, "open")
+	if receipt.PermissionRequired || receipt.RuntimeOperationID == "" || app.Presentation().RequiresVPN {
+		t.Fatal("proxy-only execution requested VPN consent", receipt)
+	}
+	request(t, app, "clear", "data.reset", nil)
+	waitDomain(t, app, "clear")
+	raw, _ := json.Marshal(map[string]any{"apiVersion": 1, "operationId": "empty", "method": "runtime.start"})
+	var response struct {
+		Error any `json:"error"`
+	}
+	_ = json.Unmarshal(app.Handle(raw), &response)
+	if response.Error == nil || app.Snapshot().Runtime.DesiredRunning {
+		t.Fatal("empty catalog started a direct VPN")
+	}
+}

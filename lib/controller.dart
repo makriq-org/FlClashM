@@ -119,30 +119,6 @@ class AppController {
     await syncVpnStateOnResume();
   }
 
-  Future<void> onRuntimeStarted({
-    required bool checkProfileModified,
-    bool updateStatusBarIcon = true,
-  }) async {
-    if (updateStatusBarIcon)
-      await StatusBarManager.updateIcon(isConnected: true);
-    _lastRuntimeGroupsSync = null;
-    startRunTimeTimer();
-    addCheckIpNumDebounce();
-  }
-
-  Future<void> onRuntimeStopped({bool updateStatusBarIcon = true}) async {
-    if (updateStatusBarIcon) {
-      await StatusBarManager.updateIcon(isConnected: false);
-    }
-
-    stopRunTimeTimer();
-    _lastRuntimeGroupsSync = null;
-    _ref.read(trafficsProvider.notifier).clear();
-    _ref.read(totalTrafficProvider.notifier).value = Traffic();
-    _ref.read(runTimeProvider.notifier).value = null;
-    addCheckIpNumDebounce();
-  }
-
   Timer? _runTimeTimer;
   bool _trafficPending = false;
   bool? _projectedRunning;
@@ -508,6 +484,7 @@ class AppController {
     await backendClient.command('proxy.select', {
       'group': groupName,
       'proxy': proxyName,
+      'reset': proxyName.isEmpty,
     });
     addCheckIpNumDebounce();
   }
@@ -800,8 +777,6 @@ class AppController {
   void updateStart() {
     updateStatus(!_ref.read(runTimeProvider.notifier).isStart);
   }
-
-  void updateCurrentSelectedMap(String groupName, String proxyName) {}
 
   void updateCurrentUnfoldSet(Set<String> value) {
     final currentProfile = _ref.read(currentProfileProvider);

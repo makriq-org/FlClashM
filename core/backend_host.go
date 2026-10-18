@@ -190,7 +190,7 @@ func openApplicationBackend(options backendHostOptions) error {
 	}}
 	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots}
 	compiler := &prepare.Compiler{
-		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: []string{options.Package, options.Package + ".dev"}, InstalledPackages: func(ctx context.Context) ([]string, error) {
+		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: backendSelfPackages(options.Package), InstalledPackages: func(ctx context.Context) ([]string, error) {
 			var packages []string
 			err := platformBroker.Call(ctx, "packages.list", nil, &packages)
 			return packages, err
@@ -620,4 +620,9 @@ func (backendPlatform) NotifySubscription(ctx context.Context, notice applicatio
 	var shown bool
 	err := platformBroker.Call(ctx, "notification.subscription", notice, &shown)
 	return shown, err
+}
+
+func backendSelfPackages(packageName string) []string {
+	base := strings.TrimSuffix(packageName, ".dev")
+	return []string{base, base + ".dev"}
 }

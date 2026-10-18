@@ -101,7 +101,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if _, err := a.profiles.Get(id); err != nil {
 			return result, nil
 		}
-		if permissions, ok := a.platform.(backend.VPNPermissionReader); ok {
+		if permissions, ok := a.platform.(backend.VPNPermissionReader); ok && a.requiresVPN() {
 			granted, err := permissions.VPNPermission(ctx)
 			if err != nil {
 				return result, err

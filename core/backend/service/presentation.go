@@ -13,6 +13,7 @@ import (
 // Presentation is a read-only projection for native notifications, tiles and
 // widgets. Reading it never starts, repairs or changes a runtime.
 type Presentation struct {
+	RequiresVPN       bool   `json:"requiresVpn"`
 	HasActiveProfile  bool   `json:"hasActiveProfile"`
 	Mode              string `json:"mode"`
 	GlobalModeEnabled bool   `json:"globalModeEnabled"`
@@ -24,7 +25,7 @@ func (a *App) Presentation() Presentation {
 	catalog := a.profiles.Snapshot()
 	var selected string
 	_ = json.Unmarshal(catalog.Settings["currentProfileId"], &selected)
-	value := Presentation{Mode: "rule", GlobalModeEnabled: true, NotificationTitle: "FlClashM", AppliedGeneration: a.runtime.Snapshot().AppliedGeneration}
+	value := Presentation{RequiresVPN: a.requiresVPN(), Mode: "rule", GlobalModeEnabled: true, NotificationTitle: "FlClashM", AppliedGeneration: a.runtime.Snapshot().AppliedGeneration}
 	var metadata profiles.Object
 	for _, record := range catalog.Profiles {
 		var id string
@@ -146,4 +147,12 @@ func (a *App) Presentation() Presentation {
 		}
 	}
 	return value
+}
+
+func (a *App) requiresVPN() bool {
+	var props struct {
+		Enable *bool `json:"enable"`
+	}
+	_ = json.Unmarshal(a.profiles.Snapshot().Settings["vpnProps"], &props)
+	return props.Enable == nil || *props.Enable
 }

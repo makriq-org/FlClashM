@@ -30,6 +30,7 @@ object GlobalState {
     @Volatile var runTime = 0L
     @Volatile var flutterEngine: FlutterEngine? = null
     @Volatile private var profileAvailable = false
+    @Volatile private var requiresVpn = true
     @Volatile private var projectedMode = "rule"
     private var lastAppliedSeq = 0L
 
@@ -47,6 +48,7 @@ object GlobalState {
         val state = when { snapshot.isRunning -> RunState.START; snapshot.isStarting -> RunState.PENDING; else -> RunState.STOP }
         runTime = if (snapshot.isRunning) snapshot.startedAt else 0L
         profileAvailable = snapshot.hasActiveProfile
+        requiresVpn = snapshot.requiresVpn
         projectedMode = snapshot.mode
         runStateFlow.value = state
         withContext(Dispatchers.Main) {
@@ -71,8 +73,8 @@ object GlobalState {
     fun handleChangeMode(mode: String) = userCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject().put("mode", mode))))
     private fun userCommand(method: String, params: JSONObject = JSONObject(), permission: Boolean = false) {
         val context = CommonGlobalState.application
-        if (permission && VpnService.prepare(context) != null) {
-            context.startActivity(Intent(context, TempActivity::class.java).setAction(wrapAction("START")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        if (permission && requiresVpn && VpnService.prepare(context) != null) {
+            context.startActivity(Intent(context, TempActivity::class.java).setAction(context.wrapAction("START")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
         }
         CommonGlobalState.launch {

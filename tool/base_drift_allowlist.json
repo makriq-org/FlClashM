@@ -1404,6 +1404,11 @@
       "path": "core/backend/service/reset.go",
       "bucket": "budget",
       "reason": "Go сохраняет семантику уведомлений, ограничения переносов и очистку данных; Android предоставляет локализованное отображение без участия Flutter."
+    },
+    {
+      "path": "lib/views/proxies/card.dart",
+      "bucket": "budget",
+      "reason": "Выбор прокси передаётся одним действием Go backend; удалён вызов заменённого Dart-обновления runtime selection."
     }
   ]
 }
