@@ -49,4 +49,5 @@ object State {
     // down the core if it's STILL the owner — a fast off→on hands ownership to a
     // new instance whose tunnel the old onDestroy must not close.
     val tunOwner = AtomicReference<FlVpnService?>(null)
+    val commonOwner = AtomicReference<CommonService?>(null)
 }

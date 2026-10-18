@@ -3,7 +3,6 @@ package com.follow.clashx.service
 import android.app.Service
 import android.content.Intent
 import android.net.VpnService
-import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.ServiceDelegate
@@ -47,7 +46,6 @@ internal object AndroidBackendPlatform {
                 service.handleStart(options)
             }.getOrThrow()
             coroutineContext.ensureActive()
-            State.runTime = SystemClock.uptimeMillis()
         } catch (error: Throwable) {
             withContext(NonCancellable) { stopLocked() }
             throw error
@@ -61,8 +59,9 @@ internal object AndroidBackendPlatform {
         if (delegate != null) {
             try { delegate.useService(timeoutMillis = 15_000L) { it.handleStop() }.getOrThrow() }
             finally { delegate.unbind(); State.delegate = null }
-        } else if (State.tunOwner.get() != null) {
+        } else {
             State.tunOwner.get()?.handleStop()
+            State.commonOwner.get()?.handleStop()
         }
         Core.stopTun()
         State.runTime = 0L

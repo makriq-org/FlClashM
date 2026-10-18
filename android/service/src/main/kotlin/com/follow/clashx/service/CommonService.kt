@@ -15,6 +15,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class CommonService : Service(), BackendForegroundResource {
     inner class LocalBinder : Binder() { val service: CommonService = this@CommonService }
     private val binder = LocalBinder()
+    private val resources = Any()
     @Volatile override var destroyed = false
     @Volatile private var active = false
     private val notifications = NotificationModule(this)
@@ -36,15 +37,32 @@ class CommonService : Service(), BackendForegroundResource {
         return START_STICKY
     }
     override fun onDestroy() {
-        val lost = active
-        active = false
-        destroyed = true
+        val lost = synchronized(resources) {
+            destroyed = true
+            active = false
+            val owned = State.commonOwner.compareAndSet(this, null)
+            if (owned) { State.runTime = 0L; State.clearAppliedVpnOptions() }
+            owned
+        }
         BackendForegroundHold.destroyed(this)
         runCatching { runBlocking { withTimeoutOrNull(3_000L) { notifications.uninstall() } } }
-        if (lost) { State.runTime = 0L; BackendOSObserver.service("service") }
+        if (lost) BackendOSObserver.service("service")
         super.onDestroy()
     }
-    override suspend fun handleStart(options: VpnOptions) { check(!destroyed); active = true }
-    override suspend fun handleStop() { active = false; State.runTime = 0L; State.clearAppliedVpnOptions(); finishIfIdle() }
+    override suspend fun handleStart(options: VpnOptions) {
+        synchronized(resources) {
+            check(!destroyed)
+            active = true
+            State.commonOwner.set(this)
+            State.runTime = android.os.SystemClock.uptimeMillis()
+        }
+    }
+    override suspend fun handleStop() {
+        synchronized(resources) {
+            active = false
+            if (State.commonOwner.compareAndSet(this, null)) { State.runTime = 0L; State.clearAppliedVpnOptions() }
+        }
+        finishIfIdle()
+    }
     override fun finishIfIdle() { if (!active && !BackendForegroundHold.held) stopSelf() }
 }

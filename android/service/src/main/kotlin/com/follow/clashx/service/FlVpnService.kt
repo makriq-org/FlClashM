@@ -22,6 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class FlVpnService : VpnService(), BackendForegroundResource {
     inner class LocalBinder : Binder() { val service: FlVpnService = this@FlVpnService }
     private val binder = LocalBinder()
+    private val resources = Any()
     @Volatile private var tunActive = false
     @Volatile private var revoked = false
     @Volatile override var destroyed = false
@@ -58,27 +59,36 @@ class FlVpnService : VpnService(), BackendForegroundResource {
     }
 
     override fun onRevoke() {
-        revoked = true
-        if (State.tunOwner.compareAndSet(this, null)) {
-            tunActive = false
-            State.runTime = 0L
-            State.clearAppliedVpnOptions()
-            releaseWakeLock()
-            BackendOSObserver.service("revoked")
+        val owned = synchronized(resources) {
+            revoked = true
+            val owned = State.tunOwner.compareAndSet(this, null)
+            if (owned) {
+                tunActive = false
+                Core.stopTun()
+                State.runTime = 0L
+                State.clearAppliedVpnOptions()
+            }
+            owned
         }
+        releaseWakeLock()
+        if (owned) BackendOSObserver.service("revoked")
         super.onRevoke()
     }
 
     override fun onDestroy() {
-        destroyed = true
-        tunActive = false
-        releaseWakeLock()
-        if (State.tunOwner.compareAndSet(this, null)) {
-            Core.stopTun()
-            State.runTime = 0L
-            State.clearAppliedVpnOptions()
-            BackendOSObserver.service("service")
+        val owned = synchronized(resources) {
+            destroyed = true
+            tunActive = false
+            val owned = State.tunOwner.compareAndSet(this, null)
+            if (owned) {
+                Core.stopTun()
+                State.runTime = 0L
+                State.clearAppliedVpnOptions()
+            }
+            owned
         }
+        releaseWakeLock()
+        if (owned) BackendOSObserver.service("service")
         BackendForegroundHold.destroyed(this)
         runCatching { runBlocking { withTimeoutOrNull(3_000L) { notifications.uninstall() } } }
         super.onDestroy()
@@ -184,75 +194,83 @@ class FlVpnService : VpnService(), BackendForegroundResource {
 
         builder.setBlocking(false)
 
-        val pfd = builder.establish() ?: error("VpnService.Builder.establish() returned null")
-        val fd = pfd.detachFd()
-        tunActive = true
-        // Ownership boundary: we own the fd until the native core is invoked; from
-        // Core.startTun onward the core/sing-tun owns it (and closes it on teardown
-        // or on its own failure paths). Reclaiming it again after handoff could
-        // double-close a number the core may have already reused, so only close it
-        // here if the core was never reached (loader.start threw before handoff).
-        var fdHandedToCore = false
-        try {
-            // Acquire the tunnel wakelock only now, after establish() has succeeded.
-            // Acquiring it before this try leaked the lock if Builder setup / establish()
-            // threw: the unwind's ACTION_STOP → handleStop early-returns
-            // (runTime==0 && !tunActive) without ever reaching releaseWakeLock().
-            acquireWakeLock()
-            fdHandedToCore = true
+        synchronized(resources) {
+            check(!destroyed && !revoked) { "VPN service is unavailable" }
+            val pfd = builder.establish() ?: error("VpnService.Builder.establish() returned null")
+            val fd = pfd.detachFd()
+            tunActive = true
+            // Ownership boundary: we own the fd until the native core is invoked; from
+            // Core.startTun onward the core/sing-tun owns it (and closes it on teardown
+            // or on its own failure paths). Reclaiming it again after handoff could
+            // double-close a number the core may have already reused, so only close it
+            // here if the core was never reached.
+            var fdHandedToCore = false
+            try {
+                // Acquire the tunnel wakelock only now, after establish() has succeeded.
+                // Acquiring it before this try leaked the lock if Builder setup / establish()
+                // threw: the unwind's ACTION_STOP → handleStop early-returns
+                // (runTime==0 && !tunActive) without ever reaching releaseWakeLock().
+                acquireWakeLock()
+                fdHandedToCore = true
 
-            val started = com.follow.clashx.core.Core.startTun(
-                fd = fd,
-                protect = { fdToProtect -> protect(fdToProtect) },
-                resolverProcess = { protocol, source, target, uid ->
-                    val resolvedUid = if (uid > 0) uid else {
-                        // getConnectionOwnerUid is API 29+; on older devices the call
-                        // throws NoSuchMethodError (an Error, not an Exception), so guard
-                        // by version and catch Throwable to avoid crashing the resolver.
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                            try {
-                                val cm = getSystemService(ConnectivityManager::class.java)
-                                val proto = if (protocol == 6) android.system.OsConstants.IPPROTO_TCP
-                                            else android.system.OsConstants.IPPROTO_UDP
-                                cm.getConnectionOwnerUid(proto, source, target)
-                            } catch (_: Throwable) { -1 }
-                        } else -1
-                    }
-                    if (resolvedUid <= 0) return@startTun ""
-                    packageManager.getPackagesForUid(resolvedUid)?.firstOrNull() ?: ""
-                },
-            )
-            if (!started) error("Core.startTun failed")
-            check(!destroyed && !revoked) { "VPN service disappeared during start" }
-            // Claim TUN ownership: from here this instance owns the native core's
-            // tun. onDestroy releases it via CAS so a delayed teardown of THIS
-            // instance can't close a tunnel a newer instance has since brought up.
-            State.tunOwner.set(this)
-            State.publishAppliedVpnOptions(options)
-        } catch (e: Exception) {
-            State.clearAppliedVpnOptions()
-            tunActive = false
-            // tunActive=false before releaseWakeLock (mirrors handleStop) so an
-            // in-flight setAwake(true) can't re-acquire the lock past this release.
-            releaseWakeLock()
-            // Roll back a partially-completed start: stop modules and native core
-            // before reclaiming the fd, so no orphaned Go core / module survives.
-            runCatching { com.follow.clashx.core.Core.stopTun() }
-            if (!fdHandedToCore) {
-                // Core never received the fd; reclaim it. Once handed off the core
-                // (and sing-tun) own and close it — see core/lib_android.go.
-                runCatching { android.os.ParcelFileDescriptor.adoptFd(fd).close() }
+                val started = com.follow.clashx.core.Core.startTun(
+                    fd = fd,
+                    protect = { fdToProtect -> protect(fdToProtect) },
+                    resolverProcess = { protocol, source, target, uid ->
+                        val resolvedUid = if (uid > 0) uid else {
+                            // getConnectionOwnerUid is API 29+; on older devices the call
+                            // throws NoSuchMethodError (an Error, not an Exception), so guard
+                            // by version and catch Throwable to avoid crashing the resolver.
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                try {
+                                    val cm = getSystemService(ConnectivityManager::class.java)
+                                    val proto = if (protocol == 6) android.system.OsConstants.IPPROTO_TCP
+                                                else android.system.OsConstants.IPPROTO_UDP
+                                    cm.getConnectionOwnerUid(proto, source, target)
+                                } catch (_: Throwable) { -1 }
+                            } else -1
+                        }
+                        if (resolvedUid <= 0) return@startTun ""
+                        packageManager.getPackagesForUid(resolvedUid)?.firstOrNull() ?: ""
+                    },
+                )
+                if (!started) error("Core.startTun failed")
+                check(!destroyed && !revoked) { "VPN service disappeared during start" }
+                // Claim TUN ownership: from here this instance owns the native core's
+                // tun. onDestroy releases it via CAS so a delayed teardown of THIS
+                // instance can't close a tunnel a newer instance has since brought up.
+                State.tunOwner.set(this)
+                State.publishAppliedVpnOptions(options)
+                State.runTime = android.os.SystemClock.uptimeMillis()
+            } catch (e: Exception) {
+                State.clearAppliedVpnOptions()
+                tunActive = false
+                // tunActive=false before releaseWakeLock (mirrors handleStop) so an
+                // in-flight setAwake(true) can't re-acquire the lock past this release.
+                releaseWakeLock()
+                // Roll back a partially-completed start: stop modules and native core
+                // before reclaiming the fd, so no orphaned Go core / module survives.
+                runCatching { com.follow.clashx.core.Core.stopTun() }
+                if (!fdHandedToCore) {
+                    // Core never received the fd; reclaim it. Once handed off the core
+                    // (and sing-tun) own and close it — see core/lib_android.go.
+                    runCatching { android.os.ParcelFileDescriptor.adoptFd(fd).close() }
+                }
+                throw e
             }
-            throw e
         }
     }
 
     override suspend fun handleStop() {
-        tunActive = false
+        synchronized(resources) {
+            tunActive = false
+            if (State.tunOwner.compareAndSet(this, null)) {
+                Core.stopTun()
+                State.runTime = 0L
+                State.clearAppliedVpnOptions()
+            }
+        }
         releaseWakeLock()
-        if (State.tunOwner.compareAndSet(this, null)) Core.stopTun()
-        State.runTime = 0L
-        State.clearAppliedVpnOptions()
         finishIfIdle()
     }
 }
