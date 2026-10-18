@@ -98,6 +98,8 @@ class AndroidRuntimeE2eTest {
     """.trimIndent()
 
     @Test fun packagedBinderReconnect() = runBlocking {
+        // The seed/observe phases deliberately preserve one process instance.
+        if (InstrumentationRegistry.getArguments().getString("scenario", "lifecycle") != "lifecycle") return@runBlocking
         Service.bind()
         val previous = snapshot().getString("instanceId")
         val process = remotePid()
