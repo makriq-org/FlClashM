@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"core/backend"
 	"core/backend/profiles"
 )
 
@@ -169,6 +170,22 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			return result, err
 		}
 		result.ProfileID = request.ProfileID
+		if apply {
+			catalog := a.profiles.Snapshot()
+			if len(catalog.Profiles) == 0 {
+				receipt, err := a.runtimeCommand(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "runtime.stop"})
+				result.RuntimeOperationID = receipt.OperationID
+				return result, err
+			}
+			var firstID string
+			_ = json.Unmarshal(catalog.Profiles[0].Metadata["id"], &firstID)
+			if err := a.customize(ctx, catalog.Profiles[0].Metadata, false); err != nil {
+				return result, err
+			}
+			if err := a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(firstID)}, 0); err != nil {
+				return result, err
+			}
+		}
 	case "profile.select":
 		var request struct {
 			ProfileID *string `json:"profileId"`

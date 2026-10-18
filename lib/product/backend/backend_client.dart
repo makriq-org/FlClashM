@@ -3,18 +3,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-typedef BackendTransport = Future<Map<String, dynamic>> Function(
-  Map<String, dynamic> request,
-);
+typedef BackendTransport =
+    Future<Map<String, dynamic>> Function(Map<String, dynamic> request);
 
 /// Local UI client. It submits user actions and projects snapshots; it has no
 /// compiler, runtime executor, recovery timer or subscription scheduler.
 class BackendClient {
-  BackendClient(
-      {required BackendTransport transport,
-      required Stream<Map<String, dynamic>> events})
-      : _transport = transport,
-        _events = events;
+  BackendClient({required this._transport, required this._events});
 
   final BackendTransport _transport;
   final Stream<Map<String, dynamic>> _events;
@@ -46,50 +41,66 @@ class BackendClient {
     _subscription = null;
   }
 
-  Future<dynamic> request(String method,
-      [Map<String, dynamic>? params, String? id]) async {
+  Future<dynamic> request(
+    String method, [
+    Map<String, dynamic>? params,
+    String? id,
+  ]) async {
     final response = await _transport({
       'apiVersion': 1,
       'operationId': id ?? operationId(),
       'method': method,
-      if (params != null) 'params': params,
+      'params': ?params,
     });
-    if (response['apiVersion'] != 1)
+    if (response['apiVersion'] != 1) {
       throw StateError('Unsupported backend API version');
+    }
     final error = response['error'];
-    if (error is Map) throw StateError('${error['message']}');
+    if (error is Map) {
+      throw StateError('${error['message']}');
+    }
     return response['result'];
   }
 
   /// Waiting belongs to the UI. Timeout or detachment never cancels the Go
   /// operation; cancellation is a separate, explicit command.
-  Future<Map<String, dynamic>> command(String method,
-      [Map<String, dynamic>? params, String? id]) async {
+  Future<Map<String, dynamic>> command(
+    String method, [
+    Map<String, dynamic>? params,
+    String? id,
+  ]) async {
     final operation = id ?? operationId();
     final receipt = _map(await request(method, params, operation));
     final completed = await wait(operation, initial: receipt);
     final runtimeOperation = completed['runtimeOperationId'];
-    if (runtimeOperation is String && runtimeOperation.isNotEmpty)
+    if (runtimeOperation is String && runtimeOperation.isNotEmpty) {
       await wait(runtimeOperation);
+    }
     await refresh();
     return completed;
   }
 
-  Future<Map<String, dynamic>> wait(String operation,
-      {Map<String, dynamic>? initial,
-      Duration timeout = const Duration(minutes: 10)}) async {
+  Future<Map<String, dynamic>> wait(
+    String operation, {
+    Map<String, dynamic>? initial,
+    Duration timeout = const Duration(minutes: 10),
+  }) async {
     final deadline = DateTime.now().add(timeout);
-    var receipt = initial ??
+    var receipt =
+        initial ??
         _map(await request('operation.get', {'operationId': operation}));
     while (receipt['status'] == 'accepted') {
-      if (DateTime.now().isAfter(deadline))
+      if (DateTime.now().isAfter(deadline)) {
         throw TimeoutException('Backend operation is still pending', timeout);
+      }
       await Future<void>.delayed(const Duration(milliseconds: 120));
-      receipt =
-          _map(await request('operation.get', {'operationId': operation}));
+      receipt = _map(
+        await request('operation.get', {'operationId': operation}),
+      );
     }
-    if (receipt['status'] != 'succeeded')
+    if (receipt['status'] != 'succeeded') {
       throw StateError('${receipt['error'] ?? receipt['status']}');
+    }
     return receipt;
   }
 
@@ -105,7 +116,9 @@ class BackendClient {
     final task = _refreshLoop();
     _refreshing = task;
     return task.whenComplete(() {
-      if (identical(_refreshing, task)) _refreshing = null;
+      if (identical(_refreshing, task)) {
+        _refreshing = null;
+      }
     });
   }
 
@@ -145,7 +158,9 @@ class BackendClient {
       _resync();
       return;
     }
-    if (sequence <= _sequence) return;
+    if (sequence <= _sequence) {
+      return;
+    }
     _sequence = sequence;
     final previous = _map(_snapshot['runtime']);
     _snapshot = {..._snapshot, 'runtime': _copy(runtime), 'seq': sequence};
@@ -153,14 +168,17 @@ class BackendClient {
     final catalog = _map(_snapshot['catalog']);
     if (event['resyncRequired'] == true ||
         event['catalogRevision'] != catalog['revision'] ||
-        runtime['appliedGeneration'] != previous['appliedGeneration'])
+        runtime['appliedGeneration'] != previous['appliedGeneration']) {
       _resync();
+    }
   }
 
   void _resync() {
-    unawaited(refresh().catchError((Object error, StackTrace stack) {
-      _changes.addError(error, stack);
-    }));
+    unawaited(
+      refresh().catchError((Object error, StackTrace stack) {
+        _changes.addError(error, stack);
+      }),
+    );
   }
 
   Map<String, dynamic> get settings {
@@ -169,7 +187,7 @@ class BackendClient {
       ..._copy(_map(catalog['settings'])),
       'profiles': [
         for (final record in (catalog['profiles'] as List? ?? []))
-          _copy(_map(_map(record)['metadata']))
+          _copy(_map(_map(record)['metadata'])),
       ],
     };
   }
@@ -178,11 +196,15 @@ class BackendClient {
     for (final record
         in (_map(_snapshot['catalog'])['profiles'] as List? ?? [])) {
       final row = _map(record);
-      if (_map(row['metadata'])['id'] == id)
+      if (_map(row['metadata'])['id'] == id) {
         return (row['revision'] as num?)?.toInt() ?? 0;
+      }
     }
     return 0;
   }
+
+  int get catalogRevision =>
+      (_map(_snapshot['catalog'])['revision'] as num?)?.toInt() ?? 0;
 
   Future<Map<String, dynamic>> profile(String id) async =>
       _map(await request('profile.get', {'profileId': id}));
@@ -199,8 +221,11 @@ class BackendClient {
   }
 
   Future<Map<String, dynamic>> saveSource(
-      Map<String, dynamic> metadata, Uint8List source,
-      {required int expectedRevision, bool select = false}) async {
+    Map<String, dynamic> metadata,
+    Uint8List source, {
+    required int expectedRevision,
+    bool select = false,
+  }) async {
     final token = await upload(source);
     try {
       return await command('profile.import.file', {
@@ -223,7 +248,7 @@ class BackendClient {
         await request('blob.append', {
           'token': token,
           'offset': offset,
-          'data': base64Encode(Uint8List.sublistView(bytes, offset, end))
+          'data': base64Encode(Uint8List.sublistView(bytes, offset, end)),
         });
       }
       return token;
@@ -236,11 +261,17 @@ class BackendClient {
   Future<Uint8List> download(String token, int size) async {
     final bytes = BytesBuilder(copy: false);
     while (bytes.length < size) {
-      final part = _map(await request('blob.read',
-          {'token': token, 'offset': bytes.length, 'limit': 192 * 1024}));
+      final part = _map(
+        await request('blob.read', {
+          'token': token,
+          'offset': bytes.length,
+          'limit': 192 * 1024,
+        }),
+      );
       final chunk = base64Decode(part['data'] as String);
-      if (chunk.isEmpty || bytes.length + chunk.length > size)
+      if (chunk.isEmpty || bytes.length + chunk.length > size) {
         throw StateError('Invalid backend transfer');
+      }
       bytes.add(chunk);
     }
     return bytes.takeBytes();

@@ -145,7 +145,16 @@ func backendControllerGate(next controlhttp.Handler) controlhttp.Handler {
 					controlhttp.Error(w, "no active profile", 400)
 					return
 				}
-				err = runApplicationCommand(r.Context(), app, "profile.put", map[string]any{"metadata": map[string]string{"id": settings.ID}, "source": request.Payload})
+				var revision uint64
+				for _, record := range app.Snapshot().Catalog.Profiles {
+					var id string
+					_ = json.Unmarshal(record.Metadata["id"], &id)
+					if id == settings.ID {
+						revision = record.Revision
+						break
+					}
+				}
+				err = runApplicationCommand(r.Context(), app, "profile.put", map[string]any{"metadata": map[string]string{"id": settings.ID}, "source": request.Payload, "expectedRevision": revision})
 			}
 			if err != nil {
 				controlhttp.Error(w, err.Error(), 400)

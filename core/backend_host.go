@@ -47,6 +47,18 @@ var platformBroker = &host.Broker{Send: func(request host.Request) {
 	sendMessage(Message{Type: "backendPlatform", Data: request})
 }}
 
+func legacyRuntimeMutation(method Method) bool {
+	switch method {
+	case initClashMethod, shutdownMethod, setupConfigMethod, updateConfigMethod,
+		changeProxyMethod, startListenerMethod, stopListenerMethod, setStateMethod,
+		updateDnsMethod, resetConnectionsMethod, closeConnectionsMethod, closeConnectionMethod,
+		resetTrafficMethod, updateExternalProviderMethod, sideLoadExternalProviderMethod, updateGeoDataMethod,
+		setScreenActiveMethod:
+		return true
+	}
+	return false
+}
+
 type backendHostOptions struct {
 	Home          string            `json:"home"`
 	SDK           int               `json:"sdk"`

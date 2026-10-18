@@ -1284,6 +1284,11 @@
       "path": "core/backend_platform_other.go",
       "bucket": "budget",
       "reason": "Совместимая миграция и живые обновления выполняются в Go; платформенный DNS изолирован от переносимого host."
+    },
+    {
+      "path": "core/backend/service/applied_settings.go",
+      "bucket": "budget",
+      "reason": "После применённого плана Go сохраняет совместимые network hints с защитой ревизии каталога от устаревших результатов."
     }
   ]
 }

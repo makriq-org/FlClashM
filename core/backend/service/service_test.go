@@ -187,6 +187,59 @@ func waitCondition(t *testing.T, condition func() bool) {
 	}
 	t.Fatal("condition did not become true")
 }
+
+func TestDeletingActiveProfileSelectsFirstAndLastDeletionStopsVPN(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	for _, id := range []string{"one", "two"} {
+		request(t, app, "add-"+id, "profile.put", map[string]any{"metadata": map[string]any{"id": id}, "source": "rules: ['MATCH,DIRECT']\n", "select": id == "two"})
+		waitDomain(t, app, "add-"+id)
+	}
+	request(t, app, "connect-deletion", "runtime.start", nil)
+	waitRuntime(t, app, "connect-deletion")
+	two, _ := app.profiles.Get("two")
+	request(t, app, "delete-two", "profile.delete", map[string]any{"profileId": "two", "expectedRevision": two.Revision})
+	waitDomain(t, app, "delete-two")
+	if !app.isCurrent("one") || !app.Snapshot().Runtime.AppliedRunning {
+		t.Fatal("remaining profile was not selected while preserving VPN")
+	}
+	one, _ := app.profiles.Get("one")
+	request(t, app, "delete-last", "profile.delete", map[string]any{"profileId": "one", "expectedRevision": one.Revision})
+	waitDomain(t, app, "delete-last")
+	if app.Snapshot().Runtime.DesiredRunning || app.Snapshot().Runtime.Observed.State != "stopped" {
+		t.Fatal("deleting the last profile left VPN running")
+	}
+}
+
+func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "hinted", "profile.put", map[string]any{"metadata": map[string]any{"id": "hinted", "providerHeaders": map[string]string{"flclashm-globalmode": "false"}}, "source": "mixed-port: 9091\nrules: ['MATCH,DIRECT']\n", "select": true})
+	waitDomain(t, app, "hinted")
+	waitCondition(t, func() bool {
+		var patch map[string]any
+		_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &patch)
+		return patch["mixed-port"] == float64(9091)
+	})
+	request(t, app, "global-disabled", "settings.patch", map[string]any{"patch": map[string]any{"patchClashConfig": map[string]any{"mode": "global"}}})
+	waitDomain(t, app, "global-disabled")
+	waitCondition(t, func() bool {
+		var patch map[string]any
+		_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &patch)
+		return patch["mode"] == "rule"
+	})
+	request(t, app, "plain", "profile.put", map[string]any{"metadata": map[string]any{"id": "plain"}, "source": "rules: ['MATCH,DIRECT']\n", "select": true})
+	waitDomain(t, app, "plain")
+	view, err := app.RuntimeView()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Config map[string]any `json:"config"`
+	}
+	_ = json.Unmarshal(view, &payload)
+	if payload.Config["mixed-port"] != float64(9091) {
+		t.Fatal("switching to an unhinted profile lost the retained fallback", payload.Config)
+	}
+}
 func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	directory := t.TempDir()
 	opts := options(t, directory, &testEngine{}, make(chan time.Time))

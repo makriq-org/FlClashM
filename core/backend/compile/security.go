@@ -7,10 +7,17 @@ import "strings"
 type SecurityPolicy struct{}
 
 func (SecurityPolicy) ApplyPatch(patch Object, metadata Object, capabilities Capabilities) {
+	headers := object(metadata["providerHeaders"])
+	globalMode, present := headers["flclashm-globalmode"]
+	if !present {
+		globalMode = headers["flclashx-globalmode"]
+	}
+	if strings.EqualFold(strings.TrimSpace(text(globalMode)), "false") && patch["mode"] == "global" {
+		patch["mode"] = "rule"
+	}
 	if capabilities.Platform != "android" {
 		return
 	}
-	headers := object(metadata["providerHeaders"])
 	value, ok := headers["flclashm-androidsecure"]
 	if !ok {
 		value = headers["flclashx-androidsecure"]

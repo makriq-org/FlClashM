@@ -28,6 +28,36 @@ func upload(t *testing.T, app *App, data []byte) Blob {
 	}
 	return blob
 }
+
+func TestProfileExportPreservesLegacyBytesAndBlobEditsUseRevision(t *testing.T) {
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	original := []byte{'#', 0xff, '\n', 'a', ':', ' ', 'b', '\n'}
+	opts.LegacySettings = []byte(`{"profiles":[{"id":"legacy","autoUpdateDuration":86400000000}]}`)
+	opts.ReadLegacySource = func(string) (string, error) { return string(original), nil }
+	app := openTestApp(t, opts)
+	request(t, app, "export-original", "profile.export", map[string]any{"profileId": "legacy"})
+	receipt := waitDomain(t, app, "export-original")
+	name, _ := app.blobPath(receipt.Blob.Token)
+	data, err := os.ReadFile(name)
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatal("export changed original bytes", err)
+	}
+	old, _ := app.profiles.Get("legacy")
+	request(t, app, "rename-original", "profile.put", map[string]any{"metadata": map[string]any{"id": "legacy", "label": "New label"}, "expectedRevision": old.Revision})
+	waitDomain(t, app, "rename-original")
+	blob := upload(t, app, []byte("rules: ['MATCH,DIRECT']\n"))
+	request(t, app, "stale-edit", "profile.import.file", map[string]any{"token": blob.Token, "metadata": map[string]any{"id": "legacy"}, "expectedRevision": old.Revision})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	failed, err := app.Await(ctx, "stale-edit")
+	if err != nil || failed.Status != "failed" {
+		t.Fatal(failed, err)
+	}
+	current, _ := app.profiles.Get("legacy")
+	if current.Source != string(original) {
+		t.Fatal("stale file edit replaced the source")
+	}
+}
 func TestCompatibleBackupRoundTripAndUnsafeArchive(t *testing.T) {
 	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
 	source := "# original\nbase: &base {type: direct}\nproxies: []\nrules: ['MATCH,DIRECT']\n"

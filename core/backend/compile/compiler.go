@@ -56,13 +56,14 @@ type Node struct {
 	Activation Object            `json:"activation,omitempty"`
 }
 type Prepared struct {
-	Config      Object   `json:"config"`
-	Selected    Object   `json:"selected-map"`
-	TestURL     string   `json:"test-url"`
-	Nodes       []Node   `json:"nodes"`
-	CoreState   Object   `json:"coreState"`
-	Patch       Object   `json:"patch"`
-	Diagnostics []string `json:"diagnostics"`
+	Config               Object   `json:"config"`
+	Selected             Object   `json:"selected-map"`
+	TestURL              string   `json:"test-url"`
+	Nodes                []Node   `json:"nodes"`
+	CoreState            Object   `json:"coreState"`
+	Patch                Object   `json:"patch"`
+	Diagnostics          []string `json:"diagnostics"`
+	ProfileAccessControl Object   `json:"profileAccessControl,omitempty"`
 }
 type Compiler struct {
 	Capabilities Capabilities
@@ -298,7 +299,10 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		bypass = defaultBypassDomains()
 	}
 	state := Object{"vpn-props": vpn, "current-profile-name": name, "bypass-domain": bypass}
-	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics})
+	if profileAccess != nil {
+		profileAccess = c.Policy.AccessControl(profileAccess, c.Capabilities)
+	}
+	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess})
 }
 func text(value any) string { v, _ := value.(string); return v }
 func list(value any) []any {

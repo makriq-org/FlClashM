@@ -42,6 +42,10 @@ func handleAction(action *Action, result ActionResult) {
 	if handleBackendAction(action, result) {
 		return
 	}
+	if backendManaged.Load() && legacyRuntimeMutation(action.Method) {
+		result.error("legacy runtime mutation is disabled while Go backend owns the engine")
+		return
+	}
 	switch action.Method {
 	case initClashMethod:
 		paramsString, ok := action.Data.(string)

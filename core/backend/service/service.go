@@ -121,6 +121,7 @@ func Open(options Options) (*App, error) {
 	runtimeEvents, detach := runtime.Subscribe(1)
 	app.workers.Go(func() {
 		defer detach()
+		var retainedGeneration uint64
 		for {
 			select {
 			case <-ctx.Done():
@@ -130,6 +131,11 @@ func Open(options Options) (*App, error) {
 					return
 				}
 				if runtime.Snapshot().AppliedGeneration > 0 {
+					generation := runtime.Snapshot().AppliedGeneration
+					if generation != retainedGeneration {
+						app.retainAppliedSettings(ctx)
+						retainedGeneration = generation
+					}
 					operations.mu.Lock()
 					complete := operations.document.BootstrapComplete
 					operations.mu.Unlock()
