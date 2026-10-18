@@ -125,7 +125,7 @@ func TestMissingLegacyURLSourceDownloadsAsCancellableFencedOperation(t *testing.
 
 type deniedPermissionPlatform struct{ testPlatform }
 
-func (deniedPermissionPlatform) VPNPermission(context.Context) (bool, error) { return false, nil }
+func (*deniedPermissionPlatform) VPNPermission(context.Context) (bool, error) { return false, nil }
 func TestProxyOnlyAutorunDoesNotRequestVPNAndEmptyCatalogCannotConnect(t *testing.T) {
 	opt := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
 	opt.Platform = &deniedPermissionPlatform{}
@@ -146,5 +146,26 @@ func TestProxyOnlyAutorunDoesNotRequestVPNAndEmptyCatalogCannotConnect(t *testin
 	_ = json.Unmarshal(app.Handle(raw), &response)
 	if response.Error == nil || app.Snapshot().Runtime.DesiredRunning {
 		t.Fatal("empty catalog started a direct VPN")
+	}
+}
+
+func TestLastProfileDeleteDoesNotWaitForInputCaptureLock(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "fixture", "profile.put", map[string]any{"metadata": map[string]any{"id": "one"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "fixture")
+	record, _ := app.profiles.Get("one")
+	// An input-capture path may already own the runtime command lock while
+	// waiting for the catalog. Deletion's durable Stop must not invert that order.
+	app.runtimeMu.Lock()
+	defer app.runtimeMu.Unlock()
+	request(t, app, "delete", "profile.delete", map[string]any{"profileId": "one", "expectedRevision": record.Revision})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	receipt, err := app.Await(ctx, "delete")
+	if err != nil || receipt.Status != "succeeded" {
+		t.Fatal("catalog/runtime lock inversion", receipt, err)
+	}
+	if app.Snapshot().Runtime.DesiredRunning {
+		t.Fatal("last profile kept a runnable intent")
 	}
 }

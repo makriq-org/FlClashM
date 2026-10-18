@@ -214,12 +214,21 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 			return "", err
 		}
 	}
+	a.runtimeMu.Lock()
+	defer a.runtimeMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if a.resetting.Load() {
+		return "", errors.New("data reset in progress")
+	}
+	generation := a.runtime.Snapshot().Generation
 	input, err := a.captureInput()
 	if err != nil {
 		return "", err
 	}
 	operationID := newID("restore")
-	_, err = a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: "restart", Input: input})
+	_, err = a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: "restart", Input: input}, generation)
 	return operationID, err
 }
 

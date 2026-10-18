@@ -255,7 +255,7 @@ func (a *App) runtimeCommand(request backend.Request) (backend.Receipt, error) {
 			}
 		}
 	}
-	if request.Method == "runtime.toggle" {
+	if request.Method == "runtime.toggle" || method == "apply" || method == "connect" || method == "restart" {
 		return a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: request.OperationID, Method: method, Input: input}, generation)
 	}
 	return a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: request.OperationID, Method: method, Input: input})

@@ -270,7 +270,10 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		var err error
 		apply, err = a.profiles.DeleteWithSelection(request.ProfileID, request.ExpectedRevision, func() error {
-			receipt, stopErr := a.runtimeCommand(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "runtime.stop"})
+			if err := a.operations.disableBootstrap(); err != nil {
+				return err
+			}
+			receipt, stopErr := a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "stop"})
 			result.RuntimeOperationID = receipt.OperationID
 			return stopErr
 		})

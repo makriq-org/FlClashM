@@ -362,6 +362,12 @@ func (a *App) profileUpdated(ctx context.Context, id string, revision uint64) er
 	return err
 }
 func (a *App) applyCurrent(id string, connect bool) (backend.Receipt, error) {
+	a.runtimeMu.Lock()
+	defer a.runtimeMu.Unlock()
+	if a.resetting.Load() {
+		return backend.Receipt{}, errors.New("data reset in progress")
+	}
+	generation := a.runtime.Snapshot().Generation
 	input, err := a.captureInput()
 	if err != nil {
 		return backend.Receipt{}, err
@@ -370,7 +376,7 @@ func (a *App) applyCurrent(id string, connect bool) (backend.Receipt, error) {
 	if connect {
 		method = "connect"
 	}
-	return a.runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: id, Method: method, Input: input})
+	return a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: id, Method: method, Input: input}, generation)
 }
 func (a *App) Close() error {
 	a.cancel()
