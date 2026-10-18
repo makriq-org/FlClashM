@@ -152,13 +152,17 @@ func handleBackendAction(action *Action, result ActionResult) bool {
 	return false
 }
 
+func validBackendHost(home, packageName string) bool {
+	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev")
+}
+
 func openApplicationBackend(options backendHostOptions) error {
 	applicationMu.Lock()
 	defer applicationMu.Unlock()
 	if applicationBackend != nil {
 		return nil
 	}
-	if !filepath.IsAbs(options.Home) || options.Package != "com.makriq.flclash" {
+	if !validBackendHost(options.Home, options.Package) {
 		return errors.New("invalid backend host")
 	}
 	initParams, _ := json.Marshal(InitParams{HomeDir: options.Home, Version: options.SDK})
