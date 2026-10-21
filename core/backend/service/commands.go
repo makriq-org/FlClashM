@@ -202,8 +202,16 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		for key := range request.Patch {
 			switch key {
-			case "patchClashConfig", "vpnProps", "networkProps", "overrideDns", "scriptProps", "currentProfileId", "appSetting":
+			case "patchClashConfig", "vpnProps", "networkProps", "overrideDns", "scriptProps", "currentProfileId":
 				apply = true
+			case "appSetting":
+				var fields profiles.Object
+				_ = json.Unmarshal(request.Patch[key], &fields)
+				for _, field := range []string{"overrideNetworkSettings", "testUrl", "closeConnections"} {
+					if _, changed := fields[field]; changed {
+						apply = true
+					}
+				}
 			}
 		}
 	case "profile.put":

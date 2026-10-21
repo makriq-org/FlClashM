@@ -11,6 +11,13 @@
 
     <application>
 
+        <activity
+            android:name=".InstalledAppsPermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:process=":remote" />
+
         <service
             android:name=".BackendValidatorService"
             android:exported="false"

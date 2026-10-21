@@ -218,6 +218,18 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	if err = ctx.Err(); err != nil {
 		return err
 	}
+	port := node.Port
+	if launch.Port != 0 {
+		port = launch.Port
+	}
+	// Do not report readiness against a socket owned by another installation.
+	// The actual transport binds after this probe; namespace allocation keeps
+	// application variants apart and process observation still fences early exit.
+	listener, err := net.Listen("tcp", net.JoinHostPort(node.Host, strconv.Itoa(port)))
+	if err != nil {
+		return fmt.Errorf("external listener port %d is unavailable: %w", port, err)
+	}
+	_ = listener.Close()
 	if node.Type == "stormdns" || node.Type == "olcrtc" {
 		if err = a.renderDNS(ctx, node, directory); err != nil {
 			return err

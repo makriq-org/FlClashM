@@ -132,6 +132,55 @@ func openTestApp(t *testing.T, options Options) *App {
 	t.Cleanup(func() { _ = app.Close() })
 	return app
 }
+
+func TestPresentationSettingsDoNotSupersedeRuntime(t *testing.T) {
+	engine := &testEngine{}
+	app := openTestApp(t, options(t, t.TempDir(), engine, make(chan time.Time)))
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "p"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "add")
+	request(t, app, "start", "runtime.start", nil)
+	if _, err := app.AwaitRuntime(context.Background(), "start"); err != nil {
+		t.Fatal(err)
+	}
+	before := app.Snapshot().Runtime
+	for _, field := range []string{"openLogs", "autoCheckUpdate", "autoRun"} {
+		request(t, app, field, "settings.patch", map[string]any{"patch": map[string]any{"appSetting": map[string]any{field: true}}})
+		receipt := waitDomain(t, app, field)
+		if receipt.RuntimeOperationID != "" {
+			t.Fatalf("UI setting %s reapplied runtime", field)
+		}
+	}
+	after := app.Snapshot().Runtime
+	if after.Generation != before.Generation || after.StartedAt != before.StartedAt || after.Observed.State != "running" {
+		t.Fatal("UI settings changed runtime", before, after)
+	}
+}
+
+func TestSubscriptionRefreshReportsRuntimeFailureAfterRollback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("rules: ['MATCH,REJECT']"))
+	}))
+	defer server.Close()
+	engine := &testEngine{}
+	app := openTestApp(t, options(t, t.TempDir(), engine, make(chan time.Time)))
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "p", "url": server.URL}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "add")
+	request(t, app, "start", "runtime.start", nil)
+	waitRuntime(t, app, "start")
+	engine.mu.Lock()
+	engine.fail = true
+	engine.mu.Unlock()
+	request(t, app, "refresh", "subscription.refresh", map[string]any{"profileId": "p"})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	receipt, err := app.Await(ctx, "refresh")
+	if err != nil || receipt.Status != "failed" {
+		t.Fatalf("failed runtime reported as successful download: %#v %v", receipt, err)
+	}
+	if snapshot := app.Snapshot().Runtime; snapshot.Observed.State != "running" {
+		t.Fatal("rollback lost the running VPN", snapshot)
+	}
+}
 func request(t *testing.T, app *App, id, method string, params any) json.RawMessage {
 	t.Helper()
 	raw, _ := json.Marshal(params)

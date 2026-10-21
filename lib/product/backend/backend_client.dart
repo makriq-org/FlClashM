@@ -18,6 +18,7 @@ class BackendClient {
   StreamSubscription<Map<String, dynamic>>? _subscription;
   Future<void>? _refreshing;
   bool _refreshAgain = false;
+  (String, Future<Map<String, dynamic>>)? _runCommand;
   Map<String, dynamic> _snapshot = {};
   Map<String, dynamic> _view = {};
   String _instance = '';
@@ -77,7 +78,27 @@ class BackendClient {
     String method, [
     Map<String, dynamic>? params,
     String? id,
-  ]) async {
+  ]) {
+    if (id != null ||
+        (params != null && params.isNotEmpty) ||
+        (method != 'runtime.start' && method != 'runtime.stop')) {
+      return _command(method, params, id);
+    }
+    final pending = _runCommand;
+    if (pending?.$1 == method) return pending!.$2;
+    late final Future<Map<String, dynamic>> task;
+    task = _command(method, params, id).whenComplete(() {
+      if (identical(_runCommand?.$2, task)) _runCommand = null;
+    });
+    _runCommand = (method, task);
+    return task;
+  }
+
+  Future<Map<String, dynamic>> _command(
+    String method,
+    Map<String, dynamic>? params,
+    String? id,
+  ) async {
     final operation = id ?? operationId();
     final receipt = _map(await request(method, params, operation));
     final completed = await wait(operation, initial: receipt);
@@ -98,11 +119,13 @@ class BackendClient {
     var receipt =
         initial ??
         _map(await request('operation.get', {'operationId': operation}));
+    var pollMilliseconds = 16;
     while (receipt['status'] == 'accepted') {
       if (DateTime.now().isAfter(deadline)) {
         throw TimeoutException('Backend operation is still pending', timeout);
       }
-      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await Future<void>.delayed(Duration(milliseconds: pollMilliseconds));
+      pollMilliseconds = min(pollMilliseconds * 2, 120);
       receipt = _map(
         await request('operation.get', {'operationId': operation}),
       );
@@ -192,8 +215,18 @@ class BackendClient {
 
   Map<String, dynamic> get settings {
     final catalog = _map(_snapshot['catalog']);
+    final values = _copy(_map(catalog['settings']));
+    final patch = _map(values['patchClashConfig']);
+    final controller = patch['external-controller'];
+    // The UI has an on/off enum; the backend accepts arbitrary endpoints. Keep
+    // the actual address in runtimeView and persisted settings, and project only
+    // its enabled state into this enum to avoid crashing Config.fromJson.
+    if (controller is String && controller.isNotEmpty) {
+      patch['external-controller'] = '127.0.0.1:9090';
+      values['patchClashConfig'] = patch;
+    }
     return {
-      ..._copy(_map(catalog['settings'])),
+      ...values,
       'profiles': [
         for (final record in (catalog['profiles'] as List? ?? []))
           _copy(_map(_map(record)['metadata'])),

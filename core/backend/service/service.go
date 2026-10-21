@@ -187,6 +187,9 @@ func Open(options Options) (*App, error) {
 				if !ok {
 					return
 				}
+				if lists, ok := app.compiler.Lists.(interface{ Refresh(context.Context) }); ok {
+					app.workers.Go(func() { lists.Refresh(ctx) })
+				}
 				app.checkNotices(ctx, now)
 				for _, id := range app.subscriptions.Due(now) {
 					_, _ = app.submitInternal("subscription.refresh", map[string]any{"profileId": id, "deviceHeaders": true})
@@ -358,7 +361,13 @@ func (a *App) profileUpdated(ctx context.Context, id string, revision uint64) er
 	if current != id {
 		return nil
 	}
-	_, err = a.applyCurrent(newID("subscription"), false)
+	receipt, err := a.applyCurrent(newID("subscription"), false)
+	if err != nil {
+		return err
+	}
+	// Download completion alone is not a successful active-profile update. Wait
+	// for its runtime result so rollback/failure reaches both UI and scheduling.
+	_, err = a.runtime.Await(ctx, receipt.OperationID)
 	return err
 }
 func (a *App) applyCurrent(id string, connect bool) (backend.Receipt, error) {

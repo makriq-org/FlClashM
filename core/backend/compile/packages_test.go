@@ -68,3 +68,18 @@ func TestBundledAutoStrategyAndLegacyAliases(t *testing.T) {
 		t.Fatal("bundled strategy list missing")
 	}
 }
+
+func TestPackageInventoryFailureCannotSilentlyDiscardSplitTunneling(t *testing.T) {
+	for _, inventory := range []func(context.Context) ([]string, error){
+		nil,
+		func(context.Context) ([]string, error) { return nil, errors.New("permission denied") },
+		func(context.Context) ([]string, error) { return []string{}, nil },
+	} {
+		compiler := Compiler{Capabilities: Capabilities{Platform: "android", InstalledPackages: inventory}}
+		config := mustProfile(t, "tun: {exclude-package: ['com.example.*']}")
+		diagnostics := []string{}
+		if _, err := compiler.splitPackages(context.Background(), config, "p", &diagnostics); err == nil {
+			t.Fatal("unavailable inventory silently changed the VPN package policy")
+		}
+	}
+}

@@ -16,12 +16,18 @@ import (
 var bundledStrategies string
 
 type ExternalCompiler struct {
+	// Trusted host namespace keeps parallel stable/dev/test installations from
+	// sharing another application's SOCKS listener during VPN handover.
+	PortOffset        int
 	Lists             PackageLists
 	RemoteLists       RemoteLists
 	BuiltinStrategies []string
 }
 
 func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, testURL string) ([]Node, error) {
+	if e.PortOffset < 0 || e.PortOffset > 16384 {
+		return nil, errors.New("invalid external listener namespace")
+	}
 	if strings.EqualFold(strings.TrimSpace(text(object(config["x-flclashm-runtime"])["engine"])), "naiveproxy") {
 		return nil, errors.New("legacy top-level naiveproxy runtime selection is unsupported")
 	}
@@ -97,6 +103,7 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		case "stormdns":
 			start, size = 36200, 256
 		}
+		start += e.PortOffset
 		seed := 0
 		for _, r := range md5Text(name) {
 			seed += int(r)

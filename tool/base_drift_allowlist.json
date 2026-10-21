@@ -553,7 +553,7 @@
     {
       "path": "lib/controller.dart",
       "bucket": "budget",
-      "reason": "Существующее действие экспорта остаётся тонким делегатом безопасного product ZIP-builder."
+      "reason": "UI делегирует действия product-слою и завершает локальный индикатор обновления профиля при любом исходе."
     },
     {
       "path": "lib/main.dart",
@@ -723,7 +723,7 @@
     {
       "path": "lib/views/profiles/profiles.dart",
       "bucket": "budget",
-      "reason": "Живой список профилей читает ссылку поддержки через product advisory без прямого разбора provider headers."
+      "reason": "Живой список использует product advisory и делегирует обновление профиля общему UI-действию."
     },
     {
       "path": "lib/views/profiles/receive_profile_dialog.dart",
@@ -1419,6 +1419,41 @@
       "path": "lib/views/proxies/card.dart",
       "bucket": "budget",
       "reason": "Выбор прокси передаётся одним действием Go backend; удалён вызов заменённого Dart-обновления runtime selection."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/InstalledAppsPermissionActivity.kt",
+      "bucket": "budget",
+      "reason": "Android-механизм запрашивает vendor-разрешение до выдачи Go полного списка пакетов."
+    },
+    {
+      "path": "core/backend/compile/selection.go",
+      "bucket": "budget",
+      "reason": "Go-компилятор повторно использует проверенный план только при смене выбранного прокси."
+    },
+    {
+      "path": "core/backend/compile/selection_test.go",
+      "bucket": "budget",
+      "reason": "Тесты проверяют смену прокси без повторной валидации и запрет повторного использования изменённого профиля."
+    },
+    {
+      "path": "core/backend_engine_contract_test.go",
+      "bucket": "budget",
+      "reason": "Интеграционный тест проверяет передачу правил Go-компилятора настоящему загрузчику mihomo."
+    },
+    {
+      "path": "core/backend/compile/package_cache.go",
+      "bucket": "budget",
+      "reason": "Go сохраняет кэш удалённых списков приложений и обновляет его отменяемой фоновой задачей."
+    },
+    {
+      "path": "core/backend/compile/package_cache_test.go",
+      "bucket": "budget",
+      "reason": "Проверены работа без сети, проверка содержимого и отмена записи кэша после сброса."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Service.kt",
+      "bucket": "budget",
+      "reason": "После выгрузки процесса Android создаётся новое IPC-подключение с ограниченными повторами."
     }
   ]
 }

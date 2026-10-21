@@ -167,7 +167,10 @@ object BackendHost {
                     "network.available" -> physicalNetwork() != null
                     "network.dns" -> JSONArray(SystemDnsReader.read())
                     "network.scope" -> networkScope()
-                    "packages.list" -> JSONArray(application.packageManager.getInstalledApplications(0).map { it.packageName })
+                    "packages.list" -> {
+                        InstalledAppsPermission.ensure(application)
+                        JSONArray(application.packageManager.getInstalledApplications(0).map { it.packageName })
+                    }
                     "device.headers" -> deviceHeaders()
                     else -> error("unsupported platform mechanism")
                 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"core/backend"
 	prepare "core/backend/compile"
@@ -153,7 +152,7 @@ func handleBackendAction(action *Action, result ActionResult) bool {
 }
 
 func validBackendHost(home, packageName string) bool {
-	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev" || packageName == "com.makriq.flclash.backendtest")
+	return filepath.IsAbs(home) && (packageName == "com.makriq.flclash" || packageName == "com.makriq.flclash.dev" || packageName == "com.makriq.flclash.backendtest" || packageName == "com.makriq.flclash.backendcheck")
 }
 
 func openApplicationBackend(options backendHostOptions) error {
@@ -205,7 +204,7 @@ func openApplicationBackend(options backendHostOptions) error {
 			err := platformBroker.Call(ctx, "packages.list", nil, &packages)
 			return packages, err
 		}},
-		Scripts: prepare.JavaScript{}, Nodes: &prepare.ExternalCompiler{RemoteLists: lists}, Lists: backendPackageLists{client},
+		Scripts: prepare.JavaScript{}, Nodes: &prepare.ExternalCompiler{RemoteLists: lists, PortOffset: backendNodePortOffset(options.Package)}, Lists: &prepare.PackageListCache{ProfilesDir: filepath.Join(options.Home, "profiles"), Client: client},
 		Validate: func(ctx context.Context, value prepare.Object) error {
 			return validateThroughHost(ctx, options.Home, value)
 		},
@@ -321,6 +320,10 @@ func validateIsolatedFile(home, path string) string {
 
 type backendEngine struct{ probe *transport.SOCKSProbe }
 
+func (backendEngine) RuntimeFailure(method string, err error) {
+	sendMessage(Message{Type: "runtimeLog", Data: map[string]string{"type": "backend", "line": method + ": " + err.Error()}})
+}
+
 func (backendEngine) ApplyLiveSettings(ctx context.Context, _, next *backend.RuntimePlan) error {
 	var payload struct {
 		Config json.RawMessage `json:"config"`
@@ -367,7 +370,7 @@ func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error
 	if err := json.Unmarshal(plan.Payload(), &payload); err != nil {
 		return err
 	}
-	raw, err := config.UnmarshalRawConfig(payload.Config)
+	raw, err := unmarshalBackendEngineConfig(payload.Config)
 	if err != nil {
 		return err
 	}
@@ -382,6 +385,26 @@ func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error
 	}
 	handleSetState(string(payload.State))
 	return ctx.Err()
+}
+
+// Older committed plans used RawConfig's JSON spelling. Recovery normally
+// recompiles original input, but rollback must also preserve their routing.
+func unmarshalBackendEngineConfig(payload json.RawMessage) (*config.RawConfig, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, err
+	}
+	if _, present := fields["rules"]; !present {
+		if legacy, ok := fields["rule"]; ok {
+			fields["rules"] = legacy
+			var err error
+			payload, err = json.Marshal(fields)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return config.UnmarshalRawConfig(payload)
 }
 func (backendEngine) ApplySelection(ctx context.Context, old, next *backend.RuntimePlan) error {
 	if err := ctx.Err(); err != nil {
@@ -604,31 +627,6 @@ func (backendInspection) TestGroup(ctx context.Context, name string, urls []stri
 	return false, nil
 }
 
-type backendPackageLists struct{ client *http.Client }
-
-func (l backendPackageLists) Read(ctx context.Context, _, address string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-	if err != nil {
-		return "", err
-	}
-	response, err := l.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", errors.New("package list download failed")
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20+1))
-	if err != nil {
-		return "", err
-	}
-	if len(body) > 1<<20 {
-		return "", errors.New("package list too large")
-	}
-	return string(bytes.ToValidUTF8(body, []byte("�"))), nil
-}
-
 func (backendPlatform) NotifySubscription(ctx context.Context, notice application.SubscriptionNotice) (bool, error) {
 	var shown bool
 	err := platformBroker.Call(ctx, "notification.subscription", notice, &shown)
@@ -636,11 +634,20 @@ func (backendPlatform) NotifySubscription(ctx context.Context, notice applicatio
 }
 
 func backendSelfPackages(packageName string) []string {
-	base := strings.TrimSuffix(strings.TrimSuffix(packageName, ".backendtest"), ".dev")
-	if strings.HasSuffix(packageName, ".backendtest") {
-		return []string{base, base + ".dev", packageName}
+	return []string{"com.makriq.flclash", "com.makriq.flclash.dev", "com.makriq.flclash.backendtest", "com.makriq.flclash.backendcheck"}
+}
+
+func backendNodePortOffset(packageName string) int {
+	switch packageName {
+	case "com.makriq.flclash.dev":
+		return 4096
+	case "com.makriq.flclash.backendtest":
+		return 8192
+	case "com.makriq.flclash.backendcheck":
+		return 12288
+	default:
+		return 0
 	}
-	return []string{base, base + ".dev"}
 }
 
 // Provider timers belong to the installed engine configuration. Release every

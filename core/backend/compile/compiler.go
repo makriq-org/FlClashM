@@ -267,7 +267,9 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		}
 		rules = append(extra, rules...)
 	}
-	config["rule"] = rules
+	// The engine loader uses YAML tags, including when the payload is JSON.
+	// RawConfig's JSON tag is "rule", but UnmarshalRawConfig reads "rules".
+	config["rules"] = rules
 	if android {
 		for _, item := range list(config["proxy-groups"]) {
 			group := object(item)

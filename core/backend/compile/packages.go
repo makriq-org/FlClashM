@@ -228,11 +228,17 @@ func (c *Compiler) splitPackages(ctx context.Context, config Object, profileID s
 		return nil, errors.New("Android profile split tunneling requires either include or exclude selectors")
 	}
 	inventory := []string{}
-	if needInventory && c.Capabilities.InstalledPackages != nil {
+	if needInventory && (hasSource || len(groups[0]) > 0 || len(groups[1]) > 0) {
+		if c.Capabilities.InstalledPackages == nil {
+			return nil, errors.New("installed package inventory is unavailable")
+		}
 		var err error
 		inventory, err = c.Capabilities.InstalledPackages(ctx)
 		if err != nil {
 			return nil, err
+		}
+		if len(inventory) == 0 {
+			return nil, errors.New("installed package inventory is empty; check installed applications permission")
 		}
 	}
 	for i, p := range inventory {

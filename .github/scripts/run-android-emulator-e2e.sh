@@ -31,7 +31,7 @@ adb logcat -c
 adb shell am instrument -w -r \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/instrumentation.txt"
-grep -q '^OK (1 test)$' "$artifacts/instrumentation.txt"
+grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/instrumentation.txt"
 ! grep -Eq 'FAILURES!!!|INSTRUMENTATION_ABORTED|Process crashed|shortMsg=' \
   "$artifacts/instrumentation.txt"
 
@@ -52,7 +52,7 @@ launch_ui
 adb shell am instrument --no-restart -w -r -e scenario seed \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-seed.txt"
-grep -q '^OK (1 test)$' "$artifacts/headless-seed.txt"
+grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/headless-seed.txt"
 remote_before=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
 main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r')
 test -n "$remote_before"
@@ -64,7 +64,7 @@ launch_ui
 adb shell am instrument --no-restart -w -r -e scenario observe \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-observe.txt"
-grep -q '^OK (1 test)$' "$artifacts/headless-observe.txt"
+grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/headless-observe.txt"
 # Remove Flutter again before killing :remote. Recovery must commit a new
 # applied generation while no UI exists, before observation instrumentation.
 main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r' || true)
@@ -85,6 +85,6 @@ launch_ui
 adb shell am instrument --no-restart -w -r -e scenario recovered \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/recovered.txt"
-grep -q '^OK (1 test)$' "$artifacts/recovered.txt"
+grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/recovered.txt"
 adb logcat -d -v threadtime > "$artifacts/logcat.txt"
 ! grep -Eq 'flutter.*Unhandled Exception:' "$artifacts/logcat.txt"
