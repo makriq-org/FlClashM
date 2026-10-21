@@ -320,6 +320,20 @@ func validateIsolatedFile(home, path string) string {
 
 type backendEngine struct{ probe *transport.SOCKSProbe }
 
+// The app owns local web UI assets. An absent download URL is not a request
+// to fetch an empty address; retain the serving path in the original config.
+func embeddedExecutorConfig(current *config.Config) *config.Config {
+	if current.Controller == nil || current.Controller.ExternalUIURL != "" {
+		return current
+	}
+	copyConfig := *current
+	controller := *current.Controller
+	controller.ExternalUI = ""
+	controller.ExternalUIName = ""
+	copyConfig.Controller = &controller
+	return &copyConfig
+}
+
 func (backendEngine) RuntimeFailure(method string, err error) {
 	sendMessage(Message{Type: "runtimeLog", Data: map[string]string{"type": "backend", "line": method + ": " + err.Error()}})
 }
