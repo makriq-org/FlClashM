@@ -1,6 +1,7 @@
 package com.follow.clashx
 
 import android.content.Context
+import android.app.ActivityManager
 import android.net.VpnService
 import android.os.Process
 import android.util.Base64
@@ -8,6 +9,9 @@ import com.follow.clashx.common.diagnostics.DiagnosticLog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -21,6 +25,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.UUID
 
 /** Production Go API, actual validator process, native transport and VPN/TUN.
  * All input is local; public DNS/HTTP endpoints are explicitly disabled. */
@@ -96,6 +101,104 @@ class AndroidRuntimeE2eTest {
           - {name: Select, type: select, proxies: [LocalBye, DIRECT]}
         rules: ['MATCH,REJECT']
     """.trimIndent()
+
+    @Test fun packagedValidatorRepeatedRequests() = runBlocking {
+        Service.bind()
+        val valid = "dns: {enable: false}\nrules: ['MATCH,DIRECT']"
+        coroutineScope {
+            List(8) {
+                async { Service.backendCommand("profile.validate", JSONObject().put("source", valid)) }
+            }.awaitAll()
+        }
+        // Subscription refresh validates its source and then the runtime plan.
+        // Exercise immediate rebinding, including recovery after a parser error.
+        repeat(20) { iteration ->
+            Service.backendCommand("profile.validate", JSONObject().put("source", valid))
+            val invalid = runCatching {
+                Service.backendCommand("profile.validate", JSONObject().put("source",
+                    "dns: {enable: false}\nrules: ['MATCH,missing-outbound']"))
+            }.exceptionOrNull()
+            assertNotNull("Invalid rules accepted on iteration $iteration", invalid)
+            assertTrue("Parser error replaced by an IPC failure: ${invalid?.message}",
+                invalid?.message.orEmpty().contains("missing-outbound"))
+        }
+        Service.backendCommand("profile.validate", JSONObject().put("source", valid))
+        Unit
+    }
+
+    @Test fun packagedSubscriptionRepeatedRefresh() = runBlocking {
+        Service.bind()
+        val requests = AtomicInteger()
+        val server = ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
+        val id = "validator-refresh-${UUID.randomUUID()}"
+        var imported = false
+        val worker = Thread {
+            while (!server.isClosed) {
+                runCatching {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 5_000
+                        val input = socket.getInputStream().bufferedReader()
+                        while (!input.readLine().isNullOrEmpty()) { }
+                        val body = "# revision ${requests.incrementAndGet()}\ndns: {enable: false}\nrules: ['MATCH,DIRECT']".toByteArray()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                            write(body)
+                            flush()
+                        }
+                    }
+                }
+            }
+        }.apply { isDaemon = true; start() }
+        try {
+            Service.backendCommand("profile.import.url", JSONObject().put("select", false)
+                .put("deviceHeaders", false).put("metadata", JSONObject().put("id", id)
+                    .put("label", "Validator refresh fixture").put("url", "http://127.0.0.1:${server.localPort}/profile")))
+            imported = true
+            repeat(10) {
+                val before = Service.backend("profile.get", JSONObject().put("profileId", id)).getLong("revision")
+                Service.backendCommand("subscription.refresh", JSONObject().put("profileId", id).put("deviceHeaders", false))
+                val after = Service.backend("profile.get", JSONObject().put("profileId", id))
+                assertTrue("Refresh did not save a new revision", after.getLong("revision") > before)
+                assertTrue(after.getString("source").startsWith("# revision ${requests.get()}\n"))
+            }
+        } finally {
+            server.close()
+            worker.join(5_000L)
+            if (imported) {
+                val record = Service.backend("profile.get", JSONObject().put("profileId", id))
+                Service.backendCommand("profile.delete", JSONObject().put("profileId", id)
+                    .put("expectedRevision", record.getLong("revision")))
+            }
+        }
+    }
+
+    @Test fun packagedValidatorRecoversFromProcessDeath() = runBlocking {
+        Service.bind()
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        coroutineScope {
+            val request = async {
+                Service.backendCommand("profile.validate", JSONObject().put("source",
+                    "dns: {enable: false}\nrules: ['MATCH,DIRECT']"))
+            }
+            val pid = withTimeout(10_000L) {
+                var pid: Int? = null
+                while (pid == null) {
+                    pid = manager.runningAppProcesses?.firstOrNull {
+                        it.processName == "${context.packageName}:validator"
+                    }?.pid
+                    if (pid == null) delay(5L)
+                }
+                pid
+            }
+            Process.killProcess(pid)
+            // A single infrastructure eviction is retried, not exposed as a bad
+            // profile. A subsequent request must also use a healthy fresh parser.
+            withTimeout(15_000L) { request.await() }
+        }
+        Service.backendCommand("profile.validate", JSONObject().put("source",
+            "dns: {enable: false}\nrules: ['MATCH,DIRECT']"))
+        Unit
+    }
 
     @Test fun packagedBinderReconnect() = runBlocking {
         // The seed/observe phases deliberately preserve one process instance.
