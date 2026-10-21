@@ -150,3 +150,107 @@ func TestServiceLossAndRevocationUseCommonRecoveryAndRespectStop(t *testing.T) {
 		t.Fatal("late destruction resurrected stopped runtime")
 	}
 }
+
+func TestRevocationStopsDespitePermissionAndStaleObservation(t *testing.T) {
+	for _, observedRunning := range []bool{false, true} {
+		t.Run(strconv.FormatBool(observedRunning), func(t *testing.T) {
+			store := newStore(t)
+			h := newHost()
+			// Android may still report permission during a handover. The revoke
+			// event itself must win, even if a recovery already recreated the TUN.
+			platform := permissionPlatform{hostPlatform{h}, true}
+			b, err := Open(store, h, policyHostEngine{commandHostEngine{hostEngine{h}}}, hostTransports{h}, platform)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			run(t, b, "start", "connect", `{"nodes":[]}`)
+			h.mu.Lock()
+			h.states["platform"] = observedRunning
+			h.mu.Unlock()
+			if err = b.coordinator.platformLost(context.Background(), b, "handover", true); err != nil {
+				t.Fatal(err)
+			}
+			if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" {
+				t.Fatal("VPN revocation retained running intent", s)
+			}
+			if err = b.coordinator.platformLost(context.Background(), b, "late-destroy", false); err != nil {
+				t.Fatal(err)
+			}
+			if err = b.Close(); err != nil {
+				t.Fatal(err)
+			}
+			reopened := openHost(t, store, newHost())
+			run(t, reopened, "sticky-recovery", "recover", "")
+			if s := reopened.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" {
+				t.Fatal("cold recovery reclaimed revoked VPN", s)
+			}
+			run(t, reopened, "explicit-start", "start", "")
+			if reopened.Snapshot().Observed.State != "running" {
+				t.Fatal("revocation prevented a later explicit start")
+			}
+		})
+	}
+}
+
+func TestRevocationPreemptsInFlightRestartAndRecovery(t *testing.T) {
+	for _, source := range []string{"restart", "recovery"} {
+		t.Run(source, func(t *testing.T) {
+			h := newHost()
+			b, err := Open(newStore(t), h, policyHostEngine{commandHostEngine{hostEngine{h}}}, hostTransports{h}, permissionPlatform{hostPlatform{h}, true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			run(t, b, "start", "connect", `{"nodes":[]}`)
+			h.mu.Lock()
+			h.block, h.entered, h.release = "compile", make(chan struct{}), make(chan struct{})
+			if source == "recovery" {
+				h.states["platform"] = false
+			}
+			h.mu.Unlock()
+			defer close(h.release)
+			if source == "restart" {
+				_, err = b.Submit(Request{APIVersion: 1, OperationID: "restart", Method: "restart", Input: Input(`{"nodes":[]}`)})
+			} else {
+				err = b.NotifyPlatform(PlatformEvent{Kind: "service", Sequence: 1})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			select {
+			case <-h.entered:
+			case <-ctx.Done():
+				t.Fatal("operation did not enter preparation")
+			}
+			operation := b.Snapshot().OperationID
+			h.mu.Lock()
+			h.states["platform"] = false
+			h.mu.Unlock()
+			events, detach := b.Subscribe(16)
+			defer detach()
+			if err = b.NotifyPlatform(PlatformEvent{Kind: "revoked", Sequence: 2}); err != nil {
+				t.Fatal(err)
+			}
+			if b.Snapshot().DesiredRunning {
+				t.Fatal("revocation did not durably accept Stop")
+			}
+			for {
+				select {
+				case event := <-events:
+					if s := event.Snapshot; !s.DesiredRunning && !s.AppliedRunning && s.Observed.State == "stopped" {
+						receipt, err := b.Await(ctx, operation)
+						if err == nil || receipt.Status != "cancelled" {
+							t.Fatal("revocation did not cancel operation", receipt, err)
+						}
+						return
+					}
+				case <-ctx.Done():
+					t.Fatal("VPN revocation waited for in-flight preparation")
+				}
+			}
+		})
+	}
+}
