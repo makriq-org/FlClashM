@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-typedef BackendTransport =
-    Future<Map<String, dynamic>> Function(Map<String, dynamic> request);
+typedef BackendTransport = Future<Map<String, dynamic>> Function(
+  Map<String, dynamic> request,
+);
 
 /// Local UI client. It submits user actions and projects snapshots; it has no
 /// compiler, runtime executor, recovery timer or subscription scheduler.
@@ -100,11 +101,21 @@ class BackendClient {
     String? id,
   ) async {
     final operation = id ?? operationId();
-    final receipt = _map(await request(method, params, operation));
-    final completed = await wait(operation, initial: receipt);
-    final runtimeOperation = completed['runtimeOperationId'];
-    if (runtimeOperation is String && runtimeOperation.isNotEmpty) {
-      await wait(runtimeOperation);
+    late final Map<String, dynamic> completed;
+    try {
+      final receipt = _map(await request(method, params, operation));
+      completed = await wait(operation, initial: receipt);
+      final runtimeOperation = completed['runtimeOperationId'];
+      if (runtimeOperation is String && runtimeOperation.isNotEmpty) {
+        await wait(runtimeOperation);
+      }
+    } catch (error, stack) {
+      // Failure may have rolled runtime back without a new applied generation.
+      // Refresh that view too, preserving the original error if IPC is lost.
+      try {
+        await refresh();
+      } catch (_) {}
+      Error.throwWithStackTrace(error, stack);
     }
     await refresh();
     return completed;
@@ -229,9 +240,23 @@ class BackendClient {
       ...values,
       'profiles': [
         for (final record in (catalog['profiles'] as List? ?? []))
-          _copy(_map(_map(record)['metadata'])),
+          _profileSettings(_map(_map(record)['metadata'])),
       ],
     };
+  }
+
+  Map<String, dynamic> _profileSettings(Map<String, dynamic> metadata) {
+    final projected = _copy(metadata);
+    final runtime = _map(_snapshot['runtime']);
+    if (runtime['appliedRunning'] == true &&
+        _viewGeneration == runtime['appliedGeneration'] &&
+        _view['profileId'] == metadata['id'] &&
+        _view['selected-map'] is Map) {
+      // The catalog retains the requested selection after a failed switch.
+      // Show the committed selection while connected, without rewriting it.
+      projected['selectedMap'] = _copy(_map(_view['selected-map']));
+    }
+    return projected;
   }
 
   int profileRevision(String id) {

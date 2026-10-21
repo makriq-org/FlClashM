@@ -27,7 +27,7 @@ func TestSelectionReusesValidatedPlanWithoutNetworkOrParser(t *testing.T) {
 	}
 	var result Prepared
 	_ = json.Unmarshal(next.Payload(), &result)
-	if result.Selected["Pick"] != "REJECT" || validations != 1 || next.Generation() != 2 {
+	if result.ProfileID != "p" || result.Selected["Pick"] != "REJECT" || validations != 1 || next.Generation() != 2 {
 		t.Fatalf("selection did not reuse validation: %#v, %d", result.Selected, validations)
 	}
 	for _, change := range []func(){
@@ -44,6 +44,13 @@ func TestSelectionReusesValidatedPlanWithoutNetworkOrParser(t *testing.T) {
 	_ = json.Unmarshal(plan.Payload(), &original)
 	if original.Selected["Pick"] != "DIRECT" {
 		t.Fatal("committed plan mutated")
+	}
+	var legacyPayload Object
+	_ = json.Unmarshal(plan.Payload(), &legacyPayload)
+	delete(legacyPayload, "profileId")
+	withoutProfile, _ := backend.NewRuntimePlan(1, legacyPayload)
+	if reused, err := c.CompileSelection(context.Background(), after, before, withoutProfile, 3); err != nil || reused != nil {
+		t.Fatal("plan without applied profile identity was reused")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
