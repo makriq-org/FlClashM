@@ -65,6 +65,7 @@ type runtimeCoordinator struct {
 	nodeCancel     context.CancelFunc
 	nodeContext    context.Context
 	nodesExecuting bool
+	keepNodesWarm  bool // UI preparation only; never persisted as a VPN intent.
 	nodeMutation   *execution
 	instanceID     string
 	commands       sync.Mutex
@@ -87,6 +88,21 @@ type runtimeCoordinator struct {
 }
 
 type Backend struct{ coordinator *runtimeCoordinator }
+
+// PrepareForUI records a local UI-session fact, not a durable run intent. All
+// resource effects remain in the coordinator's serialized commands.
+func (b *Backend) PrepareForUI() error {
+	c := b.coordinator
+	c.commands.Lock()
+	defer c.commands.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return ErrClosed
+	}
+	c.keepNodesWarm = true
+	return nil
+}
 
 func Open(store Store, compiler Compiler, engine EngineAdapter, transports TransportAdapter, platform PlatformAdapter, nodeOptions ...NodeOptions) (*Backend, error) {
 	if store == nil || compiler == nil || engine == nil || (transports == nil && len(nodeOptions) != 1) || platform == nil {
@@ -236,7 +252,7 @@ func fingerprint(r Request) (string, error) {
 		return "", errors.New("operationId must contain 1..128 bytes")
 	}
 	switch r.Method {
-	case "apply", "connect", "restart", "engine.command":
+	case "apply", "connect", "restart", "warm", "engine.command":
 		input, err := canonicalJSON(r.Input)
 		if err != nil {
 			return "", err
@@ -312,7 +328,7 @@ func (b *Backend) submit(r Request, expected *uint64) (Receipt, error) {
 	priorDesired.Input = bytes.Clone(priorDesired.Input)
 	next.Generation = nextEpoch
 	switch r.Method {
-	case "apply", "connect", "restart":
+	case "apply", "connect", "restart", "warm":
 		next.Desired.Input = bytes.Clone(r.Input)
 		if r.Method == "connect" {
 			next.Desired.Running = true
@@ -521,7 +537,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	next := cloneDocument(c.document)
 	next.Generation = e.epoch
 	switch e.request.Method {
-	case "apply", "connect", "restart":
+	case "apply", "connect", "restart", "warm":
 		next.Desired.Input = bytes.Clone(e.request.Input)
 		if e.request.Method == "connect" {
 			next.Desired.Running = true
@@ -544,6 +560,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		} else {
 			next.Desired = Desired{}
 		}
+	}
+	if e.request.Method == "warm" {
+		c.keepNodesWarm = true
+	} else if e.request.Method == "forget" || (e.request.Method == "recover" && !next.Desired.Running) {
+		c.keepNodesWarm = false
 	}
 	if next.Desired.Running && len(next.Desired.Input) == 0 {
 		c.mu.Unlock()
@@ -570,7 +591,12 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	c.mu.Unlock()
 
 	if e.request.Method == "stop" || e.request.Method == "forget" {
-		err := c.cleanup()
+		var err error
+		if e.request.Method == "stop" && c.keepNodesWarm && c.nodeOptions != nil && c.nodesExecuting {
+			err = c.stopPreparedRuntime()
+		} else {
+			err = c.cleanup()
+		}
 		if err == nil && e.request.Method == "forget" {
 			// Erasure waits for cancelled preparation to leave its cache files;
 			// ordinary Stop still returns without waiting for a slow parser.
@@ -602,6 +628,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		committed := cloneDocument(c.document)
 		if committed.Applied != nil {
 			committed.Applied.Running = false
+			committed.Applied.Nodes = c.persistedNodes()
 		}
 		committed.Pending = nil
 		committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Method: e.request.Method, Status: "succeeded", Generation: e.epoch})
@@ -610,7 +637,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 	var plan *RuntimePlan
 	var err error
 	if len(next.Desired.Input) > 0 {
-		if compiler, ok := c.compiler.(SelectionCompiler); ok && e.request.Method == "apply" && previous.Applied != nil {
+		if compiler, ok := c.compiler.(SelectionCompiler); ok && (e.request.Method == "apply" || e.request.Method == "warm" || e.request.Method == "connect") && previous.Applied != nil {
 			old, restoreErr := RestorePlan(previous.Applied.Plan)
 			if restoreErr != nil {
 				err = restoreErr
@@ -646,13 +673,21 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		if resident {
 			resident = c.observe(e.ctx, next.Desired.Running) == nil
 		}
+		if c.keepNodesWarm && !next.Desired.Running && !c.nodesExecuting {
+			// A cancelled warm-up may leave a stopped engine but no processes.
+			// Selection/settings shortcuts cannot complete that preparation.
+			resident = false
+		}
 		// Persisted Applied describes the last commit, not an engine resident in
 		// this process. Every in-place optimization requires fresh observations.
-		unchanged := resident && samePlan
+		unchanged := resident && samePlan && !(c.keepNodesWarm && !next.Desired.Running && !c.nodesExecuting)
 		if err = c.current(e); err == nil && !unchanged {
 			var patched bool
 			var patchErr error
-			if resident {
+			if samePlan {
+				patched, patchErr = c.tryPreparedTransition(e, previous, plan, next.Desired.Running)
+			}
+			if !patched && patchErr == nil && resident {
 				patched, patchErr = c.trySelection(e, previous, plan, next.Desired.Running)
 				if !patched && patchErr == nil {
 					patched, patchErr = c.tryLiveSettings(e, previous, plan, next.Desired.Running)
@@ -716,7 +751,7 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 	}
 	if plan != nil {
 		steps := []func() error{func() error { return c.transports.Prepare(e.ctx, plan) }}
-		if running {
+		if running || c.keepNodesWarm {
 			steps = append(steps, func() error { return c.transports.Start(e.ctx, plan) })
 		}
 		steps = append(steps, func() error { return c.engine.Apply(e.ctx, plan) })
@@ -730,28 +765,63 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 		}
 	}
 	if running {
-		if err := c.engine.Start(e.ctx); err != nil {
+		if err := c.startRuntime(e, plan); err != nil {
 			return err
 		}
-		if err := c.current(e); err != nil {
-			return err
-		}
-		if err := c.platform.Start(e.ctx, plan); err != nil {
-			return err
-		}
-		if err := c.platformStarted(e.ctx); err != nil {
-			return err
-		}
-		if err := c.current(e); err != nil {
-			return err
-		}
-	} else {
-		// Plan preparation while stopped must not keep external nodes alive.
+	} else if !c.keepNodesWarm {
+		// Headless recovery after Stop never recreates a UI preparation lease.
 		if err := c.transports.Stop(e.ctx); err != nil {
 			return err
 		}
 	}
 	return c.observe(e.ctx, running)
+}
+
+func (c *runtimeCoordinator) startRuntime(e *execution, plan *RuntimePlan) error {
+	if err := c.engine.Start(e.ctx); err != nil {
+		return err
+	}
+	if err := c.current(e); err != nil {
+		return err
+	}
+	if err := c.platform.Start(e.ctx, plan); err != nil {
+		return err
+	}
+	if err := c.platformStarted(e.ctx); err != nil {
+		return err
+	}
+	return c.current(e)
+}
+
+// Stopping VPN pauses reserve automation, but ordinary prepared processes stay
+// available for UI latency checks, as they did before the backend migration.
+func (c *runtimeCoordinator) stopPreparedRuntime() error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
+	defer cancel()
+	platformErr := c.platform.Stop(ctx)
+	engineErr := c.engine.Stop(ctx)
+	var nodeErr error
+	for _, node := range c.nodes {
+		if node.plan.Activation != nil && node.plan.Activation.Mode == "auto" && node.awake {
+			err := c.nodeOptions.Adapter.Stop(ctx, node.plan.ID)
+			nodeErr = errors.Join(nodeErr, err)
+			node.awake = false
+			node.observed = "sleeping"
+			if err != nil {
+				node.observed = "unknown"
+			}
+		}
+	}
+	c.publishNodes()
+	err := errors.Join(platformErr, engineErr, nodeErr)
+	c.mu.Lock()
+	c.startedAt = 0
+	c.observed = Observation{State: "stopped"}
+	if err != nil {
+		c.observed = Observation{State: "unknown", Message: "runtime cleanup failed"}
+	}
+	c.mu.Unlock()
+	return err
 }
 func (c *runtimeCoordinator) cleanup() error {
 	c.mu.Lock()
@@ -780,7 +850,12 @@ func (c *runtimeCoordinator) observe(ctx context.Context, running bool) error {
 	if running {
 		expected = "running"
 	}
-	for _, read := range []func(context.Context) (Observation, error){c.engine.Observe, c.transports.Observe, c.platform.Observe} {
+	readers := []func(context.Context) (Observation, error){c.engine.Observe}
+	if running || !c.keepNodesWarm || !c.nodesExecuting {
+		readers = append(readers, c.transports.Observe)
+	}
+	readers = append(readers, c.platform.Observe)
+	for _, read := range readers {
 		observation, err := read(ctx)
 		if err != nil {
 			return err
