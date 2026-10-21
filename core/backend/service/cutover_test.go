@@ -53,6 +53,21 @@ func TestHeadlessPresentationAutorunAndLastProfileDeletion(t *testing.T) {
 		t.Fatal("deleted profile recovered")
 	}
 }
+
+func TestUIAttachPreparesSelectedProfileWithoutAutorun(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "fixture", "profile.put", map[string]any{"metadata": map[string]any{"id": "one"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "fixture")
+	request(t, app, "ui-session", "ui.attach", nil)
+	receipt := waitDomain(t, app, "ui-session")
+	if receipt.RuntimeOperationID == "" {
+		t.Fatal("UI attach did not prepare profile")
+	}
+	waitRuntime(t, app, receipt.RuntimeOperationID)
+	if s := app.Snapshot().Runtime; s.DesiredRunning || s.AppliedRunning {
+		t.Fatal("preparation connected without user intent", s)
+	}
+}
 func TestResetKeepsMigrationMarkerAndFencesOldSource(t *testing.T) {
 	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
 	request(t, app, "put", "profile.put", map[string]any{"metadata": map[string]any{"id": "one", "future": "preserved"}, "source": "rules: ['MATCH,DIRECT']", "select": true})

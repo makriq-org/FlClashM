@@ -16,10 +16,15 @@ class ClientHost {
   final blobs = <int>[];
   final operations = <String, Map<String, dynamic>>{};
   Map<String, dynamic> extraSettings = {};
+  Map<String, dynamic> profileMetadata = {};
+  Map<String, dynamic> view = {
+    'config': {'mode': 'rule'},
+  };
   Map<String, dynamic> get runtime => {
     'instanceId': instance,
     'appliedGeneration': generation,
     'desiredRunning': running,
+    'appliedRunning': running,
     'observed': {'state': running ? 'running' : 'stopped'},
   };
   Map<String, dynamic> get snapshot => {
@@ -35,7 +40,7 @@ class ClientHost {
       },
       'profiles': [
         {
-          'metadata': {'id': 'one', 'label': 'Original'},
+          'metadata': {'id': 'one', 'label': 'Original', ...profileMetadata},
           'revision': revision,
         },
       ],
@@ -49,9 +54,7 @@ class ClientHost {
       case 'snapshot':
         result = snapshot;
       case 'runtime.view':
-        result = {
-          'config': {'mode': 'rule'},
-        };
+        result = view;
       case 'runtime.start':
       case 'runtime.stop':
         result = {'operationId': request['operationId'], 'status': 'accepted'};
@@ -89,6 +92,113 @@ class ClientHost {
 }
 
 void main() {
+  test(
+    'failed selection refreshes the rolled back view without an event',
+    () async {
+      final host = ClientHost();
+      final client = BackendClient(
+        transport: (request) async {
+          if (request['method'] == 'proxy.select') {
+            host
+              ..profileMetadata = {
+                'selectedMap': {'GLOBAL': 'Unavailable'},
+              }
+              ..view = {
+                'profileId': 'one',
+                'selected-map': {'GLOBAL': 'Working'},
+              }
+              ..operations['runtime-selection'] = {
+                'status': 'failed',
+                'error': 'operation failed',
+              };
+            return {
+              'apiVersion': 1,
+              'result': {
+                'status': 'succeeded',
+                'runtimeOperationId': 'runtime-selection',
+              },
+            };
+          }
+          return host.call(request);
+        },
+        events: host.events.stream,
+      );
+      await client.attach();
+      await expectLater(
+        client.command('proxy.select', {
+          'group': 'GLOBAL',
+          'proxy': 'Unavailable',
+        }),
+        throwsStateError,
+      );
+      final profiles = client.settings['profiles'] as List;
+      expect((profiles.single as Map)['selectedMap'], {'GLOBAL': 'Working'});
+      final catalog = client.snapshot['catalog'] as Map;
+      final persisted =
+          ((catalog['profiles'] as List).single as Map)['metadata'] as Map;
+      expect(persisted['selectedMap'], {'GLOBAL': 'Unavailable'});
+      await client.detach();
+      await host.close();
+    },
+  );
+
+  test(
+    'applied selections are scoped to their running profile and preserve reset',
+    () async {
+      final host = ClientHost()
+        ..profileMetadata = {
+          'selectedMap': {'GLOBAL': 'Desired'},
+        }
+        ..view = {'profileId': 'one', 'selected-map': <String, dynamic>{}};
+      final client = BackendClient(
+        transport: host.call,
+        events: host.events.stream,
+      );
+      await client.attach();
+      Map selection() =>
+          ((client.settings['profiles'] as List).single as Map)['selectedMap']
+              as Map;
+      expect(selection(), isEmpty);
+      host.view['profileId'] = 'another-profile';
+      await client.refresh();
+      expect(selection(), {'GLOBAL': 'Desired'});
+      host.view['profileId'] = 'one';
+      host.running = false;
+      await client.refresh();
+      expect(selection(), {'GLOBAL': 'Desired'});
+      await client.detach();
+      await host.close();
+    },
+  );
+
+  test('refresh failure preserves the original command error', () async {
+    final host = ClientHost();
+    final client = BackendClient(
+      transport: (request) async {
+        throw StateError(
+          request['method'] == 'proxy.select'
+              ? 'selection failed'
+              : 'refresh failed',
+        );
+      },
+      events: host.events.stream,
+    );
+    await expectLater(
+      client.command('proxy.select', {
+        'group': 'GLOBAL',
+        'proxy': 'Unavailable',
+      }),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          'selection failed',
+        ),
+      ),
+    );
+    await host.close();
+  });
+
   test('repeated Start shares one operation while Stop remains immediate', () async {
     final host = ClientHost();
     final gate = Completer<void>();

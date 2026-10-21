@@ -52,11 +52,12 @@ func (b *Backend) NotifyPlatform(event PlatformEvent) error {
 	event.DNS = append([]string(nil), event.DNS...)
 	c := b.coordinator
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return ErrClosed
 	}
 	if c.policy == nil {
+		c.mu.Unlock()
 		return errors.New("platform effects are unavailable")
 	}
 	if prior, ok := c.policy.pending[event.Kind]; !ok || prior.Sequence < event.Sequence {
@@ -65,6 +66,18 @@ func (b *Backend) NotifyPlatform(event PlatformEvent) error {
 	select {
 	case c.policy.wake <- struct{}{}:
 	default:
+	}
+	generation, wanted := c.epoch, c.document.Desired.Running
+	c.mu.Unlock()
+	if event.Kind == "revoked" && wanted {
+		// The policy worker may itself be awaiting service recovery. Persist
+		// Stop now so that recovery cannot delay or undo this OS handover.
+		_, err := b.SubmitAtGeneration(Request{APIVersion: APIVersion, OperationID: "system-" + rand.Text(), Method: "stop"}, generation)
+		if err != nil && !errors.Is(err, ErrSuperseded) {
+			return err
+		}
+		// Keep the event queued: the worker retries failed acceptance and fences
+		// a concurrent command if the captured generation was superseded.
 	}
 	return nil
 }
@@ -109,8 +122,13 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 		}
 		p := c.policy
 		var event *PlatformEvent
-		if c.active == nil {
-			for _, kind := range []string{"revoked", "service", "screen", "network"} {
+		if value, ok := p.pending["revoked"]; ok {
+			// Revocation is a stop intent and must preempt preparation/recovery,
+			// rather than wait for that operation to establish another tunnel.
+			copy := value
+			event = &copy
+		} else if c.active == nil {
+			for _, kind := range []string{"service", "screen", "network"} {
 				if value, ok := p.pending[kind]; ok {
 					copy := value
 					event = &copy
@@ -192,30 +210,24 @@ func (c *runtimeCoordinator) platformLost(ctx context.Context, b *Backend, id st
 	if !wanted {
 		return nil
 	}
-	observed, err := c.platform.Observe(ctx)
-	if err != nil {
-		return err
-	}
-	if observed.State == "running" {
-		return nil
-	}
 	method := "recover"
 	if revoked {
-		allowed := false
-		if permissions, ok := c.platform.(VPNPermissionReader); ok {
-			allowed, err = permissions.VPNPermission(ctx)
-			if err != nil {
-				return err
-			}
+		// Android revoked this session (for example, another VPN took over).
+		// Permission and a possibly stale observation cannot authorize recovery.
+		method = "stop"
+	} else {
+		observed, err := c.platform.Observe(ctx)
+		if err != nil {
+			return err
 		}
-		if !allowed {
-			method = "stop"
+		if observed.State == "running" {
+			return nil
 		}
 	}
-	if _, err = b.SubmitAtGeneration(Request{APIVersion: APIVersion, OperationID: id, Method: method}, generation); err != nil {
+	if _, err := b.SubmitAtGeneration(Request{APIVersion: APIVersion, OperationID: id, Method: method}, generation); err != nil {
 		return err
 	}
-	_, err = b.Await(ctx, id)
+	_, err := b.Await(ctx, id)
 	return err
 }
 

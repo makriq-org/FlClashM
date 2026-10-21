@@ -450,7 +450,11 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 			}
 		}
 	}()
-	executor.ApplyConfig(currentConfig, true)
+	applyConfig := currentConfig
+	if backendManaged.Load() {
+		applyConfig = embeddedExecutorConfig(currentConfig)
+	}
+	executor.ApplyConfig(applyConfig, true)
 	close(applyFinished)
 	<-cancelFinished
 	if err := ctx.Err(); err != nil {

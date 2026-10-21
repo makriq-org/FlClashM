@@ -53,3 +53,19 @@ func TestRollbackOfLegacyPlanPreservesRoutingRules(t *testing.T) {
 		}
 	}
 }
+
+func TestEmbeddedUIWithoutDownloadURLPreservesServingPath(t *testing.T) {
+	controller := &config.Controller{ExternalUI: "/private/zashboard", ExternalUIName: "local", ExternalController: "127.0.0.1:9090", Secret: "private"}
+	original := &config.Config{Controller: controller}
+	prepared := embeddedExecutorConfig(original)
+	if prepared.Controller.ExternalUI != "" || prepared.Controller.ExternalUIName != "" {
+		t.Fatal("empty URL still triggers automatic UI download")
+	}
+	if controller.ExternalUI != "/private/zashboard" || controller.ExternalUIName != "local" || prepared.Controller.ExternalController != controller.ExternalController || prepared.Controller.Secret != controller.Secret {
+		t.Fatal("serving path or controller settings changed")
+	}
+	controller.ExternalUIURL = "https://example.com/ui.zip"
+	if embeddedExecutorConfig(original) != original {
+		t.Fatal("explicit UI download was disabled")
+	}
+}

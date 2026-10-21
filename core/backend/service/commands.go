@@ -87,19 +87,39 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err := decodeParams(params, &struct{}{}); err != nil {
 			return result, err
 		}
+		if err := a.runtime.PrepareForUI(); err != nil {
+			return result, err
+		}
 		catalog := a.profiles.Snapshot()
 		var app struct {
 			AutoRun bool `json:"autoRun"`
 		}
 		_ = json.Unmarshal(catalog.Settings["appSetting"], &app)
 		snapshot := a.runtime.Snapshot()
-		if !app.AutoRun || snapshot.DesiredRunning {
+		if snapshot.DesiredRunning {
 			return result, nil
 		}
 		var id string
 		_ = json.Unmarshal(catalog.Settings["currentProfileId"], &id)
 		if _, err := a.profiles.Get(id); err != nil {
 			return result, nil
+		}
+		if !app.AutoRun {
+			// Opening the UI prepares nodes for latency checks without requesting
+			// VPN permission or persisting an intent to connect after process death.
+			if err := a.ensureCurrentSource(ctx); err != nil {
+				return result, err
+			}
+			input, err := a.captureInput()
+			if err != nil {
+				return result, err
+			}
+			receipt, err := a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: runtimeID(operationID), Method: "warm", Input: input}, snapshot.Generation)
+			if errors.Is(err, backend.ErrSuperseded) {
+				return result, nil
+			}
+			result.RuntimeOperationID = receipt.OperationID
+			return result, err
 		}
 		if permissions, ok := a.platform.(backend.VPNPermissionReader); ok && a.requiresVPN() {
 			granted, err := permissions.VPNPermission(ctx)

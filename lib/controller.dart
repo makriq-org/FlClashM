@@ -62,11 +62,7 @@ class AppController {
       String proxyName,
     ) async {
       await changeProxy(groupName: groupName, proxyName: proxyName);
-      await syncAndroidForegroundNotificationForProxyChange(
-        groupName: groupName,
-        proxyName: proxyName,
-      );
-      await updateGroups();
+      await updateGroups(syncNotification: true);
     }, args: [groupName, proxyName], duration: const Duration(milliseconds: 50));
   }
 
@@ -487,11 +483,17 @@ class AppController {
     required String groupName,
     required String proxyName,
   }) async {
-    await backendClient.command('proxy.select', {
-      'group': groupName,
-      'proxy': proxyName,
-      'reset': proxyName.isEmpty,
-    });
+    try {
+      await backendClient.command('proxy.select', {
+        'group': groupName,
+        'proxy': proxyName,
+        'reset': proxyName.isEmpty,
+      });
+    } catch (error) {
+      if (context.mounted) {
+        globalState.showNotifier(error.toString());
+      }
+    }
     addCheckIpNumDebounce();
   }
 

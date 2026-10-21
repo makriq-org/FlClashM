@@ -57,6 +57,7 @@ type Node struct {
 	Activation Object            `json:"activation,omitempty"`
 }
 type Prepared struct {
+	ProfileID                string   `json:"profileId"`
 	Config                   Object   `json:"config"`
 	Selected                 Object   `json:"selected-map"`
 	TestURL                  string   `json:"test-url"`
@@ -327,7 +328,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	if value, ok := app["closeConnections"].(bool); ok {
 		closeOnSelect = value
 	}
-	return backend.NewRuntimePlan(generation, Prepared{Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect})
+	return backend.NewRuntimePlan(generation, Prepared{ProfileID: profileID, Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect})
 }
 func text(value any) string { v, _ := value.(string); return v }
 func list(value any) []any {

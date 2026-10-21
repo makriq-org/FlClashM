@@ -8,6 +8,58 @@ import (
 	"reflect"
 )
 
+// A stopped engine can already have the exact plan and live loopback nodes.
+// Promote only the engine/platform; never destroy that preparation on Start.
+func (c *runtimeCoordinator) tryPreparedTransition(e *execution, previous Document, plan *RuntimePlan, running bool) (bool, error) {
+	if c.nodeOptions == nil || previous.Applied == nil || previous.Applied.Running || e.request.Method == "restart" || (!running && !c.keepNodesWarm) {
+		return false, nil
+	}
+	c.mu.Lock()
+	stopped := c.observed.State == "stopped"
+	c.mu.Unlock()
+	if !stopped || c.observe(e.ctx, false) != nil {
+		return false, nil
+	}
+	if err := c.current(e); err != nil {
+		return true, err
+	}
+	var prepared struct {
+		Selected map[string]string `json:"selected-map"`
+	}
+	_ = json.Unmarshal(plan.Payload(), &prepared)
+	for _, node := range c.nodes {
+		if node.awake || node.plan.Activation == nil || node.plan.Activation.Mode != "auto" {
+			continue
+		}
+		for _, name := range prepared.Selected {
+			if name == node.plan.Name {
+				return false, nil
+			}
+		}
+	}
+	if !c.nodesExecuting {
+		if err := c.transports.Start(e.ctx, plan); err != nil {
+			return true, err
+		}
+		if !running {
+			// Refresh providers' initial health checks after loopback listeners exist.
+			if err := c.engine.Apply(e.ctx, plan); err != nil {
+				return true, err
+			}
+		}
+	}
+	observed, err := c.transports.Observe(e.ctx)
+	if err != nil || observed.State != "running" {
+		return false, nil
+	}
+	if running {
+		if err := c.startRuntime(e, plan); err != nil {
+			return true, err
+		}
+	}
+	return true, c.observe(e.ctx, running)
+}
+
 // SelectionCompiler may reuse a validated committed plan when only proxy
 // selections changed. A nil plan requests ordinary preparation instead.
 type SelectionCompiler interface {

@@ -13,6 +13,7 @@ import (
 type nodeHost struct {
 	mu           sync.Mutex
 	processes    map[string]NodeLaunch
+	starts       int
 	nextPort     int
 	probes       int
 	goodStrategy string
@@ -49,6 +50,7 @@ func (h *nodeHost) Start(ctx context.Context, launch NodeLaunch) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.processes[launch.Node.ID] = launch
+	h.starts++
 	return nil
 }
 func (h *nodeHost) Stop(ctx context.Context, id string) error {
@@ -160,6 +162,153 @@ func nodeInput(nodes ...NodePlan) string {
 		Nodes []NodePlan `json:"nodes"`
 	}{nodes})
 	return string(raw)
+}
+
+func TestUIWarmNodesWithoutVPNAndConnectReusesProcesses(t *testing.T) {
+	store := newStore(t)
+	mechanism := newNodeHost()
+	b := openNodeHost(t, store, mechanism)
+	node := reservePlan()
+	node.Activation = nil
+	input := nodeInput(node)
+	run(t, b, "configure", "apply", input)
+	run(t, b, "ui-warm", "warm", input)
+	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "running" {
+		t.Fatal("UI preparation changed VPN intent or failed to launch node", s)
+	}
+	run(t, b, "connect", "connect", input)
+	mechanism.mu.Lock()
+	starts := mechanism.starts
+	mechanism.mu.Unlock()
+	if starts != 1 || b.Snapshot().Observed.State != "running" {
+		t.Fatal("connect restarted prepared node", starts, b.Snapshot())
+	}
+	run(t, b, "stop", "stop", "")
+	mechanism.mu.Lock()
+	left := len(mechanism.processes)
+	mechanism.mu.Unlock()
+	if left != 1 || b.Snapshot().DesiredRunning || b.Snapshot().AppliedRunning {
+		t.Fatal("Stop lost latency preparation or retained VPN intent")
+	}
+	run(t, b, "recover-stopped", "recover", "")
+	mechanism.mu.Lock()
+	left = len(mechanism.processes)
+	mechanism.mu.Unlock()
+	if left != 0 || b.Snapshot().DesiredRunning {
+		t.Fatal("headless recovery replayed UI preparation")
+	}
+}
+
+func TestUISettingsCompleteMissingNodePreparation(t *testing.T) {
+	h := newHost()
+	mechanism := newNodeHost()
+	b, err := Open(newStore(t), h, liveHostEngine{hostEngine{h}}, nil, hostPlatform{h}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	node := reservePlan()
+	node.Activation = nil
+	payload := map[string]any{"nodes": []NodePlan{node}, "config": map[string]string{"mode": "rule"}, "patch": map[string]string{"mode": "rule"}}
+	input, _ := json.Marshal(payload)
+	run(t, b, "configure", "apply", string(input))
+	// UI attached, but preparation has not completed (or was superseded).
+	if err = b.PrepareForUI(); err != nil {
+		t.Fatal(err)
+	}
+	payload["config"] = map[string]string{"mode": "global"}
+	payload["patch"] = map[string]string{"mode": "global"}
+	input, _ = json.Marshal(payload)
+	run(t, b, "mode", "apply", string(input))
+	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Nodes[0].State != "running" {
+		t.Fatal("settings shortcut skipped UI node preparation", s)
+	}
+}
+
+func TestWarmProcessDeathAndStopFence(t *testing.T) {
+	for _, interrupted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "dead-process", true: "stop-during-warm"}[interrupted], func(t *testing.T) {
+			mechanism := newNodeHost()
+			b := openNodeHost(t, newStore(t), mechanism)
+			node := reservePlan()
+			node.Activation = nil
+			input := nodeInput(node)
+			if interrupted {
+				mechanism.blockWake = true
+				mechanism.wakeEntered = make(chan struct{})
+				if _, err := b.Submit(Request{APIVersion: 1, OperationID: "warm", Method: "warm", Input: Input(input)}); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case <-mechanism.wakeEntered:
+				case <-time.After(time.Second):
+					t.Fatal("warm did not start external preparation")
+				}
+				run(t, b, "stop", "stop", "")
+				if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning {
+					t.Fatal("late warm enabled runtime", s)
+				}
+			} else {
+				run(t, b, "warm", "warm", input)
+				mechanism.mu.Lock()
+				delete(mechanism.processes, node.ID)
+				mechanism.mu.Unlock()
+				run(t, b, "start", "connect", input)
+				mechanism.mu.Lock()
+				starts := mechanism.starts
+				mechanism.mu.Unlock()
+				if starts != 2 || b.Snapshot().Observed.State != "running" {
+					t.Fatal("dead prepared process was reused", starts)
+				}
+			}
+		})
+	}
+}
+
+func TestStoppedUICommandsRestoreDeadPreparedNode(t *testing.T) {
+	for _, command := range []string{"warm", "selection", "settings"} {
+		t.Run(command, func(t *testing.T) {
+			h := newHost()
+			mechanism := newNodeHost()
+			var engine EngineAdapter = selectionHostEngine{hostEngine{h}}
+			if command == "settings" {
+				engine = liveHostEngine{hostEngine{h}}
+			}
+			b, err := Open(newStore(t), h, engine, nil, hostPlatform{h}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ManualTicks: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			node := reservePlan()
+			node.Activation = nil
+			payload := map[string]any{"nodes": []NodePlan{node}, "selected-map": map[string]string{"Pick": "DIRECT"}, "config": map[string]string{"mode": "rule"}, "patch": map[string]string{"mode": "rule"}}
+			input, _ := json.Marshal(payload)
+			run(t, b, "prepare", "warm", string(input))
+			mechanism.mu.Lock()
+			delete(mechanism.processes, node.ID)
+			mechanism.mu.Unlock()
+			method := "warm"
+			if command == "selection" {
+				method = "apply"
+				payload["selected-map"] = map[string]string{"Pick": "REJECT"}
+			} else if command == "settings" {
+				method = "apply"
+				payload["config"] = map[string]string{"mode": "global"}
+				payload["patch"] = map[string]string{"mode": "global"}
+			}
+			input, _ = json.Marshal(payload)
+			run(t, b, "refresh-ui", method, string(input))
+			mechanism.mu.Lock()
+			alive, starts := len(mechanism.processes), mechanism.starts
+			mechanism.mu.Unlock()
+			if alive != 1 || starts != 2 {
+				t.Fatalf("command did not restore dead preparation: processes=%d starts=%d", alive, starts)
+			}
+			if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "running" {
+				t.Fatal("restoring preparation changed VPN intent or node state", s)
+			}
+		})
+	}
 }
 func TestNodeReserveHeadlessWakeSleepAndRecovery(t *testing.T) {
 	store := newStore(t)

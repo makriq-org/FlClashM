@@ -60,6 +60,9 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 	if _, ok := object(payload["config"])["rules"]; !ok {
 		return nil, nil
 	}
+	if payload["profileId"] != next.Profile.ID {
+		return nil, nil
+	}
 	payload["selected-map"] = selected
 	return backend.NewRuntimePlan(generation, payload)
 }
