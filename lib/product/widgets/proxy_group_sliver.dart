@@ -30,15 +30,17 @@ class ProxyGroupSliver extends StatelessWidget {
         SliverToBoxAdapter(child: header),
         if (factor > 0 && rowCount > 0)
           SliverPadding(
-            padding: EdgeInsets.symmetric(vertical: 4 * factor),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             sliver: SliverFixedExtentList.builder(
               itemCount: rowCount,
-              itemExtent: (rowHeight + spacing) * factor,
-              itemBuilder: (context, index) => ClipRect(
-                child: OverflowBox(
-                  alignment: Alignment.topCenter,
-                  minHeight: rowHeight,
-                  maxHeight: rowHeight,
+              // Animate opacity only. Shrinking each row's extent makes the
+              // viewport build the entire group near zero animation progress.
+              // Fixed extents also keep the scrollbar stable during the fade.
+              itemExtent: rowHeight + spacing,
+              itemBuilder: (context, index) => Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  height: rowHeight,
                   child: ExcludeFocus(
                     excluding: !expanded,
                     child: Opacity(

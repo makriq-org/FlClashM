@@ -3,6 +3,79 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('large group fades keep rows lazy and scroll extent fixed', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final built = <int>{};
+    var expanded = false;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return Scaffold(
+              body: CustomScrollView(
+                controller: controller,
+                slivers: [
+                  ProxyGroupSliver(
+                    header: const SizedBox(height: 60),
+                    expanded: expanded,
+                    rowCount: 1050,
+                    rowHeight: 64,
+                    spacing: 8,
+                    rowBuilder: (_, index) {
+                      built.add(index);
+                      return Text('Proxy $index');
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    expect(built, isEmpty);
+
+    void checkExpandedFrame() {
+      expect(find.byType(Text).evaluate().length, inExclusiveRange(0, 30));
+      expect(built.length, lessThan(30));
+      expect(
+        controller.position.maxScrollExtent,
+        closeTo(
+          60 + 8 + 1050 * 72 - controller.position.viewportDimension,
+          0.01,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    }
+
+    rebuild(() => expanded = true);
+    await tester.pump();
+    // Include the tiny first/last extents that used to mount all 1050 rows.
+    for (final milliseconds in [1, 15, 32, 64, 64, 23]) {
+      await tester.pump(Duration(milliseconds: milliseconds));
+      checkExpandedFrame();
+    }
+    await tester.pumpAndSettle();
+    checkExpandedFrame();
+
+    built.clear();
+    rebuild(() => expanded = false);
+    await tester.pump();
+    for (final milliseconds in [1, 15, 32, 64, 64, 23]) {
+      await tester.pump(Duration(milliseconds: milliseconds));
+      checkExpandedFrame();
+    }
+    await tester.pumpAndSettle();
+    expect(find.byType(Text), findsNothing);
+    expect(controller.position.maxScrollExtent, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('mixed group sizes keep exact scroll extent and rows stay lazy', (
     tester,
   ) async {
