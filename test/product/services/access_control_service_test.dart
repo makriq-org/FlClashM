@@ -6,8 +6,6 @@ import 'dart:typed_data';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/android/android_runtime_access_policy.dart';
-import 'package:flclashx/product/compile/raw_profile.dart';
-import 'package:flclashx/product/runtime/engine_manager.dart';
 import 'package:flclashx/product/services/access_control_service.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,40 +46,9 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
   }
 
   @override
-  String mergeVpnOptions(
-    String optionsJson, {
-    required AccessControl accessControl,
-  }) =>
-      optionsJson;
-
-  @override
-  Future<bool> startVpn({required AccessControl accessControl}) async {
-    lastStartAccessControl = accessControl;
-    return true;
-  }
-
-  @override
-  Future<void> stopVpn() async {
-    stopCalls++;
-  }
-
-  @override
   Future<ProfileAccessSnapshot> readAppliedProfileAccess() async {
     appliedOptionsReadCalls++;
     return appliedSnapshotReader?.call() ?? appliedSnapshot;
-  }
-
-  @override
-  Future<ResolvedTunAccess> resolveTunAccess({
-    required bool requestedTunEnable,
-    required bool realTunEnable,
-    required Future<void> Function() onAuthorizeRestart,
-    required void Function(bool p1) onResolvedTunEnable,
-    Future<AuthorizeCode> Function()? authorizeCore,
-  }) async {
-    resolveCalls++;
-    onResolvedTunEnable(requestedTunEnable);
-    return ResolvedTunAccess.proceed(enableTun: requestedTunEnable);
   }
 }
 
@@ -152,10 +119,10 @@ void main() {
         editorState: editorState,
       );
 
-      expect(
-        filtered.map((item) => item.packageName).toList(),
-        ['com.example.selected', 'com.example.other'],
-      );
+      expect(filtered.map((item) => item.packageName).toList(), [
+        'com.example.selected',
+        'com.example.other',
+      ]);
     });
 
     test('loads packages once and then serves cached values', () async {
@@ -195,8 +162,9 @@ void main() {
       final platform = _FakeRuntimeAccessPlatform(icon: icon);
       final service = AccessControlService(platform: platform);
 
-      final resolvedIcon =
-          await service.readPackageIcon('com.example.with.icon');
+      final resolvedIcon = await service.readPackageIcon(
+        'com.example.with.icon',
+      );
 
       expect(resolvedIcon, same(icon));
       expect(platform.lastIconPackageName, 'com.example.with.icon');
@@ -268,33 +236,6 @@ void main() {
       },
     );
 
-    test('delegates runtime access orchestration to the platform bridge',
-        () async {
-      final platform = _FakeRuntimeAccessPlatform();
-      final service = AccessControlService(platform: platform);
-      final resolvedValues = <bool>[];
-      const accessControl = AccessControl(
-        enable: true,
-        rejectList: ['com.example.blocked'],
-      );
-
-      final started = await service.startVpn(accessControl: accessControl);
-      final resolved = await service.resolveRuntimeAccess(
-        requestedTunEnable: true,
-        realTunEnable: false,
-        onAuthorizeRestart: () async {},
-        onResolvedTunEnable: resolvedValues.add,
-      );
-      await service.stopVpn();
-
-      expect(started, isTrue);
-      expect(platform.lastStartAccessControl, accessControl);
-      expect(platform.resolveCalls, 1);
-      expect(resolved.enableTun, isTrue);
-      expect(resolvedValues, [true]);
-      expect(platform.stopCalls, 1);
-    });
-
     test('reads applied profile access through the platform bridge', () async {
       const applied = AccessControl(
         enable: true,
@@ -313,33 +254,25 @@ void main() {
       expect(platform.appliedOptionsReadCalls, 1);
     });
 
-    test('resolves declared profile access inside the product service',
-        () async {
-      final service = AccessControlService(
-        platform: _FakeRuntimeAccessPlatform(),
-      );
-      final rawProfile = RawProfile.fromConfig(
-        profile: const Profile(
-          id: 'profile-id',
-          autoUpdateDuration: Duration.zero,
-        ),
-        config: const {
-          'tun': {
-            'include-package': ['com.example.app'],
-          },
-        },
-      );
+    test(
+      'resolves declared profile access inside the product service',
+      () async {
+        final service = AccessControlService(
+          platform: _FakeRuntimeAccessPlatform(),
+        );
+        final snapshot = await service.readProfileConfigAccess(
+          readProfileAccessControl: () async => const AccessControl(
+            enable: true,
+            mode: AccessControlMode.acceptSelected,
+            acceptList: ['com.example.app'],
+          ),
+        );
 
-      final snapshot = await service.readProfileConfigAccess(
-        loadCurrentRawProfile: () async => rawProfile,
-        readProfilesPath: () async => '/profiles',
-        readInstalledPackageNames: () async => const ['com.example.app'],
-      );
-
-      expect(snapshot.available, isTrue);
-      expect(snapshot.accessControl?.mode, AccessControlMode.acceptSelected);
-      expect(snapshot.accessControl?.acceptList, ['com.example.app']);
-    });
+        expect(snapshot.available, isTrue);
+        expect(snapshot.accessControl?.mode, AccessControlMode.acceptSelected);
+        expect(snapshot.accessControl?.acceptList, ['com.example.app']);
+      },
+    );
 
     group('resolveProfileManagedAccess', () {
       const service = AccessControlService();
@@ -479,16 +412,13 @@ void main() {
       test('preserves dirty manual editor state across unmanaged refresh', () {
         final previous = service
             .createEditorState(
-          const AccessControl(
-            enable: true,
-            mode: AccessControlMode.rejectSelected,
-            rejectList: ['com.before'],
-          ),
-        )
-            .copyWith(
-          selectedPackages: {'com.edited'},
-          dirty: true,
-        );
+              const AccessControl(
+                enable: true,
+                mode: AccessControlMode.rejectSelected,
+                rejectList: ['com.before'],
+              ),
+            )
+            .copyWith(selectedPackages: {'com.edited'}, dirty: true);
 
         final reconciled = service.reconcileManagedEditorState(
           manualAccessControl: const AccessControl(
@@ -504,49 +434,49 @@ void main() {
         expect(reconciled, same(previous));
       });
 
-      test('managed controller discards a stale asynchronous refresh',
-          () async {
-        final first = Completer<ProfileAccessSnapshot>();
-        final second = Completer<ProfileAccessSnapshot>();
-        var call = 0;
-        final platform = _FakeRuntimeAccessPlatform(
-          appliedSnapshotReader: () =>
-              call++ == 0 ? first.future : second.future,
-        );
-        final service = AccessControlService(platform: platform);
-        final controller = service.createProfileManagedController(
-          loadCurrentRawProfile: () async => null,
-          readProfilesPath: () async => '',
-          readInstalledPackageNames: () async => const [],
-        );
-        const declared = AccessControl(
-          enable: true,
-          mode: AccessControlMode.acceptSelected,
-          acceptList: ['com.profile'],
-        );
-        const newer = AccessControl(
-          enable: true,
-          mode: AccessControlMode.rejectSelected,
-          rejectList: ['com.newer'],
-        );
+      test(
+        'managed controller discards a stale asynchronous refresh',
+        () async {
+          final first = Completer<ProfileAccessSnapshot>();
+          final second = Completer<ProfileAccessSnapshot>();
+          var call = 0;
+          final platform = _FakeRuntimeAccessPlatform(
+            appliedSnapshotReader: () =>
+                call++ == 0 ? first.future : second.future,
+          );
+          final service = AccessControlService(platform: platform);
+          final controller = service.createProfileManagedController(
+            readProfileAccessControl: () async => null,
+          );
+          const declared = AccessControl(
+            enable: true,
+            mode: AccessControlMode.acceptSelected,
+            acceptList: ['com.profile'],
+          );
+          const newer = AccessControl(
+            enable: true,
+            mode: AccessControlMode.rejectSelected,
+            rejectList: ['com.newer'],
+          );
 
-        final staleFuture = controller.refresh(
-          isRunning: true,
-          activeProfileAccessControl: declared,
-        );
-        final currentFuture = controller.refresh(
-          isRunning: true,
-          activeProfileAccessControl: declared,
-        );
-        second.complete(const ProfileAccessSnapshot.available(newer));
-        final current = await currentFuture;
-        first.complete(const ProfileAccessSnapshot.available(declared));
-        final stale = await staleFuture;
+          final staleFuture = controller.refresh(
+            isRunning: true,
+            activeProfileAccessControl: declared,
+          );
+          final currentFuture = controller.refresh(
+            isRunning: true,
+            activeProfileAccessControl: declared,
+          );
+          second.complete(const ProfileAccessSnapshot.available(newer));
+          final current = await currentFuture;
+          first.complete(const ProfileAccessSnapshot.available(declared));
+          final stale = await staleFuture;
 
-        expect(current?.effectiveAccessControl, newer);
-        expect(stale, isNull);
-        controller.dispose();
-      });
+          expect(current?.effectiveAccessControl, newer);
+          expect(stale, isNull);
+          controller.dispose();
+        },
+      );
     });
   });
 }

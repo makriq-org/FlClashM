@@ -8,25 +8,22 @@ import com.follow.clashx.service.IAckInterface
 import com.follow.clashx.service.ICallbackInterface
 import com.follow.clashx.service.IEventInterface
 import com.follow.clashx.service.IRemoteInterface
-import com.follow.clashx.service.IResultInterface
 import com.follow.clashx.service.IStateCallback
-import com.follow.clashx.service.IVoidInterface
 import com.follow.clashx.service.RemoteService
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONObject
 import com.follow.clashx.service.models.NotificationParams
-import com.follow.clashx.service.models.VpnOptions
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 object Service {
     // Last-resort watchdog for the ASYNC result of invokeAction/quickStart. useService
@@ -57,6 +54,10 @@ object Service {
         val startedAt: Long,
         val message: String,
         val seq: Long,
+        val mode: String,
+        val globalModeEnabled: Boolean,
+        val hasActiveProfile: Boolean,
+        val requiresVpn: Boolean,
     ) {
         val isRunning get() = state == "running"
         val isStarting get() = state == "starting"
@@ -74,6 +75,10 @@ object Service {
             o.optLong("startedAt", 0L),
             o.optString("message", ""),
             o.optLong("seq", 0L),
+            o.optString("mode", "rule"),
+            o.optBoolean("globalModeEnabled", true),
+            o.optBoolean("hasActiveProfile"),
+            o.optBoolean("requiresVpn", true),
         )
     }.getOrNull()?.takeIf { it.state.isNotBlank() }
 
@@ -147,59 +152,6 @@ object Service {
         return outcome
     }
 
-    suspend fun quickStart(
-        initParamsString: String,
-        paramsString: String,
-        stateParamsString: String,
-        onStarted: (() -> Unit)?,
-        onResult: ((String) -> Unit)?,
-    ): Result<Unit> {
-        val chunks = Collections.synchronizedList(mutableListOf<ByteArray>())
-        val delivered = AtomicBoolean(false)
-        var watchdog: Job? = null
-        // Deliver to onResult exactly once (real onResult / registration failure /
-        // watchdog). onStarted is a separate fire-and-forget signal, left untouched.
-        fun deliver(payload: String) {
-            if (delivered.compareAndSet(false, true)) {
-                watchdog?.cancel()
-                onResult?.invoke(payload)
-            }
-        }
-        val outcome = delegate.useService { proxy ->
-            proxy.quickStart(
-                initParamsString,
-                paramsString,
-                stateParamsString,
-                object : ICallbackInterface.Stub() {
-                    override fun onResult(result: ByteArray?, isSuccess: Boolean, ack: IAckInterface?) {
-                        chunks.add(result ?: byteArrayOf())
-                        ack?.onAck()
-                        if (isSuccess) deliver(chunks.formatString())
-                    }
-                },
-                object : IVoidInterface.Stub() {
-                    override fun invoke() {
-                        onStarted?.invoke()
-                    }
-                },
-            )
-        }
-        if (outcome.isFailure) {
-            deliver("")
-        } else if (!delivered.get()) {
-            watchdog = CommonGlobalState.launch {
-                delay(RESULT_WATCHDOG_MILLIS)
-                deliver("")
-            }
-        }
-        return outcome
-    }
-
-    // Serializes listener (re)registration and tracks which caller owns the current
-    // one, so a detach-time cleanup can drop the remote listener ONLY while its own
-    // registration is still current. Activity recreation can run the new engine's
-    // init BEFORE the old engine's detach — an unguarded trailing null would wipe
-    // the fresh listener and leave the new UI with empty logs/traffic.
     private val listenerLock = Mutex()
     private val listenerOwner = AtomicReference<Any?>(null)
 
@@ -248,101 +200,44 @@ object Service {
     suspend fun updateNotificationParams(params: NotificationParams): Result<Unit> =
         delegate.useService { it.updateNotificationParams(params) }
 
-    private suspend fun awaitResult(block: (IResultInterface) -> Unit): Long =
-        suspendCancellableCoroutine { cont ->
-            val cb = object : IResultInterface.Stub() {
-                override fun onResult(runTime: Long) {
-                    if (cont.isActive) cont.resume(runTime)
-                }
-            }
-            runCatching { block(cb) }.onFailure {
-                if (cont.isActive) cont.resumeWithException(it)
-            }
-        }
-
-    // 35s, not 30s: the remote side itself allows handleStart up to 30s (plus bind +
-    // FGS-start overhead) and always answers via onResult, including its fail paths.
-    // An equal deadline let this side give up a moment before a barely-in-time start
-    // reported success, desyncing the UI from a tunnel that actually came up. Still
-    // comfortably under Dart's 60s wait.
-    suspend fun startService(options: VpnOptions, runTime: Long): Long =
-        delegate.useService(timeoutMillis = 35_000L) { proxy ->
-            awaitResult { cb -> proxy.startService(options, runTime, cb) }
-        }.getOrNull() ?: 0L
-
-    suspend fun stopService(): Long =
-        delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.stopService(cb) }
-        }.getOrNull() ?: 0L
-
-    suspend fun setState(state: String): Result<Unit> =
-        delegate.useService { it.setState(state) }
-
-    suspend fun updateDns(dns: String): Result<Unit> =
-        delegate.useService { it.updateDns(dns) }
-
     suspend fun getAndroidVpnOptions(): String =
         delegate.useService { it.androidVpnOptions }.getOrNull() ?: ""
-
     suspend fun getAppliedAndroidVpnOptions(): String =
         delegate.useService { it.appliedAndroidVpnOptions }.getOrNull() ?: ""
-
     suspend fun getCurrentProfileName(): String =
         delegate.useService { it.currentProfileName }.getOrNull() ?: ""
+    suspend fun getTraffic(): String = delegate.useService { it.traffic }.getOrNull() ?: ""
+    suspend fun getTotalTraffic(): String = delegate.useService { it.totalTraffic }.getOrNull() ?: ""
 
-    suspend fun getTraffic(): String =
-        delegate.useService { it.traffic }.getOrNull() ?: ""
+    suspend fun backend(method: String, params: JSONObject = JSONObject()): JSONObject {
+        bind()
+        val id = UUID.randomUUID().toString()
+        val request = JSONObject().put("apiVersion", 1).put("operationId", id)
+            .put("method", method).put("params", params)
+        val result = CompletableDeferred<String>()
+        val action = JSONObject().put("id", id).put("method", "backend").put("data", request)
+        invokeAction(action.toString()) { result.complete(it) }.getOrThrow()
+        val envelope = JSONObject(withTimeout(150_000L) { result.await() })
+        check(envelope.optInt("code", -1) == 0) { envelope.optString("data", "backend unavailable") }
+        val response = envelope.getJSONObject("data")
+        check(response.optJSONObject("error") == null) { response.optJSONObject("error")?.optString("message") ?: "backend command failed" }
+        return response.optJSONObject("result") ?: JSONObject()
+    }
 
-    suspend fun getTotalTraffic(): String =
-        delegate.useService { it.totalTraffic }.getOrNull() ?: ""
-
-    suspend fun applyRuntimeNodePlan(plan: String): String =
-        delegate.useService(timeoutMillis = 305_000L) { proxy ->
-            suspendCancellableCoroutine { cont ->
-                val callback = object : ICallbackInterface.Stub() {
-                    override fun onResult(
-                        result: ByteArray?,
-                        isSuccess: Boolean,
-                        ack: IAckInterface?,
-                    ) {
-                        ack?.onAck()
-                        if (isSuccess && cont.isActive) {
-                            cont.resume((result ?: byteArrayOf()).toString(Charsets.UTF_8))
-                        }
-                    }
-                }
-                runCatching { proxy.applyRuntimeNodePlan(plan, callback) }
-                    .onFailure { if (cont.isActive) cont.resumeWithException(it) }
+    suspend fun backendCommand(method: String, params: JSONObject = JSONObject()): JSONObject {
+        var receipt = backend(method, params)
+        suspend fun wait(initial: JSONObject): JSONObject = withTimeout(600_000L) {
+            var current = initial
+            while (current.optString("status") == "accepted") {
+                delay(120L)
+                current = backend("operation.get", JSONObject().put("operationId", initial.getString("operationId")))
             }
-        }.getOrNull() ?: ""
-
-    suspend fun getRuntimeNodePlanState(): String =
-        delegate.useService { it.runtimeNodePlanState }.getOrNull() ?: ""
-
-    suspend fun stopRuntimeNodePlan(): Long =
-        delegate.useService(timeoutMillis = 15_000L) { proxy ->
-            awaitResult { cb -> proxy.stopRuntimeNodePlan(cb) }
-        }.getOrNull() ?: 0L
-
-    suspend fun probeRuntimeNode(node: String): Boolean =
-        delegate.useService(timeoutMillis = 65_000L) { proxy ->
-            awaitResult { cb -> proxy.probeRuntimeNode(node, cb) }
-        }.getOrNull() == 1L
-
-    suspend fun probeRuntimeNodes(request: String): Int =
-        delegate.useService(timeoutMillis = 65_000L) { proxy ->
-            awaitResult { cb -> proxy.probeRuntimeNodes(request, cb) }
-        }.getOrNull()?.toInt() ?: -1
-
-    suspend fun attachRuntimeNodeClient(): Result<Unit> =
-        delegate.useService { it.attachRuntimeNodeClient() }
-
-    suspend fun detachRuntimeNodeClient(): Result<Unit> =
-        delegate.useService { it.detachRuntimeNodeClient() }
-
-    suspend fun startListener(): Result<Unit> =
-        delegate.useService { it.startListener() }
-
-    suspend fun stopListener(): Result<Unit> =
-        delegate.useService { it.stopListener() }
+            check(current.optString("status") == "succeeded") { current.optString("error", "backend operation failed") }
+            current
+        }
+        receipt = wait(receipt)
+        val runtimeId = receipt.optString("runtimeOperationId")
+        if (runtimeId.isNotEmpty()) wait(backend("operation.get", JSONObject().put("operationId", runtimeId)))
+        return receipt
+    }
 }

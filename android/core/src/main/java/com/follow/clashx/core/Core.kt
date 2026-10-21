@@ -36,26 +36,9 @@ data object Core {
 
     external fun invokeAction(data: String, cb: InvokeInterface)
 
-    /**
-     * One-shot initialization entry. [cb] is invoked once with the setup result
-     * (JSON string) and then released on the native side.
-     */
-    external fun quickStart(
-        initParams: String,
-        params: String,
-        stateParams: String,
-        cb: InvokeInterface,
-    )
-
     // --- Event stream ---------------------------------------------------------
 
     external fun setEventListener(cb: InvokeInterface?)
-
-    // --- State / config mutators ---------------------------------------------
-
-    external fun setState(state: String)
-    external fun updateDns(dns: String)
-    external fun resetConnections()
 
     // --- Getters --------------------------------------------------------------
 
@@ -64,11 +47,6 @@ data object Core {
     external fun getRunTime(): String
     external fun getCurrentProfileName(): String
     external fun getAndroidVpnOptions(): String
-
-    // --- External listener (mixed-port etc.) ---------------------------------
-
-    external fun startListener()
-    external fun stopListener()
 
     // --- Helpers --------------------------------------------------------------
 

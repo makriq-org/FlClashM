@@ -54,3 +54,10 @@ dart tool/check_product_boundaries.dart
 ---
 
 > 🌍 Другие языки: [English](../../../en/docs/development/architecture.md) · [中文](../../../zh/docs/development/architecture.md) · [فارسی](../../../fa/docs/development/architecture.md)
+
+## Переработка единого backend
+
+Целевой контракт, этапы и критерии переключения Android:
+[Go backend](go-backend/architecture.md),
+[инвентаризация сценариев](go-backend/inventory.md).
+До завершения переключения описание выше отражает текущий runtime path.

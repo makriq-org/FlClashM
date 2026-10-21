@@ -10,11 +10,9 @@ import 'package:flclashx/common/process_icon.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/state.dart';
-import 'package:flutter/services.dart';
-import 'package:path/path.dart';
+import 'package:flclashx/product/backend/backend.dart';
 
 class ClashCore {
-
   factory ClashCore() {
     _instance ??= ClashCore._internal();
     return _instance!;
@@ -32,68 +30,9 @@ class ClashCore {
 
   Future<bool> preload() => clashInterface.preload();
 
-  static Future<void> initGeo() async {
-    final homePath = await appPath.homeDirPath;
-    final homeDir = Directory(homePath);
-    final isExists = await homeDir.exists();
-    if (!isExists) {
-      await homeDir.create(recursive: true);
-    }
-    const geoFileNameList = [
-      mmdbFileName,
-      geoIpFileName,
-      geoSiteFileName,
-      asnFileName,
-    ];
-    try {
-      for (final geoFileName in geoFileNameList) {
-        final geoFile = File(
-          join(homePath, geoFileName),
-        );
-        final isExists = await geoFile.exists();
-        if (isExists) {
-          continue;
-        }
-        final data = await rootBundle.load('assets/data/$geoFileName');
-        final List<int> bytes = data.buffer.asUint8List();
-        await geoFile.writeAsBytes(bytes, flush: true);
-      }
-    } catch (e) {
-      exit(0);
-    }
-  }
-
-  Future<bool> init() async {
-    await initGeo();
-    if (globalState.config.appSetting.openLogs) {
-      clashCore.startLog();
-    } else {
-      clashCore.stopLog();
-    }
-    final homeDirPath = await appPath.homeDirPath;
-    return clashInterface.init(
-      InitParams(
-        homeDir: homeDirPath,
-        version: globalState.appState.version,
-      ),
-    );
-  }
-
-  Future<bool> setState(CoreState state) => clashInterface.setState(state);
-
   Future<bool> setUiActive(bool active) => clashInterface.setUiActive(active);
 
-  Future<void> shutdown() async {
-    await clashInterface.shutdown();
-  }
-
   FutureOr<bool> get isInit => clashInterface.isInit;
-
-  FutureOr<String> validateConfig(String data) => clashInterface.validateConfig(data);
-
-  Future<String> updateConfig(UpdateParams updateParams) => clashInterface.updateConfig(updateParams);
-
-  Future<String> setupConfig(SetupParams setupParams) => clashInterface.setupConfig(setupParams);
 
   Future<Map<String, dynamic>> tunnelHTTPRequest(
     Map<String, dynamic> params,
@@ -159,13 +98,9 @@ class ClashCore {
       return group;
     }).toList();
     return groupsRaw
-        .map(
-          (e) => Group.fromJson(Map<String, dynamic>.from(e)),
-        )
+        .map((e) => Group.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
-
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) async => await clashInterface.changeProxy(changeProxyParams);
 
   Future<List<Connection>> getConnections() async {
     final res = await clashInterface.getConnections();
@@ -193,82 +128,91 @@ class ClashCore {
   }
 
   void closeConnection(String id) {
-    clashInterface.closeConnection(id);
-  }
-
-  void closeConnections() {
-    clashInterface.closeConnections();
-  }
-
-  void resetConnections() {
-    clashInterface.resetConnections();
-  }
-
-  Future<List<ExternalProvider>> getExternalProviders() async {
-    final externalProvidersRawString =
-        await clashInterface.getExternalProviders();
-    if (externalProvidersRawString.isEmpty) {
-      return [];
-    }
-    return Isolate.run<List<ExternalProvider>>(
-      () {
-        final externalProviders =
-            (json.decode(externalProvidersRawString) as List<dynamic>)
-                .map(
-                  (item) => ExternalProvider.fromJson(item),
-                )
-                .toList();
-        return externalProviders;
-      },
+    unawaited(
+      backendClient.command('engine.command', {
+        'method': 'connection.close',
+        'params': {'id': id},
+      }),
     );
   }
 
+  void closeConnections() {
+    unawaited(
+      backendClient.command('engine.command', {'method': 'connections.close'}),
+    );
+  }
+
+  void resetConnections() {
+    unawaited(
+      backendClient.command('engine.command', {'method': 'connections.reset'}),
+    );
+  }
+
+  Future<List<ExternalProvider>> getExternalProviders() async {
+    final externalProvidersRawString = await clashInterface
+        .getExternalProviders();
+    if (externalProvidersRawString.isEmpty) {
+      return [];
+    }
+    return Isolate.run<List<ExternalProvider>>(() {
+      final externalProviders =
+          (json.decode(externalProvidersRawString) as List<dynamic>)
+              .map((item) => ExternalProvider.fromJson(item))
+              .toList();
+      return externalProviders;
+    });
+  }
+
   Future<ExternalProvider?> getExternalProvider(
-      String externalProviderName) async {
-    final externalProvidersRawString =
-        await clashInterface.getExternalProvider(externalProviderName);
+    String externalProviderName,
+  ) async {
+    final externalProvidersRawString = await clashInterface.getExternalProvider(
+      externalProviderName,
+    );
     if (externalProvidersRawString.isEmpty) {
       return null;
     }
     return ExternalProvider.fromJson(json.decode(externalProvidersRawString));
   }
 
-  Future<String> updateGeoData(UpdateGeoDataParams params) => clashInterface.updateGeoData(params);
+  Future<String> _engineCommand(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    try {
+      await backendClient.command('engine.command', {
+        'method': method,
+        'params': params,
+      });
+      return '';
+    } catch (error) {
+      return error.toString();
+    }
+  }
 
+  Future<String> updateGeoData(UpdateGeoDataParams params) =>
+      _engineCommand('geo.update', params.toJson());
   Future<String> sideLoadExternalProvider({
     required String providerName,
     required String data,
-  }) => clashInterface.sideLoadExternalProvider(
-        providerName: providerName, data: data);
+  }) =>
+      _engineCommand('provider.sideload', {'name': providerName, 'data': data});
+  Future<String> updateExternalProvider({required String providerName}) =>
+      _engineCommand('provider.refresh', {'name': providerName});
 
-  Future<String> updateExternalProvider({
-    required String providerName,
-  }) async => clashInterface.updateExternalProvider(providerName);
-
-  Future<void> startListener() async {
-    await clashInterface.startListener();
-  }
-
-  Future<void> stopListener() async {
-    await clashInterface.stopListener();
-  }
-
-  Future<void> healthCheck([String groupName = '']) => clashInterface.healthCheck(groupName);
+  Future<void> healthCheck([String groupName = '']) =>
+      clashInterface.healthCheck(groupName);
 
   Future<Delay> getDelay(String url, String proxyName) async {
     final data = await clashInterface.asyncTestDelay(url, proxyName);
     return Delay.fromJson(json.decode(data));
   }
 
-  Future<Map<String, dynamic>> getConfig(String id) async {
-    final profilePath = await appPath.getProfilePath(id);
-    final res = await clashInterface.getConfig(profilePath);
-    if (res.isSuccess) {
-      return Map<String, dynamic>.from(res.data as Map);
-    } else {
-      throw res.message;
-    }
-  }
+  Future<Map<String, dynamic>> getConfig(String id) async =>
+      Map<String, dynamic>.from(
+        await backendClient.request('profile.inspect', {'profileId': id})
+            as Map,
+      );
 
   Future<Traffic> getTraffic() async {
     final trafficString = await clashInterface.getTraffic();
@@ -283,10 +227,7 @@ class ClashCore {
     if (countryCode.isEmpty) {
       return null;
     }
-    return IpInfo(
-      ip: ip,
-      countryCode: countryCode,
-    );
+    return IpInfo(ip: ip, countryCode: countryCode);
   }
 
   Future<Traffic> getTotalTraffic() async {
@@ -314,7 +255,9 @@ class ClashCore {
   }
 
   void resetTraffic() {
-    clashInterface.resetTraffic();
+    unawaited(
+      backendClient.command('engine.command', {'method': 'traffic.reset'}),
+    );
   }
 
   void startLog() {

@@ -9,6 +9,14 @@
       ]
     },
     {
+      "path": "lib/clash/core.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
       "path": "lib/common/android.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
@@ -45,9 +53,8 @@
       "boundary": "runtime-orchestration",
       "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts, including the existing log-export action.",
       "targets": [
-        "lib/product/compile/product_compile.dart",
+        "lib/product/backend/backend.dart",
         "lib/product/diagnostics/product_diagnostics.dart",
-        "lib/product/runtime/product_runtime.dart",
         "lib/product/services/product_services.dart",
         "lib/product/subscription/product_subscription.dart"
       ]
@@ -77,6 +84,14 @@
       ]
     },
     {
+      "path": "lib/models/profile.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
       "path": "lib/providers/config.dart",
       "boundary": "platform-shell-bootstrap",
       "reason": "Config providers stay a thin base trigger for Android tile refresh after persisted profile changes.",
@@ -94,21 +109,11 @@
       ]
     },
     {
-      "path": "lib/services/subscription_notification_service.dart",
-      "boundary": "subscription-and-platform-selectors",
-      "reason": "Subscription notifications stay a thin base consumer of product display policy and do not parse provider headers locally.",
-      "targets": [
-        "lib/product/subscription/product_subscription.dart"
-      ]
-    },
-    {
       "path": "lib/state.dart",
       "boundary": "global-runtime-wiring",
       "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
       "targets": [
-        "lib/product/compile/product_compile.dart",
-        "lib/product/runtime/product_runtime.dart",
-        "lib/product/security/product_security.dart"
+        "lib/product/backend/backend.dart"
       ]
     },
     {
@@ -136,11 +141,35 @@
       ]
     },
     {
+      "path": "lib/views/config/general.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/edit_profile.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
       "path": "lib/views/profiles/profiles.dart",
       "boundary": "ui-product-advisory",
       "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",
       "targets": [
         "lib/product/subscription/provider_advisory.dart"
+      ]
+    },
+    {
+      "path": "lib/clash/lib.dart",
+      "boundary": "backend-ui-connection",
+      "reason": "Тонкий Android bridge восстанавливает IPC через UI-клиент, не управляя runtime.",
+      "targets": [
+        "lib/product/backend/backend_connection.dart"
       ]
     },
     {

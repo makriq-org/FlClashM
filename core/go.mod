@@ -5,7 +5,10 @@ go 1.26.0
 toolchain go1.27.2
 
 require (
+	github.com/dlclark/regexp2 v1.12.0
+	github.com/dop251/goja v0.0.0-20261017142635-e6862644b38f
 	github.com/metacubex/mihomo v1.19.32
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sync v0.24.0
 )
 
@@ -25,7 +28,7 @@ require (
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/coreos/go-iptables v0.8.0 // indirect
-	github.com/dlclark/regexp2 v1.12.0 // indirect
+	github.com/dlclark/regexp2/v2 v2.8.1 // indirect
 	github.com/dunglas/httpsfv v1.1.2 // indirect
 	github.com/easytier/easytier/easytier-go v0.0.0-20261010173533-7592951b808c // indirect
 	github.com/enfein/mieru/v3 v3.38.0 // indirect
@@ -37,6 +40,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.6 // indirect
 	github.com/gaukas/godicttls v0.0.4 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
@@ -133,7 +137,6 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	gitlab.com/go-extension/aes-ccm v0.0.0-20230221065045-e58665ef23c7 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.58.0 // indirect

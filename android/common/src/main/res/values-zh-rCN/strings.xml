@@ -3,4 +3,8 @@
     <string name="notification_stop">停止</string>
     <string name="subscription_notification_channel_name">订阅更新</string>
     <string name="notification_open">打开</string>
+    <string name="subscription_expired">您的订阅已过期</string>
+    <string name="subscription_expires_today">您的订阅今天到期</string>
+    <string name="subscription_expires_in_days">您的订阅将在%1$s天后到期</string>
+    <string name="subscription_renew">续订</string>
 </resources>

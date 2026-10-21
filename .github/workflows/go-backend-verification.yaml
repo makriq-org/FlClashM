@@ -1,0 +1,102 @@
+name: go-backend-verification
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'tool/prepare_core.sh'
+      - 'tool/patches/**'
+      - '.github/workflows/go-backend-verification.yaml'
+  push:
+    branches:
+      - main
+      - refactor/go-backend
+    paths:
+      - 'core/**'
+      - 'tool/prepare_core.sh'
+      - 'tool/patches/**'
+      - '.github/workflows/go-backend-verification.yaml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: core/go.sum
+      - name: Prepare reviewed core dependencies
+        run: bash tool/prepare_core.sh
+      - name: Check formatting and analyze
+        working-directory: core
+        env:
+          GOFLAGS: -mod=vendor
+        run: |
+          test -z "$(gofmt -l backend)"
+          go vet ./...
+      - name: Test portable host and core without Android
+        working-directory: core
+        env:
+          CGO_ENABLED: '0'
+          GOFLAGS: -mod=vendor
+        run: go test ./...
+      - name: Race detector
+        working-directory: core
+        env:
+          CGO_ENABLED: '1'
+          GOFLAGS: -mod=vendor
+        run: go test -race ./...
+
+  cleanup-merged-stages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/refactor/go-backend'
+    needs: go-host
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Delete merged backend stage branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          INTEGRATION_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidates=$(gh api --paginate -X GET "repos/$REPOSITORY/pulls" \
+            -f state=closed -f base=refactor/go-backend -f per_page=100 \
+            --jq '.[] | select(.merged_at != null) | select(.head.repo.full_name == .base.repo.full_name) | [.head.ref, .head.sha] | @tsv')
+          while IFS=$'\t' read -r stage_branch stage_sha; do
+            # This workflow can only remove the task's merged stage branches.
+            # In particular, the integration branch has no trailing dash.
+            if [[ ! "$stage_branch" =~ ^(docs|build|refactor)/go-backend-[a-z0-9-]+$ ]]; then
+              continue
+            fi
+            if ! current_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/$stage_branch" --jq .object.sha 2>/dev/null); then
+              continue
+            fi
+            # A branch recreated or updated after merge contains new work.
+            if [ "$current_sha" != "$stage_sha" ]; then
+              continue
+            fi
+            relation=$(gh api "repos/$REPOSITORY/compare/$INTEGRATION_SHA...$stage_sha" --jq .status)
+            if [ "$relation" = behind ] || [ "$relation" = identical ]; then
+              gh api --method DELETE "repos/$REPOSITORY/git/refs/heads/$stage_branch"
+            fi
+          done <<< "$candidates"
