@@ -264,6 +264,52 @@ func TestWarmProcessDeathAndStopFence(t *testing.T) {
 		})
 	}
 }
+
+func TestStoppedUICommandsRestoreDeadPreparedNode(t *testing.T) {
+	for _, command := range []string{"warm", "selection", "settings"} {
+		t.Run(command, func(t *testing.T) {
+			h := newHost()
+			mechanism := newNodeHost()
+			var engine EngineAdapter = selectionHostEngine{hostEngine{h}}
+			if command == "settings" {
+				engine = liveHostEngine{hostEngine{h}}
+			}
+			b, err := Open(newStore(t), h, engine, nil, hostPlatform{h}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ManualTicks: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			node := reservePlan()
+			node.Activation = nil
+			payload := map[string]any{"nodes": []NodePlan{node}, "selected-map": map[string]string{"Pick": "DIRECT"}, "config": map[string]string{"mode": "rule"}, "patch": map[string]string{"mode": "rule"}}
+			input, _ := json.Marshal(payload)
+			run(t, b, "prepare", "warm", string(input))
+			mechanism.mu.Lock()
+			delete(mechanism.processes, node.ID)
+			mechanism.mu.Unlock()
+			method := "warm"
+			if command == "selection" {
+				method = "apply"
+				payload["selected-map"] = map[string]string{"Pick": "REJECT"}
+			} else if command == "settings" {
+				method = "apply"
+				payload["config"] = map[string]string{"mode": "global"}
+				payload["patch"] = map[string]string{"mode": "global"}
+			}
+			input, _ = json.Marshal(payload)
+			run(t, b, "refresh-ui", method, string(input))
+			mechanism.mu.Lock()
+			alive, starts := len(mechanism.processes), mechanism.starts
+			mechanism.mu.Unlock()
+			if alive != 1 || starts != 2 {
+				t.Fatalf("command did not restore dead preparation: processes=%d starts=%d", alive, starts)
+			}
+			if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "running" {
+				t.Fatal("restoring preparation changed VPN intent or node state", s)
+			}
+		})
+	}
+}
 func TestNodeReserveHeadlessWakeSleepAndRecovery(t *testing.T) {
 	store := newStore(t)
 	mechanism := newNodeHost()

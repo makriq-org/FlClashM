@@ -850,18 +850,27 @@ func (c *runtimeCoordinator) observe(ctx context.Context, running bool) error {
 	if running {
 		expected = "running"
 	}
-	readers := []func(context.Context) (Observation, error){c.engine.Observe}
-	if running || !c.keepNodesWarm || !c.nodesExecuting {
-		readers = append(readers, c.transports.Observe)
+	transportExpected := expected
+	if !running && c.keepNodesWarm && c.nodesExecuting {
+		// Prepared nodes are live even with VPN stopped. The execution flag is
+		// intent, not evidence that their processes survived.
+		transportExpected = "running"
 	}
-	readers = append(readers, c.platform.Observe)
+	readers := []struct {
+		read     func(context.Context) (Observation, error)
+		expected string
+	}{
+		{c.engine.Observe, expected},
+		{c.transports.Observe, transportExpected},
+		{c.platform.Observe, expected},
+	}
 	for _, read := range readers {
-		observation, err := read(ctx)
+		observation, err := read.read(ctx)
 		if err != nil {
 			return err
 		}
-		if observation.State != expected {
-			return fmt.Errorf("runtime observed %s, expected %s", observation.State, expected)
+		if observation.State != read.expected {
+			return fmt.Errorf("runtime observed %s, expected %s", observation.State, read.expected)
 		}
 	}
 	c.mu.Lock()
