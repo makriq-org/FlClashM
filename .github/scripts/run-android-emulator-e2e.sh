@@ -37,6 +37,9 @@ grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/instrumentation.txt"
 
 # Run a real Flutter activity. --no-restart avoids instrumentation's package
 # force-stop both on entry and on finish; that would also kill the VPN service.
+# Only this test owns the seed/observe/recovered protocol. Running the whole
+# suite here would execute independent fixtures against its live REJECT VPN.
+lifecycle_test='com.follow.clashx.AndroidRuntimeE2eTest#packagedBackendLifecycle'
 launch_ui() {
   # Clear stale task/activity records after SIGKILL without force-stopping the
   # package (and its independent :remote service). Wait for the actual process;
@@ -50,9 +53,10 @@ launch_ui() {
 }
 launch_ui
 adb shell am instrument --no-restart -w -r -e scenario seed \
+  -e class "$lifecycle_test" \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-seed.txt"
-grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/headless-seed.txt"
+grep -Eq '^OK \(1 test\)$' "$artifacts/headless-seed.txt"
 remote_before=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
 main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r')
 test -n "$remote_before"
@@ -62,9 +66,10 @@ remote_after=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
 test "$remote_before" = "$remote_after"
 launch_ui
 adb shell am instrument --no-restart -w -r -e scenario observe \
+  -e class "$lifecycle_test" \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/headless-observe.txt"
-grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/headless-observe.txt"
+grep -Eq '^OK \(1 test\)$' "$artifacts/headless-observe.txt"
 # Remove Flutter again before killing :remote. Recovery must commit a new
 # applied generation while no UI exists, before observation instrumentation.
 main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r' || true)
@@ -83,8 +88,9 @@ done
 test "$headless_ready" = true
 launch_ui
 adb shell am instrument --no-restart -w -r -e scenario recovered \
+  -e class "$lifecycle_test" \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/recovered.txt"
-grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/recovered.txt"
+grep -Eq '^OK \(1 test\)$' "$artifacts/recovered.txt"
 adb logcat -d -v threadtime > "$artifacts/logcat.txt"
 ! grep -Eq 'flutter.*Unhandled Exception:' "$artifacts/logcat.txt"
