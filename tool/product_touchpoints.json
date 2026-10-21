@@ -171,6 +171,14 @@
       "targets": [
         "lib/product/backend/backend_connection.dart"
       ]
+    },
+    {
+      "path": "lib/views/proxies/list.dart",
+      "boundary": "proxy-list-layout",
+      "reason": "Страница прокси использует product-виджет с точной длиной групп и ленивыми строками.",
+      "targets": [
+        "lib/product/widgets/proxy_group_sliver.dart"
+      ]
     }
   ],
   "allowedProductUi": [
@@ -181,6 +189,10 @@
     {
       "path": "lib/product/android/android_update_bridge.dart",
       "reason": "The FlClashM Android updater owns its release prompt and in-app APK download progress dialog."
+    },
+    {
+      "path": "lib/product/widgets/proxy_group_sliver.dart",
+      "reason": "Точная геометрия групп стабилизирует ползунок прокрутки, сохраняя ленивое создание строк и анимацию."
     }
   ]
 }
