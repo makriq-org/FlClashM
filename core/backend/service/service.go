@@ -297,8 +297,13 @@ func (a *App) publish() {
 		select {
 		case channel <- event:
 		default:
-			for len(channel) > 0 {
-				<-channel
+		drain:
+			for {
+				select {
+				case <-channel:
+				default:
+					break drain
+				}
 			}
 			overflow := event
 			overflow.ResyncRequired = true

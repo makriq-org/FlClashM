@@ -201,8 +201,13 @@ func (c *runtimeCoordinator) publishLocked() {
 		default:
 			// Never block the VPN on an absent/slow UI. Retain the latest snapshot and
 			// tell it to resynchronize after any lost event, including repeated overflow.
-			for len(ch) > 0 {
-				<-ch
+		drain:
+			for {
+				select {
+				case <-ch:
+				default:
+					break drain
+				}
 			}
 			overflow := event
 			overflow.ResyncRequired = true
@@ -320,7 +325,12 @@ func (b *Backend) submit(r Request, expected *uint64) (Receipt, error) {
 		}
 	}
 	if pending >= 8 {
-		return Receipt{}, errors.New("backend command queue is full")
+		// A full queue still admits one Stop, including when an autonomous node
+		// operation owns the executor. Further Stops cannot grow the backlog.
+		stopPending := c.active != nil && c.active.request.Method == "stop"
+		if r.Method != "stop" || stopPending {
+			return Receipt{}, errors.New("backend command queue is full")
+		}
 	}
 	nextEpoch := c.epoch + 1
 	next := cloneDocument(c.document)

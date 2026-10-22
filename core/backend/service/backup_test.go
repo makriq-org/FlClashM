@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -152,6 +154,61 @@ func TestTransferRetryAndRangeGuards(t *testing.T) {
 	}
 	if _, err = app.readBlob("../../outside", 0, 10); err == nil {
 		t.Fatal("unsafe transfer path accepted")
+	}
+}
+
+func TestBackupPreservesMissingSourcesAndCanDownloadThemAfterRestore(t *testing.T) {
+	const source = "rules: ['MATCH,DIRECT']\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, source)
+	}))
+	defer server.Close()
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opts.LegacySettings = jsonValue(map[string]any{
+		"currentProfileId": "present",
+		"profiles": []map[string]any{
+			{"id": "present"},
+			{"id": "missing", "url": server.URL},
+			{"id": "empty"},
+		},
+	})
+	opts.ReadLegacySource = func(id string) (string, error) {
+		switch id {
+		case "missing":
+			return "", os.ErrNotExist
+		case "empty":
+			return "", nil
+		default:
+			return source, nil
+		}
+	}
+	app := openTestApp(t, opts)
+	waitCondition(t, func() bool { return app.Snapshot().Runtime.AppliedGeneration > 0 })
+	request(t, app, "export", "backup.export", nil)
+	receipt := waitDomain(t, app, "export")
+	name, _ := app.blobPath(receipt.Blob.Token)
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	blob := upload(t, restored, data)
+	request(t, restored, "restore", "backup.restore", map[string]any{"token": blob.Token, "replace": true})
+	waitDomain(t, restored, "restore")
+	for _, id := range []string{"present", "missing", "empty"} {
+		record, err := restored.ProfileSource(id)
+		if err != nil || record.SourceMissing != (id == "missing") {
+			t.Fatalf("backup changed source availability for %s: missing=%v, %v", id, record.SourceMissing, err)
+		}
+		if id == "present" && record.Source != source || id == "empty" && record.Source != "" {
+			t.Fatalf("backup changed original bytes for %s", id)
+		}
+	}
+	request(t, restored, "select-missing", "profile.select", map[string]any{"profileId": "missing"})
+	waitDomain(t, restored, "select-missing")
+	record, err := restored.ProfileSource("missing")
+	if err != nil || record.SourceMissing || record.Source != source {
+		t.Fatalf("restored subscription could not recover its source: missing=%v, %v", record.SourceMissing, err)
 	}
 }
 

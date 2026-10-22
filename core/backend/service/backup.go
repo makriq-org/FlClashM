@@ -60,6 +60,11 @@ func (a *App) exportBackup(ctx context.Context) (Blob, error) {
 					err = readErr
 					break
 				}
+				// Missing legacy/restored sources remain absent in the compatible
+				// archive. An empty file is a real source, not a download marker.
+				if profile.SourceMissing {
+					continue
+				}
 				err = write(path.Join("profiles", id+".yaml"), strings.NewReader(profile.Source))
 			}
 			cacheRoot := filepath.Join(a.compiler.Capabilities.ProfilesDir, "providers")
