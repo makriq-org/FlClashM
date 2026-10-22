@@ -201,8 +201,13 @@ func (c *runtimeCoordinator) publishLocked() {
 		default:
 			// Never block the VPN on an absent/slow UI. Retain the latest snapshot and
 			// tell it to resynchronize after any lost event, including repeated overflow.
-			for len(ch) > 0 {
-				<-ch
+		drain:
+			for {
+				select {
+				case <-ch:
+				default:
+					break drain
+				}
 			}
 			overflow := event
 			overflow.ResyncRequired = true

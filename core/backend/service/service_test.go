@@ -13,6 +13,7 @@ import (
 
 	"core/backend"
 	"core/backend/compile"
+	"core/backend/profiles"
 )
 
 type testEngine struct {
@@ -153,6 +154,56 @@ func TestPresentationSettingsDoNotSupersedeRuntime(t *testing.T) {
 	after := app.Snapshot().Runtime
 	if after.Generation != before.Generation || after.StartedAt != before.StartedAt || after.Observed.State != "running" {
 		t.Fatal("UI settings changed runtime", before, after)
+	}
+}
+
+func TestConcurrentSubscriberDoesNotBlockApplicationPublication(t *testing.T) {
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	store, err := backend.NewFileStore(opts.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := backend.Open(store, opts.Compiler, opts.Engine, nil, opts.Platform, opts.Nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	repository, err := profiles.Open(opts.Directory, opts.ValidateSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No application workers: exercise publication independently of disk writes
+	// and operation scheduling, with a real runtime/catalog snapshot boundary.
+	app := &App{runtime: runtime, profiles: repository, subscribers: map[uint64]chan Event{}}
+	_, events, detach := app.Subscribe(64)
+	stop := make(chan struct{})
+	received := make(chan struct{})
+	go func() {
+		defer close(received)
+		for {
+			select {
+			case <-stop:
+				return
+			case <-events:
+			}
+		}
+	}()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 100000 {
+			app.publish()
+		}
+	}()
+	select {
+	case <-done:
+		close(stop)
+		<-received
+		detach()
+	case <-time.After(15 * time.Second):
+		close(stop)
+		<-received
+		t.Fatal("subscriber blocked application publication")
 	}
 }
 

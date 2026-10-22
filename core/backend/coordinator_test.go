@@ -785,3 +785,42 @@ func TestAcceptedOperationHasDurableInterruptedOutcome(t *testing.T) {
 		t.Fatal("uncommitted first profile replayed")
 	}
 }
+
+// A receiver can drain the last queued event while the publisher is replacing
+// an overflowing queue. Publication must still release the runtime state lock.
+func TestConcurrentSubscriberDoesNotBlockPublication(t *testing.T) {
+	c := &runtimeCoordinator{document: newDocument(), subscribers: map[uint64]chan Event{}}
+	b := &Backend{c}
+	events, detach := b.Subscribe(64)
+	stop := make(chan struct{})
+	received := make(chan struct{})
+	go func() {
+		defer close(received)
+		for {
+			select {
+			case <-stop:
+				return
+			case <-events:
+			}
+		}
+	}()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 100000 {
+			c.mu.Lock()
+			c.publishLocked()
+			c.mu.Unlock()
+		}
+	}()
+	select {
+	case <-done:
+		close(stop)
+		<-received
+		detach()
+	case <-time.After(5 * time.Second):
+		close(stop)
+		<-received
+		t.Fatal("subscriber blocked runtime publication")
+	}
+}
