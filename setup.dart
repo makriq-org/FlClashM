@@ -842,6 +842,7 @@ Future<void> _syncOlcRtcAssets() async {
       [
         'go',
         'build',
+        '-buildvcs=false',
         '-trimpath',
         '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
         '-ldflags=-s -w -checklinkname=0',
@@ -1048,6 +1049,11 @@ Future<Directory> _prepareOlcRtcSource() async {
   }
 
   await _exec(
+    ['git', 'remote', 'set-url', 'origin', olcRtcSourceRepository],
+    workingDirectory: cacheDir.path,
+    name: 'update olcrtc source repository',
+  );
+  await _exec(
     ['git', 'fetch', '--depth', '1', 'origin', olcRtcPinnedCommit],
     workingDirectory: cacheDir.path,
     name: 'fetch olcrtc pinned commit',
@@ -1065,6 +1071,7 @@ String _buildOlcRtcStamp() {
     olcRtcPinnedReleaseTag,
     olcRtcSourceRepository,
     olcRtcPinnedGoVersion,
+    'buildvcs=false',
     'ndk-$olcRtcPinnedNdkVersion',
     'modules:${_runtimeGoModuleDigest('olcrtc')}',
     ...olcRtcReleaseAssets.values.map(

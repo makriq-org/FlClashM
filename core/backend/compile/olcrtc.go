@@ -39,6 +39,22 @@ func buildOlcRTC(raw Object, node *Node) error {
 			}
 		}
 	}
+	if provider == "max" {
+		if _, err = required(raw, "provider-token"); err != nil {
+			return err
+		}
+	}
+	transport := text(raw["transport"])
+	switch provider {
+	case "salutejazz", "max":
+		if transport != "datachannel" {
+			return errors.New("selected olcrtc provider requires datachannel")
+		}
+	case "vkcalls", "mtslink":
+		if transport != "vp8channel" {
+			return errors.New("selected olcrtc provider requires vp8channel")
+		}
+	}
 	key, err := required(raw, "encryption-key")
 	if err != nil || !keyPattern.MatchString(key) {
 		return errors.New("encryption-key requires 64 hexadecimal characters")
@@ -54,7 +70,6 @@ func buildOlcRTC(raw Object, node *Node) error {
 			return errors.New("dns-server must be host:port or system")
 		}
 	}
-	transport := text(raw["transport"])
 	options := copyObject(object(raw["transport-options"]))
 	allowed := map[string][]string{"vp8channel": {"fps", "batch-size"}, "seichannel": {"fps", "batch-size", "fragment-size", "ack-timeout"}, "videochannel": {"codec", "width", "height", "fps", "bitrate", "fragment-size", "qr-recovery", "tile-module", "tile-rs"}}
 	if transport == "datachannel" {

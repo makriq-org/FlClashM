@@ -206,6 +206,50 @@ func TestExternalTransportCompilation(t *testing.T) {
 		})
 	}
 }
+func TestGhostlaneProviders(t *testing.T) {
+	for _, tc := range []struct{ provider, transport, room, token string }{
+		{"salutejazz", "datachannel", "example:password", ""},
+		{"vkcalls", "vp8channel", "https://vk.ru/call/join/example", ""},
+		{"mtslink", "vp8channel", "https://my.mts-link.ru/j/owner/event", ""},
+		{"max", "datachannel", "https://max.ru/joincall/example", "test-token"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			raw := Object{"name": "Olc", "type": "olcrtc", "provider": tc.provider, "room": tc.room,
+				"provider-token": tc.token, "transport": tc.transport, "encryption-key": strings.Repeat("a", 64),
+				"dns-server": "system", "activation": "always"}
+			compile := func(raw Object) ([]Node, error) {
+				return (&ExternalCompiler{}).Compile(context.Background(), Object{"proxies": []any{raw}}, defaults(), "")
+			}
+			nodes, err := compile(raw)
+			if err != nil || len(nodes) != 1 {
+				t.Fatalf("compile %s: nodes=%d error=%v", tc.provider, len(nodes), err)
+			}
+			var native Object
+			for _, content := range nodes[0].Files {
+				if err := json.Unmarshal([]byte(content), &native); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if native["mode"] != "cnc" || object(native["auth"])["provider"] != tc.provider ||
+				object(native["auth"])["token"] != tc.token || object(native["room"])["id"] != tc.room ||
+				object(native["socks"])["host"] != "127.0.0.1" || native["udp"] != nil || native["route"] != nil {
+				t.Fatalf("unexpected runtime config: %#v", native)
+			}
+			raw["transport"] = "seichannel"
+			if _, err := compile(raw); err == nil {
+				t.Fatal("accepted unsupported provider/transport pair")
+			}
+			raw["transport"] = tc.transport
+			if tc.provider == "max" {
+				delete(raw, "provider-token")
+				if _, err := compile(raw); err == nil {
+					t.Fatal("accepted MAX without a provider token")
+				}
+			}
+		})
+	}
+}
+
 func TestExternalSecurityAndRelationalValidation(t *testing.T) {
 	base := `name: Storm, type: stormdns, domains: [example.com], encryption: none, encryption-key: k, activation: always`
 	for _, extra := range []string{", listen-port: 1", ", arq: {initial-rto: 4s, max-rto: 3s}", ", arq: {nack-max-gap: 251}", ", startup: {max-age: 36h}", ", runtime: {workers: 5}", ", mtu: {upload: {min: 201}}", ", resolvers: [10.0.0.0/8]", ", ping: {cold-interval: 1s}"} {
