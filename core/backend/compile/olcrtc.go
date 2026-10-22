@@ -44,13 +44,20 @@ func buildOlcRTC(raw Object, node *Node) error {
 			return err
 		}
 	}
+	if provider == "vkcalls" && text(raw["provider-token"]) != "" {
+		return errors.New("olcrtc vkcalls does not accept provider-token")
+	}
 	transport := text(raw["transport"])
 	switch provider {
 	case "salutejazz", "max":
 		if transport != "datachannel" {
 			return errors.New("selected olcrtc provider requires datachannel")
 		}
-	case "vkcalls", "mtslink":
+	case "vkcalls":
+		if transport != "vp8channel" && transport != "videochannel" {
+			return errors.New("olcrtc vkcalls requires vp8channel or videochannel")
+		}
+	case "mtslink":
 		if transport != "vp8channel" {
 			return errors.New("selected olcrtc provider requires vp8channel")
 		}

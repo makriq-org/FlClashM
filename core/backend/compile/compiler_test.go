@@ -210,10 +210,11 @@ func TestGhostlaneProviders(t *testing.T) {
 	for _, tc := range []struct{ provider, transport, room, token string }{
 		{"salutejazz", "datachannel", "example:password", ""},
 		{"vkcalls", "vp8channel", "https://vk.ru/call/join/example", ""},
+		{"vkcalls", "videochannel", "https://vk.ru/call/join/example", ""},
 		{"mtslink", "vp8channel", "https://my.mts-link.ru/j/owner/event", ""},
 		{"max", "datachannel", "https://max.ru/joincall/example", "test-token"},
 	} {
-		t.Run(tc.provider, func(t *testing.T) {
+		t.Run(tc.provider+"/"+tc.transport, func(t *testing.T) {
 			raw := Object{"name": "Olc", "type": "olcrtc", "provider": tc.provider, "room": tc.room,
 				"provider-token": tc.token, "transport": tc.transport, "encryption-key": strings.Repeat("a", 64),
 				"dns-server": "system", "activation": "always"}
@@ -232,6 +233,7 @@ func TestGhostlaneProviders(t *testing.T) {
 			}
 			if native["mode"] != "cnc" || object(native["auth"])["provider"] != tc.provider ||
 				object(native["auth"])["token"] != tc.token || object(native["room"])["id"] != tc.room ||
+				object(native["net"])["transport"] != tc.transport ||
 				object(native["socks"])["host"] != "127.0.0.1" || native["udp"] != nil || native["route"] != nil {
 				t.Fatalf("unexpected runtime config: %#v", native)
 			}
@@ -247,6 +249,31 @@ func TestGhostlaneProviders(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestVKCallsRejectsProviderToken(t *testing.T) {
+	for _, transport := range []string{"vp8channel", "videochannel"} {
+		for _, field := range []string{"provider-token", "auth"} {
+			t.Run(transport+"/"+field, func(t *testing.T) {
+				for _, token := range []string{"test-token", " "} {
+					config := mustProfile(t, `proxies: [{name: VK, type: olcrtc, provider: vkcalls,
+room: 'https://vk.ru/call/join/example', encryption-key: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+dns-server: system, activation: always}]`)
+					raw := object(list(config["proxies"])[0])
+					raw["transport"] = transport
+					if field == "auth" {
+						raw[field] = Object{"token": token}
+					} else {
+						raw[field] = token
+					}
+					_, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "")
+					if err == nil || !strings.Contains(err.Error(), "provider-token") {
+						t.Fatalf("expected provider-token rejection, got %v", err)
+					}
+				}
+			})
+		}
 	}
 }
 

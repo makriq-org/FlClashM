@@ -188,7 +188,7 @@ transport-options:
 
 | `provider` | `transport` | `room` | Дополнительно |
 |---|---|---|---|
-| `vkcalls` | `vp8channel` | `https://vk.ru/call/join/<id>` | Ссылка входа в звонок VK |
+| `vkcalls` | `vp8channel` или `videochannel` | `https://vk.ru/call/join/<id>` | Ссылка входа в звонок VK; непустой `provider-token` запрещён |
 | `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | Постоянная встреча МТС Линк |
 | `salutejazz` | `datachannel` | `<code>:<password>` | Код и пароль комнаты SaluteJazz |
 | `max` | `datachannel` | `https://max.ru/joincall/<hash>` | Обязателен `provider-token`: calls session key или calls token MAX |
