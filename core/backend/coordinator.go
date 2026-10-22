@@ -325,7 +325,12 @@ func (b *Backend) submit(r Request, expected *uint64) (Receipt, error) {
 		}
 	}
 	if pending >= 8 {
-		return Receipt{}, errors.New("backend command queue is full")
+		// A full queue still admits one Stop, including when an autonomous node
+		// operation owns the executor. Further Stops cannot grow the backlog.
+		stopPending := c.active != nil && c.active.request.Method == "stop"
+		if r.Method != "stop" || stopPending {
+			return Receipt{}, errors.New("backend command queue is full")
+		}
 	}
 	nextEpoch := c.epoch + 1
 	next := cloneDocument(c.document)
