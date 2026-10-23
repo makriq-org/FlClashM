@@ -16,10 +16,12 @@ class BackendServiceMechanismsTest {
     private class FakeResource(var idle: Boolean = true, var stopAccepted: Boolean = true) : BackendForegroundResource {
         override var destroyed = false
         var stops = 0
+        var startId = 1
+        var stoppedStartId = 0
         override suspend fun handleStart(options: VpnOptions) {}
         override suspend fun handleStop() {}
         override fun finishIfIdle() {
-            BackendForegroundHold.retireIfIdle(this, { idle }) { stops++; stopAccepted }
+            BackendForegroundHold.retireIfIdle(this, { idle }, { startId }) { stoppedStartId = it; stops++; stopAccepted }
         }
     }
 
@@ -51,8 +53,11 @@ class BackendServiceMechanismsTest {
     }
 
     @Test fun newerStartCommandKeepsInstanceLive() = withResource(FakeResource(stopAccepted = false)) { resource ->
+        resource.startId = 7
         resource.finishIfIdle()
         assertEquals(1, resource.stops)
+        // The id read while retiring is the one passed to stopSelfResult.
+        assertEquals(7, resource.stoppedStartId)
         assertTrue(BackendForegroundHold.isLive(resource))
         assertSame(resource, BackendForegroundHold.awaitService(FakeResource::class.java))
     }
@@ -77,9 +82,10 @@ class BackendServiceMechanismsTest {
         assertFalse(BackendForegroundHold.isLive(resource))
     }
 
-    @Test fun onlyApplicationEventsRefreshPresentation() {
+    @Test fun onlyStateEventsRefreshPresentation() {
         assertTrue(BackendEvents.refreshesPresentation("backend"))
-        for (type in listOf("log", "delay", "request", "loaded", "runtimeLog", "backendPlatform", "", null)) {
+        assertTrue(BackendEvents.refreshesPresentation("delay"))
+        for (type in listOf("log", "request", "loaded", "runtimeLog", "backendPlatform", "", null)) {
             assertFalse(type.toString(), BackendEvents.refreshesPresentation(type))
         }
     }

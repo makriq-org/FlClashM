@@ -92,7 +92,7 @@ class FlVpnService : VpnService(), BackendForegroundResource {
     }
 
     override fun finishIfIdle() {
-        BackendForegroundHold.retireIfIdle(this, { !tunActive }) { stopSelfResult(lastStartId) }
+        BackendForegroundHold.retireIfIdle(this, { !tunActive }, { lastStartId }) { stopSelfResult(it) }
     }
 
     private val wakeLockLock = Any()
