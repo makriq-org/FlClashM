@@ -116,15 +116,65 @@ Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runti
 <details>
 <summary>OlcRTC: source, builds and limitations</summary>
 
-- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.12.1, commit `b2c4b17ee35bfe65330aa9141f94dac082228bb2`, without local source patches
-- v0.12.1 fixes VK Calls RTP payload-type conflicts during connection and renegotiation
-- New providers: `vkcalls` (`vp8channel` or `videochannel`), `mtslink` (`vp8channel`), `salutejazz` and `max` (`datachannel`). `max` requires `provider-token`; guest `vkcalls` rejects non-empty tokens. See the [provider table](profiles.md#olcrtc)
-- Ghostlane UDP/direct/failover/DTLS options are not exposed: CNC mode, loopback SOCKS and Go runtime ownership are preserved
-- Dependencies are pinned in `tool/runtime_go_modules/olcrtc.mod/.sum`; `-buildvcs=false` keeps tags and checkout depth out of the binary digest
+- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.12.1, commit `b2c4b17ee35bfe65330aa9141f94dac082228bb2`; sources are built without local patches
+- v0.12.1 fixes VK Calls RTP payload-type conflicts during connection and renegotiation; dependencies and the config format are preserved
+- New providers: `vkcalls` with `vp8channel` or `videochannel`, `mtslink` with `vp8channel`, and `salutejazz` and `max` with `datachannel`. `max` requires `provider-token`; guest `vkcalls` rejects non-empty tokens. New engines are selected through providers: they need additional credentials absent from the direct `engine-url`/`engine-token` contract
+- New Ghostlane UDP/direct/failover/DTLS settings are not exposed in FlClashM profiles: CNC, loopback SOCKS, sole Go ownership of runtime and existing Mihomo routing are preserved
+- Dependencies remain in `tool/runtime_go_modules/olcrtc.mod/.sum` with FlClashM security updates; pinned `covert-dtls` was added. Its camouflage profile is not enabled
+- When the source repository changes, setup updates the existing cache’s `origin` before fetching; `-buildvcs=false` removes SHA dependence on Git tags and history depth. CLI `-version` prints `(devel)`; the exact source is recorded in the release stamp and asset metadata
 
-OlcRTC must be rebuilt with the official, unpatched Go 1.27.3 distribution and NDK 28.0.13004108. `nix develop` provides it via `FLCLASHM_OLCRTC_GO`; elsewhere, set that variable to the official `go` executable if it is not on `PATH`. Preparation rejects nixpkgs patches in `net`/`mime`, which embed store paths and change SHA-256. The official archive may itself live in the Nix store. Go BuildID is disabled (`-buildid=`): it includes the C compiler path even with `-trimpath`; SHA-256 verifies the resulting bytes.
+Rebuilding OlcRTC requires official, unpatched Go 1.27.3 and NDK 28.0.13004108.
+`nix develop` provides official Go through `FLCLASHM_OLCRTC_GO`; outside that
+environment, set the variable to the official `go` executable if it is not on `PATH`.
+Preparation rejects nixpkgs patches in `net`/`mime`: they embed store paths and change
+SHA-256. The official archive itself may reside in the Nix store. The stamp includes
+`toolchain:official` and `buildid=none`; BuildID is disabled because Go includes
+the C compiler path even with `-trimpath`. SHA-256 pins the bytes of each ABI.
 
-The wire formats remain OLC2, handshake v3 and OLVC 5. New services require server support; verify cold start, reconnection and VPN on physical Android ABIs before release. Known Ghostlane audit limitations remain open. OlcRTC uses official Go 1.27.3, which fixes [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809); see the [audit and verification notes](../../ru/docs/maintenance.md#olcrtc-audit).
+The update preserves OLC2, handshake v3 and OLVC 5. Matching format versions does not
+replace testing an old server with the new client through the required service. New
+services require server support. Before release, test cold start, reconnection and VPN
+on physical Android ABIs. See the [audit and verification notes](#olcrtc-audit).
+
+By the accepted decision, Ghostlane sources are integrated without fixes for the audit
+findings. Known issues: unauthenticated switching of the ordered SEI stream and
+unbounded `floor` traversal; server-side accumulation of session-accounting records
+and no mandatory loopback bind for `/stats`. The last two apply to `srv` mode, which
+the app does not start. Tampering with encrypted content and an attack through a live
+SFU were not confirmed in the audit. Dependency updates or a successful build do not
+establish that these limitations have been fixed.
+
+OlcRTC was rebuilt with official Go 1.27.3 to fix
+[GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809) in certificate validation.
+The third-party dependency graph did not change. This update does not resolve the
+Ghostlane audit findings listed above.
+
+Verification of the v0.12.1 update: VK Calls tests (including payload-type conflicts and
+renegotiation), config/client/protect and local E2E passed with `-race` using FlClashM’s
+pinned dependencies. Three Android ABIs were rebuilt; `setup.dart` with official Go
+reproduced SHA-256, and a second run used the cache. On an Android 16 emulator,
+the exact x86_64 binary ran `-version`, parsed the CNC config and correctly reported
+a connection refusal from an unavailable local endpoint. A live VK connection and
+the app’s full VPN path were not tested for this version.
+
+Reproducibility verification after review: official Go from the archive and from the
+flake, and NDK from its original archive and from nixpkgs, produced byte-identical
+files for all three ABIs with `-buildid=`. Binaries contain no `/nix/store/` paths;
+the patched-Go rejection check passes before the build starts.
+
+Live verification on 2026-10-22 (previous commit `b8a6e12`, before v0.12.1):
+with `vkcalls + vp8channel`, a Linux server and the exact bundled x86_64 binary
+on an Android 16 emulator joined a real VK room. SOCKS with remote name resolution
+returned HTTPS 200 from example.com, Cloudflare and raw.githubusercontent.com;
+a 243,217-byte file transferred in 1.36 s and matched the direct download byte for
+byte (SHA-256 `40d15ce858cf058cff92606001a29ee1689db88c121a2f0c283163a0d64a7375`).
+TLS verification stayed enabled. The first run hit the test PC’s fake-IP DNS:
+the server correctly rejected reserved addresses. The second run used a local
+DNS-to-DoH bridge to Cloudflare that returned real public addresses; OlcRTC outbound
+traffic checks were unchanged. MTS was excluded from live testing at the user’s
+request. This run verifies the transport and Android executable, but not the app’s
+full VPN path, physical ARM ABIs or operation on networks with allowlists.
+Test rooms, keys and tokens are not stored in the repository.
 
 - **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.3 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
 - **Rollback:** restore `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d` together with its module locks, release metadata and Android artifacts. New-provider profiles will no longer be supported; existing profiles need no migration.

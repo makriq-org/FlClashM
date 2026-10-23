@@ -116,15 +116,57 @@ nix develop -c make check go-check
 <details>
 <summary>OlcRTC：源码、构建与限制</summary>
 
-- 使用 `ghostlane-project/olcrtc` 的 `proofkit` 分支、v0.12.1、提交 `b2c4b17ee35bfe65330aa9141f94dac082228bb2`，不添加本地源码补丁
-- v0.12.1 修复了 VK Calls 在连接和重新协商期间的 RTP payload type 冲突
-- 新增提供者：`vkcalls` 支持 `vp8channel` 或 `videochannel`，`mtslink` 支持 `vp8channel`，`salutejazz` 和 `max` 支持 `datachannel`。`max` 必须提供 `provider-token`，访客 `vkcalls` 禁止非空令牌；参见[提供者表](profiles.md#olcrtc)
-- 不公开 Ghostlane 的 UDP/direct/failover/DTLS 选项；保留 CNC、loopback SOCKS 和 Go 对 runtime 的统一管理
-- 依赖固定在 `tool/runtime_go_modules/olcrtc.mod/.sum`；`-buildvcs=false` 消除了标签和检出深度对二进制哈希的影响
+- 使用 `ghostlane-project/olcrtc` 的 `proofkit` 分支、v0.12.1、提交 `b2c4b17ee35bfe65330aa9141f94dac082228bb2`；构建源码时不添加本地补丁
+- v0.12.1 修复了 VK Calls 在连接和重新协商期间的 RTP payload type 冲突；依赖和配置格式保持不变
+- 新增提供者：`vkcalls` 支持 `vp8channel` 或 `videochannel`，`mtslink` 支持 `vp8channel`，`salutejazz` 和 `max` 支持 `datachannel`。`max` 必须提供 `provider-token`，访客 `vkcalls` 禁止非空令牌。新引擎通过提供者选择，因为它们需要直接 `engine-url`/`engine-token` 契约中没有的额外凭据
+- FlClashM 配置不公开 Ghostlane 新增的 UDP/direct/failover/DTLS 设置：保留 CNC、loopback SOCKS、Go 对 runtime 的独占管理和现有 Mihomo 路由
+- 依赖仍固定在 `tool/runtime_go_modules/olcrtc.mod/.sum`，包含 FlClashM 的安全更新；新增固定版本的 `covert-dtls`，但不启用其伪装配置
+- 源码仓库改变时，setup 在 fetch 前更新现有缓存的 `origin`；`-buildvcs=false` 消除了 Git 标签和历史深度对 SHA 的影响。CLI `-version` 显示 `(devel)`；准确源码版本记录在发布戳记和资源元数据中
 
-重建 OlcRTC 必须使用未经修改的官方 Go 1.27.3 和 NDK 28.0.13004108。`nix develop` 通过 `FLCLASHM_OLCRTC_GO` 提供该工具；在其他环境中，如果官方 `go` 不在 `PATH`，请将此变量设为其路径。准备流程会拒绝 nixpkgs 对 `net`/`mime` 的补丁，因为这些补丁嵌入 store 路径并改变 SHA-256；官方归档本身可以存放在 Nix store 中。通过 `-buildid=` 禁用 Go BuildID，因为即使启用 `-trimpath`，它仍包含 C 编译器路径；使用 SHA-256 校验产物字节。
+重建 OlcRTC 必须使用未经修改的官方 Go 1.27.3 和 NDK 28.0.13004108。
+`nix develop` 通过 `FLCLASHM_OLCRTC_GO` 提供官方 Go；在其他环境中，
+如果官方 `go` 不在 `PATH`，请将此变量设为其路径。
+准备流程会拒绝 nixpkgs 对 `net`/`mime` 的补丁，因为它们嵌入 store 路径并改变 SHA-256。
+官方归档本身可以存放在 Nix store 中。戳记包含 `toolchain:official` 和 `buildid=none`；
+禁用 BuildID 是因为即使启用 `-trimpath`，Go 仍会将 C 编译器路径放入其中。
+SHA-256 固定各 ABI 的产物字节。
 
-保留 OLC2、handshake v3 和 OLVC 5 格式。新服务需要服务器支持；发布前应在真实 Android ABI 上验证冷启动、重连和 VPN。Ghostlane 已知审计限制仍未解决。OlcRTC 已使用官方 Go 1.27.3 重建，以修复 [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)；参见[审计和验证记录](../../ru/docs/maintenance.md#olcrtc-audit)。
+本次更新保留 OLC2、handshake v3 和 OLVC 5。格式版本相同不能替代通过所需服务
+测试旧服务器与新客户端的兼容性。新服务需要服务器支持。
+发布前应在真实 Android ABI 上验证冷启动、重连和 VPN。
+参见[审计和验证记录](#olcrtc-audit)。
+
+按照已接受的决定，Ghostlane 源码集成时没有修复审计发现。
+已知问题包括：未经身份验证即可切换有序 SEI 流、无界的 `floor` 遍历、
+服务器会话记账记录不断累积，以及 `/stats` 不强制绑定 loopback。
+后两项属于应用不会启动的 `srv` 模式。审计没有证实篡改加密内容或通过真实 SFU
+发动攻击的可行性。依赖更新或构建成功不代表这些限制已得到修复。
+
+OlcRTC 已使用官方 Go 1.27.3 重建，以修复证书验证中的
+[GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)。
+第三方依赖图没有改变。本次更新不会修复上述 Ghostlane 审计问题。
+
+v0.12.1 更新验证：使用 FlClashM 固定依赖，VK Calls 测试（包括 payload type 冲突和
+重新协商）、config/client/protect 及本地 E2E 均通过 `-race`。
+三个 Android ABI 已重建；`setup.dart` 使用官方 Go 复现了 SHA-256，第二次运行使用缓存。
+在 Android 16 模拟器上，随附的准确 x86_64 二进制执行了 `-version`、解析了 CNC 配置，
+并按预期报告无法连接到不可用的本地端点。此版本尚未验证真实 VK 连接或应用的完整 VPN 路径。
+
+审查后的可复现性验证：分别使用官方归档和 flake 中的官方 Go，以及原始归档和 nixpkgs
+中的 NDK，配合 `-buildid=`，三个 ABI 的产物均逐字节相同。
+二进制不包含 `/nix/store/` 路径；拒绝带补丁 Go 的检查在构建启动前通过。
+
+2026-10-22 的真实连接验证（之前的提交 `b8a6e12`，早于 v0.12.1）：
+使用 `vkcalls + vp8channel`，Linux 服务器和 Android 16 模拟器上随附的准确 x86_64
+二进制加入了真实 VK 房间。通过 SOCKS 远程解析域名，从 example.com、Cloudflare 和
+raw.githubusercontent.com 获得 HTTPS 200；243,217 字节文件在 1.36 秒内传输完成，
+与直接下载逐字节相同（SHA-256
+`40d15ce858cf058cff92606001a29ee1689db88c121a2f0c283163a0d64a7375`）。
+TLS 验证保持启用。首次运行遇到了测试电脑的 fake-IP DNS，服务器正确拒绝了保留地址。
+第二次运行使用连接 Cloudflare 的本地 DNS-to-DoH 桥，返回真实公网地址；
+没有更改 OlcRTC 出站流量检查。按用户决定，MTS 未纳入真实连接验证。
+此轮验证确认了传输和 Android 可执行文件，但未确认应用的完整 VPN 路径、
+真实 ARM ABI 或在白名单网络中的运行情况。测试房间、密钥和令牌不存入仓库。
 
 - **更新：** 更换固定提交，用固定的 Go 1.27.3 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
 - **回滚：** 恢复 `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d`，以及对应的模块锁定文件、发布元数据和 Android 产物。新服务的配置将不再受支持；已有配置无需迁移。
