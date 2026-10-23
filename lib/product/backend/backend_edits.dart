@@ -31,7 +31,9 @@ class BackendEdits {
     String Function(T record) idOf,
   ) {
     final byId = {for (final record in records) idOf(record): record};
-    final ordered = [for (final id in ids) ?byId.remove(id)];
+    final ordered = [
+      for (final id in ids) ?byId.remove(id),
+    ];
     return [...ordered, ...byId.values];
   }
 
