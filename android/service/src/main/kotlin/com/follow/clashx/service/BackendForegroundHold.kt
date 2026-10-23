@@ -64,8 +64,9 @@ internal object BackendForegroundHold {
     /** Registers a promoted instance. Also called on every promoted start
      * command: a retired instance kept alive by a binding (the system VPN bind)
      * receives the next start itself instead of a fresh instance being created. */
-    fun created(service: BackendForegroundResource) {
+    fun created(service: BackendForegroundResource, recordStart: () -> Unit = {}) {
         synchronized(lock) {
+            recordStart()
             if (!service.destroyed && services.add(service)) available.value = services.toList()
         }
     }
@@ -83,9 +84,9 @@ internal object BackendForegroundHold {
      * Retires an idle service before it stops itself. `destroyed` is only set in
      * onDestroy, long after stopSelf, so without this a quick Stop->Start could
      * get a hold granted by, or attach a TUN to, an instance that is going away.
-     * [startId] is read while retiring, so a start delivered after that point
-     * makes [stop] (stopSelfResult with the older id) return false; the instance
-     * then stays the live host for that command.
+     * [startId] is read under the same lock in which [created] records a start,
+     * so a start that is not yet registered makes [stop] (stopSelfResult with
+     * the older id) return false; the instance then stays the live host for it.
      */
     fun retireIfIdle(
         service: BackendForegroundResource,
