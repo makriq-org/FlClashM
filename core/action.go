@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"unsafe"
 
@@ -11,6 +12,16 @@ type Action struct {
 	Id     string      `json:"id"`
 	Method Method      `json:"method"`
 	Data   interface{} `json:"data"`
+}
+
+// Keep domain settings/metadata exact across the outer native action envelope.
+// Decoding through float64 would round unknown JSON integers before the backend
+// can store them, even when the inner API uses RawMessage.
+func (action *Action) UnmarshalJSON(raw []byte) error {
+	type wire Action
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	return decoder.Decode((*wire)(action))
 }
 
 type ActionResult struct {
@@ -39,6 +50,13 @@ func (result ActionResult) error(data interface{}) {
 }
 
 func handleAction(action *Action, result ActionResult) {
+	if handleBackendAction(action, result) {
+		return
+	}
+	if backendManaged.Load() && legacyRuntimeMutation(action.Method) {
+		result.error("legacy runtime mutation is disabled while Go backend owns the engine")
+		return
+	}
 	switch action.Method {
 	case initClashMethod:
 		paramsString, ok := action.Data.(string)

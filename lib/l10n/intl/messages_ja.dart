@@ -110,6 +110,25 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "autoUpdate": MessageLookupByLibrary.simpleMessage("自動更新"),
     "autoUpdateInterval": MessageLookupByLibrary.simpleMessage("自動更新間隔（分）"),
+    "backendClosed": MessageLookupByLibrary.simpleMessage(
+      "操作の完了前にバックグラウンドサービスが停止しました",
+    ),
+    "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
+      "操作はキャンセルされました",
+    ),
+    "backendOperationFailed": MessageLookupByLibrary.simpleMessage("操作に失敗しました"),
+    "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
+      "FlClashM を起動できませんでした",
+    ),
+    "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
+      "アプリはバックグラウンドサービスに接続できず、自動的に再試行を続けています。今すぐ再試行するか、サポート用にログをエクスポートできます。",
+    ),
+    "backendTimeout": MessageLookupByLibrary.simpleMessage(
+      "バックグラウンドサービスが時間内に応答しませんでした",
+    ),
+    "backendUnavailable": MessageLookupByLibrary.simpleMessage(
+      "バックグラウンドサービスを利用できません",
+    ),
     "backup": MessageLookupByLibrary.simpleMessage("バックアップ"),
     "backupAndRecovery": MessageLookupByLibrary.simpleMessage("バックアップと復元"),
     "backupAndRecoveryDesc": MessageLookupByLibrary.simpleMessage(
@@ -508,6 +527,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "DNS接続がルールに従う（proxy-server-nameserverの設定が必要）",
     ),
     "restart": MessageLookupByLibrary.simpleMessage("再起動"),
+    "retry": MessageLookupByLibrary.simpleMessage("再試行"),
     "routeAddress": MessageLookupByLibrary.simpleMessage("ルートアドレス"),
     "routeAddressDesc": MessageLookupByLibrary.simpleMessage("ルートアドレスを設定"),
     "routeMode": MessageLookupByLibrary.simpleMessage("ルートモード"),

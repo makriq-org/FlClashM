@@ -1,14 +1,33 @@
 name: android-base-verification
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Android verification / {0}', inputs.e2e_runner) || github.workflow }}
 
 on:
   pull_request:
   push:
     branches:
       - main
+      - dev
   workflow_dispatch:
+    inputs:
+      backend_test:
+        description: "Собрать ARM64 APK в отдельном пакете .backendtest"
+        type: boolean
+        default: false
+      e2e_runner:
+        description: "Раннер E2E для сравнения скорости (Blacksmith требует подключения)"
+        type: choice
+        default: ubuntu-latest
+        options:
+          - ubuntu-latest
+          - blacksmith-4vcpu-ubuntu-2404
+          - blacksmith-8vcpu-ubuntu-2404
+      e2e_only:
+        description: "Запустить только E2E для замера скорости раннера"
+        type: boolean
+        default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}
   cancel-in-progress: true
 
 permissions: {}
@@ -16,6 +35,7 @@ permissions: {}
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NDK_VERSION: "28.0.13004108"
+  GRADLE_OPTS: "-Dorg.gradle.caching=true"
 
 jobs:
   detect-changes:
@@ -41,15 +61,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          E2E_ONLY: ${{ inputs.e2e_only }}
         run: |
           verification=false
           android=false
           full_matrix=false
           e2e=false
 
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$E2E_ONLY" = true ]; then
+            e2e=true
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] || \
              [ -z "$BASE_SHA" ] || \
-             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
+             ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             verification=true
             android=true
             full_matrix=true
@@ -57,19 +81,19 @@ jobs:
           else
             changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
 
-            if grep -Eq '^(.github/workflows/|analysis_options\.yaml$|android/|assets/runtimes/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/|CHANGELOG\.md$|\.github/(pre_)?release_template\.md$)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/workflows/|analysis_options\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/|CHANGELOG\.md$|\.github/(pre_)?release_template\.md$)' <<< "$changed_files"; then
               verification=true
             fi
 
-            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|analysis_options\.yaml$|android/|assets/runtimes/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/))' <<< "$changed_files"; then
               android=true
             fi
 
-            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|android/|core/|assets/runtimes/|setup\.dart$|lib/product/runtime/)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/runtime/)' <<< "$changed_files"; then
               full_matrix=true
             fi
 
-            if grep -Eq '^(.github/workflows/android-base-verification\.yaml$|.github/scripts/run-android-emulator-e2e\.sh$|android/|core/|assets/runtimes/|setup\.dart$|lib/product/(android|runtime)/)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|\.github/scripts/run-android-emulator-e2e\.sh$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/(android|backend|bootstrap|runtime)/|lib/clash/|lib/(application|controller|main|state)\.dart$)' <<< "$changed_files"; then
               e2e=true
             fi
           fi
@@ -125,8 +149,60 @@ jobs:
       - name: Run product and tool tests
         run: flutter test test/product test/tool
 
+      - name: Analyze application compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib
+
       - name: Run targeted analyze
         run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+
+  android-unit-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '16111833' # 23.0
+          packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: "3.47.7"
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+          # Fork PRs read the base cache; trusted branches and internal PRs warm it.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
+      - name: Run Android unit tests
+        working-directory: android
+        run: |
+          gradle \
+            --no-daemon \
+            --project-cache-dir="$RUNNER_TEMP/flclashm-gradle-project-cache" \
+            -Pkotlin.project.persistent.dir="$RUNNER_TEMP/flclashm-kotlin-cache" \
+            -Ptarget-platform=android-arm64 \
+            -Ptarget=lib/main.dart \
+            :app:testDebugUnitTest \
+            :common:testDebugUnitTest \
+            :service:testDebugUnitTest
 
   android-smoke:
     needs: detect-changes
@@ -166,29 +242,31 @@ jobs:
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           gradle-version: "9.8.1"
-
-      - name: Run Android unit tests
-        working-directory: android
-        run: |
-          gradle \
-            --no-daemon \
-            --project-cache-dir="$RUNNER_TEMP/flclashm-gradle-project-cache" \
-            -Pkotlin.project.persistent.dir="$RUNNER_TEMP/flclashm-kotlin-cache" \
-            -Ptarget-platform=android-arm64 \
-            -Ptarget=lib/main.dart \
-            :app:testDebugUnitTest \
-            :service:testDebugUnitTest
+          # Fork PRs read the base cache; trusted branches and internal PRs warm it.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
+          cache: false
+
+      - name: Cache Android Go modules and build outputs
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-android-v1-${{ runner.os }}-${{ runner.arch }}-arm64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-${{ hashFiles('core/**/*.go', 'core/**/*.c', 'core/**/*.h', 'tool/patches/**', 'tool/prepare_core.sh', 'setup.dart', 'lib/product/runtime/*_release.dart') }}
+          restore-keys: |
+            go-android-v1-${{ runner.os }}-${{ runner.arch }}-arm64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-
 
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch arm64 --out core
 
       - name: Build Android arm64 release smoke APK
+        env:
+          ORG_GRADLE_PROJECT_backendTest: ${{ inputs.backend_test && 'true' || 'false' }}
         shell: bash
         run: |
           core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\\(.*\\)';$/\\1/p" lib/core_version.dart)
@@ -199,12 +277,34 @@ jobs:
             --dart-define=APP_ENV=pre \
             --dart-define=CORE_VERSION="$core_version"
 
-      - name: Run Android unit tests
-        working-directory: android
-        run: ./gradlew :common:testDebugUnitTest :service:testDebugUnitTest
-
       - name: Assert smoke artifact exists
         run: test -f build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Verify and collect installable ARM64 test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          destination="$RUNNER_TEMP/android-arm64-apk"
+          mkdir -p "$destination"
+          expected_package=com.makriq.flclash.dev
+          if [ "${{ inputs.backend_test && 'true' || 'false' }}" = true ]; then
+            expected_package=com.makriq.flclash.backendtest
+          fi
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2" dump badging "$apk" > "$destination/package.txt"
+          grep -F "package: name='$expected_package' " "$destination/package.txt"
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify --print-certs "$apk" > "$destination/signature.txt"
+          cp "$apk" "$destination/FlClashM-arm64.apk"
+          cd "$destination"
+          sha256sum FlClashM-arm64.apk > SHA256SUMS
+
+      - name: Upload installable ARM64 test APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-arm64-test-apk
+          path: ${{ runner.temp }}/android-arm64-apk
+          if-no-files-found: error
+          retention-days: 7
 
   android-extra-abi-smoke:
     needs: detect-changes
@@ -246,11 +346,28 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+          # Fork PRs read the base cache; trusted branches and internal PRs warm it.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
+          cache: false
+
+      - name: Cache Android Go modules and build outputs
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-android-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.arch }}-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-${{ hashFiles('core/**/*.go', 'core/**/*.c', 'core/**/*.h', 'tool/patches/**', 'tool/prepare_core.sh', 'setup.dart', 'lib/product/runtime/*_release.dart') }}
+          restore-keys: |
+            go-android-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.arch }}-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-
 
       - name: Build Android core smoke artifact
         run: dart setup.dart android --arch ${{ matrix.arch }} --out core
@@ -272,7 +389,7 @@ jobs:
   android-emulator-e2e:
     needs: detect-changes
     if: needs.detect-changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.e2e_runner || 'ubuntu-latest' }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -310,11 +427,28 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+          # Fork PRs read the base cache; trusted branches and internal PRs warm it.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.2"
-          cache-dependency-path: core/go.sum
+          cache: false
+
+      - name: Cache Android Go modules and build outputs
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-android-v1-${{ runner.os }}-${{ runner.arch }}-amd64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-${{ hashFiles('core/**/*.go', 'core/**/*.c', 'core/**/*.h', 'tool/patches/**', 'tool/prepare_core.sh', 'setup.dart', 'lib/product/runtime/*_release.dart') }}
+          restore-keys: |
+            go-android-v1-${{ runner.os }}-${{ runner.arch }}-amd64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-
 
       - name: Build x86_64 core and runtime assets
         run: dart setup.dart android --arch amd64 --out core

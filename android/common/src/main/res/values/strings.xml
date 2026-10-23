@@ -4,4 +4,8 @@
     <string name="notification_channel_name">FlClashM</string>
     <string name="subscription_notification_channel_name">Subscription updates</string>
     <string name="notification_open">Open</string>
+    <string name="subscription_expired">Your subscription has expired</string>
+    <string name="subscription_expires_today">Your subscription expires today</string>
+    <string name="subscription_expires_in_days">Your subscription expires in %1$s day(s)</string>
+    <string name="subscription_renew">Renew</string>
 </resources>

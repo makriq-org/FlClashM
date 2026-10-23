@@ -1,320 +1,351 @@
 package com.follow.clashx
 
-import android.app.ActivityManager
-import android.app.NotificationManager
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import android.app.ActivityManager
 import android.net.VpnService
 import android.os.Process
+import android.util.Base64
+import com.follow.clashx.common.diagnostics.DiagnosticLog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.follow.clashx.common.GlobalState as CommonGlobalState
-import com.follow.clashx.common.SavedParams
-import com.follow.clashx.service.models.VpnOptions
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.After
+import org.junit.runner.RunWith
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
-import org.json.JSONArray
-import org.json.JSONObject
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
+import java.net.ServerSocket
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.UUID
 
-/**
- * One vertical Android smoke test for CI. It deliberately uses production IPC,
- * service, core and runtime-process code; the only test-specific input is a
- * local DIRECT profile, so the result never depends on the public network.
- *
- * The workflow grants ACTIVATE_VPN before instrumentation starts. Android has
- * no supported API for accepting VPN consent headlessly, so a non-null
- * VpnService.prepare result is treated as a CI setup failure instead of adding
- * brittle UI automation here.
- */
+/** Production Go API, actual validator process, native transport and VPN/TUN.
+ * All input is local; public DNS/HTTP endpoints are explicitly disabled. */
 @RunWith(AndroidJUnit4::class)
 class AndroidRuntimeE2eTest {
-    private val context: Context
-        get() = InstrumentationRegistry.getInstrumentation().targetContext
+    private var packageListServer: ServerSocket? = null
+    private val packageListRequests = AtomicInteger()
+    @After fun closePackageListServer() { packageListServer?.close() }
+    private fun packageListURL(): String {
+        val server = ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
+        packageListServer = server
+        Thread {
+            while (!server.isClosed) {
+                runCatching {
+                    server.accept().use { socket ->
+                        val input = socket.getInputStream().bufferedReader()
+                        while (!input.readLine().isNullOrEmpty()) { }
+                        packageListRequests.incrementAndGet()
+                        val body = "com.android.settings\n".toByteArray()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                            write(body)
+                            flush()
+                        }
+                    }
+                }
+            }
+        }.apply { isDaemon = true; name = "package-list-fixture"; start() }
+        return "http://127.0.0.1:${server.localPort}/packages"
+    }
+    private val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
+    private val fixtureState get() = context.getSharedPreferences("backend-e2e", Context.MODE_PRIVATE)
+    private suspend fun snapshot() = Service.backend("snapshot").getJSONObject("runtime")
+    private suspend fun engineSnapshot(): JSONObject {
+        val result = CompletableDeferred<String>()
+        Service.invokeAction(JSONObject().put("id", "engine-fixture")
+            .put("method", "getRuntimeSnapshot").toString()) { result.complete(it) }.getOrThrow()
+        return JSONObject(withTimeout(10_000L) { result.await() }).getJSONObject("data")
+    }
+    private suspend fun await(label: String, condition: suspend () -> Boolean) = withTimeout(90_000L) {
+        while (!condition()) delay(150)
+    }
+    private fun canConnect(port: Int): Boolean = runCatching {
+        Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }; true
+    }.getOrDefault(false)
+    private suspend fun upload(source: String): String {
+        val token = Service.backend("blob.create").getString("token")
+        val bytes = source.toByteArray(Charsets.UTF_8)
+        var offset = 0
+        while (offset < bytes.size) {
+            val size = minOf(192 * 1024, bytes.size - offset)
+            Service.backend("blob.append", JSONObject().put("token", token).put("offset", offset)
+                .put("data", Base64.encodeToString(bytes, offset, size, Base64.NO_WRAP)))
+            offset += size
+        }
+        return token
+    }
+    private suspend fun importProfile(id: String, source: String, select: Boolean = true) {
+        val token = upload(source)
+        try {
+            Service.backendCommand("profile.import.file", JSONObject().put("token", token)
+                .put("metadata", JSONObject().put("id", id).put("label", "Local fixture"))
+                .put("select", select))
+        } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }
+    }
+    private val source = """
+        mixed-port: 17890
+        ipv6: false
+        dns: {enable: false}
+        proxies:
+          - {name: LocalBye, type: byedpi, mode: manual, strategy: '-d1 -s2'}
+        proxy-groups:
+          - {name: Select, type: select, proxies: [LocalBye, DIRECT]}
+        rules: ['MATCH,REJECT']
+    """.trimIndent()
 
-    @Before
-    fun setUp() = runBlocking {
-        SavedParams.clearQuickStartParams()
+    @Test fun packagedValidatorRepeatedRequests() = runBlocking {
         Service.bind()
-        await("remote service bind") { Service.fetchServiceState() != null }
+        val valid = "dns: {enable: false}\nrules: ['MATCH,DIRECT']"
+        coroutineScope {
+            List(8) {
+                async { Service.backendCommand("profile.validate", JSONObject().put("source", valid)) }
+            }.awaitAll()
+        }
+        // Subscription refresh validates its source and then the runtime plan.
+        // Exercise immediate rebinding, including recovery after a parser error.
+        repeat(20) { iteration ->
+            Service.backendCommand("profile.validate", JSONObject().put("source", valid))
+            val invalid = runCatching {
+                Service.backendCommand("profile.validate", JSONObject().put("source",
+                    "dns: {enable: false}\nrules: ['MATCH,missing-outbound']"))
+            }.exceptionOrNull()
+            assertNotNull("Invalid rules accepted on iteration $iteration", invalid)
+            assertTrue("Parser error replaced by an IPC failure: ${invalid?.message}",
+                invalid?.message.orEmpty().contains("missing-outbound"))
+        }
+        Service.backendCommand("profile.validate", JSONObject().put("source", valid))
+        Unit
     }
 
-    @After
-    fun tearDown() = runBlocking {
-        runCatching { Service.stopService() }
-        runCatching { Service.stopRuntimeNodePlan() }
-        SavedParams.clearQuickStartParams()
+    @Test fun packagedSubscriptionRepeatedRefresh() = runBlocking {
+        Service.bind()
+        val requests = AtomicInteger()
+        val server = ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
+        val id = "validator-refresh-${UUID.randomUUID()}"
+        var imported = false
+        val worker = Thread {
+            while (!server.isClosed) {
+                runCatching {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 5_000
+                        val input = socket.getInputStream().bufferedReader()
+                        while (!input.readLine().isNullOrEmpty()) { }
+                        val body = "# revision ${requests.incrementAndGet()}\ndns: {enable: false}\nrules: ['MATCH,DIRECT']".toByteArray()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                            write(body)
+                            flush()
+                        }
+                    }
+                }
+            }
+        }.apply { isDaemon = true; start() }
+        try {
+            Service.backendCommand("profile.import.url", JSONObject().put("select", false)
+                .put("deviceHeaders", false).put("metadata", JSONObject().put("id", id)
+                    .put("label", "Validator refresh fixture").put("url", "http://127.0.0.1:${server.localPort}/profile")))
+            imported = true
+            repeat(10) {
+                val before = Service.backend("profile.get", JSONObject().put("profileId", id)).getLong("revision")
+                Service.backendCommand("subscription.refresh", JSONObject().put("profileId", id).put("deviceHeaders", false))
+                val after = Service.backend("profile.get", JSONObject().put("profileId", id))
+                assertTrue("Refresh did not save a new revision", after.getLong("revision") > before)
+                assertTrue(after.getString("source").startsWith("# revision ${requests.get()}\n"))
+            }
+        } finally {
+            server.close()
+            worker.join(5_000L)
+            if (imported) {
+                val record = Service.backend("profile.get", JSONObject().put("profileId", id))
+                Service.backendCommand("profile.delete", JSONObject().put("profileId", id)
+                    .put("expectedRevision", record.getLong("revision")))
+            }
+        }
+    }
+
+    @Test fun packagedValidatorRecoversFromProcessDeath() = runBlocking {
+        Service.bind()
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        coroutineScope {
+            val request = async {
+                Service.backendCommand("profile.validate", JSONObject().put("source",
+                    "dns: {enable: false}\nrules: ['MATCH,DIRECT']"))
+            }
+            val pid = withTimeout(10_000L) {
+                var pid: Int? = null
+                while (pid == null) {
+                    pid = manager.runningAppProcesses?.firstOrNull {
+                        it.processName == "${context.packageName}:validator"
+                    }?.pid
+                    if (pid == null) delay(5L)
+                }
+                pid
+            }
+            Process.killProcess(pid)
+            // A single infrastructure eviction is retried, not exposed as a bad
+            // profile. A subsequent request must also use a healthy fresh parser.
+            withTimeout(15_000L) { request.await() }
+        }
+        Service.backendCommand("profile.validate", JSONObject().put("source",
+            "dns: {enable: false}\nrules: ['MATCH,DIRECT']"))
+        Unit
+    }
+
+    @Test fun packagedBinderReconnect() = runBlocking {
+        // The seed/observe phases deliberately preserve one process instance.
+        if (InstrumentationRegistry.getArguments().getString("scenario", "lifecycle") != "lifecycle") return@runBlocking
+        Service.bind()
+        val previous = snapshot().getString("instanceId")
+        val process = remotePid()
+        assertTrue("Remote process not found", process > 0)
+        Process.killProcess(process)
+        withTimeout(12_000L) {
+            await("fresh binding after process eviction") {
+                runCatching { snapshot().getString("instanceId") != previous }.getOrDefault(false)
+            }
+        }
+        // The foreground UI can now issue requests without recreating its own process.
+        assertNotEquals(previous, snapshot().getString("instanceId"))
+    }
+
+    @Test fun packagedBackendLifecycle() = runBlocking {
+        assertTrue("Packaged Android ABI required", android.os.Build.SUPPORTED_ABIS.any {
+            it in listOf("x86_64", "arm64-v8a", "armeabi-v7a")
+        })
+        assertNull("CI must grant ACTIVATE_VPN", VpnService.prepare(context))
+        for (type in listOf("naiveproxy", "olcrtc", "byedpi", "stormdns")) {
+            val file = File(context.applicationInfo.nativeLibraryDir, "libflclashm_$type.so")
+            assertTrue("Missing packaged $type", file.isFile)
+            val magic = file.inputStream().use { input -> ByteArray(4).also { input.read(it) } }
+            assertArrayEquals(byteArrayOf(0x7f, 0x45, 0x4c, 0x46), magic)
+        }
+        Service.bind()
+        val scenario = InstrumentationRegistry.getArguments().getString("scenario", "lifecycle")
+        if (scenario != "lifecycle") await("Flutter engine attachment") { GlobalState.flutterEngine != null }
+        if (scenario == "observe" || scenario == "recovered") {
+            await("headless VPN") { snapshot().getJSONObject("observed").optString("state") == "running" }
+            val runtime = snapshot()
+            if (scenario == "observe") assertEquals(fixtureState.getLong("startedAt", -1), runtime.getLong("startedAt"))
+            assertTrue(canConnect(fixtureState.getInt("port", 0)))
+            assertTrue(Service.backend("presentation").optString("notificationTitle").contains("Local fixture"))
+            // A native widget action works without Flutter initialization.
+            Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject().put("mode", "direct"))))
+            assertEquals("direct", Service.backend("presentation").getString("mode"))
+            if (scenario == "recovered") {
+                Service.backendCommand("runtime.stop")
+                assertFalse(snapshot().getBoolean("desiredRunning"))
+                await("native listener stopped") { !canConnect(fixtureState.getInt("port", 0)) }
+            }
+            Service.unbind()
+            return@runBlocking
+        }
+        Service.backendCommand("data.reset")
+        Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+            .put("appSetting", JSONObject().put("testUrl", "").put("overrideNetworkSettings", true)
+                .put("autoCheckUpdate", false).put("dashboardWidgets", org.json.JSONArray()))
+            .put("patchClashConfig", JSONObject().put("mixed-port", 17890).put("ipv6", false))
+            .put("vpnProps", JSONObject().put("enable", true).put("ipv6", false))))
+        // Original source is larger than Binder's transaction limit. Chunking is
+        // exercised both on import and on profile.get, with byte-for-byte checks.
+        val largeSource = source + "\ntun: {exclude-package-url: ['${packageListURL()}']}\n#" + "a".repeat(1100 * 1024) + "\n"
+        importProfile("fixture", largeSource)
+        val record = Service.backend("profile.get", JSONObject().put("profileId", "fixture"))
+        assertEquals(largeSource, record.getString("source"))
+        Service.backendCommand("runtime.start")
+        val runtime = snapshot()
+        assertEquals("running", runtime.getJSONObject("observed").getString("state"))
+        val view = Service.backend("runtime.view")
+        val node = view.getJSONArray("nodes").getJSONObject(0)
+        val port = node.getInt("port")
+        assertTrue("Packaged external transport did not listen", canConnect(port))
+        assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
+        assertTrue("Remote process not found", remotePid() > 0)
+        assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
+        val rules = engineSnapshot().getJSONObject("config").getJSONArray("rule")
+        assertEquals("Compiled routing rules never reached the actual engine", "MATCH,REJECT", rules.getString(0))
+        assertEquals("Preparation redundantly downloaded the package list", 1, packageListRequests.get())
+        // Every subsequent restart/recovery must work with this URL offline.
+        packageListServer?.close()
+        fixtureState.edit().putLong("startedAt", runtime.getLong("startedAt")).putInt("port", port).commit()
+        if (scenario == "seed") { Service.unbind(); return@runBlocking }
+        try {
+            repeat(2) {
+                Service.backendCommand("runtime.restart")
+                assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
+                assertTrue("Restart lost the external transport", canConnect(port))
+                assertTrue("Restart lost the applied VPN options", Service.getAppliedAndroidVpnOptions().isNotEmpty())
+                assertTrue("Restart lost the native TUN", engineSnapshot().getBoolean("tun-up"))
+            }
+            // No source/model supplied on recovery; the committed Go input is used.
+            Service.unbind()
+            delay(500)
+            Service.bind()
+            Service.backendCommand("runtime.recover")
+            assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
+            // Invalid edits fail without replacing either original source or VPN.
+            val token = upload("proxies: [unterminated")
+            try {
+                val rejected = runCatching { Service.backendCommand("profile.import.file", JSONObject().put("token", token)
+                    .put("metadata", JSONObject().put("id", "fixture")).put("expectedRevision", record.getLong("revision"))) }.exceptionOrNull()
+                assertNotNull("Invalid profile source accepted", rejected)
+                // Only the source parser may reject it: an argument, token or
+                // revision failure would leave the parse path unverified.
+                assertTrue("Invalid source rejected for another reason: ${rejected?.message}",
+                    rejected?.message.orEmpty().startsWith("yaml:"))
+                assertEquals(largeSource, Service.backend("profile.get", JSONObject().put("profileId", "fixture")).getString("source"))
+                assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
+            } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }
+            val generation = snapshot().getLong("appliedGeneration")
+            Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject().put("mode", "direct"))))
+            assertEquals("direct", Service.backend("runtime.view").getJSONObject("config").getString("mode"))
+            assertTrue(snapshot().getLong("appliedGeneration") > generation)
+        } finally {
+            Service.backendCommand("runtime.stop")
+            await("persisted external transport exit diagnostics") {
+                DiagnosticLog.requestOtherProcessesFlush(context)
+                File(context.filesDir, "diagnostics").listFiles()
+                    ?.filter { it.name.startsWith("android-remote.") && it.extension == "log" }
+                    ?.any { file ->
+                        runCatching {
+                            file.readLines().any { it.contains("runtime-byedpi") && it.contains("process exited:") }
+                        }.getOrDefault(false)
+                    } == true
+            }
+            Service.backendCommand("runtime.recover")
+            assertFalse(snapshot().getBoolean("desiredRunning"))
+            assertEquals("stopped", snapshot().getJSONObject("observed").getString("state"))
+            await("transport shutdown") { !canConnect(port) }
+            Service.unbind()
+        }
+        // Proxy-only execution uses the same coordinator and survives without
+        // a TUN or a VPN-consent decision in Flutter/Kotlin.
+        Service.bind()
+        try {
+            Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("vpnProps", JSONObject().put("enable", false))))
+            assertFalse(Service.backend("presentation").getBoolean("requiresVpn"))
+            Service.backendCommand("runtime.start")
+            assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
+            assertFalse(JSONObject(Service.getAndroidVpnOptions()).getBoolean("enable"))
+        } finally { Service.backendCommand("runtime.stop"); Service.unbind() }
+        Service.bind()
+        Service.backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject()
+            .put("external-controller", "127.0.0.1:17892").put("secret", "fixture-secret"))))
+        assertTrue("Controller did not open", canConnect(17892))
+        Service.backendCommand("data.reset")
+        await("reset closed the old controller") { !canConnect(17892) }
         Service.unbind()
     }
-
-    @Test
-    fun packagedRuntimeVpnAndHeadlessRecoveryLifecycle() = runBlocking {
-        assertEquals("The emulator must execute the x86_64 runtime", "x86_64", primaryAbi())
-        val nativeDir = File(context.applicationInfo.nativeLibraryDir)
-        val runtimeLibraries = listOf(
-            "libflclashm_naiveproxy.so",
-            "libflclashm_olcrtc.so",
-            "libflclashm_byedpi.so",
-            "libflclashm_stormdns.so",
-        ).associateWith { File(nativeDir, it) }
-        runtimeLibraries.forEach { (name, file) -> assertElfExecutable(name, file) }
-
-        // A representative local node goes through the real AIDL bridge and
-        // RuntimeNodeProcessManager. Checking every CLI here would duplicate the
-        // same Android process contract while making this job much slower.
-        val runtimePort = 17891
-        val runtimePlan = runtimePlan(
-            executable = runtimeLibraries.getValue("libflclashm_byedpi.so"),
-            port = runtimePort,
-        )
-        val runtimeState = Service.applyRuntimeNodePlan(runtimePlan)
-        assertEquals("ready", JSONObject(runtimeState).getString("status"))
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress("127.0.0.1", runtimePort), 1_000)
-        }
-        Service.stopRuntimeNodePlan()
-        await("runtime listener cleanup") { !canConnect(runtimePort) }
-
-        assertNull(
-            "GitHub Actions must grant ACTIVATE_VPN before instrumentation",
-            VpnService.prepare(context),
-        )
-        SavedParams.saveRuntimeNodesState("{\"nodes\":[]}")
-
-        val quickStartError = quickStartCore()
-        assertTrue("mihomo quickStart failed: $quickStartError", quickStartError.isEmpty())
-
-        val coreOptions = Service.getAndroidVpnOptions()
-        assertTrue("mihomo returned no Android VPN options", coreOptions.isNotBlank())
-        val parsedOptions = JSONObject(coreOptions)
-        assertTrue("mihomo disabled Android VPN", parsedOptions.getBoolean("enable"))
-        assertEquals("unexpected mixed port", 17890, parsedOptions.getInt("port"))
-        assertEquals(
-            "unexpected IPv4 address",
-            "172.19.0.1/30",
-            parsedOptions.getString("ipv4Address"),
-        )
-        assertEquals("IPv6 must stay disabled", "", parsedOptions.getString("ipv6Address"))
-        assertEquals(
-            "unexpected in-tunnel DNS address",
-            "172.19.0.2",
-            parsedOptions.getString("dnsServerAddress"),
-        )
-        assertTrue("allowBypass unexpectedly enabled", !parsedOptions.getBoolean("allowBypass"))
-        assertTrue("system proxy unexpectedly enabled", !parsedOptions.getBoolean("systemProxy"))
-        val options = VpnOptions(
-            enable = parsedOptions.getBoolean("enable"),
-            port = parsedOptions.getInt("port"),
-            socksPort = 17891,
-            ipv4Address = parsedOptions.getString("ipv4Address"),
-            ipv6Address = parsedOptions.getString("ipv6Address"),
-            dnsServerAddress = parsedOptions.getString("dnsServerAddress"),
-            routeAddress = parsedOptions.optJSONArray("routeAddress").strings(),
-            allowBypass = parsedOptions.getBoolean("allowBypass"),
-            systemProxy = parsedOptions.getBoolean("systemProxy"),
-            bypassDomain = parsedOptions.optJSONArray("bypassDomain").strings(),
-            ipv4 = true,
-            ipv6 = false,
-        )
-        val startedAt = Service.startService(options, 0L)
-        assertTrue("VPN foreground service did not start", startedAt > 0L)
-        await("running VPN state") { Service.fetchServiceState()?.isRunning == true }
-        await("VPN transport") { hasVpnTransport() }
-        assertNotNull("foreground notification is missing", foregroundNotification())
-
-        val oldRemotePid = remotePid()
-        assertTrue("remote process was not found", oldRemotePid > 0)
-        Process.killProcess(oldRemotePid)
-
-        await("remote process replacement", timeoutMillis = 45_000L) {
-            remotePid().let { it > 0 && it != oldRemotePid }
-        }
-        // FlVpnService and RemoteService share :remote. Killing that process tears
-        // down the TUN and core; Android rebinds RemoteService, while the supported
-        // headless recovery contract reissues quickStart/startService through AIDL.
-        await("remote service rebind", timeoutMillis = 45_000L) {
-            Service.fetchServiceState() != null
-        }
-        val coldStartError = quickStartCore()
-        assertTrue("mihomo headless recovery failed: $coldStartError", coldStartError.isEmpty())
-        assertTrue("VPN recovery command was rejected", Service.startService(options, 0L) > 0L)
-        await("headless VPN recovery", timeoutMillis = 45_000L) {
-            Service.fetchServiceState()?.isRunning == true
-        }
-        await("VPN transport after headless recovery", timeoutMillis = 20_000L) { hasVpnTransport() }
-        assertNotNull("foreground notification was not restored", foregroundNotification())
-
-        Service.stopService()
-        await("VPN stop") { Service.fetchServiceState()?.state == "stopped" }
-        await("VPN transport cleanup") { !hasVpnTransport() }
-        await("foreground notification cleanup") { foregroundNotification() == null }
-        assertTrue("VPN active marker was not cleared", !SavedParams.isVpnActive())
-        assertNotEquals("remote process unexpectedly disappeared on normal stop", 0, remotePid())
-    }
-
-    private suspend fun quickStartCore(): String {
-        val home = File(context.filesDir, "android-e2e-core").apply { mkdirs() }
-        val init = JSONObject()
-            .put("home-dir", home.absolutePath)
-            .put("version", 1)
-            .toString()
-        val config = JSONObject()
-            .put("mixed-port", 17890)
-            .put("allow-lan", false)
-            .put("mode", "direct")
-            .put("log-level", "info")
-            .put("ipv6", false)
-            .put("external-controller", "")
-            .put("proxies", JSONArray())
-            .put("proxy-groups", JSONArray())
-            .put("rules", JSONArray().put("MATCH,DIRECT"))
-            .put("dns", JSONObject().put("enable", false))
-            .put(
-                "tun",
-                JSONObject()
-                    .put("enable", true)
-                    .put("device", "FlClashM-E2E")
-                    .put("stack", "system")
-                    .put("auto-route", false)
-                    .put("dns-hijack", JSONArray().put("any:53")),
-            )
-        val setup = JSONObject()
-            .put("config", config)
-            .put("selected-map", JSONObject())
-            .put("test-url", "http://example.invalid")
-            .toString()
-        val state = JSONObject()
-            .put(
-                "vpn-props",
-                JSONObject()
-                    .put("enable", true)
-                    .put("systemProxy", false)
-                    .put("ipv6", false)
-                    .put("allowBypass", false)
-                    .put("accessControl", JSONObject().put("enable", false)),
-            )
-            .put("only-statistics-proxy", false)
-            .put("current-profile-name", "Android E2E")
-            .put("bypass-domain", JSONArray())
-            .toString()
-
-        val result = CompletableDeferred<String>()
-        val registration = Service.quickStart(init, setup, state, null) { result.complete(it) }
-        registration.getOrThrow()
-        return withTimeout(20_000L) { result.await() }
-    }
-
-    private fun runtimePlan(executable: File, port: Int): String = JSONObject()
-        .put(
-            "nodes",
-            JSONArray().put(
-                JSONObject()
-                    .put("nodeId", "android-e2e-byedpi")
-                    .put("type", "byedpi")
-                    .put("name", "Android E2E ByeDPI")
-                    .put("host", "127.0.0.1")
-                    .put("port", port)
-                    .put("executablePath", executable.absolutePath)
-                    .put(
-                        "workingDirectory",
-                        File(context.cacheDir, "android-e2e-byedpi").absolutePath,
-                    )
-                    .put(
-                        "arguments",
-                        JSONArray(
-                            listOf(
-                                "--ip",
-                                "127.0.0.1",
-                                "--port",
-                                "$port",
-                                "--disorder",
-                                "1",
-                            ),
-                        ),
-                    )
-                    .put("revision", "android-e2e-v1")
-                    .put(
-                        "connectivityCheck",
-                        JSONObject()
-                            .put("urls", JSONArray())
-                            .put("required", false)
-                            .put("startup-timeout", 10)
-                            .put("resolver", "system"),
-                    )
-                    .put("startupFailurePatterns", JSONArray()),
-            ),
-        )
-        .toString()
-
-    private fun assertElfExecutable(name: String, file: File) {
-        assertTrue("$name is missing from nativeLibraryDir", file.isFile)
-        assertTrue("$name is not executable", file.canExecute())
-        val magic = file.inputStream().use { input -> ByteArray(4).also { input.read(it) } }
-        assertTrue(
-            "$name is not an ELF binary",
-            magic.contentEquals(byteArrayOf(0x7f, 0x45, 0x4c, 0x46)),
-        )
-    }
-
-    private fun primaryAbi(): String = android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-
     private fun remotePid(): Int {
-        val activityManager = context.getSystemService(ActivityManager::class.java)
-        val processName = "${context.packageName}:remote"
-        return activityManager.runningAppProcesses
-            ?.firstOrNull { it.processName == processName }
-            ?.pid ?: 0
-    }
-
-    private fun hasVpnTransport(): Boolean = vpnNetworkHandle() != null
-
-    @Suppress("DEPRECATION")
-    private fun vpnNetworkHandle(): Long? {
-        val connectivity = context.getSystemService(ConnectivityManager::class.java)
-        return connectivity.allNetworks.firstOrNull { network ->
-            connectivity.getNetworkCapabilities(network)
-                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-        }?.networkHandle
-    }
-
-    private fun foregroundNotification() =
-        context.getSystemService(NotificationManager::class.java)
-            .activeNotifications
-            .firstOrNull { it.id == CommonGlobalState.NOTIFICATION_ID }
-
-    private fun canConnect(port: Int): Boolean = runCatching {
-        Socket().use { socket -> socket.connect(InetSocketAddress("127.0.0.1", port), 200) }
-    }.isSuccess
-
-    private suspend fun await(
-        description: String,
-        timeoutMillis: Long = 20_000L,
-        condition: suspend () -> Boolean,
-    ) {
-        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMillis
-        while (android.os.SystemClock.elapsedRealtime() < deadline) {
-            if (runCatching { condition() }.getOrDefault(false)) return
-            delay(100L)
-        }
-        assertTrue("Timed out waiting for $description", false)
-    }
-
-    private fun JSONArray?.strings(): List<String> = buildList {
-        val source = this@strings ?: return@buildList
-        for (index in 0 until source.length()) add(source.getString(index))
+        val manager = context.getSystemService(android.app.ActivityManager::class.java)
+        return manager.runningAppProcesses.firstOrNull { it.processName == context.packageName + ":remote" }?.pid ?: -1
     }
 }

@@ -105,31 +105,16 @@ class Profiles extends _$Profiles with AutoDisposeNotifierMixin {
     );
   }
 
-  String? _getLabel(String? label, String id) {
-    final realLabel = label ?? id;
-    final hasDup = state.indexWhere(
-            (element) => element.label == realLabel && element.id != id) !=
-        -1;
-    if (hasDup) {
-      return _getLabel(utils.getOverwriteLabel(realLabel), id);
-    } else {
-      return label;
-    }
-  }
-
+  /// UI replica update; metadata normalization and persistence belong to Go.
   void setProfile(Profile profile) {
-    final profilesTemp = List<Profile>.from(state);
-    final index =
-        profilesTemp.indexWhere((element) => element.id == profile.id);
-    final updateProfile = profile.copyWith(
-      label: _getLabel(profile.label, profile.id),
-    );
-    if (index == -1) {
-      profilesTemp.add(updateProfile);
+    final next = List<Profile>.from(state);
+    final index = next.indexWhere((value) => value.id == profile.id);
+    if (index < 0) {
+      next.add(profile);
     } else {
-      profilesTemp[index] = updateProfile;
+      next[index] = profile;
     }
-    state = profilesTemp;
+    state = next;
   }
 
   void updateProfile(
@@ -164,7 +149,7 @@ class CurrentProfileId extends _$CurrentProfileId
   Future<void> _syncTileForProfileChange() async {
     // Native tile availability reads the persisted config, so refresh it only
     // after the current profile selection has been flushed to preferences.
-    await preferences.saveConfig(globalState.config);
+    await globalState.flushEdits();
     await productServices.androidShell.syncTileForProfileChange();
   }
 }

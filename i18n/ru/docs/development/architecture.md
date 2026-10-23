@@ -4,25 +4,31 @@ FlClashM построен на базе FlClashX. Продуктовая лог�
 
 ## 🔗 Главная цепочка
 
+Runtime path принадлежит единому Go backend (`core/backend/**`), который работает в Android-процессе `:remote` независимо от Flutter:
+
 ```
-RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineManager → EngineAdapter
+RawProfile + настройки + capabilities → Go Compiler + SecurityPolicy
+→ неизменяемый RuntimePlan → внутренний RuntimeCoordinator → EngineAdapter
 ```
 
 | Стадия | Что делает |
 |--------|-----------|
-| **RawProfile** | Исходный профиль как есть |
-| **ProfileCompiler** | Читает профиль, нормализует раздельное туннелирование, компилирует встроенные узлы |
-| **SecurityPolicy** | Принудительно включает TUN на Android |
-| **RuntimePlan** | Строит план запуска среды выполнения |
-| **EngineManager** | Управляет жизненным циклом движка |
-| **EngineAdapter** | Мост к `mihomo` |
+| **RawProfile** | Исходный профиль как есть, хранится в Go-каталоге вместе с настройками |
+| **Go Compiler** | Читает профиль, нормализует раздельное туннелирование, компилирует встроенные узлы |
+| **SecurityPolicy** | Защищает mixed port, ограничивает global mode, исключает приложение из VPN и фиксирует правила split tunneling |
+| **RuntimePlan** | Неизменяемый проверенный план с поколением и digest; клиент не передаёт свой план |
+| **RuntimeCoordinator** | Единственный владелец состояния runtime: очередь эффектов, отмена, откат, восстановление без UI |
+| **EngineAdapter / NodeAdapter** | Исполнение `mihomo` и отдельных процессов встроенных узлов |
+
+Подробный контракт API, состояний, хранения и миграции — в [описании Go backend](go-backend/architecture.md).
 
 ## 🧱 Слои
 
-1. 🎛 **База FlClashX** — UI, навигация, базовый runtime-путь.
-2. 📦 **Продуктовый слой** (`lib/product/**`) — компиляция профиля, безопасность, обновления, fork-only страницы.
-3. ⚙️ **Слой среды выполнения** — `mihomo` (baseline) и встроенные узлы `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
-4. 📱 **Слой платформы** — Android VPN, foreground-служба, установщик, уведомления.
+1. 🎛 **База FlClashX** — UI, навигация, пользовательские действия; состояние runtime получает из снимков и событий Go API v1.
+2. 🧠 **Go backend** (`core/backend/**`) — профили, подписки, настройки, компиляция, SecurityPolicy, исполнение и восстановление.
+3. ⚙️ **Слой среды выполнения** — `mihomo` и отдельные процессы встроенных узлов `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
+4. 📱 **Слой платформы** — Android-процесс `:remote`, разрешения, VPN/TUN, foreground-служба, события ОС; `:validator` изолирует разбор профиля.
+5. 📦 **Продуктовый слой** (`lib/product/**`) — тонкий клиент backend, обновления APK, диагностика, fork-only страницы.
 
 ## 🚧 Граница между базой и продуктом
 
@@ -43,13 +49,20 @@ dart tool/check_product_boundaries.dart
 
 | Сервис | Отвечает за |
 |--------|-------------|
-| `ProfileCompiler` | Чтение и нормализацию профиля |
-| `SecurityPolicy` | Обязательное включение TUN на Android |
-| `EngineManager` | Жизненный цикл движка |
-| `BuiltInProxySupervisor` | Жизненный цикл встроенных узлов |
+| Go `Compiler` + `SecurityPolicy` | Чтение, нормализацию и проверку профиля перед исполнением |
+| Go `RuntimeCoordinator` | Жизненный цикл движка и встроенных узлов, откат и восстановление |
+| `BackendClient` (Dart) | Команды UI и чтение снимков Go backend |
 | `AppUpdateService` | Проверку, загрузку и установку обновлений приложения |
 | `AppUpdateManifestVerifier` | Проверку подписи и контракта каталога обновлений |
-| `AccessControlService` | Раздельное туннелирование |
+| `AccessControlService` | Редактор раздельного туннелирования в UI |
+
+## Единый Go backend
+
+Контракт, миграция данных и этапы переноса: [Go backend](go-backend/architecture.md),
+[инвентаризация сценариев](go-backend/inventory.md),
+[журнал стабилизации](go-backend/stabilization.md). Прежние Dart `ProfileCompiler`,
+`EngineManager`, `BuiltInProxySupervisor` и Kotlin process manager удалены;
+описание выше отражает текущий runtime path.
 
 ---
 

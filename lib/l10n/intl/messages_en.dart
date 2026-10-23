@@ -149,6 +149,27 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoUpdateInterval": MessageLookupByLibrary.simpleMessage(
       "Auto update interval (minutes)",
     ),
+    "backendClosed": MessageLookupByLibrary.simpleMessage(
+      "Background service stopped before the operation finished",
+    ),
+    "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
+      "Operation cancelled",
+    ),
+    "backendOperationFailed": MessageLookupByLibrary.simpleMessage(
+      "Operation failed",
+    ),
+    "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
+      "Could not start FlClashM",
+    ),
+    "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
+      "The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.",
+    ),
+    "backendTimeout": MessageLookupByLibrary.simpleMessage(
+      "Background service did not respond in time",
+    ),
+    "backendUnavailable": MessageLookupByLibrary.simpleMessage(
+      "Background service is unavailable",
+    ),
     "backup": MessageLookupByLibrary.simpleMessage("Backup"),
     "backupAndRecovery": MessageLookupByLibrary.simpleMessage(
       "Backup and Recovery",
@@ -705,6 +726,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "restart": MessageLookupByLibrary.simpleMessage("Restart"),
     "restartCore": MessageLookupByLibrary.simpleMessage("Restart core"),
+    "retry": MessageLookupByLibrary.simpleMessage("Retry"),
     "routeAddress": MessageLookupByLibrary.simpleMessage("Route address"),
     "routeAddressDesc": MessageLookupByLibrary.simpleMessage(
       "Config listen route address",

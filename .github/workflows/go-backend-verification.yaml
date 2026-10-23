@@ -1,0 +1,63 @@
+name: go-backend-verification
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'tool/prepare_core.sh'
+      - 'tool/patches/**'
+      - '.github/workflows/go-backend-verification.yaml'
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'core/**'
+      - 'tool/prepare_core.sh'
+      - 'tool/patches/**'
+      - '.github/workflows/go-backend-verification.yaml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: core/go.sum
+      - name: Prepare reviewed core dependencies
+        run: bash tool/prepare_core.sh
+      - name: Check formatting and analyze
+        working-directory: core
+        env:
+          GOFLAGS: -mod=vendor
+        run: |
+          test -z "$(gofmt -l backend)"
+          go vet ./...
+      - name: Test portable host and core without Android
+        working-directory: core
+        env:
+          CGO_ENABLED: '0'
+          GOFLAGS: -mod=vendor
+        run: go test ./...
+      - name: Race detector
+        working-directory: core
+        env:
+          CGO_ENABLED: '1'
+          GOFLAGS: -mod=vendor
+        run: go test -race ./...

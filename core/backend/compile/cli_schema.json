@@ -1,0 +1,652 @@
+[
+  {
+    "short": "N",
+    "long": "no-domain",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "DNS behavior is owned by FlClashM"
+  },
+  {
+    "short": "U",
+    "long": "no-udp",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "UDP behavior is owned by FlClashM"
+  },
+  {
+    "short": "I",
+    "long": "conn-ip",
+    "kind": "address",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "the outbound bind address is owned by FlClashM"
+  },
+  {
+    "short": "b",
+    "long": "buf-size",
+    "kind": "bufferSize",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process resource limits are owned by FlClashM"
+  },
+  {
+    "short": "c",
+    "long": "max-conn",
+    "kind": "connectionLimit",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process resource limits are owned by FlClashM"
+  },
+  {
+    "short": "x",
+    "long": "debug",
+    "kind": "debugLevel",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "runtime logging is owned by FlClashM"
+  },
+  {
+    "short": "F",
+    "long": "tfo",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process networking is owned by FlClashM"
+  },
+  {
+    "short": "T",
+    "long": "timeout",
+    "kind": "timeout",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process timeouts are owned by FlClashM"
+  },
+  {
+    "short": "g",
+    "long": "def-ttl",
+    "kind": "uint8",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process networking is owned by FlClashM"
+  },
+  {
+    "short": "A",
+    "long": "auto",
+    "kind": "autoDetect",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "groupSeparator",
+    "forbidden": null
+  },
+  {
+    "short": "L",
+    "long": "auto-mode",
+    "kind": "autoMode",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "u",
+    "long": "cache-ttl",
+    "kind": "positiveInteger",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "K",
+    "long": "proto",
+    "kind": "protocolList",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "H",
+    "long": "hosts",
+    "kind": "inlineData",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "j",
+    "long": "ipset",
+    "kind": "inlineData",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "V",
+    "long": "pf",
+    "kind": "portRange",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "R",
+    "long": "round",
+    "kind": "positiveRange",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "s",
+    "long": "split",
+    "kind": "position",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "d",
+    "long": "disorder",
+    "kind": "position",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "o",
+    "long": "oob",
+    "kind": "position",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "q",
+    "long": "disoob",
+    "kind": "position",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "f",
+    "long": "fake",
+    "kind": "position",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "S",
+    "long": "md5sig",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "n",
+    "long": "fake-sni",
+    "kind": "text",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "t",
+    "long": "ttl",
+    "kind": "uint8",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "l",
+    "long": "fake-data",
+    "kind": "inlineData",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "O",
+    "long": "fake-offset",
+    "kind": "position",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "Q",
+    "long": "fake-tls-mod",
+    "kind": "fakeTlsModifiers",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "e",
+    "long": "oob-data",
+    "kind": "escapedCharacter",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "M",
+    "long": "mod-http",
+    "kind": "httpModifiers",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "r",
+    "long": "tlsrec",
+    "kind": "tlsRecordPosition",
+    "repeatable": true,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "m",
+    "long": "tlsminor",
+    "kind": "uint8",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "a",
+    "long": "udp-fake",
+    "kind": "nonNegativeInteger",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "Y",
+    "long": "drop-sack",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": null
+  },
+  {
+    "short": "i",
+    "long": "ip",
+    "kind": "address",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "the listener address is owned by FlClashM"
+  },
+  {
+    "short": "p",
+    "long": "port",
+    "kind": "positiveInteger",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "the listener port is owned by FlClashM"
+  },
+  {
+    "short": "D",
+    "long": "daemon",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "process lifecycle is owned by FlClashM"
+  },
+  {
+    "short": "w",
+    "long": "pidfile",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "process lifecycle is owned by FlClashM"
+  },
+  {
+    "short": "E",
+    "long": "transparent",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "transparent mode bypasses the local SOCKS contract"
+  },
+  {
+    "short": "P",
+    "long": "protect-path",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "file delivery is not supported"
+  },
+  {
+    "short": "y",
+    "long": "cache-file",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "user-selected file paths are not supported"
+  },
+  {
+    "short": "B",
+    "long": "copy",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented parser control is not supported"
+  },
+  {
+    "short": "Z",
+    "long": "wait-send",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented runtime control is not supported"
+  },
+  {
+    "short": "W",
+    "long": "await-int",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented runtime control is not supported"
+  },
+  {
+    "short": "C",
+    "long": "connect-to",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented outbound redirection is not supported"
+  },
+  {
+    "short": "#",
+    "long": "comment",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented parser metadata is not supported"
+  },
+  {
+    "short": "/",
+    "long": "cache-merge",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented cache control is not supported"
+  },
+  {
+    "short": "X",
+    "long": "no-ipv6",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented network control is not supported"
+  },
+  {
+    "short": "h",
+    "long": "help",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "process control flags are not runtime arguments"
+  },
+  {
+    "short": "v",
+    "long": "version",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "process control flags are not runtime arguments"
+  }
+]

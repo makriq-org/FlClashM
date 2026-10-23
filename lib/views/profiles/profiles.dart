@@ -46,18 +46,13 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
     final updateProfiles = profiles.map<Future>(
       (profile) async {
         if (profile.type == ProfileType.file) return;
-        globalState.appController.setProfile(
-          profile.copyWith(isUpdating: true),
-        );
         try {
           await globalState.appController.updateProfile(profile);
         } catch (e) {
-          messages.add("${profile.label ?? profile.id}: $e \n");
-          globalState.appController.setProfile(
-            profile.copyWith(
-              isUpdating: false,
-            ),
-          );
+          final message = globalState.describeError(e);
+          if (message.isNotEmpty) {
+            messages.add("${profile.label ?? profile.id}: $message \n");
+          }
         }
       },
     );
@@ -362,10 +357,10 @@ class _ProfileItemState extends State<ProfileItem> {
     final commonScaffoldState = context.commonScaffoldState;
     final res = await commonScaffoldState?.loadingRun<bool>(
       () async {
-        final file = await widget.profile.getFile();
+        final bytes = await widget.profile.exportBytes();
         final value = await picker.saveFile(
           widget.profile.label ?? widget.profile.id,
-          file.readAsBytesSync(),
+          bytes,
         );
         if (value == null) return false;
         return true;
@@ -574,7 +569,9 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
             tooltip: appLocalizations.save,
             onPressed: () {
               Navigator.of(context).pop();
-              globalState.appController.setProfiles(profiles);
+              globalState.appController.reorderProfiles([
+                for (final profile in profiles) profile.id,
+              ]);
             },
             icon: const Icon(
               Icons.save,

@@ -1,6 +1,7 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/widgets/proxy_group_sliver.dart';
 import 'package:flclashx/providers/app.dart';
 import 'package:flclashx/providers/config.dart';
 import 'package:flclashx/providers/state.dart';
@@ -64,7 +65,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
 
   @override
   Widget build(BuildContext context) => Consumer(
-      builder: (_, ref, __) {
+      builder: (_, ref, _) {
         final state = ref.watch(proxiesListSelectorStateProvider);
 
         final groupsVersion = ref.watch(versionProvider);
@@ -105,11 +106,14 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                   behavior: HiddenBarScrollBehavior(),
                   child: FocusTraversalGroup(
                     policy: WidgetOrderTraversalPolicy(),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
+                    child: CustomScrollView(
                       controller: _controller,
-                      itemCount: items.length,
-                      itemBuilder: (_, index) => items[index],
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.all(16),
+                          sliver: SliverMainAxisGroup(slivers: items),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -141,17 +145,12 @@ class ProxyGroupCard extends StatefulWidget {
 }
 
 class _ProxyGroupCardState extends State<ProxyGroupCard> {
-  final _expansibleController = ExpansibleController();
-
   bool isLock = false;
-  bool _bodyMounted = false;
   late List<Proxy> _sortedProxies;
 
   String get icon => widget.group.icon;
 
   String get groupName => widget.group.name;
-
-  bool get isExpand => _expansibleController.isExpanded;
 
   List<Proxy> _resolveProxies() =>
       globalState.appController.getSortProxies(
@@ -178,34 +177,13 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     }
   }
 
-  void _collapseAndReleaseBody() {
-    _expansibleController.collapse();
-    Future<void>.delayed(kThemeAnimationDuration, () {
-      if (mounted && !_expansibleController.isExpanded) {
-        setState(() => _bodyMounted = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _expansibleController.dispose();
-    super.dispose();
-  }
-
   void _toggleExpansion(Set<String> currentUnfoldSet) {
-    final appController = globalState.appController;
     final unfoldSet = Set<String>.from(currentUnfoldSet);
     
-    if (_expansibleController.isExpanded) {
-      _collapseAndReleaseBody();
-      unfoldSet.remove(groupName);
-    } else {
-      setState(() => _bodyMounted = true);
-      _expansibleController.expand();
+    if (!unfoldSet.remove(groupName)) {
       unfoldSet.add(groupName);
     }
-    appController.updateCurrentUnfoldSet(unfoldSet);
+    globalState.appController.updateCurrentUnfoldSet(unfoldSet);
   }
 
   Future<void> _delayTest() async {
@@ -256,67 +234,49 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
       },
     );
 
-  List<Widget> _buildProxyRows() => _sortedProxies
-      .chunks(widget.columns)
-      .map<Widget>((proxies) {
-        final children = proxies
-            .map<Widget>(
-              (proxy) => Flexible(
-                flex: 1,
-                child: RepaintBoundary(
-                  child: ProxyCard(
-                    testUrl: widget.group.testUrl,
-                    type: widget.type,
-                    groupType: widget.group.type,
-                    key: ValueKey('$groupName.${proxy.name}'),
-                    proxy: proxy,
-                    groupName: groupName,
-                  ),
-                ),
+  Widget _buildProxyRow(int index) {
+    final proxies =
+        _sortedProxies.skip(index * widget.columns).take(widget.columns);
+    final children = proxies
+        .map<Widget>(
+          (proxy) => Flexible(
+            flex: 1,
+            child: RepaintBoundary(
+              child: ProxyCard(
+                testUrl: widget.group.testUrl,
+                type: widget.type,
+                groupType: widget.group.type,
+                key: ValueKey('$groupName.${proxy.name}'),
+                proxy: proxy,
+                groupName: groupName,
               ),
-            )
-            .fill(
-              widget.columns,
-              filler: (_) => const Flexible(child: SizedBox()),
-            )
-            .separated(const SizedBox(width: 8));
-        return Row(children: children.toList());
-      })
-      .separated(
-        SizedBox(
-          height: widget.type == ProxyCardType.oneline ? 4 : 8,
-        ),
-      )
-      .toList();
+            ),
+          ),
+        )
+        .fill(
+          widget.columns,
+          filler: (_) => const Flexible(child: SizedBox()),
+        )
+        .separated(const SizedBox(width: 8));
+    return Row(children: children.toList());
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
     return Consumer(
-      builder: (_, ref, __) {
+      builder: (_, ref, _) {
         final unfoldSet = ref.watch(unfoldSetProvider);
         final shouldExpand = unfoldSet.contains(groupName);
-        final mountBody = _bodyMounted || shouldExpand;
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (shouldExpand && !_expansibleController.isExpanded) {
-            _bodyMounted = true;
-            _expansibleController.expand();
-          } else if (!shouldExpand && _expansibleController.isExpanded) {
-            _collapseAndReleaseBody();
-          }
-        });
-        
-        return RepaintBoundary(
-          // No per-group FocusTraversalGroup: wrapping each card in its own
-          // traversal group made every group a membrane the D-pad had to step
-          // out of and back into, costing an extra press to cross between groups.
-          // The whole list shares the outer group (ProxiesListView), so
-          // directional nav flows straight through; ExcludeFocus still keeps a
-          // folded group's hidden proxies out of the traversal.
-          child: Expansible(
-              controller: _expansibleController,
-              headerBuilder: (context, animation) => GestureDetector(
+        return ProxyGroupSliver(
+          expanded: shouldExpand,
+          rowCount: (_sortedProxies.length / widget.columns).ceil(),
+          rowHeight: getItemHeight(widget.type)
+              .clamp(kMinInteractiveDimension, double.infinity)
+              .toDouble(),
+          spacing: widget.type == ProxyCardType.oneline ? 4 : 8,
+          rowBuilder: (_, index) => _buildProxyRow(index),
+          header: GestureDetector(
                 onTap: () => _toggleExpansion(unfoldSet),
                 child: Container(
                   decoration: BoxDecoration(
@@ -348,7 +308,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
                                   Flexible(
                                     flex: 1,
                                     child: Consumer(
-                                      builder: (_, ref, __) {
+                                      builder: (_, ref, _) {
                                         final proxyName = ref
                                             .watch(getSelectedProxyNameProvider(groupName))
                                             .getSafeValue("");
@@ -396,7 +356,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
                             padding: EdgeInsets.zero,
                             constraints:
                                 const BoxConstraints.tightFor(width: 40, height: 40),
-                            icon: CommonExpandIcon(expand: isExpand),
+                            icon: CommonExpandIcon(expand: shouldExpand),
                           ),
                         ],
                       ),
@@ -404,33 +364,6 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
                   ),
                 ),
               ),
-              bodyBuilder: (context, animation) => ExcludeFocus(
-                // A collapsed group keeps its proxy cards mounted — SizeTransition
-                // only clips them to zero height — and every card is a focusable
-                // OutlinedButton. On Android TV the D-pad would otherwise dive into
-                // these invisible cards, so the highlight jitters and looks like it
-                // skips whole groups. Drop the folded body from focus traversal.
-                excluding: !shouldExpand,
-                child: RepaintBoundary(
-                  child: SizeTransition(
-                    sizeFactor: animation,
-                    axisAlignment: -1.0,
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Column(
-                          children:
-                              mountBody ? _buildProxyRows() : const [],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              expansibleBuilder: (context, header, body, animation) =>
-                  Column(children: [header, body]),
-            ),
         );
       },
     );

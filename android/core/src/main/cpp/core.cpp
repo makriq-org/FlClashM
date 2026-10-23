@@ -64,7 +64,7 @@ call_tun_interface_resolve_process_impl(void *tun_interface, int protocol,
 }
 
 /**
- * Delivered for one-shot callbacks (invokeAction / quickStart). After invoking
+ * Delivered for one-shot callbacks (invokeAction). After invoking
  * onResult we drop the global ref — the Go side never releases these.
  */
 static void invoke_callback_impl(void *callback, const char *data) {
@@ -122,18 +122,6 @@ Java_com_follow_clashx_core_Core_invokeAction(JNIEnv *env, jobject, jstring data
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_quickStart(JNIEnv *env, jobject,
-                                            jstring init, jstring params, jstring state,
-                                            jobject cb) {
-    const auto interface = new_global(cb);
-    scoped_string c_init = get_string(init);
-    scoped_string c_params = get_string(params);
-    scoped_string c_state = get_string(state);
-    quickStart(c_init, c_params, c_state, interface);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
 Java_com_follow_clashx_core_Core_setEventListener(JNIEnv *env, jobject, jobject cb) {
     if (cb == nullptr) {
         setEventListener(nullptr);
@@ -141,20 +129,6 @@ Java_com_follow_clashx_core_Core_setEventListener(JNIEnv *env, jobject, jobject 
     }
     const auto interface = new_global(cb);
     setEventListener(interface);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_setState(JNIEnv *env, jobject, jstring s) {
-    scoped_string c_s = get_string(s);
-    setState(c_s);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_updateDns(JNIEnv *env, jobject, jstring s) {
-    scoped_string c_s = get_string(s);
-    updateDns(c_s);
 }
 
 // Helper macro for getters returning a Go-allocated char* that must be freed via
@@ -198,24 +172,6 @@ extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_follow_clashx_core_Core_getAndroidVpnOptions(JNIEnv *env, jobject) {
     RETURN_GO_STRING(getAndroidVpnOptions());
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_resetConnections(JNIEnv *, jobject) {
-    resetConnections();
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_startListener(JNIEnv *, jobject) {
-    startListener();
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_follow_clashx_core_Core_stopListener(JNIEnv *, jobject) {
-    stopListener();
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -8,6 +9,7 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/pages/editor.dart';
 import 'package:flclashx/pages/editor_window.dart';
 import 'package:flclashx/state.dart';
+import 'package:flclashx/product/backend/backend.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -37,6 +39,41 @@ class _EditProfileViewState extends State<EditProfileView> {
 
   Profile get profile => widget.profile;
 
+  Future<void>? _loading;
+  int _revision = 0;
+
+  // A failed load is retried by the next action instead of being cached.
+  Future<void> _loaded() async {
+    final loading = _loading ??= _load();
+    try {
+      await loading;
+    } catch (_) {
+      if (identical(_loading, loading)) _loading = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _load() async {
+    final record = await backendClient.profile(profile.id);
+    if (!mounted) return;
+    _revision = (record['revision'] as num).toInt();
+    rawText = record['source'] as String;
+    fileInfoNotifier.value = FileInfo(
+      size: utf8.encode(rawText!).length,
+      lastModified:
+          profile.lastUpdateDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  @override
+  void dispose() {
+    labelController.dispose();
+    urlController.dispose();
+    autoUpdateDurationController.dispose();
+    fileInfoNotifier.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -46,15 +83,16 @@ class _EditProfileViewState extends State<EditProfileView> {
     autoUpdateDurationController = TextEditingController(
       text: widget.profile.autoUpdateDuration.inMinutes.toString(),
     );
-    appPath.getProfilePath(widget.profile.id).then((path) async {
-      fileInfoNotifier.value = await _getFileInfo(path);
-    });
+    unawaited(
+      _loaded().catchError((error) {
+        commonPrint.log('Profile load failed: $error');
+      }),
+    );
   }
 
   Future<void> _handleConfirm() async {
     if (!_formKey.currentState!.validate()) return;
-    final appController = globalState.appController;
-    var profile = this.profile.copyWith(
+    var draft = profile.copyWith(
           url: urlController.text,
           label: labelController.text,
           autoUpdate: autoUpdate,
@@ -64,43 +102,61 @@ class _EditProfileViewState extends State<EditProfileView> {
             ),
           ),
         );
-    final hasUpdate = widget.profile.url != profile.url;
-    if (fileData != null) {
-      if (profile.type == ProfileType.url && autoUpdate) {
-        final res = await globalState.showMessage(
-          title: appLocalizations.tip,
-          message: TextSpan(
-            text: appLocalizations.profileHasUpdate,
-          ),
-        );
-        if (res == true) {
-          profile = profile.copyWith(
-            autoUpdate: false,
-          );
-        }
-      }
-      appController.setProfileAndAutoApply(
-        await profile.saveFile(
-          fileData!,
-          validateConfig: globalState.validateProfileConfigText,
+    if (fileData != null && draft.type == ProfileType.url && autoUpdate) {
+      final disable = await globalState.showMessage(
+        title: appLocalizations.tip,
+        message: TextSpan(
+          text: appLocalizations.profileHasUpdate,
         ),
       );
-    } else if (!hasUpdate) {
-      appController.setProfileAndAutoApply(profile);
-    } else {
-      globalState.homeScaffoldKey.currentState?.loadingRun(
-        () async {
-          await Future.delayed(
-            commonDuration,
-          );
-          if (hasUpdate) {
-            await appController.updateProfile(profile);
-          }
-        },
-      );
+      if (disable == true) draft = draft.copyWith(autoUpdate: false);
     }
-    if (mounted) {
+    final scaffold = globalState.homeScaffoldKey.currentState;
+    Future<bool?> save() =>
+        globalState.safeRun(() => _save(draft), silence: false);
+    final saved = scaffold != null && scaffold.mounted
+        ? await scaffold.loadingRun(save)
+        : await save();
+    // On failure the error was shown and the sheet stays open for a retry.
+    if (saved == true && mounted) {
       Navigator.of(context).pop();
+    }
+  }
+
+  Future<bool> _save(Profile draft) async {
+    await _loaded();
+    try {
+      final data = fileData;
+      if (data != null) {
+        final receipt = await backendClient.saveSource(
+          draft.toBackendMetadata(),
+          data,
+          expectedRevision: _revision,
+        );
+        _revision = (receipt['revision'] as num).toInt();
+        fileData = null;
+      } else {
+        final receipt = await backendClient.command('profile.put', {
+          'metadata': draft.toBackendMetadata(),
+          'expectedRevision': _revision,
+        });
+        _revision = (receipt['revision'] as num).toInt();
+        if (widget.profile.url != draft.url) {
+          await backendClient.command('subscription.refresh', {
+            'profileId': draft.id,
+          });
+        }
+      }
+      return true;
+    } catch (error) {
+      _rememberCommittedRevision(error);
+      rethrow;
+    }
+  }
+
+  void _rememberCommittedRevision(Object error) {
+    if (error is BackendCommittedException) {
+      _revision = error.revisionFor(widget.profile.id) ?? _revision;
     }
   }
 
@@ -109,19 +165,6 @@ class _EditProfileViewState extends State<EditProfileView> {
     setState(() {
       autoUpdate = value;
     });
-  }
-
-  Future<FileInfo?> _getFileInfo(path) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      return null;
-    }
-    final lastModified = await file.lastModified();
-    final size = await file.length();
-    return FileInfo(
-      size: size,
-      lastModified: lastModified,
-    );
   }
 
   Future<void> _handleSaveEdit(BuildContext context, String data) async {
@@ -145,12 +188,11 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   Future<void> _editProfileFile() async {
-    if (rawText == null) {
-      final profilePath = await appPath.getProfilePath(widget.profile.id);
-      final file = File(profilePath);
-      if (await file.exists()) {
-        rawText = await file.readAsString();
-      }
+    try {
+      await _loaded();
+    } catch (error) {
+      globalState.showNotifier(globalState.describeError(error));
+      return;
     }
     if (!mounted) return;
     final title = widget.profile.label ?? widget.profile.id;
@@ -174,11 +216,19 @@ class _EditProfileViewState extends State<EditProfileView> {
         cancelLabel: appLocalizations.cancel,
         onSave: (content, disableAutoUpdate) async {
           try {
-            var saved = await widget.profile.saveFileWithString(content);
+            final receipt = await backendClient.saveSource(
+              widget.profile.toBackendMetadata(),
+              Uint8List.fromList(utf8.encode(content)),
+              expectedRevision: _revision,
+            );
+            _revision = (receipt['revision'] as num).toInt();
             if (disableAutoUpdate) {
-              saved = saved.copyWith(autoUpdate: false);
+              final updated = await backendClient.command('profile.put', {
+                'metadata': {'id': widget.profile.id, 'autoUpdate': false},
+                'expectedRevision': _revision,
+              });
+              _revision = (updated['revision'] as num).toInt();
             }
-            globalState.appController.setProfileAndAutoApply(saved);
             if (mounted) {
               rawText = content;
               fileData = null;
@@ -192,6 +242,7 @@ class _EditProfileViewState extends State<EditProfileView> {
             }
             return null;
           } catch (e) {
+            _rememberCommittedRevision(e);
             return e.toString();
           }
         },

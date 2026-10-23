@@ -29,26 +29,6 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   void initState() {
     super.initState();
     clashMessage.addListener(this);
-    globalState.appController.markRuntimeConfigListenerReady();
-    ref.listenManual(needSetupProvider, (prev, next) {
-      if (prev != next) {
-        globalState.appController.handleChangeProfile();
-      }
-    });
-    ref.listenManual(coreStateProvider, (prev, next) async {
-      if (prev != next) {
-        await clashCore.setState(next);
-      }
-    });
-    ref.listenManual(updateParamsProvider, (prev, next) {
-      if (prev != next) {
-        if (globalState.appController.consumeSuppressedRuntimeConfigUpdate()) {
-          return;
-        }
-        globalState.appController.updateClashConfigDebounce();
-      }
-    });
-
     ref.listenManual(
       appSettingProvider.select((state) => state.openLogs),
       (prev, next) {
@@ -64,7 +44,6 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   @override
   Future<void> dispose() async {
     clashMessage.removeListener(this);
-    globalState.appController.markRuntimeConfigListenerNotReady();
     super.dispose();
   }
 

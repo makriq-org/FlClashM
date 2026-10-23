@@ -8,7 +8,7 @@ import 'package:flclashx/state.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flclashx/product/backend/backend.dart';
 
 class OverrideNetworkSettingsItem extends ConsumerWidget {
   const OverrideNetworkSettingsItem({super.key});
@@ -364,7 +364,6 @@ class SendHeadersToggle extends StatefulWidget {
 }
 
 class _SendHeadersToggleState extends State<SendHeadersToggle> {
-  static const _preferenceKey = 'sendDeviceHeaders';
   bool _sendHeaders = true;
 
   @override
@@ -374,20 +373,39 @@ class _SendHeadersToggleState extends State<SendHeadersToggle> {
   }
 
   Future<void> _loadPreference() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      await backendClient.refresh();
+    } catch (error) {
+      // Fall back to the last projected snapshot.
+      commonPrint.log('Send headers preference refresh failed: $error');
+    }
     if (mounted) {
       setState(() {
-        _sendHeaders = prefs.getBool(_preferenceKey) ?? true;
+        _sendHeaders =
+            backendClient.settings['sendDeviceHeaders'] as bool? ?? true;
       });
     }
   }
 
   Future<void> _updatePreference(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_preferenceKey, value);
+    final previous = _sendHeaders;
     setState(() {
       _sendHeaders = value;
     });
+    try {
+      await backendClient.command('settings.patch', {
+        'patch': {'sendDeviceHeaders': value},
+      });
+    } catch (error) {
+      commonPrint.log('Send headers preference update failed: $error');
+      // A newer toggle superseded this patch and already owns the switch.
+      if (isSilentBackendError(error)) return;
+      globalState.showNotifier(globalState.describeError(error));
+      if (!mounted) return;
+      setState(() {
+        _sendHeaders = previous;
+      });
+    }
   }
 
   @override

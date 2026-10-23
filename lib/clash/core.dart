@@ -10,8 +10,7 @@ import 'package:flclashx/common/process_icon.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/state.dart';
-import 'package:flutter/services.dart';
-import 'package:path/path.dart';
+import 'package:flclashx/product/backend/backend.dart';
 
 class ClashCore {
 
@@ -32,68 +31,9 @@ class ClashCore {
 
   Future<bool> preload() => clashInterface.preload();
 
-  static Future<void> initGeo() async {
-    final homePath = await appPath.homeDirPath;
-    final homeDir = Directory(homePath);
-    final isExists = await homeDir.exists();
-    if (!isExists) {
-      await homeDir.create(recursive: true);
-    }
-    const geoFileNameList = [
-      mmdbFileName,
-      geoIpFileName,
-      geoSiteFileName,
-      asnFileName,
-    ];
-    try {
-      for (final geoFileName in geoFileNameList) {
-        final geoFile = File(
-          join(homePath, geoFileName),
-        );
-        final isExists = await geoFile.exists();
-        if (isExists) {
-          continue;
-        }
-        final data = await rootBundle.load('assets/data/$geoFileName');
-        final List<int> bytes = data.buffer.asUint8List();
-        await geoFile.writeAsBytes(bytes, flush: true);
-      }
-    } catch (e) {
-      exit(0);
-    }
-  }
-
-  Future<bool> init() async {
-    await initGeo();
-    if (globalState.config.appSetting.openLogs) {
-      clashCore.startLog();
-    } else {
-      clashCore.stopLog();
-    }
-    final homeDirPath = await appPath.homeDirPath;
-    return clashInterface.init(
-      InitParams(
-        homeDir: homeDirPath,
-        version: globalState.appState.version,
-      ),
-    );
-  }
-
-  Future<bool> setState(CoreState state) => clashInterface.setState(state);
-
   Future<bool> setUiActive(bool active) => clashInterface.setUiActive(active);
 
-  Future<void> shutdown() async {
-    await clashInterface.shutdown();
-  }
-
   FutureOr<bool> get isInit => clashInterface.isInit;
-
-  FutureOr<String> validateConfig(String data) => clashInterface.validateConfig(data);
-
-  Future<String> updateConfig(UpdateParams updateParams) => clashInterface.updateConfig(updateParams);
-
-  Future<String> setupConfig(SetupParams setupParams) => clashInterface.setupConfig(setupParams);
 
   Future<Map<String, dynamic>> tunnelHTTPRequest(
     Map<String, dynamic> params,
@@ -165,8 +105,6 @@ class ClashCore {
         .toList();
   }
 
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) async => await clashInterface.changeProxy(changeProxyParams);
-
   Future<List<Connection>> getConnections() async {
     final res = await clashInterface.getConnections();
     final connectionsData = json.decode(res) as Map;
@@ -193,15 +131,29 @@ class ClashCore {
   }
 
   void closeConnection(String id) {
-    clashInterface.closeConnection(id);
+    _fireEngineCommand('connection.close', {'id': id});
   }
 
   void closeConnections() {
-    clashInterface.closeConnections();
+    _fireEngineCommand('connections.close');
   }
 
   void resetConnections() {
-    clashInterface.resetConnections();
+    _fireEngineCommand('connections.reset');
+  }
+
+  // Fire-and-forget UI actions still surface failures in the log.
+  void _fireEngineCommand(String method, [Map<String, dynamic>? params]) {
+    unawaited(
+      backendClient
+          .command('engine.command', {'method': method, 'params': ?params})
+          .then<void>(
+        (_) {},
+        onError: (Object error) {
+          commonPrint.log('Engine command $method failed: $error');
+        },
+      ),
+    );
   }
 
   Future<List<ExternalProvider>> getExternalProviders() async {
@@ -233,25 +185,34 @@ class ClashCore {
     return ExternalProvider.fromJson(json.decode(externalProvidersRawString));
   }
 
-  Future<String> updateGeoData(UpdateGeoDataParams params) => clashInterface.updateGeoData(params);
+  Future<String> _engineCommand(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    try {
+      await backendClient.command('engine.command', {
+        'method': method,
+        'params': params,
+      });
+      return '';
+    } catch (error) {
+      commonPrint.log('Engine command $method failed: $error');
+      return describeBackendError(error, reportSuperseded: true);
+    }
+  }
+
+  Future<String> updateGeoData(UpdateGeoDataParams params) =>
+      _engineCommand('geo.update', params.toJson());
 
   Future<String> sideLoadExternalProvider({
     required String providerName,
     required String data,
-  }) => clashInterface.sideLoadExternalProvider(
-        providerName: providerName, data: data);
+  }) =>
+      _engineCommand('provider.sideload', {'name': providerName, 'data': data});
 
   Future<String> updateExternalProvider({
     required String providerName,
-  }) async => clashInterface.updateExternalProvider(providerName);
-
-  Future<void> startListener() async {
-    await clashInterface.startListener();
-  }
-
-  Future<void> stopListener() async {
-    await clashInterface.stopListener();
-  }
+  }) => _engineCommand('provider.refresh', {'name': providerName});
 
   Future<void> healthCheck([String groupName = '']) => clashInterface.healthCheck(groupName);
 
@@ -260,15 +221,11 @@ class ClashCore {
     return Delay.fromJson(json.decode(data));
   }
 
-  Future<Map<String, dynamic>> getConfig(String id) async {
-    final profilePath = await appPath.getProfilePath(id);
-    final res = await clashInterface.getConfig(profilePath);
-    if (res.isSuccess) {
-      return Map<String, dynamic>.from(res.data as Map);
-    } else {
-      throw res.message;
-    }
-  }
+  Future<Map<String, dynamic>> getConfig(String id) async =>
+      Map<String, dynamic>.from(
+        await backendClient.request('profile.inspect', {'profileId': id})
+            as Map,
+      );
 
   Future<Traffic> getTraffic() async {
     final trafficString = await clashInterface.getTraffic();
@@ -314,7 +271,7 @@ class ClashCore {
   }
 
   void resetTraffic() {
-    clashInterface.resetTraffic();
+    _fireEngineCommand('traffic.reset');
   }
 
   void startLog() {

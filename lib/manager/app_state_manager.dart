@@ -99,24 +99,6 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
       },
       fireImmediately: true,
     );
-    ref.listenManual(
-      globalModeEnabledProvider,
-      (prev, next) {
-        if (next) {
-          return;
-        }
-        final currentMode = ref.read(
-          patchClashConfigProvider.select((state) => state.mode),
-        );
-        if (currentMode != Mode.global) {
-          return;
-        }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          globalState.appController.changeMode(Mode.rule);
-        });
-      },
-      fireImmediately: true,
-    );
   }
 
   @override
@@ -140,7 +122,6 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         state == AppLifecycleState.inactive) {
       globalState.appController.savePreferences();
       if (Platform.isAndroid) {
-        globalState.engineManager.pauseUpdateTasks();
         globalState.appController.stopRunTimeTimer();
         globalState.stopGroupsUpdateTask();
         // Tell the core the UI is backgrounded: it pauses the request forwarder
@@ -177,13 +158,16 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         // Optimistically restart timers from the cached state so the runtime
         // display doesn't stall while the probe below is in flight...
         if (globalState.isStart) {
-          await globalState.engineManager.resumeUpdateTasks();
           globalState.appController.startRunTimeTimer();
         }
         // ...then align with the native truth: STOP/START events are lost
         // while the process is frozen/killed, and the cached state never
         // self-heals without this.
-        unawaited(globalState.appController.syncVpnStateOnResume());
+        unawaited(
+          globalState.appController.syncVpnStateOnResume().catchError(
+                (error) => commonPrint.log('Resume sync failed: $error'),
+              ),
+        );
       }
     }
   }

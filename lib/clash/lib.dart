@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/backend/backend_connection.dart';
 import 'package:flutter/services.dart';
 
 import 'interface.dart';
@@ -23,28 +24,59 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   final MethodChannel _channel =
       const MethodChannel('com.makriq.flclash/service');
-  Completer<bool> _initCompleter = Completer<bool>();
-  // Guards against launching a second concurrent native `init` while a prior
-  // _init() is still awaiting (its completer not yet settled).
-  bool _initInFlight = false;
+  final _backendEvents = StreamController<Map<String, dynamic>>.broadcast(
+    sync: true,
+  );
+  Stream<Map<String, dynamic>> get backendEvents => _backendEvents.stream;
+  // Fires after the binding is re-established, e.g. when :remote was
+  // replaced; events emitted before Dart re-registered must be resynced.
+  final _backendReconnects = StreamController<void>.broadcast();
+  Stream<void> get backendReconnects => _backendReconnects.stream;
+
+  Future<bool> requestVpnPermission() async =>
+      await _channel.invokeMethod<bool>('requestVpnPermission') ?? false;
+
+  Future<Map<String, dynamic>> invokeBackend(
+    Map<String, dynamic> request,
+  ) async {
+    if (!await preload())
+      throw StateError('Android backend connection is unavailable');
+    final raw = await _channel.invokeMethod<String>(
+      'invokeAction',
+      jsonEncode({
+        'id': request['operationId'],
+        'method': 'backend',
+        'data': request,
+      }),
+    );
+    if (raw == null || raw.isEmpty) throw StateError('Empty backend response');
+    final envelope = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    if (envelope['code'] != 0) throw StateError('${envelope['data']}');
+    return Map<String, dynamic>.from(envelope['data'] as Map);
+  }
+
+  late final _connection = BackendConnection(
+    connect: _connect,
+    onReconnected: () => _backendReconnects.add(null),
+  );
+  bool get _initInFlight => _connection.connecting;
 
   static const int _maxCrashRetries = 5;
   int _crashCount = 0;
   DateTime? _lastCrashTime;
 
-  Future<void> _init() async {
-    _initInFlight = true;
+  Future<void> _init() async => _connection.ensure().then((_) {});
+
+  Future<bool> _connect() async {
     try {
       await _channel
           .invokeMethod<String>('init')
           .timeout(const Duration(seconds: 15));
       _crashCount = 0;
-      if (!_initCompleter.isCompleted) _initCompleter.complete(true);
+      return true;
     } catch (e) {
       commonPrint.log('ClashLib init failed: $e');
-      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
-    } finally {
-      _initInFlight = false;
+      return false;
     }
   }
 
@@ -62,7 +94,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         'service crash loop: $_crashCount crashes, giving up. '
         'Restart the app to retry.',
       );
-      if (!_initCompleter.isCompleted) _initCompleter.complete(false);
       return;
     }
 
@@ -78,7 +109,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
       commonPrint.log('service crash restart skipped: init already in flight');
       return;
     }
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
   }
 
@@ -88,12 +118,21 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         final raw = call.arguments as String?;
         if (raw == null || raw.isEmpty) return null;
         try {
+          final envelope = json.decode(raw) as Map;
+          final message = envelope['data'];
+          if (message is Map && message['type'] == 'backend') {
+            _backendEvents.add(
+              Map<String, dynamic>.from(message['data'] as Map),
+            );
+            return null;
+          }
           handleResult(ActionResult.fromJson(json.decode(raw)));
         } catch (e) {
           commonPrint.log('event parse err: $e raw=$raw');
         }
         return null;
       case 'crash':
+        _connection.invalidate();
         commonPrint.log('service crash: ${call.arguments}');
         unawaited(_handleCrashRestart());
         return null;
@@ -105,55 +144,41 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   @override
-  Future<bool> preload() => _initCompleter.future;
+  Future<bool> preload() => _crashCount > _maxCrashRetries
+      ? Future.value(false)
+      : _connection.ensure();
 
   @override
   Future<bool> destroy() async {
+    _connection.invalidate();
     try {
       await _channel.invokeMethod<bool>('shutdown');
     } catch (_) {}
-    // shutdown unbinds the remote service; re-arm init state so a later preload()/
-    // reconnectIfNeeded() forces a fresh bind + event-listener registration instead
-    // of reporting "ready" against a dead service.
+    // The next request establishes a new binding and event listener.
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     return true;
   }
 
   @override
   void reStart() {
+    _connection.invalidate();
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
     unawaited(_init());
   }
 
   void reconnectIfNeeded() {
-    // An init is already running (completer not yet settled); let it finish
-    // rather than spawning a second concurrent native init.
-    if (_initInFlight) {
-      return;
-    }
-    // Re-register on EVERY resume (no _initSucceeded short-circuit): the event pipe is
-    // registered once per Flutter engine, but a warm app-open after a headless tile
-    // start keeps this engine alive while the :remote core it registered against has
-    // been recycled (eventListener==nil) — so logs/journal/delays silently stop
-    // arriving even though the polled traffic keeps working. Re-invoking init re-binds
-    // and re-registers the listener idempotently (Service.bind no-ops if bound;
-    // setEventListener swaps the listener under a lock). Still respect the crash budget
-    // so a genuine crash-loop doesn't spin.
-    if (_crashCount > _maxCrashRetries) {
-      return;
-    }
+    if (_initInFlight || _crashCount > _maxCrashRetries) return;
+    // Re-arm the event pipe on foreground entry, even when the old remote
+    // process was replaced while this Flutter engine remained alive.
     _crashCount = 0;
-    if (_initCompleter.isCompleted) _initCompleter = Completer<bool>();
+    _connection.invalidate();
     unawaited(_init());
   }
 
+  // :remote rejects the legacy `shutdown` action; unbinding is the only
+  // teardown the UI owns.
   @override
-  Future<bool> shutdown() async {
-    await super.shutdown();
-    return destroy();
-  }
+  Future<bool> shutdown() => destroy();
 
   @override
   Future<void> sendMessage(String message) async {
@@ -224,19 +249,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
   }
 
-  @override
-  Future<bool> updateDns(String value) async {
-    try {
-      await _channel
-          .invokeMethod('updateDns', value)
-          .timeout(const Duration(seconds: 10));
-      return true;
-    } catch (e) {
-      commonPrint.log('updateDns error: $e');
-      return false;
-    }
-  }
-
   /// null means the tunnel is confirmed stopped. A failed probe (channel
   /// error / timeout) THROWS instead of returning null — callers must be able
   /// to tell "stopped" from "unknown", otherwise a slow bind on cold start
@@ -264,63 +276,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
   }
 
-  // --- VPN lifecycle --------------------------------------------------------
-
-  /// Tells the `:remote` service to bring the TUN tunnel up using the current
-  /// Go-provided `AndroidVpnOptions`, merged with UI access control settings.
-  Future<int> startVpn({String? optionsJson}) async {
-    final payload = optionsJson ?? await getAndroidVpnOptions();
-    if (payload.isEmpty) {
-      // Probe failed/timed out (e.g. core busy in setupConfig). Starting anyway
-      // would bring the tunnel up with default VpnOptions — no routes, no
-      // access control (split tunneling silently lost). Fail the start instead.
-      // (Access control itself is resolved by the product layer before this
-      // call — see resolveVpnAccessControl — so no extra merge happens here.)
-      commonPrint.log('startVpn aborted: empty AndroidVpnOptions');
-      return 0;
-    }
-    // Defensive backstop: the native side always replies (even on permission
-    // denial -> 0), but never block the start flow indefinitely if it doesn't.
-    final res = await _channel
-        .invokeMethod('start', {'data': payload})
-        .timeout(const Duration(seconds: 60), onTimeout: () => 0);
-    return (res is int) ? res : int.tryParse('$res') ?? 0;
-  }
-
-  Future<bool> stopVpn() async {
-    // The native side resolves the result inside a coroutine that can be
-    // cancelled (engine detach) or starved (frozen main dispatcher) — without
-    // a timeout this await can hang forever, leaving the UI stuck in
-    // "connected" with a frozen runtime. UI-side cleanup must always proceed.
-    try {
-      await _channel
-          .invokeMethod('stop')
-          .timeout(const Duration(seconds: 20), onTimeout: () => null);
-    } catch (e) {
-      commonPrint.log('stopVpn error: $e');
-    }
-    return true;
-  }
-
-  /// One-shot start: atomically `initClash` + `setupConfig` + foreground
-  /// service bring-up on the remote side. Returns an error string (empty on
-  /// success) matching the legacy Dart API.
-  Future<String> quickStart({
-    required InitParams initParams,
-    required SetupParams setupParams,
-    required CoreState state,
-  }) async {
-    final res = await _channel
-        .invokeMethod<String>('quickStart', <String, String>{
-          'init': json.encode(initParams),
-          'params': json.encode(setupParams),
-          'state': json.encode(state),
-        })
-        .timeout(const Duration(seconds: 60),
-            onTimeout: () => 'quickStart timed out');
-    return res ?? '';
-  }
-
   /// Push foreground-notification params (title/server/content) so the
   /// :remote service can render the sticky notification without having to
   /// call back into Dart.
@@ -339,26 +294,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       commonPrint.log('updateNotificationParams error: $e');
-    }
-  }
-
-  /// Persist quickStart-equivalent params so tile/widget/Always-on can
-  /// cold-start without Flutter via FlVpnService.coldStart().
-  Future<void> saveParamsForColdStart({
-    required InitParams initParams,
-    required SetupParams setupParams,
-    required CoreState state,
-  }) async {
-    try {
-      await _channel
-          .invokeMethod('saveParams', <String, String>{
-            'init': json.encode(initParams),
-            'params': json.encode(setupParams),
-            'state': json.encode(state),
-          })
-          .timeout(const Duration(seconds: 15));
-    } catch (e) {
-      commonPrint.log('saveParamsForColdStart error: $e');
     }
   }
 }

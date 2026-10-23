@@ -45,9 +45,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
     _profileManaged = initialProfileAccess != null;
     _managedAccessController =
         productServices.accessControl.createProfileManagedController(
-      loadCurrentRawProfile: globalState.loadCurrentRawProfile,
-      readProfilesPath: globalState.readProfilesPath,
-      readInstalledPackageNames: globalState.readInstalledPackageNames,
+      readProfileAccessControl: globalState.readProfileAccessControl,
     );
     globalState.activeProfileAccessControlNotifier
         .addListener(_handleProfileAccessControlChanged);

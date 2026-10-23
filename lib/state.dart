@@ -1,82 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi' show Pointer;
-import 'dart:io' show File, Platform;
+import 'dart:typed_data';
 
 import 'package:animations/animations.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/theme.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/widgets/dialog.dart';
 import 'package:flclashx/widgets/scaffold.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_js/flutter_js.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'common/common.dart';
-import 'common/yaml_dump.dart';
 import 'controller.dart';
 import 'core_version.dart';
 import 'models/models.dart';
-import 'plugins/app.dart';
-import 'product/compile/product_compile.dart';
-import 'product/runtime/product_runtime.dart';
-import 'product/security/product_security.dart';
-
-class AppRuntimeHealthProbe implements RuntimeHealthProbe {
-  const AppRuntimeHealthProbe();
-
-  @override
-  Future<bool> hasDeviceNetwork() async {
-    final results = await Connectivity().checkConnectivity();
-    return results.any((result) => result != ConnectivityResult.none);
-  }
-
-  @override
-  Future<bool> testDelay({
-    required String proxyName,
-    required List<Uri> urls,
-  }) async {
-    for (final url in urls) {
-      try {
-        final delay = await clashCore.getDelay(url.toString(), proxyName);
-        if ((delay.value ?? 0) > 0) return true;
-      } catch (_) {
-        // Try the next validated probe address.
-      }
-    }
-    return false;
-  }
-
-  @override
-  Future<List<List<String>>> activeConnectionChains() async => [
-        for (final connection in await clashCore.getConnections())
-          List<String>.unmodifiable(connection.chains),
-      ];
-
-  @override
-  Future<Map<String, String>> selectedProxies(List<String> groupNames) async {
-    final requested = groupNames.toSet();
-    final selected = <String, String>{
-      for (final group in await clashCore.getProxiesGroups())
-        if (requested.contains(group.name) && group.now != null)
-          group.name: group.now!,
-    };
-    final missing = requested.difference(selected.keys.toSet());
-    if (missing.isNotEmpty) {
-      throw StateError(
-        'Could not read current selections for groups: ${missing.join(', ')}.',
-      );
-    }
-    return selected;
-  }
-}
+import 'product/backend/backend.dart';
 
 class GlobalState {
   factory GlobalState() {
@@ -84,29 +27,34 @@ class GlobalState {
     return _instance!;
   }
 
-  GlobalState._internal() {
-    runtimeRegistry = RuntimeRegistry.flClashM(
-      readAccessControl: () => config.vpnProps.accessControl,
-      readProfileAccessControl: () => activeProfileAccessControl,
-      runtimeHealthProbe: const AppRuntimeHealthProbe(),
-    );
-    engineManager = EngineManager(
-      runtimeRegistry: runtimeRegistry,
-      loadCurrentRawProfile: loadCurrentRawProfile,
-      compileProfilePatch: compileProfilePatch,
-      enforceSecurityPolicy: enforceSecurityPolicy,
-      secureRuntimeUpdate: secureRuntimeUpdate,
-      buildRuntimePlan: buildRuntimePlan,
-      applyRuntimePlan: applyRuntimePlan,
-      buildCoreState: getCoreState,
-      buildInitParams: _buildInitParams,
-    );
-  }
+  GlobalState._internal();
   static GlobalState? _instance;
   Map<CacheTag, double> cacheScrollPosition = {};
   Map<CacheTag, FixedMap<String, double>> cacheHeightMap = {};
   Timer? groupsUpdateTimer;
-  late Config config;
+  Config? _config;
+  bool _projectingBackend = false;
+  Map<String, dynamic> _backendRuntime = {};
+  Map<String, dynamic> _backendView = {};
+  Config get config => _config!;
+  set config(Config value) {
+    final previous = _config;
+    _config = value;
+    if (previous != null && !_projectingBackend && backendClient.attached) {
+      backendEdits.submit(previous.toJson(), value.toJson());
+    }
+  }
+
+  late final BackendEdits backendEdits = BackendEdits(
+    backendClient,
+    onError: (error) {
+      commonPrint.log('Backend action failed: $error');
+      if (isInit) showNotifier(describeError(error));
+    },
+    onSettled: projectBackend,
+  );
+  Future<void> flushEdits() => backendEdits.flush();
+  Map<String, dynamic> get runtimeView => _backendView;
   late AppState appState;
   bool isPre = true;
   String? coreSHA256;
@@ -123,7 +71,6 @@ class GlobalState {
   CorePalette? corePalette;
   final activeProfileAccessControlNotifier =
       ValueNotifier<AccessControl?>(null);
-  final _loadedProfiles = LoadedProfileRepository();
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -158,16 +105,13 @@ class GlobalState {
   AppController? _appController;
   GlobalKey<CommonScaffoldState> homeScaffoldKey = GlobalKey();
   bool isInit = false;
-  final ProductProfilePipeline _profilePipeline =
-      const ProductProfilePipeline();
-  final ProductProfileValidator _profileValidator =
-      const ProductProfileValidator();
-  late final RuntimeRegistry runtimeRegistry;
-  late final EngineManager engineManager;
+  bool get isStart =>
+      (_backendRuntime['observed'] as Map?)?['state'] == 'running';
 
-  bool get isStart => engineManager.isStarted;
-
-  DateTime? get startTime => engineManager.startTime;
+  DateTime? get startTime {
+    final value = (_backendRuntime['startedAt'] as num?)?.toInt() ?? 0;
+    return value > 0 ? DateTime.fromMillisecondsSinceEpoch(value) : null;
+  }
 
   AppController get appController => _appController!;
 
@@ -226,11 +170,22 @@ class GlobalState {
     } catch (_) {}
   }
 
+  bool _listeningBackend = false;
+
   Future<void> init() async {
     packageInfo = await PackageInfo.fromPlatform();
-    config = await preferences.getConfig() ??
-        const Config(themeProps: defaultThemeProps);
-    await globalState.migrateOldData(config);
+    // init may be retried after the backend was unavailable at startup.
+    if (!_listeningBackend) {
+      _listeningBackend = true;
+      backendClient.changes.listen(
+        (_) => projectBackend(),
+        onError: (Object error) {
+          commonPrint.log('Backend snapshot failed: $error');
+        },
+      );
+    }
+    await backendClient.attach();
+    projectBackend();
     await AppLocalizations.load(
       utils.getLocaleForString(config.appSetting.locale) ??
           WidgetsBinding.instance.platformDispatcher.locale,
@@ -313,17 +268,24 @@ class GlobalState {
       return res;
     } catch (e) {
       commonPrint.log("$e");
+      final text = describeError(e);
+      if (text.isEmpty) {
+        return null;
+      }
       if (silence) {
-        showNotifier(e.toString());
+        showNotifier(text);
       } else {
         showMessage(
           title: title ?? appLocalizations.tip,
-          message: TextSpan(text: e.toString()),
+          message: TextSpan(text: text),
         );
       }
       return null;
     }
   }
+
+  /// User-facing text for an error; empty when it must not be reported.
+  String describeError(Object error) => describeBackendError(error);
 
   void showNotifier(String text) {
     if (text.isEmpty) {
@@ -344,315 +306,150 @@ class GlobalState {
     launchUrl(Uri.parse(url));
   }
 
-  Future<void> migrateOldData(Config config) async {
-    final clashConfig = await preferences.getClashConfig();
-    if (clashConfig != null) {
-      config = config.copyWith(patchClashConfig: clashConfig);
-      preferences.clearClashConfig();
-      preferences.saveConfig(config);
-    }
-  }
-
-  CoreState getCoreState({
-    AccessControl? profileAccessControl,
-  }) {
-    final currentProfile = config.currentProfile;
-    final resolvedAccessControl = profileAccessControl ??
-        activeProfileAccessControl ??
-        config.vpnProps.accessControl;
-    return CoreState(
-      vpnProps: config.vpnProps.copyWith(
-        accessControl: enforceSelfPackageBypass(resolvedAccessControl),
-      ),
-      onlyStatisticsProxy: false,
-      currentProfileName: currentProfile?.label ?? currentProfile?.id ?? "",
-      bypassDomain: config.networkProps.bypassDomain,
+  /// Applies a server snapshot to UI replicas. Assignments made during this
+  /// projection never become user commands or rewrite backend settings.
+  void projectBackend() {
+    final snapshot = backendClient.snapshot;
+    _backendRuntime = Map<String, dynamic>.from(
+      snapshot['runtime'] as Map? ?? {},
     );
-  }
-
-  /// True = start time is now known (possibly "stopped"); false = probe
-  /// failed, runtime state UNKNOWN — do not treat as stopped.
-  Future<bool> syncRuntimeStartTime() => engineManager.syncStartTime();
-
-  Future<RawProfile?> loadCurrentRawProfile() async {
-    final profile = config.currentProfile;
-    if (profile == null) {
-      _loadedProfiles.clear();
-      return null;
-    }
-    final profilePath = await appPath.getProfilePath(profile.id);
-    final profileStat = await File(profilePath).stat();
-    final currentScript = config.scriptProps.currentScript;
-    final revision = RawProfileRevision(
-      profileId: profile.id,
-      overrideData: profile.overrideData,
-      lastModifiedMicros: profileStat.modified.microsecondsSinceEpoch,
-      changedMicros: profileStat.changed.microsecondsSinceEpoch,
-      fileSize: profileStat.size,
-      scriptId: currentScript?.id,
-      scriptContent: currentScript?.content,
-    );
-    return _loadedProfiles.load(revision, () async {
-      final rawConfig = await handleEvaluate(
-        await loadProfileConfigFromFile(profilePath),
+    if (!backendEdits.pending) {
+      final data = backendClient.settings;
+      final decoded = Config.compatibleFromJson(data);
+      final next = decoded.copyWith(
+        profiles: [
+          for (final profile in decoded.profiles)
+            profile.copyWith(
+              lastUpdateDate: profile.lastUpdateDate?.toLocal(),
+              isUpdating:
+                  _config?.profiles.getProfile(profile.id)?.isUpdating ?? false,
+            ),
+        ],
       );
-      return RawProfile.fromConfig(
-        profile: profile,
-        config: rawConfig,
-        revision: revision,
-      );
-    });
-  }
-
-  Object get runtimePlanSettingsRevision {
-    final selectedEntries =
-        (config.currentProfile?.selectedMap.entries.toList() ?? [])
-          ..sort((left, right) => left.key.compareTo(right.key));
-    return (
-      config.appSetting.overrideNetworkSettings,
-      config.overrideDns,
-      config.networkProps.routeMode,
-      config.appSetting.testUrl,
-      json.encode([
-        for (final entry in selectedEntries) [entry.key, entry.value],
-      ]),
-    );
-  }
-
-  CompiledProfilePatch compileProfilePatch({
-    required RawProfile? rawProfile,
-    required ClashConfig patchConfig,
-  }) =>
-      _profilePipeline.compileProfilePatch(
-        rawProfile: rawProfile,
-        context: _buildProfilePatchContext(patchConfig),
-      );
-
-  SecuredProfilePatch enforceSecurityPolicy({
-    required CompiledProfilePatch compiledProfile,
-  }) =>
-      _profilePipeline.secureProfilePatch(
-        compiledProfile: compiledProfile,
-        context: _buildSecurityPolicyContext(),
-      );
-
-  ClashConfig securePatchConfig({
-    required ClashConfig patchConfig,
-  }) =>
-      _profilePipeline.securePatchConfig(
-        patchConfig: patchConfig,
-        context: _buildSecurityPolicyContext(),
-      );
-
-  UpdateParams secureRuntimeUpdate({
-    required UpdateParams updateParams,
-  }) =>
-      _profilePipeline.secureRuntimeUpdate(
-        updateParams: updateParams,
-        context: _buildSecurityPolicyContext(),
-      );
-
-  Future<RuntimePlan> buildRuntimePlan({
-    required RawProfile? rawProfile,
-    required SecuredProfilePatch securedProfile,
-    required ClashConfig runtimePatchConfig,
-  }) async {
-    final profilesPath = await appPath.profilesPath;
-    final homeDirPath = await appPath.homeDirPath;
-    return _profilePipeline.buildRuntimePlan(
-      rawProfile: rawProfile,
-      context: _buildRuntimePlanContext(
-        profilesPath: profilesPath,
-        homeDirPath: homeDirPath,
-      ),
-      securedProfile: securedProfile,
-      runtimePatchConfig: runtimePatchConfig,
-      selectedMap: config.currentProfile?.selectedMap ?? {},
-      testUrl: config.appSetting.testUrl,
-      providerAssetPathResolver: (
-        profileId,
-        type,
-        url,
-      ) async =>
-          appPath.getProvidersFilePath(profileId, type, url),
-    );
-  }
-
-  UpdateParams buildRuntimeUpdateParams({
-    required ClashConfig patchConfig,
-  }) =>
-      UpdateParams(
-        tun: patchConfig.tun.getRealTun(config.networkProps.routeMode),
-        allowLan: patchConfig.allowLan,
-        findProcessMode: patchConfig.findProcessMode,
-        mode: patchConfig.mode,
-        logLevel: patchConfig.logLevel,
-        ipv6: patchConfig.ipv6,
-        tcpConcurrent: patchConfig.tcpConcurrent,
-        externalController: patchConfig.externalController,
-        unifiedDelay: patchConfig.unifiedDelay,
-        mixedPort: patchConfig.mixedPort,
-      );
-
-  void applyRuntimePlan(RuntimePlan runtimePlan) {
-    activeProfileAccessControlNotifier.value = runtimePlan.profileAccessControl;
-    _applyCompiledProfileMetadata(runtimePlan.metadata);
-    _applyRuntimeConfigState(runtimePlan.config);
-    for (final diagnostic in runtimePlan.diagnostics) {
-      commonPrint.log(diagnostic);
-      if (config.appSetting.openLogs) {
-        showNotifier(diagnostic);
+      _projectingBackend = true;
+      try {
+        _config = next;
+        _appController?.projectBackendConfig(next);
+      } finally {
+        _projectingBackend = false;
       }
     }
-  }
-
-  Future<InitParams> _buildInitParams() async => InitParams(
-        homeDir: await appPath.homeDirPath,
-        version: await system.version,
-      );
-
-  ProfilePatchContext _buildProfilePatchContext(ClashConfig patchConfig) =>
-      ProfilePatchContext(
-        patchConfig: patchConfig,
-        overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
-      );
-
-  SecurityPolicyContext _buildSecurityPolicyContext() => SecurityPolicyContext(
-        isAndroid: Platform.isAndroid,
-        androidSecure: profileRequestsAndroidSecure(config.currentProfile),
-      );
-
-  RuntimePlanBuildContext _buildRuntimePlanContext({
-    required String profilesPath,
-    required String homeDirPath,
-  }) =>
-      RuntimePlanBuildContext(
-        isAndroid: Platform.isAndroid,
-        overrideNetworkSettings: config.appSetting.overrideNetworkSettings,
-        overrideDns: config.overrideDns,
-        routeMode: config.networkProps.routeMode,
-        hasCurrentScript: config.scriptProps.currentScript != null,
-        profilesPath: profilesPath,
-        homeDirPath: homeDirPath,
-        readInstalledPackageNames: readInstalledPackageNames,
-      );
-
-  Future<String> readProfilesPath() => appPath.profilesPath;
-
-  Future<List<String>> readInstalledPackageNames() async {
-    final packageNames =
-        await app?.getInstalledPackageNames() ?? const <String>[];
-    return {
-      for (final packageName in packageNames)
-        if (packageName.trim().isNotEmpty) packageName.trim(),
-    }.toList(growable: false);
-  }
-
-  void _applyCompiledProfileMetadata(CompiledProfileMetadata? metadata) {
-    if (metadata == null) {
-      groupDescriptions.value = const {};
-      effectiveExternalController.value = "";
-      effectiveSecret.value = "";
-      effectiveExternalUi.value = "";
-      effectiveTcpConcurrent.value = false;
-      effectiveUnifiedDelay.value = false;
-      effectiveLogLevel.value = LogLevel.info.name;
-      effectiveKeepAliveInterval.value = defaultKeepAliveInterval;
-      globalOverrideEnabled.value = false;
-      proxyGroupOrder.value = const [];
-      return;
+    if (backendClient.runtimeViewGeneration ==
+        _backendRuntime['appliedGeneration']) {
+      _backendView = backendClient.runtimeView;
+      _projectRuntimeView();
     }
-    groupDescriptions.value = metadata.groupDescriptions;
-    effectiveExternalController.value = metadata.externalController;
-    effectiveTcpConcurrent.value = metadata.tcpConcurrent;
-    effectiveUnifiedDelay.value = metadata.unifiedDelay;
-    effectiveLogLevel.value = metadata.logLevel;
-    effectiveKeepAliveInterval.value = metadata.keepAliveInterval;
+    _appController?.projectBackendRuntime();
+    _projectProfileChange();
   }
 
-  void _applyRuntimeConfigState(Map<String, dynamic> runtimeConfig) {
-    if (runtimeConfig.isEmpty) {
-      effectiveSecret.value = "";
-      effectiveExternalUi.value = "";
-      globalOverrideEnabled.value = false;
-      proxyGroupOrder.value = const [];
-      return;
-    }
+  final _projectionWatcher = ProjectionWatcher();
 
+  void _projectProfileChange() {
+    final applied = _backendView['profileId'];
+    final change = _projectionWatcher.observe(
+      profileId: _config?.currentProfileId,
+      appliedProfileId: applied is String ? applied : null,
+      generation: _projectedViewGeneration,
+    );
+    final controller = _appController;
+    if (controller == null || !controller.context.mounted) return;
+    switch (change) {
+      case ProjectionChange.profile:
+        controller.handleChangeProfile();
+      case ProjectionChange.generation:
+        controller.updateGroupsDebounce();
+      case ProjectionChange.none:
+        break;
+    }
+  }
+
+  int? _projectedViewGeneration;
+
+  void _projectRuntimeView() {
+    final generation = backendClient.runtimeViewGeneration;
+    if (_projectedViewGeneration == generation) return;
+    _projectedViewGeneration = generation;
+    final runtimeConfig = Map<String, dynamic>.from(
+      _backendView['config'] as Map? ?? {},
+    );
+    final profileAccess = _backendView['profileAccessControl'];
+    activeProfileAccessControlNotifier.value = profileAccess is Map
+        ? AccessControl.fromJson(Map<String, dynamic>.from(profileAccess))
+        : null;
     effectiveExternalController.value =
-        (runtimeConfig["external-controller"] as String?)?.trim() ??
-            effectiveExternalController.value;
-    effectiveSecret.value = (runtimeConfig["secret"] as String?)?.trim() ?? "";
-    effectiveExternalUi.value =
-        (runtimeConfig["external-ui"] as String?)?.trim() ?? "";
-
-    var parsedGlobalOverride = false;
-    final parsedProxyGroupOrder = <String>[];
-    final proxyGroups = runtimeConfig["proxy-groups"];
-    if (proxyGroups is List) {
-      for (final group in proxyGroups) {
-        if (group is! Map) {
-          continue;
-        }
-        final name = group["name"]?.toString().trim();
-        if (name != null && name.isNotEmpty) {
-          parsedProxyGroupOrder.add(name);
-        }
-        if (name == GroupName.GLOBAL.name) {
-          parsedGlobalOverride = resolveGlobalGroupOverride(group);
-        }
+        '${runtimeConfig['external-controller'] ?? ''}'.trim();
+    effectiveSecret.value = '${runtimeConfig['secret'] ?? ''}'.trim();
+    effectiveExternalUi.value = '${runtimeConfig['external-ui'] ?? ''}'.trim();
+    effectiveTcpConcurrent.value = runtimeConfig['tcp-concurrent'] == true;
+    effectiveUnifiedDelay.value = runtimeConfig['unified-delay'] == true;
+    effectiveLogLevel.value = '${runtimeConfig['log-level'] ?? 'info'}';
+    effectiveKeepAliveInterval.value =
+        (runtimeConfig['keep-alive-interval'] as num?)?.toInt() ??
+            defaultKeepAliveInterval;
+    final descriptions = <String, String>{};
+    final order = <String>[];
+    var globalOverride = false;
+    for (final value in runtimeConfig['proxy-groups'] as List? ?? []) {
+      if (value is! Map) continue;
+      final name = '${value['name'] ?? ''}'.trim();
+      if (name.isEmpty) continue;
+      order.add(name);
+      final description = '${value['description'] ?? ''}'.trim();
+      if (description.isNotEmpty) descriptions[name] = description;
+      if (name == GroupName.GLOBAL.name) {
+        globalOverride = value.containsKey('flclashm-override')
+            ? value['flclashm-override'] == true
+            : value['flclashx-override'] == true;
       }
     }
-    globalOverrideEnabled.value = parsedGlobalOverride;
-    proxyGroupOrder.value = parsedProxyGroupOrder;
+    groupDescriptions.value = descriptions;
+    proxyGroupOrder.value = order;
+    globalOverrideEnabled.value = globalOverride;
+  }
+
+  Future<bool> syncRuntimeStartTime() async {
+    try {
+      await backendClient.refresh();
+      return true;
+    } catch (error) {
+      commonPrint.log('Backend resync failed: $error');
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {
-    final profilePath = await appPath.getProfilePath(profileId);
-    return loadProfileConfigFromFile(profilePath);
+    final inspected =
+        await backendClient.request('profile.inspect', {'profileId': profileId})
+            as Map;
+    return Map<String, dynamic>.from(inspected['config'] as Map);
+  }
+
+  Future<AccessControl?> readProfileAccessControl() async {
+    final id = config.currentProfileId;
+    if (id == null) return null;
+    final inspected =
+        await backendClient.request('profile.inspect', {'profileId': id})
+            as Map;
+    final access = inspected['accessControl'];
+    return access is Map
+        ? AccessControl.fromJson(Map<String, dynamic>.from(access))
+        : null;
   }
 
   Future<String> validateProfileConfigText(String text) async {
+    final token = await backendClient.upload(
+      Uint8List.fromList(utf8.encode(text)),
+    );
     try {
-      final normalizedConfig = _profileValidator.normalizeForValidation(
-        text,
-        globalTestUrl: config.appSetting.testUrl,
-      );
-      final yamlBuffer = StringBuffer();
-      yamlDump(yamlBuffer, normalizedConfig, 0);
-      return clashCore.validateConfig(yamlBuffer.toString());
+      await backendClient.command('profile.validate', {'token': token});
+      return '';
     } catch (error) {
-      return error.toString();
-    }
-  }
-
-  Future<Map<String, dynamic>> handleEvaluate(
-    Map<String, dynamic> config,
-  ) async {
-    final currentScript = globalState.config.scriptProps.currentScript;
-    if (currentScript == null) {
-      return config;
-    }
-    if (config["proxy-providers"] == null) {
-      config["proxy-providers"] = {};
-    }
-    final configJs = json.encode(config);
-    final runtime = getJavascriptRuntime();
-    try {
-      final res = await runtime.evaluateAsync("""
-        ${currentScript.content}
-        main($configJs)
-      """);
-      if (res.isError) {
-        throw res.stringResult;
-      }
-      final value = switch (res.rawResult is Pointer) {
-        true => runtime.convertValue<Map<String, dynamic>>(res),
-        false => Map<String, dynamic>.from(res.rawResult),
-      };
-      return value ?? config;
+      // An empty result means "valid"; never let a silent error pass as such.
+      final text = describeError(error);
+      return text.isEmpty ? '$error' : text;
     } finally {
-      runtime.dispose();
+      await backendClient.request('blob.delete', {'token': token});
     }
   }
 }

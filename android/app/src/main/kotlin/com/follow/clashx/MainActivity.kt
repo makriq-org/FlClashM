@@ -15,7 +15,6 @@ import com.follow.clashx.plugins.TilePlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
 
@@ -95,23 +94,31 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
+    // Theme the first frame before Flutter renders. The value is a startup-only
+    // cache of the Go settings projection; legacy preferences are not read.
     private fun applyAppTheme() {
-        try {
-            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val configJson = prefs.getString("flutter.config", null)
-            val themeMode = configJson
-                ?.let { JSONObject(it).optJSONObject("themeProps")?.optString("themeMode", "ThemeMode.system") }
-                ?: "ThemeMode.system"
-            when {
-                themeMode.contains("light", ignoreCase = true) ->
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-                themeMode.contains("dark", ignoreCase = true) ->
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-                else ->
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-            }
-        } catch (_: Exception) {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-        }
+        AppCompatDelegate.setDefaultNightMode(StartupTheme.nightMode(StartupTheme.read(this)))
+    }
+}
+
+/** Startup-only cache of the Go settings theme, written in this process from
+ * the StateHub projection. Go stays the source of truth. */
+internal object StartupTheme {
+    private const val PREFERENCES = "flclashm_startup_theme"
+    private const val KEY = "themeMode"
+
+    fun store(context: Context, mode: String) {
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        if (preferences.getString(KEY, null) != mode) preferences.edit().putString(KEY, mode).apply()
+    }
+
+    fun read(context: Context): String? = runCatching {
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getString(KEY, null)
+    }.getOrNull()
+
+    fun nightMode(mode: String?): Int = when (mode) {
+        "light" -> AppCompatDelegate.MODE_NIGHT_NO
+        "dark" -> AppCompatDelegate.MODE_NIGHT_YES
+        else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
     }
 }

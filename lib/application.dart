@@ -25,8 +25,6 @@ class Application extends ConsumerStatefulWidget {
 }
 
 class ApplicationState extends ConsumerState<Application> {
-  Timer? _autoUpdateProfilesTaskTimer;
-
   final _pageTransitionsTheme = const PageTransitionsTheme(
     builders: <TargetPlatform, PageTransitionsBuilder>{
       TargetPlatform.android: CommonPageTransitionsBuilder(),
@@ -55,7 +53,6 @@ class ApplicationState extends ConsumerState<Application> {
     }
 
     globalState.startGroupsUpdateTask();
-    _autoUpdateProfilesTask();
     globalState.appController = AppController(context, ref);
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       final currentContext = globalState.navigatorKey.currentContext;
@@ -68,34 +65,14 @@ class ApplicationState extends ConsumerState<Application> {
     });
   }
 
-  void _autoUpdateProfilesTask() {
-    _autoUpdateProfilesTaskTimer = Timer(const Duration(minutes: 20), () async {
-      await globalState.appController.autoUpdateProfiles();
-      // dispose() may have landed during the await; don't arm a fresh
-      // post-dispose timer that would keep firing.
-      if (!mounted) return;
-      _autoUpdateProfilesTask();
-    });
-  }
-
   Widget _buildPlatformState(Widget child) => AndroidManager(child: child);
 
   Widget _buildState(Widget child) => AppStateManager(
         child: ClashManager(
           child: ConnectivityManager(
             onConnectivityChanged: (results) async {
-              if (!results.contains(ConnectivityResult.vpn)) {
-                clashCore.closeConnections();
-              }
               unawaited(globalState.appController.updateLocalIp());
               globalState.appController.addCheckIpNumDebounce();
-              unawaited(
-                globalState.engineManager.notifyNetworkChanged().catchError(
-                      (Object error) => commonPrint.log(
-                        'ByeDPI network switch failed: $error',
-                      ),
-                    ),
-              );
             },
             child: child,
           ),
@@ -168,7 +145,6 @@ class ApplicationState extends ConsumerState<Application> {
   void dispose() {
     linkManager.destroy();
     globalState.stopGroupsUpdateTask();
-    _autoUpdateProfilesTaskTimer?.cancel();
     if (Platform.isAndroid) {
       // Activity teardown (recreation, "don't keep activities", OEM kill) must
       // not shut the core down: the FGS/tunnel outlives the UI by design, and

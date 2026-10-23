@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:isolate';
 
 import 'package:flclashx/clash/message.dart';
 import 'package:flclashx/common/common.dart';
@@ -8,8 +7,6 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 
 mixin ClashInterface {
-  Future<bool> init(InitParams params);
-
   Future<bool> preload();
 
   Future<bool> shutdown();
@@ -18,38 +15,15 @@ mixin ClashInterface {
 
   Future<bool> forceGc();
 
-  FutureOr<String> validateConfig(String data);
-
-  FutureOr<Result> getConfig(String path);
-
   Future<String> asyncTestDelay(String url, String proxyName);
 
   Future<void> healthCheck([String groupName = '']);
 
-  FutureOr<String> updateConfig(UpdateParams updateParams);
-
-  FutureOr<String> setupConfig(SetupParams setupParams);
-
   FutureOr<Map> getProxies();
-
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams);
-
-  Future<bool> startListener();
-
-  Future<bool> stopListener();
 
   FutureOr<String> getExternalProviders();
 
   FutureOr<String>? getExternalProvider(String externalProviderName);
-
-  Future<String> updateGeoData(UpdateGeoDataParams params);
-
-  Future<String> sideLoadExternalProvider({
-    required String providerName,
-    required String data,
-  });
-
-  Future<String> updateExternalProvider(String providerName);
 
   FutureOr<String> getTraffic();
 
@@ -61,8 +35,6 @@ mixin ClashInterface {
 
   FutureOr<String> getCoreVersion();
 
-  resetTraffic();
-
   startLog();
 
   stopLog();
@@ -70,14 +42,6 @@ mixin ClashInterface {
   Future<bool> crash();
 
   FutureOr<String> getConnections();
-
-  FutureOr<bool> closeConnection(String id);
-
-  FutureOr<bool> closeConnections();
-
-  FutureOr<bool> resetConnections();
-
-  Future<bool> setState(CoreState state);
 
   Future<bool> setUiActive(bool active);
 
@@ -92,8 +56,6 @@ mixin ClashInterface {
 }
 
 mixin AndroidClashInterface {
-  Future<bool> updateDns(String value);
-
   Future<String> getAndroidVpnOptions();
 
   Future<String> getAppliedAndroidVpnOptions();
@@ -190,18 +152,6 @@ abstract class ClashHandlerInterface with ClashInterface {
   }
 
   @override
-  Future<bool> init(InitParams params) => invoke<bool>(
-      method: ActionMethod.initClash,
-      data: json.encode(params),
-    );
-
-  @override
-  Future<bool> setState(CoreState state) => invoke<bool>(
-      method: ActionMethod.setState,
-      data: json.encode(state),
-    );
-
-  @override
   Future<bool> setUiActive(bool active) => invoke<bool>(
       method: ActionMethod.setUiActive,
       data: active,
@@ -239,12 +189,6 @@ abstract class ClashHandlerInterface with ClashInterface {
       );
 
   @override
-  Future<bool> shutdown() => invoke<bool>(
-      method: ActionMethod.shutdown,
-      timeout: const Duration(seconds: 1),
-    );
-
-  @override
   Future<bool> get isInit => invoke<bool>(
         method: ActionMethod.getIsInit,
       );
@@ -255,48 +199,6 @@ abstract class ClashHandlerInterface with ClashInterface {
       );
 
   @override
-  FutureOr<String> validateConfig(String data) => invoke<String>(
-        method: ActionMethod.validateConfig,
-        data: data,
-      );
-
-  @override
-  Future<String> updateConfig(UpdateParams updateParams) => invoke<String>(
-        method: ActionMethod.updateConfig,
-        data: json.encode(updateParams),
-        timeout: const Duration(minutes: 2),
-        // Empty string means success to callers; the default-on-timeout is "",
-        // which would mask a 2-minute hang as a successful apply. Return a
-        // non-empty error string so the caller actually treats it as failed.
-        onTimeout: () => 'updateConfig timed out',
-      );
-
-  @override
-  Future<Result> getConfig(String path) => invoke<Result>(
-        method: ActionMethod.getConfig,
-        data: path,
-        timeout: const Duration(minutes: 2),
-        // A timed-out/failed read used to default to Result.success({}), making
-        // the caller treat an empty config as a successful load. Yield an error
-        // Result so getConfig()'s error path fires instead.
-        defaultValue: Result.error('getConfig timed out'),
-      );
-
-  @override
-  Future<String> setupConfig(SetupParams setupParams) async {
-    final data = await Isolate.run(() => json.encode(setupParams));
-    return invoke<String>(
-      method: ActionMethod.setupConfig,
-      data: data,
-      timeout: const Duration(minutes: 2),
-      // Non-empty = error to callers; the default "" would mask a 2-minute hang
-      // as a successful setup (and falsely advance lastProfileModified), so the
-      // recovery re-apply would silently no-op against a still-broken executor.
-      onTimeout: () => 'setupConfig timed out',
-    );
-  }
-
-  @override
   Future<bool> crash() => invoke<bool>(
       method: ActionMethod.crash,
     );
@@ -305,12 +207,6 @@ abstract class ClashHandlerInterface with ClashInterface {
   Future<Map> getProxies() => invoke<Map>(
       method: ActionMethod.getProxies,
       timeout: const Duration(seconds: 5),
-    );
-
-  @override
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) => invoke<String>(
-      method: ActionMethod.changeProxy,
-      data: json.encode(changeProxyParams),
     );
 
   @override
@@ -325,49 +221,8 @@ abstract class ClashHandlerInterface with ClashInterface {
     );
 
   @override
-  Future<String> updateGeoData(UpdateGeoDataParams params) => invoke<String>(
-        method: ActionMethod.updateGeoData,
-        data: json.encode(params),
-        timeout: const Duration(seconds: 100));
-
-  @override
-  Future<String> sideLoadExternalProvider({
-    required String providerName,
-    required String data,
-  }) => invoke<String>(
-      method: ActionMethod.sideLoadExternalProvider,
-      data: json.encode({
-        "providerName": providerName,
-        "data": data,
-      }),
-    );
-
-  @override
-  Future<String> updateExternalProvider(String providerName) => invoke<String>(
-      method: ActionMethod.updateExternalProvider,
-      data: providerName,
-      timeout: const Duration(minutes: 1),
-    );
-
-  @override
   FutureOr<String> getConnections() => invoke<String>(
       method: ActionMethod.getConnections,
-    );
-
-  @override
-  Future<bool> closeConnections() => invoke<bool>(
-      method: ActionMethod.closeConnections,
-    );
-
-  @override
-  Future<bool> resetConnections() => invoke<bool>(
-      method: ActionMethod.resetConnections,
-    );
-
-  @override
-  Future<bool> closeConnection(String id) => invoke<bool>(
-      method: ActionMethod.closeConnection,
-      data: id,
     );
 
   @override
@@ -381,11 +236,6 @@ abstract class ClashHandlerInterface with ClashInterface {
     );
 
   @override
-  void resetTraffic() {
-    invoke(method: ActionMethod.resetTraffic);
-  }
-
-  @override
   void startLog() {
     invoke(method: ActionMethod.startLog);
   }
@@ -396,16 +246,6 @@ abstract class ClashHandlerInterface with ClashInterface {
       method: ActionMethod.stopLog,
     );
   }
-
-  @override
-  Future<bool> startListener() => invoke<bool>(
-      method: ActionMethod.startListener,
-    );
-
-  @override
-  Future<bool> stopListener() => invoke<bool>(
-      method: ActionMethod.stopListener,
-    );
 
   @override
   Future<String> asyncTestDelay(String url, String proxyName) {

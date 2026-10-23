@@ -454,5 +454,13 @@
   "zashboardInApp": "アプリ内で zashboard を開く",
   "zashboardInAppDesc": "外部ブラウザに切り替えず、内蔵ブラウザでパネルを表示します",
   "openPanel": "パネルを開く",
-  "downloadingZashboard": "Zashboard をダウンロード中…"
+  "downloadingZashboard": "Zashboard をダウンロード中…",
+  "backendUnavailable": "バックグラウンドサービスを利用できません",
+  "backendOperationFailed": "操作に失敗しました",
+  "backendOperationCancelled": "操作はキャンセルされました",
+  "backendClosed": "操作の完了前にバックグラウンドサービスが停止しました",
+  "backendTimeout": "バックグラウンドサービスが時間内に応答しませんでした",
+  "backendStartupFailed": "FlClashM を起動できませんでした",
+  "backendStartupFailedDesc": "アプリはバックグラウンドサービスに接続できず、自動的に再試行を続けています。今すぐ再試行するか、サポート用にログをエクスポートできます。",
+  "retry": "再試行"
 }

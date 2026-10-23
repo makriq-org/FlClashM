@@ -5,9 +5,6 @@ import '../../common/common.dart';
 import '../../enum/enum.dart';
 import '../../models/models.dart';
 import '../android/android_runtime_access_policy.dart';
-import '../compile/profile_split_tunneling.dart';
-import '../compile/raw_profile.dart';
-import '../runtime/engine_manager.dart';
 
 @immutable
 class AccessControlEditorState {
@@ -34,14 +31,14 @@ class AccessControlEditorState {
   bool get isWhitelist => mode == AccessControlMode.acceptSelected;
 
   AccessControl toAccessControl() => AccessControl(
-        enable: enabled,
-        mode: mode,
-        acceptList: isWhitelist ? selectedPackages.toList() : const [],
-        rejectList: isWhitelist ? const [] : selectedPackages.toList(),
-        sort: sort,
-        isFilterSystemApp: !showSystemApps,
-        isFilterNonInternetApp: !showNoInternetApps,
-      );
+    enable: enabled,
+    mode: mode,
+    acceptList: isWhitelist ? selectedPackages.toList() : const [],
+    rejectList: isWhitelist ? const [] : selectedPackages.toList(),
+    sort: sort,
+    isFilterSystemApp: !showSystemApps,
+    isFilterNonInternetApp: !showNoInternetApps,
+  );
 
   AccessControlEditorState copyWith({
     String? query,
@@ -52,17 +49,16 @@ class AccessControlEditorState {
     Set<String>? selectedPackages,
     AccessSortType? sort,
     bool? dirty,
-  }) =>
-      AccessControlEditorState(
-        query: query ?? this.query,
-        enabled: enabled ?? this.enabled,
-        mode: mode ?? this.mode,
-        showSystemApps: showSystemApps ?? this.showSystemApps,
-        showNoInternetApps: showNoInternetApps ?? this.showNoInternetApps,
-        selectedPackages: selectedPackages ?? this.selectedPackages,
-        sort: sort ?? this.sort,
-        dirty: dirty ?? this.dirty,
-      );
+  }) => AccessControlEditorState(
+    query: query ?? this.query,
+    enabled: enabled ?? this.enabled,
+    mode: mode ?? this.mode,
+    showSystemApps: showSystemApps ?? this.showSystemApps,
+    showNoInternetApps: showNoInternetApps ?? this.showNoInternetApps,
+    selectedPackages: selectedPackages ?? this.selectedPackages,
+    sort: sort ?? this.sort,
+    dirty: dirty ?? this.dirty,
+  );
 }
 
 /// Where the profile-managed access control shown in the Access Control view
@@ -79,11 +75,7 @@ enum ProfileManagedAccessSource {
   appliedVpn,
 }
 
-enum ProfileManagedAccessNotice {
-  none,
-  drift,
-  verificationUnavailable,
-}
+enum ProfileManagedAccessNotice { none, drift, verificationUnavailable }
 
 /// Immutable description of whether the Access Control view should present a
 /// profile-managed (locked) state, which access control to display and whether
@@ -118,22 +110,16 @@ class ProfileManagedAccess {
   );
 }
 
-typedef LoadCurrentRawProfile = Future<RawProfile?> Function();
-typedef ReadProfilesPath = Future<String> Function();
-typedef ReadInstalledPackageNames = Future<List<String>> Function();
+typedef ReadProfileAccessControl = Future<AccessControl?> Function();
 
 class ProfileManagedAccessController {
   ProfileManagedAccessController({
     required this.service,
-    required this.loadCurrentRawProfile,
-    required this.readProfilesPath,
-    required this.readInstalledPackageNames,
+    required this.readProfileAccessControl,
   });
 
   final AccessControlService service;
-  final LoadCurrentRawProfile loadCurrentRawProfile;
-  final ReadProfilesPath readProfilesPath;
-  final ReadInstalledPackageNames readInstalledPackageNames;
+  final ReadProfileAccessControl readProfileAccessControl;
 
   int _generation = 0;
   bool _disposed = false;
@@ -149,9 +135,7 @@ class ProfileManagedAccessController {
     final profileSnapshot = isRunning && activeProfileAccessControl != null
         ? ProfileAccessSnapshot.available(activeProfileAccessControl)
         : await service.readProfileConfigAccess(
-            loadCurrentRawProfile: loadCurrentRawProfile,
-            readProfilesPath: readProfilesPath,
-            readInstalledPackageNames: readInstalledPackageNames,
+            readProfileAccessControl: readProfileAccessControl,
           );
     final appliedSnapshot = await appliedSnapshotFuture;
     final resolved = service.resolveProfileManagedAccess(
@@ -205,10 +189,7 @@ class AccessControlService {
     if (state.enabled == enabled) {
       return state;
     }
-    return state.copyWith(
-      enabled: enabled,
-      dirty: true,
-    );
+    return state.copyWith(enabled: enabled, dirty: true);
   }
 
   AccessControlEditorState togglePackage(
@@ -221,10 +202,7 @@ class AccessControlService {
     } else {
       selectedPackages.add(packageName);
     }
-    return state.copyWith(
-      selectedPackages: selectedPackages,
-      dirty: true,
-    );
+    return state.copyWith(selectedPackages: selectedPackages, dirty: true);
   }
 
   AccessControlEditorState switchMode(AccessControlEditorState state) =>
@@ -238,37 +216,26 @@ class AccessControlService {
 
   AccessControlEditorState toggleShowSystemApps(
     AccessControlEditorState state,
-  ) =>
-      state.copyWith(
-        showSystemApps: !state.showSystemApps,
-        dirty: true,
-      );
+  ) => state.copyWith(showSystemApps: !state.showSystemApps, dirty: true);
 
   AccessControlEditorState toggleShowNoInternetApps(
     AccessControlEditorState state,
-  ) =>
-      state.copyWith(
-        showNoInternetApps: !state.showNoInternetApps,
-        dirty: true,
-      );
+  ) => state.copyWith(
+    showNoInternetApps: !state.showNoInternetApps,
+    dirty: true,
+  );
 
   AccessControlEditorState clearSelection(AccessControlEditorState state) {
     if (state.selectedPackages.isEmpty) {
       return state;
     }
-    return state.copyWith(
-      selectedPackages: <String>{},
-      dirty: true,
-    );
+    return state.copyWith(selectedPackages: <String>{}, dirty: true);
   }
 
   VpnProps applyEditorState(
     VpnProps vpnProps,
     AccessControlEditorState editorState,
-  ) =>
-      vpnProps.copyWith(
-        accessControl: editorState.toAccessControl(),
-      );
+  ) => vpnProps.copyWith(accessControl: editorState.toAccessControl());
 
   List<Package> filterPackages({
     required List<Package> packages,
@@ -291,25 +258,25 @@ class AccessControlService {
       return true;
     }).toList();
 
-    return filtered
-      ..sort((a, b) {
-        final selectedA = selectedPackages.contains(a.packageName);
-        final selectedB = selectedPackages.contains(b.packageName);
-        if (selectedA != selectedB) {
-          return selectedA ? -1 : 1;
-        }
-        return _comparePackages(a, b, editorState.sort);
-      });
+    return filtered..sort((a, b) {
+      final selectedA = selectedPackages.contains(a.packageName);
+      final selectedB = selectedPackages.contains(b.packageName);
+      if (selectedA != selectedB) {
+        return selectedA ? -1 : 1;
+      }
+      return _comparePackages(a, b, editorState.sort);
+    });
   }
 
   int _comparePackages(Package a, Package b, AccessSortType sort) =>
       switch (sort) {
-        AccessSortType.none =>
-          a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+        AccessSortType.none => a.label.toLowerCase().compareTo(
+          b.label.toLowerCase(),
+        ),
         AccessSortType.name => utils.sortByChar(
-            utils.getPinyin(a.label),
-            utils.getPinyin(b.label),
-          ),
+          utils.getPinyin(a.label),
+          utils.getPinyin(b.label),
+        ),
         AccessSortType.time => b.lastUpdateTime.compareTo(a.lastUpdateTime),
       };
 
@@ -338,8 +305,7 @@ class AccessControlService {
   AccessControl resolveVpnAccessControl({
     required AccessControl accessControl,
     AccessControl? profileAccessControl,
-  }) =>
-      profileAccessControl ?? accessControl;
+  }) => profileAccessControl ?? accessControl;
 
   AccessControlEditorState resolveEditorState({
     required AccessControl accessControl,
@@ -363,46 +329,17 @@ class AccessControlService {
   }
 
   ProfileManagedAccessController createProfileManagedController({
-    required LoadCurrentRawProfile loadCurrentRawProfile,
-    required ReadProfilesPath readProfilesPath,
-    required ReadInstalledPackageNames readInstalledPackageNames,
-  }) =>
-      ProfileManagedAccessController(
-        service: this,
-        loadCurrentRawProfile: loadCurrentRawProfile,
-        readProfilesPath: readProfilesPath,
-        readInstalledPackageNames: readInstalledPackageNames,
-      );
+    required ReadProfileAccessControl readProfileAccessControl,
+  }) => ProfileManagedAccessController(
+    service: this,
+    readProfileAccessControl: readProfileAccessControl,
+  );
 
   Future<ProfileAccessSnapshot> readProfileConfigAccess({
-    required LoadCurrentRawProfile loadCurrentRawProfile,
-    required ReadProfilesPath readProfilesPath,
-    required ReadInstalledPackageNames readInstalledPackageNames,
+    required ReadProfileAccessControl readProfileAccessControl,
   }) async {
-    if (!platform.isAndroid) {
-      return const ProfileAccessSnapshot.available(null);
-    }
     try {
-      final rawProfile = await loadCurrentRawProfile();
-      if (rawProfile == null) {
-        return const ProfileAccessSnapshot.available(null);
-      }
-      final rawConfig = rawProfile.config;
-      final installedPackageNames =
-          requiresInstalledPackageInventoryForProfileSplitTunneling(
-        rawConfig,
-        isAndroid: true,
-      )
-              ? await readInstalledPackageNames()
-              : const <String>[];
-      final resolved = await resolveAndroidProfileSplitTunneling(
-        rawConfig: rawConfig,
-        isAndroid: true,
-        profilesPath: await readProfilesPath(),
-        profileId: rawProfile.profile.id,
-        installedPackageNames: installedPackageNames,
-      );
-      return ProfileAccessSnapshot.available(resolved.accessControl);
+      return ProfileAccessSnapshot.available(await readProfileAccessControl());
     } catch (_) {
       return const ProfileAccessSnapshot.unavailable();
     }
@@ -447,8 +384,9 @@ class AccessControlService {
     }
 
     if (!applied.available) {
-      final configured =
-          profileConfig.available ? profileConfig.accessControl : null;
+      final configured = profileConfig.available
+          ? profileConfig.accessControl
+          : null;
       return ProfileManagedAccess(
         managed: configured != null,
         effectiveAccessControl: configured,
@@ -460,11 +398,9 @@ class AccessControlService {
     }
 
     final effective = applied.accessControl;
-    final hasDrift = profileConfig.available &&
-        !_sameNullableEffectiveAccess(
-          profileConfig.accessControl,
-          effective,
-        );
+    final hasDrift =
+        profileConfig.available &&
+        !_sameNullableEffectiveAccess(profileConfig.accessControl, effective);
     return ProfileManagedAccess(
       managed: effective != null,
       effectiveAccessControl: effective,
@@ -506,24 +442,4 @@ class AccessControlService {
     final setB = b.currentList.toSet();
     return setA.length == setB.length && setA.containsAll(setB);
   }
-
-  Future<bool> startVpn({required AccessControl accessControl}) =>
-      platform.startVpn(accessControl: accessControl);
-
-  Future<void> stopVpn() => platform.stopVpn();
-
-  Future<ResolvedTunAccess> resolveRuntimeAccess({
-    required bool requestedTunEnable,
-    required bool realTunEnable,
-    required Future<void> Function() onAuthorizeRestart,
-    required ValueChanged<bool> onResolvedTunEnable,
-    Future<AuthorizeCode> Function()? authorizeCore,
-  }) =>
-      platform.resolveTunAccess(
-        requestedTunEnable: requestedTunEnable,
-        realTunEnable: realTunEnable,
-        onAuthorizeRestart: onAuthorizeRestart,
-        onResolvedTunEnable: onResolvedTunEnable,
-        authorizeCore: authorizeCore,
-      );
 }
