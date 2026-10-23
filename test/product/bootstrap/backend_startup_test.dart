@@ -39,6 +39,23 @@ void main() {
     expect(presented, isEmpty);
   });
 
+  test('background retries re-arm a binding that gave up', () async {
+    var reconnects = 0;
+    final startup = BackendStartup(
+      initialize: () async {
+        if (reconnects < 2) {
+          throw const BackendException('unavailable', 'gave up');
+        }
+      },
+      present: (_) {},
+      reconnect: () => reconnects++,
+      retryDelay: (_) => const Duration(milliseconds: 1),
+      log: (_) {},
+    );
+    await startup.run();
+    expect(reconnects, 2);
+  });
+
   test('a manual retry re-arms the binding and completes startup', () async {
     var reachable = false;
     var reconnects = 0;

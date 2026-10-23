@@ -197,7 +197,7 @@ class ClashCore {
       return '';
     } catch (error) {
       commonPrint.log('Engine command $method failed: $error');
-      return describeBackendError(error);
+      return describeBackendError(error, reportSuperseded: true);
     }
   }
 

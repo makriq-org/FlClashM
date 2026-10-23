@@ -210,7 +210,13 @@ class BackendClient {
       completed = await wait(operation, initial: receipt);
       final runtimeOperation = completed['runtimeOperationId'];
       if (runtimeOperation is String && runtimeOperation.isNotEmpty) {
-        await wait(runtimeOperation);
+        try {
+          await wait(runtimeOperation);
+        } on BackendException catch (error) {
+          // The change itself is saved; a newer runtime operation applies the
+          // latest state instead, so callers still get this receipt.
+          if (!error.isSuperseded) rethrow;
+        }
       }
     } catch (error, stack) {
       // Failure may have rolled runtime back without a new applied generation.
