@@ -72,7 +72,8 @@ jobs:
             e2e=true
           elif [ "$EVENT_NAME" = "workflow_dispatch" ] || \
              [ -z "$BASE_SHA" ] || \
-             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
+             ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             verification=true
             android=true
             full_matrix=true

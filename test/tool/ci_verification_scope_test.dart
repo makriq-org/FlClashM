@@ -16,6 +16,7 @@ void main() {
     List<bool> expected, {
     String event = 'pull_request',
     String base = 'base',
+    bool baseAvailable = true,
     bool e2eOnly = false,
   }) async {
     final directory = Directory.systemTemp.createTempSync('ci-scope-');
@@ -31,13 +32,20 @@ void main() {
         'pipefail',
         '-c',
         // Supply changed paths without depending on the local Git history.
-        'git() { printf \'%s\\n\' "\$CHANGED_FILES"; }\n$script',
+        'git() {\n'
+            '  if [ "\$1" = cat-file ]; then\n'
+            '    [ "\$BASE_AVAILABLE" = true ]\n'
+            '  else\n'
+            '    printf \'%s\\n\' "\$CHANGED_FILES"\n'
+            '  fi\n'
+            '}\n$script',
       ],
       environment: {
         'CHANGED_FILES': files.join('\n'),
         'EVENT_NAME': event,
         'E2E_ONLY': '$e2eOnly',
         'BASE_SHA': base,
+        'BASE_AVAILABLE': '$baseAvailable',
         'HEAD_SHA': 'head',
         'GITHUB_OUTPUT': output.path,
       },
@@ -127,6 +135,15 @@ void main() {
       [false, false, false, true],
       event: 'workflow_dispatch',
       e2eOnly: true,
+    );
+  });
+
+  test('push with an unavailable previous commit runs every check', () async {
+    await expectScope(
+      ['i18n/ru/docs/README.md'],
+      [true, true, true, true],
+      event: 'push',
+      baseAvailable: false,
     );
   });
 
