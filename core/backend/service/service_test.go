@@ -363,9 +363,20 @@ func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	if !snapshot.Runtime.AppliedRunning {
 		t.Fatal(snapshot)
 	}
+	// A closed subscription may still contain events published before detachment.
+	app.publish()
 	detach()
-	if _, ok := <-events; ok {
-		t.Fatal("UI event subscription not detached")
+	detach() // Detachment is idempotent.
+drain:
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				break drain
+			}
+		default:
+			t.Fatal("UI event subscription not detached")
+		}
 	}
 	request(t, app, "rename", "profile.put", map[string]any{"metadata": map[string]any{"id": "one", "label": "Renamed"}, "expectedRevision": receipt.Revision})
 	waitDomain(t, app, "rename")
