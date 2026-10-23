@@ -796,6 +796,7 @@ String _buildByedpiStamp() {
   return lines.join('\n');
 }
 
+/// Rebuilds stale OlcRTC assets with the pinned toolchain and verifies each ABI.
 Future<void> _syncOlcRtcAssets() async {
   final stamp = File(_projectPath(_olcRtcStampFile));
   final expectedStamp = _buildOlcRtcStamp();
@@ -807,8 +808,13 @@ Future<void> _syncOlcRtcAssets() async {
     return;
   }
 
+  final goExecutable = Platform.environment['FLCLASHM_OLCRTC_GO'] ?? 'go';
+  await _requireGoVersion(
+    olcRtcPinnedGoVersion,
+    executable: goExecutable,
+    requireUnpatched: true,
+  );
   final sourceDir = await _prepareOlcRtcSource();
-  await _requireGoVersion(olcRtcPinnedGoVersion);
   final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
   if (!targetRoot.existsSync()) {
     targetRoot.createSync(recursive: true);
@@ -840,11 +846,12 @@ Future<void> _syncOlcRtcAssets() async {
 
     await _exec(
       [
-        'go',
+        goExecutable,
         'build',
+        '-buildvcs=false',
         '-trimpath',
         '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
-        '-ldflags=-s -w -checklinkname=0',
+        '-ldflags=-s -w -checklinkname=0 -buildid=',
         '-o',
         target.path,
         './cmd/olcrtc',
@@ -1020,6 +1027,7 @@ Future<bool> _olcRtcAssetsMatchDigests() async {
   return true;
 }
 
+/// Checks out the pinned source, including a repository change in an old cache.
 Future<Directory> _prepareOlcRtcSource() async {
   final override = Platform.environment['OLCRTC_SOURCE_DIR'];
   if (override != null && override.trim().isNotEmpty) {
@@ -1048,6 +1056,11 @@ Future<Directory> _prepareOlcRtcSource() async {
   }
 
   await _exec(
+    ['git', 'remote', 'set-url', 'origin', olcRtcSourceRepository],
+    workingDirectory: cacheDir.path,
+    name: 'update olcrtc source repository',
+  );
+  await _exec(
     ['git', 'fetch', '--depth', '1', 'origin', olcRtcPinnedCommit],
     workingDirectory: cacheDir.path,
     name: 'fetch olcrtc pinned commit',
@@ -1060,11 +1073,15 @@ Future<Directory> _prepareOlcRtcSource() async {
   return cacheDir;
 }
 
+/// Records the source, modules, toolchain and flags that invalidate cached assets.
 String _buildOlcRtcStamp() {
   final lines = <String>[
     olcRtcPinnedReleaseTag,
     olcRtcSourceRepository,
     olcRtcPinnedGoVersion,
+    'toolchain:official',
+    'buildid=none',
+    'buildvcs=false',
     'ndk-$olcRtcPinnedNdkVersion',
     'modules:${_runtimeGoModuleDigest('olcrtc')}',
     ...olcRtcReleaseAssets.values.map(
@@ -1084,25 +1101,49 @@ String _runtimeGoModuleDigest(String runtime) {
   return sha256.convert(bytes.takeBytes()).toString();
 }
 
-Future<void> _requireGoVersion(String expectedVersion) async {
-  final result = await Process.run(
-    'go',
-    const ['env', 'GOVERSION'],
-    runInShell: true,
-  );
+/// Checks the selected Go version and optionally rejects nixpkgs source patches.
+Future<void> _requireGoVersion(
+  String expectedVersion, {
+  String executable = 'go',
+  bool requireUnpatched = false,
+}) async {
+  const arguments = ['env', 'GOVERSION', 'GOROOT'];
+  final result = await Process.run(executable, arguments, runInShell: true);
   if (result.exitCode != 0) {
     throw ProcessException(
-      'go',
-      const ['env', 'GOVERSION'],
+      executable,
+      arguments,
       'unable to read Go version: ${result.stderr}',
       result.exitCode,
     );
   }
-  final actualVersion = result.stdout.toString().trim();
+  final values = result.stdout.toString().trim().split('\n');
+  final actualVersion = values.first.trim();
   if (actualVersion != expectedVersion) {
     throw StateError(
-      'olcrtc must be built with $expectedVersion; found $actualVersion.',
+      'Runtime must be built with $expectedVersion; found $actualVersion.',
     );
+  }
+  if (requireUnpatched) {
+    final goRoot = values.last.trim();
+    // nixpkgs patches these files even when GOVERSION matches the official Go
+    // release. Check source contents: an untouched official archive may itself
+    // be stored in /nix/store by the development flake.
+    for (final path in const [
+      'net/port_unix.go',
+      'net/lookup_unix.go',
+      'mime/type_unix.go',
+    ]) {
+      final source = File(_join(goRoot, 'src', path));
+      if (!source.existsSync() ||
+          (await source.readAsString()).contains('/nix/store/')) {
+        throw StateError(
+          'OlcRTC requires the official, unpatched $expectedVersion toolchain. '
+          'Set FLCLASHM_OLCRTC_GO to its go executable '
+          '(nix develop sets it automatically).',
+        );
+      }
+    }
   }
 }
 

@@ -152,7 +152,7 @@ proxy-groups:
 
 | Parameter | Description |
 |-----------|-------------|
-| `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `none` |
+| `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `salutejazz`, `vkcalls`, `mtslink`, `max`, `none` |
 | `room` | Video-call room identifier |
 | `encryption-key` | 256-bit encryption key — **exactly 64 hex characters** |
 | `transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
@@ -182,6 +182,19 @@ transport-options:
 
 > [!TIP]
 > The recommended combination is `jitsi` + `datachannel`. Use `vp8channel` for `wbstream` without a moderator token and for `telemost`.
+
+The bundled runtime is the [Ghostlane fork](https://github.com/ghostlane-project/olcrtc).
+Use these combinations for the new services:
+
+| `provider` | `transport` | `room` | Additional requirements |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` or `videochannel` | `https://vk.ru/call/join/<id>` | VK call join link; non-empty `provider-token` is forbidden |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | Permanent MTS Link meeting |
+| `salutejazz` | `datachannel` | `<code>:<password>` | SaluteJazz room code and password |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | Required `provider-token`: MAX calls session key or calls token |
+
+The token is passed only to the OlcRTC process in its private config; do not publish profiles containing it.
+Unsupported provider/transport combinations are rejected before the process starts.
 
 `profiles`, `failover`, and `video.hw` are removed from the public contract. Define separate OlcRTC nodes and combine them with a Mihomo group. `provider: none` requires `engine`, `engine-url`, and `engine-token`; other providers forbid them.
 
