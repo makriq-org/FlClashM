@@ -40,6 +40,21 @@ type platformPolicy struct {
 	lastReset, lastProbe time.Time
 	nextProbe, releaseAt time.Time
 	missed               bool
+	// Per-kind retry state for persistently failing effects ("tick" for the
+	// timer); a newer observation of a kind is attempted immediately.
+	failures map[string]int
+	retryAt  map[string]time.Time
+}
+
+const platformRetryLimit = 5 * time.Minute
+
+// platformRetryDelay doubles from one second up to platformRetryLimit.
+func platformRetryDelay(failures int) time.Duration {
+	delay := time.Second
+	for i := 1; i < failures && delay < platformRetryLimit; i++ {
+		delay *= 2
+	}
+	return min(delay, platformRetryLimit)
 }
 
 func (b *Backend) NotifyPlatform(event PlatformEvent) error {
@@ -62,6 +77,8 @@ func (b *Backend) NotifyPlatform(event PlatformEvent) error {
 	}
 	if prior, ok := c.policy.pending[event.Kind]; !ok || prior.Sequence < event.Sequence {
 		c.policy.pending[event.Kind] = event
+		delete(c.policy.failures, event.Kind)
+		delete(c.policy.retryAt, event.Kind)
 	}
 	select {
 	case c.policy.wake <- struct{}{}:
@@ -86,7 +103,7 @@ func (c *runtimeCoordinator) openPlatformPolicy() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c.policy = &platformPolicy{wake: make(chan struct{}, 1), cancel: cancel, pending: map[string]PlatformEvent{}, screen: PlatformEvent{ScreenOn: true}}
+	c.policy = &platformPolicy{wake: make(chan struct{}, 1), cancel: cancel, pending: map[string]PlatformEvent{}, screen: PlatformEvent{ScreenOn: true}, failures: map[string]int{}, retryAt: map[string]time.Time{}}
 	if c.nodeOptions != nil && c.nodeOptions.ManualTicks {
 		return
 	}
@@ -121,15 +138,28 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 			return
 		}
 		p := c.policy
+		// Backoff uses the wall clock of the timers below, not the policy clock.
+		now := time.Now()
+		retry := time.Time{} // earliest end of a backoff that deferred work
+		ready := func(kind string) bool {
+			at := p.retryAt[kind]
+			if at.IsZero() || !now.Before(at) {
+				return true
+			}
+			if retry.IsZero() || at.Before(retry) {
+				retry = at
+			}
+			return false
+		}
 		var event *PlatformEvent
-		if value, ok := p.pending["revoked"]; ok {
+		if value, ok := p.pending["revoked"]; ok && ready("revoked") {
 			// Revocation is a stop intent and must preempt preparation/recovery,
 			// rather than wait for that operation to establish another tunnel.
 			copy := value
 			event = &copy
 		} else if c.active == nil {
 			for _, kind := range []string{"service", "screen", "network"} {
-				if value, ok := p.pending[kind]; ok {
+				if value, ok := p.pending[kind]; ok && ready(kind) {
 					copy := value
 					event = &copy
 					break
@@ -146,6 +176,7 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 				due = p.releaseAt
 			}
 		}
+		tickDeferred := !due.IsZero() && !ready("tick")
 		c.mu.Unlock()
 		method := "platform.tick"
 		var input json.RawMessage
@@ -153,39 +184,56 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 			method = "platform.event"
 			input, _ = json.Marshal(event)
 		}
-		if event != nil || (!due.IsZero() && !c.now().Before(due)) {
+		if event != nil || (!due.IsZero() && !tickDeferred && !c.now().Before(due)) {
+			kind := "tick"
+			if event != nil {
+				kind = event.Kind
+			}
 			id := "system-" + rand.Text()
 			var err error
 			if event != nil && (event.Kind == "service" || event.Kind == "revoked") {
 				err = c.platformLost(ctx, b, id, event.Kind == "revoked")
 			} else {
-				_, err = b.SubmitEngineCommand(id, EngineCommand{Method: method, Params: input})
-				if err == nil {
-					_, err = b.Await(ctx, id)
-				}
+				err = b.runSystemCommand(ctx, id, EngineCommand{Method: method, Params: input})
 			}
-			if err == nil && event != nil {
-				c.mu.Lock()
-				if latest := p.pending[event.Kind]; latest.Sequence == event.Sequence {
-					delete(p.pending, event.Kind)
-				}
-				c.mu.Unlock()
+			if ctx.Err() != nil {
+				return
 			}
-			if err != nil {
-				timer := time.NewTimer(time.Second)
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					return
-				case <-timer.C:
+			c.mu.Lock()
+			if err == nil {
+				delete(p.failures, kind)
+				delete(p.retryAt, kind)
+				if event != nil {
+					if latest := p.pending[event.Kind]; latest.Sequence == event.Sequence {
+						delete(p.pending, event.Kind)
+					}
 				}
+			} else if event == nil || p.pending[event.Kind].Sequence == event.Sequence {
+				// A persistently failing effect must not spin; a newer
+				// observation of the same kind already reset its backoff.
+				p.failures[kind]++
+				p.retryAt[kind] = time.Now().Add(platformRetryDelay(p.failures[kind]))
 			}
+			c.mu.Unlock()
 			continue
 		}
 		var timer *time.Timer
 		var tick <-chan time.Time
-		if !due.IsZero() {
-			timer = time.NewTimer(max(time.Millisecond, time.Until(due)))
+		wait := time.Duration(-1)
+		consider := func(at time.Time) {
+			if at.IsZero() {
+				return
+			}
+			if d := max(time.Millisecond, time.Until(at)); wait < 0 || d < wait {
+				wait = d
+			}
+		}
+		if !tickDeferred {
+			consider(due)
+		}
+		consider(retry)
+		if wait >= 0 {
+			timer = time.NewTimer(wait)
 			tick = timer.C
 		}
 		select {

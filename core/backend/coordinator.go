@@ -9,12 +9,30 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 var ErrSuperseded = errors.New("operation superseded")
 var ErrClosed = errors.New("backend closed")
+
+// Receipt.ErrorCode and APIError.ErrorCode carry one of these stable machine
+// values; Error/Message stay short human-readable text that clients must not
+// parse. A successful receipt has no code.
+const (
+	// ErrorCodeSuperseded: a newer runtime command (including Stop or an OS
+	// revocation) took over before this operation completed. It is not a fault.
+	ErrorCodeSuperseded = "superseded"
+	// ErrorCodeCancelled: explicit operation.cancel without a newer command.
+	ErrorCodeCancelled = "cancelled"
+	// ErrorCodeClosed: backend/process teardown interrupted the operation.
+	ErrorCodeClosed = "closed"
+	// ErrorCodeFailed: the operation itself failed; Error names the cause.
+	ErrorCodeFailed = "failed"
+)
 
 type Request struct {
 	APIVersion  int    `json:"apiVersion"`
@@ -49,6 +67,9 @@ type execution struct {
 	receipt      Receipt
 	priorDesired Desired
 	err          error
+	// internal marks coordinator-owned platform effects. They are retried by
+	// the policy, so they are neither journaled nor kept in receipt history.
+	internal bool
 }
 
 // RuntimeCoordinator is private to Backend. Only this owner may invoke mutating
@@ -66,6 +87,18 @@ type runtimeCoordinator struct {
 	nodeContext    context.Context
 	nodesExecuting bool
 	keepNodesWarm  bool // UI preparation only; never persisted as a VPN intent.
+	// uiDetached fences warm commands queued by a UI session that has gone
+	// away; uiSequence orders UI attach/detach facts by API arrival.
+	uiDetached bool
+	uiSequence uint64
+	// residentDigest names the plan whose engine configuration and prepared
+	// nodes are resident in this process. It is cleared before any mechanism
+	// may replace them and set only after they were installed completely, so
+	// an interrupted install can never be mistaken for the committed plan.
+	// Guarded by the command lock.
+	residentDigest string
+	// nodesDigest names the plan of the last completed node preparation.
+	nodesDigest    string
 	nodeMutation   *execution
 	instanceID     string
 	commands       sync.Mutex
@@ -91,17 +124,43 @@ type Backend struct{ coordinator *runtimeCoordinator }
 
 // PrepareForUI records a local UI-session fact, not a durable run intent. All
 // resource effects remain in the coordinator's serialized commands.
-func (b *Backend) PrepareForUI() error {
+func (b *Backend) PrepareForUI() error { return b.SetUISession(true, 0) }
+
+// ReleaseUI records that no UI remains attached. It is idempotent.
+func (b *Backend) ReleaseUI() error { return b.SetUISession(false, 0) }
+
+// SetUISession records whether a UI is attached. A non-zero sequence orders
+// facts by API arrival: an older fact applied late is ignored. Detaching never
+// changes VPN intent; while the VPN is stopped it releases ordinary nodes that
+// were kept only for latency checks, through the serialized command lock.
+func (b *Backend) SetUISession(attached bool, sequence uint64) error {
 	c := b.coordinator
 	c.commands.Lock()
 	defer c.commands.Unlock()
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return ErrClosed
 	}
-	c.keepNodesWarm = true
-	return nil
+	if sequence != 0 {
+		if sequence <= c.uiSequence {
+			c.mu.Unlock()
+			return nil
+		}
+		c.uiSequence = sequence
+	}
+	c.keepNodesWarm = attached
+	c.uiDetached = !attached
+	running := c.document.Desired.Running || (c.document.Applied != nil && c.document.Applied.Running)
+	c.mu.Unlock()
+	if attached || running || c.nodeOptions == nil || !c.nodesExecuting {
+		// A running VPN keeps its nodes; a later Stop releases them because
+		// the preparation lease is gone.
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
+	defer cancel()
+	return c.transports.Stop(ctx)
 }
 
 func Open(store Store, compiler Compiler, engine EngineAdapter, transports TransportAdapter, platform PlatformAdapter, nodeOptions ...NodeOptions) (*Backend, error) {
@@ -478,7 +537,9 @@ func (c *runtimeCoordinator) execute(e *execution) {
 			}()
 		}
 	}
+	performed := false
 	if err == nil {
+		performed = true
 		err = c.perform(e)
 	}
 	c.activateNodeLoop(e.epoch)
@@ -495,12 +556,7 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	e.err = err
 	e.receipt.Status = "succeeded"
 	if err != nil {
-		e.receipt.Status = "failed"
-		e.receipt.Error = "operation failed"
-		if e.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
-			e.receipt.Status = "cancelled"
-			e.receipt.Error = "operation cancelled"
-		}
+		e.receipt.Status, e.receipt.ErrorCode, e.receipt.Error = c.failureLocked(e, err)
 	}
 	// A commit failure must leave the pending journal intact. A later recovery
 	// uses it to fence any operation that was never durably acknowledged.
@@ -511,10 +567,19 @@ func (c *runtimeCoordinator) execute(e *execution) {
 		if e.epoch > next.Generation {
 			next.Generation = e.epoch
 		}
+		// Explicit cancellation without a newer command withdraws the intent
+		// accepted at submission, also when the command was cancelled while
+		// still queued (perform restores it only after it started). Reset has
+		// already dropped Applied, and a Stop whose effects ran keeps its intent.
+		if e.ctx.Err() != nil && c.epoch == e.epoch && !c.closed && e.request.Method != "forget" && (!performed || e.request.Method != "stop") {
+			next.Desired = e.priorDesired
+			next.Desired.Input = bytes.Clone(e.priorDesired.Input)
+		}
 		next.Receipts = appendReceipt(next.Receipts, e.receipt)
 		if saveErr := c.saveLocked(next); saveErr != nil {
 			e.err = errors.Join(e.err, saveErr)
 			e.receipt.Status = "failed"
+			e.receipt.ErrorCode = ErrorCodeFailed
 			e.receipt.Error = "storage commit failed"
 		}
 	}
@@ -572,7 +637,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		}
 	}
 	if e.request.Method == "warm" {
-		c.keepNodesWarm = true
+		// A warm queued by a UI that detached meanwhile prepares the plan
+		// like apply, but cannot recreate the preparation lease.
+		if !c.uiDetached {
+			c.keepNodesWarm = true
+		}
 	} else if e.request.Method == "forget" || (e.request.Method == "recover" && !next.Desired.Running) {
 		c.keepNodesWarm = false
 	}
@@ -602,6 +671,10 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 
 	if e.request.Method == "stop" || e.request.Method == "forget" {
 		var err error
+		if e.request.Method == "forget" {
+			// Applied is gone and the engine configuration is erased below.
+			c.residentDigest = ""
+		}
 		if e.request.Method == "stop" && c.keepNodesWarm && c.nodeOptions != nil && c.nodesExecuting {
 			err = c.stopPreparedRuntime()
 		} else {
@@ -638,7 +711,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		committed := cloneDocument(c.document)
 		if committed.Applied != nil {
 			committed.Applied.Running = false
-			committed.Applied.Nodes = c.persistedNodes()
+			// Prepared nodes may belong to an interrupted install of another
+			// plan; then the committed node states remain authoritative.
+			if c.residentDigest == committed.Applied.Plan.Digest {
+				committed.Applied.Nodes = c.persistedNodes()
+			}
 		}
 		committed.Pending = nil
 		committed.Receipts = appendReceipt(committed.Receipts, Receipt{OperationID: e.request.OperationID, Fingerprint: e.fingerprint, Method: e.request.Method, Status: "succeeded", Generation: e.epoch})
@@ -670,7 +747,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		_, hasSelection := c.engine.(SelectionAdapter)
 		_, hasLiveSettings := c.engine.(LiveSettingsAdapter)
 		samePlan := plan != nil && previous.Applied != nil && plan.Digest() == previous.Applied.Plan.Digest
-		resident := previous.Applied != nil && previous.Applied.Running == next.Desired.Running && e.request.Method != "restart" && (samePlan || hasSelection || hasLiveSettings)
+		// In-place paths patch the resident engine and nodes. They are valid
+		// only when those were installed for the committed plan in this process;
+		// a superseded install may have left another plan's configuration.
+		residentPlan := previous.Applied != nil && c.residentDigest == previous.Applied.Plan.Digest
+		resident := residentPlan && previous.Applied.Running == next.Desired.Running && e.request.Method != "restart" && (samePlan || hasSelection || hasLiveSettings)
 		if resident {
 			c.mu.Lock()
 			expected := "stopped"
@@ -760,6 +841,9 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 		return err
 	}
 	if plan != nil {
+		// Preparation replaces node definitions and engine configuration; until
+		// every step succeeded, neither belongs to any plan.
+		c.residentDigest = ""
 		steps := []func() error{func() error { return c.transports.Prepare(e.ctx, plan) }}
 		if running || c.keepNodesWarm {
 			steps = append(steps, func() error { return c.transports.Start(e.ctx, plan) })
@@ -773,6 +857,7 @@ func (c *runtimeCoordinator) install(e *execution, plan *RuntimePlan, running bo
 				return err
 			}
 		}
+		c.residentDigest = plan.Digest()
 	}
 	if running {
 		if err := c.startRuntime(e, plan); err != nil {
@@ -953,6 +1038,17 @@ func (b *Backend) Close() error {
 	return err
 }
 
+const maxReceipts = 128
+
+// Autonomous receipts (OS recovery/revocation, reserve wake/sleep) share the
+// history but may occupy only a few slots, so a persistently retried system
+// operation cannot evict the outcome of a user command.
+const maxSystemReceipts = 16
+
+func systemReceipt(id string) bool {
+	return strings.HasPrefix(id, "system-") || strings.HasPrefix(id, "node-")
+}
+
 func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
 	for i := range receipts {
 		if receipts[i].OperationID == receipt.OperationID {
@@ -961,10 +1057,96 @@ func appendReceipt(receipts []Receipt, receipt Receipt) []Receipt {
 		}
 	}
 	receipts = append(receipts, receipt)
-	if len(receipts) > 128 {
-		receipts = receipts[len(receipts)-128:]
+	if systemReceipt(receipt.OperationID) {
+		count := 0
+		for _, existing := range receipts {
+			if systemReceipt(existing.OperationID) {
+				count++
+			}
+		}
+		for i := 0; count > maxSystemReceipts && i < len(receipts); {
+			if systemReceipt(receipts[i].OperationID) {
+				receipts = append(receipts[:i], receipts[i+1:]...)
+				count--
+				continue
+			}
+			i++
+		}
+	}
+	if len(receipts) > maxReceipts {
+		receipts = receipts[len(receipts)-maxReceipts:]
 	}
 	return receipts
+}
+
+const maxReceiptError = 300
+
+var (
+	receiptURLCredentials = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/\s@]+@`)
+	receiptSecretValues   = regexp.MustCompile(`(?i)(password|passwd|secret|token|uuid|private[-_]?key|pre-shared-key|psk|auth[a-z_-]*)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}\]]+)`)
+)
+
+// failureLocked classifies a failed execution for its receipt. Caller holds mu.
+func (c *runtimeCoordinator) failureLocked(e *execution, err error) (status, code, message string) {
+	switch {
+	case c.closed || errors.Is(err, ErrClosed):
+		code, message = ErrorCodeClosed, "backend closed"
+	case c.epoch != e.epoch:
+		code, message = ErrorCodeSuperseded, "operation superseded by a newer command"
+	case e.ctx.Err() != nil || errors.Is(err, context.Canceled):
+		code, message = ErrorCodeCancelled, "operation cancelled"
+	case errors.Is(err, ErrSuperseded):
+		code, message = ErrorCodeSuperseded, "operation superseded by a newer command"
+	default:
+		return "failed", ErrorCodeFailed, describeError(err)
+	}
+	return "cancelled", code, message
+}
+
+// ErrorCode maps an API rejection to a stable receipt error code.
+func ErrorCode(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrClosed):
+		return ErrorCodeClosed
+	case errors.Is(err, ErrSuperseded):
+		return ErrorCodeSuperseded
+	case errors.Is(err, context.Canceled):
+		return ErrorCodeCancelled
+	}
+	return ErrorCodeFailed
+}
+
+// describeError returns the first meaningful line of an error chain as short
+// user-facing text. Joined rollback errors and cancellation markers follow the
+// root cause; credentials embedded in URLs or key/value pairs are redacted.
+// Full errors still reach the host's redacting RuntimeDiagnostics sink.
+func describeError(err error) string {
+	message := ""
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line == context.Canceled.Error() || line == ErrSuperseded.Error() || line == ErrClosed.Error() {
+			continue
+		}
+		message = line
+		break
+	}
+	if message == "" {
+		return "operation failed"
+	}
+	message = receiptURLCredentials.ReplaceAllString(message, "${1}***@")
+	message = receiptSecretValues.ReplaceAllString(message, "${1}${2}***")
+	message = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, message)
+	if runes := []rune(message); len(runes) > maxReceiptError {
+		message = string(runes[:maxReceiptError-1]) + "…"
+	}
+	return message
 }
 
 // Preparation has no runtime side effects. A non-cooperative parser must not

@@ -40,7 +40,10 @@ type Receipt struct {
 	Status      string `json:"status"`
 	Method      string `json:"method,omitempty"`
 	Generation  uint64 `json:"generation"`
-	Error       string `json:"error,omitempty"`
+	// Error is short human-readable text; ErrorCode is one of the stable
+	// ErrorCode* values for failed and cancelled operations.
+	Error     string `json:"error,omitempty"`
+	ErrorCode string `json:"errorCode,omitempty"`
 }
 type Document struct {
 	Version    int       `json:"version"`
@@ -177,7 +180,18 @@ func (s *FileStore) Save(d Document) error {
 	if err = os.Rename(f.Name(), s.path); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(s.path))
+	// After the rename every Load, including one after a process restart,
+	// observes the new document. Reporting a failed directory flush as a
+	// rejected save would leave the caller's memory behind the state it will
+	// act on after restart, so the save counts as committed. The next Save
+	// flushes the directory again.
+	_ = syncDirectory(filepath.Dir(s.path))
+	return nil
+}
+
+// syncDirectory flushes directory metadata; tests replace it to inject faults.
+var syncDirectory = func(path string) error {
+	dir, err := os.Open(path)
 	if err != nil {
 		return err
 	}

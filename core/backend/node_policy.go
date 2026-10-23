@@ -147,6 +147,7 @@ func (c *runtimeCoordinator) prepareNodes(ctx context.Context, plan *RuntimePlan
 	if err := json.Unmarshal(plan.Payload(), &data); err != nil {
 		return err
 	}
+	c.nodesDigest = ""
 	c.nodes = map[string]*nodeRuntime{}
 	c.nodeOrder = nil
 	c.mu.Lock()
@@ -201,7 +202,11 @@ func (c *runtimeCoordinator) prepareNodes(ctx context.Context, plan *RuntimePlan
 		c.nodeOrder = append(c.nodeOrder, node.ID)
 	}
 	c.publishNodes()
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.nodesDigest = plan.Digest()
+	return nil
 }
 func (c *runtimeCoordinator) startNodes(ctx context.Context) error {
 	for _, id := range c.nodeOrder {
@@ -543,7 +548,12 @@ type coordinatedTransports struct{ c *runtimeCoordinator }
 func (a coordinatedTransports) Prepare(ctx context.Context, p *RuntimePlan) error {
 	return a.c.prepareNodes(ctx, p)
 }
-func (a coordinatedTransports) Start(ctx context.Context, _ *RuntimePlan) error {
+func (a coordinatedTransports) Start(ctx context.Context, p *RuntimePlan) error {
+	// Node definitions come from the last completed Prepare. Never launch
+	// another plan's processes, e.g. those left by a superseded install.
+	if p == nil || a.c.nodesDigest != p.Digest() {
+		return errors.New("external nodes are not prepared for this plan")
+	}
 	if err := a.c.startNodes(ctx); err != nil {
 		return err
 	}

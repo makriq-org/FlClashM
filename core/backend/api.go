@@ -8,9 +8,16 @@ import (
 
 const MaxRequestBytes = 16 << 20
 
+// APIError rejects a request before an operation exists. Code is the
+// transport-level reason: request_too_large, invalid_request,
+// unsupported_version, reset_in_progress, backend_closed or command_rejected.
+// For backend_closed and command_rejected, ErrorCode classifies the cause with
+// the same values as Receipt.ErrorCode (superseded, cancelled, closed, failed).
+// Message is human-readable text only.
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	ErrorCode string `json:"errorCode,omitempty"`
 }
 type Response struct {
 	APIVersion  int       `json:"apiVersion"`
@@ -39,7 +46,7 @@ func (b *Backend) Operation(id string) (Receipt, error) {
 func (b *Backend) Handle(raw []byte) []byte {
 	response := Response{APIVersion: APIVersion}
 	fail := func(code, message string) []byte {
-		response.Error = &APIError{code, message}
+		response.Error = &APIError{Code: code, Message: message}
 		response.Result = nil
 		result, _ := json.Marshal(response)
 		return result
@@ -83,7 +90,10 @@ func (b *Backend) Handle(raw []byte) []byte {
 		response.Result, err = b.Submit(request)
 	}
 	if err != nil {
-		return fail("command_rejected", err.Error())
+		response.Error = &APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: ErrorCode(err)}
+		response.Result = nil
+		result, _ := json.Marshal(response)
+		return result
 	}
 	result, _ := json.Marshal(response)
 	return result

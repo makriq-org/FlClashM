@@ -824,3 +824,159 @@ func TestConcurrentSubscriberDoesNotBlockPublication(t *testing.T) {
 		t.Fatal("subscriber blocked runtime publication")
 	}
 }
+
+// An install superseded after it replaced the engine configuration must not
+// let a later command for the committed plan skip installation.
+func TestSupersededInstallCannotSatisfyCommittedPlan(t *testing.T) {
+	h := newHost()
+	b := openHost(t, newStore(t), h)
+	run(t, b, "configure", "apply", `{"profile":"A"}`)
+	h.mu.Lock()
+	h.block = "engine.apply"
+	h.entered = make(chan struct{})
+	h.release = make(chan struct{})
+	h.mu.Unlock()
+	if _, err := b.Submit(Request{APIVersion: 1, OperationID: "switch", Method: "apply", Input: Input(`{"profile":"B"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-h.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("install did not reach the engine")
+	}
+	if _, err := b.Submit(Request{APIVersion: 1, OperationID: "back", Method: "apply", Input: Input(`{"profile":"A"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	// The non-cooperative engine finishes loading B after supersession.
+	close(h.release)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	switched, err := b.Await(ctx, "switch")
+	if err == nil || switched.Status != "cancelled" || switched.ErrorCode != ErrorCodeSuperseded {
+		t.Fatalf("superseded switch: %+v %v", switched, err)
+	}
+	if back, err := b.Await(ctx, "back"); err != nil || back.Status != "succeeded" {
+		t.Fatalf("return to committed plan: %+v %v", back, err)
+	}
+	h.mu.Lock()
+	resident := string(h.applied)
+	h.mu.Unlock()
+	if resident != `{"profile":"A"}` {
+		t.Fatalf("committed plan A while the engine kept %s", resident)
+	}
+	run(t, b, "start", "start", "")
+	h.mu.Lock()
+	resident = string(h.applied)
+	h.mu.Unlock()
+	if resident != `{"profile":"A"}` || b.Snapshot().Observed.State != "running" {
+		t.Fatalf("start used a foreign configuration: %s %+v", resident, b.Snapshot())
+	}
+}
+
+func TestCancelledQueuedCommandRestoresPriorIntent(t *testing.T) {
+	store := newStore(t)
+	b := openHost(t, store, newHost())
+	run(t, b, "configure", "apply", `{"profile":"old"}`)
+	// Hold the executor, as a predecessor would, so the connect stays queued.
+	b.coordinator.commands.Lock()
+	if _, err := b.Submit(Request{APIVersion: 1, OperationID: "queued", Method: "connect", Input: Input(`{"profile":"new"}`)}); err != nil {
+		b.coordinator.commands.Unlock()
+		t.Fatal(err)
+	}
+	if !b.Snapshot().DesiredRunning {
+		b.coordinator.commands.Unlock()
+		t.Fatal("connect intent was not accepted durably")
+	}
+	cancelled := b.Cancel("queued")
+	b.coordinator.commands.Unlock()
+	if !cancelled {
+		t.Fatal("queued command was not cancellable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	receipt, err := b.Await(ctx, "queued")
+	if !errors.Is(err, context.Canceled) || receipt.Status != "cancelled" || receipt.ErrorCode != ErrorCodeCancelled {
+		t.Fatalf("cancelled queued command: %+v %v", receipt, err)
+	}
+	if b.Snapshot().DesiredRunning {
+		t.Fatal("cancelled queued connect kept its running intent")
+	}
+	doc, err := store.Load()
+	if err != nil || doc.Desired.Running || string(doc.Desired.Input) != `{"profile":"old"}` {
+		t.Fatalf("cancelled intent survived on disk: %+v %v", doc.Desired, err)
+	}
+}
+
+func TestFailedReceiptCarriesCodeAndRedactedCause(t *testing.T) {
+	h := newHost()
+	b := openHost(t, newStore(t), h)
+	h.mu.Lock()
+	h.fail = "compile"
+	h.mu.Unlock()
+	expectFailure(t, b, "broken", "apply", `{"profile":"x"}`)
+	receipt, err := b.Operation("broken")
+	if err != nil || receipt.Status != "failed" || receipt.ErrorCode != ErrorCodeFailed || receipt.Error != "injected compile" {
+		t.Fatalf("failed receipt: %+v %v", receipt, err)
+	}
+	message := describeError(errors.Join(errors.New("proxy one: password: hunter2, url ss://user:pw@example.com:443\nsecond line"), context.Canceled))
+	if strings.Contains(message, "hunter2") || strings.Contains(message, "user:pw") || strings.Contains(message, "second line") || !strings.Contains(message, "proxy one") {
+		t.Fatalf("unsafe or unhelpful receipt error: %q", message)
+	}
+	if long := describeError(errors.New(strings.Repeat("x", 1000))); len([]rune(long)) != maxReceiptError {
+		t.Fatalf("receipt error is not bounded: %d", len([]rune(long)))
+	}
+	if root := describeError(errors.Join(context.Canceled, errors.New("root cause"))); root != "root cause" {
+		t.Fatalf("cancellation marker hid the root cause: %q", root)
+	}
+}
+
+func TestAPIRejectionCarriesErrorCode(t *testing.T) {
+	b := openHost(t, newStore(t), newHost())
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var response Response
+	if err := json.Unmarshal(b.Handle([]byte(`{"apiVersion":1,"operationId":"late","method":"stop"}`)), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error == nil || response.Error.Code != "command_rejected" || response.Error.ErrorCode != ErrorCodeClosed {
+		t.Fatalf("rejection without stable code: %+v", response.Error)
+	}
+}
+
+func TestSystemReceiptsCannotEvictUserHistory(t *testing.T) {
+	receipts := appendReceipt(nil, Receipt{OperationID: "user-first", Status: "succeeded"})
+	for i := range 500 {
+		receipts = appendReceipt(receipts, Receipt{OperationID: fmt.Sprintf("system-%d", i), Status: "failed"})
+	}
+	system := 0
+	for _, receipt := range receipts {
+		if systemReceipt(receipt.OperationID) {
+			system++
+		}
+	}
+	if receipts[0].OperationID != "user-first" || system != maxSystemReceipts || receipts[len(receipts)-1].OperationID != "system-499" {
+		t.Fatalf("system receipts evicted user history: first=%s system=%d", receipts[0].OperationID, system)
+	}
+	for i := range 200 {
+		receipts = appendReceipt(receipts, Receipt{OperationID: fmt.Sprintf("user-%d", i)})
+	}
+	if len(receipts) != maxReceipts {
+		t.Fatal("receipt history is unbounded", len(receipts))
+	}
+}
+
+// A failed directory flush after the atomic rename must not leave the
+// coordinator behind the document it will act on after restart.
+func TestDirectorySyncFailureAfterRenameKeepsMemoryAndDiskConsistent(t *testing.T) {
+	previous := syncDirectory
+	syncDirectory = func(string) error { return errors.New("injected directory sync failure") }
+	t.Cleanup(func() { syncDirectory = previous })
+	store := newStore(t)
+	b := openHost(t, store, newHost())
+	run(t, b, "configure", "apply", `{"profile":"one"}`)
+	doc, err := store.Load()
+	if err != nil || doc.Applied == nil || doc.Applied.Plan.Generation != b.Snapshot().AppliedGeneration || doc.Generation != b.Snapshot().Generation {
+		t.Fatalf("memory and disk diverged: %+v %+v %v", b.Snapshot(), doc, err)
+	}
+}
