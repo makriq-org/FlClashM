@@ -29,9 +29,10 @@ class CommonService : Service(), BackendForegroundResource {
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        lastStartId = startId
         val promoted = promoteServiceForeground()
-        if (promoted) BackendForegroundHold.created(this)
+        // The id is recorded with registration: a concurrent retirement either
+        // stops with the older id (rejected by the system) or sees this start.
+        if (promoted) BackendForegroundHold.created(this) { lastStartId = startId } else lastStartId = startId
         if (intent?.action == BackendForegroundHold.ACTION_HOLD) {
             BackendForegroundHold.acknowledge(intent.getStringExtra("operationId"), promoted)
             return START_NOT_STICKY
