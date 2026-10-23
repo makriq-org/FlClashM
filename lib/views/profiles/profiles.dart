@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart' hide Action;
-import 'package:flclashx/pages/pages.dart';
 import 'package:flclashx/product/subscription/provider_advisory.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';

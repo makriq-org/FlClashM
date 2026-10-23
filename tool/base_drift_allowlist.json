@@ -38,7 +38,7 @@
     {
       "path": "core/action.go",
       "bucket": "budget",
-      "reason": "Внутренние IPC-действия для HTTP через tunnel и снимка runtime-состояния принадлежат обёртке ядра форка."
+      "reason": "IPC обёртки ядра передаёт запросы Go backend, платформенные события и HTTP через tunnel."
     },
     {
       "path": "core/common.go",
@@ -328,7 +328,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/SavedParams.kt",
       "bucket": "budget",
-      "reason": "Миграция состояния always-on и runtime-узлов относится к Android platform-слою."
+      "reason": "Старое хранилище параметров удалено: состояние и восстановление принадлежат Go backend."
     },
     {
       "path": "android/common/src/main/res/values-ja/strings.xml",
@@ -386,26 +386,6 @@
       "reason": "Lifecycle удалённого процесса mihomo сохраняется без зависимости от Flutter UI."
     },
     {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
-      "bucket": "budget",
-      "reason": "Супервизор передаёт bounded stdout встроенных нод в общий журнал удалённого процесса."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
-      "bucket": "budget",
-      "reason": "Нативный CI-тест закрепляет дедупликацию и запрет выхода resolver-файла за рабочую директорию."
-    },
-    {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",
-      "bucket": "budget",
-      "reason": "Обобщённый контракт resolver-файла runtime-узлов принадлежит Android runtime-слою: перегенерация при смене системных DNS обязана работать без Flutter-процесса."
-    },
-    {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityChecker.kt",
-      "bucket": "budget",
-      "reason": "Проверка доступности встроенных узлов при холодном запуске относится к Android runtime-слою и зеркалит контракт product layer."
-    },
-    {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",
       "bucket": "budget",
       "reason": "Снимок параметров, реально переданных Android VPN-службе, принадлежит платформенному жизненному циклу и нужен для достоверного отображения пакетных правил."
@@ -418,17 +398,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
       "bucket": "budget",
-      "reason": "Исправления DNS и системной сети относятся к platform/runtime слою Android."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeProbeBatchTest.kt",
-      "bucket": "budget",
-      "reason": "Тест ограниченного параллелизма временных runtime-процессов проверяет Android batch-probe встроенных узлов."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityCheckerTest.kt",
-      "bucket": "budget",
-      "reason": "Тест SOCKS-запроса и DoH-резолва проверочного адреса проверяет Android-проверку доступности встроенных узлов."
+      "reason": "Kotlin-координация сети удалена; Android передаёт факты сети в Go backend."
     },
     {
       "path": "android/service/src/main/res/drawable/ic_notification.xml",
@@ -448,12 +418,12 @@
     {
       "path": "lib/application.dart",
       "bucket": "budget",
-      "reason": "Base-оболочка сведена к тонким вызовам product-сервисов и передаёт runtime событие смены физической сети."
+      "reason": "Базовая оболочка инициализирует Android shortcuts и подключает UI к Go backend."
     },
     {
       "path": "lib/clash/interface.dart",
       "bucket": "budget",
-      "reason": "Базовый интерфейс канала содержит отдельный контракт чтения снимка применённых параметров Android VPN без продуктовой политики."
+      "reason": "Базовый канал передаёт Go API и снимок фактически применённых правил Android VPN."
     },
     {
       "path": "lib/clash/lib.dart",
@@ -1454,6 +1424,21 @@
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Service.kt",
       "bucket": "budget",
       "reason": "После выгрузки процесса Android создаётся новое IPC-подключение с ограниченными повторами."
+    },
+    {
+      "path": "core/backend/node_probe.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
+    },
+    {
+      "path": "core/backend/node_strategy.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
+    },
+    {
+      "path": "core/backend/node_reconcile.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
     }
   ]
 }

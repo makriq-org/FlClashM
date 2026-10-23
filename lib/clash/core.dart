@@ -5,7 +5,6 @@ import 'dart:isolate';
 
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/clash/interface.dart';
-import 'package:flclashx/common/common.dart';
 import 'package:flclashx/common/process_icon.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';

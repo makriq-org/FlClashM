@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flclashx/clash/core.dart';
 import 'package:flclashx/clash/lib.dart';
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
