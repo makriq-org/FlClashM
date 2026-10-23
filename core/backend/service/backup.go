@@ -177,16 +177,22 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 	if err != nil {
 		return "", err
 	}
-	if legacy := entries["clashConfig.json"]; legacy != nil {
-		clash, err := read(legacy, profiles.MaxDocumentBytes)
-		if err != nil {
-			return "", err
-		}
+	legacy := entries["clashConfig.json"]
+	if legacy != nil || !onlyProfiles {
 		var settings profiles.Object
-		if json.Unmarshal(rawSettings, &settings) != nil {
+		if json.Unmarshal(rawSettings, &settings) != nil || settings == nil {
 			return "", errors.New("invalid backup settings")
 		}
-		settings["patchClashConfig"] = clash
+		if legacy != nil {
+			clash, err := read(legacy, profiles.MaxDocumentBytes)
+			if err != nil {
+				return "", err
+			}
+			settings["patchClashConfig"] = clash
+		}
+		if !onlyProfiles {
+			preserveHostOnlySettings(settings, a.profiles.Snapshot().Settings)
+		}
 		rawSettings, _ = json.Marshal(settings)
 	}
 	err = a.profiles.Restore(ctx, rawSettings, func(id string) (string, error) {
@@ -246,6 +252,23 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 	operationID := newID("restore")
 	_, err = a.runtime.SubmitAtGeneration(backend.Request{APIVersion: backend.APIVersion, OperationID: operationID, Method: method, Input: input}, generation)
 	return operationID, err
+}
+
+// hostOnlySettings were separate SharedPreferences before the Go catalogue
+// owned them, so legacy config.json backups never contain them. Restoring such
+// a backup must not silently reset them to their defaults (sendDeviceHeaders
+// defaults to enabled, which would re-enable device identification).
+var hostOnlySettings = []string{"sendDeviceHeaders"}
+
+func preserveHostOnlySettings(restored, current profiles.Object) {
+	for _, key := range hostOnlySettings {
+		if _, present := restored[key]; present {
+			continue
+		}
+		if value, ok := current[key]; ok {
+			restored[key] = append(json.RawMessage(nil), value...)
+		}
+	}
 }
 
 func atomicCacheFile(target string, data []byte) error {
