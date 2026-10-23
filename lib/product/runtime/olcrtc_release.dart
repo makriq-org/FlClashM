@@ -36,18 +36,18 @@ const olcRtcReleaseAssets = <String, OlcRtcReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: '07f3e14109c0d2aae37e2c9b1cbb08af0f7707b26346231b233a192fd127db16',
+    sha256: '647630defdc352937599aa2f02d7eabef7d0c958b60234eafcac9517c244489f',
   ),
   'arm64-v8a': OlcRtcReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: '07063a74e697613eacfb3172565c213a0af83720f345a783321657e848bfb072',
+    sha256: 'd2540f20a9cfdf78c2ecf852d3fca32e0adf9c478850b0635e0d99365ebfef5d',
   ),
   'x86_64': OlcRtcReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '746ca09065d10e283efd584d781bdf6e8050dc9734131e9367d26a2d062ef65d',
+    sha256: '0620f0789727400703266788b6c4c9143cf51e10724ceccc1b46023a7f98f1c8',
   ),
 };

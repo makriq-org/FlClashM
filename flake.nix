@@ -17,6 +17,24 @@
         };
       };
       goPkgs = import nixpkgsGo { inherit system; };
+      # Keep the release toolchain pristine: nixpkgs Go patches net/mime with
+      # store paths, changing the Android binaries and their pinned digests.
+      olcrtcGo = pkgs.stdenvNoCC.mkDerivation {
+        pname = "olcrtc-go-official";
+        version = "1.27.2";
+        src = pkgs.fetchurl {
+          url = "https://dl.google.com/go/go1.27.2.linux-amd64.tar.gz";
+          hash = "sha256-7LrbmQkaP0bjH1+TSwaLGGTq+nmVIRs56t33aZYEX+U=";
+        };
+        dontConfigure = true;
+        dontBuild = true;
+        dontFixup = true;
+        installPhase = ''
+          mkdir -p "$out/share/go" "$out/bin"
+          cp -r . "$out/share/go/"
+          ln -s "$out/share/go/bin/go" "$out/bin/go"
+        '';
+      };
       android = pkgs.androidenv.composeAndroidPackages {
         platformVersions = [ "34" "35" "36" "37.0" ];
         buildToolsVersions = [ "35.0.0" "36.0.0" "37.0.0" ];
@@ -58,6 +76,7 @@
         ANDROID_HOME = sdkRoot;
         ANDROID_SDK_ROOT = sdkRoot;
         ANDROID_NDK = "${sdkRoot}/ndk/28.0.13004108";
+        FLCLASHM_OLCRTC_GO = "${olcrtcGo}/bin/go";
         JAVA_HOME = "${pkgs.jdk17.home}";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         GRADLE_OPTS =

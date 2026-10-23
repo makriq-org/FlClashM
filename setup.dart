@@ -807,8 +807,13 @@ Future<void> _syncOlcRtcAssets() async {
     return;
   }
 
+  final goExecutable = Platform.environment['FLCLASHM_OLCRTC_GO'] ?? 'go';
+  await _requireGoVersion(
+    olcRtcPinnedGoVersion,
+    executable: goExecutable,
+    requireUnpatched: true,
+  );
   final sourceDir = await _prepareOlcRtcSource();
-  await _requireGoVersion(olcRtcPinnedGoVersion);
   final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
   if (!targetRoot.existsSync()) {
     targetRoot.createSync(recursive: true);
@@ -840,12 +845,12 @@ Future<void> _syncOlcRtcAssets() async {
 
     await _exec(
       [
-        'go',
+        goExecutable,
         'build',
         '-buildvcs=false',
         '-trimpath',
         '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
-        '-ldflags=-s -w -checklinkname=0',
+        '-ldflags=-s -w -checklinkname=0 -buildid=',
         '-o',
         target.path,
         './cmd/olcrtc',
@@ -1071,6 +1076,8 @@ String _buildOlcRtcStamp() {
     olcRtcPinnedReleaseTag,
     olcRtcSourceRepository,
     olcRtcPinnedGoVersion,
+    'toolchain:official',
+    'buildid=none',
     'buildvcs=false',
     'ndk-$olcRtcPinnedNdkVersion',
     'modules:${_runtimeGoModuleDigest('olcrtc')}',
@@ -1091,25 +1098,48 @@ String _runtimeGoModuleDigest(String runtime) {
   return sha256.convert(bytes.takeBytes()).toString();
 }
 
-Future<void> _requireGoVersion(String expectedVersion) async {
-  final result = await Process.run(
-    'go',
-    const ['env', 'GOVERSION'],
-    runInShell: true,
-  );
+Future<void> _requireGoVersion(
+  String expectedVersion, {
+  String executable = 'go',
+  bool requireUnpatched = false,
+}) async {
+  const arguments = ['env', 'GOVERSION', 'GOROOT'];
+  final result = await Process.run(executable, arguments, runInShell: true);
   if (result.exitCode != 0) {
     throw ProcessException(
-      'go',
-      const ['env', 'GOVERSION'],
+      executable,
+      arguments,
       'unable to read Go version: ${result.stderr}',
       result.exitCode,
     );
   }
-  final actualVersion = result.stdout.toString().trim();
+  final values = result.stdout.toString().trim().split('\n');
+  final actualVersion = values.first.trim();
   if (actualVersion != expectedVersion) {
     throw StateError(
-      'olcrtc must be built with $expectedVersion; found $actualVersion.',
+      'Runtime must be built with $expectedVersion; found $actualVersion.',
     );
+  }
+  if (requireUnpatched) {
+    final goRoot = values.last.trim();
+    // nixpkgs patches these files even when GOVERSION matches the official Go
+    // release. Check source contents: an untouched official archive may itself
+    // be stored in /nix/store by the development flake.
+    for (final path in const [
+      'net/port_unix.go',
+      'net/lookup_unix.go',
+      'mime/type_unix.go',
+    ]) {
+      final source = File(_join(goRoot, 'src', path));
+      if (!source.existsSync() ||
+          (await source.readAsString()).contains('/nix/store/')) {
+        throw StateError(
+          'OlcRTC requires the official, unpatched $expectedVersion toolchain. '
+          'Set FLCLASHM_OLCRTC_GO to its go executable '
+          '(nix develop sets it automatically).',
+        );
+      }
+    }
   }
 }
 
