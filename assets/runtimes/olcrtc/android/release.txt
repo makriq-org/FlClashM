@@ -1,4 +1,4 @@
-git-b8a6e12e3e3afb0666e38f9668c7d81d8aff948f
+git-b2c4b17ee35bfe65330aa9141f94dac082228bb2
 https://github.com/ghostlane-project/olcrtc.git
 go1.27.2
 buildvcs=false
