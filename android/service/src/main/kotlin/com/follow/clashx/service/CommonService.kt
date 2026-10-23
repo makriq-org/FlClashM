@@ -4,9 +4,9 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.promoteToForeground
 import com.follow.clashx.service.models.VpnOptions
 import com.follow.clashx.service.modules.NotificationModule
+import com.follow.clashx.service.modules.promoteServiceForeground
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -16,19 +16,22 @@ class CommonService : Service(), BackendForegroundResource {
     private val resources = Any()
     @Volatile override var destroyed = false
     @Volatile private var active = false
+    @Volatile private var lastStartId = 0
     private val notifications = NotificationModule(this)
 
     override fun onCreate() {
         super.onCreate()
         handleCreate()
-        if (promoteToForeground(R.drawable.ic_notification, "FlClashM")) {
+        if (promoteServiceForeground()) {
             BackendForegroundHold.created(this)
             GlobalState.launch { notifications.install() }
         } else stopSelf()
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val promoted = promoteToForeground(R.drawable.ic_notification, "FlClashM")
+        lastStartId = startId
+        val promoted = promoteServiceForeground()
+        if (promoted) BackendForegroundHold.created(this)
         if (intent?.action == BackendForegroundHold.ACTION_HOLD) {
             BackendForegroundHold.acknowledge(intent.getStringExtra("operationId"), promoted)
             return START_NOT_STICKY
@@ -38,10 +41,17 @@ class CommonService : Service(), BackendForegroundResource {
             return if (promoted) START_STICKY else START_NOT_STICKY
         }
         if (!promoted) { stopSelf(); return START_NOT_STICKY }
-        if (intent?.action != AndroidBackendPlatform.ACTION_APPLY) {
-            GlobalState.launch { BackendHost.initialize(); BackendHost.command("runtime.recover") }
+        val method = ServiceStartCommand.backendMethod(intent?.action) ?: return START_STICKY
+        GlobalState.launch {
+            runCatching {
+                BackendHost.initialize()
+                BackendHost.command(method)
+            }.onSuccess {
+                // A Stop that found nothing running must not leave this host behind.
+                if (method == "runtime.stop") finishIfIdle()
+            }.onFailure { GlobalState.log("host OS command failed: ${it.message}"); finishIfIdle() }
         }
-        return START_STICKY
+        return if (ServiceStartCommand.sticky(method)) START_STICKY else START_NOT_STICKY
     }
     override fun onDestroy() {
         val lost = synchronized(resources) {
@@ -57,6 +67,7 @@ class CommonService : Service(), BackendForegroundResource {
         super.onDestroy()
     }
     override suspend fun handleStart(options: VpnOptions) {
+        check(BackendForegroundHold.isLive(this)) { "foreground host is stopping" }
         synchronized(resources) {
             check(!destroyed)
             active = true
@@ -71,5 +82,7 @@ class CommonService : Service(), BackendForegroundResource {
         }
         finishIfIdle()
     }
-    override fun finishIfIdle() { if (!active && State.runTime == 0L && !BackendForegroundHold.held) stopSelf() }
+    override fun finishIfIdle() {
+        BackendForegroundHold.retireIfIdle(this, { !active && State.runTime == 0L }) { stopSelfResult(lastStartId) }
+    }
 }
