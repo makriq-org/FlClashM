@@ -356,7 +356,7 @@ Only public HTTP(S) URLs without credentials/fragment are allowed. DNS is checke
 
 | Field | Default | What it sets |
 |-------|---------|--------------|
-| `urls` | — | Addresses to check (public HTTP(S), no credentials or fragments) |
+| `urls` | — | At most 16 addresses to check (public HTTP(S), no credentials or fragments) |
 | `required` | `false` | Whether the check is mandatory for startup |
 | `timeout` | `5s` | Per-request timeout |
 | `startup-timeout` | `30s` (`2m` for `stormdns`) | Overall check budget at startup |
