@@ -32,13 +32,14 @@ void main() {
         'pipefail',
         '-c',
         // Supply changed paths without depending on the local Git history.
-        'git() {\n'
-            '  if [ "\$1" = cat-file ]; then\n'
-            '    [ "\$BASE_AVAILABLE" = true ]\n'
-            '  else\n'
-            '    printf \'%s\\n\' "\$CHANGED_FILES"\n'
-            '  fi\n'
-            '}\n$script',
+        '''git() {
+  if [ "\$1" = cat-file ]; then
+    [ "\$BASE_AVAILABLE" = true ]
+  else
+    printf '%s\\n' "\$CHANGED_FILES"
+  fi
+}
+$script''',
       ],
       environment: {
         'CHANGED_FILES': files.join('\n'),
