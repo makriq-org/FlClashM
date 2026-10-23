@@ -6,6 +6,6 @@
 
 - [README و شروع سریع](../README.md)
 - [🧩 تنظیم پروفایل](profiles.md)
-- [🛠 ساخت و نگهداری](maintenance.md)
+- [🛠 ساخت و نگه‌داری](maintenance.md)
 
 </div>
