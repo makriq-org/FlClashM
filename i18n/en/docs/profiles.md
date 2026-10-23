@@ -54,7 +54,7 @@ proxies:
       - "https://example.org/byedpi-strategies.txt"
 ```
 
-`mode: auto` tries strategies and caches a working result per physical network (up to 16 networks, without SSID access). When the startup budget expires, a fallback is used while selection continues in the background. Verified results and fallbacks are stored separately. `mode: manual` uses `strategy`; without `mode`, a `strategy` selects manual, otherwise auto.
+`mode: auto` tries strategies and caches a result per physical network (up to 16 networks, without SSID access). After the startup budget, a fallback is used while selection continues in the background. The cache marks the result as verified or temporary; fallback uses its own `retry-after`. `mode: manual` uses `strategy`; without `mode`, a `strategy` selects manual, otherwise auto.
 
 ```yaml
 proxies:
@@ -73,8 +73,8 @@ HTTPS lists contain one strategy per line; empty lines and lines starting with `
 |-----------|---------|-------------|
 | `strategies` | `[builtin:byebyeedpi]` | Built-ins, inline strategies, and public HTTPS lists in one order |
 | `strategy-test.urls` | built-in YouTube endpoint | Addresses for selection |
-| `strategy-test.sni` | — | Hostname to substitute for `{sni}` |
-| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | DoH resolver for the test address (bypasses fake-ip); `system` uses the platform resolver |
+| `strategy-test.sni` | `google.com` | Hostname to substitute for `{sni}` |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | DoH resolver for the test address; `system` uses the system resolver |
 | `strategy-test.timeout` | `5s` | Per-check timeout |
 | `strategy-test.requests` | `1` | Requests per strategy |
 | `strategy-test.request-concurrency` | `4` | Parallel HTTP requests inside a candidate |
@@ -82,10 +82,10 @@ HTTPS lists contain one strategy per line; empty lines and lines starting with `
 | `strategy-selection.strategy-concurrency` | `4` | Strategies checked at once |
 | `strategy-selection.startup-timeout` | `15s` | Selection budget before the node starts |
 | `strategy-selection.continue-in-background` | `true` | Keep checking the list in the background after fallback |
-| `strategy-selection.fallback-strategy` | — | Temporary-strategy arguments if foreground didn't finish in time |
+| `strategy-selection.fallback-strategy` | built-in strategy | Temporary-strategy arguments if foreground didn't finish in time |
+| `strategy-selection.retry-after` | `5m` | Pause before a new selection after fallback |
 | `strategy-selection.cache.ttl` | `7d` | Cache lifetime |
 | `strategy-selection.cache.recheck-after` | `1d` | Re-check interval |
-| `strategy-selection.retry-after` | `5m` | Pause before a new selection after fallback |
 | `strategy-selection.cache.failure-threshold` | `2` | Errors before the cache is reset |
 
 </details>
@@ -110,7 +110,7 @@ proxy-groups:
 
 CNC client mode only. Replace `<64-hex-key>` with the server key: exactly 64 hexadecimal characters. `provider: none` requires `engine`, `engine-url`, `engine-token`; other providers reject them. `profiles`, `failover`, `video.hw`, local listeners and keys from files are forbidden.
 
-`dns-server: system` uses the first DNS server of Android’s physical network and updates the active node when it changes. With no system DNS, startup waits for a network update. Client and server must support OLC2 and OLVC 5.
+`dns-server: system` uses the first DNS server of Android’s physical network: `host:53` for IPv4, `[IPv6]:53` for IPv6. Changes restart the active dependent node. If DNS is unavailable, startup immediately fails with `physical DNS is unavailable`. A launch failure during plan application aborts that application; a failed background wake uses `retry-after`. Client and server must support OLC2 and OLVC 5.
 
 <details>
 <summary>OlcRTC fields and transport</summary>
@@ -118,21 +118,35 @@ CNC client mode only. Replace `<64-hex-key>` with the server key: exactly 64 hex
 | Parameter | Description |
 |-----------|-------------|
 | `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `none` |
-| `room` | Video-call room identifier |
+| `room` | Room URL or ID; required except for `provider: none` |
 | `encryption-key` | 256-bit encryption key — **exactly 64 hex characters** |
 | `transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
-| `dns-server` | Mandatory DNS server as `address:port` or `system` |
+| `dns-server` | Required `host:port` or `system` |
 | `transport-options` | Optional settings for the selected transport; forbidden for `datachannel` |
 
 `transport-options` is forbidden for `datachannel`. `vp8channel` defaults: `fps: 30`, `batch-size: 64`; `seichannel` adds `fragment-size: 900`, `ack-timeout: 2s`. `videochannel` accepts `codec` (`qrcode`/`tile`), `width`, `height`, `fps`, `fragment-size`, `qr-recovery`, `tile-module`, `tile-rs`. Defaults: `qrcode`, 1920×1080, `qr-recovery: low`; tile uses 1080×1080. Legacy `bitrate` is accepted but ignored.
 
 ```yaml
-transport: seichannel
-transport-options:
-  fps: 30
-  batch-size: 64
-  fragment-size: 900
-  ack-timeout: 2s
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: seichannel
+  dns-server: 1.1.1.1:53
+  transport-options:
+    fps: 30
+    batch-size: 64
+    fragment-size: 900
+    ack-timeout: 2s
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 </details>
@@ -171,7 +185,7 @@ An empty or missing `resolvers` means `[system]`. Sources expand in order; dupli
 | `system` | DNS servers of the physical (non-VPN) network |
 | `8.8.8.8` | One resolver on port 53 |
 | `1.1.1.1:5353` | One resolver on its own port |
-| `192.168.1.0/30` | CIDR: for IPv4 the network and broadcast addresses are skipped; a range wider than 65536 addresses is rejected |
+| `192.168.1.0/30` | CIDR up to 65536 addresses. IPv4 ranges with more than 2 addresses exclude first and last; `/31` and `/32` are kept in full. IPv6 ranges with more than 2 addresses exclude the first |
 | `https://…` | Resolvers from a remote list |
 
 At most 32 HTTPS lists per profile, without credentials/fragment or local download-server addresses; private IPs/CIDRs inside a list are allowed. Response limits: 1 MiB, 15 seconds; redirects are forbidden. On failure, the previous cache is used even after `refresh`; without a cache the source is skipped. `refresh` is checked when applying a profile.
@@ -189,7 +203,7 @@ At most 32 HTTPS lists per profile, without credentials/fragment or local downlo
 | `cached` (default) | Start from cache without re-checking MTU |
 | `verified` | Start from cache and re-check MTU |
 
-The cache depends on resolvers, `domains` and the StormDNS version. `startup.max-age` is a whole number of days, default `30d`. Without a suitable cache, scanning runs again. System DNS changes invalidate the MTU cache and restart active dependent nodes without UI. Local DNS/SOCKS, resolver files, log paths and `startup.mode: ask` are forbidden in profiles.
+The cache depends on resolvers, `domains` and the StormDNS version. `startup.max-age` is a duration string in whole days, from `0s` to `365d` (default `30d`; `720h` is also valid, the number `30` is not). Without a suitable cache, scanning runs again. System DNS changes invalidate the MTU cache and restart active dependent nodes without UI. Local DNS/SOCKS, resolver files, log paths and `startup.mode: ask` are forbidden in profiles.
 
 </details>
 
@@ -205,11 +219,25 @@ Order: defaults → `preset` → explicit fields. Durations are strings with uni
 | `bulk` | 3 / 3 / 4 / 4 | `zstd` |
 
 ```yaml
-preset: bulk
-duplication:
-  upload: 2
-compression:
-  upload: zlib
+proxies:
+- name: storm
+  type: stormdns
+  domains:
+  - v.example.com
+  encryption: chacha20
+  encryption-key: "<key>"
+  preset: bulk
+  duplication:
+    upload: 2
+  compression:
+    upload: zlib
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - storm
 ```
 
 | Block | Fields and bounds |
@@ -232,7 +260,7 @@ Linked bounds are checked in full:
 - `runtime.process-workers` ≥ `runtime.workers`
 - `runtime.session-retry-base` ≤ `session-retry-max`
 
-Field names match the StormDNS config.
+Profile fields map to native keys through `core/backend/compile/storm_schema.json`, for example `arq.window` → `ARQ_WINDOW_SIZE`.
 
 </details>
 
@@ -242,16 +270,34 @@ Field names match the StormDNS config.
 
 OlcRTC and StormDNS default to `activation: auto`: they start on manual selection or failure of the watched group. A node must be a direct group member. With no selection or connections it sleeps after `sleep.idle`; `0s` prevents sleep until VPN restart. Use `activation: always` to start with the profile.
 
+`activation` and `connectivity-check` belong inside a specific node in `proxies`. `activation: auto` requires a direct containing group and a wake URL (explicit or inherited from the node check, group or app settings); otherwise the profile is rejected. Durations in these two blocks must be whole seconds (`1s`, `1m`); `500ms` is invalid.
+
 ```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30s
-    failures: 2
-    retry-after: 5m
-  sleep:
-    idle: 15m
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: datachannel
+  dns-server: 1.1.1.1:53
+  activation:
+    mode: auto
+    wake:
+      urls:
+      - https://example.org/generate_204
+      interval: 30s
+      failures: 2
+      retry-after: 5m
+    sleep:
+      idle: 15m
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 <details>
@@ -275,9 +321,17 @@ activation:
 Process and SOCKS readiness are always checked. The HTTP(S) URL comes from node `connectivity-check.urls`, the nearest group or the app-wide test URL. `required: false` checks in the background; `true` requires a URL and rolls startup back on failure. Any valid HTTP response, including 4xx/5xx, counts as success.
 
 ```yaml
-connectivity-check:
-  urls: ["https://example.org/generate_204"]
-  required: true
+proxies:
+- name: naive
+  type: naiveproxy
+  server: example.com
+  port: 443
+  username: user
+  password: pass
+  connectivity-check:
+    urls:
+    - https://example.org/generate_204
+    required: true
 ```
 
 Only public HTTP(S) URLs without credentials/fragment are allowed. DNS is checked before the request; traffic goes through the tested node’s SOCKS, with no direct fallback. TLS verifies the original hostname.
@@ -302,7 +356,7 @@ Only public HTTP(S) URLs without credentials/fragment are allowed. DNS is checke
 
 ## 🎯 Which apps use the VPN
 
-Profile rules take priority over manual settings. `include-package` sends only listed apps through the VPN; `exclude-package` sends all other apps. They cannot be used together; an explicit empty list differs from no rule.
+Profile rules take priority over manual settings. `include-package` sends only listed apps through VPN; `exclude-package` sends all other apps. Choose one mode. An empty source `include-package: []` or `exclude-package: []` without other sources creates no profile rule: general settings apply.
 
 ```yaml
 tun:
@@ -350,14 +404,14 @@ flclashm-view: type:tab;sort:delay;card:min
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` applies appearance on import, `update` on every refresh; otherwise appearance is not applied. Manual settings override `flclashm-settings`. `androidsecure` only disables mixed-port, preserving the VPN choice. `GLOBAL` supports `flclashm-override` / `flclashx-override`, with the first taking priority.
+`flclashm-custom: add` applies `hex`, `view`, `widgets` and `settings` on import, `update` on every refresh; other headers do not depend on it. `flclashm-settings` applies when `overrideProviderSettings` is off: listed flags are enabled, absent flags reset to `false`. `androidsecure` only disables mixed-port, preserving the VPN choice. `GLOBAL` supports `flclashm-override` / `flclashx-override`, with the first taking priority.
 
 <details>
 <summary>Header and format reference</summary>
 
 | Header | Value | Purpose |
 |---|---|---|
-| `flclashm-background` | `URL` | Background image |
+| `flclashm-background` | `URL[,opacity]` | Background; optional image visibility 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Color theme |
 | `flclashm-widgets` | `list` | Widget order |
 | `flclashm-view` | `key:value;…` | Node page layout |
@@ -374,8 +428,9 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-custom` | `add/update` | When to apply appearance |
 | `announce` | `text/base64:…` | Announcement |
 | `support-url` | `URL` | Support |
-| `x-hwid-max-devices-reached` | `—` | Device limit reached |
-| `x-hwid-not-supported` | `—` | HWID unsupported |
+| `profile-update-interval` | integer hours | Subscription refresh interval; positive value |
+| `x-hwid-max-devices-reached` | `true` | Device limit reached |
+| `x-hwid-not-supported` | `true` | HWID unsupported |
 
 `flclashm-hex`: a 6/8-digit hexadecimal color with optional `#`, then a Material 3 variant and `pureblack`. Variants: `tonalSpot`, `fidelity`, `monochrome`, `neutral`, `vibrant`, `expressive`, `content`, `rainbow`, `fruitSalad`.
 
@@ -393,7 +448,7 @@ flclashm-settings: autostart,autoupdate
 
 | Flag | What it enables |
 |------|-----------------|
-| `autostart` | Auto-start / auto-connect (including after reboot) |
+| `autostart` | Auto-connect when the app opens (`ui.attach`) |
 | `autoupdate` | Automatic update checking |
 | `autorun` | Launch the app on system start *(desktop)* |
 | `shadowstart` | Silent (background) launch |

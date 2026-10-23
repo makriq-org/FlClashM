@@ -68,7 +68,7 @@ proxies:
 
 </div>
 
-در `mode: auto` راهبردها آزمایش و نتیجهٔ کارآمد برای هر شبکهٔ فیزیکی جداگانه ذخیره می‌شود (تا ۱۶ شبکه، بدون دسترسی به SSID). با پایان مهلت راه‌اندازی، راهبرد موقت استفاده و انتخاب در پس‌زمینه ادامه می‌یابد. نتیجهٔ تأییدشده و راهبرد موقت جدا ذخیره می‌شوند. `mode: manual` از `strategy` استفاده می‌کند؛ بدون `mode`، وجود `strategy` حالت manual و نبود آن حالت auto را انتخاب می‌کند.
+در `mode: auto` راهبردها آزمایش و نتیجه برای هر شبکهٔ فیزیکی ذخیره می‌شود (تا 16 شبکه، بدون دسترسی به SSID). پس از مهلت راه‌اندازی، راهبرد موقت استفاده و انتخاب در پس‌زمینه ادامه می‌یابد. کش، نتیجه را تأییدشده یا موقت علامت می‌زند؛ راهبرد موقت از `retry-after` خود استفاده می‌کند. `mode: manual` از `strategy` استفاده می‌کند؛ بدون `mode`، وجود `strategy` حالت manual و نبود آن حالت auto را انتخاب می‌کند.
 
 <div dir="ltr">
 
@@ -91,8 +91,8 @@ proxies:
 |---------|---------|-------|
 | `strategies` | `[builtin:byebyeedpi]` | ترکیب مرتب فهرست داخلی، راهبردهای inline و فهرست عمومی HTTPS |
 | `strategy-test.urls` | endpoint داخلی YouTube | آدرس‌های انتخاب |
-| `strategy-test.sni` | — | نام میزبان برای جای‌گذاری `{sni}` |
-| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | حل‌کننده DoH برای نشانی آزمایش (دور زدن fake-ip)؛ `system` از حل‌کننده سیستم استفاده می‌کند |
+| `strategy-test.sni` | `google.com` | نام میزبان برای جای‌گذاری `{sni}` |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | حل‌کنندهٔ DoH نشانی تست؛ `system` از حل‌کنندهٔ سیستم استفاده می‌کند |
 | `strategy-test.timeout` | `5s` | مهلت هر بررسی |
 | `strategy-test.requests` | `1` | درخواست به‌ازای هر راهبرد |
 | `strategy-test.request-concurrency` | `4` | درخواست‌های HTTP موازی درون یک نامزد |
@@ -100,10 +100,10 @@ proxies:
 | `strategy-selection.strategy-concurrency` | `4` | راهبردهای هم‌زمان بررسی‌شونده |
 | `strategy-selection.startup-timeout` | `15s` | بودجهٔ انتخاب پیش از شروع نود |
 | `strategy-selection.continue-in-background` | `true` | ادامهٔ فهرست در پس‌زمینه پس از fallback |
-| `strategy-selection.fallback-strategy` | — | آرگومان راهبرد موقت اگر foreground به‌موقع تمام نشد |
+| `strategy-selection.fallback-strategy` | راهبرد داخلی | آرگومان راهبرد موقت اگر foreground به‌موقع تمام نشد |
+| `strategy-selection.retry-after` | `5m` | مکث پیش از انتخاب تازه پس از fallback |
 | `strategy-selection.cache.ttl` | `7d` | عمر کش |
 | `strategy-selection.cache.recheck-after` | `1d` | فاصلهٔ بررسی مجدد |
-| `strategy-selection.retry-after` | `5m` | مکث پیش از انتخاب تازه پس از fallback |
 | `strategy-selection.cache.failure-threshold` | `2` | تعداد خطا تا بازنشانی کش |
 
 </details>
@@ -130,9 +130,9 @@ proxy-groups:
 
 </div>
 
-فقط حالت کلاینت CNC مجاز است. به‌جای `<64-hex-key>` کلید سرور را قرار دهید: دقیقاً ۶۴ نویسهٔ hexadecimal. `provider: none` به `engine`، `engine-url`، `engine-token` نیاز دارد؛ برای سایر ارائه‌دهندگان این فیلدها ممنوع‌اند. `profiles`، `failover`، `video.hw`، listener محلی و کلید از فایل مجاز نیستند.
+فقط حالت کلاینت CNC مجاز است. به‌جای `<64-hex-key>` کلید سرور را قرار دهید: دقیقاً 64 نویسهٔ hexadecimal. `provider: none` به `engine`، `engine-url`، `engine-token` نیاز دارد؛ برای سایر ارائه‌دهندگان این فیلدها ممنوع‌اند. `profiles`، `failover`، `video.hw`، listener محلی و کلید از فایل مجاز نیستند.
 
-`dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند و با تغییر آن نود فعال را به‌روز می‌کند. بدون DNS سیستم، راه‌اندازی تا به‌روزرسانی شبکه منتظر می‌ماند. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
+`dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند: `host:53` برای IPv4 و `[IPv6]:53` برای IPv6. تغییر آن نود فعال وابسته را دوباره اجرا می‌کند. نبود DNS فوراً خطای `physical DNS is unavailable` می‌دهد. خطای راه‌اندازی هنگام اعمال نقشه، اعمال آن را متوقف می‌کند؛ پس از بیدارسازی ناموفق در پس‌زمینه، مکث `retry-after` اعمال می‌شود. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
 
 <details>
 <summary>فیلدها و انتقال OlcRTC</summary>
@@ -140,10 +140,10 @@ proxy-groups:
 | پارامتر | توضیح |
 |---------|-------|
 | `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `none` |
-| `room` | شناسهٔ اتاق تماس تصویری |
-| `encryption-key` | کلید رمزنگاری ۲۵۶بیتی — **دقیقاً ۶۴ کاراکتر هگز** |
+| `room` | URL یا شناسهٔ اتاق؛ به‌جز `provider: none` الزامی است |
+| `encryption-key` | کلید رمزنگاری 256بیتی — **دقیقاً 64 کاراکتر هگز** |
 | `transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |
-| `dns-server` | سرور DNS الزامی به‌شکل `آدرس:پورت` |
+| `dns-server` | الزامی: `host:port` یا `system` |
 | `transport-options` | گزینه‌های اختیاری transport انتخاب‌شده؛ برای `datachannel` ممنوع است |
 
 برای `datachannel`، بخش `transport-options` ممنوع است. پیش‌فرض `vp8channel`: مقدار `fps: 30` و `batch-size: 64`؛ برای `seichannel` همچنین `fragment-size: 900` و `ack-timeout: 2s`. در `videochannel`: فیلدهای `codec` (`qrcode`/`tile`)، `width`، `height`، `fps`، `fragment-size`، `qr-recovery`، `tile-module`، `tile-rs`. پیش‌فرض: `qrcode`، اندازهٔ 1920×1080 و `qr-recovery: low`؛ برای tile اندازهٔ 1080×1080 است. `bitrate` قدیمی پذیرفته اما نادیده گرفته می‌شود.
@@ -151,12 +151,26 @@ proxy-groups:
 <div dir="ltr">
 
 ```yaml
-transport: seichannel
-transport-options:
-  fps: 30
-  batch-size: 64
-  fragment-size: 900
-  ack-timeout: 2s
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: seichannel
+  dns-server: 1.1.1.1:53
+  transport-options:
+    fps: 30
+    batch-size: 64
+    fragment-size: 900
+    ack-timeout: 2s
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 </div>
@@ -199,12 +213,12 @@ proxy-groups:
 | مورد | چه اضافه می‌کند |
 |------|-----------------|
 | `system` | DNS شبکهٔ فیزیکی (نه VPN) |
-| `8.8.8.8` | یک resolver روی پورت ۵۳ |
+| `8.8.8.8` | یک resolver روی پورت 53 |
 | `1.1.1.1:5353` | یک resolver با پورت اختصاصی |
-| `192.168.1.0/30` | CIDR: در IPv4 نشانی شبکه و broadcast برداشته نمی‌شوند؛ بازهٔ بزرگ‌تر از ۶۵۵۳۶ نشانی رد می‌شود |
+| `192.168.1.0/30` | CIDR تا 65536 نشانی. در IPv4 با بیش از 2 نشانی، اولین و آخرین کنار گذاشته می‌شوند؛ `/31` و `/32` کامل حفظ می‌شوند. در IPv6 با بیش از 2 نشانی، اولین کنار گذاشته می‌شود |
 | `https://…` | resolverها از یک فهرست راه دور |
 
-هر پروفایل حداکثر ۳۲ فهرست HTTPS دارد؛ آدرس دانلود نباید اعتبارنامه، fragment یا آدرس سرور محلی داشته باشد؛ IP/CIDR خصوصی داخل فهرست مجاز است. محدودیت پاسخ: 1 MiB و ۱۵ ثانیه؛ تغییرمسیر ممنوع است. در خطا حتی پس از `refresh` از کش قبلی استفاده می‌شود؛ بدون کش، منبع رد می‌شود. `refresh` هنگام اعمال پروفایل بررسی می‌شود.
+هر پروفایل حداکثر 32 فهرست HTTPS دارد؛ آدرس دانلود نباید اعتبارنامه، fragment یا آدرس سرور محلی داشته باشد؛ IP/CIDR خصوصی داخل فهرست مجاز است. محدودیت پاسخ: 1 MiB و 15 ثانیه؛ تغییرمسیر ممنوع است. در خطا حتی پس از `refresh` از کش قبلی استفاده می‌شود؛ بدون کش، از منبع صرف‌نظر می‌شود. `refresh` هنگام اعمال پروفایل بررسی می‌شود.
 
 | `resolver-policy` | پیش‌فرض | توضیح |
 |-------------------|---------|-------|
@@ -219,7 +233,7 @@ proxy-groups:
 | `cached` (پیش‌فرض) | شروع از کش بدون بررسی دوبارهٔ MTU |
 | `verified` | شروع از کش با بررسی دوبارهٔ MTU |
 
-کش به حل‌کننده‌ها، `domains` و نسخهٔ StormDNS وابسته است. `startup.max-age` تعداد صحیح روز با پیش‌فرض `30d` است. بدون کش مناسب، اسکن دوباره انجام می‌شود. تغییر DNS سیستم کش MTU را پاک و نودهای فعال وابسته را بدون UI راه‌اندازی مجدد می‌کند. DNS/SOCKS محلی، فایل حل‌کننده، مسیر لاگ و `startup.mode: ask` در پروفایل ممنوع‌اند.
+کش به حل‌کننده‌ها، `domains` و نسخهٔ StormDNS وابسته است. `startup.max-age` رشتهٔ مدت با تعداد صحیح روز، از `0s` تا `365d` است (پیش‌فرض `30d`؛ `720h` معتبر است ولی عدد `30` معتبر نیست). بدون کش مناسب اسکن تکرار می‌شود. تغییر DNS سیستم کش MTU را پاک و نودهای فعال وابسته را بدون UI دوباره اجرا می‌کند. DNS/SOCKS محلی، فایل حل‌کننده، مسیر لاگ و `startup.mode: ask` در پروفایل ممنوع‌اند.
 
 </details>
 
@@ -230,30 +244,44 @@ proxy-groups:
 
 | `preset` | تکرار (upload / download / upload-setup / download-setup) | فشرده‌سازی |
 |----------|-------------------------------------------------------------|------------|
-| `messenger` (پیش‌فرض) | ۱ / ۷ / ۳ / ۸ | `lz4` |
-| `balanced` | ۲ / ۵ / ۳ / ۶ | `lz4` |
-| `bulk` | ۳ / ۳ / ۴ / ۴ | `zstd` |
+| `messenger` (پیش‌فرض) | 1 / 7 / 3 / 8 | `lz4` |
+| `balanced` | 2 / 5 / 3 / 6 | `lz4` |
+| `bulk` | 3 / 3 / 4 / 4 | `zstd` |
 
 <div dir="ltr">
 
 ```yaml
-preset: bulk
-duplication:
-  upload: 2
-compression:
-  upload: zlib
+proxies:
+- name: storm
+  type: stormdns
+  domains:
+  - v.example.com
+  encryption: chacha20
+  encryption-key: "<key>"
+  preset: bulk
+  duplication:
+    upload: 2
+  compression:
+    upload: zlib
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - storm
 ```
 
 </div>
 
 | بلوک | فیلدها و مرزها |
 |------|----------------|
-| `duplication` | `upload`، `download`، `upload-setup`، `download-setup` — ۱ تا ۸ |
-| `compression` | `upload`، `download` — `none`، `zstd`، `lz4`، `zlib`؛ `min-size` — ۱۰۰ تا ۶۵۵۳۵ |
-| `mtu.upload`، `mtu.download` | `min` — ۱ تا ۶۵۵۳۵؛ `max` — ۰ تا ۶۵۵۳۵ که در آن `0` سقف را برمی‌دارد |
-| `arq` | `window` ۱ تا ۶۰۰۰، `nack-max-gap` ۰ تا ۱۵۰۰، `max-control-retries` ۵ تا ۵۰۰۰، `max-data-retries` ۶۰ تا ۱۰۰۰۰۰؛ بقیه مدت‌زمان‌اند |
+| `duplication` | `upload`، `download`، `upload-setup`، `download-setup` — 1 تا 8 |
+| `compression` | `upload`، `download` — `none`، `zstd`، `lz4`، `zlib`؛ `min-size` — 100 تا 65535 |
+| `mtu.upload`، `mtu.download` | `min` — 1 تا 65535؛ `max` — 0 تا 65535 که در آن `0` سقف را برمی‌دارد |
+| `arq` | `window` 1 تا 6000، `nack-max-gap` 0 تا 1500، `max-control-retries` 5 تا 5000، `max-data-retries` 60 تا 100000؛ بقیه مدت‌زمان‌اند |
 | `ping` | فقط مدت‌زمان: بازه‌های `aggressive`/`lazy`/`cooldown`/`cold` و آستانه‌های `warm`/`cool`/`cold` |
-| `runtime` | `workers` و `process-workers` ۱ تا ۶۴، اندازهٔ صف‌ها و استخرها، مدت‌زمان تلاش مجدد؛ `base-encode` پرچم است |
+| `runtime` | `workers` و `process-workers` 1 تا 64، اندازهٔ صف‌ها و استخرها، مدت‌زمان تلاش مجدد؛ `base-encode` پرچم است |
 
 محدودیت‌های وابسته به‌طور کامل بررسی می‌شوند:
 
@@ -266,7 +294,7 @@ compression:
 - `runtime.process-workers` ≥ `runtime.workers`
 - `runtime.session-retry-base` ≤ `session-retry-max`
 
-نام فیلدها با پیکربندی StormDNS یکی است.
+فیلدهای پروفایل با `core/backend/compile/storm_schema.json` به کلید بومی نگاشت می‌شوند؛ مانند `arq.window` → `ARQ_WINDOW_SIZE`.
 
 </details>
 
@@ -276,18 +304,36 @@ compression:
 
 پیش‌فرض OlcRTC و StormDNS برابر `activation: auto` است: با انتخاب دستی یا خرابی گروه تحت نظر اجرا می‌شوند. نود باید عضو مستقیم گروه باشد. بدون انتخاب یا اتصال، پس از `sleep.idle` می‌خوابد؛ `0s` خواب را تا راه‌اندازی مجدد VPN غیرفعال می‌کند. برای اجرا همراه پروفایل از `activation: always` استفاده کنید.
 
+`activation` و `connectivity-check` داخل نود مشخص در `proxies` قرار می‌گیرند. `activation: auto` به گروهِ دربرگیرندهٔ مستقیم و URL بیداری نیاز دارد (صریح یا به‌ارث‌رسیده از بررسی نود، گروه یا تنظیم برنامه)؛ در غیر این صورت پروفایل رد می‌شود. مدت این دو بخش باید مضرب ثانیه باشد (`1s`، `1m`)؛ `500ms` نامعتبر است.
+
 <div dir="ltr">
 
 ```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30s
-    failures: 2
-    retry-after: 5m
-  sleep:
-    idle: 15m
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: datachannel
+  dns-server: 1.1.1.1:53
+  activation:
+    mode: auto
+    wake:
+      urls:
+      - https://example.org/generate_204
+      interval: 30s
+      failures: 2
+      retry-after: 5m
+    sleep:
+      idle: 15m
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 </div>
@@ -310,14 +356,22 @@ activation:
 
 ## 🩺 بررسی دسترسی
 
-فرایند و پورت SOCKS همیشه بررسی می‌شوند. آدرس HTTP(S) از `connectivity-check.urls` نود، نزدیک‌ترین گروه یا آدرس تست عمومی برنامه گرفته می‌شود. `required: false` بررسی را در پس‌زمینه انجام می‌دهد؛ `true` به آدرس نیاز دارد و در شکست، راه‌اندازی را بازمی‌گرداند. هر پاسخ معتبر HTTP از جمله 4xx/5xx موفق است.
+فرایند و پورت SOCKS همیشه بررسی می‌شوند. آدرس HTTP(S) از `connectivity-check.urls` نود، نزدیک‌ترین گروه یا آدرس تست عمومی برنامه گرفته می‌شود. `required: false` بررسی را در پس‌زمینه انجام می‌دهد؛ `true` به آدرس نیاز دارد و در شکست، راه‌اندازی را لغو و تغییرات را بازمی‌گرداند. هر پاسخ معتبر HTTP از جمله 4xx/5xx موفق است.
 
 <div dir="ltr">
 
 ```yaml
-connectivity-check:
-  urls: ["https://example.org/generate_204"]
-  required: true
+proxies:
+- name: naive
+  type: naiveproxy
+  server: example.com
+  port: 443
+  username: user
+  password: pass
+  connectivity-check:
+    urls:
+    - https://example.org/generate_204
+    required: true
 ```
 
 </div>
@@ -344,7 +398,7 @@ connectivity-check:
 
 ## 🎯 کدام برنامه‌ها از VPN استفاده می‌کنند
 
-قوانین پروفایل بر تنظیم دستی اولویت دارند. `include-package` فقط برنامه‌های فهرست‌شده و `exclude-package` سایر برنامه‌ها را از VPN عبور می‌دهد. استفادهٔ هم‌زمان ممنوع است؛ فهرست خالی صریح با نبود قانون فرق دارد.
+قوانین پروفایل بر تنظیم دستی اولویت دارند. `include-package` فقط برنامه‌های فهرست‌شده و `exclude-package` سایر برنامه‌ها را از VPN عبور می‌دهد. یک حالت را انتخاب کنید. `include-package: []` یا `exclude-package: []` خالی در منبع، بدون منابع دیگر، قانون پروفایل ایجاد نمی‌کند؛ تنظیم عمومی اعمال می‌شود.
 
 <div dir="ltr">
 
@@ -408,14 +462,14 @@ flclashm-settings: autostart,autoupdate
 
 </div>
 
-`flclashm-custom: add` ظاهر را هنگام افزودن و `update` در هر به‌روزرسانی اعمال می‌کند؛ در غیر این صورت ظاهر اعمال نمی‌شود. تنظیم دستی بر `flclashm-settings` اولویت دارد. `androidsecure` فقط mixed-port را می‌بندد و انتخاب VPN را حفظ می‌کند. گروه `GLOBAL` از `flclashm-override` / `flclashx-override` پشتیبانی می‌کند و اولی اولویت دارد.
+`flclashm-custom: add` هنگام افزودن و `update` در هر به‌روزرسانی فقط `hex`، `view`، `widgets` و `settings` را اعمال می‌کند؛ سایر هدرها به آن وابسته نیستند. `flclashm-settings` وقتی `overrideProviderSettings` خاموش باشد اعمال می‌شود: پرچم‌های موجود فعال و پرچم‌های غایب به `false` بازنشانی می‌شوند. `androidsecure` فقط mixed-port را می‌بندد و انتخاب VPN را حفظ می‌کند. گروه `GLOBAL` از `flclashm-override` / `flclashx-override` پشتیبانی می‌کند و اولی اولویت دارد.
 
 <details>
 <summary>مرجع هدرها و قالب‌ها</summary>
 
 | هدر | مقدار | کاربرد |
 |---|---|---|
-| `flclashm-background` | `URL` | تصویر پس‌زمینه |
+| `flclashm-background` | `URL[,opacity]` | پس‌زمینه؛ نمایانی اختیاری تصویر 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | رنگ‌بندی |
 | `flclashm-widgets` | `list` | ترتیب ابزارک‌ها |
 | `flclashm-view` | `key:value;…` | چیدمان صفحهٔ نودها |
@@ -432,8 +486,9 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-custom` | `add/update` | زمان اعمال ظاهر |
 | `announce` | `text/base64:…` | اعلان |
 | `support-url` | `URL` | پشتیبانی |
-| `x-hwid-max-devices-reached` | `—` | رسیدن به محدودیت دستگاه |
-| `x-hwid-not-supported` | `—` | عدم پشتیبانی HWID |
+| `profile-update-interval` | تعداد صحیح ساعت | فاصلهٔ به‌روزرسانی اشتراک؛ مقدار مثبت |
+| `x-hwid-max-devices-reached` | `true` | رسیدن به محدودیت دستگاه |
+| `x-hwid-not-supported` | `true` | عدم پشتیبانی HWID |
 
 `flclashm-hex`: رنگ hexadecimal شش/هشت‌رقمی با `#` اختیاری، سپس نوع Material 3 و `pureblack`. انواع: `tonalSpot`، `fidelity`، `monochrome`، `neutral`، `vibrant`، `expressive`، `content`، `rainbow`، `fruitSalad`.
 
@@ -451,7 +506,7 @@ flclashm-settings: autostart,autoupdate
 
 | پرچم | چه فعال می‌کند |
 |------|----------------|
-| `autostart` | اجرا/اتصال خودکار (از جمله پس از راه‌اندازی مجدد) |
+| `autostart` | اتصال خودکار هنگام بازکردن برنامه (`ui.attach`) |
 | `autoupdate` | بررسی خودکار به‌روزرسانی |
 | `autorun` | اجرای برنامه هنگام شروع سیستم *(دسکتاپ)* |
 | `shadowstart` | اجرای خاموش (پس‌زمینه) |

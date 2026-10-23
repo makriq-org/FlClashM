@@ -54,7 +54,7 @@ proxies:
       - "https://example.org/byedpi-strategies.txt"
 ```
 
-`mode: auto` 逐个尝试策略，按物理网络缓存有效结果（最多 16 个网络，无需访问 SSID）。启动预算耗尽后使用备用策略，并在后台继续选择。已验证结果与备用策略分别保存。`mode: manual` 使用 `strategy`；省略 `mode` 时，有 `strategy` 就采用 manual，否则采用 auto。
+`mode: auto` 尝试策略并按物理网络缓存结果（最多 16 个网络，无需访问 SSID）。启动预算耗尽后使用备用策略，并在后台继续选择。缓存会标记结果已验证还是临时结果；备用策略使用自己的 `retry-after`。`mode: manual` 使用 `strategy`；省略 `mode` 时，有 `strategy` 就采用 manual，否则采用 auto。
 
 ```yaml
 proxies:
@@ -73,8 +73,8 @@ HTTPS 列表每行一个策略；空行和以 `#` 开头的行被忽略。支持
 |------|--------|------|
 | `strategies` | `[builtin:byebyeedpi]` | 按顺序组合内置集、内联策略和公开 HTTPS 列表 |
 | `strategy-test.urls` | 内置 YouTube 端点 | 用于选择的地址 |
-| `strategy-test.sni` | — | 替换 `{sni}` 的主机名 |
-| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | 解析测试地址的 DoH 解析器（绕过 fake-ip）；`system` 使用系统解析器 |
+| `strategy-test.sni` | `google.com` | 替换 `{sni}` 的主机名 |
+| `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | 测试地址的 DoH 解析器；`system` 使用系统解析器 |
 | `strategy-test.timeout` | `5s` | 单次检查超时 |
 | `strategy-test.requests` | `1` | 每条策略的请求数 |
 | `strategy-test.request-concurrency` | `4` | 单个候选内的并行 HTTP 请求数 |
@@ -82,10 +82,10 @@ HTTPS 列表每行一个策略；空行和以 `#` 开头的行被忽略。支持
 | `strategy-selection.strategy-concurrency` | `4` | 同时检查的策略数 |
 | `strategy-selection.startup-timeout` | `15s` | 节点启动前的选择预算 |
 | `strategy-selection.continue-in-background` | `true` | fallback 后是否在后台继续检查列表 |
-| `strategy-selection.fallback-strategy` | — | 前台未及时完成时的临时策略参数 |
+| `strategy-selection.fallback-strategy` | 内置策略 | 前台未及时完成时的临时策略参数 |
+| `strategy-selection.retry-after` | `5m` | fallback 后再次选择前的暂停 |
 | `strategy-selection.cache.ttl` | `7d` | 缓存生存期 |
 | `strategy-selection.cache.recheck-after` | `1d` | 重新检查间隔 |
-| `strategy-selection.retry-after` | `5m` | fallback 后再次选择前的暂停 |
 | `strategy-selection.cache.failure-threshold` | `2` | 重置缓存前的错误次数 |
 
 </details>
@@ -110,7 +110,7 @@ proxy-groups:
 
 仅支持 CNC 客户端模式。请将 `<64-hex-key>` 替换为服务器密钥，必须是 64 个十六进制字符。`provider: none` 必须提供 `engine`、`engine-url`、`engine-token`，其他提供商禁止使用这些字段。禁止 `profiles`、`failover`、`video.hw`、本地监听和文件密钥。
 
-`dns-server: system` 使用 Android 物理网络的第一个 DNS，并在它变化时更新活动节点。没有系统 DNS 时，启动需等待网络更新。客户端和服务器必须支持 OLC2 和 OLVC 5。
+`dns-server: system` 使用 Android 物理网络的第一个 DNS：IPv4 为 `host:53`，IPv6 为 `[IPv6]:53`。该地址变化时重启依赖它的活动节点。若 DNS 不可用，启动立即报错 `physical DNS is unavailable`。应用计划时的启动失败会中止应用；后台唤醒失败后按 `retry-after` 等待。客户端和服务器必须支持 OLC2 和 OLVC 5。
 
 <details>
 <summary>OlcRTC 字段与传输</summary>
@@ -118,21 +118,35 @@ proxy-groups:
 | 参数 | 说明 |
 |------|------|
 | `provider` | 连接提供者：`jitsi`、`telemost`、`wbstream`、`none` |
-| `room` | 视频通话房间标识 |
+| `room` | 房间 URL 或 ID；除 `provider: none` 外必填 |
 | `encryption-key` | 256 位加密密钥 —— **恰好 64 个十六进制字符** |
 | `transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |
-| `dns-server` | 必填 DNS 服务器，格式 `地址:端口` |
+| `dns-server` | 必填：`host:port` 或 `system` |
 | `transport-options` | 当前传输的可选参数；`datachannel` 禁止此段 |
 
 `datachannel` 禁止 `transport-options`。`vp8channel` 默认 `fps: 30`、`batch-size: 64`；`seichannel` 另有 `fragment-size: 900`、`ack-timeout: 2s`。`videochannel` 支持 `codec`（`qrcode`/`tile`）、`width`、`height`、`fps`、`fragment-size`、`qr-recovery`、`tile-module`、`tile-rs`。默认 `qrcode`、1920×1080、`qr-recovery: low`；tile 为 1080×1080。旧字段 `bitrate` 可接受但被忽略。
 
 ```yaml
-transport: seichannel
-transport-options:
-  fps: 30
-  batch-size: 64
-  fragment-size: 900
-  ack-timeout: 2s
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: seichannel
+  dns-server: 1.1.1.1:53
+  transport-options:
+    fps: 30
+    batch-size: 64
+    fragment-size: 900
+    ack-timeout: 2s
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 </details>
@@ -153,7 +167,7 @@ proxy-groups:
     proxies: ["DIRECT", "storm"]
 ```
 
-`domains`、`encryption`、`encryption-key` 必填，无默认值，必须与服务器一致。`none` 和 `xor` 无法向解析器运营者隐藏内容。首次启动会扫描解析器，可能需要两分钟。
+`domains`、`encryption`、`encryption-key` 必填，无默认值，必须与服务器一致。`none` 和 `xor` 无法向解析器运营者隐藏内容。首次启动会扫描解析器，最长可达两分钟。
 
 <details>
 <summary>解析器与缓存</summary>
@@ -171,7 +185,7 @@ proxy-groups:
 | `system` | 物理网络（非 VPN）的 DNS |
 | `8.8.8.8` | 一个使用 53 端口的解析器 |
 | `1.1.1.1:5353` | 一个使用自定端口的解析器 |
-| `192.168.1.0/30` | CIDR：IPv4 会跳过网络地址与广播地址；超过 65536 个地址的范围会被拒绝 |
+| `192.168.1.0/30` | CIDR 最多 65536 个地址。IPv4 超过 2 个地址时去除首尾；`/31` 和 `/32` 全部保留。IPv6 超过 2 个地址时去除首地址 |
 | `https://…` | 来自远程列表的解析器 |
 
 每个配置最多 32 个 HTTPS 列表，下载 URL 不得包含凭据、片段或本地服务器地址；列表内部可含私有 IP/CIDR。响应限制：1 MiB、15 秒，禁止重定向。失败时即使超过 `refresh` 也使用旧缓存；没有缓存则跳过该来源。应用配置时检查 `refresh`。
@@ -189,7 +203,7 @@ proxy-groups:
 | `cached`（默认） | 从缓存启动，不重测 MTU |
 | `verified` | 从缓存启动并重测 MTU |
 
-缓存关联解析器、`domains` 和 StormDNS 版本。`startup.max-age` 为整数天，默认 `30d`。无合适缓存时重新扫描。系统 DNS 变化会清除 MTU 缓存并重启依赖它的活动节点，无需 UI。配置禁止本地 DNS/SOCKS、解析器文件、日志路径及 `startup.mode: ask`。
+缓存关联解析器、`domains` 和 StormDNS 版本。`startup.max-age` 是整天倍数的时长字符串，范围 `0s` 至 `365d`（默认 `30d`，也可用 `720h`，但不能用数字 `30`）。无合适缓存时重新扫描。系统 DNS 变化会清除 MTU 缓存并重启依赖它的活动节点，无需 UI。配置禁止本地 DNS/SOCKS、解析器文件、日志路径及 `startup.mode: ask`。
 
 </details>
 
@@ -205,11 +219,25 @@ proxy-groups:
 | `bulk` | 3 / 3 / 4 / 4 | `zstd` |
 
 ```yaml
-preset: bulk
-duplication:
-  upload: 2
-compression:
-  upload: zlib
+proxies:
+- name: storm
+  type: stormdns
+  domains:
+  - v.example.com
+  encryption: chacha20
+  encryption-key: "<key>"
+  preset: bulk
+  duplication:
+    upload: 2
+  compression:
+    upload: zlib
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - storm
 ```
 
 | 块 | 字段与范围 |
@@ -232,7 +260,7 @@ compression:
 - `runtime.process-workers` ≥ `runtime.workers`
 - `runtime.session-retry-base` ≤ `session-retry-max`
 
-字段名与 StormDNS 配置一致。
+配置字段通过 `core/backend/compile/storm_schema.json` 映射至原生键，例如 `arq.window` → `ARQ_WINDOW_SIZE`。
 
 </details>
 
@@ -242,16 +270,34 @@ compression:
 
 OlcRTC 和 StormDNS 默认 `activation: auto`：手动选择或受监测分组故障时启动。节点必须直接属于分组。未被选择且无连接时，经过 `sleep.idle` 后休眠；`0s` 表示在 VPN 重启前不休眠。设为 `activation: always` 可随配置启动。
 
+`activation` 和 `connectivity-check` 必须放在 `proxies` 的具体节点内。`activation: auto` 需要直接包含节点的分组及唤醒 URL（显式指定或从节点检测、分组、应用设置继承），否则拒绝配置。这两个区块的时长必须是整秒（`1s`、`1m`），不允许 `500ms`。
+
 ```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30s
-    failures: 2
-    retry-after: 5m
-  sleep:
-    idle: 15m
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: datachannel
+  dns-server: 1.1.1.1:53
+  activation:
+    mode: auto
+    wake:
+      urls:
+      - https://example.org/generate_204
+      interval: 30s
+      failures: 2
+      retry-after: 5m
+    sleep:
+      idle: 15m
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 <details>
@@ -275,9 +321,17 @@ activation:
 始终检测进程和 SOCKS 端口。HTTP(S) 地址依次取自节点的 `connectivity-check.urls`、最近的分组或应用全局测试 URL。`required: false` 在后台检测；`true` 要求有 URL，失败时回滚启动。任何有效 HTTP 响应（包括 4xx/5xx）均视为成功。
 
 ```yaml
-connectivity-check:
-  urls: ["https://example.org/generate_204"]
-  required: true
+proxies:
+- name: naive
+  type: naiveproxy
+  server: example.com
+  port: 443
+  username: user
+  password: pass
+  connectivity-check:
+    urls:
+    - https://example.org/generate_204
+    required: true
 ```
 
 仅允许无凭据或片段的公共 HTTP(S) URL。请求前检查 DNS；连接通过受测节点的 SOCKS，不会直接连接回退。TLS 验证原始主机名。
@@ -302,7 +356,7 @@ connectivity-check:
 
 ## 🎯 哪些应用走 VPN
 
-配置规则优先于手动设置。`include-package` 仅让列出的应用走 VPN，`exclude-package` 让其余应用走 VPN。两者不能同时使用；显式空列表与没有规则不同。
+配置规则优先于手动设置。`include-package` 仅让列出的应用走 VPN，`exclude-package` 让其余应用走 VPN。请选择一种模式。若原始 `include-package: []` 或 `exclude-package: []` 为空且无其他来源，不创建配置规则，使用通用设置。
 
 ```yaml
 tun:
@@ -350,14 +404,14 @@ flclashm-view: type:tab;sort:delay;card:min
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` 在添加时应用外观，`update` 在每次更新时应用；否则不应用。手动设置优先于 `flclashm-settings`。`androidsecure` 仅关闭 mixed-port，不改变 VPN 选择。`GLOBAL` 支持 `flclashm-override` / `flclashx-override`，前者优先。
+`flclashm-custom: add` 在添加时应用 `hex`、`view`、`widgets` 和 `settings`，`update` 在每次更新时应用；其他响应头不受它控制。关闭 `overrideProviderSettings` 时才应用 `flclashm-settings`：列出的标志开启，未列出的重置为 `false`。`androidsecure` 仅关闭 mixed-port，不改变 VPN 选择。`GLOBAL` 支持 `flclashm-override` / `flclashx-override`，前者优先。
 
 <details>
 <summary>响应头与格式参考</summary>
 
 | 响应头 | 值 | 用途 |
 |---|---|---|
-| `flclashm-background` | `URL` | 背景图片 |
+| `flclashm-background` | `URL[,opacity]` | 背景；可选图片可见度 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | 配色主题 |
 | `flclashm-widgets` | `list` | 小组件顺序 |
 | `flclashm-view` | `key:value;…` | 节点页面布局 |
@@ -374,8 +428,9 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-custom` | `add/update` | 何时应用外观 |
 | `announce` | `text/base64:…` | 公告 |
 | `support-url` | `URL` | 支持 |
-| `x-hwid-max-devices-reached` | `—` | 已达设备上限 |
-| `x-hwid-not-supported` | `—` | 不支持 HWID |
+| `profile-update-interval` | 整数小时 | 订阅自动更新间隔，须为正数 |
+| `x-hwid-max-devices-reached` | `true` | 已达设备上限 |
+| `x-hwid-not-supported` | `true` | 不支持 HWID |
 
 `flclashm-hex`：6/8 位十六进制颜色，可带 `#`，后接 Material 3 方案和 `pureblack`。方案：`tonalSpot`、`fidelity`、`monochrome`、`neutral`、`vibrant`、`expressive`、`content`、`rainbow`、`fruitSalad`。
 
@@ -393,7 +448,7 @@ flclashm-settings: autostart,autoupdate
 
 | 标志 | 启用内容 |
 |------|----------|
-| `autostart` | 自动启动 / 自动连接（含重启后） |
+| `autostart` | 打开应用时自动连接（`ui.attach`） |
 | `autoupdate` | 自动检查更新 |
 | `autorun` | 系统启动时启动应用 *(桌面)* |
 | `shadowstart` | 静默（后台）启动 |

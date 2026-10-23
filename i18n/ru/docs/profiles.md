@@ -54,7 +54,7 @@ proxies:
       - "https://example.org/byedpi-strategies.txt"
 ```
 
-`mode: auto` перебирает стратегии и сохраняет рабочую отдельно для каждой физической сети (до 16 сетей, без доступа к SSID). По истечении стартового бюджета используется fallback, подбор продолжается в фоне. Проверенный результат и fallback хранятся отдельно. `mode: manual` использует `strategy`; без `mode` наличие `strategy` выбирает manual, иначе auto.
+`mode: auto` перебирает стратегии и кэширует результат для каждой физической сети (до 16 сетей, без доступа к SSID). После стартового бюджета используется fallback, подбор продолжается в фоне. Кэш отмечает результат как проверенный или временный; fallback использует свой `retry-after`. `mode: manual` использует `strategy`; без `mode` наличие `strategy` выбирает manual, иначе auto.
 
 ```yaml
 proxies:
@@ -73,7 +73,7 @@ HTTPS-список содержит одну стратегию на строк�
 |----------|--------------|----------|
 | `strategies` | `[builtin:byebyeedpi]` | Встроенные наборы, inline-стратегии и публичные HTTPS-списки в общем порядке |
 | `strategy-test.urls` | встроенный endpoint YouTube | Адреса для подбора |
-| `strategy-test.sni` | — | Имя хоста для подстановки `{sni}` |
+| `strategy-test.sni` | `google.com` | Имя хоста для подстановки `{sni}` |
 | `strategy-test.dns-resolver` | `https://1.1.1.1/dns-query` | DoH-резолвер адреса проверки; `system` — системный резолвер |
 | `strategy-test.timeout` | `5s` | Таймаут одной проверки |
 | `strategy-test.requests` | `1` | Запросов на стратегию |
@@ -82,7 +82,7 @@ HTTPS-список содержит одну стратегию на строк�
 | `strategy-selection.strategy-concurrency` | `4` | Одновременно проверяемых стратегий |
 | `strategy-selection.startup-timeout` | `15s` | Бюджет подбора до запуска узла |
 | `strategy-selection.continue-in-background` | `true` | Продолжать список в фоне после fallback |
-| `strategy-selection.fallback-strategy` | — | Временная стратегия, если подбор не успел |
+| `strategy-selection.fallback-strategy` | встроенная стратегия | Временная стратегия, если подбор не успел |
 | `strategy-selection.retry-after` | `5m` | Пауза перед новым подбором после fallback |
 | `strategy-selection.cache.ttl` | `7d` | Время жизни кэша |
 | `strategy-selection.cache.recheck-after` | `1d` | Интервал повторной проверки |
@@ -110,7 +110,7 @@ proxy-groups:
 
 Работает только как CNC-клиент. Замените `<64-hex-key>` ключом сервера из 64 hex-символов. Для `provider: none` обязательны `engine`, `engine-url`, `engine-token`; с другими провайдерами они запрещены. `profiles`, `failover`, `video.hw`, локальные listeners и ключи из файлов запрещены.
 
-`dns-server: system` использует первый DNS физической сети Android и обновляет активный узел при его изменении. Без системного DNS запуск ждёт обновления сети. Клиент и сервер должны поддерживать OLC2 и OLVC 5.
+`dns-server: system` использует первый DNS физической сети Android: `host:53` для IPv4, `[IPv6]:53` для IPv6. При его смене активный зависимый узел перезапускается. Если DNS недоступен, запуск сразу завершается ошибкой `physical DNS is unavailable`. Ошибка запуска при применении плана прерывает его применение; после неудачного фонового пробуждения действует `retry-after`. Клиент и сервер должны поддерживать OLC2 и OLVC 5.
 
 <details>
 <summary>Поля и транспорт OlcRTC</summary>
@@ -118,21 +118,35 @@ proxy-groups:
 | Параметр | Описание |
 |----------|----------|
 | `provider` | Поставщик соединения: `jitsi`, `telemost`, `wbstream`, `none` |
-| `room` | URL или идентификатор комнаты |
+| `room` | URL или ID комнаты; обязателен, кроме `provider: none` |
 | `encryption-key` | 256-битный ключ — **ровно 64 hex-символа** |
 | `transport` | `datachannel`, `vp8channel`, `seichannel`, `videochannel` |
-| `dns-server` | Обязательный DNS-сервер в формате `адрес:порт` или `system` |
+| `dns-server` | Обязательный `host:port` или `system` |
 | `transport-options` | Необязательные параметры выбранного транспорта; для `datachannel` секция запрещена |
 
 `transport-options` для `datachannel` запрещён. Для `vp8channel`: `fps: 30`, `batch-size: 64`; для `seichannel` дополнительно `fragment-size: 900`, `ack-timeout: 2s`. У `videochannel`: `codec` (`qrcode`/`tile`), `width`, `height`, `fps`, `fragment-size`, `qr-recovery`, `tile-module`, `tile-rs`. По умолчанию `qrcode`, 1920×1080, `qr-recovery: low`; для tile — 1080×1080. Старый `bitrate` принимается, но игнорируется.
 
 ```yaml
-transport: seichannel
-transport-options:
-  fps: 30
-  batch-size: 64
-  fragment-size: 900
-  ack-timeout: 2s
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: seichannel
+  dns-server: 1.1.1.1:53
+  transport-options:
+    fps: 30
+    batch-size: 64
+    fragment-size: 900
+    ack-timeout: 2s
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 </details>
@@ -171,7 +185,7 @@ proxy-groups:
 | `system` | DNS физической сети (не VPN) |
 | `8.8.8.8` | Один резольвер на порту 53 |
 | `1.1.1.1:5353` | Один резольвер на своём порту |
-| `192.168.1.0/30` | CIDR: у IPv4 сетевой и широковещательный адреса не берутся; диапазон шире 65536 адресов отклоняется |
+| `192.168.1.0/30` | CIDR до 65536 адресов. IPv4 с более чем 2 адресами исключает первый и последний; `/31` и `/32` берутся целиком. IPv6 с более чем 2 адресами исключает первый |
 | `https://…` | Резольверы из удалённого списка |
 
 Не более 32 HTTPS-списков на профиль, без credentials/fragment и локальных адресов сервера загрузки; приватные IP/CIDR внутри списка допустимы. Лимиты ответа: 1 МиБ, 15 с; редиректы запрещены. При сбое берётся прежний кэш даже после `refresh`, без кэша источник пропускается. `refresh` проверяется при применении профиля.
@@ -189,7 +203,7 @@ proxy-groups:
 | `cached` (по умолчанию) | Старт из кэша без перепроверки MTU |
 | `verified` | Старт из кэша с перепроверкой MTU |
 
-Кэш зависит от резольверов, `domains` и версии StormDNS. `startup.max-age` — целое число дней, по умолчанию `30d`. Без подходящего кэша выполняется сканирование. Смена системного DNS сбрасывает MTU-кэш и перезапускает активные зависимые узлы без UI. Локальные DNS/SOCKS, resolver-файл, журнал и `startup.mode: ask` в профиле запрещены.
+Кэш зависит от резольверов, `domains` и версии StormDNS. `startup.max-age` — строка длительности, кратной суткам, от `0s` до `365d` (по умолчанию `30d`; также допустимо `720h`, но не число `30`). Без подходящего кэша выполняется сканирование. Смена системного DNS сбрасывает MTU-кэш и перезапускает активные зависимые узлы без UI. Локальные DNS/SOCKS, resolver-файл, журнал и `startup.mode: ask` в профиле запрещены.
 
 </details>
 
@@ -205,11 +219,25 @@ proxy-groups:
 | `bulk` | 3 / 3 / 4 / 4 | `zstd` |
 
 ```yaml
-preset: bulk
-duplication:
-  upload: 2
-compression:
-  upload: zlib
+proxies:
+- name: storm
+  type: stormdns
+  domains:
+  - v.example.com
+  encryption: chacha20
+  encryption-key: "<key>"
+  preset: bulk
+  duplication:
+    upload: 2
+  compression:
+    upload: zlib
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - storm
 ```
 
 | Блок | Поля и границы |
@@ -232,7 +260,7 @@ compression:
 - `runtime.process-workers` ≥ `runtime.workers`
 - `runtime.session-retry-base` ≤ `session-retry-max`
 
-Имена полей совпадают с конфигом StormDNS.
+Поля профиля преобразуются в нативные ключи по `core/backend/compile/storm_schema.json`, например `arq.window` → `ARQ_WINDOW_SIZE`.
 
 </details>
 
@@ -242,16 +270,34 @@ compression:
 
 OlcRTC и StormDNS по умолчанию используют `activation: auto`: запускаются при ручном выборе или отказе наблюдаемой группы. Узел должен напрямую входить в группу. Без выбора и соединений он засыпает после `sleep.idle`; `0s` запрещает сон до перезапуска VPN. Для запуска вместе с профилем задайте `activation: always`.
 
+`activation` и `connectivity-check` задаются внутри конкретного узла в `proxies`. Для `activation: auto` обязательны прямая содержащая группа и wake-URL (явный либо унаследованный из проверки узла, группы или настроек приложения); без них профиль отклоняется. Длительности этих двух блоков должны быть кратны секунде (`1s`, `1m`); `500ms` не допускается.
+
 ```yaml
-activation:
-  mode: auto
-  wake:
-    urls: ["https://example.org/generate_204"]
-    interval: 30s
-    failures: 2
-    retry-after: 5m
-  sleep:
-    idle: 15m
+proxies:
+- name: rtc
+  type: olcrtc
+  provider: jitsi
+  room: https://meet.example.org/room
+  encryption-key: "<64-hex-key>"
+  transport: datachannel
+  dns-server: 1.1.1.1:53
+  activation:
+    mode: auto
+    wake:
+      urls:
+      - https://example.org/generate_204
+      interval: 30s
+      failures: 2
+      retry-after: 5m
+    sleep:
+      idle: 15m
+proxy-groups:
+- name: main
+  type: fallback
+  url: https://example.org/generate_204
+  proxies:
+  - DIRECT
+  - rtc
 ```
 
 <details>
@@ -275,9 +321,17 @@ activation:
 Всегда проверяются процесс и SOCKS-порт. HTTP(S)-адрес выбирается из `connectivity-check.urls` узла, ближайшей группы или общего URL приложения. `required: false` выполняет проверку в фоне; `true` требует адрес и отменяет запуск с откатом при неудаче. Любой корректный HTTP-ответ, включая 4xx/5xx, считается успехом.
 
 ```yaml
-connectivity-check:
-  urls: ["https://example.org/generate_204"]
-  required: true
+proxies:
+- name: naive
+  type: naiveproxy
+  server: example.com
+  port: 443
+  username: user
+  password: pass
+  connectivity-check:
+    urls:
+    - https://example.org/generate_204
+    required: true
 ```
 
 Разрешены только публичные HTTP(S)-адреса без credentials/fragment. DNS проверяется перед запросом; соединение идёт через SOCKS проверяемого узла, без прямого fallback. TLS проверяет исходное имя.
@@ -302,7 +356,7 @@ connectivity-check:
 
 ## 🎯 Какие приложения идут через VPN
 
-Правила профиля приоритетнее ручных настроек. `include-package` направляет через VPN только указанные приложения, `exclude-package` — все остальные. Их нельзя задавать одновременно; явный пустой список отличается от отсутствия правила.
+Правила профиля приоритетнее ручных настроек. `include-package` направляет через VPN только указанные приложения, `exclude-package` — все остальные. Выберите один режим. Пустой исходный `include-package: []` или `exclude-package: []` без других источников не создаёт профильного правила: действуют общие настройки.
 
 ```yaml
 tun:
@@ -350,14 +404,14 @@ flclashm-view: type:tab;sort:delay;card:min
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` применяет оформление при добавлении, `update` — при каждом обновлении; без них оформление не применяется. Ручные настройки пользователя приоритетнее `flclashm-settings`. `androidsecure` отключает только mixed-port, не меняя выбор VPN. Поля `flclashm-override` / `flclashx-override` поддерживаются в группе `GLOBAL`, приоритет у первого.
+`flclashm-custom: add` применяет `hex`, `view`, `widgets` и `settings` при добавлении, `update` — при каждом обновлении; остальные заголовки от него не зависят. `flclashm-settings` применяется, если выключен `overrideProviderSettings`; перечисленные флаги включаются, отсутствующие сбрасываются в `false`. `androidsecure` отключает только mixed-port, не меняя выбор VPN. Поля `flclashm-override` / `flclashx-override` поддерживаются в группе `GLOBAL`, приоритет у первого.
 
 <details>
 <summary>Справочник заголовков и форматов</summary>
 
 | Заголовок | Значение | Назначение |
 |---|---|---|
-| `flclashm-background` | `URL` | Фоновое изображение |
+| `flclashm-background` | `URL[,opacity]` | Фон; необязательная видимость изображения 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Цветовая тема |
 | `flclashm-widgets` | `list` | Порядок виджетов |
 | `flclashm-view` | `key:value;…` | Вид страницы узлов |
@@ -374,8 +428,9 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-custom` | `add/update` | Когда применять оформление |
 | `announce` | `text/base64:…` | Объявление |
 | `support-url` | `URL` | Поддержка |
-| `x-hwid-max-devices-reached` | `—` | Достигнут лимит устройств |
-| `x-hwid-not-supported` | `—` | HWID не поддерживается |
+| `profile-update-interval` | целое число часов | Интервал автообновления подписки; положительное значение |
+| `x-hwid-max-devices-reached` | `true` | Достигнут лимит устройств |
+| `x-hwid-not-supported` | `true` | HWID не поддерживается |
 
 `flclashm-hex`: цвет из 6/8 hex-символов с необязательным `#`, затем вариант Material 3 и `pureblack`. Варианты: `tonalSpot`, `fidelity`, `monochrome`, `neutral`, `vibrant`, `expressive`, `content`, `rainbow`, `fruitSalad`.
 
@@ -393,7 +448,7 @@ flclashm-settings: autostart,autoupdate
 
 | Флаг | Что включает |
 |------|--------------|
-| `autostart` | Автозапуск/автоподключение (в т. ч. после перезагрузки) |
+| `autostart` | Автоподключение при открытии приложения (`ui.attach`) |
 | `autoupdate` | Автоматическую проверку обновлений |
 | `autorun` | Запуск приложения при старте системы *(desktop)* |
 | `shadowstart` | Тихий (фоновый) запуск |
