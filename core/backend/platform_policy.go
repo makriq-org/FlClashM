@@ -152,12 +152,15 @@ func (c *runtimeCoordinator) platformLoop(ctx context.Context) {
 			return false
 		}
 		var event *PlatformEvent
-		if value, ok := p.pending["revoked"]; ok && ready("revoked") {
+		revoked, revoking := p.pending["revoked"]
+		if revoking && ready("revoked") {
 			// Revocation is a stop intent and must preempt preparation/recovery,
 			// rather than wait for that operation to establish another tunnel.
-			copy := value
+			copy := revoked
 			event = &copy
-		} else if c.active == nil {
+		} else if !revoking && c.active == nil {
+			// A revocation in backoff still blocks recovery events: they would
+			// re-establish the tunnel the system has just taken away.
 			for _, kind := range []string{"service", "screen", "network"} {
 				if value, ok := p.pending[kind]; ok && ready(kind) {
 					copy := value
