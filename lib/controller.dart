@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/providers/providers.dart';
@@ -9,7 +8,6 @@ import 'package:flclashx/widgets/dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'common/common.dart';
 import 'models/models.dart';
 import 'product/backend/backend.dart';
@@ -46,12 +44,6 @@ class AppController {
     });
   }
 
-  void applyProfileDebounce({bool silence = false}) {
-    debouncer.call(FunctionTag.applyProfile, (silence) {
-      applyProfile(silence: silence);
-    }, args: [silence]);
-  }
-
   void savePreferencesDebounce() {
     debouncer.call(FunctionTag.savePreferences, savePreferences);
   }
@@ -73,17 +65,6 @@ class AppController {
     );
   }
 
-  Future<void> syncAndroidForegroundNotificationForProxyChange({
-    required String groupName,
-    required String proxyName,
-  }) async {
-    await productServices.androidShell.syncForegroundNotificationForProxyChange(
-      profile: globalState.config.currentProfile,
-      groupName: groupName,
-      proxyName: proxyName,
-    );
-  }
-
   Future<void> restartCore() async {
     await globalState.flushEdits();
     await backendClient.command('runtime.restart');
@@ -98,7 +79,7 @@ class AppController {
       await StatusBarManager.updateIcon(isConnected: false);
       if (globalState.homeScaffoldKey.currentState?.mounted ?? false) {
         // Отчёт, а не вопрос: ответа не ждём, текст дублируется в логи.
-        globalState.showNotifier(e.toString());
+        globalState.showNotifier(globalState.describeError(e));
       }
     }
   }
@@ -210,12 +191,6 @@ class AppController {
     updateGroupsDebounce();
   }
 
-  void syncPatchClashConfigFromRuntime(ClashConfig patchConfig) {
-    _ref
-        .read(patchClashConfigProvider.notifier)
-        .updateState((_) => patchConfig);
-  }
-
   Future<void> addProfile(Profile profile) async {
     final shouldSelect = globalState.config.currentProfileId == null;
     if (shouldSelect)
@@ -247,21 +222,21 @@ class AppController {
   final _profileRefreshes = ProfileRefreshes();
 
   Future<void> updateProfile(Profile profile) => _profileRefreshes.run(
-    profile.id,
-    setLoading: ({required loading}) {
-      final current = globalState.config.profiles.getProfile(profile.id);
-      if (current != null && context.mounted) {
-        setProfile(current.copyWith(isUpdating: loading));
-      }
-    },
-    refresh: () async {
-      await backendClient.command('subscription.refresh', {
-        'profileId': profile.id,
-      });
-      final current = globalState.config.profiles.getProfile(profile.id);
-      if (current != null) _showProductNotices(current);
-    },
-  );
+        profile.id,
+        setLoading: ({required loading}) {
+          final current = globalState.config.profiles.getProfile(profile.id);
+          if (current != null && context.mounted) {
+            setProfile(current.copyWith(isUpdating: loading));
+          }
+        },
+        refresh: () async {
+          await backendClient.command('subscription.refresh', {
+            'profileId': profile.id,
+          });
+          final current = globalState.config.profiles.getProfile(profile.id);
+          if (current != null) _showProductNotices(current);
+        },
+      );
 
   void _showProductNotices(Profile profile) {
     final advisory = ProductProviderAdvisory.fromProfile(profile);
@@ -334,6 +309,18 @@ class AppController {
     _ref.read(profilesProvider.notifier).value = profiles;
   }
 
+  /// Changes only the order: the latest records are reordered, so fields
+  /// copied when the sort sheet opened never overwrite newer backend data.
+  void reorderProfiles(List<String> ids) {
+    setProfiles(
+      BackendEdits.reorderByIds(
+        _ref.read(profilesProvider),
+        ids,
+        (profile) => profile.id,
+      ),
+    );
+  }
+
   void addLog(Log log) {
     _ref.read(logsProvider).add(log);
   }
@@ -396,18 +383,15 @@ class AppController {
   /// live. updateConfig does NOT recompute effectiveExternalController (that's
   /// the applyProfile path), so set it here too — the zashboard URL reads it.
   Future<void> setExternalControllerEnabled(bool enable) async {
-    _ref
-        .read(patchClashConfigProvider.notifier)
-        .updateState(
+    _ref.read(patchClashConfigProvider.notifier).updateState(
           (state) => state.copyWith(
             externalController: enable
                 ? ExternalControllerStatus.open
                 : ExternalControllerStatus.close,
           ),
         );
-    globalState.effectiveExternalController.value = enable
-        ? ExternalControllerStatus.open.value
-        : "";
+    globalState.effectiveExternalController.value =
+        enable ? ExternalControllerStatus.open.value : "";
     await updateClashConfig();
   }
 
@@ -419,14 +403,6 @@ class AppController {
   Future<bool> setupClashConfig() async {
     await _updateClashConfig();
     return true;
-  }
-
-  Future<void> applyProfile({bool silence = false}) async {
-    await globalState.flushEdits();
-    await backendClient.refresh();
-    await updateGroups();
-    await updateProviders();
-    addCheckIpNumDebounce();
   }
 
   void handleChangeProfile() {
@@ -490,8 +466,9 @@ class AppController {
         'reset': proxyName.isEmpty,
       });
     } catch (error) {
+      // A superseded selection formats to no text: the newer one counts.
       if (context.mounted) {
-        globalState.showNotifier(error.toString());
+        globalState.showNotifier(globalState.describeError(error));
       }
     }
     addCheckIpNumDebounce();
@@ -551,10 +528,10 @@ class AppController {
       includePrerelease: appSetting.includePrereleaseUpdates,
       skippedTagName: appSetting.skippedAppUpdateTagName,
       onSkipRelease: (tagName) async {
-        _ref
-            .read(appSettingProvider.notifier)
-            .updateState(
-              (state) => state.copyWith(skippedAppUpdateTagName: tagName),
+        _ref.read(appSettingProvider.notifier).updateState(
+              (state) => state.copyWith(
+                skippedAppUpdateTagName: tagName,
+              ),
             );
       },
     );
@@ -637,9 +614,7 @@ class AppController {
             ),
             TextButton(
               onPressed: () {
-                _ref
-                    .read(appSettingProvider.notifier)
-                    .updateState(
+                _ref.read(appSettingProvider.notifier).updateState(
                       (state) => state.copyWith(disclaimerAccepted: true),
                     );
                 Navigator.of(context).pop<bool>(true);
@@ -672,9 +647,7 @@ class AppController {
 
     try {
       final profile = await commonScaffoldState?.loadingRun<Profile>(() async {
-        return Profile.normal(
-          url: url,
-        ).update(validateConfig: globalState.validateProfileConfigText);
+        return Profile.normal(url: url).update();
       }, title: "${appLocalizations.add}${appLocalizations.profile}");
 
       if (profile != null) {
@@ -684,14 +657,12 @@ class AppController {
       }
     } catch (err) {
       commonPrint.log('Add Profile Failed: $err');
-      globalState.showNotifier(err.toString());
+      globalState.showNotifier(globalState.describeError(err));
     }
   }
 
   Future<void> addProfileFromUrlForSync(String url) async {
-    final profile = await Profile.normal(
-      url: url,
-    ).update(validateConfig: globalState.validateProfileConfigText);
+    final profile = await Profile.normal(url: url).update();
     _showProductNotices(profile);
     await addProfile(profile);
   }
@@ -709,9 +680,7 @@ class AppController {
     if (commonScaffoldState?.mounted != true) return;
     final profile = await commonScaffoldState?.loadingRun<Profile?>(() async {
       await Future.delayed(const Duration(milliseconds: 300));
-      return Profile.normal(
-        label: platformFile?.name,
-      ).saveFile(bytes, validateConfig: globalState.validateProfileConfigText);
+      return Profile.normal(label: platformFile?.name).saveFile(bytes);
     }, title: "${appLocalizations.add}${appLocalizations.profile}");
     if (profile != null) {
       await addProfile(profile);
@@ -741,25 +710,26 @@ class AppController {
     );
 
   List<Proxy> _sortOfDelay({required List<Proxy> proxies, String? testUrl}) =>
-      List.of(proxies)..sort((a, b) {
-        final aDelay = _ref.read(
-          getDelayProvider(proxyName: a.name, testUrl: testUrl),
-        );
-        final bDelay = _ref.read(
-          getDelayProvider(proxyName: b.name, testUrl: testUrl),
-        );
-        // null (untested) and -1 (failed) are equivalent "no delay"
-        // sentinels: map both to the same rank so the comparator stays
-        // antisymmetric (compare(a,b) == -compare(b,a)) and they sort to
-        // the end together.
-        if (aDelay == null || aDelay == -1) {
-          return (bDelay == null || bDelay == -1) ? 0 : 1;
-        }
-        if (bDelay == null || bDelay == -1) {
-          return -1;
-        }
-        return aDelay.compareTo(bDelay);
-      });
+      List.of(proxies)
+        ..sort((a, b) {
+          final aDelay = _ref.read(
+            getDelayProvider(proxyName: a.name, testUrl: testUrl),
+          );
+          final bDelay = _ref.read(
+            getDelayProvider(proxyName: b.name, testUrl: testUrl),
+          );
+          // null (untested) and -1 (failed) are equivalent "no delay"
+          // sentinels: map both to the same rank so the comparator stays
+          // antisymmetric (compare(a,b) == -compare(b,a)) and they sort to
+          // the end together.
+          if (aDelay == null || aDelay == -1) {
+            return (bDelay == null || bDelay == -1) ? 0 : 1;
+          }
+          if (bDelay == null || bDelay == -1) {
+            return -1;
+          }
+          return aDelay.compareTo(bDelay);
+        });
 
   List<Proxy> getSortProxies(List<Proxy> proxies, [String? url]) =>
       switch (_ref.read(proxiesStyleSettingProvider).sortType) {
@@ -775,9 +745,7 @@ class AppController {
   }
 
   void updateSystemProxy() {
-    _ref
-        .read(networkSettingProvider.notifier)
-        .updateState(
+    _ref.read(networkSettingProvider.notifier).updateState(
           (state) => state.copyWith(systemProxy: !state.systemProxy),
         );
   }
@@ -911,8 +879,7 @@ class AppController {
       await backendClient.command('backup.restore', {
         'token': token,
         'onlyProfiles': recoveryOption == RecoveryOption.onlyProfiles,
-        'replace':
-            _ref.read(appSettingProvider).recoveryStrategy ==
+        'replace': _ref.read(appSettingProvider).recoveryStrategy ==
             RecoveryStrategy.override,
       });
     } finally {

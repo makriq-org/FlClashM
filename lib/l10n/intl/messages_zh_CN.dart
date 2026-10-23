@@ -102,6 +102,17 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "autoUpdate": MessageLookupByLibrary.simpleMessage("自动更新"),
     "autoUpdateInterval": MessageLookupByLibrary.simpleMessage("自动更新间隔（分钟）"),
+    "backendClosed": MessageLookupByLibrary.simpleMessage("操作完成前后台服务已停止"),
+    "backendOperationCancelled": MessageLookupByLibrary.simpleMessage("操作已取消"),
+    "backendOperationFailed": MessageLookupByLibrary.simpleMessage("操作失败"),
+    "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
+      "无法启动 FlClashM",
+    ),
+    "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
+      "应用无法连接到后台服务，正在自动重试。您可以立即重试，或导出日志以获取支持。",
+    ),
+    "backendTimeout": MessageLookupByLibrary.simpleMessage("后台服务未及时响应"),
+    "backendUnavailable": MessageLookupByLibrary.simpleMessage("后台服务不可用"),
     "backup": MessageLookupByLibrary.simpleMessage("备份"),
     "backupAndRecovery": MessageLookupByLibrary.simpleMessage("备份与恢复"),
     "backupAndRecoveryDesc": MessageLookupByLibrary.simpleMessage(
@@ -444,6 +455,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "DNS连接跟随rules,需配置proxy-server-nameserver",
     ),
     "restart": MessageLookupByLibrary.simpleMessage("重启"),
+    "retry": MessageLookupByLibrary.simpleMessage("重试"),
     "routeAddress": MessageLookupByLibrary.simpleMessage("路由地址"),
     "routeAddressDesc": MessageLookupByLibrary.simpleMessage("配置监听路由地址"),
     "routeMode": MessageLookupByLibrary.simpleMessage("路由模式"),

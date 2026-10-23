@@ -203,7 +203,13 @@ class AppUpdateService {
   }
 
   Future<void> _openInstaller(String path) async {
-    await platform.prepareInstallHandoff();
+    // Stopping the runtime is best effort: the installer replaces the app
+    // anyway, so a failed stop must not keep the update from opening.
+    try {
+      await platform.prepareInstallHandoff();
+    } catch (error) {
+      commonPrint.log('Runtime stop before installer handoff failed: $error');
+    }
     final installed = await platform.installPackage(path);
     if (!installed) {
       throw StateError('Unable to open the Android installer.');

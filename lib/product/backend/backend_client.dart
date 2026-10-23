@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -7,16 +8,55 @@ typedef BackendTransport = Future<Map<String, dynamic>> Function(
   Map<String, dynamic> request,
 );
 
+/// Typed failure of a backend request or operation. [message] is the short
+/// cause reported by the backend; [toString] returns it without a Dart prefix.
+class BackendException implements Exception {
+  const BackendException(this.code, this.message, {this.operationId});
+
+  /// Receipt `errorCode` (`superseded`, `cancelled`, `closed`, `failed`), API
+  /// error code, or `unavailable` when the backend could not be reached.
+  final String code;
+  final String message;
+  final String? operationId;
+
+  static const superseded = 'superseded';
+  static const cancelled = 'cancelled';
+  static const closed = 'closed';
+  static const failed = 'failed';
+  static const unavailable = 'unavailable';
+
+  /// A newer command pre-empted this one; its own result is what matters.
+  bool get isSuperseded => code == superseded;
+
+  /// Optimistic concurrency check of a profile write failed.
+  bool get isRevisionConflict =>
+      code == 'conflict' || message.contains('revision changed');
+
+  @override
+  String toString() => message.isEmpty ? code : message;
+}
+
 /// Local UI client. It submits user actions and projects snapshots; it has no
 /// compiler, runtime executor, recovery timer or subscription scheduler.
 class BackendClient {
-  BackendClient({required this._transport, required this._events});
+  BackendClient({
+    required this._transport,
+    required this._events,
+    Stream<void>? reconnects,
+  }) : _reconnects = reconnects ?? const Stream<void>.empty();
+
+  /// Go rejects engine commands once eight are pending; stay well below.
+  static const engineCommandLimit = 4;
 
   final BackendTransport _transport;
   final Stream<Map<String, dynamic>> _events;
+  final Stream<void> _reconnects;
   final _changes = StreamController<Map<String, dynamic>>.broadcast(sync: true);
   final _random = Random.secure();
   StreamSubscription<Map<String, dynamic>>? _subscription;
+  StreamSubscription<void>? _reconnectSubscription;
+  final _engineQueue = Queue<Completer<void>>();
+  int _engineRunning = 0;
   Future<void>? _refreshing;
   bool _refreshAgain = false;
   (String, Future<Map<String, dynamic>>)? _runCommand;
@@ -44,12 +84,17 @@ class BackendClient {
 
   Future<void> attach() async {
     _subscription ??= _events.listen(_event);
+    // A replaced backend may have published events before the new binding
+    // delivered them; only a full snapshot restores the projection.
+    _reconnectSubscription ??= _reconnects.listen((_) => _resync());
     await refresh();
   }
 
   Future<void> detach() async {
     await _subscription?.cancel();
     _subscription = null;
+    await _reconnectSubscription?.cancel();
+    _reconnectSubscription = null;
   }
 
   Future<dynamic> request(
@@ -57,21 +102,56 @@ class BackendClient {
     Map<String, dynamic>? params,
     String? id,
   ]) async {
-    final response = await _transport({
-      'apiVersion': 1,
-      'operationId': id ?? operationId(),
-      'method': method,
-      'params': ?params,
-    });
+    final operation = id ?? operationId();
+    final Map<String, dynamic> response;
+    try {
+      response = await _transport({
+        'apiVersion': 1,
+        'operationId': operation,
+        'method': method,
+        'params': ?params,
+      });
+    } on BackendException {
+      rethrow;
+    } catch (error) {
+      throw BackendException(
+        BackendException.unavailable,
+        _plain(error),
+        operationId: operation,
+      );
+    }
     if (response['apiVersion'] != 1) {
-      throw StateError('Unsupported backend API version');
+      throw BackendException(
+        'unsupported_version',
+        'Unsupported backend API version',
+        operationId: operation,
+      );
     }
     final error = response['error'];
     if (error is Map) {
-      throw StateError('${error['message']}');
+      // `errorCode` classifies rejected commands like receipts do; `code` is
+      // the transport-level reason.
+      final classified = error['errorCode'];
+      final code = error['code'];
+      throw BackendException(
+        classified is String && classified.isNotEmpty
+            ? classified
+            : code is String && code.isNotEmpty
+            ? code
+            : BackendException.failed,
+        '${error['message'] ?? ''}',
+        operationId: operation,
+      );
     }
     return response['result'];
   }
+
+  static String _plain(Object error) => error is StateError
+      ? error.message
+      : '$error'.replaceFirst(
+          RegExp(r'^(Exception|Bad state|Unsupported operation): '),
+          '',
+        );
 
   /// Waiting belongs to the UI. Timeout or detachment never cancels the Go
   /// operation; cancellation is a separate, explicit command.
@@ -80,6 +160,9 @@ class BackendClient {
     Map<String, dynamic>? params,
     String? id,
   ]) {
+    if (method == 'engine.command') {
+      return _limitEngine(() => _command(method, params, id));
+    }
     if (id != null ||
         (params != null && params.isNotEmpty) ||
         (method != 'runtime.start' && method != 'runtime.stop')) {
@@ -93,6 +176,26 @@ class BackendClient {
     });
     _runCommand = (method, task);
     return task;
+  }
+
+  Future<T> _limitEngine<T>(Future<T> Function() task) async {
+    if (_engineRunning >= engineCommandLimit) {
+      final slot = Completer<void>();
+      _engineQueue.add(slot);
+      // The finishing task hands its slot over without decrementing.
+      await slot.future;
+    } else {
+      _engineRunning++;
+    }
+    try {
+      return await task();
+    } finally {
+      if (_engineQueue.isNotEmpty) {
+        _engineQueue.removeFirst().complete();
+      } else {
+        _engineRunning--;
+      }
+    }
   }
 
   Future<Map<String, dynamic>> _command(
@@ -142,7 +245,16 @@ class BackendClient {
       );
     }
     if (receipt['status'] != 'succeeded') {
-      throw StateError('${receipt['error'] ?? receipt['status']}');
+      final code = receipt['errorCode'];
+      throw BackendException(
+        code is String && code.isNotEmpty
+            ? code
+            : receipt['status'] == BackendException.cancelled
+            ? BackendException.cancelled
+            : BackendException.failed,
+        '${receipt['error'] ?? ''}',
+        operationId: operation,
+      );
     }
     return receipt;
   }
@@ -337,7 +449,10 @@ class BackendClient {
       );
       final chunk = base64Decode(part['data'] as String);
       if (chunk.isEmpty || bytes.length + chunk.length > size) {
-        throw StateError('Invalid backend transfer');
+        throw const BackendException(
+          BackendException.failed,
+          'Invalid backend transfer',
+        );
       }
       bytes.add(chunk);
     }

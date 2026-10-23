@@ -3998,6 +3998,81 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  /// `Background service is unavailable`
+  String get backendUnavailable {
+    return Intl.message(
+      'Background service is unavailable',
+      name: 'backendUnavailable',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Operation failed`
+  String get backendOperationFailed {
+    return Intl.message(
+      'Operation failed',
+      name: 'backendOperationFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Operation cancelled`
+  String get backendOperationCancelled {
+    return Intl.message(
+      'Operation cancelled',
+      name: 'backendOperationCancelled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Background service stopped before the operation finished`
+  String get backendClosed {
+    return Intl.message(
+      'Background service stopped before the operation finished',
+      name: 'backendClosed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Background service did not respond in time`
+  String get backendTimeout {
+    return Intl.message(
+      'Background service did not respond in time',
+      name: 'backendTimeout',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Could not start FlClashM`
+  String get backendStartupFailed {
+    return Intl.message(
+      'Could not start FlClashM',
+      name: 'backendStartupFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.`
+  String get backendStartupFailedDesc {
+    return Intl.message(
+      'The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.',
+      name: 'backendStartupFailedDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Retry`
+  String get retry {
+    return Intl.message('Retry', name: 'retry', desc: '', args: []);
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

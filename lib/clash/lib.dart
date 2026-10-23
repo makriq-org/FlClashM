@@ -22,13 +22,16 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     unawaited(_init());
   }
 
-  final MethodChannel _channel = const MethodChannel(
-    'com.makriq.flclash/service',
-  );
+  final MethodChannel _channel =
+      const MethodChannel('com.makriq.flclash/service');
   final _backendEvents = StreamController<Map<String, dynamic>>.broadcast(
     sync: true,
   );
   Stream<Map<String, dynamic>> get backendEvents => _backendEvents.stream;
+  // Fires after the binding is re-established, e.g. when :remote was
+  // replaced; events emitted before Dart re-registered must be resynced.
+  final _backendReconnects = StreamController<void>.broadcast();
+  Stream<void> get backendReconnects => _backendReconnects.stream;
 
   Future<bool> requestVpnPermission() async =>
       await _channel.invokeMethod<bool>('requestVpnPermission') ?? false;
@@ -52,7 +55,10 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     return Map<String, dynamic>.from(envelope['data'] as Map);
   }
 
-  late final _connection = BackendConnection(connect: _connect);
+  late final _connection = BackendConnection(
+    connect: _connect,
+    onReconnected: () => _backendReconnects.add(null),
+  );
   bool get _initInFlight => _connection.connecting;
 
   static const int _maxCrashRetries = 5;
@@ -169,11 +175,10 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     unawaited(_init());
   }
 
+  // :remote rejects the legacy `shutdown` action; unbinding is the only
+  // teardown the UI owns.
   @override
-  Future<bool> shutdown() async {
-    await super.shutdown();
-    return destroy();
-  }
+  Future<bool> shutdown() => destroy();
 
   @override
   Future<void> sendMessage(String message) async {
@@ -204,9 +209,7 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
         if (id != null) {
           final completer = callbackCompleterMap.remove(id);
           if (completer != null && !completer.isCompleted) {
-            commonPrint.log(
-              '_failPendingCompleter: method=$method reason=$reason',
-            );
+            commonPrint.log('_failPendingCompleter: method=$method reason=$reason');
             // Complete with the typed default (not null) so a Completer<bool/String/Map>
             // resolves immediately instead of throwing TypeError and hanging to timeout.
             completer.complete(callbackDefaultMap.remove(id));
@@ -283,14 +286,11 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }) async {
     try {
       await _channel
-          .invokeMethod(
-            'updateNotificationParams',
-            json.encode({
-              'title': title,
-              'stopText': server,
-              'onlyStatisticsProxy': onlyStatisticsProxy,
-            }),
-          )
+          .invokeMethod('updateNotificationParams', json.encode({
+            'title': title,
+            'stopText': server,
+            'onlyStatisticsProxy': onlyStatisticsProxy,
+          }))
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       commonPrint.log('updateNotificationParams error: $e');

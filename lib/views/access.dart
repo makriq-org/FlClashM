@@ -35,22 +35,20 @@ class _AccessViewState extends ConsumerState<AccessView> {
   void initState() {
     super.initState();
     final isRunning = ref.read(runTimeProvider) != null;
-    final initialProfileAccess = isRunning
-        ? globalState.activeProfileAccessControl
-        : null;
+    final initialProfileAccess =
+        isRunning ? globalState.activeProfileAccessControl : null;
     _editorState = productServices.accessControl.resolveEditorState(
       accessControl: ref.read(vpnSettingProvider).accessControl,
       profileAccessControl: initialProfileAccess,
       previousState: null,
     );
     _profileManaged = initialProfileAccess != null;
-    _managedAccessController = productServices.accessControl
-        .createProfileManagedController(
-          readProfileAccessControl: globalState.readProfileAccessControl,
-        );
-    globalState.activeProfileAccessControlNotifier.addListener(
-      _handleProfileAccessControlChanged,
+    _managedAccessController =
+        productServices.accessControl.createProfileManagedController(
+      readProfileAccessControl: globalState.readProfileAccessControl,
     );
+    globalState.activeProfileAccessControlNotifier
+        .addListener(_handleProfileAccessControlChanged);
     _loadCompleter.complete(_loadPackages());
     unawaited(_refreshManagedAccess());
     system.isAndroidTV.then((value) {
@@ -82,9 +80,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
 
   @override
   void dispose() {
-    globalState.activeProfileAccessControlNotifier.removeListener(
-      _handleProfileAccessControlChanged,
-    );
+    globalState.activeProfileAccessControlNotifier
+        .removeListener(_handleProfileAccessControlChanged);
     _managedAccessController.dispose();
     _persist();
     _searchFocusNode.removeListener(_onSearchFocusChange);
@@ -128,9 +125,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
 
   void _persist() {
     if (_profileManaged || !_editorState.dirty) return;
-    ref
-        .read(vpnSettingProvider.notifier)
-        .updateState(
+    ref.read(vpnSettingProvider.notifier).updateState(
           (state) => productServices.accessControl.applyEditorState(
             state,
             _editorState,
@@ -237,11 +232,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
               onChanged: _profileManaged
                   ? null
                   : (v) => setState(() {
-                      _editorState = productServices.accessControl.setEnabled(
-                        _editorState,
-                        enabled: v,
-                      );
-                    }),
+                        _editorState = productServices.accessControl.setEnabled(
+                          _editorState,
+                          enabled: v,
+                        );
+                      }),
             ),
           ),
           if (noticeMessage != null)
@@ -253,10 +248,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: GestureDetector(
                       onLongPress: _showModeHelp,
                       child: SegmentedButton<AccessControlMode>(
@@ -264,24 +257,19 @@ class _AccessViewState extends ConsumerState<AccessView> {
                           ButtonSegment(
                             value: AccessControlMode.acceptSelected,
                             label: Text(appLocale.includeInVpn),
-                            icon: const Icon(
-                              Icons.check_circle_outline,
-                              size: 18,
-                            ),
+                            icon: const Icon(Icons.check_circle_outline,
+                                size: 18),
                           ),
                           ButtonSegment(
                             value: AccessControlMode.rejectSelected,
                             label: Text(appLocale.excludeFromVpn),
-                            icon: const Icon(
-                              Icons.remove_circle_outline,
-                              size: 18,
-                            ),
+                            icon: const Icon(Icons.remove_circle_outline,
+                                size: 18),
                           ),
                         ],
                         selected: {_editorState.mode},
-                        onSelectionChanged: _profileManaged
-                            ? null
-                            : (_) => _switchMode(),
+                        onSelectionChanged:
+                            _profileManaged ? null : (_) => _switchMode(),
                         showSelectedIcon: false,
                       ),
                     ),
@@ -300,9 +288,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
                         prefixIcon: const Icon(Icons.search, size: 20),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
-                        ),
+                            vertical: 8, horizontal: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -312,8 +298,11 @@ class _AccessViewState extends ConsumerState<AccessView> {
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
-                                    _editorState = productServices.accessControl
-                                        .setQuery(_editorState, '');
+                                    _editorState =
+                                        productServices.accessControl.setQuery(
+                                      _editorState,
+                                      '',
+                                    );
                                   });
                                 },
                               )
@@ -328,10 +317,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       children: [
                         IconButton(
@@ -357,9 +344,8 @@ class _AccessViewState extends ConsumerState<AccessView> {
                             _editorState.selectedPackages.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all, size: 18),
-                            label: Text(
-                              '${_editorState.selectedPackages.length}',
-                            ),
+                            label:
+                                Text('${_editorState.selectedPackages.length}'),
                             onPressed: () => setState(() {
                               _editorState = productServices.accessControl
                                   .clearSelection(_editorState);
@@ -374,8 +360,7 @@ class _AccessViewState extends ConsumerState<AccessView> {
                       builder: (_, snap) {
                         if (snap.connectionState != ConnectionState.done) {
                           return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                              child: CircularProgressIndicator());
                         }
                         if (filtered.isEmpty) {
                           return Center(
