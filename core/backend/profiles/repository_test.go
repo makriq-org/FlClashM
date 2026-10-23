@@ -134,12 +134,19 @@ func TestMigrationKeepsOtherProfilesWhenOneLegacyRecordIsBad(t *testing.T) {
 		`{"id":"dup","label":"First"},` +
 		`{"id":"dup","label":"Second"},` +
 		`{"id":"good","label":"Good"}]}`)
+	failRead := true
 	read := func(id string) (string, error) {
-		if id == "broken" {
+		if id == "broken" && failRead {
 			return "", errors.New("injected read failure")
 		}
 		return ReadLegacySource(legacy, id)
 	}
+	// A read error that may be transient must not commit the migration without
+	// the profile content: the next start retries it.
+	if err = r.Migrate(context.Background(), settings, read); err == nil || r.Snapshot().Migrated {
+		t.Fatal("transient read failure committed the migration", err)
+	}
+	failRead = false
 	if err = r.Migrate(context.Background(), settings, read); err != nil {
 		t.Fatal("one bad legacy profile blocked migration:", err)
 	}
@@ -158,7 +165,7 @@ func TestMigrationKeepsOtherProfilesWhenOneLegacyRecordIsBad(t *testing.T) {
 	for _, id := range []string{"large", "broken"} {
 		record, err := r.Get(id)
 		if err != nil || !record.SourceMissing || record.Source != "" {
-			t.Fatalf("unreadable source %s was not kept as missing: %+v %v", id, record, err)
+			t.Fatalf("absent or oversized source %s was not kept as missing: %+v %v", id, record, err)
 		}
 	}
 	large, _ := r.Get("large")

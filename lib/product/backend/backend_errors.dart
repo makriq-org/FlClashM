@@ -43,9 +43,17 @@ const _genericCauses = {
 };
 
 /// User-facing text for [error]; empty when nothing should be shown.
-String formatBackendError(Object error, BackendErrorLabels labels) {
+///
+/// A superseded operation is silent by default: a newer action replaced it.
+/// Callers that treat an empty result as success pass [reportSuperseded] so a
+/// command that never ran is reported as cancelled.
+String formatBackendError(
+  Object error,
+  BackendErrorLabels labels, {
+  bool reportSuperseded = false,
+}) {
   if (error is BackendException) {
-    if (error.isSuperseded) return '';
+    if (error.isSuperseded) return reportSuperseded ? labels.cancelled : '';
     final prefix = switch (error.code) {
       BackendException.unavailable => labels.unavailable,
       BackendException.cancelled => labels.cancelled,
@@ -69,5 +77,39 @@ String formatBackendError(Object error, BackendErrorLabels labels) {
 bool isSilentBackendError(Object error) =>
     error is BackendException && error.isSuperseded;
 
-String describeBackendError(Object error) =>
-    formatBackendError(error, BackendErrorLabels.current());
+String describeBackendError(Object error, {bool reportSuperseded = false}) =>
+    formatBackendError(
+      error,
+      BackendErrorLabels.current(),
+      reportSuperseded: reportSuperseded,
+    );
+
+/// A backend failure already translated for the user. UI wrappers that show
+/// `error.toString()` display its text instead of the internal cause.
+class DescribedBackendError implements Exception {
+  const DescribedBackendError(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Runs [action] for UI wrappers that show `error.toString()`, replacing
+/// backend failures with their localized description.
+Future<T> withDescribedBackendErrors<T>(Future<T> Function() action) async {
+  try {
+    return await action();
+  } on BackendException catch (error, stack) {
+    Error.throwWithStackTrace(
+      DescribedBackendError(
+        describeBackendError(error, reportSuperseded: true),
+      ),
+      stack,
+    );
+  } on TimeoutException catch (error, stack) {
+    Error.throwWithStackTrace(
+      DescribedBackendError(describeBackendError(error)),
+      stack,
+    );
+  }
+}

@@ -61,7 +61,7 @@ adb shell am instrument --no-restart -w -r -e scenario seed \
   | tee "$artifacts/headless-seed.txt"
 grep -Eq '^OK \(1 test\)$' "$artifacts/headless-seed.txt"
 remote_before=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
-main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r')
+main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r' || true)
 test -n "$remote_before"
 if [ -n "$main_pid" ]; then adb shell run-as com.makriq.flclash.dev kill -9 "$main_pid"; fi
 sleep 3

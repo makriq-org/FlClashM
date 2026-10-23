@@ -262,9 +262,10 @@ object BackendHost {
 internal object BackendEvents {
     const val PRESENTATION_DEBOUNCE_MS = 150L
 
-    /** Only Go application events (runtime, catalog, settings, operations)
-     * can change the presentation; engine logs, delays and requests cannot. */
-    fun refreshesPresentation(type: String?): Boolean = type == "backend"
+    /** Go application events (runtime, catalog, settings, operations) change
+     * the presentation. Delay results can move an auto-selecting group to
+     * another node shown in the notification title; logs and requests cannot. */
+    fun refreshesPresentation(type: String?): Boolean = type == "backend" || type == "delay"
 
     /** Normalized Flutter ThemeMode name from Go settings: light, dark or system. */
     fun themeMode(value: String?): String {

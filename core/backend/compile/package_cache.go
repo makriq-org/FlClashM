@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -99,7 +100,10 @@ func (s *PackageListCache) fetch(ctx context.Context, name, address string) (str
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	ready := s.flights.DoChan(address, func() (any, error) {
+	// The key carries the epoch: after Reset a new caller never joins a flight
+	// whose download context has already been cancelled.
+	key := strconv.FormatUint(epoch, 10) + "\x00" + address
+	ready := s.flights.DoChan(key, func() (any, error) {
 		// Each waiter honors its own context below; cancelling the first caller
 		// must not fail every other caller waiting for the same list.
 		ctx, cancel := context.WithTimeout(downloads, 20*time.Second)
@@ -229,9 +233,6 @@ func (s *PackageListCache) Reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.epoch++
-	for _, request := range s.pending {
-		s.flights.Forget(request.address)
-	}
 	s.pending = nil
 	if s.refreshCancel != nil {
 		s.refreshCancel()

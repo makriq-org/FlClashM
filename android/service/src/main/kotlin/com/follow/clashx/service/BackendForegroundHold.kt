@@ -83,19 +83,25 @@ internal object BackendForegroundHold {
      * Retires an idle service before it stops itself. `destroyed` is only set in
      * onDestroy, long after stopSelf, so without this a quick Stop->Start could
      * get a hold granted by, or attach a TUN to, an instance that is going away.
-     * [stop] returns false when a newer start command reached the instance; it
+     * [startId] is read while retiring, so a start delivered after that point
+     * makes [stop] (stopSelfResult with the older id) return false; the instance
      * then stays the live host for that command.
      */
-    fun retireIfIdle(service: BackendForegroundResource, idle: () -> Boolean, stop: () -> Boolean) {
-        val retired = synchronized(lock) {
-            if (holds.isNotEmpty() || service.destroyed || service !in services || !idle()) false
+    fun retireIfIdle(
+        service: BackendForegroundResource,
+        idle: () -> Boolean,
+        startId: () -> Int,
+        stop: (Int) -> Boolean,
+    ) {
+        val retiredStartId = synchronized(lock) {
+            if (holds.isNotEmpty() || service.destroyed || service !in services || !idle()) null
             else {
                 services.remove(service)
                 available.value = services.toList()
-                true
+                startId()
             }
         }
-        if (!retired || stop()) return
+        if (retiredStartId == null || stop(retiredStartId)) return
         synchronized(lock) {
             if (!service.destroyed && services.add(service)) available.value = services.toList()
         }

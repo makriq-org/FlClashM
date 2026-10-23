@@ -32,8 +32,7 @@ class BackendEdits {
   ) {
     final byId = {for (final record in records) idOf(record): record};
     final ordered = [
-      for (final id in ids)
-        if (byId.remove(id) case final record?) record,
+      for (final id in ids) ?byId.remove(id),
     ];
     return [...ordered, ...byId.values];
   }

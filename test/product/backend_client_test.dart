@@ -374,6 +374,37 @@ void main() {
     },
   );
 
+  test('a saved change keeps its receipt when its runtime apply is superseded', () async {
+    final host = ClientHost()
+      ..operations['runtime-apply'] = {
+        'status': 'failed',
+        'errorCode': 'superseded',
+        'error': 'operation superseded',
+      };
+    final client = BackendClient(
+      transport: (request) async {
+        if (request['method'] == 'profile.put') {
+          return {
+            'apiVersion': 1,
+            'result': {
+              'status': 'succeeded',
+              'revision': 2,
+              'runtimeOperationId': 'runtime-apply',
+            },
+          };
+        }
+        return host.call(request);
+      },
+      events: host.events.stream,
+    );
+    final receipt = await client.command('profile.put', {
+      'metadata': {'id': 'one', 'label': 'Renamed'},
+      'expectedRevision': 1,
+    });
+    expect(receipt['revision'], 2);
+    await host.close();
+  });
+
   test('failed receipts become typed exceptions with their error code', () async {
     final host = ClientHost()
       ..operations.addAll({
@@ -470,6 +501,11 @@ void main() {
     const superseded = BackendException('superseded', 'operation superseded');
     expect(formatBackendError(superseded, labels), isEmpty);
     expect(isSilentBackendError(superseded), isTrue);
+    // Where empty text means success, a command that never ran is cancelled.
+    expect(
+      formatBackendError(superseded, labels, reportSuperseded: true),
+      'Отменено',
+    );
     expect(
       formatBackendError(
         const BackendException('failed', 'operation failed'),
