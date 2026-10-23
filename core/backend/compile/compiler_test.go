@@ -334,6 +334,23 @@ func TestNameserverPolicyKeepsDeclarationOrder(t *testing.T) {
 	}
 }
 
+func TestNameserverPolicyOrderThroughYAMLMerge(t *testing.T) {
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	for name, profile := range map[string]string{
+		"inherited dns":        "<<: &base\n  dns:\n    enable: true\n    nameserver-policy: {z.example: 1.1.1.1, a.example: 8.8.8.8}\nproxies: []\n",
+		"inherited policy":     "dns:\n  <<: &base\n    enable: true\n    nameserver-policy: {z.example: 1.1.1.1, a.example: 8.8.8.8}\nproxies: []\n",
+		"last merge wins":      "dns:\n  enable: true\n  <<: [{nameserver-policy: {old.example: 9.9.9.9}}, {nameserver-policy: {z.example: 1.1.1.1, a.example: 8.8.8.8}}]\nproxies: []\n",
+		"explicit policy wins": "dns:\n  enable: true\n  nameserver-policy: {z.example: 1.1.1.1, a.example: 8.8.8.8}\n  <<: {nameserver-policy: {old.example: 9.9.9.9}}\nproxies: []\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			input, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p", Text: profile}, Settings: Object{}})
+			if got := policyOrder(t, c, string(input)); !reflect.DeepEqual(got, []string{"z.example", "a.example"}) {
+				t.Fatal("YAML merge lost effective policy order", got)
+			}
+		})
+	}
+}
+
 func TestLargeAnchorProfileIsAcceptedAndAliasBombRejected(t *testing.T) {
 	var source strings.Builder
 	source.WriteString("base: &all\n  type: select\n  proxies:\n")
