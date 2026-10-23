@@ -796,6 +796,7 @@ String _buildByedpiStamp() {
   return lines.join('\n');
 }
 
+/// Rebuilds stale OlcRTC assets with the pinned toolchain and verifies each ABI.
 Future<void> _syncOlcRtcAssets() async {
   final stamp = File(_projectPath(_olcRtcStampFile));
   final expectedStamp = _buildOlcRtcStamp();
@@ -1026,6 +1027,7 @@ Future<bool> _olcRtcAssetsMatchDigests() async {
   return true;
 }
 
+/// Checks out the pinned source, including a repository change in an old cache.
 Future<Directory> _prepareOlcRtcSource() async {
   final override = Platform.environment['OLCRTC_SOURCE_DIR'];
   if (override != null && override.trim().isNotEmpty) {
@@ -1071,6 +1073,7 @@ Future<Directory> _prepareOlcRtcSource() async {
   return cacheDir;
 }
 
+/// Records the source, modules, toolchain and flags that invalidate cached assets.
 String _buildOlcRtcStamp() {
   final lines = <String>[
     olcRtcPinnedReleaseTag,
@@ -1098,6 +1101,7 @@ String _runtimeGoModuleDigest(String runtime) {
   return sha256.convert(bytes.takeBytes()).toString();
 }
 
+/// Checks the selected Go version and optionally rejects nixpkgs source patches.
 Future<void> _requireGoVersion(
   String expectedVersion, {
   String executable = 'go',

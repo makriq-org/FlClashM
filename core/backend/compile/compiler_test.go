@@ -207,6 +207,7 @@ func TestExternalTransportCompilation(t *testing.T) {
 		})
 	}
 }
+// TestGhostlaneProviders checks the provider/transport matrix and MAX credentials.
 func TestGhostlaneProviders(t *testing.T) {
 	for _, tc := range []struct{ provider, transport, room, token string }{
 		{"salutejazz", "datachannel", "example:password", ""},
@@ -253,6 +254,7 @@ func TestGhostlaneProviders(t *testing.T) {
 	}
 }
 
+// TestVKCallsRejectsProviderToken protects VK Calls' guest-only login contract.
 func TestVKCallsRejectsProviderToken(t *testing.T) {
 	for _, transport := range []string{"vp8channel", "videochannel"} {
 		for _, field := range []string{"provider-token", "auth"} {

@@ -66,14 +66,14 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - The SHA-256 of each binary is pinned next to the commit; asset preparation and tests reject outdated or altered files even with a matching stamp
 
 
-OlcRTC must be rebuilt with the official, unpatched Go 1.27.2 distribution and NDK 28.0.13004108. `nix develop` provides it via `FLCLASHM_OLCRTC_GO`; elsewhere, set that variable to the official `go` executable if it is not on `PATH`. Preparation rejects nixpkgs patches in `net`/`mime`, which embed store paths and change SHA-256. The official archive may itself live in the Nix store. Go BuildID is disabled (`-buildid=`): it includes the C compiler path even with `-trimpath`; SHA-256 verifies the resulting bytes.
+OlcRTC must be rebuilt with the official, unpatched Go 1.27.3 distribution and NDK 28.0.13004108. `nix develop` provides it via `FLCLASHM_OLCRTC_GO`; elsewhere, set that variable to the official `go` executable if it is not on `PATH`. Preparation rejects nixpkgs patches in `net`/`mime`, which embed store paths and change SHA-256. The official archive may itself live in the Nix store. Go BuildID is disabled (`-buildid=`): it includes the C compiler path even with `-trimpath`; SHA-256 verifies the resulting bytes.
 
-The wire formats remain OLC2, handshake v3 and OLVC 5. New services require server support; verify cold start, reconnection and VPN on physical Android ABIs before release. Known Ghostlane audit limitations and the pinned Go 1.27.2 finding GO-2026-6809 remain open; see the [audit and verification notes](../../../ru/docs/development/runtime.md#-olcrtc).
+The wire formats remain OLC2, handshake v3 and OLVC 5. New services require server support; verify cold start, reconnection and VPN on physical Android ABIs before release. Known Ghostlane audit limitations remain open. OlcRTC uses official Go 1.27.3, which fixes [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809); see the [audit and verification notes](../../../ru/docs/development/runtime.md#-olcrtc).
 
 <details>
 <summary>🔧 Updating and rolling back olcrtc</summary>
 
-- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.2 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
+- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.3 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
 - **Rollback:** restore `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d` together with its module locks, release metadata and Android artifacts. New-provider profiles will no longer be supported; existing profiles need no migration.
 
 </details>

@@ -1,6 +1,6 @@
 git-b2c4b17ee35bfe65330aa9141f94dac082228bb2
 https://github.com/ghostlane-project/olcrtc.git
-go1.27.2
+go1.27.3
 toolchain:official
 buildid=none
 buildvcs=false

@@ -21,10 +21,10 @@
       # store paths, changing the Android binaries and their pinned digests.
       olcrtcGo = pkgs.stdenvNoCC.mkDerivation {
         pname = "olcrtc-go-official";
-        version = "1.27.2";
+        version = "1.27.3";
         src = pkgs.fetchurl {
-          url = "https://dl.google.com/go/go1.27.2.linux-amd64.tar.gz";
-          hash = "sha256-7LrbmQkaP0bjH1+TSwaLGGTq+nmVIRs56t33aZYEX+U=";
+          url = "https://dl.google.com/go/go1.27.3.linux-amd64.tar.gz";
+          hash = "sha256-Ze+8gP3B+izSYxytW0gXd6aOhyXzTon1D8ascU43m0A=";
         };
         dontConfigure = true;
         dontBuild = true;

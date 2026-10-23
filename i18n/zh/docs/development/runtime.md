@@ -66,14 +66,14 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 每个二进制的 SHA-256 固定在提交旁；资源准备与测试即使在戳记匹配时也会拒绝过时或被改动的文件
 
 
-重建 OlcRTC 必须使用未经修改的官方 Go 1.27.2 和 NDK 28.0.13004108。`nix develop` 通过 `FLCLASHM_OLCRTC_GO` 提供该工具；在其他环境中，如果官方 `go` 不在 `PATH`，请将此变量设为其路径。准备流程会拒绝 nixpkgs 对 `net`/`mime` 的补丁，因为这些补丁嵌入 store 路径并改变 SHA-256；官方归档本身可以存放在 Nix store 中。通过 `-buildid=` 禁用 Go BuildID，因为即使启用 `-trimpath`，它仍包含 C 编译器路径；使用 SHA-256 校验产物字节。
+重建 OlcRTC 必须使用未经修改的官方 Go 1.27.3 和 NDK 28.0.13004108。`nix develop` 通过 `FLCLASHM_OLCRTC_GO` 提供该工具；在其他环境中，如果官方 `go` 不在 `PATH`，请将此变量设为其路径。准备流程会拒绝 nixpkgs 对 `net`/`mime` 的补丁，因为这些补丁嵌入 store 路径并改变 SHA-256；官方归档本身可以存放在 Nix store 中。通过 `-buildid=` 禁用 Go BuildID，因为即使启用 `-trimpath`，它仍包含 C 编译器路径；使用 SHA-256 校验产物字节。
 
-保留 OLC2、handshake v3 和 OLVC 5 格式。新服务需要服务器支持；发布前应在真实 Android ABI 上验证冷启动、重连和 VPN。Ghostlane 已知审计限制和固定 Go 1.27.2 的 GO-2026-6809 仍未解决；参见[审计和验证记录](../../../ru/docs/development/runtime.md#-olcrtc)。
+保留 OLC2、handshake v3 和 OLVC 5 格式。新服务需要服务器支持；发布前应在真实 Android ABI 上验证冷启动、重连和 VPN。Ghostlane 已知审计限制仍未解决。OlcRTC 已使用官方 Go 1.27.3 重建，以修复 [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)；参见[审计和验证记录](../../../ru/docs/development/runtime.md#-olcrtc)。
 
 <details>
 <summary>🔧 olcrtc 的更新与回滚</summary>
 
-- **更新：** 更换固定提交，用固定的 Go 1.27.2 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
+- **更新：** 更换固定提交，用固定的 Go 1.27.3 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
 - **回滚：** 恢复 `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d`，以及对应的模块锁定文件、发布元数据和 Android 产物。新服务的配置将不再受支持；已有配置无需迁移。
 
 </details>

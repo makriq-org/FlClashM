@@ -18,6 +18,8 @@ func required(raw Object, key string) (string, error) {
 	}
 	return value, nil
 }
+// buildOlcRTC compiles the public CNC contract and validates provider-specific
+// transports and credentials before a Ghostlane process can be launched.
 func buildOlcRTC(raw Object, node *Node) error {
 	provider, err := required(raw, "provider")
 	if err != nil {
