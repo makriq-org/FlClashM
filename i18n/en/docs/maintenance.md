@@ -53,6 +53,8 @@ Flutter owns presentation and drafts, submits commands and reads snapshots. `cor
 
 RuntimeCoordinator is the sole owner of mutable runtime state. The backend lives in `:remote` independently of Flutter; `:validator` isolates the mihomo parser. `ui.attach` may prepare ordinary nodes in advance without VPN. Stop is persisted before effects, cancels preparation and turns VPN off; ready nodes may remain for latency checks while UI is open. Headless recovery after Stop does not launch them; reset and Close stop everything.
 
+When the backend instance changes or the Binder connection recovers, a live UI repeats `ui.attach` with a new `operationId` and `restore: true`. Go restores UI presence and node preparation without repeating `autoRun`; the stopped intent after an explicit Stop is preserved. Without `restore`, the first opening uses the normal `autoRun` policy.
+
 Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widgets are registered in `allowedProductUi`. `lib/views/**` stays in base with minimal hooks. Other base changes require reasons in `tool/base_drift_allowlist.json`. Do not restore coordination or legacy SharedPreferences as state authority in Dart/Kotlin.
 
 <details>

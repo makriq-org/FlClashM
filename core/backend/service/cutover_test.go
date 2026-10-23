@@ -202,3 +202,34 @@ func TestClearingSelectionStopsInsteadOfCreatingADirectVPN(t *testing.T) {
 		t.Fatal("unselected profile recovered")
 	}
 }
+
+func TestRestoredUISessionDoesNotRepeatAutoRunAfterStop(t *testing.T) {
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opts.LegacySettings = []byte(`{"appSetting":{"autoRun":true},"profiles":[{"id":"one"}],"currentProfileId":"one"}`)
+	opts.ReadLegacySource = func(string) (string, error) { return "proxies: []\nrules: ['MATCH,DIRECT']\n", nil }
+	app := openTestApp(t, opts)
+	waitCondition(t, func() bool { return app.Snapshot().Runtime.AppliedGeneration > 0 })
+	request(t, app, "initial-ui", "ui.attach", nil)
+	waitDomain(t, app, "initial-ui")
+	waitCondition(t, func() bool { return app.Snapshot().Runtime.AppliedRunning })
+	request(t, app, "explicit-stop", "runtime.stop", nil)
+	waitRuntime(t, app, "explicit-stop")
+	if err := app.Close(); err != nil {
+		t.Fatal(err)
+	}
+	engine := &testEngine{}
+	platform := &testPlatform{}
+	opts.Engine, opts.Platform = engine, platform
+	restored := openTestApp(t, opts)
+	request(t, restored, "restored-ui", "ui.attach", map[string]any{"restore": true})
+	waitDomain(t, restored, "restored-ui")
+	engine.mu.Lock()
+	starts := engine.starts
+	engine.mu.Unlock()
+	platform.mu.Lock()
+	platformStarts := platform.starts
+	platform.mu.Unlock()
+	if snapshot := restored.Snapshot().Runtime; snapshot.DesiredRunning || snapshot.AppliedRunning || starts != 0 || platformStarts != 0 {
+		t.Fatal("UI recovery repeated autoRun after explicit Stop", snapshot, starts, platformStarts)
+	}
+}

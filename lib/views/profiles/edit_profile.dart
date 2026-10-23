@@ -125,26 +125,39 @@ class _EditProfileViewState extends State<EditProfileView> {
 
   Future<bool> _save(Profile draft) async {
     await _loaded();
-    final data = fileData;
-    if (data != null) {
-      final saved = await draft.saveFile(data, expectedRevision: _revision);
-      _revision = backendClient.profileRevision(saved.id);
-      fileData = null;
-    } else {
-      final receipt = await backendClient.command('profile.put', {
-        'metadata': draft.toBackendMetadata(),
-        'expectedRevision': _revision,
-      });
-      // Later saves must expect this write, even if the refresh below fails.
-      _revision = (receipt['revision'] as num?)?.toInt() ??
-          backendClient.profileRevision(draft.id);
-      if (widget.profile.url != draft.url) {
-        await backendClient.command('subscription.refresh', {
-          'profileId': draft.id,
+    try {
+      final data = fileData;
+      if (data != null) {
+        final receipt = await backendClient.saveSource(
+          draft.toBackendMetadata(),
+          data,
+          expectedRevision: _revision,
+        );
+        _revision = (receipt['revision'] as num).toInt();
+        fileData = null;
+      } else {
+        final receipt = await backendClient.command('profile.put', {
+          'metadata': draft.toBackendMetadata(),
+          'expectedRevision': _revision,
         });
+        _revision = (receipt['revision'] as num).toInt();
+        if (widget.profile.url != draft.url) {
+          await backendClient.command('subscription.refresh', {
+            'profileId': draft.id,
+          });
+        }
       }
+      return true;
+    } catch (error) {
+      _rememberCommittedRevision(error);
+      rethrow;
     }
-    return true;
+  }
+
+  void _rememberCommittedRevision(Object error) {
+    if (error is BackendCommittedException) {
+      _revision = error.revisionFor(widget.profile.id) ?? _revision;
+    }
   }
 
   void _setAutoUpdate(bool value) {
@@ -203,20 +216,19 @@ class _EditProfileViewState extends State<EditProfileView> {
         cancelLabel: appLocalizations.cancel,
         onSave: (content, disableAutoUpdate) async {
           try {
-            var saved = await widget.profile.saveFileWithString(
-              content,
+            final receipt = await backendClient.saveSource(
+              widget.profile.toBackendMetadata(),
+              Uint8List.fromList(utf8.encode(content)),
               expectedRevision: _revision,
             );
+            _revision = (receipt['revision'] as num).toInt();
             if (disableAutoUpdate) {
-              saved = saved.copyWith(autoUpdate: false);
-            }
-            if (disableAutoUpdate) {
-              await backendClient.command('profile.put', {
-                'metadata': {'id': saved.id, 'autoUpdate': false},
-                'expectedRevision': backendClient.profileRevision(saved.id),
+              final updated = await backendClient.command('profile.put', {
+                'metadata': {'id': widget.profile.id, 'autoUpdate': false},
+                'expectedRevision': _revision,
               });
+              _revision = (updated['revision'] as num).toInt();
             }
-            _revision = backendClient.profileRevision(saved.id);
             if (mounted) {
               rawText = content;
               fileData = null;
@@ -230,6 +242,7 @@ class _EditProfileViewState extends State<EditProfileView> {
             }
             return null;
           } catch (e) {
+            _rememberCommittedRevision(e);
             return e.toString();
           }
         },

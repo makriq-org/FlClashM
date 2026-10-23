@@ -53,6 +53,8 @@ Flutter 负责展示和草稿，发送命令并读取快照。`core/backend/**` 
 
 RuntimeCoordinator 是可变运行状态的唯一所有者。后端独立于 Flutter 运行于 `:remote`；`:validator` 隔离 mihomo 解析器。`ui.attach` 可在未启用 VPN 时提前准备普通节点。Stop 在执行效果前保存，取消准备并关闭 VPN；UI 开启时已就绪节点可保留用于延迟测试。Stop 后无界面恢复不会启动它们；reset 和 Close 停止所有进程。
 
+后端实例更换或 Binder 连接恢复时，仍在运行的 UI 使用新的 `operationId` 和 `restore: true` 再次发送 `ui.attach`。Go 恢复 UI 会话和节点准备，不会再次执行 `autoRun`；显式 Stop 后的停止意图保持不变。不带 `restore` 的首次打开使用正常的 `autoRun` 策略。
+
 基础代码通过 `tool/product_touchpoints.json` 调用 `lib/product/**`；组件登记在 `allowedProductUi`。`lib/views/**` 保留于基础层，仅添加少量钩子。其他基础修改需在 `tool/base_drift_allowlist.json` 说明原因。不要将协调逻辑或作为状态来源的旧 SharedPreferences 放回 Dart/Kotlin。
 
 <details>

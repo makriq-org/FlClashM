@@ -92,7 +92,10 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		sequence, _ := ctx.Value(uiSequenceKey{}).(uint64)
 		return result, a.runtime.SetUISession(false, sequence)
 	case "ui.attach":
-		if err := decodeParams(params, &struct{}{}); err != nil {
+		var request struct {
+			Restore bool `json:"restore"`
+		}
+		if err := decodeParams(params, &request); err != nil {
 			return result, err
 		}
 		sequence, _ := ctx.Value(uiSequenceKey{}).(uint64)
@@ -113,7 +116,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if _, err := a.profiles.Get(id); err != nil {
 			return result, nil
 		}
-		if !app.AutoRun {
+		if !app.AutoRun || request.Restore {
 			// Opening the UI prepares nodes for latency checks without requesting
 			// VPN permission or persisting an intent to connect after process death.
 			if err := a.ensureCurrentSource(ctx); err != nil {

@@ -53,6 +53,8 @@ Flutter хранит представление и черновики, отпр�
 
 RuntimeCoordinator — единственный владелец изменяемого runtime. Backend живёт в `:remote` независимо от Flutter; `:validator` изолирует parser mihomo. `ui.attach` может заранее подготовить обычные узлы без VPN. Stop сохраняется до эффектов, отменяет подготовку и выключает VPN; готовые узлы могут остаться для задержек при открытом UI. Восстановление без UI после Stop их не запускает; reset и Close завершают всё.
 
+При замене backend или восстановлении Binder-соединения живой UI повторяет `ui.attach` с новым `operationId` и `restore: true`. Go восстанавливает присутствие UI и подготовку узлов без повторного `autoRun`; остановленное намерение после явного Stop сохраняется. Без `restore` первое открытие использует обычную политику `autoRun`.
+
 Base-код обращается к `lib/product/**` через `tool/product_touchpoints.json`; виджеты регистрируются в `allowedProductUi`. Экраны `lib/views/**` остаются в базе с минимальными хуками. Прочие base-изменения объясняются в `tool/base_drift_allowlist.json`. Координацию и legacy SharedPreferences как источник состояния в Dart/Kotlin не возвращать.
 
 <details>
