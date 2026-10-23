@@ -236,9 +236,14 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		}
 		seen[id] = true
 		source, err := readSource(id)
-		// An unreadable or oversized legacy source keeps its metadata as a missing
+		// An absent or oversized legacy source keeps its metadata as a missing
 		// source: the user still sees the profile and can download or replace it.
-		missing := err != nil || len(source) > MaxProfileBytes
+		// Any other read error may be transient; abort so the next start retries
+		// instead of committing the migration without the profile content.
+		missing := errors.Is(err, os.ErrNotExist) || errors.Is(err, errLegacySourceTooLarge) || len(source) > MaxProfileBytes
+		if err != nil && !missing {
+			return fmt.Errorf("read legacy profile %s: %w", id, err)
+		}
 		if missing {
 			source = ""
 		}
@@ -412,10 +417,13 @@ func ReadLegacySource(directory, id string) (string, error) {
 		return "", err
 	}
 	if len(raw) > MaxProfileBytes {
-		return "", errors.New("profile exceeds size limit")
+		return "", errLegacySourceTooLarge
 	}
 	return string(raw), nil
 }
+
+var errLegacySourceTooLarge = errors.New("profile exceeds size limit")
+
 func mustJSON(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
 
 // Patch compatible objects recursively so a UI projection cannot erase fields
