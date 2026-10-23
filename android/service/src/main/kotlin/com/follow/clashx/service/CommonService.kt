@@ -83,6 +83,6 @@ class CommonService : Service(), BackendForegroundResource {
         finishIfIdle()
     }
     override fun finishIfIdle() {
-        BackendForegroundHold.retireIfIdle(this, { !active && State.runTime == 0L }) { stopSelfResult(lastStartId) }
+        BackendForegroundHold.retireIfIdle(this, { !active && State.runTime == 0L }, { lastStartId }) { stopSelfResult(it) }
     }
 }
