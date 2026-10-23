@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+language: ru-RU
+tone_instructions: >-
+  Пиши кратко и по существу. Для замечания укажи конкретный сценарий ошибки,
+  последствия и минимальное исправление. Соблюдай AGENTS.md; избегай
+  косметических правок и необязательных рефакторингов.
+
+reviews:
+  profile: chill
+  poem: false
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+    drafts: false
+    # PR направляются также в dev и интеграционные ветки.
+    base_branches:
+      - ".*"
+
+knowledge_base:
+  code_guidelines:
+    # AGENTS.md обнаруживается автоматически, включая вложенные инструкции.
+    enabled: true
