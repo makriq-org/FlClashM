@@ -62,6 +62,13 @@ class BackendServiceMechanismsTest {
         assertSame(resource, BackendForegroundHold.awaitService(FakeResource::class.java))
     }
 
+    @Test fun startRecordedAtRegistrationIsSeenByRetirement() = withResource(FakeResource()) { resource ->
+        BackendForegroundHold.created(resource) { resource.startId = 9 }
+        resource.finishIfIdle()
+        assertEquals(9, resource.stoppedStartId)
+        assertFalse(BackendForegroundHold.isLive(resource))
+    }
+
     @Test fun busyOrHeldServiceIsNotRetired() = withResource(FakeResource(idle = false)) { resource ->
         resource.finishIfIdle()
         assertEquals(0, resource.stops)

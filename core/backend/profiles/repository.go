@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"unicode/utf8"
 )
 
@@ -242,14 +243,15 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		}
 		seen[id] = true
 		source, err := readSource(id)
-		// An absent or oversized legacy source keeps its metadata as a missing
-		// source: the user still sees the profile and can download or replace it.
-		// Any other read error may be transient; abort so the next start retries
-		// instead of committing the migration without the profile content.
-		missing := errors.Is(err, os.ErrNotExist) || errors.Is(err, errLegacySourceTooLarge) || len(source) > MaxProfileBytes
-		if err != nil && !missing {
+		// A transient read error aborts, so the next start retries instead of
+		// committing the migration without the profile content. Any other
+		// unreadable or oversized source keeps its metadata as a missing source:
+		// the user still sees the profile and can download or replace it, and a
+		// permanently broken file cannot block every backend start.
+		if transientReadError(err) {
 			return fmt.Errorf("read legacy profile %s: %w", id, err)
 		}
+		missing := err != nil || len(source) > MaxProfileBytes
 		if missing {
 			source = ""
 		}
@@ -429,6 +431,15 @@ func ReadLegacySource(directory, id string) (string, error) {
 }
 
 var errLegacySourceTooLarge = errors.New("profile exceeds size limit")
+
+func transientReadError(err error) bool {
+	for _, errno := range []syscall.Errno{syscall.EIO, syscall.EINTR, syscall.EAGAIN, syscall.EMFILE, syscall.ENFILE, syscall.ENOMEM} {
+		if errors.Is(err, errno) {
+			return true
+		}
+	}
+	return false
+}
 
 func mustJSON(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
 

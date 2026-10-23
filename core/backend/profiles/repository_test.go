@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -154,10 +155,15 @@ func TestMigrationKeepsOtherProfilesWhenOneLegacyRecordIsBad(t *testing.T) {
 		`{"id":"dup","label":"First"},` +
 		`{"id":"dup","label":"Second"},` +
 		`{"id":"good","label":"Good"}]}`)
+	// After the transient failure, a directory in place of the file is a
+	// permanent read error: it must not block the migration forever.
+	if err := os.Mkdir(filepath.Join(legacy, "broken.yaml"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	failRead := true
 	read := func(id string) (string, error) {
 		if id == "broken" && failRead {
-			return "", errors.New("injected read failure")
+			return "", &os.PathError{Op: "read", Path: id + ".yaml", Err: syscall.EIO}
 		}
 		return ReadLegacySource(legacy, id)
 	}
