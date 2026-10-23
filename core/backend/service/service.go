@@ -44,6 +44,7 @@ type App struct {
 	now                                 func() time.Time
 	runtimeMu                           sync.Mutex
 	resetting                           atomic.Bool
+	uiSequence                          atomic.Uint64 // API arrival order of ui.attach/ui.detach
 	platform                            backend.PlatformAdapter
 	presentationMu                      sync.Mutex
 	presentationGeneration              uint64
@@ -68,6 +69,10 @@ type App struct {
 	subscribers                         map[uint64]chan Event
 	subscriberID                        uint64
 }
+
+// uiSequenceKey carries the arrival sequence of a UI session command.
+type uiSequenceKey struct{}
+
 type Snapshot struct {
 	APIVersion int               `json:"apiVersion"`
 	Sequence   uint64            `json:"seq"`
@@ -225,6 +230,12 @@ func Open(options Options) (*App, error) {
 		input, err = app.captureInput()
 		if bootstrap {
 			method = "connect"
+		} else if err == nil && runtime.Snapshot().DesiredRunning {
+			// Without a committed plan, a persisted running intent comes from a
+			// first connect that never succeeded. Withdraw it with the common
+			// recovery rule before preparing the selected profile stopped; the
+			// apply below inherits the durable stopped intent.
+			_, err = runtime.Submit(backend.Request{APIVersion: backend.APIVersion, OperationID: newID("boot"), Method: "recover"})
 		}
 	}
 	if err != nil {
@@ -249,12 +260,11 @@ func (a *App) captureInput() (backend.Input, error) {
 		catalog := a.profiles.Snapshot()
 		var id string
 		_ = json.Unmarshal(catalog.Settings["currentProfileId"], &id)
-		rawSettings, _ := json.Marshal(catalog.Settings)
-		decoder := json.NewDecoder(bytes.NewReader(rawSettings))
-		decoder.UseNumber()
-		var settings compile.Object
-		if err := decoder.Decode(&settings); err != nil {
-			return nil, err
+		// Raw values keep member order of ordered engine maps such as
+		// dns.nameserver-policy; the compiler decodes them as needed.
+		settings := compile.Object{}
+		for key, value := range catalog.Settings {
+			settings[key] = json.RawMessage(value)
 		}
 		request := compile.Input{Version: 1, Settings: settings, CatalogRevision: catalog.Revision}
 		if id != "" {
@@ -268,7 +278,7 @@ func (a *App) captureInput() (backend.Input, error) {
 				}
 			} else {
 				rawMeta, _ := json.Marshal(record.Metadata)
-				decoder = json.NewDecoder(bytes.NewReader(rawMeta))
+				decoder := json.NewDecoder(bytes.NewReader(rawMeta))
 				decoder.UseNumber()
 				var metadata compile.Object
 				_ = decoder.Decode(&metadata)

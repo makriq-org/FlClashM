@@ -81,24 +81,52 @@ type PackageLists interface {
 }
 
 func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation uint64) (*backend.RuntimePlan, error) {
-	var request Input
-	decoder := json.NewDecoder(bytes.NewReader(input))
-	decoder.UseNumber()
-	if err := decoder.Decode(&request); err != nil {
+	prepared, err := c.prepare(ctx, input)
+	if err != nil {
 		return nil, err
 	}
+	return backend.NewRuntimePlan(generation, prepared)
+}
+
+// prepare builds the plan payload. Its JSON encoding is the engine contract,
+// including the member order of order-sensitive dictionaries.
+func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, error) {
+	// Settings stay raw at first so the declaration order of order-sensitive
+	// dictionaries survives decoding into Go maps.
+	var wire struct {
+		Input
+		Settings json.RawMessage `json:"settings"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(input))
+	decoder.UseNumber()
+	if err := decoder.Decode(&wire); err != nil {
+		return Prepared{}, err
+	}
+	request := wire.Input
+	if len(wire.Settings) > 0 {
+		decoder = json.NewDecoder(bytes.NewReader(wire.Settings))
+		decoder.UseNumber()
+		if err := decoder.Decode(&request.Settings); err != nil {
+			return Prepared{}, err
+		}
+	}
 	if request.Version != 1 {
-		return nil, errors.New("unsupported preparation input version")
+		return Prepared{}, errors.New("unsupported preparation input version")
 	}
 	if c.Validate == nil {
-		return nil, errors.New("engine validator is required")
+		return Prepared{}, errors.New("engine validator is required")
 	}
 	if request.Profile != nil && request.Profile.SourceMissing {
-		return nil, errors.New("profile source is unavailable")
+		return Prepared{}, errors.New("profile source is unavailable")
 	}
 	settings := request.Settings
 	patch := defaults()
-	merge(patch, object(settings["patchClashConfig"]))
+	mergePatch(patch, object(settings["patchClashConfig"]), "")
+	patchPolicyOrder := jsonKeyOrder(defaultPatch, "dns", "nameserver-policy")
+	if order := jsonKeyOrder(wire.Settings, "patchClashConfig", "dns", "nameserver-policy"); order != nil {
+		patchPolicyOrder = order
+	}
+	var profilePolicyOrder []string
 	app := object(settings["appSetting"])
 	override := app["overrideNetworkSettings"] == true
 	testURL, hasTestURL := app["testUrl"].(string)
@@ -112,12 +140,12 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	if request.Profile != nil {
 		profileID = request.Profile.ID
 		if profileID == "" || strings.ContainsAny(profileID, "/\\\x00") || profileID == "." || profileID == ".." {
-			return nil, errors.New("invalid profile id")
+			return Prepared{}, errors.New("invalid profile id")
 		}
 		var err error
-		config, err = ParseProfile(request.Profile.Text)
+		config, profilePolicyOrder, err = parseProfile(request.Profile.Text)
 		if err != nil {
-			return nil, err
+			return Prepared{}, err
 		}
 		metadata = request.Profile.Metadata
 		selected = object(metadata["selectedMap"])
@@ -125,7 +153,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	script := currentScript(settings)
 	if script != "" {
 		if c.Scripts == nil {
-			return nil, errors.New("script evaluator is required")
+			return Prepared{}, errors.New("script evaluator is required")
 		}
 		if config["proxy-providers"] == nil {
 			config["proxy-providers"] = Object{}
@@ -133,7 +161,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		var err error
 		config, err = c.Scripts.Evaluate(ctx, script, config)
 		if err != nil {
-			return nil, err
+			return Prepared{}, err
 		}
 	}
 	if !override {
@@ -173,7 +201,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		var err error
 		profileAccess, err = c.splitPackages(ctx, config, profileID, &diagnostics)
 		if err != nil {
-			return nil, err
+			return Prepared{}, err
 		}
 	}
 	nodes := []Node{}
@@ -181,12 +209,12 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		var err error
 		nodes, err = c.Nodes.Compile(ctx, config, patch, testURL)
 		if err != nil {
-			return nil, err
+			return Prepared{}, err
 		}
 	} else {
 		for _, entry := range list(config["proxies"]) {
 			if isExternal(text(object(entry)["type"])) {
-				return nil, errors.New("external transport compiler is required")
+				return Prepared{}, errors.New("external transport compiler is required")
 			}
 		}
 	}
@@ -240,6 +268,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	config["hosts"] = hosts
 	dns := object(config["dns"])
 	enabled := dns["enable"] == true
+	policyOrder := profilePolicyOrder
 	if settings["overrideDns"] == true || !enabled {
 		dns = copyObject(object(patch["dns"]))
 		if !enabled {
@@ -250,6 +279,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 			policy[key] = splitValues(text(value))
 		}
 		dns["nameserver-policy"] = policy
+		policyOrder = patchPolicyOrder
 	}
 	config["dns"] = dns
 	rules := list(config["rules"])
@@ -280,7 +310,7 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return Prepared{}, err
 	}
 	vpn := copyObject(object(settings["vpnProps"]))
 	if _, ok := vpn["enable"]; !ok {
@@ -318,17 +348,22 @@ func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation 
 	}
 	for _, value := range selected {
 		if _, ok := value.(string); !ok {
-			return nil, errors.New("profile selections must contain proxy names")
+			return Prepared{}, errors.New("profile selections must contain proxy names")
 		}
 	}
+	// The engine evaluates nameserver-policy entries in declaration order. This
+	// is the last step before sealing: later code must not read the dictionary.
+	if policy, ok := asObject(dns["nameserver-policy"]); ok {
+		dns["nameserver-policy"] = newOrderedObject(policy, policyOrder)
+	}
 	if err := c.Validate(ctx, config); err != nil {
-		return nil, err
+		return Prepared{}, err
 	}
 	closeOnSelect := true
 	if value, ok := app["closeConnections"].(bool); ok {
 		closeOnSelect = value
 	}
-	return backend.NewRuntimePlan(generation, Prepared{ProfileID: profileID, Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect})
+	return Prepared{ProfileID: profileID, Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect}, nil
 }
 func text(value any) string { v, _ := value.(string); return v }
 func list(value any) []any {
@@ -346,6 +381,32 @@ func merge(target, source Object) {
 				old = Object{}
 			}
 			merge(old, child)
+			target[key] = old
+		} else {
+			target[key] = value
+		}
+	}
+}
+
+// replacedPatchMaps are dictionaries that the legacy ClashConfig model decoded
+// as whole maps: a saved value replaces the defaults instead of being merged,
+// so entries the user deleted do not return.
+var replacedPatchMaps = map[string]bool{"hosts": true, "dns.nameserver-policy": true}
+
+// mergePatch applies saved settings over defaults like the legacy model:
+// nested structures are filled field by field, dictionaries are replaced.
+func mergePatch(target, source Object, path string) {
+	for key, value := range source {
+		name := key
+		if path != "" {
+			name = path + "." + key
+		}
+		if child, ok := asObject(value); ok && !replacedPatchMaps[name] {
+			old, exists := asObject(target[key])
+			if !exists {
+				old = Object{}
+			}
+			mergePatch(old, child, name)
 			target[key] = old
 		} else {
 			target[key] = value

@@ -507,5 +507,13 @@
   "zashboardInApp": "Open zashboard in the app",
   "zashboardInAppDesc": "Show the control panel in the built-in browser instead of switching to an external one",
   "openPanel": "Open panel",
-  "downloadingZashboard": "Downloading Zashboard…"
+  "downloadingZashboard": "Downloading Zashboard…",
+  "backendUnavailable": "Background service is unavailable",
+  "backendOperationFailed": "Operation failed",
+  "backendOperationCancelled": "Operation cancelled",
+  "backendClosed": "Background service stopped before the operation finished",
+  "backendTimeout": "Background service did not respond in time",
+  "backendStartupFailed": "Could not start FlClashM",
+  "backendStartupFailedDesc": "The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.",
+  "retry": "Retry"
 }

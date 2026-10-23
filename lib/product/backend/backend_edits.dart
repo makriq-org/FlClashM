@@ -16,6 +16,28 @@ class BackendEdits {
   bool get pending => _pending > 0;
   Future<void> flush() => _tail;
 
+  /// Profile fields that only describe presentation. Backend writers such as
+  /// proxy selection or subscription refresh never own them, so a revision
+  /// conflict can be resolved by reapplying the field patch.
+  static const uiOnlyProfileFields = {'currentGroupName', 'unfoldSet'};
+  static const _uiOnlyAttempts = 3;
+
+  /// Applies the order of [ids] to the latest [records]. Records missing from
+  /// [ids] keep their relative order at the end, so a reorder never carries
+  /// fields copied before newer backend data arrived.
+  static List<T> reorderByIds<T>(
+    List<T> records,
+    List<String> ids,
+    String Function(T record) idOf,
+  ) {
+    final byId = {for (final record in records) idOf(record): record};
+    final ordered = [
+      for (final id in ids)
+        if (byId.remove(id) case final record?) record,
+    ];
+    return [...ordered, ...byId.values];
+  }
+
   void submit(
     Map<String, dynamic> beforeConfig,
     Map<String, dynamic> afterConfig,
@@ -80,54 +102,95 @@ class BackendEdits {
       return;
     }
     _pending++;
+    // Every step settles on its own: a failing callback must not poison the
+    // chain, otherwise later edits are skipped and pending never drops to zero.
     _tail = _tail.then((_) async {
       try {
         for (final command in commands) {
-          final params = {...command.$2};
-          final metadata = params['metadata'];
-          final profileId = metadata is Map
-              ? metadata['id'] as String?
-              : params['profileId'] as String?;
-          var expected = params['expectedRevision'] as int?;
-          if (profileId != null && expected != null) {
-            final advances = _ownRevisions[profileId];
-            while (true) {
-              final next = advances?[expected];
-              if (next == null) {
-                break;
-              }
-              expected = next;
-            }
-            params['expectedRevision'] = expected;
-          }
-          if (command.$1 == 'profile.reorder') {
-            params['expectedRevision'] = client.catalogRevision;
-          }
-          final receipt = await client.command(command.$1, params);
-          if (command.$1 == 'profile.put' &&
-              profileId != null &&
-              expected != null) {
-            final revision = (receipt['revision'] as num?)?.toInt();
-            if (revision != null && revision > expected) {
-              (_ownRevisions[profileId] ??= {})[expected] = revision;
-            }
-          }
+          await _run(command.$1, command.$2);
         }
       } catch (error) {
-        onError(error);
+        _report(error);
       } finally {
         try {
           await client.refresh();
         } catch (error) {
-          onError(error);
+          _report(error);
         }
         _pending--;
         if (_pending == 0) {
           _ownRevisions.clear();
         }
-        onSettled();
+        try {
+          onSettled();
+        } catch (error) {
+          _report(error);
+        }
       }
     });
+  }
+
+  void _report(Object error) {
+    try {
+      onError(error);
+    } catch (_) {}
+  }
+
+  Future<void> _run(String method, Map<String, dynamic> command) async {
+    final params = {...command};
+    final metadata = params['metadata'];
+    final profileId = metadata is Map
+        ? metadata['id'] as String?
+        : params['profileId'] as String?;
+    var expected = params['expectedRevision'] as int?;
+    if (profileId != null && expected != null) {
+      final advances = _ownRevisions[profileId];
+      while (true) {
+        final next = advances?[expected];
+        if (next == null) {
+          break;
+        }
+        expected = next;
+      }
+      params['expectedRevision'] = expected;
+    }
+    if (method == 'profile.reorder') {
+      params['expectedRevision'] = client.catalogRevision;
+    }
+    final uiOnly =
+        method == 'profile.put' &&
+        metadata is Map &&
+        metadata.keys.every(
+          (key) => key == 'id' || uiOnlyProfileFields.contains(key),
+        );
+    var attempts = 1;
+    while (true) {
+      try {
+        final receipt = await client.command(method, params);
+        if (method == 'profile.put' && profileId != null && expected != null) {
+          final revision = (receipt['revision'] as num?)?.toInt();
+          if (revision != null && revision > expected) {
+            (_ownRevisions[profileId] ??= {})[expected] = revision;
+          }
+        }
+        return;
+      } on BackendException catch (error) {
+        if (!uiOnly ||
+            profileId == null ||
+            !error.isRevisionConflict ||
+            attempts >= _uiOnlyAttempts) {
+          rethrow;
+        }
+        attempts++;
+        // The patch carries only UI fields; reapply it on the latest record.
+        await client.refresh();
+        expected = client.profileRevision(profileId);
+        if (expected == 0) {
+          rethrow;
+        }
+        params['expectedRevision'] = expected;
+      }
+    }
   }
 
   static Map<String, Map<String, dynamic>> _profiles(

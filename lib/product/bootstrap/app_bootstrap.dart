@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application.dart';
 import '../../clash/core.dart';
+import '../../clash/lib.dart';
 import '../../common/android.dart';
 import '../../common/http.dart';
 import '../../common/path.dart';
@@ -13,6 +14,7 @@ import '../../state.dart';
 import '../android/android_entrypoint.dart';
 import '../diagnostics/diagnostic_recorder.dart';
 import '../platform/platform_profile.dart';
+import 'backend_startup.dart';
 
 class AppBootstrap {
   const AppBootstrap._();
@@ -34,7 +36,13 @@ class AppBootstrap {
 
     final version = await system.version;
     await clashCore.preload();
-    await globalState.initApp(version);
+    // Without the backend there is no configuration to render; show a
+    // recovery screen instead of a blank app until it becomes reachable.
+    await BackendStartup(
+      initialize: () => globalState.initApp(version),
+      present: presentBackendStartup,
+      reconnect: clashLib?.reStart,
+    ).run();
     await android?.init();
     await androidEntrypoint.init();
 

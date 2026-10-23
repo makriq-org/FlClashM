@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -333,5 +334,107 @@ func TestLegacyYAMLScalarRules(t *testing.T) {
 	}
 	if _, err := ParseProfile("value: !!timestamp 2026-10-18"); err == nil {
 		t.Fatal("undefined legacy tag accepted")
+	}
+}
+
+func TestLegacyOlcRTCModeCNCIsAcceptedAndRemoved(t *testing.T) {
+	node := `name: Olc, type: olcrtc, provider: jitsi, room: room, encryption-key: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', dns-server: system, transport: datachannel, activation: always`
+	nodes, err := (&ExternalCompiler{}).Compile(context.Background(), mustProfile(t, "proxies: [{"+node+", mode: ' cnc '}]"), defaults(), "")
+	if err != nil {
+		t.Fatal("legacy olcrtc mode cnc rejected:", err)
+	}
+	artifact := nodes[0].Files["built-in-proxies/olcrtc/"+nodes[0].ID+"/config.yaml"]
+	if !strings.Contains(artifact, "@flclashm-system-dns@") {
+		t.Fatalf("legacy mode changed native configuration: %s", artifact)
+	}
+	for _, mode := range []string{"p2p", "''", "1"} {
+		if _, err := (&ExternalCompiler{}).Compile(context.Background(), mustProfile(t, "proxies: [{"+node+", mode: "+mode+"}]"), defaults(), ""); err == nil {
+			t.Errorf("accepted unsupported olcrtc mode %s", mode)
+		}
+	}
+}
+
+func policyOrder(t *testing.T, c Compiler, input string) []string {
+	t.Helper()
+	result, err := c.prepare(context.Background(), backend.Input(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The payload encoding is what the engine reads in declaration order.
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return jsonKeyOrder(raw, "config", "dns", "nameserver-policy")
+}
+
+func TestSavedNameserverPolicyReplacesDefaultEntries(t *testing.T) {
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	// The user deleted every default entry except one and added a new one.
+	settings := `{"overrideDns":true,"patchClashConfig":{"dns":{"nameserver-policy":{"www.baidu.com":"114.114.114.114","+.corp.example":"10.0.0.1"},"ipv6":false}}}`
+	got := policyOrder(t, c, `{"version":1,"profile":{"id":"p","text":"proxies: []\n"},"settings":`+settings+`}`)
+	if !reflect.DeepEqual(got, []string{"www.baidu.com", "+.corp.example"}) {
+		t.Fatal("deleted default nameserver-policy entries returned", got)
+	}
+	result, err := c.prepare(context.Background(), backend.Input(`{"version":1,"profile":{"id":"p","text":"proxies: []\n"},"settings":`+settings+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dns := object(result.Config["dns"])
+	// Structured sections still keep defaults for fields the user did not save.
+	if dns["ipv6"] != false || dns["listen"] != "0.0.0.0:1053" {
+		t.Fatal("dns defaults were not filled field by field", dns)
+	}
+	// Without a saved dictionary the defaults remain, in their declared order.
+	got = policyOrder(t, c, `{"version":1,"profile":{"id":"p","text":"proxies: []\n"},"settings":{"overrideDns":true}}`)
+	if !reflect.DeepEqual(got, []string{"www.baidu.com", "+.internal.crop.com", "geosite:cn"}) {
+		t.Fatal("default nameserver-policy changed", got)
+	}
+}
+
+func TestNameserverPolicyKeepsDeclarationOrder(t *testing.T) {
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	profile := "dns:\n  enable: true\n  nameserver-policy:\n    'z.example': 10.0.0.2\n    '+.a.example': [10.0.0.1, 10.0.0.3]\n    'geosite:cn': system\n    'm.example': 10.0.0.4\nproxies: []\n"
+	input, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p", Text: profile}, Settings: Object{}})
+	if got := policyOrder(t, c, string(input)); !reflect.DeepEqual(got, []string{"z.example", "+.a.example", "geosite:cn", "m.example"}) {
+		t.Fatal("profile nameserver-policy order lost", got)
+	}
+	settings := `{"overrideDns":true,"patchClashConfig":{"dns":{"nameserver-policy":{"z.example":"10.0.0.2","geosite:cn":"system","a.example":"10.0.0.1, 10.0.0.3"}}}}`
+	if got := policyOrder(t, c, `{"version":1,"profile":{"id":"p","text":"proxies: []\n"},"settings":`+settings+`}`); !reflect.DeepEqual(got, []string{"z.example", "geosite:cn", "a.example"}) {
+		t.Fatal("saved nameserver-policy order lost", got)
+	}
+}
+
+func TestLargeAnchorProfileIsAcceptedAndAliasBombRejected(t *testing.T) {
+	var source strings.Builder
+	source.WriteString("base: &all\n  type: select\n  proxies:\n")
+	for i := range 2000 {
+		fmt.Fprintf(&source, "    - proxy-%d\n", i)
+	}
+	source.WriteString("proxy-groups:\n")
+	for i := range 100 {
+		fmt.Fprintf(&source, "  - {<<: *all, name: group-%d}\n", i)
+	}
+	value, err := ParseProfile(source.String())
+	if err != nil {
+		t.Fatal("realistic anchor profile rejected:", err)
+	}
+	groups := list(value["proxy-groups"])
+	if len(groups) != 100 || len(list(object(groups[99])["proxies"])) != 2000 || object(groups[99])["name"] != "group-99" {
+		t.Fatal("anchor profile materialized incorrectly")
+	}
+	// Merged values are independent copies: compilation mutates them in place.
+	object(groups[0])["lazy"] = true
+	if _, shared := object(groups[1])["lazy"]; shared {
+		t.Fatal("aliased values share storage")
+	}
+	bomb := "a: &a [x, x, x, x, x, x, x, x, x, x]\n"
+	previous := "a"
+	for _, name := range []string{"b", "c", "d", "e", "f", "g", "h", "i"} {
+		bomb += name + ": &" + name + " [" + strings.TrimSuffix(strings.Repeat("*"+previous+", ", 10), ", ") + "]\n"
+		previous = name
+	}
+	if _, err = ParseProfile(bomb); err == nil {
+		t.Fatal("billion laughs profile accepted")
 	}
 }

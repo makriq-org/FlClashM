@@ -16,8 +16,14 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	decode := func(raw backend.Input) (Input, error) {
-		var value Input
+	// Settings stay raw so a change that only reorders an order-sensitive
+	// dictionary (dns.nameserver-policy) is not mistaken for no change.
+	type wireInput struct {
+		Input
+		Settings json.RawMessage `json:"settings"`
+	}
+	decode := func(raw backend.Input) (wireInput, error) {
+		var value wireInput
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()
 		err := decoder.Decode(&value)
@@ -40,7 +46,7 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 			return nil, errors.New("profile selections must contain proxy names")
 		}
 	}
-	strip := func(value Input) []byte {
+	strip := func(value wireInput) []byte {
 		value.CatalogRevision = 0
 		value.Profile.Revision = 0
 		delete(value.Profile.Metadata, "selectedMap")
@@ -50,19 +56,24 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 	if !bytes.Equal(strip(next), strip(old)) {
 		return nil, nil
 	}
-	var payload Object
-	decoder := json.NewDecoder(bytes.NewReader(plan.Payload()))
-	decoder.UseNumber()
-	if err = decoder.Decode(&payload); err != nil {
+	// The committed payload stays raw: decoding it into Go maps would lose the
+	// member order of the engine configuration.
+	var payload map[string]json.RawMessage
+	if err = json.Unmarshal(plan.Payload(), &payload); err != nil {
 		return nil, err
 	}
+	var config map[string]json.RawMessage
+	_ = json.Unmarshal(payload["config"], &config)
 	// Plans committed by the old compiler need a full rebuild after upgrade.
-	if _, ok := object(payload["config"])["rules"]; !ok {
+	if _, ok := config["rules"]; !ok {
 		return nil, nil
 	}
-	if payload["profileId"] != next.Profile.ID {
+	var profileID *string
+	if json.Unmarshal(payload["profileId"], &profileID) != nil || profileID == nil || *profileID != next.Profile.ID {
 		return nil, nil
 	}
-	payload["selected-map"] = selected
+	if payload["selected-map"], err = json.Marshal(selected); err != nil {
+		return nil, err
+	}
 	return backend.NewRuntimePlan(generation, payload)
 }

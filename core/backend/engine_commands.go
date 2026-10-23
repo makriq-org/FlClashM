@@ -10,39 +10,64 @@ import (
 // SubmitEngineCommand queues an effect at the current generation without
 // superseding an accepted plan change. A later runtime command fences it.
 func (b *Backend) SubmitEngineCommand(id string, command EngineCommand) (Receipt, error) {
+	_, receipt, err := b.submitEngineCommand(id, command, false)
+	return receipt, err
+}
+
+// runSystemCommand executes a coordinator-owned platform effect through the
+// same command queue and generation fence as API engine commands. The platform
+// policy retries failures itself, so these attempts are not journaled and do
+// not occupy the bounded receipt history shared with user commands.
+func (b *Backend) runSystemCommand(ctx context.Context, id string, command EngineCommand) error {
+	e, _, err := b.submitEngineCommand(id, command, true)
+	if err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-e.done:
+	}
+	c := b.coordinator
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return e.err
+}
+
+func (b *Backend) submitEngineCommand(id string, command EngineCommand, internal bool) (*execution, Receipt, error) {
 	if _, ok := b.coordinator.engine.(EngineCommandAdapter); !ok {
-		return Receipt{}, errors.New("engine commands are unavailable")
+		return nil, Receipt{}, errors.New("engine commands are unavailable")
 	}
 	if command.Method == "" || len(command.Method) > 128 || len(command.Params) > MaxRequestBytes {
-		return Receipt{}, errors.New("invalid engine command")
+		return nil, Receipt{}, errors.New("invalid engine command")
 	}
 	input, err := json.Marshal(command)
 	if err != nil {
-		return Receipt{}, err
+		return nil, Receipt{}, err
 	}
 	r := Request{APIVersion: APIVersion, OperationID: id, Method: "engine.command", Input: input}
 	fp, err := fingerprint(r)
 	if err != nil {
-		return Receipt{}, err
+		return nil, Receipt{}, err
 	}
 	c := b.coordinator
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
-		return Receipt{}, ErrClosed
+		return nil, Receipt{}, ErrClosed
 	}
 	if e := c.executions[id]; e != nil {
-		if e.fingerprint != fp {
-			return Receipt{}, errors.New("operationId reused for a different command")
+		if e.fingerprint != fp || e.internal != internal {
+			return nil, Receipt{}, errors.New("operationId reused for a different command")
 		}
-		return e.receipt, nil
+		return e, e.receipt, nil
 	}
 	for _, receipt := range c.document.Receipts {
 		if receipt.OperationID == id {
-			if receipt.Fingerprint != fp {
-				return Receipt{}, errors.New("operationId reused for a different command")
+			if receipt.Fingerprint != fp || internal {
+				return nil, Receipt{}, errors.New("operationId reused for a different command")
 			}
-			return receipt, nil
+			return nil, receipt, nil
 		}
 	}
 	pending := 0
@@ -52,27 +77,29 @@ func (b *Backend) SubmitEngineCommand(id string, command EngineCommand) (Receipt
 		}
 	}
 	if pending >= 8 {
-		return Receipt{}, errors.New("backend command queue is full")
+		return nil, Receipt{}, errors.New("backend command queue is full")
 	}
 	receipt := Receipt{OperationID: id, Fingerprint: fp, Method: r.Method, Status: "accepted", Generation: c.epoch}
-	next := cloneDocument(c.document)
-	next.Receipts = appendReceipt(next.Receipts, receipt)
-	if err = c.saveLocked(next); err != nil {
-		return Receipt{}, err
+	if !internal {
+		next := cloneDocument(c.document)
+		next.Receipts = appendReceipt(next.Receipts, receipt)
+		if err = c.saveLocked(next); err != nil {
+			return nil, Receipt{}, err
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	e := &execution{request: r, fingerprint: fp, epoch: c.epoch, ctx: ctx, cancel: cancel, done: make(chan struct{}), receipt: receipt}
+	e := &execution{request: r, fingerprint: fp, epoch: c.epoch, ctx: ctx, cancel: cancel, done: make(chan struct{}), receipt: receipt, internal: internal}
 	c.executions[id] = e
 	command.Params = bytes.Clone(command.Params)
 	go c.executeEngineCommand(e, command)
-	return receipt, nil
+	return e, receipt, nil
 }
 func (c *runtimeCoordinator) executeEngineCommand(e *execution, command EngineCommand) {
 	c.commands.Lock()
 	defer c.commands.Unlock()
 	defer e.cancel()
 	err := c.current(e)
-	if err == nil {
+	if err == nil && !e.internal {
 		c.mu.Lock()
 		if c.epoch != e.epoch || e.ctx.Err() != nil {
 			err = ErrSuperseded
@@ -98,25 +125,23 @@ func (c *runtimeCoordinator) executeEngineCommand(e *execution, command EngineCo
 	e.err = err
 	e.receipt.Status = "succeeded"
 	if err != nil {
-		e.receipt.Status = "failed"
-		e.receipt.Error = "engine command failed"
-		if e.ctx.Err() != nil || errors.Is(err, ErrSuperseded) || errors.Is(err, ErrClosed) {
-			e.receipt.Status = "cancelled"
-			e.receipt.Error = "engine command cancelled"
+		e.receipt.Status, e.receipt.ErrorCode, e.receipt.Error = c.failureLocked(e, err)
+	}
+	if !e.internal {
+		next := cloneDocument(c.document)
+		if err == nil && next.Pending != nil && next.Pending.OperationID == e.receipt.OperationID {
+			next.Pending = nil
 		}
-	}
-	next := cloneDocument(c.document)
-	if err == nil && next.Pending != nil && next.Pending.OperationID == e.receipt.OperationID {
-		next.Pending = nil
-	}
-	next.Receipts = appendReceipt(next.Receipts, e.receipt)
-	if saveErr := c.saveLocked(next); saveErr != nil {
-		e.err = errors.Join(err, saveErr)
-		e.receipt.Status = "failed"
-		e.receipt.Error = "storage commit failed"
+		next.Receipts = appendReceipt(next.Receipts, e.receipt)
+		if saveErr := c.saveLocked(next); saveErr != nil {
+			e.err = errors.Join(err, saveErr)
+			e.receipt.Status = "failed"
+			e.receipt.ErrorCode = ErrorCodeFailed
+			e.receipt.Error = "storage commit failed"
+		}
+		c.publishLocked()
 	}
 	e.request.Input = nil
-	c.publishLocked()
 	close(e.done)
 	if len(c.executions) > 128 {
 		for id, old := range c.executions {

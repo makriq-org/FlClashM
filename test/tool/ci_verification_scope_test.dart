@@ -16,6 +16,7 @@ void main() {
     List<bool> expected, {
     String event = 'pull_request',
     String base = 'base',
+    bool baseAvailable = true,
     bool e2eOnly = false,
   }) async {
     final directory = Directory.systemTemp.createTempSync('ci-scope-');
@@ -31,13 +32,21 @@ void main() {
         'pipefail',
         '-c',
         // Supply changed paths without depending on the local Git history.
-        'git() { printf \'%s\\n\' "\$CHANGED_FILES"; }\n$script',
+        '''git() {
+  if [ "\$1" = cat-file ]; then
+    [ "\$BASE_AVAILABLE" = true ]
+  else
+    printf '%s\\n' "\$CHANGED_FILES"
+  fi
+}
+$script''',
       ],
       environment: {
         'CHANGED_FILES': files.join('\n'),
         'EVENT_NAME': event,
         'E2E_ONLY': '$e2eOnly',
         'BASE_SHA': base,
+        'BASE_AVAILABLE': '$baseAvailable',
         'HEAD_SHA': 'head',
         'GITHUB_OUTPUT': output.path,
       },
@@ -85,12 +94,18 @@ void main() {
     }
   });
 
-  test('Android UI bridge keeps E2E coverage', () async {
-    await expectScope(
-      ['lib/product/android/backend_client.dart'],
-      [true, true, false, true],
-    );
-  });
+  for (final path in [
+    'lib/product/android/android_shell_bridge.dart',
+    'lib/product/backend/backend_client.dart',
+    'lib/product/bootstrap/app_bootstrap.dart',
+    'lib/clash/lib.dart',
+    'lib/state.dart',
+    'lib/controller.dart',
+  ]) {
+    test('$path keeps E2E coverage for the UI backend bridge', () async {
+      await expectScope([path], [true, true, false, true]);
+    });
+  }
 
   test('E2E script changes run the emulator', () async {
     await expectScope(
@@ -127,6 +142,15 @@ void main() {
       [false, false, false, true],
       event: 'workflow_dispatch',
       e2eOnly: true,
+    );
+  });
+
+  test('push with an unavailable previous commit runs every check', () async {
+    await expectScope(
+      ['i18n/ru/docs/README.md'],
+      [true, true, true, true],
+      event: 'push',
+      baseAvailable: false,
     );
   });
 

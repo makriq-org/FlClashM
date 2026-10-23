@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -363,9 +364,20 @@ func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	if !snapshot.Runtime.AppliedRunning {
 		t.Fatal(snapshot)
 	}
+	// A closed subscription may still contain events published before detachment.
+	app.publish()
 	detach()
-	if _, ok := <-events; ok {
-		t.Fatal("UI event subscription not detached")
+	detach() // Detachment is idempotent.
+drain:
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				break drain
+			}
+		default:
+			t.Fatal("UI event subscription not detached")
+		}
 	}
 	request(t, app, "rename", "profile.put", map[string]any{"metadata": map[string]any{"id": "one", "label": "Renamed"}, "expectedRevision": receipt.Revision})
 	waitDomain(t, app, "rename")
@@ -502,5 +514,92 @@ func TestLegacyActiveMigrationAndExplicitStopUseOneExecutor(t *testing.T) {
 	waitCondition(t, func() bool { return restored.Snapshot().Runtime.Observed.State == "stopped" })
 	if restored.Snapshot().Runtime.DesiredRunning {
 		t.Fatal("old Kotlin active marker overrode an explicit Go Stop")
+	}
+}
+
+// A first connect durably accepts its running intent before any plan commits.
+// After process death, headless boot prepares the profile but never connects.
+func TestColdStartWithoutCommittedPlanDoesNotReplayUnconfirmedConnect(t *testing.T) {
+	engine := &testEngine{}
+	opts := options(t, t.TempDir(), engine, make(chan time.Time))
+	opts.LegacySettings = []byte(`{"appSetting":{"testUrl":""},"profiles":[{"id":"one"}],"currentProfileId":"one"}`)
+	opts.ReadLegacySource = func(string) (string, error) { return "rules: ['MATCH,DIRECT']", nil }
+	store, err := backend.NewFileStore(opts.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Save(backend.Document{Version: backend.StorageVersion, Generation: 1, Desired: backend.Desired{Running: true, Input: backend.Input(`{"version":1}`)}}); err != nil {
+		t.Fatal(err)
+	}
+	app := openTestApp(t, opts)
+	waitCondition(t, func() bool { return app.Snapshot().Runtime.AppliedGeneration > 0 })
+	if s := app.Snapshot().Runtime; s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" {
+		t.Fatal("cold start replayed an unconfirmed first connect", s)
+	}
+	engine.mu.Lock()
+	starts := engine.starts
+	engine.mu.Unlock()
+	if starts != 0 {
+		t.Fatal("cold start started the engine", starts)
+	}
+}
+
+func TestUIDetachIsAnIdempotentApplicationCommand(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "fixture", "profile.put", map[string]any{"metadata": map[string]any{"id": "one"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "fixture")
+	request(t, app, "attach", "ui.attach", nil)
+	waitDomain(t, app, "attach")
+	// BackendHost.command sends an empty params object.
+	request(t, app, "detach-1", "ui.detach", map[string]any{})
+	waitDomain(t, app, "detach-1")
+	request(t, app, "detach-2", "ui.detach", nil)
+	waitDomain(t, app, "detach-2")
+	if s := app.Snapshot().Runtime; s.DesiredRunning || s.AppliedRunning {
+		t.Fatal("UI detach changed VPN intent", s)
+	}
+	request(t, app, "start", "runtime.start", nil)
+	waitRuntime(t, app, "start")
+	request(t, app, "detach-3", "ui.detach", nil)
+	waitDomain(t, app, "detach-3")
+	if s := app.Snapshot().Runtime; !s.DesiredRunning || s.Observed.State != "running" {
+		t.Fatal("UI detach interrupted a running VPN", s)
+	}
+}
+
+func TestLongRunningOperationKeepsIdempotencyAfterHistoryEviction(t *testing.T) {
+	store, err := openOperations(t.TempDir(), false, "UTC", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := []byte(`{"profileId":"slow"}`)
+	long, accepted, err := store.accept(context.Background(), "long", "subscription.refresh", params)
+	if err != nil || long == nil {
+		t.Fatal(accepted, err)
+	}
+	for i := range 130 {
+		op, _, err := store.accept(context.Background(), fmt.Sprintf("quick-%d", i), "profile.reorder", []byte(`{}`))
+		if err != nil || op == nil {
+			t.Fatal(err)
+		}
+		store.finish(op, Receipt{}, nil)
+	}
+	for _, receipt := range store.document.Receipts {
+		if receipt.OperationID == "long" {
+			t.Fatal("fixture did not evict the running receipt from history")
+		}
+	}
+	again, retried, err := store.accept(context.Background(), "long", "subscription.refresh", params)
+	if err != nil || again != nil || retried.Status != "accepted" || retried.OperationID != accepted.OperationID {
+		t.Fatalf("running operation accepted twice: %+v %v", retried, err)
+	}
+	if _, _, err = store.accept(context.Background(), "long", "subscription.refresh", []byte(`{"profileId":"other"}`)); err == nil {
+		t.Fatal("running operationId reused for a different command")
+	}
+	long.cancel()
+	store.finish(long, Receipt{}, context.Canceled)
+	final, err := store.get("long")
+	if err != nil || final.Status != "cancelled" || final.ErrorCode != backend.ErrorCodeCancelled {
+		t.Fatalf("cancelled application receipt: %+v %v", final, err)
 	}
 }

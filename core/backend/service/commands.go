@@ -83,11 +83,20 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		a.presentationMu.Unlock()
 		result.RuntimeOperationID = receipt.OperationID
 		return result, nil
+	case "ui.detach":
+		// The host reports that no UI remains bound. It never changes VPN
+		// intent; the coordinator releases nodes kept only for latency checks.
+		if err := decodeParams(params, &struct{}{}); err != nil {
+			return result, err
+		}
+		sequence, _ := ctx.Value(uiSequenceKey{}).(uint64)
+		return result, a.runtime.SetUISession(false, sequence)
 	case "ui.attach":
 		if err := decodeParams(params, &struct{}{}); err != nil {
 			return result, err
 		}
-		if err := a.runtime.PrepareForUI(); err != nil {
+		sequence, _ := ctx.Value(uiSequenceKey{}).(uint64)
+		if err := a.runtime.SetUISession(true, sequence); err != nil {
 			return result, err
 		}
 		catalog := a.profiles.Snapshot()

@@ -10,9 +10,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.buildServiceNotification
+import com.follow.clashx.common.promoteToForeground
 import com.follow.clashx.common.startForegroundSafely
 import com.follow.clashx.service.Module
 import com.follow.clashx.service.State
+import com.follow.clashx.service.models.NotificationParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +23,33 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/**
+ * Both foreground services share one notification ID. Every post goes through
+ * this record so a content change is re-posted once, not once per service, and
+ * the posted content is always the current one rather than a placeholder.
+ */
+internal class SharedNotificationContent(private val current: () -> NotificationParams) {
+    private var posted: NotificationParams? = null
+
+    /** Posts the current content. [force] is for startForeground, which the
+     * platform requires on every start command even when nothing changed. */
+    @Synchronized
+    fun post(force: Boolean, show: (NotificationParams) -> Boolean): Boolean {
+        val params = current()
+        if (!force && params == posted) return false
+        if (!show(params)) return false
+        posted = params
+        return true
+    }
+}
+
+internal val serviceNotification = SharedNotificationContent { State.notificationParamsFlow.value }
+
+/** Foreground promotion with the current shared content (never a placeholder title). */
+internal fun Service.promoteServiceForeground(): Boolean = serviceNotification.post(force = true) { params ->
+    promoteToForeground(com.follow.clashx.service.R.drawable.ic_notification, params.title, params.stopText)
+}
 
 class NotificationModule(service: Service) : Module(service) {
     private val lifecycle = Mutex()
@@ -32,20 +61,23 @@ class NotificationModule(service: Service) : Module(service) {
         if (closed) return@withLock
         scope = CoroutineScope(SupervisorJob())
         ensureChannel()
-        val params = State.notificationParamsFlow.value
-        val notification = buildNotification(params.title, params.stopText)
         val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
             0
         }
-        service.startForegroundSafely(GlobalState.NOTIFICATION_ID, notification, fgType)
+        serviceNotification.post(force = true) { params ->
+            service.startForegroundSafely(GlobalState.NOTIFICATION_ID, buildNotification(params.title, params.stopText), fgType)
+        }
 
         paramsJob = scope.launch {
-            State.notificationParamsFlow.collectLatest { params ->
-                val n = buildNotification(params.title, params.stopText)
-                ContextCompat.getSystemService(service, NotificationManager::class.java)
-                    ?.notify(GlobalState.NOTIFICATION_ID, n)
+            State.notificationParamsFlow.collectLatest {
+                // The other service may have posted this content already.
+                serviceNotification.post(force = false) { params ->
+                    val manager = ContextCompat.getSystemService(service, NotificationManager::class.java)
+                    manager?.notify(GlobalState.NOTIFICATION_ID, buildNotification(params.title, params.stopText))
+                    manager != null
+                }
             }
         }
     }

@@ -211,17 +211,14 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 	if len(r.state.Profiles) > 0 {
 		return errors.New("cannot migrate into a nonempty store")
 	}
+	// The Flutter preferences loader discarded an undecodable config and started
+	// fresh. Mirror that instead of failing every backend start forever.
 	var settings Object
 	if !json.Valid(rawSettings) || json.Unmarshal(rawSettings, &settings) != nil || settings == nil {
-		return errors.New("invalid legacy settings")
+		settings = Object{}
 	}
 	compatibleSettings(settings)
-	var metadata []Object
-	if raw, ok := settings["profiles"]; ok && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &metadata); err != nil {
-			return err
-		}
-	}
+	metadata := legacyProfileMetadata(settings["profiles"])
 	next := clone(r.state)
 	next.Settings = settings
 	delete(next.Settings, "profiles")
@@ -231,25 +228,19 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		// A record without a safe, unique id cannot be addressed or stored; skip
+		// only that record so the remaining profiles still migrate.
 		id, err := profileID(m)
-		if err != nil {
-			return err
-		}
-		if seen[id] {
-			return errors.New("duplicate legacy profile id")
+		if err != nil || seen[id] {
+			continue
 		}
 		seen[id] = true
 		source, err := readSource(id)
-		missing := errors.Is(err, os.ErrNotExist)
-		if errors.Is(err, os.ErrNotExist) {
+		// An unreadable or oversized legacy source keeps its metadata as a missing
+		// source: the user still sees the profile and can download or replace it.
+		missing := err != nil || len(source) > MaxProfileBytes
+		if missing {
 			source = ""
-			err = nil
-		}
-		if err != nil {
-			return err
-		}
-		if len(source) > MaxProfileBytes {
-			return errors.New("legacy profile exceeds size limit")
 		}
 		// Migration preserves even an invalid legacy source: the compiler validates
 		// it before execution. Rejecting one offline/broken profile must not lose all.
@@ -259,6 +250,23 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 		next.Profiles = append(next.Profiles, Record{SourceMissing: missing, Metadata: m, Source: source, Revision: r.state.Revision + 1, Digest: digest(source)})
 	}
 	return r.persist(next)
+}
+
+// legacyProfileMetadata keeps every decodable profile object of the legacy
+// list. A malformed entry or a non-list value drops only the affected data.
+func legacyProfileMetadata(raw json.RawMessage) []Object {
+	var entries []json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
+		return nil
+	}
+	metadata := make([]Object, 0, len(entries))
+	for _, entry := range entries {
+		var m Object
+		if json.Unmarshal(entry, &m) == nil && m != nil {
+			metadata = append(metadata, m)
+		}
+	}
+	return metadata
 }
 
 // Put uses optimistic revision checking so a late subscription response cannot

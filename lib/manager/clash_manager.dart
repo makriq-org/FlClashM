@@ -10,7 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ClashManager extends ConsumerStatefulWidget {
-  const ClashManager({super.key, required this.child});
+  const ClashManager({
+    super.key,
+    required this.child,
+  });
   final Widget child;
 
   @override
@@ -26,16 +29,16 @@ class _ClashContainerState extends ConsumerState<ClashManager>
   void initState() {
     super.initState();
     clashMessage.addListener(this);
-    ref.listenManual(appSettingProvider.select((state) => state.openLogs), (
-      prev,
-      next,
-    ) {
-      if (next) {
-        clashCore.startLog();
-      } else {
-        clashCore.stopLog();
-      }
-    });
+    ref.listenManual(
+      appSettingProvider.select((state) => state.openLogs),
+      (prev, next) {
+        if (next) {
+          clashCore.startLog();
+        } else {
+          clashCore.stopLog();
+        }
+      },
+    );
   }
 
   @override
@@ -49,9 +52,13 @@ class _ClashContainerState extends ConsumerState<ClashManager>
     super.onDelay(delay);
     final appController = globalState.appController;
     appController.setDelay(delay);
-    debouncer.call(FunctionTag.updateDelay, () async {
-      appController.updateGroupsDebounce();
-    }, duration: const Duration(milliseconds: 5000));
+    debouncer.call(
+      FunctionTag.updateDelay,
+      () async {
+        appController.updateGroupsDebounce();
+      },
+      duration: const Duration(milliseconds: 5000),
+    );
   }
 
   @override
@@ -75,9 +82,11 @@ class _ClashContainerState extends ConsumerState<ClashManager>
 
   @override
   Future<void> onLoaded(String providerName) async {
-    ref
-        .read(providersProvider.notifier)
-        .setProvider(await clashCore.getExternalProvider(providerName));
+    ref.read(providersProvider.notifier).setProvider(
+          await clashCore.getExternalProvider(
+            providerName,
+          ),
+        );
     globalState.appController.updateGroupsDebounce();
     super.onLoaded(providerName);
   }

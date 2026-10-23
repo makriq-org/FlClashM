@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -252,5 +253,47 @@ func TestRevocationPreemptsInFlightRestartAndRecovery(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPlatformRetryBackoffIsBounded(t *testing.T) {
+	for failures, expected := range map[int]time.Duration{1: time.Second, 2: 2 * time.Second, 5: 16 * time.Second, 9: 256 * time.Second, 10: platformRetryLimit, 1000: platformRetryLimit} {
+		if delay := platformRetryDelay(failures); delay != expected {
+			t.Fatalf("failure %d retried after %v, expected %v", failures, delay, expected)
+		}
+	}
+}
+
+// Retried OS effects run through the command queue but neither rewrite the
+// state document nor evict the receipts of user commands.
+func TestFailingSystemPlatformEffectsKeepUserReceipts(t *testing.T) {
+	h := newHost()
+	nodes := newNodeHost()
+	store := newStore(t)
+	b, err := Open(store, h, policyHostEngine{commandHostEngine{hostEngine{h}}}, nil, hostPlatform{h}, NodeOptions{Adapter: nodes, Inspection: nodes, Cache: nodes, ABI: "host", Now: nodes.now, ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	run(t, b, "user", "apply", `{"nodes":[]}`)
+	before, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 200 {
+		h.mu.Lock()
+		h.fail = "screen.false"
+		h.mu.Unlock()
+		params, _ := json.Marshal(PlatformEvent{Sequence: uint64(i + 1), Kind: "screen", ScreenOn: false})
+		if err := b.runSystemCommand(context.Background(), fmt.Sprintf("system-%d", i), EngineCommand{Method: "platform.event", Params: params}); err == nil {
+			t.Fatal("injected platform failure was not reported")
+		}
+	}
+	after, err := store.Load()
+	if err != nil || after.Sequence != before.Sequence {
+		t.Fatalf("retried system effects rewrote backend state: %d -> %d %v", before.Sequence, after.Sequence, err)
+	}
+	if receipt, err := b.Operation("user"); err != nil || receipt.Status != "succeeded" {
+		t.Fatalf("system effects evicted a user receipt: %+v %v", receipt, err)
 	}
 }

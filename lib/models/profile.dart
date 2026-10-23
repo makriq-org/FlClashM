@@ -1,7 +1,6 @@
 // ignore_for_file: invalid_annotation_target
 import 'dart:convert';
 import 'dart:typed_data';
-
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -13,8 +12,6 @@ part 'generated/profile.freezed.dart';
 part 'generated/profile.g.dart';
 
 typedef SelectedMap = Map<String, String>;
-typedef ValidateProfileConfigCallback =
-    Future<String> Function(String configText);
 
 String? resolveFlClashProviderHeader(
   Map<String, String> headers,
@@ -78,12 +75,16 @@ abstract class Profile with _$Profile {
   factory Profile.fromJson(Map<String, Object?> json) =>
       _$ProfileFromJson(json);
 
-  factory Profile.normal({String? label, String url = ''}) => Profile(
-    label: label,
-    url: url,
-    id: DateTime.now().millisecondsSinceEpoch.toString(),
-    autoUpdateDuration: defaultUpdateDuration,
-  );
+  factory Profile.normal({
+    String? label,
+    String url = '',
+  }) =>
+      Profile(
+        label: label,
+        url: url,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        autoUpdateDuration: defaultUpdateDuration,
+      );
 }
 
 @freezed
@@ -120,9 +121,9 @@ abstract class OverrideRule with _$OverrideRule {
 
 extension OverrideRuleExt on OverrideRule {
   List<Rule> get rules => switch (type == OverrideRuleType.override) {
-    true => overrideRules,
-    false => addedRules,
-  };
+        true => overrideRules,
+        false => addedRules,
+      };
 
   OverrideRule updateRules(List<Rule> Function(List<Rule> rules) builder) {
     if (type == OverrideRuleType.added) {
@@ -166,7 +167,6 @@ extension ProfileExtension on Profile {
 
   Future<Profile> update({
     bool shouldSendHeaders = true,
-    ValidateProfileConfigCallback? validateConfig,
   }) async {
     final revision = backendClient.profileRevision(id);
     if (revision == 0) {
@@ -193,7 +193,6 @@ extension ProfileExtension on Profile {
 
   Future<Profile> saveFile(
     Uint8List bytes, {
-    ValidateProfileConfigCallback? validateConfig,
     int? expectedRevision,
   }) async {
     await backendClient.saveSource(
@@ -206,10 +205,10 @@ extension ProfileExtension on Profile {
 
   Future<Profile> saveFileWithString(
     String value, {
-    ValidateProfileConfigCallback? validateConfig,
     int? expectedRevision,
-  }) => saveFile(
-    Uint8List.fromList(utf8.encode(value)),
-    expectedRevision: expectedRevision,
-  );
+  }) =>
+      saveFile(
+        Uint8List.fromList(utf8.encode(value)),
+        expectedRevision: expectedRevision,
+      );
 }

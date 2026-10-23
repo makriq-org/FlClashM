@@ -8,11 +8,11 @@ import android.net.VpnService
 import android.os.Build
 import android.os.PowerManager
 import com.follow.clashx.common.GlobalState
-import com.follow.clashx.common.promoteToForeground
 import com.follow.clashx.core.Core
 import com.follow.clashx.service.models.VpnOptions
 import com.follow.clashx.service.models.toCIDR
 import com.follow.clashx.service.modules.NotificationModule
+import com.follow.clashx.service.modules.promoteServiceForeground
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -22,33 +22,37 @@ class FlVpnService : VpnService(), BackendForegroundResource {
     @Volatile private var tunActive = false
     @Volatile private var revoked = false
     @Volatile override var destroyed = false
+    @Volatile private var lastStartId = 0
     private val notifications = NotificationModule(this)
-
-    companion object { const val ACTION_STOP = "com.makriq.flclash.service.STOP" }
 
     override fun onCreate() {
         super.onCreate()
         handleCreate()
-        if (promoteToForeground(R.drawable.ic_notification, "FlClashM")) {
+        if (promoteServiceForeground()) {
             BackendForegroundHold.created(this)
             GlobalState.launch { notifications.install() }
         } else { stopSelf() }
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val promoted = promoteToForeground(R.drawable.ic_notification, "FlClashM")
+        lastStartId = startId
+        val promoted = promoteServiceForeground()
+        if (promoted) BackendForegroundHold.created(this)
         if (intent?.action == BackendForegroundHold.ACTION_HOLD) {
             BackendForegroundHold.acknowledge(intent.getStringExtra("operationId"), promoted)
             return START_NOT_STICKY
         }
         if (!promoted) { stopSelf(); return START_NOT_STICKY }
-        if (intent?.action == AndroidBackendPlatform.ACTION_APPLY) return START_STICKY
+        val method = ServiceStartCommand.backendMethod(intent?.action) ?: return START_STICKY
         GlobalState.launch {
             runCatching {
                 BackendHost.initialize()
-                BackendHost.command(if (intent?.action == ACTION_STOP) "runtime.stop" else "runtime.recover")
+                BackendHost.command(method)
+            }.onSuccess {
+                // A Stop that found nothing running must not leave this host behind.
+                if (method == "runtime.stop") finishIfIdle()
             }.onFailure { GlobalState.log("VPN OS command failed: ${it.message}"); finishIfIdle() }
         }
-        return if (intent?.action == ACTION_STOP) START_NOT_STICKY else START_STICKY
+        return if (ServiceStartCommand.sticky(method)) START_STICKY else START_NOT_STICKY
     }
 
     override fun onRevoke() {
@@ -88,7 +92,7 @@ class FlVpnService : VpnService(), BackendForegroundResource {
     }
 
     override fun finishIfIdle() {
-        if (!tunActive && !BackendForegroundHold.held) stopSelf()
+        BackendForegroundHold.retireIfIdle(this, { !tunActive }) { stopSelfResult(lastStartId) }
     }
 
     private val wakeLockLock = Any()
@@ -127,7 +131,7 @@ class FlVpnService : VpnService(), BackendForegroundResource {
     }
 
     override suspend fun handleStart(options: VpnOptions) {
-        check(!destroyed && !revoked) { "VPN service is unavailable" }
+        check(!destroyed && !revoked && BackendForegroundHold.isLive(this)) { "VPN service is unavailable" }
         val builder = Builder()
             .setSession("FlClashM")
         // Tunnel DNS comes from the core (it derives the in-tunnel resolver address from

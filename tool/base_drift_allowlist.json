@@ -386,26 +386,6 @@
       "reason": "Lifecycle удалённого процесса mihomo сохраняется без зависимости от Flutter UI."
     },
     {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeProcessManager.kt",
-      "bucket": "budget",
-      "reason": "Супервизор передаёт bounded stdout встроенных нод в общий журнал удалённого процесса."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeResolverFileTest.kt",
-      "bucket": "budget",
-      "reason": "Нативный CI-тест закрепляет дедупликацию и запрет выхода resolver-файла за рабочую директорию."
-    },
-    {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeResolverFile.kt",
-      "bucket": "budget",
-      "reason": "Обобщённый контракт resolver-файла runtime-узлов принадлежит Android runtime-слою: перегенерация при смене системных DNS обязана работать без Flutter-процесса."
-    },
-    {
-      "path": "android/service/src/main/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityChecker.kt",
-      "bucket": "budget",
-      "reason": "Проверка доступности встроенных узлов при холодном запуске относится к Android runtime-слою и зеркалит контракт product layer."
-    },
-    {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",
       "bucket": "budget",
       "reason": "Снимок параметров, реально переданных Android VPN-службе, принадлежит платформенному жизненному циклу и нужен для достоверного отображения пакетных правил."
@@ -419,16 +399,6 @@
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
       "bucket": "budget",
       "reason": "Исправления DNS и системной сети относятся к platform/runtime слою Android."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeProbeBatchTest.kt",
-      "bucket": "budget",
-      "reason": "Тест ограниченного параллелизма временных runtime-процессов проверяет Android batch-probe встроенных узлов."
-    },
-    {
-      "path": "android/service/src/test/kotlin/com/follow/clashx/service/RuntimeNodeConnectivityCheckerTest.kt",
-      "bucket": "budget",
-      "reason": "Тест SOCKS-запроса и DoH-резолва проверочного адреса проверяет Android-проверку доступности встроенных узлов."
     },
     {
       "path": "android/service/src/main/res/drawable/ic_notification.xml",
@@ -448,7 +418,7 @@
     {
       "path": "lib/application.dart",
       "bucket": "budget",
-      "reason": "Base-оболочка сведена к тонким вызовам product-сервисов и передаёт runtime событие смены физической сети."
+      "reason": "Base-оболочка оставлена только для Android: ярлыки через product-сервис, смена сети лишь обновляет IP в UI; автообновление профилей перенесено в Go backend."
     },
     {
       "path": "lib/clash/interface.dart",
@@ -458,7 +428,7 @@
     {
       "path": "lib/clash/lib.dart",
       "bucket": "budget",
-      "reason": "Канал связи с Android service и quick-start остаётся базовым runtime-мостом."
+      "reason": "Канал связи с Android service остаётся базовым мостом: запросы и события Go API v1, переподключение к :remote, параметры уведомления; quick-start и cold-start параметры удалены."
     },
     {
       "path": "lib/clash/service.dart",
@@ -638,12 +608,12 @@
     {
       "path": "lib/services/subscription_notification_service.dart",
       "bucket": "budget",
-      "reason": "Сервис уведомлений больше не разбирает provider headers и берёт название и ссылку только через product display policy."
+      "reason": "Сервис удалён: пороги и dedupe уведомлений об истечении подписки ведёт Go backend, показ выполняет Android-служба без Flutter."
     },
     {
       "path": "lib/state.dart",
       "bucket": "budget",
-      "reason": "Глобальная связка compile, security и runtime остаётся базовым инфраструктурным якорем."
+      "reason": "GlobalState проецирует снимки Go backend и отправляет правки настроек через backend-клиент; compile, security и runtime в Dart не остаются."
     },
     {
       "path": "lib/utils/device_info_service.dart",
@@ -1454,6 +1424,21 @@
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Service.kt",
       "bucket": "budget",
       "reason": "После выгрузки процесса Android создаётся новое IPC-подключение с ограниченными повторами."
+    },
+    {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/BackendServiceMechanismsTest.kt",
+      "bucket": "budget",
+      "reason": "Переключён единый Go backend: JVM-проверки механизмов Android host (действие остановки, удержание foreground, уведомление, тема запуска)."
+    },
+    {
+      "path": "core/backend/compile/ordered.go",
+      "bucket": "budget",
+      "reason": "Перенос компиляции профилей в Go backend: упорядоченные словари движка (dns.nameserver-policy) сохраняют порядок объявления."
+    },
+    {
+      "path": "core/backend_host_test.go",
+      "bucket": "budget",
+      "reason": "Android host Go backend: кэши списков и стратегий используют часовой пояс, сохранённый при миграции."
     }
   ]
 }

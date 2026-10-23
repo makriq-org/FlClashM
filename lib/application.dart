@@ -34,7 +34,8 @@ class ApplicationState extends ConsumerState<Application> {
   ColorScheme _getAppColorScheme({
     required Brightness brightness,
     int? primaryColor,
-  }) => ref.read(genColorSchemeProvider(brightness));
+  }) =>
+      ref.read(genColorSchemeProvider(brightness));
 
   @override
   void initState() {
@@ -67,16 +68,16 @@ class ApplicationState extends ConsumerState<Application> {
   Widget _buildPlatformState(Widget child) => AndroidManager(child: child);
 
   Widget _buildState(Widget child) => AppStateManager(
-    child: ClashManager(
-      child: ConnectivityManager(
-        onConnectivityChanged: (results) async {
-          unawaited(globalState.appController.updateLocalIp());
-          globalState.appController.addCheckIpNumDebounce();
-        },
-        child: child,
-      ),
-    ),
-  );
+        child: ClashManager(
+          child: ConnectivityManager(
+            onConnectivityChanged: (results) async {
+              unawaited(globalState.appController.updateLocalIp());
+              globalState.appController.addCheckIpNumDebounce();
+            },
+            child: child,
+          ),
+        ),
+      );
 
   Widget _buildPlatformApp(Widget child) => VpnManager(child: child);
 
@@ -85,59 +86,60 @@ class ApplicationState extends ConsumerState<Application> {
 
   @override
   Widget build(BuildContext context) => _buildPlatformState(
-    _buildState(
-      Consumer(
-        builder: (_, ref, child) {
-          final locale = ref.watch(
-            appSettingProvider.select((state) => state.locale),
-          );
-          final themeProps = ref.watch(themeSettingProvider);
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            navigatorKey: globalState.navigatorKey,
-            checkerboardRasterCacheImages: false,
-            checkerboardOffscreenLayers: false,
-            showPerformanceOverlay: false,
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-            ],
-            builder: (_, child) =>
-                AppEnvManager(child: _buildPlatformApp(_buildApp(child!))),
-            scrollBehavior: BaseScrollBehavior(),
-            title: appName,
-            locale: utils.getLocaleForString(locale),
-            supportedLocales: AppLocalizations.delegate.supportedLocales,
-            themeMode: themeProps.themeMode,
-            theme: ThemeData(
-              useMaterial3: true,
-              pageTransitionsTheme: _pageTransitionsTheme,
-              colorScheme: _getAppColorScheme(
-                brightness: Brightness.light,
-                primaryColor: themeProps.primaryColor,
-              ),
-              // Reduce animation duration for snappier feel
-              visualDensity: VisualDensity.adaptivePlatformDensity,
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              pageTransitionsTheme: _pageTransitionsTheme,
-              colorScheme: _getAppColorScheme(
-                brightness: Brightness.dark,
-                primaryColor: themeProps.primaryColor,
-              ).toPureBlack(themeProps.pureBlack),
-              // Reduce animation duration for snappier feel
-              visualDensity: VisualDensity.adaptivePlatformDensity,
-            ),
-            home: child,
-          );
-        },
-        child: const HomePage(),
-      ),
-    ),
-  );
+        _buildState(
+          Consumer(
+            builder: (_, ref, child) {
+              final locale = ref.watch(
+                appSettingProvider.select((state) => state.locale),
+              );
+              final themeProps = ref.watch(themeSettingProvider);
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                navigatorKey: globalState.navigatorKey,
+                checkerboardRasterCacheImages: false,
+                checkerboardOffscreenLayers: false,
+                showPerformanceOverlay: false,
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                ],
+                builder: (_, child) => AppEnvManager(
+                  child: _buildPlatformApp(_buildApp(child!)),
+                ),
+                scrollBehavior: BaseScrollBehavior(),
+                title: appName,
+                locale: utils.getLocaleForString(locale),
+                supportedLocales: AppLocalizations.delegate.supportedLocales,
+                themeMode: themeProps.themeMode,
+                theme: ThemeData(
+                  useMaterial3: true,
+                  pageTransitionsTheme: _pageTransitionsTheme,
+                  colorScheme: _getAppColorScheme(
+                    brightness: Brightness.light,
+                    primaryColor: themeProps.primaryColor,
+                  ),
+                  // Reduce animation duration for snappier feel
+                  visualDensity: VisualDensity.adaptivePlatformDensity,
+                ),
+                darkTheme: ThemeData(
+                  useMaterial3: true,
+                  pageTransitionsTheme: _pageTransitionsTheme,
+                  colorScheme: _getAppColorScheme(
+                    brightness: Brightness.dark,
+                    primaryColor: themeProps.primaryColor,
+                  ).toPureBlack(themeProps.pureBlack),
+                  // Reduce animation duration for snappier feel
+                  visualDensity: VisualDensity.adaptivePlatformDensity,
+                ),
+                home: child,
+              );
+            },
+            child: const HomePage(),
+          ),
+        ),
+      );
 
   @override
   void dispose() {

@@ -146,6 +146,27 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoUpdateInterval": MessageLookupByLibrary.simpleMessage(
       "Интервал автообновления (минуты)",
     ),
+    "backendClosed": MessageLookupByLibrary.simpleMessage(
+      "Фоновая служба остановилась до завершения операции",
+    ),
+    "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
+      "Операция отменена",
+    ),
+    "backendOperationFailed": MessageLookupByLibrary.simpleMessage(
+      "Операция не выполнена",
+    ),
+    "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось запустить FlClashM",
+    ),
+    "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
+      "Приложение не смогло подключиться к фоновой службе и продолжает попытки автоматически. Можно повторить сейчас или экспортировать логи для поддержки.",
+    ),
+    "backendTimeout": MessageLookupByLibrary.simpleMessage(
+      "Фоновая служба не ответила вовремя",
+    ),
+    "backendUnavailable": MessageLookupByLibrary.simpleMessage(
+      "Фоновая служба недоступна",
+    ),
     "backup": MessageLookupByLibrary.simpleMessage("Резервное копирование"),
     "backupAndRecovery": MessageLookupByLibrary.simpleMessage(
       "Резервное копирование и восстановление",
@@ -742,6 +763,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "restart": MessageLookupByLibrary.simpleMessage("Перезапустить"),
     "restartCore": MessageLookupByLibrary.simpleMessage("Перезапустить ядро"),
+    "retry": MessageLookupByLibrary.simpleMessage("Повторить"),
     "routeAddress": MessageLookupByLibrary.simpleMessage("Адрес маршрутизации"),
     "routeAddressDesc": MessageLookupByLibrary.simpleMessage(
       "Настройка адреса прослушивания маршрутизации",

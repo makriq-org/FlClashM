@@ -21,6 +21,8 @@ object StateHub {
     private var globalModeEnabled = true
     private var hasActiveProfile = false
     private var requiresVpn = true
+    // Empty until Go settings were projected once in this process.
+    private var themeMode = ""
 
     fun publish(value: String, startedAt: Long = 0L, message: String = "") = synchronized(lock) {
         if (state == value && this.startedAt == startedAt && this.message == message) return@synchronized
@@ -37,6 +39,13 @@ object StateHub {
         val nextVpn = value.optBoolean("requiresVpn", true)
         if (mode == nextMode && globalModeEnabled == nextGlobal && hasActiveProfile == nextProfile && requiresVpn == nextVpn) return@synchronized
         mode = nextMode; globalModeEnabled = nextGlobal; hasActiveProfile = nextProfile; requiresVpn = nextVpn
+        broadcastLocked()
+    }
+
+    /** Go settings theme, projected so the UI process can theme its first frame. */
+    fun projectTheme(value: String) = synchronized(lock) {
+        if (themeMode == value) return@synchronized
+        themeMode = value
         broadcastLocked()
     }
 
@@ -57,5 +66,6 @@ object StateHub {
     fun snapshotJson(): String = synchronized(lock) { snapshotLocked() }
     private fun snapshotLocked(): String = JSONObject().put("state", state).put("startedAt", startedAt)
         .put("message", message).put("seq", sequence).put("mode", mode)
-        .put("globalModeEnabled", globalModeEnabled).put("hasActiveProfile", hasActiveProfile).put("requiresVpn", requiresVpn).toString()
+        .put("globalModeEnabled", globalModeEnabled).put("hasActiveProfile", hasActiveProfile).put("requiresVpn", requiresVpn)
+        .put("themeMode", themeMode).toString()
 }

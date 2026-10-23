@@ -294,8 +294,13 @@ class AndroidRuntimeE2eTest {
             // Invalid edits fail without replacing either original source or VPN.
             val token = upload("proxies: [unterminated")
             try {
-                assertTrue(runCatching { Service.backendCommand("profile.import.file", JSONObject().put("token", token)
-                    .put("metadata", JSONObject().put("id", "fixture")).put("expectedRevision", record.getLong("revision"))) }.isFailure)
+                val rejected = runCatching { Service.backendCommand("profile.import.file", JSONObject().put("token", token)
+                    .put("metadata", JSONObject().put("id", "fixture")).put("expectedRevision", record.getLong("revision"))) }.exceptionOrNull()
+                assertNotNull("Invalid profile source accepted", rejected)
+                // Only the source parser may reject it: an argument, token or
+                // revision failure would leave the parse path unverified.
+                assertTrue("Invalid source rejected for another reason: ${rejected?.message}",
+                    rejected?.message.orEmpty().startsWith("yaml:"))
                 assertEquals(largeSource, Service.backend("profile.get", JSONObject().put("profileId", "fixture")).getString("source"))
                 assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }

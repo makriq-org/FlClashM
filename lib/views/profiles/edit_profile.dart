@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -13,6 +14,7 @@ import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileView extends StatefulWidget {
+
   const EditProfileView({
     super.key,
     required this.context,
@@ -36,8 +38,20 @@ class _EditProfileViewState extends State<EditProfileView> {
   Uint8List? fileData;
 
   Profile get profile => widget.profile;
-  late final Future<void> _loaded;
+
+  Future<void>? _loading;
   int _revision = 0;
+
+  // A failed load is retried by the next action instead of being cached.
+  Future<void> _loaded() async {
+    final loading = _loading ??= _load();
+    try {
+      await loading;
+    } catch (_) {
+      if (identical(_loading, loading)) _loading = null;
+      rethrow;
+    }
+  }
 
   Future<void> _load() async {
     final record = await backendClient.profile(profile.id);
@@ -69,43 +83,68 @@ class _EditProfileViewState extends State<EditProfileView> {
     autoUpdateDurationController = TextEditingController(
       text: widget.profile.autoUpdateDuration.inMinutes.toString(),
     );
-    _loaded = _load();
+    unawaited(
+      _loaded().catchError((error) {
+        commonPrint.log('Profile load failed: $error');
+      }),
+    );
   }
 
   Future<void> _handleConfirm() async {
     if (!_formKey.currentState!.validate()) return;
-    await _loaded;
     var draft = profile.copyWith(
-      url: urlController.text,
-      label: labelController.text,
-      autoUpdate: autoUpdate,
-      autoUpdateDuration: Duration(
-        minutes: int.parse(autoUpdateDurationController.text),
-      ),
-    );
-    if (fileData != null) {
-      if (draft.type == ProfileType.url && autoUpdate) {
-        final disable = await globalState.showMessage(
-          title: appLocalizations.tip,
-          message: TextSpan(text: appLocalizations.profileHasUpdate),
+          url: urlController.text,
+          label: labelController.text,
+          autoUpdate: autoUpdate,
+          autoUpdateDuration: Duration(
+            minutes: int.parse(
+              autoUpdateDurationController.text,
+            ),
+          ),
         );
-        if (disable == true) draft = draft.copyWith(autoUpdate: false);
-      }
-      await draft.saveFile(fileData!, expectedRevision: _revision);
+    if (fileData != null && draft.type == ProfileType.url && autoUpdate) {
+      final disable = await globalState.showMessage(
+        title: appLocalizations.tip,
+        message: TextSpan(
+          text: appLocalizations.profileHasUpdate,
+        ),
+      );
+      if (disable == true) draft = draft.copyWith(autoUpdate: false);
+    }
+    final scaffold = globalState.homeScaffoldKey.currentState;
+    Future<bool?> save() =>
+        globalState.safeRun(() => _save(draft), silence: false);
+    final saved = scaffold != null && scaffold.mounted
+        ? await scaffold.loadingRun(save)
+        : await save();
+    // On failure the error was shown and the sheet stays open for a retry.
+    if (saved == true && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<bool> _save(Profile draft) async {
+    await _loaded();
+    final data = fileData;
+    if (data != null) {
+      final saved = await draft.saveFile(data, expectedRevision: _revision);
+      _revision = backendClient.profileRevision(saved.id);
+      fileData = null;
     } else {
-      await backendClient.command('profile.put', {
+      final receipt = await backendClient.command('profile.put', {
         'metadata': draft.toBackendMetadata(),
         'expectedRevision': _revision,
       });
+      // Later saves must expect this write, even if the refresh below fails.
+      _revision = (receipt['revision'] as num?)?.toInt() ??
+          backendClient.profileRevision(draft.id);
       if (widget.profile.url != draft.url) {
         await backendClient.command('subscription.refresh', {
           'profileId': draft.id,
         });
       }
     }
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    return true;
   }
 
   void _setAutoUpdate(bool value) {
@@ -116,10 +155,13 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   Future<void> _handleSaveEdit(BuildContext context, String data) async {
-    final message = await globalState.safeRun<String>(() async {
-      final message = await globalState.validateProfileConfigText(data);
-      return message;
-    }, silence: false);
+    final message = await globalState.safeRun<String>(
+      () async {
+        final message = await globalState.validateProfileConfigText(data);
+        return message;
+      },
+      silence: false,
+    );
     if (message?.isNotEmpty == true) {
       globalState.showMessage(
         title: appLocalizations.tip,
@@ -133,7 +175,12 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   Future<void> _editProfileFile() async {
-    await _loaded;
+    try {
+      await _loaded();
+    } catch (error) {
+      globalState.showNotifier(globalState.describeError(error));
+      return;
+    }
     if (!mounted) return;
     final title = widget.profile.label ?? widget.profile.id;
 
@@ -202,7 +249,9 @@ class _EditProfileViewState extends State<EditProfileView> {
         }
         final res = await globalState.showMessage(
           title: title,
-          message: TextSpan(text: appLocalizations.hasCacheChange),
+          message: TextSpan(
+            text: appLocalizations.hasCacheChange,
+          ),
         );
         if (res == true && context.mounted) {
           _handleSaveEdit(context, content);
@@ -318,31 +367,39 @@ class _EditProfileViewState extends State<EditProfileView> {
       ValueListenableBuilder<FileInfo?>(
         valueListenable: fileInfoNotifier,
         builder: (_, fileInfo, __) => FadeThroughBox(
-          child: fileInfo == null
-              ? Container()
-              : ListItem(
-                  title: Text(appLocalizations.profile),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(fileInfo.desc),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        runSpacing: 6,
-                        spacing: 12,
-                        children: [
-                          CommonChip(
-                            avatar: const Icon(Icons.edit),
-                            label: appLocalizations.edit,
-                            onPressed: _editProfileFile,
-                          ),
-                        ],
-                      ),
-                    ],
+            child: fileInfo == null
+                ? Container()
+                : ListItem(
+                    title: Text(
+                      appLocalizations.profile,
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(
+                          height: 4,
+                        ),
+                        Text(
+                          fileInfo.desc,
+                        ),
+                        const SizedBox(
+                          height: 8,
+                        ),
+                        Wrap(
+                          runSpacing: 6,
+                          spacing: 12,
+                          children: [
+                            CommonChip(
+                              avatar: const Icon(Icons.edit),
+                              label: appLocalizations.edit,
+                              onPressed: _editProfileFile,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-        ),
+          ),
       ),
     ];
     return CommonPopScope(
@@ -365,11 +422,17 @@ class _EditProfileViewState extends State<EditProfileView> {
         child: Form(
           key: _formKey,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(
+              vertical: 16,
+            ),
             child: ListView.separated(
-              padding: kMaterialListPadding.copyWith(bottom: 72),
+              padding: kMaterialListPadding.copyWith(
+                bottom: 72,
+              ),
               itemBuilder: (_, index) => items[index],
-              separatorBuilder: (_, __) => const SizedBox(height: 24),
+              separatorBuilder: (_, __) => const SizedBox(
+                  height: 24,
+                ),
               itemCount: items.length,
             ),
           ),

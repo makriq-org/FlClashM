@@ -53,7 +53,7 @@ func TestEngineCommandsDoNotPreemptPlansAndAreFencedByStop(t *testing.T) {
 	if _, err = b.Await(context.Background(), "stop"); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := b.Await(context.Background(), "refresh"); r.Status != "cancelled" {
+	if r, _ := b.Await(context.Background(), "refresh"); r.Status != "cancelled" || r.ErrorCode != ErrorCodeSuperseded {
 		t.Fatal(r)
 	}
 	h.mu.Lock()

@@ -454,5 +454,13 @@
   "zashboardInApp": "在应用内打开 zashboard",
   "zashboardInAppDesc": "使用内置浏览器显示控制面板，无需跳转到外部浏览器",
   "openPanel": "打开面板",
-  "downloadingZashboard": "正在下载 Zashboard…"
+  "downloadingZashboard": "正在下载 Zashboard…",
+  "backendUnavailable": "后台服务不可用",
+  "backendOperationFailed": "操作失败",
+  "backendOperationCancelled": "操作已取消",
+  "backendClosed": "操作完成前后台服务已停止",
+  "backendTimeout": "后台服务未及时响应",
+  "backendStartupFailed": "无法启动 FlClashM",
+  "backendStartupFailedDesc": "应用无法连接到后台服务，正在自动重试。您可以立即重试，或导出日志以获取支持。",
+  "retry": "重试"
 }

@@ -193,10 +193,7 @@ func openApplicationBackend(options backendHostOptions) error {
 		},
 		TLSClientConfig: backendTLSConfig(roots),
 	}}
-	zone, err := time.LoadLocation(options.TimeZone)
-	if err != nil {
-		zone = time.FixedZone("legacy", options.UTCOffset)
-	}
+	zone := legacyTimeZone(filepath.Join(options.Home, "backend"), options.TimeZone, options.UTCOffset)
 	lists := &prepare.ListStore{Home: options.Home, RootCAs: roots, LegacyTimeZone: zone}
 	compiler := &prepare.Compiler{
 		Capabilities: prepare.Capabilities{Platform: "android", HomeDir: options.Home, ProfilesDir: filepath.Join(options.Home, "profiles"), SelfPackages: backendSelfPackages(options.Package), InstalledPackages: func(ctx context.Context) ([]string, error) {
@@ -256,6 +253,36 @@ func openApplicationBackend(options backendHostOptions) error {
 		}
 	}()
 	return nil
+}
+
+// legacyTimeZone resolves the zone that the application journal saved when the
+// backend first opened. Legacy timestamps without an offset were written in
+// that zone; subscriptions use it, so remote-list and strategy caches must too,
+// even after the device time zone changes. Before the first open the journal
+// does not exist yet and will save the current device zone. Fields missing
+// from an existing journal keep the device values, as the journal decoder does.
+func legacyTimeZone(directory, zone string, offset int) *time.Location {
+	if file, err := os.Open(filepath.Join(directory, "application-v1.json")); err == nil {
+		raw, readErr := io.ReadAll(io.LimitReader(file, 32<<20))
+		_ = file.Close()
+		var saved struct {
+			Zone   *string `json:"legacyTimeZone"`
+			Offset *int    `json:"legacyUtcOffset"`
+		}
+		if readErr == nil && json.Unmarshal(raw, &saved) == nil {
+			if saved.Zone != nil {
+				zone = *saved.Zone
+			}
+			if saved.Offset != nil {
+				offset = *saved.Offset
+			}
+		}
+	}
+	location, err := time.LoadLocation(zone)
+	if err != nil {
+		location = time.FixedZone("legacy", offset)
+	}
+	return location
 }
 
 func validateThroughHost(ctx context.Context, home string, config prepare.Object) error {
