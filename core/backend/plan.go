@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 const APIVersion = 1
@@ -76,17 +77,36 @@ func canonicalJSON(raw []byte) ([]byte, error) {
 	if _, ok := v.(map[string]any); !ok {
 		return nil, errors.New("expected JSON object")
 	}
-	// json.Valid also rejects trailing values. Compact keeps member order: some
-	// engine maps (dns.nameserver-policy) are evaluated in declaration order.
-	// Payloads persisted by earlier builds were already sorted and compact, so
-	// their digests are unchanged.
+	// json.Valid also rejects trailing values. Top-level members are sorted so
+	// a struct and a map with the same fields share one digest; nested values
+	// keep member order: some engine maps (dns.nameserver-policy) are
+	// evaluated in declaration order.
 	if !json.Valid(raw) {
 		return nil, errors.New("invalid JSON document")
 	}
-	var out bytes.Buffer
-	if err := json.Compact(&out, raw); err != nil {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &members); err != nil {
 		return nil, err
 	}
+	keys := make([]string, 0, len(members))
+	for key := range members {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var out bytes.Buffer
+	out.WriteByte('{')
+	for i, key := range keys {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		name, _ := json.Marshal(key)
+		out.Write(name)
+		out.WriteByte(':')
+		if err := json.Compact(&out, members[key]); err != nil {
+			return nil, err
+		}
+	}
+	out.WriteByte('}')
 	return out.Bytes(), nil
 }
 
