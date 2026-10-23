@@ -3,7 +3,7 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization and forwards physical-network changes to the product runtime.",
+      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization; network changes only refresh UI-side IP display.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -51,7 +51,7 @@
     {
       "path": "lib/controller.dart",
       "boundary": "runtime-orchestration",
-      "reason": "AppController is the thin base orchestrator between global state and product compile/runtime/service contracts, including the existing log-export action.",
+      "reason": "AppController forwards user actions to Go backend commands and product services (notification sync, app update check, provider advisory, log export) without owning runtime state.",
       "targets": [
         "lib/product/backend/backend.dart",
         "lib/product/diagnostics/product_diagnostics.dart",
@@ -111,7 +111,7 @@
     {
       "path": "lib/state.dart",
       "boundary": "global-runtime-wiring",
-      "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
+      "reason": "GlobalState projects Go backend snapshots and submits settings edits through the backend client; it owns no runtime or compile policy.",
       "targets": [
         "lib/product/backend/backend.dart"
       ]
@@ -193,6 +193,10 @@
     {
       "path": "lib/product/widgets/proxy_group_sliver.dart",
       "reason": "Точная геометрия групп стабилизирует ползунок прокрутки, сохраняя ленивое создание строк и анимацию."
+    },
+    {
+      "path": "lib/product/bootstrap/backend_startup.dart",
+      "reason": "Экран восстановления при недоступном фоновом backend на старте: повтор подключения и экспорт логов без работающего Go API."
     }
   ]
 }

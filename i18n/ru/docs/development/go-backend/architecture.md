@@ -215,7 +215,8 @@ network/health/suspend coordination, quickStart и SavedParams удалены. �
 PR #116 зафиксировал архитектуру; #117 актуализировал main и baseline;
 #118 реализовал переносимый координатор. По разрешению владельца оставшаяся работа
 (данные, compiler, Android cutover и удаление старых путей) объединена в PR #119.
-Все PR направляются только в `refactor/go-backend`; `main` не изменяется.
+Этапы собирались в интеграционной ветке `refactor/go-backend`; итоговый PR #128
+переносит её в `dev`.
 
 Go host tests проверяют совместимость, безопасность, отмену, rollback, interrupted
 recovery, source CAS, автономные узлы, OS-политику, уведомления и IPC-протокол. CI
@@ -231,11 +232,11 @@ Wi-Fi↔mobile handover и энергопотребление требуют о�
 
 ## Отдельная тестовая установка
 
-ARM64 smoke-сборка push в `refactor/go-backend` публикуется артефактом
-`android-arm64-test-apk`. Пакет `com.makriq.flclash.backendtest` имеет название
-`FlClashM Backend Test`, отдельные данные и debug-подпись, включая release-режим
-компиляции. Он устанавливается рядом с обычным и `.dev` клиентами.
-Для ручной сборки workflow поддерживает input `backend_test`; локально достаточно
+ARM64 smoke-сборка CI публикуется артефактом `android-arm64-test-apk`. При ручном
+запуске `android-base-verification` с input `backend_test` она собирается как пакет
+`com.makriq.flclash.backendtest` с названием `FlClashM Backend Test`, отдельными
+данными и debug-подписью, включая release-режим компиляции. Он устанавливается
+рядом с обычным и `.dev` клиентами. Локально достаточно
 `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64`
 после подготовки Android runtime-артефактов.
 
@@ -252,7 +253,8 @@ ORG_GRADLE_PROJECT_backendDiagnostic=true flutter build apk --debug --target-pla
 Исходный профиль можно перенести резервной копией; данные установок независимы.
 Для ROM, требующих отдельного подтверждения установки той же версии, локальный
 номер и имя можно передать через `--build-number` / `--build-name` без изменения
-`pubspec.yaml` и без релизного тега. В CI остаётся прежний `backendTest=true`.
+`pubspec.yaml` и без релизного тега. В CI тестовый пакет по-прежнему задаётся
+`backendTest=true` через input `backend_test`.
 
 Удалённые списки приложений читаются сначала из прежнего кэша профиля. Go обновляет
 проверенное содержимое фоновыми задачами своего жизненного цикла с ограничением
