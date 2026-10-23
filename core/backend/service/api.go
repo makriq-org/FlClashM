@@ -40,7 +40,10 @@ func (a *App) Handle(raw []byte) []byte {
 		return fail("reset_in_progress", "data reset in progress")
 	}
 	if a.ctx.Err() != nil {
-		return fail("backend_closed", "backend is closing")
+		response.Result = nil
+		response.Error = &backend.APIError{Code: "backend_closed", Message: "backend is closing", ErrorCode: backend.ErrorCodeClosed}
+		encoded, _ := json.Marshal(response)
+		return encoded
 	}
 	var err error
 	switch request.Method {
@@ -151,7 +154,10 @@ func (a *App) Handle(raw []byte) []byte {
 		}
 	}
 	if err != nil {
-		return fail("command_rejected", err.Error())
+		response.Result = nil
+		response.Error = &backend.APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: backend.ErrorCode(err)}
+		encoded, _ := json.Marshal(response)
+		return encoded
 	}
 	encoded, _ := json.Marshal(response)
 	return encoded
@@ -263,7 +269,7 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 		return Receipt{}, errors.New("data reset in progress")
 	}
 	switch request.Method {
-	case "ui.attach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}
@@ -275,8 +281,13 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 		return receipt, err
 	}
 	params := bytes.Clone(request.Input)
+	ctx := operation.ctx
+	if request.Method == "ui.attach" || request.Method == "ui.detach" {
+		// Workers may run out of order; the runtime ignores an older UI fact.
+		ctx = context.WithValue(ctx, uiSequenceKey{}, a.uiSequence.Add(1))
+	}
 	a.workers.Go(func() {
-		result, err := a.perform(operation.ctx, request.Method, params, operation.receipt.OperationID)
+		result, err := a.perform(ctx, request.Method, params, operation.receipt.OperationID)
 		a.operations.finish(operation, result, err)
 		a.publish()
 	})
