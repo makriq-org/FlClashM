@@ -76,11 +76,18 @@ func canonicalJSON(raw []byte) ([]byte, error) {
 	if _, ok := v.(map[string]any); !ok {
 		return nil, errors.New("expected JSON object")
 	}
-	// json.Valid also rejects trailing values; encoding/json sorts object keys.
+	// json.Valid also rejects trailing values. Compact keeps member order: some
+	// engine maps (dns.nameserver-policy) are evaluated in declaration order.
+	// Payloads persisted by earlier builds were already sorted and compact, so
+	// their digests are unchanged.
 	if !json.Valid(raw) {
 		return nil, errors.New("invalid JSON document")
 	}
-	return json.Marshal(v)
+	var out bytes.Buffer
+	if err := json.Compact(&out, raw); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 type Compiler interface {

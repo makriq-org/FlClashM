@@ -129,6 +129,13 @@ func normalizeNode(input Object, kind string) (Object, error) {
 		}
 	}
 	if kind == "olcrtc" {
+		// Legacy profiles may still carry the only historical mode value.
+		if value, ok := node["mode"]; ok {
+			if mode, _ := value.(string); strings.TrimSpace(mode) != "cnc" {
+				return nil, errors.New("olcrtc.mode supports only legacy value `cnc`")
+			}
+			delete(node, "mode")
+		}
 		for section, aliases := range map[string]map[string]string{
 			"auth": {"provider": "provider", "token": "provider-token"}, "room": {"id": "room", "channel": "room-channel"}, "crypto": {"key": "encryption-key"}, "net": {"transport": "transport", "dns": "dns-server"}, "engine": {"name": "engine", "url": "engine-url", "token": "engine-token"},
 		} {

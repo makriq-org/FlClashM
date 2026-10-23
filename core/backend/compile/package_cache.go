@@ -35,6 +35,10 @@ type PackageListCache struct {
 	epoch         uint64
 	refreshCancel context.CancelFunc
 	flights       singleflight.Group
+	// downloads owns shared downloads of the current epoch. A download is not
+	// owned by whichever caller started it, and Reset cancels it.
+	downloads       context.Context
+	cancelDownloads context.CancelFunc
 }
 
 func (s *PackageListCache) path(profile, address string) (string, error) {
@@ -88,10 +92,18 @@ func (s *PackageListCache) Read(ctx context.Context, profile, address string) (s
 func (s *PackageListCache) fetch(ctx context.Context, name, address string) (string, error) {
 	s.mu.Lock()
 	epoch := s.epoch
+	if s.downloads == nil {
+		s.downloads, s.cancelDownloads = context.WithCancel(context.Background())
+	}
+	downloads := s.downloads
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	ready := s.flights.DoChan(address, func() (any, error) {
+		// Each waiter honors its own context below; cancelling the first caller
+		// must not fail every other caller waiting for the same list.
+		ctx, cancel := context.WithTimeout(downloads, 20*time.Second)
+		defer cancel()
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 		if err != nil {
 			return "", err
@@ -223,5 +235,9 @@ func (s *PackageListCache) Reset() {
 	s.pending = nil
 	if s.refreshCancel != nil {
 		s.refreshCancel()
+	}
+	if s.cancelDownloads != nil {
+		s.cancelDownloads()
+		s.downloads, s.cancelDownloads = nil, nil
 	}
 }

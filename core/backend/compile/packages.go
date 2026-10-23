@@ -138,10 +138,18 @@ func isHTTPURL(value string) bool {
 	return err == nil && u.Hostname() != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
 func parsePackageBody(body string) ([]selector, error) {
-	var value any
-	if yaml.Unmarshal([]byte(body), &value) == nil {
-		if _, ok := value.([]any); ok {
-			return selectors(value, false)
+	// YAML reads an exclusion item such as `- !com.example` as a local tag
+	// with an empty value. The legacy parser rejected undefined tags and used
+	// line parsing instead, which keeps the exclusion.
+	var document yaml.Node
+	if yaml.Unmarshal([]byte(body), &document) == nil && len(document.Content) == 1 {
+		if root := document.Content[0]; root.Kind == yaml.SequenceNode && !hasCustomYAMLTag(root) {
+			var value any
+			if root.Decode(&value) == nil {
+				if _, ok := value.([]any); ok {
+					return selectors(value, false)
+				}
+			}
 		}
 	}
 	values := []any{}
@@ -159,6 +167,17 @@ func parsePackageBody(body string) ([]selector, error) {
 		}
 	}
 	return selectors(values, false)
+}
+func hasCustomYAMLTag(node *yaml.Node) bool {
+	if tag := node.ShortTag(); strings.HasPrefix(tag, "!") && !strings.HasPrefix(tag, "!!") {
+		return true
+	}
+	for _, child := range node.Content {
+		if hasCustomYAMLTag(child) {
+			return true
+		}
+	}
+	return false
 }
 func (c *Compiler) splitPackages(ctx context.Context, config Object, profileID string, diagnostics *[]string) (Object, error) {
 	tun := object(config["tun"])
