@@ -38,7 +38,7 @@
     {
       "path": "core/action.go",
       "bucket": "budget",
-      "reason": "Внутренние IPC-действия для HTTP через tunnel и снимка runtime-состояния принадлежат обёртке ядра форка."
+      "reason": "IPC обёртки ядра передаёт запросы Go backend, платформенные события и HTTP через tunnel."
     },
     {
       "path": "core/common.go",
@@ -328,7 +328,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/SavedParams.kt",
       "bucket": "budget",
-      "reason": "Миграция состояния always-on и runtime-узлов относится к Android platform-слою."
+      "reason": "Старое хранилище параметров удалено: состояние и восстановление принадлежат Go backend."
     },
     {
       "path": "android/common/src/main/res/values-ja/strings.xml",
@@ -398,7 +398,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/modules/NetworkObserveModule.kt",
       "bucket": "budget",
-      "reason": "Исправления DNS и системной сети относятся к platform/runtime слою Android."
+      "reason": "Kotlin-координация сети удалена; Android передаёт факты сети в Go backend."
     },
     {
       "path": "android/service/src/main/res/drawable/ic_notification.xml",
@@ -418,12 +418,12 @@
     {
       "path": "lib/application.dart",
       "bucket": "budget",
-      "reason": "Base-оболочка оставлена только для Android: ярлыки через product-сервис, смена сети лишь обновляет IP в UI; автообновление профилей перенесено в Go backend."
+      "reason": "Базовая оболочка передаёт Android shortcuts продуктовому слою; смена сети обновляет только IP в UI."
     },
     {
       "path": "lib/clash/interface.dart",
       "bucket": "budget",
-      "reason": "Базовый интерфейс канала содержит отдельный контракт чтения снимка применённых параметров Android VPN без продуктовой политики."
+      "reason": "Базовый канал передаёт Go API и снимок фактически применённых правил Android VPN."
     },
     {
       "path": "lib/clash/lib.dart",
@@ -1439,6 +1439,21 @@
       "path": "core/backend_host_test.go",
       "bucket": "budget",
       "reason": "Android host Go backend: кэши списков и стратегий используют часовой пояс, сохранённый при миграции."
+    },
+    {
+      "path": "core/backend/node_probe.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
+    },
+    {
+      "path": "core/backend/node_strategy.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
+    },
+    {
+      "path": "core/backend/node_reconcile.go",
+      "bucket": "budget",
+      "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
     }
   ]
 }

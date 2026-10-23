@@ -115,7 +115,7 @@ $script''',
   });
 
   test('documentation skips build and test jobs', () async {
-    await expectScope(['i18n/ru/docs/README.md'], [false, false, false, false]);
+    await expectScope(['i18n/ru/docs/profiles.md'], [false, false, false, false]);
   });
 
   test('mixed changes preserve the widest required scope', () async {
@@ -147,7 +147,7 @@ $script''',
 
   test('push with an unavailable previous commit runs every check', () async {
     await expectScope(
-      ['i18n/ru/docs/README.md'],
+      ['i18n/ru/docs/profiles.md'],
       [true, true, true, true],
       event: 'push',
       baseAvailable: false,

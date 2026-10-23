@@ -179,7 +179,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
 
   void _toggleExpansion(Set<String> currentUnfoldSet) {
     final unfoldSet = Set<String>.from(currentUnfoldSet);
-    
+
     if (!unfoldSet.remove(groupName)) {
       unfoldSet.add(groupName);
     }

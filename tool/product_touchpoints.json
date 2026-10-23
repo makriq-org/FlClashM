@@ -3,7 +3,7 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "App bootstrap stays a thin base handoff into Android shell shortcut initialization; network changes only refresh UI-side IP display.",
+      "reason": "Базовая оболочка передаёт Android shortcuts продуктовому слою; смена сети обновляет только IP в UI.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -50,8 +50,8 @@
     },
     {
       "path": "lib/controller.dart",
-      "boundary": "runtime-orchestration",
-      "reason": "AppController forwards user actions to Go backend commands and product services (notification sync, app update check, provider advisory, log export) without owning runtime state.",
+      "boundary": "backend-ui-client",
+      "reason": "AppController передаёт действия в Go backend и обновляет UI из снимков; product-сервисы обслуживают Android shell, экспорт логов и оформление подписок.",
       "targets": [
         "lib/product/backend/backend.dart",
         "lib/product/diagnostics/product_diagnostics.dart",
