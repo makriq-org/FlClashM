@@ -165,10 +165,15 @@ func resolveAlias(node *yaml.Node) *yaml.Node {
 	return node
 }
 
-// mappingValue returns the explicit value of key in a (possibly aliased) map.
+// mappingValue returns the effective value of key, including YAML merges with
+// the same last-merge-wins and explicit-key precedence as materialize.
 func mappingValue(node *yaml.Node, key string) *yaml.Node {
+	return mappingValueAtDepth(node, key, 0)
+}
+
+func mappingValueAtDepth(node *yaml.Node, key string, depth int) *yaml.Node {
 	node = resolveAlias(node)
-	if node == nil || node.Kind != yaml.MappingNode {
+	if node == nil || node.Kind != yaml.MappingNode || depth > maxYAMLDepth {
 		return nil
 	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
@@ -179,7 +184,26 @@ func mappingValue(node *yaml.Node, key string) *yaml.Node {
 			return resolveAlias(node.Content[i+1])
 		}
 	}
-	return nil
+	var value *yaml.Node
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value != "<<" {
+			continue
+		}
+		merged := resolveAlias(node.Content[i+1])
+		if merged == nil {
+			continue
+		}
+		items := []*yaml.Node{merged}
+		if merged.Kind == yaml.SequenceNode {
+			items = merged.Content
+		}
+		for _, item := range items {
+			if inherited := mappingValueAtDepth(item, key, depth+1); inherited != nil {
+				value = inherited
+			}
+		}
+	}
+	return value
 }
 
 // mappingKeyOrder lists the keys of a map in declaration order; merged keys
