@@ -56,16 +56,25 @@ Built-in nodes are declared as ordinary proxies in the profile. Their lifecycle 
 - Before startup FlClashM validates provider/direct-engine rules, transport-specific options, the key, and DNS
 - The Android service keeps a limited tail of the process output; if OlcRTC exits before opening the SOCKS5 port, the reason is returned to Dart immediately and shown to the user
 - Runs as a separate process via the stable `config.yaml` contract; the mobile library is not used
-- The sources are pinned to commit `f3ad8fb7c0d0fa981423f83269526fa94077c23d`
+- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.12.1, commit `b2c4b17ee35bfe65330aa9141f94dac082228bb2`, without local source patches
+- v0.12.1 fixes VK Calls RTP payload-type conflicts during connection and renegotiation
+- New providers: `vkcalls` (`vp8channel` or `videochannel`), `mtslink` (`vp8channel`), `salutejazz` and `max` (`datachannel`). `max` requires `provider-token`; guest `vkcalls` rejects non-empty tokens. See the [provider table](../user-guide/profiles.md#-olcrtc)
+- Ghostlane UDP/direct/failover/DTLS options are not exposed: CNC mode, loopback SOCKS and Go runtime ownership are preserved
+- Dependencies are pinned in `tool/runtime_go_modules/olcrtc.mod/.sum`; `-buildvcs=false` keeps tags and checkout depth out of the binary digest
 - The generated config omits `data`: name dictionaries are embedded, while a non-empty value now explicitly selects an override directory
 - The runtime uses OLC2 and OLVC 5 formats that are incompatible with older builds, so client and server must be updated together
 - The SHA-256 of each binary is pinned next to the commit; asset preparation and tests reject outdated or altered files even with a matching stamp
+
+
+OlcRTC must be rebuilt with the official, unpatched Go 1.27.2 distribution and NDK 28.0.13004108. `nix develop` provides it via `FLCLASHM_OLCRTC_GO`; elsewhere, set that variable to the official `go` executable if it is not on `PATH`. Preparation rejects nixpkgs patches in `net`/`mime`, which embed store paths and change SHA-256. The official archive may itself live in the Nix store. Go BuildID is disabled (`-buildid=`): it includes the C compiler path even with `-trimpath`; SHA-256 verifies the resulting bytes.
+
+The wire formats remain OLC2, handshake v3 and OLVC 5. New services require server support; verify cold start, reconnection and VPN on physical Android ABIs before release. Known Ghostlane audit limitations and the pinned Go 1.27.2 finding GO-2026-6809 remain open; see the [audit and verification notes](../../../ru/docs/development/runtime.md#-olcrtc).
 
 <details>
 <summary>🔧 Updating and rolling back olcrtc</summary>
 
 - **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.2 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
-- **Rollback:** restore the previous source pin `189d16c093c4f721376afb5eaa0213d132a11242` together with its module locks, release metadata, and Android artifacts. This update preserves the existing wire format.
+- **Rollback:** restore `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d` together with its module locks, release metadata and Android artifacts. New-provider profiles will no longer be supported; existing profiles need no migration.
 
 </details>
 

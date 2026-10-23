@@ -152,7 +152,7 @@ proxy-groups:
 
 | پارامتر | توضیح |
 |---------|-------|
-| `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `none` |
+| `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `salutejazz`، `vkcalls`، `mtslink`، `max`، `none` |
 | `room` | شناسهٔ اتاق تماس تصویری |
 | `encryption-key` | کلید رمزنگاری ۲۵۶بیتی — **دقیقاً ۶۴ کاراکتر هگز** |
 | `transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |
@@ -183,6 +183,19 @@ transport-options:
 
 > [!TIP]
 > ترکیب پیشنهادی `jitsi` + `datachannel` است. برای `wbstream` بدون توکن مدیر و برای `telemost` از `vp8channel` استفاده کنید.
+
+نسخهٔ داخلی از [فورک Ghostlane](https://github.com/ghostlane-project/olcrtc) است.
+برای سرویس‌های جدید از ترکیب‌های زیر استفاده کنید:
+
+| `provider` | `transport` | `room` | نیاز اضافی |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` یا `videochannel` | `https://vk.ru/call/join/<id>` | لینک ورود تماس VK؛ `provider-token` غیرخالی ممنوع است |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | جلسهٔ دائمی MTS Link |
+| `salutejazz` | `datachannel` | `<code>:<password>` | کد و رمز اتاق SaluteJazz |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | `provider-token` الزامی: calls session key یا calls token در MAX |
+
+توکن فقط در پیکربندی خصوصی به فرایند OlcRTC داده می‌شود؛ پروفایل حاوی آن را منتشر نکنید.
+ترکیب پشتیبانی‌نشدهٔ ارائه‌دهنده و transport پیش از اجرای فرایند رد می‌شود.
 
 `profiles`، `failover` و `video.hw` از قرارداد عمومی حذف شده‌اند. چند حالت OlcRTC را به‌صورت نودهای جدا و در یک گروه Mihomo تعریف کنید. `provider: none` به `engine`، `engine-url` و `engine-token` نیاز دارد و providerهای دیگر این فیلدها را نمی‌پذیرند.
 

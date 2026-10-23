@@ -56,16 +56,25 @@ RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan
 - 启动前 FlClashM 校验 provider/engine 规则、传输专属参数、密钥和 DNS
 - Android 服务保留有限的进程输出尾部；若 OlcRTC 在打开 SOCKS5 端口前退出，原因会立即回传给 Dart 并显示给用户
 - 通过稳定的 `config.yaml` 契约以独立进程运行；不使用移动库
-- 源码固定在提交 `f3ad8fb7c0d0fa981423f83269526fa94077c23d`
+- 使用 `ghostlane-project/olcrtc` 的 `proofkit` 分支、v0.12.1、提交 `b2c4b17ee35bfe65330aa9141f94dac082228bb2`，不添加本地源码补丁
+- v0.12.1 修复了 VK Calls 在连接和重新协商期间的 RTP payload type 冲突
+- 新增提供者：`vkcalls` 支持 `vp8channel` 或 `videochannel`，`mtslink` 支持 `vp8channel`，`salutejazz` 和 `max` 支持 `datachannel`。`max` 必须提供 `provider-token`，访客 `vkcalls` 禁止非空令牌；参见[提供者表](../user-guide/profiles.md#-olcrtc)
+- 不公开 Ghostlane 的 UDP/direct/failover/DTLS 选项；保留 CNC、loopback SOCKS 和 Go 对 runtime 的统一管理
+- 依赖固定在 `tool/runtime_go_modules/olcrtc.mod/.sum`；`-buildvcs=false` 消除了标签和检出深度对二进制哈希的影响
 - 生成的配置不再写入 `data`：名称字典已嵌入可执行文件，非空值现在明确表示外部覆盖目录
 - runtime 使用与旧版本不兼容的 OLC2 和 OLVC 5 格式，因此客户端与服务器必须同时更新
 - 每个二进制的 SHA-256 固定在提交旁；资源准备与测试即使在戳记匹配时也会拒绝过时或被改动的文件
+
+
+重建 OlcRTC 必须使用未经修改的官方 Go 1.27.2 和 NDK 28.0.13004108。`nix develop` 通过 `FLCLASHM_OLCRTC_GO` 提供该工具；在其他环境中，如果官方 `go` 不在 `PATH`，请将此变量设为其路径。准备流程会拒绝 nixpkgs 对 `net`/`mime` 的补丁，因为这些补丁嵌入 store 路径并改变 SHA-256；官方归档本身可以存放在 Nix store 中。通过 `-buildid=` 禁用 Go BuildID，因为即使启用 `-trimpath`，它仍包含 C 编译器路径；使用 SHA-256 校验产物字节。
+
+保留 OLC2、handshake v3 和 OLVC 5 格式。新服务需要服务器支持；发布前应在真实 Android ABI 上验证冷启动、重连和 VPN。Ghostlane 已知审计限制和固定 Go 1.27.2 的 GO-2026-6809 仍未解决；参见[审计和验证记录](../../../ru/docs/development/runtime.md#-olcrtc)。
 
 <details>
 <summary>🔧 olcrtc 的更新与回滚</summary>
 
 - **更新：** 更换固定提交，用固定的 Go 1.27.2 和 NDK 28.0.13004108 经 `dart setup.dart android --out runtime-assets` 重建三个 Android ABI，按产物更新固定的 SHA-256，并重跑该命令与测试。
-- **回滚：** 恢复之前固定的源提交 `189d16c093c4f721376afb5eaa0213d132a11242`，并一同恢复模块锁定文件、发布元数据和 Android 产物。本次更新保留现有 wire 格式。
+- **回滚：** 恢复 `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d`，以及对应的模块锁定文件、发布元数据和 Android 产物。新服务的配置将不再受支持；已有配置无需迁移。
 
 </details>
 
