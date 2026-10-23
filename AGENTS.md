@@ -39,7 +39,7 @@ RawProfile + настройки + capabilities → Go Compiler + SecurityPolicy
 5. **Product UI** (`lib/product/**`) — тонкий клиент backend, представление,
    обновления APK, диагностика и fork-only страницы.
 
-Контракты и миграция: `i18n/ru/docs/development/go-backend/architecture.md`.
+Контракты и миграция: `i18n/ru/docs/maintenance.md`.
 Новые пути не должны возвращать управление runtime в Dart/Kotlin или читать
 legacy SharedPreferences после однократной миграции как источник истины.
 
@@ -216,5 +216,6 @@ chore: обновлён Go до 1.26 и зависимости ядра
 
 ## Документация
 
-Центр: `i18n/ru/docs/README.md`. Раздел для разработчиков — `i18n/ru/docs/development/`
-(архитектура, runtime, security, release-contract, upstream-sync, verification).
+Вход: `README.md`. Два руководства: `i18n/ru/docs/profiles.md` (настройка профиля)
+и `i18n/ru/docs/maintenance.md` (сборка и сопровождение). Полные переводы —
+`i18n/{en,zh,fa}/README.md` и `i18n/{en,zh,fa}/docs/`.

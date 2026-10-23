@@ -12,4 +12,4 @@
 
 Не уверены — берите **Universal**. Другие варианты (`armeabi-v7a`, `x86_64`), AAB и файлы `.sha256` — во вложениях ниже.
 
-📚 [Документация](https://github.com/REPO/blob/main/i18n/ru/docs/README.md) · 📄 [Все изменения](https://github.com/REPO/blob/main/CHANGELOG.md)
+📚 [Документация](https://github.com/REPO/blob/main/README.md) · 📄 [Все изменения](https://github.com/REPO/blob/main/CHANGELOG.md)
