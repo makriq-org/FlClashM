@@ -50,12 +50,8 @@ class BackendStartup {
     await _ready.future;
   }
 
-  /// User retry: re-arms the binding and attempts immediately.
-  Future<void> retry() async {
-    if (busy.value || _ready.isCompleted) return;
-    reconnect?.call();
-    await _tryAgain();
-  }
+  /// User retry: attempts immediately.
+  Future<void> retry() => _tryAgain();
 
   Future<bool> _attempt() async {
     busy.value = true;
@@ -72,9 +68,12 @@ class BackendStartup {
     }
   }
 
+  /// Every retry re-arms the binding: once a crash loop gave up, attempts
+  /// without it fail immediately. The retry delay bounds the restart rate.
   Future<void> _tryAgain() async {
     if (busy.value || _ready.isCompleted) return;
     _timer?.cancel();
+    reconnect?.call();
     if (await _attempt()) {
       _timer?.cancel();
       _ready.complete();

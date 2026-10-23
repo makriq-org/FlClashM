@@ -647,7 +647,9 @@ class AppController {
 
     try {
       final profile = await commonScaffoldState?.loadingRun<Profile>(() async {
-        return Profile.normal(url: url).update();
+        return withDescribedBackendErrors(
+          () => Profile.normal(url: url).update(),
+        );
       }, title: "${appLocalizations.add}${appLocalizations.profile}");
 
       if (profile != null) {
@@ -680,7 +682,9 @@ class AppController {
     if (commonScaffoldState?.mounted != true) return;
     final profile = await commonScaffoldState?.loadingRun<Profile?>(() async {
       await Future.delayed(const Duration(milliseconds: 300));
-      return Profile.normal(label: platformFile?.name).saveFile(bytes);
+      return withDescribedBackendErrors(
+        () => Profile.normal(label: platformFile?.name).saveFile(bytes),
+      );
     }, title: "${appLocalizations.add}${appLocalizations.profile}");
     if (profile != null) {
       await addProfile(profile);
