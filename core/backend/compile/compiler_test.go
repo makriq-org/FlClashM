@@ -207,6 +207,7 @@ func TestExternalTransportCompilation(t *testing.T) {
 		})
 	}
 }
+
 // TestGhostlaneProviders checks the provider/transport matrix and MAX credentials.
 func TestGhostlaneProviders(t *testing.T) {
 	for _, tc := range []struct{ provider, transport, room, token string }{
