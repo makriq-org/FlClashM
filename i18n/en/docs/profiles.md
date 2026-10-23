@@ -98,7 +98,7 @@ proxies:
     type: olcrtc
     provider: jitsi
     room: "https://meet.example.org/room"
-    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    encryption-key: "<64-hex-key>"
     transport: datachannel
     dns-server: "1.1.1.1:53"
 proxy-groups:
@@ -108,7 +108,7 @@ proxy-groups:
     proxies: ["DIRECT", "rtc"]
 ```
 
-CNC client mode only. The key is exactly 64 hexadecimal characters. `provider: none` requires `engine`, `engine-url`, `engine-token`; other providers reject them. `profiles`, `failover`, `video.hw`, local listeners and keys from files are forbidden.
+CNC client mode only. Replace `<64-hex-key>` with the server key: exactly 64 hexadecimal characters. `provider: none` requires `engine`, `engine-url`, `engine-token`; other providers reject them. `profiles`, `failover`, `video.hw`, local listeners and keys from files are forbidden.
 
 `dns-server: system` uses the first DNS server of Android’s physical network and updates the active node when it changes. With no system DNS, startup waits for a network update. Client and server must support OLC2 and OLVC 5.
 

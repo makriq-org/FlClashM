@@ -118,7 +118,7 @@ proxies:
     type: olcrtc
     provider: jitsi
     room: "https://meet.example.org/room"
-    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    encryption-key: "<64-hex-key>"
     transport: datachannel
     dns-server: "1.1.1.1:53"
 proxy-groups:
@@ -130,7 +130,7 @@ proxy-groups:
 
 </div>
 
-فقط حالت کلاینت CNC مجاز است. کلید دقیقاً ۶۴ نویسهٔ hexadecimal است. `provider: none` به `engine`، `engine-url`، `engine-token` نیاز دارد؛ برای سایر ارائه‌دهندگان این فیلدها ممنوع‌اند. `profiles`، `failover`، `video.hw`، listener محلی و کلید از فایل مجاز نیستند.
+فقط حالت کلاینت CNC مجاز است. به‌جای `<64-hex-key>` کلید سرور را قرار دهید: دقیقاً ۶۴ نویسهٔ hexadecimal. `provider: none` به `engine`، `engine-url`، `engine-token` نیاز دارد؛ برای سایر ارائه‌دهندگان این فیلدها ممنوع‌اند. `profiles`، `failover`، `video.hw`، listener محلی و کلید از فایل مجاز نیستند.
 
 `dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند و با تغییر آن نود فعال را به‌روز می‌کند. بدون DNS سیستم، راه‌اندازی تا به‌روزرسانی شبکه منتظر می‌ماند. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
 

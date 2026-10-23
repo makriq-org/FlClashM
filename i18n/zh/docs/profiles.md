@@ -98,7 +98,7 @@ proxies:
     type: olcrtc
     provider: jitsi
     room: "https://meet.example.org/room"
-    encryption-key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    encryption-key: "<64-hex-key>"
     transport: datachannel
     dns-server: "1.1.1.1:53"
 proxy-groups:
@@ -108,7 +108,7 @@ proxy-groups:
     proxies: ["DIRECT", "rtc"]
 ```
 
-仅支持 CNC 客户端模式。密钥必须是 64 个十六进制字符。`provider: none` 必须提供 `engine`、`engine-url`、`engine-token`，其他提供商禁止使用这些字段。禁止 `profiles`、`failover`、`video.hw`、本地监听和文件密钥。
+仅支持 CNC 客户端模式。请将 `<64-hex-key>` 替换为服务器密钥，必须是 64 个十六进制字符。`provider: none` 必须提供 `engine`、`engine-url`、`engine-token`，其他提供商禁止使用这些字段。禁止 `profiles`、`failover`、`video.hw`、本地监听和文件密钥。
 
 `dns-server: system` 使用 Android 物理网络的第一个 DNS，并在它变化时更新活动节点。没有系统 DNS 时，启动需等待网络更新。客户端和服务器必须支持 OLC2 和 OLVC 5。
 
