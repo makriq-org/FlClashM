@@ -100,7 +100,7 @@
     {"path": "olcrtc.activation.wake.retry-after", "type": "string", "additionalTypes": ["integer"], "hasDefault": true, "default": "5m"},
     {"path": "olcrtc.activation.sleep", "type": "object"},
     {"path": "olcrtc.activation.sleep.idle", "type": "string", "additionalTypes": ["integer"], "hasDefault": true, "default": "15m"},
-    {"path": "olcrtc.provider", "type": "string", "required": true, "allowedValues": ["jitsi", "telemost", "wbstream", "none"]},
+    {"path": "olcrtc.provider", "type": "string", "required": true, "allowedValues": ["jitsi", "telemost", "wbstream", "salutejazz", "vkcalls", "mtslink", "max", "none"]},
     {"path": "olcrtc.provider-token", "type": "string"},
     {"path": "olcrtc.room", "type": "string"},
     {"path": "olcrtc.room-channel", "type": "string"},

@@ -90,6 +90,8 @@ HTTPS lists contain one strategy per line; empty lines and lines starting with `
 
 </details>
 
+<a id="olcrtc"></a>
+
 ### OlcRTC
 
 ```yaml
@@ -112,12 +114,25 @@ CNC client mode only. Replace `<64-hex-key>` with the server key: exactly 64 hex
 
 `dns-server: system` uses the first DNS server of Android’s physical network: `host:53` for IPv4, `[IPv6]:53` for IPv6. Changes restart the active dependent node. If DNS is unavailable, startup immediately fails with `physical DNS is unavailable`. A launch failure during plan application aborts that application; a failed background wake uses `retry-after`. Client and server must support OLC2 and OLVC 5.
 
+The bundled runtime is the [Ghostlane fork](https://github.com/ghostlane-project/olcrtc).
+Use these combinations for the new services:
+
+| `provider` | `transport` | `room` | Additional requirements |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` or `videochannel` | `https://vk.ru/call/join/<id>` | VK call join link; non-empty `provider-token` is forbidden |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | Permanent MTS Link meeting |
+| `salutejazz` | `datachannel` | `<code>:<password>` | SaluteJazz room code and password |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | Required `provider-token`: MAX calls session key or calls token |
+
+The token is passed only to the OlcRTC process in its private config; do not publish profiles containing it.
+Unsupported provider/transport combinations are rejected before the process starts.
+
 <details>
 <summary>OlcRTC fields and transport</summary>
 
 | Parameter | Description |
 |-----------|-------------|
-| `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `none` |
+| `provider` | Connection provider: `jitsi`, `telemost`, `wbstream`, `salutejazz`, `vkcalls`, `mtslink`, `max`, `none` |
 | `room` | Room URL or ID; required except for `provider: none` |
 | `encryption-key` | 256-bit encryption key — **exactly 64 hex characters** |
 | `transport` | Transport: `datachannel`, `vp8channel`, `seichannel`, `videochannel` |

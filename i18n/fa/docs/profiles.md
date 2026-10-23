@@ -108,6 +108,8 @@ proxies:
 
 </details>
 
+<a id="olcrtc"></a>
+
 ### OlcRTC
 
 <div dir="ltr">
@@ -134,12 +136,25 @@ proxy-groups:
 
 `dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند: `host:53` برای IPv4 و `[IPv6]:53` برای IPv6. تغییر آن نود فعال وابسته را دوباره اجرا می‌کند. اگر DNS در دسترس نباشد، راه‌اندازی فوراً با خطای `physical DNS is unavailable` متوقف می‌شود. خطای راه‌اندازی هنگام اعمال نقشه، اعمال آن را متوقف می‌کند؛ پس از بیدارسازی ناموفق در پس‌زمینه، مکث `retry-after` اعمال می‌شود. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
 
+نسخهٔ داخلی از [فورک Ghostlane](https://github.com/ghostlane-project/olcrtc) است.
+برای سرویس‌های جدید از ترکیب‌های زیر استفاده کنید:
+
+| `provider` | `transport` | `room` | نیاز اضافی |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` یا `videochannel` | `https://vk.ru/call/join/<id>` | لینک ورود تماس VK؛ `provider-token` غیرخالی ممنوع است |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | جلسهٔ دائمی MTS Link |
+| `salutejazz` | `datachannel` | `<code>:<password>` | کد و رمز اتاق SaluteJazz |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | `provider-token` الزامی: calls session key یا calls token در MAX |
+
+توکن فقط در پیکربندی خصوصی به فرایند OlcRTC داده می‌شود؛ پروفایل حاوی آن را منتشر نکنید.
+ترکیب پشتیبانی‌نشدهٔ ارائه‌دهنده و transport پیش از اجرای فرایند رد می‌شود.
+
 <details>
 <summary>فیلدها و انتقال OlcRTC</summary>
 
 | پارامتر | توضیح |
 |---------|-------|
-| `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `none` |
+| `provider` | ارائه‌دهندهٔ اتصال: `jitsi`، `telemost`، `wbstream`، `salutejazz`، `vkcalls`، `mtslink`، `max`، `none` |
 | `room` | URL یا شناسهٔ اتاق؛ به‌جز `provider: none` الزامی است |
 | `encryption-key` | کلید رمزنگاری 256بیتی — **دقیقاً 64 کاراکتر هگز** |
 | `transport` | ترابری: `datachannel`، `vp8channel`، `seichannel`، `videochannel` |

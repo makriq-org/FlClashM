@@ -90,6 +90,8 @@ HTTPS 列表每行一个策略；空行和以 `#` 开头的行被忽略。支持
 
 </details>
 
+<a id="olcrtc"></a>
+
 ### OlcRTC
 
 ```yaml
@@ -112,12 +114,25 @@ proxy-groups:
 
 `dns-server: system` 使用 Android 物理网络的第一个 DNS：IPv4 为 `host:53`，IPv6 为 `[IPv6]:53`。该地址变化时重启依赖它的活动节点。若 DNS 不可用，启动立即报错 `physical DNS is unavailable`。应用计划时的启动失败会中止应用；后台唤醒失败后按 `retry-after` 等待。客户端和服务器必须支持 OLC2 和 OLVC 5。
 
+内置运行时来自 [Ghostlane 分支](https://github.com/ghostlane-project/olcrtc)。
+新服务请使用以下组合：
+
+| `provider` | `transport` | `room` | 其他要求 |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` 或 `videochannel` | `https://vk.ru/call/join/<id>` | VK 通话加入链接；禁止非空 `provider-token` |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | MTS Link 永久会议 |
+| `salutejazz` | `datachannel` | `<code>:<password>` | SaluteJazz 房间代码和密码 |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | 必须提供 `provider-token`：MAX calls session key 或 calls token |
+
+令牌只通过私有配置传给 OlcRTC 进程；请勿公开包含令牌的配置。
+不支持的服务与传输组合会在进程启动前被拒绝。
+
 <details>
 <summary>OlcRTC 字段与传输</summary>
 
 | 参数 | 说明 |
 |------|------|
-| `provider` | 连接提供者：`jitsi`、`telemost`、`wbstream`、`none` |
+| `provider` | 连接提供者：`jitsi`、`telemost`、`wbstream`、`salutejazz`、`vkcalls`、`mtslink`、`max`、`none` |
 | `room` | 房间 URL 或 ID；除 `provider: none` 外必填 |
 | `encryption-key` | 256 位加密密钥 —— **恰好 64 个十六进制字符** |
 | `transport` | 传输：`datachannel`、`vp8channel`、`seichannel`、`videochannel` |

@@ -1,8 +1,11 @@
-git-f3ad8fb7c0d0fa981423f83269526fa94077c23d
-https://github.com/openlibrecommunity/olcrtc.git
-go1.27.2
+git-b2c4b17ee35bfe65330aa9141f94dac082228bb2
+https://github.com/ghostlane-project/olcrtc.git
+go1.27.3
+toolchain:official
+buildid=none
+buildvcs=false
 ndk-28.0.13004108
-modules:a0fa2fc4cd0cc861c8f514dc4f511c9476c035e6f1c3baa5288ec0766cb548da
+modules:e8239fb4b9a24d196f38e33d9f6960cd87bc57ae901d02565f3303c9042297f8
 armeabi-v7a:arm:7
 arm64-v8a:arm64:
 x86_64:amd64:

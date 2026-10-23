@@ -90,6 +90,8 @@ HTTPS-список содержит одну стратегию на строк�
 
 </details>
 
+<a id="olcrtc"></a>
+
 ### OlcRTC
 
 ```yaml
@@ -112,12 +114,25 @@ proxy-groups:
 
 `dns-server: system` использует первый DNS физической сети Android: `host:53` для IPv4, `[IPv6]:53` для IPv6. При его смене активный зависимый узел перезапускается. Если DNS недоступен, запуск сразу завершается ошибкой `physical DNS is unavailable`. Ошибка запуска при применении плана прерывает его применение; после неудачного фонового пробуждения действует `retry-after`. Клиент и сервер должны поддерживать OLC2 и OLVC 5.
 
+Встроен [форк Ghostlane](https://github.com/ghostlane-project/olcrtc).
+Для новых сервисов используйте следующие сочетания:
+
+| `provider` | `transport` | `room` | Дополнительно |
+|---|---|---|---|
+| `vkcalls` | `vp8channel` или `videochannel` | `https://vk.ru/call/join/<id>` | Ссылка входа в звонок VK; непустой `provider-token` запрещён |
+| `mtslink` | `vp8channel` | `https://my.mts-link.ru/j/<owner>/<event>` | Постоянная встреча МТС Линк |
+| `salutejazz` | `datachannel` | `<code>:<password>` | Код и пароль комнаты SaluteJazz |
+| `max` | `datachannel` | `https://max.ru/joincall/<hash>` | Обязателен `provider-token`: calls session key или calls token MAX |
+
+Токен передаётся только процессу OlcRTC в приватном конфиге; не публикуйте профиль с ним.
+Неподдерживаемое сочетание нового сервиса и транспорта отклоняется до запуска процесса.
+
 <details>
 <summary>Поля и транспорт OlcRTC</summary>
 
 | Параметр | Описание |
 |----------|----------|
-| `provider` | Поставщик соединения: `jitsi`, `telemost`, `wbstream`, `none` |
+| `provider` | Поставщик соединения: `jitsi`, `telemost`, `wbstream`, `salutejazz`, `vkcalls`, `mtslink`, `max`, `none` |
 | `room` | URL или ID комнаты; обязателен, кроме `provider: none` |
 | `encryption-key` | 256-битный ключ — **ровно 64 hex-символа** |
 | `transport` | `datachannel`, `vp8channel`, `seichannel`, `videochannel` |

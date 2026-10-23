@@ -111,6 +111,26 @@ nix develop -c make check go-check
 
 Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runtime/*_release.dart`; dependencies are in [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), build notes in [assets](../../../assets/runtimes/). Updates and rollbacks change pins, dependencies and binaries together; then rebuild and verify released ABIs.
 
+<a id="olcrtc-audit"></a>
+
+<details>
+<summary>OlcRTC: source, builds and limitations</summary>
+
+- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.12.1, commit `b2c4b17ee35bfe65330aa9141f94dac082228bb2`, without local source patches
+- v0.12.1 fixes VK Calls RTP payload-type conflicts during connection and renegotiation
+- New providers: `vkcalls` (`vp8channel` or `videochannel`), `mtslink` (`vp8channel`), `salutejazz` and `max` (`datachannel`). `max` requires `provider-token`; guest `vkcalls` rejects non-empty tokens. See the [provider table](profiles.md#olcrtc)
+- Ghostlane UDP/direct/failover/DTLS options are not exposed: CNC mode, loopback SOCKS and Go runtime ownership are preserved
+- Dependencies are pinned in `tool/runtime_go_modules/olcrtc.mod/.sum`; `-buildvcs=false` keeps tags and checkout depth out of the binary digest
+
+OlcRTC must be rebuilt with the official, unpatched Go 1.27.3 distribution and NDK 28.0.13004108. `nix develop` provides it via `FLCLASHM_OLCRTC_GO`; elsewhere, set that variable to the official `go` executable if it is not on `PATH`. Preparation rejects nixpkgs patches in `net`/`mime`, which embed store paths and change SHA-256. The official archive may itself live in the Nix store. Go BuildID is disabled (`-buildid=`): it includes the C compiler path even with `-trimpath`; SHA-256 verifies the resulting bytes.
+
+The wire formats remain OLC2, handshake v3 and OLVC 5. New services require server support; verify cold start, reconnection and VPN on physical Android ABIs before release. Known Ghostlane audit limitations remain open. OlcRTC uses official Go 1.27.3, which fixes [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809); see the [audit and verification notes](../../ru/docs/maintenance.md#olcrtc-audit).
+
+- **Update:** change the pinned commit, rebuild the three Android ABIs with pinned Go 1.27.3 and NDK 28.0.13004108 via `dart setup.dart android --out runtime-assets`, update the pinned SHA-256 from the produced files, and rerun the command and tests.
+- **Rollback:** restore `openlibrecommunity/olcrtc@f3ad8fb7c0d0fa981423f83269526fa94077c23d` together with its module locks, release metadata and Android artifacts. New-provider profiles will no longer be supported; existing profiles need no migration.
+
+</details>
+
 <a id="release"></a>
 
 ## 📦 Release and rollback
