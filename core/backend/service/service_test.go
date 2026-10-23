@@ -64,11 +64,13 @@ func (e *testEngine) Observe(ctx context.Context) (backend.Observation, error) {
 type testPlatform struct {
 	mu      sync.Mutex
 	running bool
+	starts  int
 }
 
 func (p *testPlatform) Start(ctx context.Context, _ *backend.RuntimePlan) error {
 	p.mu.Lock()
 	p.running = true
+	p.starts++
 	p.mu.Unlock()
 	return ctx.Err()
 }
@@ -514,6 +516,39 @@ func TestLegacyActiveMigrationAndExplicitStopUseOneExecutor(t *testing.T) {
 	waitCondition(t, func() bool { return restored.Snapshot().Runtime.Observed.State == "stopped" })
 	if restored.Snapshot().Runtime.DesiredRunning {
 		t.Fatal("old Kotlin active marker overrode an explicit Go Stop")
+	}
+}
+
+func TestLegacyResumeWithoutSelectedProfileStaysStopped(t *testing.T) {
+	for name, settings := range map[string]string{
+		"damaged settings":  `{"profiles":`,
+		"no selection":      `{"profiles":[{"id":"one"}]}`,
+		"missing selection": `{"profiles":[{"id":"one"}],"currentProfileId":"absent"}`,
+		"skipped selection": `{"profiles":[{"id":"../bad"}],"currentProfileId":"../bad"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := &testEngine{}
+			opts := options(t, t.TempDir(), engine, make(chan time.Time))
+			opts.LegacyRunning = true
+			opts.LegacySettings = []byte(settings)
+			opts.ReadLegacySource = func(string) (string, error) { return "proxies: []\n", nil }
+			platform := opts.Platform.(*testPlatform)
+			app := openTestApp(t, opts)
+			waitCondition(t, func() bool { return app.Snapshot().Runtime.AppliedGeneration > 0 })
+			engine.mu.Lock()
+			engineStarts := engine.starts
+			engine.mu.Unlock()
+			platform.mu.Lock()
+			platformStarts := platform.starts
+			platform.mu.Unlock()
+			app.operations.mu.Lock()
+			resume := app.operations.document.LegacyResume
+			complete := app.operations.document.BootstrapComplete
+			app.operations.mu.Unlock()
+			if snapshot := app.Snapshot().Runtime; snapshot.DesiredRunning || snapshot.AppliedRunning || engineStarts != 0 || platformStarts != 0 || resume || !complete {
+				t.Fatal("legacy resume started a default plan without the selected profile", snapshot, engineStarts, platformStarts, resume, complete)
+			}
+		})
 	}
 }
 

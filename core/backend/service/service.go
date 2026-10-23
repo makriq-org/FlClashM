@@ -228,6 +228,16 @@ func Open(options Options) (*App, error) {
 	if plan == nil {
 		method = "apply"
 		input, err = app.captureInput()
+		if bootstrap && err == nil {
+			var captured compile.Input
+			err = json.Unmarshal(input, &captured)
+			if err == nil && captured.Profile == nil {
+				// A damaged or skipped legacy selection must never resume using
+				// a default plan that omits the user's proxies and routing rules.
+				bootstrap = false
+				err = operations.disableBootstrap()
+			}
+		}
 		if bootstrap {
 			method = "connect"
 		} else if err == nil && runtime.Snapshot().DesiredRunning {
