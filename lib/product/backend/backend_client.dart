@@ -36,6 +36,28 @@ class BackendException implements Exception {
   String toString() => message.isEmpty ? code : message;
 }
 
+/// A domain write committed, but its subsequent runtime step failed. The
+/// receipt identifies the exact saved revision, independently of newer edits.
+class BackendCommittedException extends BackendException {
+  BackendCommittedException(Map<String, dynamic> receipt, this.cause)
+    : receipt = Map.unmodifiable(receipt),
+      super(
+        cause is BackendException ? cause.code : BackendException.failed,
+        BackendClient._plain(cause),
+        operationId: cause is BackendException ? cause.operationId : null,
+      );
+
+  final Map<String, dynamic> receipt;
+  final Object cause;
+
+  int? revisionFor(String profileId) {
+    final revision = receipt['revision'];
+    return receipt['profileId'] == profileId && revision is num
+        ? revision.toInt()
+        : null;
+  }
+}
+
 /// Local UI client. It submits user actions and projects snapshots; it has no
 /// compiler, runtime executor, recovery timer or subscription scheduler.
 class BackendClient {
@@ -65,6 +87,8 @@ class BackendClient {
   String _instance = '';
   int _sequence = -1;
   int _viewGeneration = 0;
+  bool _uiOpened = false;
+  bool _restoreUIRequested = false;
 
   Stream<Map<String, dynamic>> get changes => _changes.stream;
   Map<String, dynamic> get snapshot => _copy(_snapshot);
@@ -75,9 +99,10 @@ class BackendClient {
   String operationId() =>
       'ui-${List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
 
-  late final String _uiSession = operationId();
+  late String _uiSession = operationId();
 
   Future<Map<String, dynamic>> openUI() async {
+    _uiOpened = true;
     final receipt = _map(await request('ui.attach', null, _uiSession));
     return wait(_uiSession, initial: receipt);
   }
@@ -86,11 +111,16 @@ class BackendClient {
     _subscription ??= _events.listen(_event);
     // A replaced backend may have published events before the new binding
     // delivered them; only a full snapshot restores the projection.
-    _reconnectSubscription ??= _reconnects.listen((_) => _resync());
+    _reconnectSubscription ??= _reconnects.listen((_) {
+      _restoreUIRequested = _uiOpened;
+      _resync();
+    });
     await refresh();
   }
 
   Future<void> detach() async {
+    _uiOpened = false;
+    _restoreUIRequested = false;
     await _subscription?.cancel();
     _subscription = null;
     await _reconnectSubscription?.cancel();
@@ -212,10 +242,15 @@ class BackendClient {
       if (runtimeOperation is String && runtimeOperation.isNotEmpty) {
         try {
           await wait(runtimeOperation);
-        } on BackendException catch (error) {
+        } catch (error, stack) {
           // The change itself is saved; a newer runtime operation applies the
           // latest state instead, so callers still get this receipt.
-          if (!error.isSuperseded) rethrow;
+          if (error is! BackendException || !error.isSuperseded) {
+            Error.throwWithStackTrace(
+              BackendCommittedException(completed, error),
+              stack,
+            );
+          }
         }
       }
     } catch (error, stack) {
@@ -226,7 +261,14 @@ class BackendClient {
       } catch (_) {}
       Error.throwWithStackTrace(error, stack);
     }
-    await refresh();
+    try {
+      await refresh();
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        BackendCommittedException(completed, error),
+        stack,
+      );
+    }
     return completed;
   }
 
@@ -303,12 +345,31 @@ class BackendClient {
         _refreshAgain = true;
         continue;
       }
+      final restoreUI =
+          _uiOpened && (_restoreUIRequested || instance != _instance);
       _instance = instance;
       _sequence = sequence;
       _snapshot = _copy(second);
       _view = _copy(view);
       _viewGeneration =
           (nextRuntime['appliedGeneration'] as num?)?.toInt() ?? 0;
+      if (restoreUI) {
+        _restoreUIRequested = false;
+        // A fresh operation is required: a restarted backend may retain the
+        // old receipt while its in-memory UI presence has been lost.
+        _uiSession = operationId();
+        try {
+          final receipt = _map(
+            await request('ui.attach', {'restore': true}, _uiSession),
+          );
+          await wait(_uiSession, initial: receipt);
+        } catch (_) {
+          _restoreUIRequested = true;
+          rethrow;
+        }
+        _refreshAgain = true;
+        continue;
+      }
       _changes.add(snapshot);
     } while (_refreshAgain);
   }
@@ -420,7 +481,11 @@ class BackendClient {
         'select': select,
       });
     } finally {
-      await request('blob.delete', {'token': token});
+      try {
+        await request('blob.delete', {'token': token});
+      } catch (_) {
+        // Cleanup must not hide the committed write and its exact revision.
+      }
     }
   }
 

@@ -94,6 +94,140 @@ class ClientHost {
 }
 
 void main() {
+  for (final method in ['profile.put', 'profile.import.file']) {
+    for (final concurrent in [false, true]) {
+      test(
+        '$method keeps committed revision after apply failure, concurrent=$concurrent',
+        () async {
+          final host = ClientHost();
+          var first = true;
+          final client = BackendClient(
+            transport: (request) async {
+              if (request['method'] == 'blob.create') host.blobs.clear();
+              if (request['method'] == method) {
+                final params = request['params'] as Map;
+                if (params['expectedRevision'] != host.revision) {
+                  return {
+                    'apiVersion': 1,
+                    'error': {
+                      'code': 'conflict',
+                      'message': 'profile revision changed',
+                    },
+                  };
+                }
+                final savedRevision = ++host.revision;
+                final apply = first;
+                first = false;
+                if (apply) {
+                  host.operations['saved-apply'] = {
+                    'status': 'failed',
+                    'errorCode': 'failed',
+                    'error': 'node did not start',
+                  };
+                }
+                return {
+                  'apiVersion': 1,
+                  'result': {
+                    'status': 'succeeded',
+                    'profileId': 'one',
+                    'revision': savedRevision,
+                    if (apply) 'runtimeOperationId': 'saved-apply',
+                  },
+                };
+              }
+              if (request['method'] == 'operation.get' && concurrent) {
+                host.revision = 3;
+              }
+              return host.call(request);
+            },
+            events: host.events.stream,
+          );
+          await client.attach();
+          var expectedRevision = client.profileRevision('one');
+          Future<Map<String, dynamic>> save() => method == 'profile.put'
+              ? client.command(method, {
+                  'metadata': {'id': 'one'},
+                  'expectedRevision': expectedRevision,
+                })
+              : client.saveSource(
+                  {'id': 'one'},
+                  Uint8List.fromList([1]),
+                  expectedRevision: expectedRevision,
+                );
+          try {
+            await save();
+            fail('runtime failure was hidden');
+          } on BackendCommittedException catch (error) {
+            expect(error.revisionFor('one'), 2);
+            expect(error.revisionFor('another'), isNull);
+            expectedRevision = error.revisionFor('one')!;
+          }
+          expect(client.profileRevision('one'), concurrent ? 3 : 2);
+          if (concurrent) {
+            await expectLater(
+              save(),
+              throwsA(
+                isA<BackendException>().having(
+                  (error) => error.isRevisionConflict,
+                  'CAS conflict',
+                  true,
+                ),
+              ),
+            );
+          } else {
+            expect((await save())['revision'], 3);
+          }
+          await client.detach();
+          await host.close();
+        },
+      );
+    }
+  }
+
+  test(
+    'replacement and rebind restore UI preparation with fresh receipts',
+    () async {
+      final host = ClientHost()..running = false;
+      final reconnects = StreamController<void>.broadcast();
+      final sessions = <Map<String, dynamic>>[];
+      var prepared = false;
+      final client = BackendClient(
+        transport: (request) async {
+          if (request['method'] == 'ui.attach') {
+            sessions.add(request);
+            final id = request['operationId'] as String;
+            final receipt = host.operations.putIfAbsent(id, () {
+              prepared = true;
+              return {'status': 'succeeded', 'operationId': id};
+            });
+            return {'apiVersion': 1, 'result': receipt};
+          }
+          return host.call(request);
+        },
+        events: host.events.stream,
+        reconnects: reconnects.stream,
+      );
+      await client.attach();
+      await client.openUI();
+      for (final instance in ['service-2', 'service-2']) {
+        host.instance = instance;
+        prepared = false;
+        final resynced = client.changes.first;
+        reconnects.add(null);
+        await resynced;
+        expect(prepared, true);
+        expect((sessions.last['params'] as Map)['restore'], true);
+        expect((client.snapshot['runtime'] as Map)['desiredRunning'], false);
+      }
+      expect(
+        sessions.map((request) => request['operationId']).toSet(),
+        hasLength(3),
+      );
+      await client.detach();
+      await reconnects.close();
+      await host.close();
+    },
+  );
   test(
     'failed selection refreshes the rolled back view without an event',
     () async {

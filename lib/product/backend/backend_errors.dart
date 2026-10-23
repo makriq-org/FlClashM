@@ -52,6 +52,13 @@ String formatBackendError(
   BackendErrorLabels labels, {
   bool reportSuperseded = false,
 }) {
+  if (error is BackendCommittedException) {
+    return formatBackendError(
+      error.cause,
+      labels,
+      reportSuperseded: reportSuperseded,
+    );
+  }
   if (error is BackendException) {
     if (error.isSuperseded) return reportSuperseded ? labels.cancelled : '';
     final prefix = switch (error.code) {
