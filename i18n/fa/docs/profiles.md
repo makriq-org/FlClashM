@@ -100,7 +100,7 @@ proxies:
 | `strategy-selection.strategy-concurrency` | `4` | راهبردهای هم‌زمان بررسی‌شونده |
 | `strategy-selection.startup-timeout` | `15s` | بودجهٔ انتخاب پیش از شروع نود |
 | `strategy-selection.continue-in-background` | `true` | ادامهٔ فهرست در پس‌زمینه پس از fallback |
-| `strategy-selection.fallback-strategy` | راهبرد داخلی | آرگومان راهبرد موقت اگر foreground به‌موقع تمام نشد |
+| `strategy-selection.fallback-strategy` | راهبرد داخلی | راهبرد موقت اگر انتخاب به‌موقع تمام نشد |
 | `strategy-selection.retry-after` | `5m` | مکث پیش از انتخاب تازه پس از fallback |
 | `strategy-selection.cache.ttl` | `7d` | عمر کش |
 | `strategy-selection.cache.recheck-after` | `1d` | فاصلهٔ بررسی مجدد |
@@ -132,7 +132,7 @@ proxy-groups:
 
 فقط حالت کلاینت CNC مجاز است. به‌جای `<64-hex-key>` کلید سرور را قرار دهید: دقیقاً 64 نویسهٔ hexadecimal. `provider: none` به `engine`، `engine-url`، `engine-token` نیاز دارد؛ برای سایر ارائه‌دهندگان این فیلدها ممنوع‌اند. `profiles`، `failover`، `video.hw`، listener محلی و کلید از فایل مجاز نیستند.
 
-`dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند: `host:53` برای IPv4 و `[IPv6]:53` برای IPv6. تغییر آن نود فعال وابسته را دوباره اجرا می‌کند. نبود DNS فوراً خطای `physical DNS is unavailable` می‌دهد. خطای راه‌اندازی هنگام اعمال نقشه، اعمال آن را متوقف می‌کند؛ پس از بیدارسازی ناموفق در پس‌زمینه، مکث `retry-after` اعمال می‌شود. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
+`dns-server: system` از نخستین DNS شبکهٔ فیزیکی Android استفاده می‌کند: `host:53` برای IPv4 و `[IPv6]:53` برای IPv6. تغییر آن نود فعال وابسته را دوباره اجرا می‌کند. اگر DNS در دسترس نباشد، راه‌اندازی فوراً با خطای `physical DNS is unavailable` متوقف می‌شود. خطای راه‌اندازی هنگام اعمال نقشه، اعمال آن را متوقف می‌کند؛ پس از بیدارسازی ناموفق در پس‌زمینه، مکث `retry-after` اعمال می‌شود. کلاینت و سرور باید از OLC2 و OLVC 5 پشتیبانی کنند.
 
 <details>
 <summary>فیلدها و انتقال OlcRTC</summary>
@@ -343,7 +343,7 @@ proxy-groups:
 
 | پارامتر | پیش‌فرض | توضیح |
 |---------|---------|-------|
-| `mode` | `auto` | `auto` پشتیبان را می‌خواباند؛ `always` راه‌اندازی همیشگی قدیمی |
+| `mode` | `auto` | `auto` نود ذخیره را می‌خواباند؛ `always` راه‌اندازی همیشگی قدیمی |
 | `wake.urls` | زنجیرهٔ `connectivity-check` | آدرس‌های HTTP(S) عمومی برای وارسی گروه زیرنظر |
 | `wake.interval` | `30s` | فاصلهٔ وارسی هنگام خواب |
 | `wake.failures` | `2` | دورهای ناموفق پیاپی تا بیدارشدن |
@@ -469,6 +469,7 @@ flclashm-settings: autostart,autoupdate
 
 | هدر | مقدار | کاربرد |
 |---|---|---|
+| `flclashm-newdomain` / `flclashx-newdomain` | نام میزبان | میزبان تازهٔ URL اشتراک را ذخیره می‌کند؛ طرح، پورت و مسیر تغییر نمی‌کنند |
 | `flclashm-background` | `URL[,opacity]` | پس‌زمینه؛ نمایانی اختیاری تصویر 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | رنگ‌بندی |
 | `flclashm-widgets` | `list` | ترتیب ابزارک‌ها |
@@ -490,7 +491,7 @@ flclashm-settings: autostart,autoupdate
 | `x-hwid-max-devices-reached` | `true` | رسیدن به محدودیت دستگاه |
 | `x-hwid-not-supported` | `true` | عدم پشتیبانی HWID |
 
-`flclashm-hex`: رنگ hexadecimal شش/هشت‌رقمی با `#` اختیاری، سپس نوع Material 3 و `pureblack`. انواع: `tonalSpot`، `fidelity`، `monochrome`، `neutral`، `vibrant`، `expressive`، `content`، `rainbow`، `fruitSalad`.
+`flclashm-hex`: رنگ hexadecimal 6/8 رقمی با `#` اختیاری، سپس نوع Material 3 و `pureblack`. انواع: `tonalSpot`، `fidelity`، `monochrome`، `neutral`، `vibrant`، `expressive`، `content`، `rainbow`، `fruitSalad`.
 
 جفت‌های `flclashm-view` با `;` جدا می‌شوند؛ همهٔ کلیدها اختیاری‌اند:
 

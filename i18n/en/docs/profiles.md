@@ -82,7 +82,7 @@ HTTPS lists contain one strategy per line; empty lines and lines starting with `
 | `strategy-selection.strategy-concurrency` | `4` | Strategies checked at once |
 | `strategy-selection.startup-timeout` | `15s` | Selection budget before the node starts |
 | `strategy-selection.continue-in-background` | `true` | Keep checking the list in the background after fallback |
-| `strategy-selection.fallback-strategy` | built-in strategy | Temporary-strategy arguments if foreground didn't finish in time |
+| `strategy-selection.fallback-strategy` | built-in strategy | Temporary strategy if selection did not finish in time |
 | `strategy-selection.retry-after` | `5m` | Pause before a new selection after fallback |
 | `strategy-selection.cache.ttl` | `7d` | Cache lifetime |
 | `strategy-selection.cache.recheck-after` | `1d` | Re-check interval |
@@ -411,6 +411,7 @@ flclashm-settings: autostart,autoupdate
 
 | Header | Value | Purpose |
 |---|---|---|
+| `flclashm-newdomain` / `flclashx-newdomain` | hostname | Saves a new host for the subscription URL; scheme, port and path stay unchanged |
 | `flclashm-background` | `URL[,opacity]` | Background; optional image visibility 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Color theme |
 | `flclashm-widgets` | `list` | Widget order |

@@ -411,6 +411,7 @@ flclashm-settings: autostart,autoupdate
 
 | Заголовок | Значение | Назначение |
 |---|---|---|
+| `flclashm-newdomain` / `flclashx-newdomain` | имя хоста | Сохраняет новый хост URL подписки; схема, порт и путь остаются прежними |
 | `flclashm-background` | `URL[,opacity]` | Фон; необязательная видимость изображения 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Цветовая тема |
 | `flclashm-widgets` | `list` | Порядок виджетов |

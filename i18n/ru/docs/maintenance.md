@@ -31,7 +31,7 @@ flutter build apk --debug --target-platform android-arm64
 
 Для независимой диагностической установки добавьте `ORG_GRADLE_PROJECT_backendDiagnostic=true` к команде `flutter build apk --debug --target-platform android-arm64`. Пакет — `com.makriq.flclash.backendcheck`; CI `backend_test` использует `.backendtest`. Обновление с сохранением данных: `adb install -r -t`.
 
-Для локальной сборки варианта CI используйте `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` после подготовки ядра и ресурсов; пакет — `com.makriq.flclash.backendtest`.
+Для упрощённой локальной сборки тестового варианта используйте `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` после подготовки ядра и ресурсов; пакет — `com.makriq.flclash.backendtest`. CI дополнительно передаёт `--dart-define=APP_ENV=pre` и `--dart-define=CORE_VERSION` со значением из `lib/core_version.dart`.
 
 </details>
 
@@ -70,7 +70,7 @@ API, данные и план имеют независимые версии, с
 
 ## 💾 Сохранность данных
 
-`backend-v1.json` хранит runtime-намерение, поколение, подтверждённый input/plan и runtime-квитанции; `application-v1.json` — журнал доменных операций (до 2 МиБ); `profiles.json` — каталог профилей и настройки. Runtime-запись использует atomic rename и fsync. Восстановление берёт последний подтверждённый input; незавершённые операции становятся interrupted. Ревизии защищают от поздней записи подписки/редактора. Однократная миграция сохраняет IDs, даты, исходные байты, неизвестные поля и большие целые.
+`backend-v1.json` хранит runtime-намерение, поколение, подтверждённый input/plan и runtime-квитанции; `application-v1.json` — журнал доменных операций (до 2 МиБ); `profiles.json` — каталог профилей и настройки. Все три файла записываются через atomic rename и fsync. Восстановление берёт последний подтверждённый input; незавершённые операции становятся interrupted. Ревизии защищают от поздней записи подписки/редактора. Однократная миграция сохраняет IDs, даты, исходные байты, неизвестные поля и большие целые.
 
 ZIP сохраняет `config.json`, оригинальные профили и provider cache. Отсутствующий исходник не заменяется пустым файлом. Архив проверяется на обход путей, символические ссылки и чрезмерный объём распаковки. Binder-перенос: блоки 192 КиБ, до 128 МиБ на файл, 32 незавершённых переноса и 512 МиБ суммарно. Удаление последнего профиля сохраняет Stop; reset останавливает работу и сохраняет маркер миграции и монотонность поколений.
 

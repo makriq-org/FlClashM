@@ -82,7 +82,7 @@ HTTPS 列表每行一个策略；空行和以 `#` 开头的行被忽略。支持
 | `strategy-selection.strategy-concurrency` | `4` | 同时检查的策略数 |
 | `strategy-selection.startup-timeout` | `15s` | 节点启动前的选择预算 |
 | `strategy-selection.continue-in-background` | `true` | fallback 后是否在后台继续检查列表 |
-| `strategy-selection.fallback-strategy` | 内置策略 | 前台未及时完成时的临时策略参数 |
+| `strategy-selection.fallback-strategy` | 内置策略 | 选择未及时完成时使用的临时策略 |
 | `strategy-selection.retry-after` | `5m` | fallback 后再次选择前的暂停 |
 | `strategy-selection.cache.ttl` | `7d` | 缓存生存期 |
 | `strategy-selection.cache.recheck-after` | `1d` | 重新检查间隔 |
@@ -411,6 +411,7 @@ flclashm-settings: autostart,autoupdate
 
 | 响应头 | 值 | 用途 |
 |---|---|---|
+| `flclashm-newdomain` / `flclashx-newdomain` | 主机名 | 保存订阅 URL 的新主机；协议、端口和路径保持不变 |
 | `flclashm-background` | `URL[,opacity]` | 背景；可选图片可见度 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | 配色主题 |
 | `flclashm-widgets` | `list` | 小组件顺序 |

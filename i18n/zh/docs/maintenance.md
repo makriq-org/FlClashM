@@ -31,11 +31,11 @@ flutter build apk --debug --target-platform android-arm64
 
 独立诊断安装：在 `flutter build apk --debug --target-platform android-arm64` 前设置 `ORG_GRADLE_PROJECT_backendDiagnostic=true`。包名为 `com.makriq.flclash.backendcheck`；CI 的 `backend_test` 使用 `.backendtest`。保留数据更新：`adb install -r -t`。
 
-本地构建 CI 变体：准备内核和资源后运行 `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64`；包名为 `com.makriq.flclash.backendtest`。
+简化的本地测试变体构建：准备内核和资源后运行 `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64`；包名为 `com.makriq.flclash.backendtest`。CI 还传入 `--dart-define=APP_ENV=pre` 和 `--dart-define=CORE_VERSION`，后者的值来自 `lib/core_version.dart`。
 
 </details>
 
-CI 覆盖 Go 主机/竞态、Dart/Flutter、Kotlin 单元测试、ARM64/armeabi-v7a 构建和 x86_64 E2E，使用真实 mihomo、validator、ByeDPI 和 TUN。纯文档修改跳过重任务。模拟器不能替代 ARM 真机：发布前检查模式、节点、订阅、UI/`:remote` 进程死亡、恢复时保留 Stop、网络切换及耗电。未解决问题见 [#132](https://github.com/makriq-org/FlClashM/issues/132)。 `secret-scan` 工作流使用 Gitleaks 检查 PR 和推送提交。
+CI 覆盖 Go 主机/竞态、Dart/Flutter、Kotlin 单元测试、ARM64/armeabi-v7a 构建和 x86_64 E2E，使用真实 mihomo、validator、ByeDPI 和 TUN。纯文档修改跳过重任务。模拟器不能替代 ARM 真机：发布前检查模式、节点、订阅、UI/`:remote` 进程死亡、恢复时保留 Stop、网络切换及耗电。未解决问题见 [#132](https://github.com/makriq-org/FlClashM/issues/132)。`secret-scan` 工作流使用 Gitleaks 检查 PR 和推送提交。
 
 <a id="architecture"></a>
 
@@ -58,7 +58,7 @@ RuntimeCoordinator 是可变运行状态的唯一所有者。后端独立于 Flu
 <details>
 <summary>修改运行时须保持的后端约定</summary>
 
-**Desired** 为已保存意图；**Applied** 为最后确认计划；**Observed** 为实际观测，出错时为 unknown。不可变 RuntimePlan 以版本和 SHA-256 校验。准备与效果队列分离；context 和代次阻止迟到结果生效。失败时恢复确认计划或停止资源。VPN 撤销会保存 Stop，必须再次显式 Start。 队列最多接受 8 条命令，并为 Stop 保留额外容量。
+**Desired** 为已保存意图；**Applied** 为最后确认计划；**Observed** 为实际观测，出错时为 unknown。不可变 RuntimePlan 以版本和 SHA-256 校验。准备与效果队列分离；context 和代次阻止迟到结果生效。失败时恢复确认计划或停止资源。VPN 撤销会保存 Stop，必须再次显式 Start。队列最多接受 8 条命令，并为 Stop 保留额外容量。
 
 API、数据和计划独立版本化，当前均为 `1`。请求：`apiVersion`、`operationId`、`method`、`params`；响应：`result` 或 `error`。相同 ID 和内容返回旧结果，内容不同则拒绝。需等待领域操作及其关联的 `runtimeOperationId`。超时或 UI 死亡不会取消工作；取消必须显式执行。
 
@@ -70,7 +70,7 @@ API、数据和计划独立版本化，当前均为 `1`。请求：`apiVersion`�
 
 ## 💾 数据完整性
 
-`backend-v1.json` 保存运行意图、代次、确认的 input/plan 和运行回执；`application-v1.json` 保存领域操作日志（最多 2 MiB）；`profiles.json` 保存配置目录和设置。运行记录通过原子重命名及 fsync 写入。恢复使用最后确认输入，未完成操作标为 interrupted。修订号阻止订阅或编辑器迟到写入。一次性迁移保留 ID、日期、原始字节、未知字段及大整数。
+`backend-v1.json` 保存运行意图、代次、确认的 input/plan 和运行回执；`application-v1.json` 保存领域操作日志（最多 2 MiB）；`profiles.json` 保存配置目录和设置。这三个文件均通过原子重命名及 fsync 写入。恢复使用最后确认输入，未完成操作标为 interrupted。修订号阻止订阅或编辑器迟到写入。一次性迁移保留 ID、日期、原始字节、未知字段及大整数。
 
 ZIP 保留 `config.json`、原始配置和 provider 缓存，缺失源文件不会被空文件替换。拒绝路径穿越、符号链接和 ZIP 炸弹。Binder 传输：192 KiB 分块，单文件最大 128 MiB，最多 32 个未完成传输，总计 512 MiB。删除最后一个配置会保存 Stop；reset 停止工作并保留迁移标记与单调代次。
 

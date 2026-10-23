@@ -31,7 +31,7 @@ flutter build apk --debug --target-platform android-arm64
 
 For an independent diagnostic installation, add `ORG_GRADLE_PROJECT_backendDiagnostic=true` to `flutter build apk --debug --target-platform android-arm64`. Package: `com.makriq.flclash.backendcheck`; CI `backend_test` uses `.backendtest`. Update while preserving data: `adb install -r -t`.
 
-To build the CI variant locally, run `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` after preparing core and assets; package: `com.makriq.flclash.backendtest`.
+For a simplified local build of the test variant, run `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` after preparing core and assets; package: `com.makriq.flclash.backendtest`. CI also passes `--dart-define=APP_ENV=pre` and `--dart-define=CORE_VERSION` with the value from `lib/core_version.dart`.
 
 </details>
 
@@ -70,7 +70,7 @@ Main methods: `snapshot`, `runtime.view`, `presentation`, `runtime.*`, `operatio
 
 ## 💾 Data integrity
 
-`backend-v1.json` stores runtime intent, generation, confirmed input/plan and runtime receipts; `application-v1.json` stores the domain operation ledger (up to 2 MiB); `profiles.json` stores the profile catalog and settings. Runtime writes use atomic rename and fsync. Recovery uses the last confirmed input; unfinished operations become interrupted. Revisions fence late subscription/editor writes. One-time migration preserves IDs, dates, original bytes, unknown fields and large integers.
+`backend-v1.json` stores runtime intent, generation, confirmed input/plan and runtime receipts; `application-v1.json` stores the domain operation ledger (up to 2 MiB); `profiles.json` stores the profile catalog and settings. All three files are written with atomic rename and fsync. Recovery uses the last confirmed input; unfinished operations become interrupted. Revisions fence late subscription/editor writes. One-time migration preserves IDs, dates, original bytes, unknown fields and large integers.
 
 ZIP preserves `config.json`, original profiles and provider cache. A missing source is not replaced with an empty file. Path traversal, symlinks and zip bombs are rejected. Binder transfers: 192 KiB chunks, up to 128 MiB per file, 32 unfinished transfers and 512 MiB total. Deleting the last profile persists Stop; reset stops work and preserves the migration marker and monotonic generations.
 
@@ -107,7 +107,7 @@ nix develop -c make check go-check
 
 `tool/prepare_core.sh` recreates `core/vendor`, applies patches without fuzz and checks the Mieru regression. Builds use `-mod=vendor` without changing the shared module cache. Patches cover closed Mieru QUIC timeouts, the backend HTTP command gate and synchronized system DNS access. Recheck each patch on update; remove upstream-fixed patches and their invocations while retaining vendor for remaining patches.
 
-Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runtime/*_release.dart`; dependencies are in [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), build notes beside [assets](../../../assets/runtimes/). Updates and rollbacks change pins, dependencies and binaries together; then rebuild and verify released ABIs.
+Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runtime/*_release.dart`; dependencies are in [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), build notes in [assets](../../../assets/runtimes/). Updates and rollbacks change pins, dependencies and binaries together; then rebuild and verify released ABIs.
 
 <a id="release"></a>
 

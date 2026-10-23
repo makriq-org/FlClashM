@@ -41,7 +41,7 @@ flutter build apk --debug --target-platform android-arm64
 
 برای نصب تشخیصی مستقل، `ORG_GRADLE_PROJECT_backendDiagnostic=true` را پیش از `flutter build apk --debug --target-platform android-arm64` بگذارید. بسته: `com.makriq.flclash.backendcheck`؛ گزینهٔ CI به نام `backend_test` از `.backendtest` استفاده می‌کند. به‌روزرسانی با حفظ داده: `adb install -r -t`.
 
-برای ساخت محلی گونهٔ CI، پس از آماده‌سازی هسته و منابع، `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` را اجرا کنید؛ بسته: `com.makriq.flclash.backendtest`.
+برای ساخت محلی ساده‌شدهٔ گونهٔ آزمایشی، پس از آماده‌سازی هسته و منابع، `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` را اجرا کنید؛ بسته: `com.makriq.flclash.backendtest`. CI همچنین `--dart-define=APP_ENV=pre` و `--dart-define=CORE_VERSION` را با مقدار برگرفته از `lib/core_version.dart` ارسال می‌کند.
 
 </details>
 
@@ -84,7 +84,7 @@ API، داده و نقشه نسخه‌های مستقل دارند که اکنو
 
 ## 💾 یکپارچگی داده‌ها
 
-`backend-v1.json` نیت اجرا، نسل، input/plan تأییدشده و رسیدهای اجرا را نگه می‌دارد؛ `application-v1.json` ژورنال عملیات دامنه (تا 2 MiB) و `profiles.json` فهرست پروفایل و تنظیمات را ذخیره می‌کنند. نوشتن وضعیت اجرا با atomic rename و fsync انجام می‌شود. بازیابی از آخرین ورودی تأییدشده استفاده می‌کند؛ عملیات ناتمام interrupted می‌شوند. revision جلوی نوشتن دیررس اشتراک/ویرایشگر را می‌گیرد. مهاجرت یک‌باره ID، تاریخ، بایت اصلی، فیلد ناشناخته و اعداد بزرگ را حفظ می‌کند.
+`backend-v1.json` نیت اجرا، نسل، input/plan تأییدشده و رسیدهای اجرا را نگه می‌دارد؛ `application-v1.json` ژورنال عملیات دامنه (تا 2 MiB) و `profiles.json` فهرست پروفایل و تنظیمات را ذخیره می‌کنند. نوشتن هر 3 فایل با atomic rename و fsync انجام می‌شود. بازیابی از آخرین ورودی تأییدشده استفاده می‌کند؛ عملیات ناتمام interrupted می‌شوند. revision جلوی نوشتن دیررس اشتراک/ویرایشگر را می‌گیرد. مهاجرت یک‌باره ID، تاریخ، بایت اصلی، فیلد ناشناخته و اعداد بزرگ را حفظ می‌کند.
 
 ZIP شامل `config.json`، پروفایل‌های اصلی و کش provider است. منبع مفقود با فایل خالی جایگزین نمی‌شود. عبور از مسیر، symlink و zip-bomb رد می‌شوند. انتقال Binder: بلوک 192 KiB، تا 128 MiB هر فایل، 32 انتقال ناتمام و مجموع 512 MiB. حذف آخرین پروفایل Stop را ذخیره می‌کند؛ reset کار را متوقف و نشان مهاجرت و نسل‌های افزایشی را حفظ می‌کند.
 
@@ -125,7 +125,7 @@ nix develop -c make check go-check
 
 `tool/prepare_core.sh` پوشهٔ `core/vendor` را از نو می‌سازد، patchها را بدون fuzz اعمال و رگرسیون Mieru را بررسی می‌کند. ساخت از `-mod=vendor` استفاده می‌کند و کش مشترک ماژول را تغییر نمی‌دهد. patchها برای timeout QUIC بستهٔ Mieru، درگاه فرمان HTTP backend و همگام‌سازی دسترسی DNS سیستم‌اند. در هر ارتقا بررسی‌شان کنید؛ patch اصلاح‌شده در بالادست و فراخوانی‌اش را حذف و vendor را برای بقیه حفظ کنید.
 
-نسخه، کامیت منبع، ABI و SHA-256 نودها در `lib/product/runtime/*_release.dart` تثبیت شده‌اند؛ وابستگی‌ها در [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md) و یادداشت ساخت کنار [منابع](../../../assets/runtimes/) هستند. ارتقا و بازگشت باید pin، وابستگی و باینری را با هم تغییر دهند؛ سپس ABIهای انتشار را دوباره بسازید و بررسی کنید.
+نسخه، کامیت منبع، ABI و SHA-256 نودها در `lib/product/runtime/*_release.dart` تثبیت شده‌اند؛ وابستگی‌ها در [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md) و یادداشت ساخت در [منابع](../../../assets/runtimes/) هستند. ارتقا و بازگشت باید pin، وابستگی و باینری را با هم تغییر دهند؛ سپس ABIهای انتشار را دوباره بسازید و بررسی کنید.
 
 <a id="release"></a>
 

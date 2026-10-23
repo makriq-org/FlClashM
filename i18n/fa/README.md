@@ -27,7 +27,7 @@ APK را از [GitHub Releases](https://github.com/makriq-org/FlClashM/releases)
 |---|---|
 | `FlClashM-android-universal.apk` | هر معماری پشتیبانی‌شده |
 | `FlClashM-android-arm64-v8a.apk` | بیشتر تلفن‌های امروزی |
-| `FlClashM-android-armeabi-v7a.apk` | دستگاه‌های ARM سی‌ودوبیتی |
+| `FlClashM-android-armeabi-v7a.apk` | دستگاه‌های ARM با معماری 32 بیتی |
 | `FlClashM-android-x86_64.apk` | شبیه‌ساز و دستگاه x86_64 |
 | `FlClashM-android-release.aab` | Android App Bundle |
 
