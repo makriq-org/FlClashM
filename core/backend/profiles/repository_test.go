@@ -126,6 +126,78 @@ func TestMigrationFailureAndMissingCache(t *testing.T) {
 	}
 }
 
+func TestMigrationRetriesRecoverableSourceReadAfterReopen(t *testing.T) {
+	for _, failure := range []struct {
+		name string
+		err  error
+	}{
+		{"timeout", syscall.ETIMEDOUT},
+		{"access_denied", syscall.EACCES},
+		{"permission_denied", syscall.EPERM},
+		{"io_failure", syscall.EIO},
+		{"deadline", context.DeadlineExceeded},
+		{"unknown", errors.New("source temporarily unavailable")},
+	} {
+		t.Run(failure.name, func(t *testing.T) {
+			directory := t.TempDir()
+			r, err := Open(filepath.Join(directory, "store"), validator)
+			if err != nil {
+				t.Fatal(err)
+			}
+			legacy := filepath.Join(directory, "legacy")
+			if err := os.Mkdir(legacy, 0700); err != nil {
+				t.Fatal(err)
+			}
+			original := "# original legacy bytes\nproxies: []\n"
+			for _, id := range []string{"healthy", "recovering"} {
+				if err := os.WriteFile(filepath.Join(legacy, id+".yaml"), []byte(original), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			settings := []byte(`{"currentProfileId":"recovering","profiles":[{"id":"healthy"},{"id":"recovering"}]}`)
+			initial := r.Snapshot()
+			read := func(id string) (string, error) {
+				if id == "recovering" {
+					return "partial content", &os.PathError{Op: "read", Path: filepath.Join(legacy, id+".yaml"), Err: failure.err}
+				}
+				return ReadLegacySource(legacy, id)
+			}
+			if err := r.Migrate(context.Background(), settings, read); !errors.Is(err, failure.err) {
+				t.Fatalf("read failure was not propagated: %v", err)
+			}
+			if !reflect.DeepEqual(initial, r.Snapshot()) {
+				t.Fatal("failed migration changed the catalog")
+			}
+			reopened, err := Open(filepath.Dir(r.path), validator)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(initial, reopened.Snapshot()) {
+				t.Fatal("failed migration committed partial state or the migration marker")
+			}
+			reads := 0
+			if err := reopened.Migrate(context.Background(), settings, func(id string) (string, error) {
+				reads++
+				return ReadLegacySource(legacy, id)
+			}); err != nil {
+				t.Fatal("migration did not recover after reopening:", err)
+			}
+			if reads != 2 || !reopened.Snapshot().Migrated {
+				t.Fatal("legacy sources were not retried", reads, reopened.Snapshot())
+			}
+			for _, id := range []string{"healthy", "recovering"} {
+				record, err := reopened.Get(id)
+				if err != nil || record.SourceMissing || record.Source != original {
+					t.Fatalf("source %s did not recover intact: %+v %v", id, record, err)
+				}
+			}
+			if string(reopened.Snapshot().Settings["currentProfileId"]) != `"recovering"` {
+				t.Fatal("selected profile was not preserved")
+			}
+		})
+	}
+}
+
 func TestMigrationKeepsOtherProfilesWhenOneLegacyRecordIsBad(t *testing.T) {
 	directory := t.TempDir()
 	legacy := filepath.Join(directory, "legacy")
