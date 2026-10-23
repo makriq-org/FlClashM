@@ -1,42 +1,28 @@
-# 🛠 Документация для разработчиков
+# Для разработчиков
 
-Как устроен FlClashM и как с ним работать, не ломая дешёвую синхронизацию с апстримом.
+FlClashM — Android-клиент для mihomo. Go backend управляет данными и подключением,
+Flutter показывает интерфейс, Android предоставляет системные механизмы.
 
-**Главный принцип:** продуктовая логика форка живёт в `lib/product/**` и отделена от базы FlClashX. Базовый код обращается к ней только через зарегистрированные точки интеграции. Благодаря этому обновление апстрима остаётся дешёвым, а специфика форка не растворяется в базе.
+- [Архитектура](architecture.md) — слои и граница с апстримом.
+- [Go backend](go-backend/architecture.md) — API, состояние, хранение и миграция.
+- [Среда выполнения](runtime.md) — запуск, внешние узлы и патчи mihomo.
+- [Диагностика](diagnostics.md) — локальные журналы и экспорт.
+- [Безопасность](security.md) — ограничения профиля и сетевых запросов.
+- [Релизы](release-contract.md) — сборка и доставка обновлений.
+- [Синхронизация с FlClashX](upstream-sync.md) — обновление базы.
+- [Проверка](verification.md) — локальные команды, CI и известные проблемы.
 
----
-
-## 📖 Разделы
-
-| Раздел | О чём |
-|--------|-------|
-| 🏗 **[Архитектура](architecture.md)** | Главная цепочка обработки, слои, граница base/product, основные сервисы |
-| ⚙️ **[Среда выполнения](runtime.md)** | Обработка профиля, проверка и жизненный цикл встроенных узлов, снимок VPN |
-| 🩺 **[Локальная диагностика](diagnostics.md)** | Журналы процессов, redaction, экспорт и откат |
-| 🔒 **[Безопасность](security.md)** | Runtime-политика, защиты Android, границы заголовков провайдера |
-| 📦 **[Релизы](release-contract.md)** | Состав выпуска, конвейер, подписанная доставка обновлений, откат |
-| 🔄 **[Синхронизация с FlClashX](upstream-sync.md)** | Процесс дешёвого обновления базы |
-| ✅ **[Проверка сборки](verification.md)** | Локальные гейты и CI |
-
----
-
-## 🧰 Локальные команды (кратко)
-
-На NixOS всё окружение задаёт `flake.nix`:
+На NixOS окружение задаёт `flake.nix`:
 
 ```bash
-nix develop -c make dev              # отладочный APK (arm64)
-nix develop -c make check            # boundaries + release-contract + drift + test + analyze
-nix develop -c make fetch-upstream   # подтянуть upstream/dev
+nix develop -c make dev              # отладочный APK для arm64
+nix develop -c make check            # проверки Dart/Flutter и границ форка
+nix develop -c make go-check         # host-тесты Go, vet и race detector
 ```
 
-Закреплённые зависимости OlcRTC и StormDNS и порядок их обновления описаны в
+Правила веток, коммитов и PR — в [AGENTS.md](../../../../AGENTS.md).
+Закрепление зависимостей внешних узлов — в
 [tool/runtime_go_modules](../../../../tool/runtime_go_modules/README.md).
 
-Подробности сборки и проверок — в [проверке сборки](verification.md) и в [README проекта](../../../../README.md#-сборка).
-
-> 🤖 Правила работы над кодом (границы base/product, touchpoints, drift-бюджет) описаны в [AGENTS.md](../../../../AGENTS.md).
-
----
-
-> 🌍 Другие языки: [English](../../../en/docs/development/README.md) · [中文](../../../zh/docs/development/README.md) · [فارسی](../../../fa/docs/development/README.md)
+Переводы могут отставать: [English](../../../en/docs/development/README.md) ·
+[中文](../../../zh/docs/development/README.md) · [فارسی](../../../fa/docs/development/README.md).

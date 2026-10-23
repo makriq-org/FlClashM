@@ -1,63 +1,43 @@
-# 🏗 Архитектура
+# Архитектура
 
-FlClashM построен на базе FlClashX. Продуктовая логика форка отделена от базы, чтобы обновления апстрима не ломали специфические возможности.
+FlClashM сохраняет интерфейс FlClashX и выносит управление подключением в Go.
 
-## 🔗 Главная цепочка
-
-```
-RawProfile → ProfileCompiler → SecurityPolicy → RuntimePlan → EngineManager → EngineAdapter
-```
-
-| Стадия | Что делает |
-|--------|-----------|
-| **RawProfile** | Исходный профиль как есть |
-| **ProfileCompiler** | Читает профиль, нормализует раздельное туннелирование, компилирует встроенные узлы |
-| **SecurityPolicy** | Принудительно включает TUN на Android |
-| **RuntimePlan** | Строит план запуска среды выполнения |
-| **EngineManager** | Управляет жизненным циклом движка |
-| **EngineAdapter** | Мост к `mihomo` |
-
-## 🧱 Слои
-
-1. 🎛 **База FlClashX** — UI, навигация, базовый runtime-путь.
-2. 📦 **Продуктовый слой** (`lib/product/**`) — компиляция профиля, безопасность, обновления, fork-only страницы.
-3. ⚙️ **Слой среды выполнения** — `mihomo` (baseline) и встроенные узлы `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`.
-4. 📱 **Слой платформы** — Android VPN, foreground-служба, установщик, уведомления.
-
-## 🚧 Граница между базой и продуктом
-
-Базовый код вне `lib/product/**` обращается к продуктовому слою **только через точки интеграции** из `tool/product_touchpoints.json`.
-
-- Живые `lib/views/**` **не дублируются** в `lib/product/**`: в base остаются апстримные экраны с минимальными хуками.
-- Классы виджетов и фабрики `Widget` в `lib/product/**` запрещены по умолчанию; собственные элементы FlClashM должны быть явно внесены в `allowedProductUi` из `tool/product_touchpoints.json` с указанием причины.
-
-Проверяется гейтом:
-
-```bash
-dart tool/check_product_boundaries.dart
+```text
+Исходный профиль + настройки + возможности платформы
+  → Go Compiler + SecurityPolicy
+  → неизменяемый RuntimePlan
+  → RuntimeCoordinator
+  → mihomo / внешние процессы / Android VPN
 ```
 
-> 📎 Как это соотносится с обновлением апстрима — в [синхронизации с FlClashX](upstream-sync.md). Правила для контрибьюторов — в [AGENTS.md](../../../../AGENTS.md).
+## Слои и ответственность
 
-## 🧩 Основные сервисы
+| Слой | Ответственность |
+|---|---|
+| Flutter, `lib/**` | Интерфейс, навигация, черновики редакторов, команды и снимки backend |
+| Product UI, `lib/product/**` | Клиент Go API, страницы форка, обновление APK и диагностика |
+| Go backend, `core/backend/**` | Профили, подписки, настройки, компиляция, запуск и восстановление |
+| Адаптеры, `core/backend_host.go`, `core/backend/transport/**` | mihomo и отдельные процессы NaiveProxy, OlcRTC, ByeDPI, StormDNS |
+| Android host, `android/service/**` | Разрешения, foreground-служба, VPN/TUN, DNS и события ОС |
 
-| Сервис | Отвечает за |
-|--------|-------------|
-| `ProfileCompiler` | Чтение и нормализацию профиля |
-| `SecurityPolicy` | Обязательное включение TUN на Android |
-| `EngineManager` | Жизненный цикл движка |
-| `BuiltInProxySupervisor` | Жизненный цикл встроенных узлов |
-| `AppUpdateService` | Проверку, загрузку и установку обновлений приложения |
-| `AppUpdateManifestVerifier` | Проверку подписи и контракта каталога обновлений |
-| `AccessControlService` | Раздельное туннелирование |
+`RuntimeCoordinator` — единственный владелец изменяемого состояния подключения.
+Flutter и Android `StateHub` показывают его снимки. Они не выбирают стратегии,
+не планируют восстановление и не управляют runtime своими таймерами.
+Backend работает в процессе `:remote` независимо от Flutter. Процесс `:validator`
+изолирует полную проверку конфигурации mihomo.
 
----
+Контракты API, состояния и данных — в [справочнике Go backend](go-backend/architecture.md).
+Жизненный цикл и внешние узлы — в [описании runtime](runtime.md).
 
-> 🌍 Другие языки: [English](../../../en/docs/development/architecture.md) · [中文](../../../zh/docs/development/architecture.md) · [فارسی](../../../fa/docs/development/architecture.md)
+## Граница между базой и продуктом
 
-## Переработка единого backend
+- Базовый Dart-код обращается к `lib/product/**` через записи в
+  `tool/product_touchpoints.json`.
+- Экраны `lib/views/**` остаются в базе с минимальными хуками. Страницы только
+  для форка размещаются в `lib/product/pages/**`.
+- Виджеты product-слоя регистрируются с причиной в `allowedProductUi`.
+- Остальные изменения base-файлов учитываются в `tool/base_drift_allowlist.json`.
 
-Целевой контракт, этапы и критерии переключения Android:
-[Go backend](go-backend/architecture.md),
-[инвентаризация сценариев](go-backend/inventory.md).
-До завершения переключения описание выше отражает текущий runtime path.
+Границы проверяют `dart tool/check_product_boundaries.dart` и
+`dart tool/check_base_drift.dart`. Порядок обновления базы описан в
+[синхронизации с апстримом](upstream-sync.md).

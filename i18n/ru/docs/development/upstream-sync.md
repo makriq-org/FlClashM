@@ -1,36 +1,23 @@
-# 🔄 Синхронизация с FlClashX
+# Синхронизация с FlClashX
 
-FlClashM построен на базе FlClashX. Продуктовая логика отделена, чтобы обновление базы оставалось **дешёвым**.
+База обновляется из `upstream/dev`. Flutter-интеграции форка живут в
+`lib/product/**`, бизнес-логика подключения — в `core/backend/**`.
+Остальные отличия от апстрима учитываются явно.
 
-## 🧭 Принцип
+1. Создать ветку от целевой ветки форка и выполнить `make fetch-upstream`.
+2. Выполнить `git merge upstream/dev` и разрешить конфликты. Имя Dart-пакета
+   остаётся `flclashx`; переписывать импорты не нужно. Git `rerere` переиспользует
+   ранее сохранённые разрешения конфликтов.
+3. Сразу запустить `dart tool/check_base_drift.dart`. Если upstream недоступен,
+   передать `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`.
+4. Новые обращения base к product зарегистрировать в `tool/product_touchpoints.json`.
+   Прочие необходимые изменения base объяснить в `tool/base_drift_allowlist.json`.
+   Экраны `lib/views/**` сохранять с минимальными хуками без копий в product.
+5. Перед PR выполнить `make check` и `make go-check` в окружении `nix develop`.
+   Изменения Android/runtime проверить по [инструкции](verification.md).
 
-- 📦 Продуктовая логика живёт в `lib/product/**`.
-- 🚧 Код вне `lib/product/**` обращается к ней только через точки интеграции.
+При выборе версии учитывается пользовательский эффект и форка, и апстрима.
+Синхронизация без видимого эффекта входит в ближайший выпуск. Изменения runtime
+сначала выпускаются через `-preN` с проверкой на реальных Android ABI.
 
-> 📎 Подробнее о границе base/product — в [архитектуре](architecture.md#-граница-между-базой-и-продуктом).
-
-## 📝 Процесс обновления
-
-1. ⬇️ Подтянуть FlClashX в отдельной ветке (обновление ведётся от `upstream/dev`).
-2. 🧩 Разобрать конфликты в `lib/product/**`.
-3. 🎛 Вне `lib/product/**` держать mounted-экраны в апстримных `lib/views/**`; product-логику вживлять только минимальными хуками.
-   - Если base-файл реально импортирует `lib/product/**` — запись должна быть в `tool/product_touchpoints.json`.
-   - Любой прочий base-дрейф должен быть объяснён в `tool/base_drift_allowlist.json`.
-4. ✅ После слияния прогнать проверки:
-
-```bash
-dart tool/check_product_boundaries.dart
-dart tool/check_release_continuity.dart
-flutter test test/product
-dart tool/check_base_drift.dart
-```
-
-Изменения апстрима, заметные пользователю, учитываются при выборе уровня повышения версии в ближайшем
-релизе. Синк без такого эффекта отдельного релиза не требует; изменения runtime path
-сначала выпускаются как `-preN` и проверяются на реальных Android ABI.
-
-> 🤖 Полная процедура (fetch, `rerere`, drift-чекер, финальные гейты) описана в разделе «Процедура обновления апстрима» в [AGENTS.md](../../../../AGENTS.md).
-
----
-
-> 🌍 Другие языки: [English](../../../en/docs/development/upstream-sync.md) · [中文](../../../zh/docs/development/upstream-sync.md) · [فارسی](../../../fa/docs/development/upstream-sync.md)
+Правила коммитов, PR и релизов — в [AGENTS.md](../../../../AGENTS.md).

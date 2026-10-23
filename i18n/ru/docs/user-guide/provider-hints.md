@@ -136,6 +136,6 @@ flclashm-settings: autostart,autoupdate
 
 ---
 
-> 📎 Почему оформление не влияет на безопасность — в [политике безопасности](../development/security.md#-заголовки-провайдера).
+> 📎 Почему оформление не влияет на безопасность — в [политике безопасности](../development/security.md#заголовки-провайдера).
 >
 > 🌍 Другие языки: [English](../../../en/docs/user-guide/provider-hints.md) · [中文](../../../zh/docs/user-guide/provider-hints.md) · [فارسی](../../../fa/docs/user-guide/provider-hints.md)

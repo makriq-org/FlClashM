@@ -207,7 +207,8 @@ nix develop -c make release
 nix develop -c make clean
 ```
 
-> Отдельно доступны цели `test`, `analyze`, `boundaries`, `release-contract` и `drift`.
+> Go backend проверяется командой `nix develop -c make go-check`.
+> Отдельно доступны `test`, `analyze`, `boundaries`, `actions-pinning`, `release-contract` и `drift`.
 
 ### Без Nix
 
