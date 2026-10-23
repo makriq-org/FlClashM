@@ -46,10 +46,11 @@ type Document struct {
 type Validator func(context.Context, string) error
 
 type Repository struct {
-	mu       sync.Mutex
-	path     string
-	state    Document
-	validate Validator
+	mu            sync.Mutex
+	path          string
+	state         Document
+	validate      Validator
+	syncDirectory func(string) error
 }
 
 func Open(directory string, validate Validator) (*Repository, error) {
@@ -59,7 +60,7 @@ func Open(directory string, validate Validator) (*Repository, error) {
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
-	r := &Repository{path: filepath.Join(directory, "profiles.json"), validate: validate,
+	r := &Repository{path: filepath.Join(directory, "profiles.json"), validate: validate, syncDirectory: syncProfileDirectory,
 		state: Document{Version: Version, Settings: Object{}, Profiles: []Record{}}}
 	raw, err := readStore(r.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -187,17 +188,22 @@ func (r *Repository) persist(next Document) error {
 	if err = os.Rename(f.Name(), r.path); err != nil {
 		return err
 	}
-	directory, err := os.Open(filepath.Dir(r.path))
+	// Rename has committed the visible generation. A failed directory flush
+	// cannot reject that write: memory must match the revision already on disk,
+	// just as it does for the runtime and operation stores.
+	_ = r.syncDirectory(filepath.Dir(r.path))
+	r.state = clone(next)
+	r.pruneSources()
+	return nil
+}
+
+func syncProfileDirectory(path string) error {
+	directory, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer directory.Close()
-	if err = directory.Sync(); err != nil {
-		return err
-	}
-	r.state = clone(next)
-	r.pruneSources()
-	return nil
+	return directory.Sync()
 }
 
 // Migrate imports the complete legacy settings object and original sources in

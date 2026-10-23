@@ -41,6 +41,26 @@ func create(t *testing.T, r *Repository, id, address string) Record {
 	}
 	return p
 }
+
+func TestDirectorySyncFailureAfterRenameKeepsCatalogWritable(t *testing.T) {
+	r := openRepository(t)
+	syncs := 0
+	r.syncDirectory = func(string) error {
+		syncs++
+		return errors.New("injected directory sync failure")
+	}
+	first := create(t, r, "one", "")
+	if _, err := r.Put(context.Background(), metadata("one", ""), "proxies: []\n# updated\n", first.Revision); err != nil {
+		t.Fatal("committed rename left the catalog unwritable", err)
+	}
+	reopened, err := Open(filepath.Dir(r.path), validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if syncs != 2 || !reflect.DeepEqual(r.Snapshot(), reopened.Snapshot()) {
+		t.Fatal("memory and renamed catalog disagree", syncs, r.Snapshot(), reopened.Snapshot())
+	}
+}
 func TestLegacyMigrationAndRoundTripPreserveSourceAndUnknownSettings(t *testing.T) {
 	directory := t.TempDir()
 	r, err := Open(directory, validator)
