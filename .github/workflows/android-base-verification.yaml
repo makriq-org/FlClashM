@@ -6,7 +6,7 @@ on:
   push:
     branches:
       - main
-      - refactor/go-backend
+      - dev
   workflow_dispatch:
     inputs:
       backend_test:
@@ -93,7 +93,7 @@ jobs:
               full_matrix=true
             fi
 
-            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|\.github/scripts/run-android-emulator-e2e\.sh$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/(android|runtime)/)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|\.github/scripts/run-android-emulator-e2e\.sh$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/(android|backend|bootstrap|runtime)/|lib/clash/|lib/(application|controller|main|state)\.dart$)' <<< "$changed_files"; then
               e2e=true
             fi
           fi
@@ -266,7 +266,7 @@ jobs:
 
       - name: Build Android arm64 release smoke APK
         env:
-          ORG_GRADLE_PROJECT_backendTest: ${{ (inputs.backend_test || github.ref == 'refs/heads/refactor/go-backend') && 'true' || 'false' }}
+          ORG_GRADLE_PROJECT_backendTest: ${{ inputs.backend_test && 'true' || 'false' }}
         shell: bash
         run: |
           core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\\(.*\\)';$/\\1/p" lib/core_version.dart)
@@ -288,7 +288,7 @@ jobs:
           destination="$RUNNER_TEMP/android-arm64-apk"
           mkdir -p "$destination"
           expected_package=com.makriq.flclash.dev
-          if [ "${{ inputs.backend_test || github.ref == 'refs/heads/refactor/go-backend' }}" = true ]; then
+          if [ "${{ inputs.backend_test && 'true' || 'false' }}" = true ]; then
             expected_package=com.makriq.flclash.backendtest
           fi
           "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2" dump badging "$apk" > "$destination/package.txt"
