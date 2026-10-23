@@ -15,6 +15,8 @@ class EditsHost {
   /// Concurrent writes (proxy selection, subscription refresh) that land
   /// right before the next profile.put.
   int concurrentWrites = 0;
+  int applyFailures = 0;
+  bool concurrentAfterApplyFailure = false;
 
   void write(String id, Map<String, dynamic> metadata) {
     revision++;
@@ -51,7 +53,9 @@ class EditsHost {
         final id = metadata['id'] as String;
         if (concurrentWrites > 0) {
           concurrentWrites--;
-          write(id, {'selectedMap': <String, dynamic>{'GLOBAL': 'Other'}});
+          write(id, {
+            'selectedMap': <String, dynamic>{'GLOBAL': 'Other'},
+          });
         }
         if (params['expectedRevision'] != revisions[id]) {
           result = {
@@ -61,8 +65,27 @@ class EditsHost {
           };
         } else {
           write(id, metadata);
-          result = {'status': 'succeeded', 'revision': revision};
+          result = {
+            'status': 'succeeded',
+            'profileId': id,
+            'revision': revision,
+            if (applyFailures > 0)
+              'runtimeOperationId': 'apply-${request['operationId']}',
+          };
+          if (applyFailures > 0) applyFailures--;
         }
+      case 'operation.get':
+        if (concurrentAfterApplyFailure) {
+          concurrentAfterApplyFailure = false;
+          write('one', {
+            'selectedMap': <String, dynamic>{'GLOBAL': 'Other'},
+          });
+        }
+        result = {
+          'status': 'failed',
+          'errorCode': 'failed',
+          'error': 'engine apply failed',
+        };
       case 'profile.reorder':
         commands.add((method, params));
         result = {'status': 'succeeded'};
@@ -104,17 +127,51 @@ Future<BackendClient> attached(EditsHost host) async {
 }
 
 void main() {
+  for (final concurrent in [false, true]) {
+    test(
+      'queued edits retain their committed revision after apply failure, concurrent=$concurrent',
+      () async {
+        final host = EditsHost()
+          ..applyFailures = 1
+          ..concurrentAfterApplyFailure = concurrent;
+        final client = await attached(host);
+        final errors = <Object>[];
+        final edits = BackendEdits(
+          client,
+          onError: errors.add,
+          onSettled: () {},
+        );
+        final before = configOf(client);
+        final first = withProfile(before, 'one', {'label': 'First'});
+        edits
+          ..submit(before, first)
+          ..submit(first, withProfile(first, 'one', {'label': 'Second'}));
+        await edits.flush();
+        expect(host.commands, hasLength(2));
+        expect(host.commands.last.$2['expectedRevision'], 2);
+        expect(errors.first, isA<BackendCommittedException>());
+        expect(edits.pending, isFalse);
+        if (concurrent) {
+          expect(errors, hasLength(2));
+          expect((errors.last as BackendException).isRevisionConflict, isTrue);
+          expect(host.profiles['one']!['label'], 'First');
+          expect(host.profiles['one']!['selectedMap'], {'GLOBAL': 'Other'});
+        } else {
+          expect(errors, hasLength(1));
+          expect(host.profiles['one']!['label'], 'Second');
+        }
+        await client.detach();
+      },
+    );
+  }
+
   test(
     'UI-only profile fields are reapplied after a concurrent revision bump',
     () async {
       final host = EditsHost()..concurrentWrites = 1;
       final client = await attached(host);
       final errors = <Object>[];
-      final edits = BackendEdits(
-        client,
-        onError: errors.add,
-        onSettled: () {},
-      );
+      final edits = BackendEdits(client, onError: errors.add, onSettled: () {});
       final before = configOf(client);
       edits.submit(
         before,

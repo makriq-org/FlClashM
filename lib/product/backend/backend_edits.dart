@@ -31,9 +31,7 @@ class BackendEdits {
     String Function(T record) idOf,
   ) {
     final byId = {for (final record in records) idOf(record): record};
-    final ordered = [
-      for (final id in ids) ?byId.remove(id),
-    ];
+    final ordered = [for (final id in ids) ?byId.remove(id)];
     return [...ordered, ...byId.values];
   }
 
@@ -166,13 +164,18 @@ class BackendEdits {
     while (true) {
       try {
         final receipt = await client.command(method, params);
-        if (method == 'profile.put' && profileId != null && expected != null) {
-          final revision = (receipt['revision'] as num?)?.toInt();
-          if (revision != null && revision > expected) {
-            (_ownRevisions[profileId] ??= {})[expected] = revision;
-          }
+        if (method == 'profile.put') {
+          _rememberRevision(profileId, expected, receipt['revision']);
         }
         return;
+      } on BackendCommittedException catch (error) {
+        // The write succeeded even though apply/refresh failed. Advance only
+        // through its receipt, so later queued edits keep their own CAS chain
+        // without adopting an unrelated concurrent write from a snapshot.
+        if (method == 'profile.put' && profileId != null) {
+          _rememberRevision(profileId, expected, error.revisionFor(profileId));
+        }
+        rethrow;
       } on BackendException catch (error) {
         if (!uiOnly ||
             profileId == null ||
@@ -188,6 +191,15 @@ class BackendEdits {
           rethrow;
         }
         params['expectedRevision'] = expected;
+      }
+    }
+  }
+
+  void _rememberRevision(String? profileId, int? expected, Object? revision) {
+    if (profileId != null && expected != null && revision is num) {
+      final next = revision.toInt();
+      if (next > expected) {
+        (_ownRevisions[profileId] ??= {})[expected] = next;
       }
     }
   }
