@@ -30,6 +30,7 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   int errorCalls = 0;
   int installCalls = 0;
   int prepareCalls = 0;
+  Error? prepareError;
   int downloadProgressCalls = 0;
   final includePrereleaseArgs = <bool>[];
   final skippedTagNameArgs = <String>[];
@@ -134,6 +135,8 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   @override
   Future<void> prepareInstallHandoff() async {
     prepareCalls++;
+    final error = prepareError;
+    if (error != null) throw error;
   }
 
   @override
@@ -671,6 +674,54 @@ void main() {
       expect(bridge.prepareCalls, 1);
       expect(bridge.installCalls, 1);
       expect(bridge.lastInstallPath, cachedFile.path);
+    });
+
+    test('opens the installer even when stopping the runtime fails',
+        () async {
+      final bytes = utf8.encode('cached-release');
+      final digest = sha256.convert(bytes).toString();
+      final cachedFile =
+          File('${tempDir.path}/FlClashM-1.2.3-android-arm64-v8a.apk')
+            ..createSync(recursive: true)
+            ..writeAsBytesSync(bytes, flush: true);
+      final release = AppRelease(
+        tagName: 'v1.2.3',
+        body: '',
+        htmlUrl: 'https://example.com/releases/v1.2.3',
+        assets: [
+          ReleaseAsset(
+            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
+            browserDownloadUrl: 'https://example.com/arm64.apk',
+            size: bytes.length,
+          ),
+          ReleaseAsset(
+            name: 'FlClashM-1.2.3-android-arm64-v8a.apk.sha256',
+            browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
+            size: 80,
+          ),
+        ],
+        prerelease: false,
+        draft: false,
+      );
+      final bridge = _FakeUpdateBridge(
+        updateDirectoryPath: tempDir.path,
+        checkResult: release,
+        promptResult: AppUpdatePromptAction.download,
+      )
+        ..remoteTexts['https://example.com/arm64.apk.sha256'] =
+            '$digest  FlClashM-1.2.3-android-arm64-v8a.apk\n'
+        ..prepareError = StateError('backend unavailable');
+      final service = AppUpdateService(platform: bridge);
+
+      await service.handleCheckResult(
+        release: release,
+        trigger: AppUpdateCheckTrigger.manual,
+      );
+
+      expect(bridge.prepareCalls, 1);
+      expect(bridge.installCalls, 1);
+      expect(bridge.lastInstallPath, cachedFile.path);
+      expect(bridge.installErrorMessage, isNull);
     });
 
     test('matches checksum sidecar entries to the selected APK asset',

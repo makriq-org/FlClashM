@@ -68,3 +68,23 @@ internal object AndroidBackendPlatform {
         }
     }
 }
+
+/** Maps a service start that is not a resource handshake to the Go request it
+ * forwards. Shared by both foreground services because the notification Stop
+ * action targets whichever of them posted the notification last. */
+internal object ServiceStartCommand {
+    const val ACTION_STOP = "com.makriq.flclash.service.STOP"
+
+    /** null: the start only delivers an Android resource to a Go operation. */
+    fun backendMethod(action: String?): String? = when (action) {
+        AndroidBackendPlatform.ACTION_APPLY,
+        BackendForegroundHold.ACTION_HOLD,
+        BackendForegroundHold.ACTION_RUNTIME -> null
+        ACTION_STOP -> "runtime.stop"
+        // Boot, sticky restart or an OS-created instance: Go decides what to recover.
+        else -> "runtime.recover"
+    }
+
+    /** A Stop must not be redelivered by the OS after process death. */
+    fun sticky(method: String): Boolean = method != "runtime.stop"
+}

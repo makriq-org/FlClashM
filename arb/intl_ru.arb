@@ -508,5 +508,13 @@
   "zashboardInApp": "Открывать zashboard в приложении",
   "zashboardInAppDesc": "Показывать панель во встроенном браузере, не переключаясь на внешний",
   "openPanel": "Открыть панель",
-  "downloadingZashboard": "Качаю Zashboard…"
+  "downloadingZashboard": "Качаю Zashboard…",
+  "backendUnavailable": "Фоновая служба недоступна",
+  "backendOperationFailed": "Операция не выполнена",
+  "backendOperationCancelled": "Операция отменена",
+  "backendClosed": "Фоновая служба остановилась до завершения операции",
+  "backendTimeout": "Фоновая служба не ответила вовремя",
+  "backendStartupFailed": "Не удалось запустить FlClashM",
+  "backendStartupFailedDesc": "Приложение не смогло подключиться к фоновой службе и продолжает попытки автоматически. Можно повторить сейчас или экспортировать логи для поддержки.",
+  "retry": "Повторить"
 }

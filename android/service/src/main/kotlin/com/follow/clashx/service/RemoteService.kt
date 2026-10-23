@@ -125,6 +125,12 @@ class RemoteService : Service() {
         if (event == null) {
             BackendHost.onEvent = null
             Core.invokeAction("""{"id":"ui-detached","method":"setUiActive","data":false}""", object : InvokeInterface { override fun onResult(result: String) {} })
+            // Host-internal call (not subject to the UI allowlist): Go stops the
+            // warm-while-UI-open policy. Best-effort; never opens the backend.
+            if (BackendHost.active) GlobalState.launch {
+                runCatching { BackendHost.command("ui.detach").optJSONObject("error")?.let { error(it.optString("message")) } }
+                    .onFailure { GlobalState.log("ui.detach failed: ${it.message}") }
+            }
             return@synchronized
         }
         val death = IBinder.DeathRecipient {

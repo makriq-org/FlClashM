@@ -43,7 +43,9 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     final items = <Widget>[];
     for (final groupName in groupNames) {
       final group = ref.watch(
-        groupsProvider.select((state) => state.getGroup(groupName)),
+        groupsProvider.select(
+          (state) => state.getGroup(groupName),
+        ),
       );
       if (group == null) {
         continue;
@@ -125,6 +127,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
 }
 
 class ProxyGroupCard extends StatefulWidget {
+
   const ProxyGroupCard({
     super.key,
     required this.group,
@@ -168,13 +171,15 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   @override
   void didUpdateWidget(ProxyGroupCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.group != widget.group || oldWidget.query != widget.query) {
+    if (oldWidget.group != widget.group ||
+        oldWidget.query != widget.query) {
       _sortedProxies = _resolveProxies();
     }
   }
 
   void _toggleExpansion(Set<String> currentUnfoldSet) {
     final unfoldSet = Set<String>.from(currentUnfoldSet);
+
     if (!unfoldSet.remove(groupName)) {
       unfoldSet.add(groupName);
     }
@@ -184,7 +189,10 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   Future<void> _delayTest() async {
     if (isLock) return;
     isLock = true;
-    await delayTest(widget.group.all, widget.group.testUrl);
+    await delayTest(
+      widget.group.all,
+      widget.group.testUrl,
+    );
     isLock = false;
   }
 
@@ -245,7 +253,10 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
             ),
           ),
         )
-        .fill(widget.columns, filler: (_) => const Flexible(child: SizedBox()))
+        .fill(
+          widget.columns,
+          filler: (_) => const Flexible(child: SizedBox()),
+        )
         .separated(const SizedBox(width: 8));
     return Row(children: children.toList());
   }

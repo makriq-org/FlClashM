@@ -5,6 +5,7 @@ import 'dart:isolate';
 
 import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/clash/interface.dart';
+import 'package:flclashx/common/common.dart';
 import 'package:flclashx/common/process_icon.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
@@ -12,6 +13,7 @@ import 'package:flclashx/state.dart';
 import 'package:flclashx/product/backend/backend.dart';
 
 class ClashCore {
+
   factory ClashCore() {
     _instance ??= ClashCore._internal();
     return _instance!;
@@ -97,7 +99,9 @@ class ClashCore {
       return group;
     }).toList();
     return groupsRaw
-        .map((e) => Group.fromJson(Map<String, dynamic>.from(e)))
+        .map(
+          (e) => Group.fromJson(Map<String, dynamic>.from(e)),
+        )
         .toList();
   }
 
@@ -127,47 +131,54 @@ class ClashCore {
   }
 
   void closeConnection(String id) {
-    unawaited(
-      backendClient.command('engine.command', {
-        'method': 'connection.close',
-        'params': {'id': id},
-      }),
-    );
+    _fireEngineCommand('connection.close', {'id': id});
   }
 
   void closeConnections() {
-    unawaited(
-      backendClient.command('engine.command', {'method': 'connections.close'}),
-    );
+    _fireEngineCommand('connections.close');
   }
 
   void resetConnections() {
+    _fireEngineCommand('connections.reset');
+  }
+
+  // Fire-and-forget UI actions still surface failures in the log.
+  void _fireEngineCommand(String method, [Map<String, dynamic>? params]) {
     unawaited(
-      backendClient.command('engine.command', {'method': 'connections.reset'}),
+      backendClient
+          .command('engine.command', {'method': method, 'params': ?params})
+          .then<void>(
+        (_) {},
+        onError: (Object error) {
+          commonPrint.log('Engine command $method failed: $error');
+        },
+      ),
     );
   }
 
   Future<List<ExternalProvider>> getExternalProviders() async {
-    final externalProvidersRawString = await clashInterface
-        .getExternalProviders();
+    final externalProvidersRawString =
+        await clashInterface.getExternalProviders();
     if (externalProvidersRawString.isEmpty) {
       return [];
     }
-    return Isolate.run<List<ExternalProvider>>(() {
-      final externalProviders =
-          (json.decode(externalProvidersRawString) as List<dynamic>)
-              .map((item) => ExternalProvider.fromJson(item))
-              .toList();
-      return externalProviders;
-    });
+    return Isolate.run<List<ExternalProvider>>(
+      () {
+        final externalProviders =
+            (json.decode(externalProvidersRawString) as List<dynamic>)
+                .map(
+                  (item) => ExternalProvider.fromJson(item),
+                )
+                .toList();
+        return externalProviders;
+      },
+    );
   }
 
   Future<ExternalProvider?> getExternalProvider(
-    String externalProviderName,
-  ) async {
-    final externalProvidersRawString = await clashInterface.getExternalProvider(
-      externalProviderName,
-    );
+      String externalProviderName) async {
+    final externalProvidersRawString =
+        await clashInterface.getExternalProvider(externalProviderName);
     if (externalProvidersRawString.isEmpty) {
       return null;
     }
@@ -185,22 +196,25 @@ class ClashCore {
       });
       return '';
     } catch (error) {
-      return error.toString();
+      commonPrint.log('Engine command $method failed: $error');
+      return describeBackendError(error, reportSuperseded: true);
     }
   }
 
   Future<String> updateGeoData(UpdateGeoDataParams params) =>
       _engineCommand('geo.update', params.toJson());
+
   Future<String> sideLoadExternalProvider({
     required String providerName,
     required String data,
   }) =>
       _engineCommand('provider.sideload', {'name': providerName, 'data': data});
-  Future<String> updateExternalProvider({required String providerName}) =>
-      _engineCommand('provider.refresh', {'name': providerName});
 
-  Future<void> healthCheck([String groupName = '']) =>
-      clashInterface.healthCheck(groupName);
+  Future<String> updateExternalProvider({
+    required String providerName,
+  }) => _engineCommand('provider.refresh', {'name': providerName});
+
+  Future<void> healthCheck([String groupName = '']) => clashInterface.healthCheck(groupName);
 
   Future<Delay> getDelay(String url, String proxyName) async {
     final data = await clashInterface.asyncTestDelay(url, proxyName);
@@ -226,7 +240,10 @@ class ClashCore {
     if (countryCode.isEmpty) {
       return null;
     }
-    return IpInfo(ip: ip, countryCode: countryCode);
+    return IpInfo(
+      ip: ip,
+      countryCode: countryCode,
+    );
   }
 
   Future<Traffic> getTotalTraffic() async {
@@ -254,9 +271,7 @@ class ClashCore {
   }
 
   void resetTraffic() {
-    unawaited(
-      backendClient.command('engine.command', {'method': 'traffic.reset'}),
-    );
+    _fireEngineCommand('traffic.reset');
   }
 
   void startLog() {

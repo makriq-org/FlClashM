@@ -29,13 +29,13 @@ dart setup.dart android --arch arm64 --out core
 flutter build apk --debug --target-platform android-arm64
 ```
 
-For an independent diagnostic installation, add `ORG_GRADLE_PROJECT_backendDiagnostic=true` to `flutter build apk --debug --target-platform android-arm64`. Package: `com.makriq.flclash.backendcheck`; CI `backend_test` uses `.backendtest`. Update while preserving data: `adb install -r -t`.
+For an independent diagnostic installation, add `ORG_GRADLE_PROJECT_backendDiagnostic=true` to `flutter build apk --debug --target-platform android-arm64`. Package: `com.makriq.flclash.backendcheck`; manual CI with `backend_test` uses `.backendtest`. Update while preserving data: `adb install -r -t`.
 
 For a simplified local build of the test variant, run `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` after preparing core and assets; package: `com.makriq.flclash.backendtest`. CI also passes `--dart-define=APP_ENV=pre` and `--dart-define=CORE_VERSION` with the value from `lib/core_version.dart`.
 
 </details>
 
-CI covers Go host/race, Dart/Flutter, Kotlin unit tests, ARM64/armeabi-v7a builds and x86_64 E2E with real mihomo, validator, ByeDPI and TUN. Documentation skips heavy jobs. An emulator does not replace ARM hardware: before release, check modes, nodes, subscriptions, UI/`:remote` death, preservation of Stop during recovery, network handover and battery use. Open findings are tracked in [#132](https://github.com/makriq-org/FlClashM/issues/132). The `secret-scan` workflow checks PR and push commits with Gitleaks.
+CI covers Go host/race, Dart/Flutter, Kotlin unit tests, ARM64/armeabi-v7a builds and x86_64 E2E with real mihomo, validator, ByeDPI and TUN. Documentation skips heavy jobs. UI/backend Dart bridge changes trigger E2E with the real Flutter activity; instrumentation errors and unhandled Flutter exceptions fail the check. An emulator does not replace ARM hardware: before release, check modes, nodes, subscriptions, UI/`:remote` death, preservation of Stop during recovery, network handover and battery use. Open findings are tracked in [#132](https://github.com/makriq-org/FlClashM/issues/132). The `secret-scan` workflow checks PR and push commits with Gitleaks.
 
 <a id="architecture"></a>
 
@@ -58,7 +58,7 @@ Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widg
 <details>
 <summary>Backend contracts when changing runtime</summary>
 
-**Desired** is persisted intent; **Applied** is the last confirmed plan; **Observed** is actual observation, unknown on error. Immutable RuntimePlan is checked by version and SHA-256. Preparation is separate from the effects queue; context and generation fence late results. Failure restores the confirmed plan or stops resources. VPN revoke persists Stop and requires a new explicit Start. The queue is limited to 8 accepted commands, with reserved capacity for Stop.
+**Desired** is persisted intent; **Applied** is the last confirmed plan; **Observed** is actual observation, unknown when the state cannot be confirmed. Immutable RuntimePlan is checked by version and SHA-256. Preparation is separate from the effects queue; context and generation fence late results. Failure restores the confirmed plan or stops resources. VPN revoke persists Stop and requires a new explicit Start. The queue is limited to 8 accepted commands, with reserved capacity for Stop.
 
 API, data and plan have independent versions, currently `1`. Request: `apiVersion`, `operationId`, `method`, `params`; response: `result` or `error`. Repeating an ID with the same content returns its prior result; different content is rejected. Wait for both the domain operation and its linked `runtimeOperationId`. Timeout or UI death does not cancel work; cancellation is explicit.
 

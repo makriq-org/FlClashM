@@ -32,8 +32,11 @@ adb shell am instrument -w -r \
   com.makriq.flclash.dev.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$artifacts/instrumentation.txt"
 grep -Eq '^OK \([1-9][0-9]* tests?\)$' "$artifacts/instrumentation.txt"
-! grep -Eq 'FAILURES!!!|INSTRUMENTATION_ABORTED|Process crashed|shortMsg=' \
-  "$artifacts/instrumentation.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_ABORTED|Process crashed|shortMsg=' \
+  "$artifacts/instrumentation.txt"; then
+  echo "Instrumentation reported failures or a crash" >&2
+  exit 1
+fi
 
 # Run a real Flutter activity. --no-restart avoids instrumentation's package
 # force-stop both on entry and on finish; that would also kill the VPN service.
@@ -58,7 +61,7 @@ adb shell am instrument --no-restart -w -r -e scenario seed \
   | tee "$artifacts/headless-seed.txt"
 grep -Eq '^OK \(1 test\)$' "$artifacts/headless-seed.txt"
 remote_before=$(adb shell pidof com.makriq.flclash.dev:remote | tr -d '\r')
-main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r')
+main_pid=$(adb shell pidof com.makriq.flclash.dev | tr -d '\r' || true)
 test -n "$remote_before"
 if [ -n "$main_pid" ]; then adb shell run-as com.makriq.flclash.dev kill -9 "$main_pid"; fi
 sleep 3
@@ -93,4 +96,7 @@ adb shell am instrument --no-restart -w -r -e scenario recovered \
   | tee "$artifacts/recovered.txt"
 grep -Eq '^OK \(1 test\)$' "$artifacts/recovered.txt"
 adb logcat -d -v threadtime > "$artifacts/logcat.txt"
-! grep -Eq 'flutter.*Unhandled Exception:' "$artifacts/logcat.txt"
+if grep -Eq 'flutter.*Unhandled Exception:' "$artifacts/logcat.txt"; then
+  echo "Flutter reported an unhandled exception" >&2
+  exit 1
+fi

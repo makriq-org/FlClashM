@@ -3,7 +3,7 @@
     {
       "path": "lib/application.dart",
       "boundary": "platform-shell-bootstrap",
-      "reason": "Базовая оболочка передаёт Android shortcuts и подключение UI продуктовому слою без собственной runtime-политики.",
+      "reason": "Базовая оболочка передаёт Android shortcuts продуктовому слою; смена сети обновляет только IP в UI.",
       "targets": [
         "lib/product/services/product_services.dart"
       ]
@@ -111,7 +111,7 @@
     {
       "path": "lib/state.dart",
       "boundary": "global-runtime-wiring",
-      "reason": "GlobalState may wire compile, security, runtime registry and engine manager callbacks without embedding product policy locally.",
+      "reason": "GlobalState projects Go backend snapshots and submits settings edits through the backend client; it owns no runtime or compile policy.",
       "targets": [
         "lib/product/backend/backend.dart"
       ]
@@ -193,6 +193,10 @@
     {
       "path": "lib/product/widgets/proxy_group_sliver.dart",
       "reason": "Точная геометрия групп стабилизирует ползунок прокрутки, сохраняя ленивое создание строк и анимацию."
+    },
+    {
+      "path": "lib/product/bootstrap/backend_startup.dart",
+      "reason": "Экран восстановления при недоступном фоновом backend на старте: повтор подключения и экспорт логов без работающего Go API."
     }
   ]
 }

@@ -90,22 +90,116 @@ func TestLegacyMigrationAndRoundTripPreserveSourceAndUnknownSettings(t *testing.
 }
 func TestMigrationFailureAndMissingCache(t *testing.T) {
 	r := openRepository(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	original := r.Snapshot()
-	err := r.Migrate(context.Background(), []byte(`{"profiles":[{"id":"one"},{"id":"two"}]}`), func(id string) (string, error) {
-		if id == "two" {
-			return "", errors.New("injected read failure")
-		}
-		return "proxies: []", nil
-	})
-	if err == nil || !reflect.DeepEqual(original, r.Snapshot()) {
-		t.Fatal("partial migration committed")
+	if err := r.Migrate(ctx, []byte(`{"profiles":[{"id":"one"}]}`), func(string) (string, error) { return "proxies: []", nil }); err == nil || !reflect.DeepEqual(original, r.Snapshot()) {
+		t.Fatal("cancelled migration committed")
 	}
-	if err = r.Migrate(context.Background(), []byte(`{"profiles":[{"id":"one","url":"https://example.test/sub"}]}`), func(string) (string, error) { return "", os.ErrNotExist }); err != nil {
+	if err := r.Migrate(context.Background(), []byte(`{"profiles":[{"id":"one","url":"https://example.test/sub"}]}`), func(string) (string, error) { return "", os.ErrNotExist }); err != nil {
 		t.Fatal(err)
 	}
 	p, err := r.Get("one")
-	if err != nil || p.Source != "" {
+	if err != nil || p.Source != "" || !p.SourceMissing {
 		t.Fatalf("missing cached subscription lost: %+v %v", p, err)
+	}
+}
+
+func TestMigrationKeepsOtherProfilesWhenOneLegacyRecordIsBad(t *testing.T) {
+	directory := t.TempDir()
+	legacy := filepath.Join(directory, "legacy")
+	if err := os.MkdirAll(legacy, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// The old Flutter importer accepted files up to 20 MiB.
+	if err := os.WriteFile(filepath.Join(legacy, "large.yaml"), []byte("proxies: []\n"+strings.Repeat("#", MaxProfileBytes)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, "good.yaml"), []byte("proxies: []\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, "dup.yaml"), []byte("proxies: []\n# first\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Open(filepath.Join(directory, "store"), validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := []byte(`{"currentProfileId":"good","profiles":[` +
+		`{"id":"large","label":"Large","url":"https://example.test/large"},` +
+		`{"id":"broken","label":"Broken"},` +
+		`{"id":"../escape","label":"Unsafe"},` +
+		`{"id":7},` +
+		`"not an object",` +
+		`{"id":"dup","label":"First"},` +
+		`{"id":"dup","label":"Second"},` +
+		`{"id":"good","label":"Good"}]}`)
+	failRead := true
+	read := func(id string) (string, error) {
+		if id == "broken" && failRead {
+			return "", errors.New("injected read failure")
+		}
+		return ReadLegacySource(legacy, id)
+	}
+	// A read error that may be transient must not commit the migration without
+	// the profile content: the next start retries it.
+	if err = r.Migrate(context.Background(), settings, read); err == nil || r.Snapshot().Migrated {
+		t.Fatal("transient read failure committed the migration", err)
+	}
+	failRead = false
+	if err = r.Migrate(context.Background(), settings, read); err != nil {
+		t.Fatal("one bad legacy profile blocked migration:", err)
+	}
+	snapshot := r.Snapshot()
+	if !snapshot.Migrated {
+		t.Fatal("migration marker was not written")
+	}
+	var ids []string
+	for _, record := range snapshot.Profiles {
+		id, _ := profileID(record.Metadata)
+		ids = append(ids, id)
+	}
+	if !reflect.DeepEqual(ids, []string{"large", "broken", "dup", "good"}) {
+		t.Fatal("unexpected migrated profiles", ids)
+	}
+	for _, id := range []string{"large", "broken"} {
+		record, err := r.Get(id)
+		if err != nil || !record.SourceMissing || record.Source != "" {
+			t.Fatalf("absent or oversized source %s was not kept as missing: %+v %v", id, record, err)
+		}
+	}
+	large, _ := r.Get("large")
+	if string(large.Metadata["label"]) != `"Large"` || string(large.Metadata["url"]) != `"https://example.test/large"` {
+		t.Fatal("metadata of an oversized profile was lost", large.Metadata)
+	}
+	dup, _ := r.Get("dup")
+	if string(dup.Metadata["label"]) != `"First"` || dup.Source != "proxies: []\n# first\n" {
+		t.Fatal("duplicate legacy id replaced the first record", dup.Metadata)
+	}
+	good, _ := r.Get("good")
+	if good.SourceMissing || good.Source != "proxies: []\n" || string(snapshot.Settings["currentProfileId"]) != `"good"` {
+		t.Fatal("valid profile changed during resilient migration", good)
+	}
+	if _, err = Open(filepath.Join(directory, "store"), validator); err != nil {
+		t.Fatal("migrated store cannot be reopened:", err)
+	}
+}
+
+func TestMigrationTreatsUndecodableLegacySettingsAsEmpty(t *testing.T) {
+	for _, raw := range []string{`{"profiles":`, `[]`, `null`, `"text"`, `{"profiles":{"id":"one"},"appSetting":{"locale":"ru"}}`} {
+		t.Run(raw, func(t *testing.T) {
+			r := openRepository(t)
+			if err := r.Migrate(context.Background(), []byte(raw), func(string) (string, error) { return "proxies: []", nil }); err != nil {
+				t.Fatal("invalid legacy settings blocked migration:", err)
+			}
+			snapshot := r.Snapshot()
+			if !snapshot.Migrated || len(snapshot.Profiles) != 0 {
+				t.Fatal("invalid legacy settings were not replaced by a fresh state", snapshot)
+			}
+			if _, exists := snapshot.Settings["profiles"]; exists {
+				t.Fatal("legacy profile list leaked into settings")
+			}
+		})
 	}
 }
 func TestRevisionGuardsDeletionAndCancellation(t *testing.T) {

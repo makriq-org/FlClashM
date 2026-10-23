@@ -240,3 +240,37 @@ func TestAggregateQuotaAppliesToReservedUploadsAndExports(t *testing.T) {
 		_ = app.removeBlob(blob.Token)
 	}
 }
+
+func TestLegacyBackupRestoreKeepsDeviceHeaderPreference(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "privacy", "settings.patch", map[string]any{"patch": map[string]any{"sendDeviceHeaders": false}})
+	waitDomain(t, app, "privacy")
+	// Old Flutter backups stored the device-header preference outside config.json.
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	entry, _ := writer.Create("config.json")
+	_, _ = entry.Write([]byte(`{"profiles":[{"id":"one","label":"Old"}],"currentProfileId":"one"}`))
+	entry, _ = writer.Create("profiles/one.yaml")
+	_, _ = entry.Write([]byte("rules: ['MATCH,DIRECT']\n"))
+	_ = writer.Close()
+	blob := upload(t, app, archive.Bytes())
+	request(t, app, "restore-old", "backup.restore", map[string]any{"token": blob.Token, "replace": true})
+	waitDomain(t, app, "restore-old")
+	if string(app.Snapshot().Catalog.Settings["sendDeviceHeaders"]) != "false" || app.deviceHeadersEnabled(true) {
+		t.Fatal("legacy backup restore re-enabled device headers", string(app.Snapshot().Catalog.Settings["sendDeviceHeaders"]))
+	}
+	// A backup that carries the preference still restores its own value.
+	archive.Reset()
+	writer = zip.NewWriter(&archive)
+	entry, _ = writer.Create("config.json")
+	_, _ = entry.Write([]byte(`{"profiles":[{"id":"one","label":"New"}],"currentProfileId":"one","sendDeviceHeaders":true}`))
+	entry, _ = writer.Create("profiles/one.yaml")
+	_, _ = entry.Write([]byte("rules: ['MATCH,DIRECT']\n"))
+	_ = writer.Close()
+	blob = upload(t, app, archive.Bytes())
+	request(t, app, "restore-new", "backup.restore", map[string]any{"token": blob.Token, "replace": true})
+	waitDomain(t, app, "restore-new")
+	if !app.deviceHeadersEnabled(true) {
+		t.Fatal("explicit backup preference was ignored")
+	}
+}

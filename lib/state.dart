@@ -49,13 +49,12 @@ class GlobalState {
     backendClient,
     onError: (error) {
       commonPrint.log('Backend action failed: $error');
-      if (isInit) showNotifier(error.toString());
+      if (isInit) showNotifier(describeError(error));
     },
     onSettled: projectBackend,
   );
   Future<void> flushEdits() => backendEdits.flush();
   Map<String, dynamic> get runtimeView => _backendView;
-
   late AppState appState;
   bool isPre = true;
   String? coreSHA256;
@@ -70,9 +69,8 @@ class GlobalState {
   late CommonTheme theme;
   late Color accentColor;
   CorePalette? corePalette;
-  final activeProfileAccessControlNotifier = ValueNotifier<AccessControl?>(
-    null,
-  );
+  final activeProfileAccessControlNotifier =
+      ValueNotifier<AccessControl?>(null);
   // Effective external-controller endpoint after applying the advisory/profile
   // merge rules for the active profile. Empty string means disabled.
   final effectiveExternalController = ValueNotifier<String>("");
@@ -145,15 +143,13 @@ class GlobalState {
   Future<void> initApp(int version) async {
     coreSHA256 = const String.fromEnvironment("CORE_SHA256");
     final coreVersionEnv = const String.fromEnvironment("CORE_VERSION");
-    coreVersion = coreVersionEnv.isEmpty
-        ? kCoreVersionFromSource
-        : coreVersionEnv;
+    coreVersion =
+        coreVersionEnv.isEmpty ? kCoreVersionFromSource : coreVersionEnv;
     isPre = const String.fromEnvironment("APP_ENV") != 'stable';
     const appVersionEnv = String.fromEnvironment("APP_VERSION");
     final tag = appVersionEnv.trim();
-    appVersionTag = (tag.startsWith("v") || tag.startsWith("V"))
-        ? tag.substring(1)
-        : tag;
+    appVersionTag =
+        (tag.startsWith("v") || tag.startsWith("V")) ? tag.substring(1) : tag;
     appState = AppState(
       version: version,
       viewSize: Size.zero,
@@ -169,20 +165,25 @@ class GlobalState {
   Future<void> _initDynamicColor() async {
     try {
       corePalette = await DynamicColorPlugin.getCorePalette();
-      accentColor =
-          await DynamicColorPlugin.getAccentColor() ??
+      accentColor = await DynamicColorPlugin.getAccentColor() ??
           const Color(defaultPrimaryColor);
     } catch (_) {}
   }
 
+  bool _listeningBackend = false;
+
   Future<void> init() async {
     packageInfo = await PackageInfo.fromPlatform();
-    backendClient.changes.listen(
-      (_) => projectBackend(),
-      onError: (Object error) {
-        commonPrint.log('Backend snapshot failed: $error');
-      },
-    );
+    // init may be retried after the backend was unavailable at startup.
+    if (!_listeningBackend) {
+      _listeningBackend = true;
+      backendClient.changes.listen(
+        (_) => projectBackend(),
+        onError: (Object error) {
+          commonPrint.log('Backend snapshot failed: $error');
+        },
+      );
+    }
     await backendClient.attach();
     projectBackend();
     await AppLocalizations.load(
@@ -206,54 +207,56 @@ class GlobalState {
     required InlineSpan message,
     String? confirmText,
     bool cancelable = true,
-  }) async => showCommonDialog<bool>(
-    child: Builder(
-      builder: (context) => CommonDialog(
-        title: title ?? appLocalizations.tip,
-        actions: [
-          if (cancelable)
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-              },
-              child: Text(appLocalizations.cancel),
-            ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(true);
-            },
-            child: Text(confirmText ?? appLocalizations.confirm),
-          ),
-        ],
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(maxHeight: 200),
-          child: SingleChildScrollView(
-            child: SelectableText.rich(
-              TextSpan(
-                style: Theme.of(context).textTheme.labelLarge,
-                children: [message],
+  }) async =>
+      showCommonDialog<bool>(
+        child: Builder(
+          builder: (context) => CommonDialog(
+            title: title ?? appLocalizations.tip,
+            actions: [
+              if (cancelable)
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(false);
+                  },
+                  child: Text(appLocalizations.cancel),
+                ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(true);
+                },
+                child: Text(confirmText ?? appLocalizations.confirm),
               ),
-              style: const TextStyle(overflow: TextOverflow.visible),
+            ],
+            child: Container(
+              width: 300,
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: SelectableText.rich(
+                  TextSpan(
+                    style: Theme.of(context).textTheme.labelLarge,
+                    children: [message],
+                  ),
+                  style: const TextStyle(overflow: TextOverflow.visible),
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 
   Future<T?> showCommonDialog<T>({
     required Widget child,
     bool dismissible = true,
-  }) async => showModal<T>(
-    context: navigatorKey.currentState!.context,
-    configuration: FadeScaleTransitionConfiguration(
-      barrierColor: Colors.black38,
-      barrierDismissible: dismissible,
-    ),
-    builder: (_) => child,
-    filter: commonFilter,
-  );
+  }) async =>
+      showModal<T>(
+        context: navigatorKey.currentState!.context,
+        configuration: FadeScaleTransitionConfiguration(
+          barrierColor: Colors.black38,
+          barrierDismissible: dismissible,
+        ),
+        builder: (_) => child,
+        filter: commonFilter,
+      );
 
   Future<T?> safeRun<T>(
     FutureOr<T> Function() futureFunction, {
@@ -265,17 +268,24 @@ class GlobalState {
       return res;
     } catch (e) {
       commonPrint.log("$e");
+      final text = describeError(e);
+      if (text.isEmpty) {
+        return null;
+      }
       if (silence) {
-        showNotifier(e.toString());
+        showNotifier(text);
       } else {
         showMessage(
           title: title ?? appLocalizations.tip,
-          message: TextSpan(text: e.toString()),
+          message: TextSpan(text: text),
         );
       }
       return null;
     }
   }
+
+  /// User-facing text for an error; empty when it must not be reported.
+  String describeError(Object error) => describeBackendError(error);
 
   void showNotifier(String text) {
     if (text.isEmpty) {
@@ -330,6 +340,28 @@ class GlobalState {
       _projectRuntimeView();
     }
     _appController?.projectBackendRuntime();
+    _projectProfileChange();
+  }
+
+  final _projectionWatcher = ProjectionWatcher();
+
+  void _projectProfileChange() {
+    final applied = _backendView['profileId'];
+    final change = _projectionWatcher.observe(
+      profileId: _config?.currentProfileId,
+      appliedProfileId: applied is String ? applied : null,
+      generation: _projectedViewGeneration,
+    );
+    final controller = _appController;
+    if (controller == null || !controller.context.mounted) return;
+    switch (change) {
+      case ProjectionChange.profile:
+        controller.handleChangeProfile();
+      case ProjectionChange.generation:
+        controller.updateGroupsDebounce();
+      case ProjectionChange.none:
+        break;
+    }
   }
 
   int? _projectedViewGeneration;
@@ -354,7 +386,7 @@ class GlobalState {
     effectiveLogLevel.value = '${runtimeConfig['log-level'] ?? 'info'}';
     effectiveKeepAliveInterval.value =
         (runtimeConfig['keep-alive-interval'] as num?)?.toInt() ??
-        defaultKeepAliveInterval;
+            defaultKeepAliveInterval;
     final descriptions = <String, String>{};
     final order = <String>[];
     var globalOverride = false;
@@ -413,7 +445,9 @@ class GlobalState {
       await backendClient.command('profile.validate', {'token': token});
       return '';
     } catch (error) {
-      return error.toString();
+      // An empty result means "valid"; never let a silent error pass as such.
+      final text = describeError(error);
+      return text.isEmpty ? '$error' : text;
     } finally {
       await backendClient.request('blob.delete', {'token': token});
     }

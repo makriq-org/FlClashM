@@ -44,6 +44,8 @@ fun Service.ensureNotificationChannel() {
     }
 }
 
+private val serviceNotificationWhen = System.currentTimeMillis()
+
 fun Service.buildServiceNotification(
     iconRes: Int,
     title: String = "FlClashM",
@@ -69,20 +71,25 @@ fun Service.buildServiceNotification(
         .setSmallIcon(iconRes)
         .setContentTitle(title)
         .setOngoing(true)
+        // Both foreground services re-post the shared ID on every start command.
+        // A fresh `when` re-ranks the entry in the shade, so keep it per process.
+        .setWhen(serviceNotificationWhen)
+        .setShowWhen(false)
+        .setOnlyAlertOnce(true)
         .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
         .apply { if (contentIntent != null) setContentIntent(contentIntent) }
         .addAction(android.R.drawable.ic_media_pause, stopLabel, stopPending)
         .build()
 }
 
-fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM"): Boolean {
+fun Service.promoteToForeground(iconRes: Int, title: String = "FlClashM", stopText: String = ""): Boolean {
     // Build the channel + notification inside the guard too: if either throws
     // during the ~5s startForegroundService() window (bad resource, OOM, odd
     // OEM), we'd otherwise crash with the exact "did not then call
     // startForeground()" RemoteServiceException. Degrade to false → stopSelf.
     val notification = runCatching {
         ensureNotificationChannel()
-        buildServiceNotification(iconRes, title)
+        buildServiceNotification(iconRes, title, stopText)
     }.getOrElse {
         GlobalState.log("promoteToForeground: notification build failed: ${it.message}")
         return false

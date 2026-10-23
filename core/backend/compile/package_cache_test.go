@@ -107,3 +107,62 @@ func TestResetFencesLatePackageListRefresh(t *testing.T) {
 		t.Fatal("late cache write survived data erasure", err)
 	}
 }
+
+func TestPackageListDownloadSurvivesFirstWaiterCancellation(t *testing.T) {
+	var requests atomic.Int32
+	entered := make(chan struct{}, 4)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		entered <- struct{}{}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		_, _ = w.Write([]byte("com.example.app\n"))
+	}))
+	defer server.Close()
+	cache := &PackageListCache{ProfilesDir: t.TempDir(), Client: server.Client()}
+	first, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	firstDone := make(chan error, 1)
+	go func() { _, err := cache.Read(first, "one", server.URL); firstDone <- err }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("download did not start")
+	}
+	type result struct {
+		body string
+		err  error
+	}
+	secondDone := make(chan result, 1)
+	go func() {
+		body, err := cache.Read(context.Background(), "two", server.URL)
+		secondDone <- result{body, err}
+	}()
+	// Give the second caller time to join the shared download.
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-firstDone:
+		if err == nil {
+			t.Fatal("cancelled caller received a result")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancelled caller kept waiting")
+	}
+	close(release)
+	select {
+	case got := <-secondDone:
+		if got.err != nil || got.body != "com.example.app\n" {
+			t.Fatal("first caller cancellation failed another waiter", got.body, got.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("second caller did not receive the shared download")
+	}
+	if requests.Load() != 1 {
+		t.Fatal("shared download was repeated", requests.Load())
+	}
+}

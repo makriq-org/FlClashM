@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flclashx/product/backend/backend_client.dart';
+import 'package:flclashx/product/backend/backend_errors.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class ClientHost {
@@ -129,7 +131,7 @@ void main() {
           'group': 'GLOBAL',
           'proxy': 'Unavailable',
         }),
-        throwsStateError,
+        throwsA(isA<BackendException>()),
       );
       final profiles = client.settings['profiles'] as List;
       expect((profiles.single as Map)['selectedMap'], {'GLOBAL': 'Working'});
@@ -189,11 +191,9 @@ void main() {
         'proxy': 'Unavailable',
       }),
       throwsA(
-        isA<StateError>().having(
-          (e) => e.message,
-          'message',
-          'selection failed',
-        ),
+        isA<BackendException>()
+            .having((e) => e.code, 'code', BackendException.unavailable)
+            .having((e) => e.message, 'message', 'selection failed'),
       ),
     );
     await host.close();
@@ -373,4 +373,234 @@ void main() {
       await host.close();
     },
   );
+
+  test('a saved change keeps its receipt when its runtime apply is superseded', () async {
+    final host = ClientHost()
+      ..operations['runtime-apply'] = {
+        'status': 'failed',
+        'errorCode': 'superseded',
+        'error': 'operation superseded',
+      };
+    final client = BackendClient(
+      transport: (request) async {
+        if (request['method'] == 'profile.put') {
+          return {
+            'apiVersion': 1,
+            'result': {
+              'status': 'succeeded',
+              'revision': 2,
+              'runtimeOperationId': 'runtime-apply',
+            },
+          };
+        }
+        return host.call(request);
+      },
+      events: host.events.stream,
+    );
+    final receipt = await client.command('profile.put', {
+      'metadata': {'id': 'one', 'label': 'Renamed'},
+      'expectedRevision': 1,
+    });
+    expect(receipt['revision'], 2);
+    await host.close();
+  });
+
+  test('failed receipts become typed exceptions with their error code', () async {
+    final host = ClientHost()
+      ..operations.addAll({
+        'newer': {
+          'status': 'failed',
+          'errorCode': 'superseded',
+          'error': 'operation superseded',
+        },
+        'stopped': {'status': 'cancelled', 'error': 'operation cancelled'},
+        'stale': {
+          'status': 'failed',
+          'errorCode': 'failed',
+          'error': 'profile revision changed',
+        },
+      });
+    final client = BackendClient(
+      transport: host.call,
+      events: host.events.stream,
+    );
+    await expectLater(
+      client.wait('newer'),
+      throwsA(
+        isA<BackendException>()
+            .having((e) => e.isSuperseded, 'isSuperseded', isTrue)
+            .having((e) => e.operationId, 'operationId', 'newer'),
+      ),
+    );
+    await expectLater(
+      client.wait('stopped'),
+      throwsA(
+        isA<BackendException>().having(
+          (e) => e.code,
+          'code',
+          BackendException.cancelled,
+        ),
+      ),
+    );
+    await expectLater(
+      client.wait('stale'),
+      throwsA(
+        isA<BackendException>()
+            .having((e) => e.isRevisionConflict, 'conflict', isTrue)
+            .having((e) => '$e', 'text', 'profile revision changed'),
+      ),
+    );
+    await host.close();
+  });
+
+  test('API errors keep their code and message without a Dart prefix', () async {
+    final client = BackendClient(
+      transport: (request) async => {
+        'apiVersion': 1,
+        'error': request['method'] == 'proxy.select'
+            ? {
+                'code': 'command_rejected',
+                'errorCode': 'superseded',
+                'message': 'operation superseded',
+              }
+            : {
+                'code': 'invalid_request',
+                'message': 'backend command queue is full',
+              },
+      },
+      events: const Stream.empty(),
+    );
+    await expectLater(
+      client.request('engine.command'),
+      throwsA(
+        isA<BackendException>()
+            .having((e) => e.code, 'code', 'invalid_request')
+            .having((e) => '$e', 'text', 'backend command queue is full'),
+      ),
+    );
+    await expectLater(
+      client.request('proxy.select'),
+      throwsA(
+        isA<BackendException>().having(
+          (e) => e.isSuperseded,
+          'isSuperseded',
+          isTrue,
+        ),
+      ),
+    );
+  });
+
+  test('user text hides superseded results and localizes the prefix', () {
+    const labels = BackendErrorLabels(
+      unavailable: 'Служба недоступна',
+      failed: 'Ошибка',
+      cancelled: 'Отменено',
+      closed: 'Служба остановлена',
+      timeout: 'Нет ответа',
+    );
+    const superseded = BackendException('superseded', 'operation superseded');
+    expect(formatBackendError(superseded, labels), isEmpty);
+    expect(isSilentBackendError(superseded), isTrue);
+    // Where empty text means success, a command that never ran is cancelled.
+    expect(
+      formatBackendError(superseded, labels, reportSuperseded: true),
+      'Отменено',
+    );
+    expect(
+      formatBackendError(
+        const BackendException('failed', 'operation failed'),
+        labels,
+      ),
+      'Ошибка',
+    );
+    expect(
+      formatBackendError(
+        const BackendException('failed', 'profile revision changed'),
+        labels,
+      ),
+      'Ошибка: profile revision changed',
+    );
+    expect(
+      formatBackendError(
+        const BackendException('unavailable', 'binder died'),
+        labels,
+      ),
+      'Служба недоступна',
+    );
+    expect(
+      formatBackendError(const BackendException('cancelled', ''), labels),
+      'Отменено',
+    );
+    expect(
+      formatBackendError(const BackendException('closed', 'closed'), labels),
+      'Служба остановлена',
+    );
+    expect(
+      formatBackendError(TimeoutException('pending'), labels),
+      'Нет ответа',
+    );
+    expect(formatBackendError(StateError('raw cause'), labels), 'raw cause');
+  });
+
+  test('engine commands stay below the backend queue limit', () async {
+    final host = ClientHost();
+    final gate = Completer<void>();
+    var running = 0;
+    var peak = 0;
+    final client = BackendClient(
+      transport: (request) async {
+        if (request['method'] != 'engine.command') return host.call(request);
+        running++;
+        peak = max(peak, running);
+        await gate.future;
+        running--;
+        return {
+          'apiVersion': 1,
+          'result': {'status': 'succeeded'},
+        };
+      },
+      events: host.events.stream,
+    );
+    final commands = [
+      for (var i = 0; i < 10; i++)
+        client.command('engine.command', {
+          'method': 'provider.refresh',
+          'params': {'name': 'provider-$i'},
+        }),
+    ];
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(running, BackendClient.engineCommandLimit);
+    gate.complete();
+    await Future.wait(commands);
+    expect(peak, BackendClient.engineCommandLimit);
+    expect(running, 0);
+    await host.close();
+  });
+
+  test('a re-established binding resyncs events missed meanwhile', () async {
+    final host = ClientHost();
+    final reconnects = StreamController<void>.broadcast();
+    final client = BackendClient(
+      transport: host.call,
+      events: host.events.stream,
+      reconnects: reconnects.stream,
+    );
+    await client.attach();
+    // The replacement process published its state before Dart re-registered.
+    host
+      ..instance = 'service-2'
+      ..sequence = 3
+      ..running = false;
+    final resynced = client.changes.firstWhere(
+      (snapshot) => (snapshot['runtime'] as Map)['instanceId'] == 'service-2',
+    );
+    reconnects.add(null);
+    await resynced;
+    expect((client.snapshot['runtime'] as Map)['desiredRunning'], false);
+    await client.detach();
+    await reconnects.close();
+    await host.close();
+  });
 }

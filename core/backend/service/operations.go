@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"core/backend"
 )
 
 const dataVersion = 1
@@ -23,6 +25,7 @@ type Receipt struct {
 	Method             string `json:"method"`
 	Status             string `json:"status"`
 	Error              string `json:"error,omitempty"`
+	ErrorCode          string `json:"errorCode,omitempty"` // backend.ErrorCode* values
 	ProfileID          string `json:"profileId,omitempty"`
 	Revision           uint64 `json:"revision,omitempty"`
 	RuntimeOperationID string `json:"runtimeOperationId,omitempty"`
@@ -40,6 +43,7 @@ type appDocument struct {
 }
 type operation struct {
 	receipt Receipt
+	parent  context.Context // application lifetime; its end means "closed"
 	ctx     context.Context
 	cancel  context.CancelFunc
 	done    chan struct{}
@@ -146,13 +150,12 @@ func (s *operationStore) saveLocked(next appDocument) error {
 	if err != nil {
 		return err
 	}
-	directory, err := os.Open(filepath.Dir(s.path))
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	if err = directory.Sync(); err != nil {
-		return err
+	// After the rename the new journal is what every later read observes;
+	// memory must follow it even if the directory flush fails (the next save
+	// flushes the directory again).
+	if directory, openErr := os.Open(filepath.Dir(s.path)); openErr == nil {
+		_ = directory.Sync()
+		_ = directory.Close()
 	}
 	s.document = next
 	s.document.Receipts = append([]Receipt(nil), next.Receipts...)
@@ -196,6 +199,13 @@ func (s *operationStore) accept(parent context.Context, id, method string, param
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A long-running operation may already have left the bounded history.
+	if op := s.running[id]; op != nil {
+		if op.receipt.Fingerprint != fingerprint || op.receipt.Method != method {
+			return nil, Receipt{}, errors.New("operationId reused for a different command")
+		}
+		return nil, op.receipt, nil
+	}
 	for _, receipt := range s.document.Receipts {
 		if receipt.OperationID == id {
 			if receipt.Fingerprint != fingerprint || receipt.Method != method {
@@ -220,7 +230,7 @@ func (s *operationStore) accept(parent context.Context, id, method string, param
 		return nil, Receipt{}, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	op := &operation{receipt: receipt, ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	op := &operation{receipt: receipt, parent: parent, ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	s.running[id] = op
 	return op, receipt, nil
 }
@@ -237,14 +247,23 @@ func (s *operationStore) finish(op *operation, result Receipt, err error) {
 		if len(result.Error) > 2048 {
 			result.Error = result.Error[:2048]
 		}
+		// Status keeps its established meaning; ErrorCode classifies the
+		// cause, e.g. a runtime step superseded by a newer user command.
+		result.ErrorCode = backend.ErrorCode(err)
 		if op.ctx.Err() != nil {
 			result.Status = "cancelled"
+			if op.parent != nil && op.parent.Err() != nil {
+				result.ErrorCode = backend.ErrorCodeClosed
+			} else if result.ErrorCode == backend.ErrorCodeFailed {
+				result.ErrorCode = backend.ErrorCodeCancelled
+			}
 		}
 	}
 	next := s.document
 	next.Receipts = appendReceipt(next.Receipts, result)
 	if saveErr := s.saveLocked(next); saveErr != nil {
 		result.Status = "failed"
+		result.ErrorCode = backend.ErrorCodeFailed
 		result.Error = "application journal commit failed"
 	}
 	op.receipt = result

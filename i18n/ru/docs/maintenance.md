@@ -29,13 +29,13 @@ dart setup.dart android --arch arm64 --out core
 flutter build apk --debug --target-platform android-arm64
 ```
 
-Для независимой диагностической установки добавьте `ORG_GRADLE_PROJECT_backendDiagnostic=true` к команде `flutter build apk --debug --target-platform android-arm64`. Пакет — `com.makriq.flclash.backendcheck`; CI `backend_test` использует `.backendtest`. Обновление с сохранением данных: `adb install -r -t`.
+Для независимой диагностической установки добавьте `ORG_GRADLE_PROJECT_backendDiagnostic=true` к команде `flutter build apk --debug --target-platform android-arm64`. Пакет — `com.makriq.flclash.backendcheck`; ручной CI с `backend_test` использует `.backendtest`. Обновление с сохранением данных: `adb install -r -t`.
 
 Для упрощённой локальной сборки тестового варианта используйте `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` после подготовки ядра и ресурсов; пакет — `com.makriq.flclash.backendtest`. CI дополнительно передаёт `--dart-define=APP_ENV=pre` и `--dart-define=CORE_VERSION` со значением из `lib/core_version.dart`.
 
 </details>
 
-CI проверяет Go host/race, Dart/Flutter, Kotlin unit-тесты, сборки ARM64/armeabi-v7a и E2E на x86_64 с настоящими mihomo, validator, ByeDPI и TUN. Документация пропускает тяжёлые задания. Эмулятор не заменяет реальные ARM-устройства: перед выпуском проверяйте режимы, узлы, подписки, смерть UI/`:remote`, сохранение Stop при восстановлении, смену сети и энергопотребление. Открытые замечания собраны в [#132](https://github.com/makriq-org/FlClashM/issues/132). Workflow `secret-scan` проверяет коммиты PR и push с помощью Gitleaks.
+CI проверяет Go host/race, Dart/Flutter, Kotlin unit-тесты, сборки ARM64/armeabi-v7a и E2E на x86_64 с настоящими mihomo, validator, ByeDPI и TUN. Документация пропускает тяжёлые задания. Изменения Dart-моста UI/backend запускают E2E с настоящей Flutter-activity; ошибки instrumentation и необработанные исключения Flutter проваливают проверку. Эмулятор не заменяет реальные ARM-устройства: перед выпуском проверяйте режимы, узлы, подписки, смерть UI/`:remote`, сохранение Stop при восстановлении, смену сети и энергопотребление. Открытые замечания собраны в [#132](https://github.com/makriq-org/FlClashM/issues/132). Workflow `secret-scan` проверяет коммиты PR и push с помощью Gitleaks.
 
 <a id="architecture"></a>
 
@@ -58,7 +58,7 @@ Base-код обращается к `lib/product/**` через `tool/product_to
 <details>
 <summary>Контракты backend при изменении runtime</summary>
 
-**Desired** — сохранённое намерение; **Applied** — последний подтверждённый план; **Observed** — фактическое наблюдение, при ошибке unknown. Неизменяемый RuntimePlan проверяется по версии и SHA-256. Подготовка отделена от очереди эффектов; context и поколение отсеивают поздние результаты. Ошибка возвращает подтверждённый план либо останавливает ресурсы. Revoke VPN сохраняет Stop и требует нового явного Start. Очередь ограничена 8 принятыми командами с резервом под Stop.
+**Desired** — сохранённое намерение; **Applied** — последний подтверждённый план; **Observed** — фактическое наблюдение, unknown, если состояние нельзя подтвердить. Неизменяемый RuntimePlan проверяется по версии и SHA-256. Подготовка отделена от очереди эффектов; context и поколение отсеивают поздние результаты. Ошибка возвращает подтверждённый план либо останавливает ресурсы. Revoke VPN сохраняет Stop и требует нового явного Start. Очередь ограничена 8 принятыми командами с резервом под Stop.
 
 API, данные и план имеют независимые версии, сейчас `1`. Запрос: `apiVersion`, `operationId`, `method`, `params`; ответ: `result` или `error`. Повтор ID с тем же содержимым возвращает прежний результат, с другим — отклоняется. Ожидаются оба результата доменной и связанной `runtimeOperationId` операции. Timeout или смерть UI не отменяют работу; отмена — явная команда.
 

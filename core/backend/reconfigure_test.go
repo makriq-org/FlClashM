@@ -138,3 +138,28 @@ func TestLiveSettingsKeepVPNAndRebuildBakedPlatformOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanDigestSortsTopLevelAndKeepsNestedOrder(t *testing.T) {
+	type prepared struct {
+		Config   json.RawMessage   `json:"config"`
+		Selected map[string]string `json:"selected-map"`
+	}
+	config := json.RawMessage(`{"dns":{"nameserver-policy":{"z.example":"1.1.1.1","a.example":"8.8.8.8"}}}`)
+	fromStruct, err := NewRuntimePlan(1, prepared{config, map[string]string{"g": "p"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromMap, err := NewRuntimePlan(1, map[string]json.RawMessage{"selected-map": json.RawMessage(`{"g":"p"}`), "config": config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromStruct.Digest() != fromMap.Digest() {
+		t.Fatalf("digest depends on top-level order: %s vs %s", fromStruct.Payload(), fromMap.Payload())
+	}
+	if payload := string(fromStruct.Payload()); strings.Index(payload, "z.example") > strings.Index(payload, "a.example") {
+		t.Fatalf("nested order lost: %s", payload)
+	}
+	if _, err := NewRuntimePlan(1, json.RawMessage(`null`)); err == nil {
+		t.Fatal("null payload accepted")
+	}
+}

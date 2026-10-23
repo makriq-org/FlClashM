@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:isolate';
 
 import 'package:flclashx/clash/message.dart';
 import 'package:flclashx/common/common.dart';
@@ -8,8 +7,6 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 
 mixin ClashInterface {
-  Future<bool> init(InitParams params);
-
   Future<bool> preload();
 
   Future<bool> shutdown();
@@ -18,38 +15,15 @@ mixin ClashInterface {
 
   Future<bool> forceGc();
 
-  FutureOr<String> validateConfig(String data);
-
-  FutureOr<Result> getConfig(String path);
-
   Future<String> asyncTestDelay(String url, String proxyName);
 
   Future<void> healthCheck([String groupName = '']);
 
-  FutureOr<String> updateConfig(UpdateParams updateParams);
-
-  FutureOr<String> setupConfig(SetupParams setupParams);
-
   FutureOr<Map> getProxies();
-
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams);
-
-  Future<bool> startListener();
-
-  Future<bool> stopListener();
 
   FutureOr<String> getExternalProviders();
 
   FutureOr<String>? getExternalProvider(String externalProviderName);
-
-  Future<String> updateGeoData(UpdateGeoDataParams params);
-
-  Future<String> sideLoadExternalProvider({
-    required String providerName,
-    required String data,
-  });
-
-  Future<String> updateExternalProvider(String providerName);
 
   FutureOr<String> getTraffic();
 
@@ -61,8 +35,6 @@ mixin ClashInterface {
 
   FutureOr<String> getCoreVersion();
 
-  resetTraffic();
-
   startLog();
 
   stopLog();
@@ -71,17 +43,12 @@ mixin ClashInterface {
 
   FutureOr<String> getConnections();
 
-  FutureOr<bool> closeConnection(String id);
-
-  FutureOr<bool> closeConnections();
-
-  FutureOr<bool> resetConnections();
-
-  Future<bool> setState(CoreState state);
-
   Future<bool> setUiActive(bool active);
 
-  FutureOr<Map> tunnelHTTPRequest(String params, {Duration? timeout});
+  FutureOr<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  });
 
   FutureOr<Map> getRuntimeSnapshot();
 
@@ -162,190 +129,111 @@ abstract class ClashHandlerInterface with ClashInterface {
     }
     callbackDefaultMap[id] = mDefaultValue;
 
-    sendMessage(json.encode(Action(id: id, method: method, data: data)));
+    sendMessage(
+      json.encode(
+        Action(
+          id: id,
+          method: method,
+          data: data,
+        ),
+      ),
+    );
 
     return (callbackCompleterMap[id]! as Completer<T>).safeFuture(
-          timeout: timeout,
-          onLast: () {
-            callbackCompleterMap.remove(id);
-            callbackDefaultMap.remove(id);
-          },
-          onTimeout: onTimeout ?? () => mDefaultValue as T,
-          functionName: id,
-        )
-        as Future<T>;
+      timeout: timeout,
+      onLast: () {
+        callbackCompleterMap.remove(id);
+        callbackDefaultMap.remove(id);
+      },
+      onTimeout: onTimeout ??
+          () => mDefaultValue as T,
+      functionName: id,
+    ) as Future<T>;
   }
 
   @override
-  Future<bool> init(InitParams params) =>
-      invoke<bool>(method: ActionMethod.initClash, data: json.encode(params));
-
-  @override
-  Future<bool> setState(CoreState state) =>
-      invoke<bool>(method: ActionMethod.setState, data: json.encode(state));
-
-  @override
   Future<bool> setUiActive(bool active) => invoke<bool>(
-    method: ActionMethod.setUiActive,
-    data: active,
-    // Short timeout so an older core without this handler degrades silently
-    // instead of leaving a pending completer.
-    timeout: const Duration(seconds: 2),
-  );
+      method: ActionMethod.setUiActive,
+      data: active,
+      // Short timeout so an older core without this handler degrades silently
+      // instead of leaving a pending completer.
+      timeout: const Duration(seconds: 2),
+    );
 
   @override
-  Future<Map> tunnelHTTPRequest(String params, {Duration? timeout}) =>
+  Future<Map> tunnelHTTPRequest(
+    String params, {
+    Duration? timeout,
+  }) =>
       invoke<Map>(
         method: ActionMethod.tunnelHTTPRequest,
         data: params,
         timeout: timeout ?? const Duration(seconds: 70),
-        defaultValue: const {'error': 'tunnel HTTP request timed out'},
+        defaultValue: const {
+          'error': 'tunnel HTTP request timed out',
+        },
       );
 
   @override
   Future<Map> getRuntimeSnapshot() => invoke<Map>(
-    method: ActionMethod.getRuntimeSnapshot,
-    timeout: const Duration(seconds: 5),
-    defaultValue: const {},
-  );
+        method: ActionMethod.getRuntimeSnapshot,
+        timeout: const Duration(seconds: 5),
+        defaultValue: const {},
+      );
 
   @override
   Future<bool> cancelTunnelHTTPRequest(String requestId) => invoke<bool>(
-    method: ActionMethod.cancelTunnelHTTPRequest,
-    data: requestId,
-    timeout: const Duration(seconds: 2),
-  );
+        method: ActionMethod.cancelTunnelHTTPRequest,
+        data: requestId,
+        timeout: const Duration(seconds: 2),
+      );
 
   @override
-  Future<bool> shutdown() => invoke<bool>(
-    method: ActionMethod.shutdown,
-    timeout: const Duration(seconds: 1),
-  );
+  Future<bool> get isInit => invoke<bool>(
+        method: ActionMethod.getIsInit,
+      );
 
   @override
-  Future<bool> get isInit => invoke<bool>(method: ActionMethod.getIsInit);
+  Future<bool> forceGc() => invoke<bool>(
+        method: ActionMethod.forceGc,
+      );
 
   @override
-  Future<bool> forceGc() => invoke<bool>(method: ActionMethod.forceGc);
-
-  @override
-  FutureOr<String> validateConfig(String data) =>
-      invoke<String>(method: ActionMethod.validateConfig, data: data);
-
-  @override
-  Future<String> updateConfig(UpdateParams updateParams) => invoke<String>(
-    method: ActionMethod.updateConfig,
-    data: json.encode(updateParams),
-    timeout: const Duration(minutes: 2),
-    // Empty string means success to callers; the default-on-timeout is "",
-    // which would mask a 2-minute hang as a successful apply. Return a
-    // non-empty error string so the caller actually treats it as failed.
-    onTimeout: () => 'updateConfig timed out',
-  );
-
-  @override
-  Future<Result> getConfig(String path) => invoke<Result>(
-    method: ActionMethod.getConfig,
-    data: path,
-    timeout: const Duration(minutes: 2),
-    // A timed-out/failed read used to default to Result.success({}), making
-    // the caller treat an empty config as a successful load. Yield an error
-    // Result so getConfig()'s error path fires instead.
-    defaultValue: Result.error('getConfig timed out'),
-  );
-
-  @override
-  Future<String> setupConfig(SetupParams setupParams) async {
-    final data = await Isolate.run(() => json.encode(setupParams));
-    return invoke<String>(
-      method: ActionMethod.setupConfig,
-      data: data,
-      timeout: const Duration(minutes: 2),
-      // Non-empty = error to callers; the default "" would mask a 2-minute hang
-      // as a successful setup (and falsely advance lastProfileModified), so the
-      // recovery re-apply would silently no-op against a still-broken executor.
-      onTimeout: () => 'setupConfig timed out',
+  Future<bool> crash() => invoke<bool>(
+      method: ActionMethod.crash,
     );
-  }
-
-  @override
-  Future<bool> crash() => invoke<bool>(method: ActionMethod.crash);
 
   @override
   Future<Map> getProxies() => invoke<Map>(
-    method: ActionMethod.getProxies,
-    timeout: const Duration(seconds: 5),
-  );
+      method: ActionMethod.getProxies,
+      timeout: const Duration(seconds: 5),
+    );
 
   @override
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) =>
-      invoke<String>(
-        method: ActionMethod.changeProxy,
-        data: json.encode(changeProxyParams),
-      );
+  FutureOr<String> getExternalProviders() => invoke<String>(
+      method: ActionMethod.getExternalProviders,
+    );
 
   @override
-  FutureOr<String> getExternalProviders() =>
-      invoke<String>(method: ActionMethod.getExternalProviders);
+  FutureOr<String> getExternalProvider(String externalProviderName) => invoke<String>(
+      method: ActionMethod.getExternalProvider,
+      data: externalProviderName,
+    );
 
   @override
-  FutureOr<String> getExternalProvider(String externalProviderName) =>
-      invoke<String>(
-        method: ActionMethod.getExternalProvider,
-        data: externalProviderName,
-      );
+  FutureOr<String> getConnections() => invoke<String>(
+      method: ActionMethod.getConnections,
+    );
 
   @override
-  Future<String> updateGeoData(UpdateGeoDataParams params) => invoke<String>(
-    method: ActionMethod.updateGeoData,
-    data: json.encode(params),
-    timeout: const Duration(seconds: 100),
-  );
+  FutureOr<String> getTotalTraffic() => invoke<String>(
+      method: ActionMethod.getTotalTraffic,
+    );
 
   @override
-  Future<String> sideLoadExternalProvider({
-    required String providerName,
-    required String data,
-  }) => invoke<String>(
-    method: ActionMethod.sideLoadExternalProvider,
-    data: json.encode({"providerName": providerName, "data": data}),
-  );
-
-  @override
-  Future<String> updateExternalProvider(String providerName) => invoke<String>(
-    method: ActionMethod.updateExternalProvider,
-    data: providerName,
-    timeout: const Duration(minutes: 1),
-  );
-
-  @override
-  FutureOr<String> getConnections() =>
-      invoke<String>(method: ActionMethod.getConnections);
-
-  @override
-  Future<bool> closeConnections() =>
-      invoke<bool>(method: ActionMethod.closeConnections);
-
-  @override
-  Future<bool> resetConnections() =>
-      invoke<bool>(method: ActionMethod.resetConnections);
-
-  @override
-  Future<bool> closeConnection(String id) =>
-      invoke<bool>(method: ActionMethod.closeConnection, data: id);
-
-  @override
-  FutureOr<String> getTotalTraffic() =>
-      invoke<String>(method: ActionMethod.getTotalTraffic);
-
-  @override
-  FutureOr<String> getTraffic() =>
-      invoke<String>(method: ActionMethod.getTraffic);
-
-  @override
-  void resetTraffic() {
-    invoke(method: ActionMethod.resetTraffic);
-  }
+  FutureOr<String> getTraffic() => invoke<String>(
+      method: ActionMethod.getTraffic,
+    );
 
   @override
   void startLog() {
@@ -354,16 +242,10 @@ abstract class ClashHandlerInterface with ClashInterface {
 
   @override
   void stopLog() {
-    invoke<bool>(method: ActionMethod.stopLog);
+    invoke<bool>(
+      method: ActionMethod.stopLog,
+    );
   }
-
-  @override
-  Future<bool> startListener() =>
-      invoke<bool>(method: ActionMethod.startListener);
-
-  @override
-  Future<bool> stopListener() =>
-      invoke<bool>(method: ActionMethod.stopListener);
 
   @override
   Future<String> asyncTestDelay(String url, String proxyName) {
@@ -375,27 +257,39 @@ abstract class ClashHandlerInterface with ClashInterface {
     return invoke<String>(
       method: ActionMethod.asyncTestDelay,
       data: json.encode(delayParams),
-      timeout: const Duration(milliseconds: 6000),
-      onTimeout: () => json.encode(Delay(name: proxyName, value: -1, url: url)),
+      timeout: const Duration(
+        milliseconds: 6000,
+      ),
+      onTimeout: () => json.encode(
+          Delay(
+            name: proxyName,
+            value: -1,
+            url: url,
+          ),
+        ),
     );
   }
 
   @override
   Future<void> healthCheck([String groupName = '']) => invoke<String>(
-    method: ActionMethod.healthCheck,
-    data: groupName,
-    timeout: const Duration(seconds: 30),
-  );
+      method: ActionMethod.healthCheck,
+      data: groupName,
+      timeout: const Duration(seconds: 30),
+    );
 
   @override
-  FutureOr<String> getCountryCode(String ip) =>
-      invoke<String>(method: ActionMethod.getCountryCode, data: ip);
+  FutureOr<String> getCountryCode(String ip) => invoke<String>(
+      method: ActionMethod.getCountryCode,
+      data: ip,
+    );
 
   @override
-  FutureOr<String> getMemory() =>
-      invoke<String>(method: ActionMethod.getMemory);
+  FutureOr<String> getMemory() => invoke<String>(
+      method: ActionMethod.getMemory,
+    );
 
   @override
-  FutureOr<String> getCoreVersion() =>
-      invoke<String>(method: ActionMethod.getCoreVersion);
+  FutureOr<String> getCoreVersion() => invoke<String>(
+      method: ActionMethod.getCoreVersion,
+    );
 }

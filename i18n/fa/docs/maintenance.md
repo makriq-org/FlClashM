@@ -39,13 +39,13 @@ flutter build apk --debug --target-platform android-arm64
 
 </div>
 
-برای نصب تشخیصی مستقل، `ORG_GRADLE_PROJECT_backendDiagnostic=true` را پیش از `flutter build apk --debug --target-platform android-arm64` بگذارید. بسته: `com.makriq.flclash.backendcheck`؛ گزینهٔ CI به نام `backend_test` از `.backendtest` استفاده می‌کند. به‌روزرسانی با حفظ داده: `adb install -r -t`.
+برای نصب تشخیصی مستقل، `ORG_GRADLE_PROJECT_backendDiagnostic=true` را پیش از `flutter build apk --debug --target-platform android-arm64` بگذارید. بسته: `com.makriq.flclash.backendcheck`؛ گزینهٔ اجرای دستی CI به نام `backend_test` از `.backendtest` استفاده می‌کند. به‌روزرسانی با حفظ داده: `adb install -r -t`.
 
 برای ساخت محلی ساده‌شدهٔ گونهٔ آزمایشی، پس از آماده‌سازی هسته و منابع، `ORG_GRADLE_PROJECT_backendTest=true flutter build apk --release --target-platform android-arm64` را اجرا کنید؛ بسته: `com.makriq.flclash.backendtest`. CI همچنین `--dart-define=APP_ENV=pre` و `--dart-define=CORE_VERSION` را با مقدار برگرفته از `lib/core_version.dart` ارسال می‌کند.
 
 </details>
 
-CI شامل Go host/race، Dart/Flutter، تست واحد Kotlin، ساخت ARM64/armeabi-v7a و E2E در x86_64 با mihomo، validator، ByeDPI و TUN واقعی است. تغییرات صرفاً مستندات، از کارهای سنگین صرف‌نظر می‌کنند. شبیه‌ساز جای دستگاه ARM واقعی را نمی‌گیرد: پیش از انتشار، حالت‌ها، نودها، اشتراک‌ها، مرگ UI/`:remote`، حفظ Stop هنگام بازیابی، تعویض شبکه و مصرف باتری را بررسی کنید. موارد باز در [#132](https://github.com/makriq-org/FlClashM/issues/132) هستند. گردش‌کار `secret-scan` کامیت‌های PR و push را با Gitleaks بررسی می‌کند.
+CI شامل Go host/race، Dart/Flutter، تست واحد Kotlin، ساخت ARM64/armeabi-v7a و E2E در x86_64 با mihomo، validator، ByeDPI و TUN واقعی است. تغییرات صرفاً مستندات، از کارهای سنگین صرف‌نظر می‌کنند. تغییر پل Dart میان UI و backend، آزمون E2E با activity واقعی Flutter را اجرا می‌کند؛ خطای instrumentation یا استثنای مدیریت‌نشدهٔ Flutter باعث شکست بررسی می‌شود. شبیه‌ساز جای دستگاه ARM واقعی را نمی‌گیرد: پیش از انتشار، حالت‌ها، نودها، اشتراک‌ها، مرگ UI/`:remote`، حفظ Stop هنگام بازیابی، تعویض شبکه و مصرف باتری را بررسی کنید. موارد باز در [#132](https://github.com/makriq-org/FlClashM/issues/132) هستند. گردش‌کار `secret-scan` کامیت‌های PR و push را با Gitleaks بررسی می‌کند.
 
 <a id="architecture"></a>
 
@@ -72,7 +72,7 @@ RuntimeCoordinator تنها مالک وضعیت تغییرپذیر اجراست.
 <details>
 <summary>قراردادهای backend هنگام تغییر اجرا</summary>
 
-**Desired** نیت ذخیره‌شده، **Applied** آخرین نقشهٔ تأییدشده و **Observed** مشاهدهٔ واقعی است که در خطا unknown می‌شود. RuntimePlan تغییرناپذیر با نسخه و SHA-256 بررسی می‌شود. آماده‌سازی از صف اثرات جداست؛ context و نسل، نتیجهٔ دیررس را مهار می‌کنند. شکست، نقشهٔ تأییدشده را برمی‌گرداند یا منابع را متوقف می‌کند. لغو VPN، Stop را ذخیره می‌کند و به Start صریح تازه نیاز دارد. صف به 8 فرمان پذیرفته‌شده محدود است و ظرفیت ذخیره‌ای برای Stop دارد.
+**Desired** نیت ذخیره‌شده، **Applied** آخرین نقشهٔ تأییدشده و **Observed** مشاهدهٔ واقعی است که اگر تأیید وضعیت ممکن نباشد، unknown است. RuntimePlan تغییرناپذیر با نسخه و SHA-256 بررسی می‌شود. آماده‌سازی از صف اثرات جداست؛ context و نسل، نتیجهٔ دیررس را مهار می‌کنند. شکست، نقشهٔ تأییدشده را برمی‌گرداند یا منابع را متوقف می‌کند. لغو VPN، Stop را ذخیره می‌کند و به Start صریح تازه نیاز دارد. صف به 8 فرمان پذیرفته‌شده محدود است و ظرفیت ذخیره‌ای برای Stop دارد.
 
 API، داده و نقشه نسخه‌های مستقل دارند که اکنون `1` است. درخواست: `apiVersion`، `operationId`، `method`، `params`؛ پاسخ: `result` یا `error`. تکرار ID با محتوای یکسان نتیجهٔ پیشین را می‌دهد و با محتوای متفاوت رد می‌شود. هم نتیجهٔ عملیات دامنه و هم `runtimeOperationId` مرتبط را انتظار بکشید. timeout یا مرگ UI کار را لغو نمی‌کند؛ لغو صریح است.
 

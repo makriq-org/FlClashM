@@ -14,6 +14,11 @@ func (c *runtimeCoordinator) tryPreparedTransition(e *execution, previous Docume
 	if c.nodeOptions == nil || previous.Applied == nil || previous.Applied.Running || e.request.Method == "restart" || (!running && !c.keepNodesWarm) {
 		return false, nil
 	}
+	// Prepared nodes and the stopped engine are reusable only if they were
+	// installed for exactly this plan; otherwise prepare it from scratch.
+	if c.residentDigest != plan.Digest() {
+		return false, nil
+	}
 	c.mu.Lock()
 	stopped := c.observed.State == "stopped"
 	c.mu.Unlock()
@@ -43,9 +48,11 @@ func (c *runtimeCoordinator) tryPreparedTransition(e *execution, previous Docume
 		}
 		if !running {
 			// Refresh providers' initial health checks after loopback listeners exist.
+			c.residentDigest = ""
 			if err := c.engine.Apply(e.ctx, plan); err != nil {
 				return true, err
 			}
+			c.residentDigest = plan.Digest()
 		}
 	}
 	observed, err := c.transports.Observe(e.ctx)
@@ -102,7 +109,7 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 	if err != nil {
 		return false, err
 	}
-	if !selectionOnly(old, next) {
+	if !selectionOnly(old, next) || c.residentDigest != old.Digest() {
 		return false, nil
 	}
 	if err = c.current(e); err != nil {
@@ -134,9 +141,12 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 			}
 		}
 	}
+	c.residentDigest = ""
 	if err = updater.ApplySelection(e.ctx, old, next); err != nil {
 		return true, err
 	}
+	// Selection-only plans share node definitions, so prepared nodes match.
+	c.adoptResidentPlan(old, next)
 	var before, after struct {
 		Selected map[string]string `json:"selected-map"`
 		Close    bool              `json:"closeConnectionsOnSelect"`
@@ -205,17 +215,29 @@ func (c *runtimeCoordinator) tryLiveSettings(e *execution, previous Document, ne
 	if err != nil {
 		return false, err
 	}
-	if !liveSettingsOnly(old, next) {
+	if !liveSettingsOnly(old, next) || c.residentDigest != old.Digest() {
 		return false, nil
 	}
 	if err = c.current(e); err != nil {
 		return true, err
 	}
+	c.residentDigest = ""
 	if err = adapter.ApplyLiveSettings(e.ctx, old, next); err != nil {
 		return true, err
 	}
+	// Live settings never touch node definitions.
+	c.adoptResidentPlan(old, next)
 	if err = c.current(e); err != nil {
 		return true, err
 	}
 	return true, c.observe(e.ctx, running)
+}
+
+// adoptResidentPlan records an in-place engine update whose plan keeps the
+// node definitions of the resident plan.
+func (c *runtimeCoordinator) adoptResidentPlan(old, next *RuntimePlan) {
+	c.residentDigest = next.Digest()
+	if c.nodesDigest == old.Digest() {
+		c.nodesDigest = next.Digest()
+	}
 }

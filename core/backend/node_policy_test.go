@@ -501,3 +501,129 @@ func TestInterruptedAutonomousWakeRecoversCommittedSleepingNode(t *testing.T) {
 		t.Fatal("uncommitted wake replayed")
 	}
 }
+
+// A superseded install of plan B leaves B's node definitions and engine
+// configuration behind. Returning to the committed plan A must reinstall A,
+// not start B's processes and persist their state under A.
+func TestSupersededWarmInstallDoesNotLeaveForeignNodes(t *testing.T) {
+	store := newStore(t)
+	mechanism := newNodeHost()
+	h := newHost()
+	b, err := Open(store, h, hostEngine{h}, nil, hostPlatform{h}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", Now: mechanism.now, ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	nodeA := reservePlan()
+	nodeA.Activation = nil
+	nodeB := reservePlan()
+	nodeB.Activation = nil
+	nodeB.ID = "stormdns-" + strings.Repeat("c", 32)
+	nodeB.Name = "StormB"
+	nodeB.Port = 36201
+	inputA, inputB := nodeInput(nodeA), nodeInput(nodeB)
+	run(t, b, "configure", "apply", inputA)
+	run(t, b, "ui-warm", "warm", inputA)
+	h.mu.Lock()
+	h.block, h.entered, h.release = "engine.apply", make(chan struct{}), make(chan struct{})
+	h.mu.Unlock()
+	if _, err = b.Submit(Request{APIVersion: 1, OperationID: "switch", Method: "apply", Input: Input(inputB)}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-h.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("install did not reach the engine")
+	}
+	if _, err = b.Submit(Request{APIVersion: 1, OperationID: "back", Method: "apply", Input: Input(inputA)}); err != nil {
+		t.Fatal(err)
+	}
+	close(h.release)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if receipt, err := b.Await(ctx, "back"); err != nil || receipt.Status != "succeeded" {
+		t.Fatalf("return to committed plan: %+v %v", receipt, err)
+	}
+	mechanism.mu.Lock()
+	_, foreign := mechanism.processes[nodeB.ID]
+	_, own := mechanism.processes[nodeA.ID]
+	mechanism.mu.Unlock()
+	if foreign || !own {
+		t.Fatalf("prepared processes do not match plan A: foreign=%v own=%v", foreign, own)
+	}
+	doc, err := store.Load()
+	if err != nil || doc.Applied == nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc.Applied.Nodes[nodeA.ID]; !ok || len(doc.Applied.Nodes) != 1 {
+		t.Fatalf("committed node states do not derive from plan A: %+v", doc.Applied.Nodes)
+	}
+	h.mu.Lock()
+	resident := string(h.applied)
+	h.mu.Unlock()
+	if !strings.Contains(resident, nodeA.ID) || strings.Contains(resident, nodeB.ID) {
+		t.Fatalf("engine kept the superseded configuration: %s", resident)
+	}
+	if s := b.Snapshot(); len(s.Nodes) != 1 || s.Nodes[0].ID != nodeA.ID || s.Nodes[0].State != "running" {
+		t.Fatal("node projection does not match plan A", s.Nodes)
+	}
+}
+
+func TestUIDetachStopsPreparedNodesAndFencesLateWarm(t *testing.T) {
+	mechanism := newNodeHost()
+	b := openNodeHost(t, newStore(t), mechanism)
+	node := reservePlan()
+	node.Activation = nil
+	input := nodeInput(node)
+	processes := func() int {
+		mechanism.mu.Lock()
+		defer mechanism.mu.Unlock()
+		return len(mechanism.processes)
+	}
+	if err := b.PrepareForUI(); err != nil {
+		t.Fatal(err)
+	}
+	run(t, b, "warm", "warm", input)
+	if processes() != 1 {
+		t.Fatal("UI preparation did not launch node")
+	}
+	for range 2 { // idempotent
+		if err := b.ReleaseUI(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s := b.Snapshot(); processes() != 0 || s.DesiredRunning || s.AppliedRunning || s.Nodes[0].State != "stopped" {
+		t.Fatal("detach kept latency preparation or changed VPN intent", processes(), s)
+	}
+	// A warm queued by the detached session prepares the plan without nodes.
+	run(t, b, "late-warm", "warm", input)
+	if processes() != 0 {
+		t.Fatal("late warm recreated UI preparation after detach")
+	}
+	// Attach/detach facts applied out of arrival order: the older one loses.
+	if err := b.SetUISession(false, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetUISession(true, 1); err != nil {
+		t.Fatal(err)
+	}
+	run(t, b, "stale-warm", "warm", input)
+	if processes() != 0 {
+		t.Fatal("stale attach recreated UI preparation")
+	}
+	// A running VPN keeps its nodes across detach; Stop then releases them.
+	if err := b.SetUISession(true, 3); err != nil {
+		t.Fatal(err)
+	}
+	run(t, b, "connect", "connect", input)
+	if err := b.SetUISession(false, 4); err != nil {
+		t.Fatal(err)
+	}
+	if processes() != 1 || b.Snapshot().Observed.State != "running" {
+		t.Fatal("detach interrupted a running VPN")
+	}
+	run(t, b, "stop", "stop", "")
+	if processes() != 0 {
+		t.Fatal("Stop after detach kept UI-only node processes")
+	}
+}

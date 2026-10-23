@@ -94,12 +94,18 @@ $script''',
     }
   });
 
-  test('Android UI bridge keeps E2E coverage', () async {
-    await expectScope(
-      ['lib/product/android/backend_client.dart'],
-      [true, true, false, true],
-    );
-  });
+  for (final path in [
+    'lib/product/android/android_shell_bridge.dart',
+    'lib/product/backend/backend_client.dart',
+    'lib/product/bootstrap/app_bootstrap.dart',
+    'lib/clash/lib.dart',
+    'lib/state.dart',
+    'lib/controller.dart',
+  ]) {
+    test('$path keeps E2E coverage for the UI backend bridge', () async {
+      await expectScope([path], [true, true, false, true]);
+    });
+  }
 
   test('E2E script changes run the emulator', () async {
     await expectScope(

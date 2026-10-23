@@ -62,4 +62,21 @@ void main() {
       expect(attempts, 3);
     },
   );
+
+  test('only a re-established binding reports a reconnect', () async {
+    var reconnects = 0;
+    final connection = BackendConnection(
+      connect: () async => true,
+      onReconnected: () {
+        reconnects++;
+      },
+    );
+    expect(await connection.ensure(), isTrue);
+    expect(await connection.ensure(), isTrue);
+    expect(reconnects, 0);
+    // :remote died; the next binding must trigger a full snapshot resync.
+    connection.invalidate();
+    expect(await connection.ensure(), isTrue);
+    expect(reconnects, 1);
+  });
 }

@@ -61,15 +61,53 @@ internal object BackendForegroundHold {
         finishIdle()
     }
 
-    fun created(service: BackendForegroundResource) = synchronized(lock) {
-        services.add(service)
-        available.value = services.toList()
+    /** Registers a promoted instance. Also called on every promoted start
+     * command: a retired instance kept alive by a binding (the system VPN bind)
+     * receives the next start itself instead of a fresh instance being created. */
+    fun created(service: BackendForegroundResource) {
+        synchronized(lock) {
+            if (!service.destroyed && services.add(service)) available.value = services.toList()
+        }
     }
     fun destroyed(service: BackendForegroundResource) = synchronized(lock) {
         services.remove(service)
         available.value = services.toList()
     }
-    suspend fun awaitService(type: Class<out android.app.Service>): BackendForegroundResource = withTimeout(30_000L) {
+
+    /** True while [service] can still grant holds and accept platform starts. */
+    fun isLive(service: BackendForegroundResource): Boolean = synchronized(lock) {
+        !service.destroyed && service in services
+    }
+
+    /**
+     * Retires an idle service before it stops itself. `destroyed` is only set in
+     * onDestroy, long after stopSelf, so without this a quick Stop->Start could
+     * get a hold granted by, or attach a TUN to, an instance that is going away.
+     * [startId] is read while retiring, so a start delivered after that point
+     * makes [stop] (stopSelfResult with the older id) return false; the instance
+     * then stays the live host for that command.
+     */
+    fun retireIfIdle(
+        service: BackendForegroundResource,
+        idle: () -> Boolean,
+        startId: () -> Int,
+        stop: (Int) -> Boolean,
+    ) {
+        val retiredStartId = synchronized(lock) {
+            if (holds.isNotEmpty() || service.destroyed || service !in services || !idle()) null
+            else {
+                services.remove(service)
+                available.value = services.toList()
+                startId()
+            }
+        }
+        if (retiredStartId == null || stop(retiredStartId)) return
+        synchronized(lock) {
+            if (!service.destroyed && services.add(service)) available.value = services.toList()
+        }
+    }
+
+    suspend fun awaitService(type: Class<*>): BackendForegroundResource = withTimeout(30_000L) {
         available.mapNotNull { values -> values.firstOrNull { !it.destroyed && type.isInstance(it) } }.first()
     }
     fun acknowledge(id: String?, promoted: Boolean) {

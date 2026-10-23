@@ -15,6 +15,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,10 +43,17 @@ object BackendHost {
     private val presentations = Channel<Unit>(Channel.CONFLATED)
     private val projectionWorker = GlobalState.scope.launch {
         for (signal in presentations) {
+            // Conflate a burst (operation finish + runtime transitions) into one
+            // refresh; a signal arriving after this point schedules the next one.
+            delay(BackendEvents.PRESENTATION_DEBOUNCE_MS)
+            presentations.tryReceive()
             runCatching {
                 val view = command("presentation").getJSONObject("result")
-                val runtime = command("snapshot").getJSONObject("result").getJSONObject("runtime")
+                val snapshot = command("snapshot").getJSONObject("result")
+                val runtime = snapshot.getJSONObject("runtime")
                 projectRuntime(runtime)
+                StateHub.projectTheme(BackendEvents.themeMode(snapshot.optJSONObject("catalog")
+                    ?.optJSONObject("settings")?.optJSONObject("themeProps")?.optString("themeMode")))
                 if (view.optLong("appliedGeneration") == runtime.optLong("appliedGeneration")) {
                     StateHub.projectPresentation(view)
                     val previous = State.notificationParamsFlow.value
@@ -60,25 +68,26 @@ object BackendHost {
         Core.setEventListener(object : InvokeInterface {
             override fun onResult(result: String) {
                 val message = runCatching { JSONObject(result).optJSONObject("data") }.getOrNull()
-                if (message?.optString("type") == "runtimeLog") {
+                val type = message?.optString("type")
+                if (message != null && type == "runtimeLog") {
                     val output = message.getJSONObject("data")
                     DiagnosticLog.runtimeNode(output.getString("type"), output.getString("line"))
-                } else if (message?.optString("type") == "backendPlatform") {
+                } else if (message != null && type == "backendPlatform") {
                     dispatch(message.getJSONObject("data"))
                 } else {
-                    if (message?.optString("type") == "backend") {
+                    if (message != null && type == "backend") {
                         projectRuntime(message.getJSONObject("data").getJSONObject("runtime"))
                     }
-                    presentations.trySend(Unit)
+                    if (BackendEvents.refreshesPresentation(type)) presentations.trySend(Unit)
                     onEvent?.invoke(result)
                 }
             }
         })
         val preferences = application.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val legacy = JSONObject(preferences.getString("flutter.config", "{}") ?: "{}")
-        preferences.getString("flutter.clash_config", null)?.let {
-            legacy.put("patchClashConfig", JSONObject(it))
-        }
+        // The old app dropped undecodable values and started fresh; a corrupt
+        // legacy value must not keep the backend from ever opening.
+        val legacy = legacyObject(preferences, "flutter.config") ?: JSONObject()
+        legacyObject(preferences, "flutter.clash_config")?.let { legacy.put("patchClashConfig", it) }
         installBundledGeo()
         // This privacy preference historically lived outside Config.
         if (preferences.contains("flutter.sendDeviceHeaders")) {
@@ -215,6 +224,13 @@ object BackendHost {
             .put("x-ver-os", Build.VERSION.RELEASE).put("x-device-model", "${Build.MANUFACTURER} ${Build.MODEL}")
     }
 
+    private fun legacyObject(preferences: android.content.SharedPreferences, key: String): JSONObject? {
+        val value = runCatching { preferences.getString(key, null) }.getOrNull() ?: return null
+        return runCatching { JSONObject(value) }
+            .onFailure { GlobalState.log("ignored undecodable legacy preference $key") }
+            .getOrNull()
+    }
+
     private fun projectRuntime(runtime: JSONObject) {
         val observed = runtime.optJSONObject("observed")?.optString("state") ?: "unknown"
         val desired = runtime.optBoolean("desiredRunning")
@@ -239,5 +255,21 @@ object BackendHost {
                 check(temporary.renameTo(target)) { "bundled geo installation failed" }
             } finally { temporary.delete() }
         }
+    }
+}
+
+/** Pure rules for projecting Go events; kept apart from the native host. */
+internal object BackendEvents {
+    const val PRESENTATION_DEBOUNCE_MS = 150L
+
+    /** Go application events (runtime, catalog, settings, operations) change
+     * the presentation. Delay results can move an auto-selecting group to
+     * another node shown in the notification title; logs and requests cannot. */
+    fun refreshesPresentation(type: String?): Boolean = type == "backend" || type == "delay"
+
+    /** Normalized Flutter ThemeMode name from Go settings: light, dark or system. */
+    fun themeMode(value: String?): String {
+        val mode = value.orEmpty().substringAfterLast('.').trim().lowercase()
+        return if (mode == "light" || mode == "dark") mode else "system"
     }
 }

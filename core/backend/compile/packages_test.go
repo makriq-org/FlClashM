@@ -83,3 +83,32 @@ func TestPackageInventoryFailureCannotSilentlyDiscardSplitTunneling(t *testing.T
 		}
 	}
 }
+
+func TestRemotePackageYAMLListKeepsTaggedExclusions(t *testing.T) {
+	parsed, err := parsePackageBody("- com.example.*\n- !com.example.two\n- org.sample # note\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw []string
+	for _, s := range parsed {
+		raw = append(raw, s.raw)
+	}
+	if !reflect.DeepEqual(raw, []string{"com.example.*", "!com.example.two", "org.sample"}) {
+		t.Fatal("YAML-list exclusion was lost", raw)
+	}
+	// Ordinary YAML lists keep YAML scalar handling.
+	parsed, err = parsePackageBody("- 'com.example.one'\n- \"!com.example.two\"\n")
+	if err != nil || len(parsed) != 2 || parsed[1].include || parsed[0].raw != "com.example.one" {
+		t.Fatal("plain YAML list changed", parsed, err)
+	}
+	compiler := Compiler{Capabilities: Capabilities{Platform: "android", InstalledPackages: func(context.Context) ([]string, error) {
+		return []string{"com.example.one", "com.example.two", "org.sample"}, nil
+	}}, Lists: packageListFunc(func(context.Context, string, string) (string, error) {
+		return "- com.example.*\n- !com.example.two\n", nil
+	}), Validate: func(context.Context, Object) error { return nil }}
+	p := prepared(t, compiler, Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "tun: {include-package-url: 'https://example.com/list'}"}, Settings: Object{}})
+	access := object(object(p.CoreState["vpn-props"])["accessControl"])
+	if !reflect.DeepEqual(access["acceptList"], []any{"com.example.one"}) {
+		t.Fatal("remote exclusion ignored", access)
+	}
+}
