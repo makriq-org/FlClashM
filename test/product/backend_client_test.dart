@@ -675,7 +675,7 @@ void main() {
       formatBackendError(TimeoutException('pending'), labels),
       'Нет ответа',
     );
-    expect(formatBackendError(StateError('raw cause'), labels), 'raw cause');
+    expect(formatBackendError(StateError('raw cause'), labels), 'Ошибка');
   });
 
   test('engine commands stay below the backend queue limit', () async {
@@ -772,6 +772,13 @@ void main() {
       'Сервер отклонил запрос (HTTP 403)');
     expect(formatBackendError(const BackendException('failed', 'internal English cause'), labels),
       'Ошибка. Подробности в журнале');
+    for (final error in [
+      StateError('Diagnostic archive exceeds the safety limit.'),
+      Exception('internal export failure'),
+    ]) {
+      expect(formatBackendError(error, labels),
+        'Ошибка. Подробности в журнале');
+    }
   });
 
 }

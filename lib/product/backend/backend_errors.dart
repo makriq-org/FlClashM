@@ -109,8 +109,9 @@ String formatBackendError(
         : '$prefix. ${labels.detailsHint}';
   }
   if (error is TimeoutException) return labels.timeout;
-  if (error is StateError) return error.message;
-  return '$error'.replaceFirst(RegExp(r'^Exception: '), '');
+  return labels.detailsHint.isEmpty
+      ? labels.failed
+      : '${labels.failed}. ${labels.detailsHint}';
 }
 
 /// Whether [error] is an expected outcome rather than a failure to report.
