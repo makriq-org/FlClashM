@@ -84,3 +84,6 @@ store/
 
 # Generated, patched Go dependencies (tool/prepare_core.sh)
 /core/vendor/
+
+# Local runtime investigation notes and experiments
+/.local/runtime-investigation/
