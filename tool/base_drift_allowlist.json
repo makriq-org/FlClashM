@@ -1078,7 +1078,7 @@
     {
       "path": "core/backend/transport/process.go",
       "bucket": "budget",
-      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+      "reason": "Go-адаптер управляет дочерними процессами; ограниченный штатный выход OlcRTC освобождает комнату провайдера до принудительной остановки."
     },
     {
       "path": "core/backend/transport/process_test.go",
