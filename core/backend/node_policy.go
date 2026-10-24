@@ -274,6 +274,10 @@ func (c *runtimeCoordinator) launchNode(ctx context.Context, n *nodeRuntime, asy
 	n.nextOptional = c.now()
 	n.optionalDeadline = c.now().Add(startup)
 	n.observed = "running"
+	if !n.plan.Check.Required && len(asynchronous) > 0 && asynchronous[0] {
+		n.observed = "starting"
+		n.nextObservation = c.now().Add(time.Second)
+	}
 	return ctx.Err()
 }
 

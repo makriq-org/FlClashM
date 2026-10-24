@@ -115,7 +115,19 @@ func (c *runtimeCoordinator) selectForeground(ctx context.Context, n *nodeRuntim
 		next = 0
 	}
 	n.cache = StrategyCache{Version: 1, Fingerprint: fingerprint, Strategy: n.strategy, CheckedAt: c.now().UTC(), SelectionRevision: 3, Verified: verified, NextIndex: next}
-	return c.nodeOptions.Cache.Write(ctx, n.plan.ID, scope, n.cache)
+	err = c.nodeOptions.Cache.Write(ctx, n.plan.ID, scope, n.cache)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil && !n.plan.Check.Required {
+		// Cache persistence is optional: the selected/fallback strategy is
+		// already usable in memory. Probe cleanup failures above remain fatal.
+		if diagnostics, ok := c.engine.(RuntimeDiagnostics); ok {
+			diagnostics.RuntimeFailure("node.strategy.cache", err)
+		}
+		return nil
+	}
+	return err
 }
 func (c *runtimeCoordinator) probeStrategies(ctx context.Context, n *nodeRuntime, start int, budget time.Duration) (string, int, error) {
 	options := n.auto

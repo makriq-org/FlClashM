@@ -331,18 +331,18 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 }
 func (a *ProcessAdapter) Stop(ctx context.Context, id string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if a.versions == nil {
 		a.versions = map[string]uint64{}
 	}
 	a.versions[id]++
 	p := a.processes[id]
+	a.mu.Unlock()
 	if p == nil {
 		return nil
 	}
 	select {
 	case <-p.done:
-		delete(a.processes, id)
+		a.forgetProcess(id, p)
 		return nil
 	default:
 	}
@@ -354,7 +354,7 @@ func (a *ProcessAdapter) Stop(ctx context.Context, id string) error {
 		defer timer.Stop()
 		select {
 		case <-p.done:
-			delete(a.processes, id)
+			a.forgetProcess(id, p)
 			return nil
 		case <-timer.C:
 		case <-ctx.Done():
@@ -366,10 +366,19 @@ func (a *ProcessAdapter) Stop(ctx context.Context, id string) error {
 	}
 	select {
 	case <-p.done:
-		delete(a.processes, id)
+		a.forgetProcess(id, p)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// forgetProcess must not remove a replacement started after the old child exited.
+func (a *ProcessAdapter) forgetProcess(id string, p *process) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.processes[id] == p {
+		delete(a.processes, id)
 	}
 }
 func (a *ProcessAdapter) StopAll(ctx context.Context) error {

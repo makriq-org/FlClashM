@@ -127,7 +127,7 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 	defer response.Body.Close()
 	if request.RequireSuccess {
 		// A block page or server error must not certify a working DPI strategy.
-		return response.StatusCode >= 200 && response.StatusCode < 400, nil
+		return response.StatusCode >= 200 && response.StatusCode < 300, nil
 	}
 	// A valid HTTP response, including 4xx/5xx, proves connectivity in the
 	// established profile contract. Probes do not interpret application status.

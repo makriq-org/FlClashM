@@ -211,6 +211,10 @@ func TestStrategyProbeRejectsHTTPFailuresWithoutChangingConnectivityChecks(t *te
 	if method := <-methods; method != http.MethodGet {
 		t.Fatal(method)
 	}
+	status.Store(http.StatusFound)
+	if ok, err := probe.Probe(ctx, request); err != nil || ok {
+		t.Fatal("redirect verified a strategy", ok, err)
+	}
 	status.Store(204)
 	if ok, err := probe.Probe(ctx, request); err != nil || !ok {
 		t.Fatal("working strategy rejected", ok, err)

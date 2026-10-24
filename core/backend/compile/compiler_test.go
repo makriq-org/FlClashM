@@ -513,3 +513,24 @@ func TestByeDPIBackgroundSelectionHasNoDefaultStartupWait(t *testing.T) {
 		}
 	}
 }
+
+func TestPreparationFailureKeepsTimeoutAndCancellationCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cause error
+		code  string
+	}{
+		{"timeout", context.DeadlineExceeded, "timeout"},
+		{"cancelled", context.Canceled, backend.ErrorCodeCancelled},
+		{"invalid", errors.New("invalid profile"), "profile_invalid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Compiler{Validate: func(context.Context, Object) error { return tc.cause }}
+			raw, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "rules: ['MATCH,DIRECT']"}, Settings: Object{}})
+			_, err := c.Compile(context.Background(), raw, 1)
+			if !errors.Is(err, tc.cause) || backend.ErrorCode(err) != tc.code {
+				t.Fatalf("wrong preparation error: code=%s err=%v", backend.ErrorCode(err), err)
+			}
+		})
+	}
+}

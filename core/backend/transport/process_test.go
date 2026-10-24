@@ -27,6 +27,7 @@ func TestMain(m *testing.M) {
 			signal.Notify(signals, os.Interrupt)
 			_ = os.WriteFile("ready", nil, 0600)
 			for range signals {
+				_ = os.WriteFile("interrupt-received", nil, 0600)
 				if mode == "graceful" {
 					_ = os.WriteFile("left-room", nil, 0600)
 					os.Exit(0)
@@ -358,7 +359,31 @@ func TestOlcRTCStopLeavesRoomAndStillFencesStuckChildren(t *testing.T) {
 			adapter := &ProcessAdapter{processes: map[string]*process{"olcrtc-test": p}}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			if err = adapter.Stop(ctx, "olcrtc-test"); err != nil {
+			stopped := make(chan error, 1)
+			go func() { stopped <- adapter.Stop(ctx, "olcrtc-test") }()
+			if mode == "stuck" {
+				deadline := time.Now().Add(time.Second)
+				for {
+					if _, err := os.Stat(filepath.Join(directory, "interrupt-received")); err == nil {
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("child did not receive interrupt")
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+				observed := make(chan error, 1)
+				go func() { _, err := adapter.Observe(context.Background(), "other-node"); observed <- err }()
+				select {
+				case err := <-observed:
+					if err != nil {
+						t.Fatal(err)
+					}
+				case <-time.After(500 * time.Millisecond):
+					t.Fatal("OlcRTC shutdown blocked another node")
+				}
+			}
+			if err = <-stopped; err != nil {
 				t.Fatal(err)
 			}
 			select {

@@ -83,6 +83,9 @@ type PackageLists interface {
 func (c *Compiler) Compile(ctx context.Context, input backend.Input, generation uint64) (*backend.RuntimePlan, error) {
 	prepared, err := c.prepare(ctx, input)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, backend.WithFailure(err, "profile_invalid", nil)
 	}
 	return backend.NewRuntimePlan(generation, prepared)

@@ -278,6 +278,21 @@ func (c *runtimeCoordinator) observeNode(ctx context.Context, node *nodeRuntime)
 			node.observed = "unknown"
 			return err
 		}
+		if observation.State == "running" && node.observed == "starting" {
+			listening, listenErr := c.nodeOptions.Adapter.Listening(ctx, node.plan)
+			if listenErr != nil {
+				node.nextObservation = now.Add(time.Second)
+				return listenErr
+			}
+			if listening {
+				node.observed = "running"
+			} else if now.Before(node.optionalDeadline) {
+				node.nextObservation = now.Add(time.Second)
+				return nil
+			} else {
+				observation.State = "degraded"
+			}
+		}
 		if observation.State != "running" {
 			node.observed = observation.State
 			if now.Before(node.retryUntil) {

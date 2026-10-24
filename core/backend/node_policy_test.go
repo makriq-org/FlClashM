@@ -173,7 +173,7 @@ func TestUIWarmNodesWithoutVPNAndConnectReusesProcesses(t *testing.T) {
 	input := nodeInput(node)
 	run(t, b, "configure", "apply", input)
 	run(t, b, "ui-warm", "warm", input)
-	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "running" {
+	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "starting" {
 		t.Fatal("UI preparation changed VPN intent or failed to launch node", s)
 	}
 	run(t, b, "connect", "connect", input)
@@ -220,7 +220,7 @@ func TestUISettingsCompleteMissingNodePreparation(t *testing.T) {
 	payload["patch"] = map[string]string{"mode": "global"}
 	input, _ = json.Marshal(payload)
 	run(t, b, "mode", "apply", string(input))
-	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Nodes[0].State != "running" {
+	if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Nodes[0].State != "starting" {
 		t.Fatal("settings shortcut skipped UI node preparation", s)
 	}
 }
@@ -304,7 +304,7 @@ func TestStoppedUICommandsRestoreDeadPreparedNode(t *testing.T) {
 			if alive != 1 || starts != 2 {
 				t.Fatalf("command did not restore dead preparation: processes=%d starts=%d", alive, starts)
 			}
-			if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "running" {
+			if s := b.Snapshot(); s.DesiredRunning || s.AppliedRunning || s.Observed.State != "stopped" || s.Nodes[0].State != "starting" {
 				t.Fatal("restoring preparation changed VPN intent or node state", s)
 			}
 		})
@@ -564,7 +564,7 @@ func TestSupersededWarmInstallDoesNotLeaveForeignNodes(t *testing.T) {
 	if !strings.Contains(resident, nodeA.ID) || strings.Contains(resident, nodeB.ID) {
 		t.Fatalf("engine kept the superseded configuration: %s", resident)
 	}
-	if s := b.Snapshot(); len(s.Nodes) != 1 || s.Nodes[0].ID != nodeA.ID || s.Nodes[0].State != "running" {
+	if s := b.Snapshot(); len(s.Nodes) != 1 || s.Nodes[0].ID != nodeA.ID || s.Nodes[0].State != "starting" {
 		t.Fatal("node projection does not match plan A", s.Nodes)
 	}
 }
@@ -767,5 +767,133 @@ func TestOptionalNodeFailureDoesNotRollbackAndRetriesPromptly(t *testing.T) {
 	}
 	if s := b.Snapshot(); mechanism.attempts != 3 || s.Nodes[0].State != "running" {
 		t.Fatal("node waited five minutes after a temporary failure", s, mechanism.attempts)
+	}
+}
+
+type failingStrategyCache struct{ *nodeHost }
+
+func (h *failingStrategyCache) Write(context.Context, string, string, StrategyCache) error {
+	return errors.New("cache filesystem is read-only")
+}
+
+type strategyDiagnosticEngine struct {
+	hostEngine
+	mu       sync.Mutex
+	failures []string
+}
+
+func (e *strategyDiagnosticEngine) RuntimeFailure(operation string, _ error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.failures = append(e.failures, operation)
+}
+func TestStrategyCacheFailureDoesNotCancelOptionalNodeOrSibling(t *testing.T) {
+	for _, required := range []bool{false, true} {
+		t.Run(map[bool]string{false: "optional", true: "required"}[required], func(t *testing.T) {
+			mechanism := &failingStrategyCache{newNodeHost()}
+			host := newHost()
+			engine := &strategyDiagnosticEngine{hostEngine: hostEngine{host}}
+			b, err := Open(newStore(t), host, engine, nil, hostPlatform{host}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", ManualTicks: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			options := autoOptions{Mode: "auto", Strategies: []string{"-d1"}, Fallback: "-d2"}
+			options.Test.Timeout = 1
+			options.Selection.Concurrency = 1
+			options.Selection.Background = true
+			raw, _ := json.Marshal(options)
+			node := NodePlan{ID: "byedpi-" + strings.Repeat("b", 32), Name: "Bye", Type: "byedpi", Host: "127.0.0.1", Port: 35600, Check: NodeCheck{Required: required}, Files: map[string]string{}}
+			node.Files["built-in-proxies/byedpi/"+node.ID+"/config.json"] = string(raw)
+			sibling := reservePlan()
+			sibling.Activation = nil
+			_, err = b.Submit(Request{APIVersion: 1, OperationID: "connect", Method: "connect", Input: Input(nodeInput(node, sibling))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = b.Await(context.Background(), "connect")
+			if required {
+				if err == nil {
+					t.Fatal("required node ignored cache failure")
+				}
+				return
+			}
+			if err != nil || b.Snapshot().Observed.State != "running" {
+				t.Fatal("optional cache failure interrupted runtime", err, b.Snapshot())
+			}
+			mechanism.mu.Lock()
+			launch := mechanism.processes[node.ID]
+			count := len(mechanism.processes)
+			mechanism.mu.Unlock()
+			if launch.Strategy != "-d2" || count != 2 {
+				t.Fatal("fallback or sibling was not started", launch.Strategy, count)
+			}
+			engine.mu.Lock()
+			defer engine.mu.Unlock()
+			if len(engine.failures) != 1 || engine.failures[0] != "node.strategy.cache" {
+				t.Fatal("cache failure lost diagnostics", engine.failures)
+			}
+		})
+	}
+}
+
+type delayedListenerHost struct {
+	*nodeHost
+	ready bool
+}
+
+func (h *delayedListenerHost) Listening(ctx context.Context, _ NodePlan) (bool, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.ready, ctx.Err()
+}
+func TestAsyncNodeReadinessAndEarlyExitAreObservedAfterOneSecond(t *testing.T) {
+	for _, exits := range []bool{false, true} {
+		t.Run(map[bool]string{false: "listener", true: "exit"}[exits], func(t *testing.T) {
+			mechanism := &delayedListenerHost{nodeHost: newNodeHost()}
+			host := newHost()
+			b, err := Open(newStore(t), host, hostEngine{host}, nil, hostPlatform{host}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, Now: mechanism.now, ManualTicks: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			node := reservePlan()
+			node.Activation = nil
+			node.Check.URLs = nil
+			node.Check.StartupTimeout = 5
+			run(t, b, "connect", "connect", nodeInput(node))
+			if b.Snapshot().Nodes[0].State != "starting" {
+				t.Fatal("listener readiness was reported before observation", b.Snapshot())
+			}
+			if exits {
+				mechanism.mu.Lock()
+				delete(mechanism.processes, node.ID)
+				mechanism.ready = true
+				mechanism.mu.Unlock()
+			}
+			mechanism.advance(time.Second)
+			if err = b.ReconcileNodes(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if exits {
+				if mechanism.starts != 2 || b.Snapshot().Nodes[0].State != "running" {
+					t.Fatal("exited child was not promptly restarted", mechanism.starts, b.Snapshot())
+				}
+				return
+			}
+			if b.Snapshot().Nodes[0].State != "starting" {
+				t.Fatal("non-listening child was reported ready", b.Snapshot())
+			}
+			mechanism.mu.Lock()
+			mechanism.ready = true
+			mechanism.mu.Unlock()
+			mechanism.advance(time.Second)
+			if err = b.ReconcileNodes(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if b.Snapshot().Nodes[0].State != "running" {
+				t.Fatal("ready listener was not observed", b.Snapshot())
+			}
+		})
 	}
 }
