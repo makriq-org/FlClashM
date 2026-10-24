@@ -83,7 +83,8 @@ String formatBackendError(
     };
     // Transport causes (Binder, channel) are internal; they go to the log.
     if (error.code == BackendException.unavailable) return prefix;
-    final localized = labels.causes[error.code];
+    final localized =
+        labels.causes[error.isRevisionConflict ? 'conflict' : error.code];
     if (localized != null) {
       final node = error.details['node'];
       final status = error.details['status'];

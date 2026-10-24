@@ -632,6 +632,7 @@ void main() {
       cancelled: 'Отменено',
       closed: 'Служба остановлена',
       timeout: 'Нет ответа',
+      causes: {'conflict': 'Откройте профиль заново'},
     );
     const superseded = BackendException('superseded', 'operation superseded');
     expect(formatBackendError(superseded, labels), isEmpty);
@@ -653,7 +654,7 @@ void main() {
         const BackendException('failed', 'profile revision changed'),
         labels,
       ),
-      'Ошибка',
+      'Откройте профиль заново',
     );
     expect(
       formatBackendError(
