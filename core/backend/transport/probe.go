@@ -111,7 +111,11 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	head, err := http.NewRequestWithContext(ctx, http.MethodHead, request.URL, nil)
+	method := http.MethodHead
+	if request.RequireSuccess {
+		method = http.MethodGet
+	}
+	head, err := http.NewRequestWithContext(ctx, method, request.URL, nil)
 	if err != nil {
 		return false, err
 	}
@@ -121,6 +125,10 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		return false, err
 	}
 	defer response.Body.Close()
+	if request.RequireSuccess {
+		// A block page or server error must not certify a working DPI strategy.
+		return response.StatusCode >= 200 && response.StatusCode < 300, nil
+	}
 	// A valid HTTP response, including 4xx/5xx, proves connectivity in the
 	// established profile contract. Probes do not interpret application status.
 	return response.StatusCode >= 100 && response.StatusCode <= 599, nil

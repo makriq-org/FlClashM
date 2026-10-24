@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"core/backend"
 )
 
 // HTTPClient is injected by the host: Android uses the engine's tunnel-aware
@@ -119,21 +121,21 @@ func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Objec
 		if ctx.Err() != nil {
 			return Record{}, ctx.Err()
 		}
-		return Record{}, errors.New("subscription download failed")
+		return Record{}, backend.WithFailure(errors.New("subscription download failed"), "subscription_download_failed", nil)
 	}
 	if response == nil || response.Body == nil {
 		return Record{}, errors.New("subscription transport returned no body")
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Record{}, fmt.Errorf("subscription HTTP status %d", response.StatusCode)
+		return Record{}, backend.WithFailure(fmt.Errorf("subscription HTTP status %d", response.StatusCode), "subscription_http_error", map[string]any{"status": response.StatusCode})
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, MaxProfileBytes+1))
 	if err != nil {
 		if ctx.Err() != nil {
 			return Record{}, ctx.Err()
 		}
-		return Record{}, errors.New("subscription body read failed")
+		return Record{}, backend.WithFailure(errors.New("subscription body read failed"), "subscription_download_failed", nil)
 	}
 	if len(raw) > MaxProfileBytes {
 		return Record{}, errors.New("subscription exceeds size limit")

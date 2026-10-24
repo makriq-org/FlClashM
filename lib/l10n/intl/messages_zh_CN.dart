@@ -103,13 +103,31 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoUpdate": MessageLookupByLibrary.simpleMessage("自动更新"),
     "autoUpdateInterval": MessageLookupByLibrary.simpleMessage("自动更新间隔（分钟）"),
     "backendClosed": MessageLookupByLibrary.simpleMessage("操作完成前后台服务已停止"),
+    "backendErrorDetailsHint": MessageLookupByLibrary.simpleMessage(
+      "详细信息可在日志中查看。",
+    ),
+    "backendNodeStartFailed": MessageLookupByLibrary.simpleMessage(
+      "内置节点无法启动。请检查其设置和日志。",
+    ),
     "backendOperationCancelled": MessageLookupByLibrary.simpleMessage("操作已取消"),
     "backendOperationFailed": MessageLookupByLibrary.simpleMessage("操作失败"),
+    "backendProfileInvalid": MessageLookupByLibrary.simpleMessage(
+      "无法准备配置。请检查其格式和设置。",
+    ),
+    "backendRevisionConflict": MessageLookupByLibrary.simpleMessage(
+      "操作期间配置已更改。请重新打开后重试。",
+    ),
     "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
       "无法启动 FlClashM",
     ),
     "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
       "应用无法连接到后台服务，正在自动重试。您可以立即重试，或导出日志以获取支持。",
+    ),
+    "backendSubscriptionDownloadFailed": MessageLookupByLibrary.simpleMessage(
+      "无法下载订阅。请检查连接后重试。",
+    ),
+    "backendSubscriptionHttpError": MessageLookupByLibrary.simpleMessage(
+      "订阅服务器拒绝了请求。请检查链接或联系提供商。",
     ),
     "backendTimeout": MessageLookupByLibrary.simpleMessage("后台服务未及时响应"),
     "backendUnavailable": MessageLookupByLibrary.simpleMessage("后台服务不可用"),

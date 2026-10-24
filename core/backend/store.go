@@ -42,8 +42,9 @@ type Receipt struct {
 	Generation  uint64 `json:"generation"`
 	// Error is short human-readable text; ErrorCode is one of the stable
 	// ErrorCode* values for failed and cancelled operations.
-	Error     string `json:"error,omitempty"`
-	ErrorCode string `json:"errorCode,omitempty"`
+	Error        string         `json:"error,omitempty"`
+	ErrorCode    string         `json:"errorCode,omitempty"`
+	ErrorDetails map[string]any `json:"errorDetails,omitempty"`
 }
 type Document struct {
 	Version    int       `json:"version"`

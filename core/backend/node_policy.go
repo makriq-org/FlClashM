@@ -6,6 +6,8 @@ import (
 	"errors"
 	"reflect"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type StrategyCache struct {
@@ -52,6 +54,7 @@ type nodeRuntime struct {
 	awake                           bool
 	observed                        string
 	failures                        int
+	restartFailures                 int
 	nextCheck, timeIdle, retryUntil time.Time
 	strategy                        string
 	auto                            *autoOptions
@@ -175,25 +178,56 @@ func (c *runtimeCoordinator) prepareNodes(ctx context.Context, plan *RuntimePlan
 	return nil
 }
 func (c *runtimeCoordinator) startNodes(ctx context.Context) error {
+	// Independent listeners must not queue behind a slow handshake or a
+	// strategy search. Each worker owns one node; publication waits for all.
+	workers, startCtx := errgroup.WithContext(ctx)
+	workers.SetLimit(4)
 	for _, id := range c.nodeOrder {
 		n := c.nodes[id]
 		if !n.awake {
 			n.observed = "sleeping"
 			continue
 		}
-		if n.auto != nil {
-			if err := c.selectForeground(ctx, n); err != nil {
-				return err
+		workers.Go(func() error {
+			if n.auto != nil {
+				if err := c.selectForeground(startCtx, n); err != nil {
+					return err
+				}
 			}
-		}
-		if err := c.launchNode(ctx, n); err != nil {
-			return err
-		}
+			return c.launchSelectedNode(startCtx, n)
+		})
 	}
+	err := workers.Wait()
 	c.publishNodes()
+	return err
+}
+
+// A failed optional node is still selectable, just like an unreachable remote
+// proxy. Its failure must not roll back healthy nodes or the user's selection.
+func (c *runtimeCoordinator) launchSelectedNode(ctx context.Context, n *nodeRuntime) error {
+	err := c.launchNode(ctx, n, true)
+	if err == nil || ctx.Err() != nil || n.plan.Check.Required {
+		return err
+	}
+	cleanup, cancel := context.WithTimeout(context.Background(), c.cleanupTimeout)
+	defer cancel()
+	if stopErr := c.nodeOptions.Adapter.Stop(cleanup, n.plan.ID); stopErr != nil {
+		return errors.Join(err, stopErr)
+	}
+	n.awake = true
+	n.observed = "degraded"
+	n.connectivity = "failed"
+	n.nextObservation = c.now().Add(5 * time.Second)
+	if diagnostics, ok := c.engine.(RuntimeDiagnostics); ok {
+		diagnostics.RuntimeFailure("node.start", err)
+	}
 	return nil
 }
-func (c *runtimeCoordinator) launchNode(ctx context.Context, n *nodeRuntime) error {
+
+func (c *runtimeCoordinator) launchNode(ctx context.Context, n *nodeRuntime, asynchronous ...bool) (err error) {
+	defer func() {
+		err = WithFailure(err, "node_start_failed", map[string]any{"node": n.plan.Name})
+	}()
 	launch := NodeLaunch{Node: n.plan.Clone(), Strategy: n.strategy}
 	if n.auto != nil {
 		launch.SNI = n.auto.Test.SNI
@@ -207,8 +241,13 @@ func (c *runtimeCoordinator) launchNode(ctx context.Context, n *nodeRuntime) err
 	}
 	readyCtx, cancel := context.WithTimeout(ctx, startup)
 	defer cancel()
-	if err := c.waitListening(readyCtx, n.plan); err != nil {
-		return err
+	// Autonomous wake must wait for the listener before testing the tunnel.
+	// Initial preparation and explicit selection can expose an optional node
+	// while its provider handshake/MTU scan continues in the child process.
+	if n.plan.Check.Required || len(asynchronous) == 0 || !asynchronous[0] {
+		if err := c.waitListening(readyCtx, n.plan); err != nil {
+			return err
+		}
 	}
 	if n.plan.Check.Required {
 		for {
@@ -229,11 +268,16 @@ func (c *runtimeCoordinator) launchNode(ctx context.Context, n *nodeRuntime) err
 		}
 	}
 	n.awake = true
+	n.restartFailures = 0
 	n.nextObservation = c.now().Add(30 * time.Second)
 	n.optionalPending = !n.plan.Check.Required && len(n.plan.Check.URLs) > 0
 	n.nextOptional = c.now()
 	n.optionalDeadline = c.now().Add(startup)
 	n.observed = "running"
+	if !n.plan.Check.Required && len(asynchronous) > 0 && asynchronous[0] {
+		n.observed = "starting"
+		n.nextObservation = c.now().Add(time.Second)
+	}
 	return ctx.Err()
 }
 
@@ -270,11 +314,19 @@ func (a coordinatedTransports) Observe(ctx context.Context) (Observation, error)
 	if !a.c.nodesExecuting {
 		return Observation{State: "stopped"}, nil
 	}
+	a.c.mu.Lock()
+	running := a.c.document.Applied != nil && a.c.document.Applied.Running
+	a.c.mu.Unlock()
 	for _, node := range a.c.nodes {
 		if !node.awake {
 			continue
 		}
 		observation, err := a.c.nodeOptions.Adapter.Observe(ctx, node.plan.ID)
+		if !node.plan.Check.Required && (running || node.observed == "degraded") && ctx.Err() == nil {
+			// The coordinator's node loop retries optional processes. Observing
+			// an exited optional process is not failure of the entire runtime.
+			continue
+		}
 		if err != nil {
 			return Observation{}, err
 		}

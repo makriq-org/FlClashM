@@ -152,17 +152,35 @@ class MessageLookup extends MessageLookupByLibrary {
     "backendClosed": MessageLookupByLibrary.simpleMessage(
       "Background service stopped before the operation finished",
     ),
+    "backendErrorDetailsHint": MessageLookupByLibrary.simpleMessage(
+      "Details are available in the logs.",
+    ),
+    "backendNodeStartFailed": MessageLookupByLibrary.simpleMessage(
+      "The built-in node could not start. Check its settings and the logs.",
+    ),
     "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
       "Operation cancelled",
     ),
     "backendOperationFailed": MessageLookupByLibrary.simpleMessage(
       "Operation failed",
     ),
+    "backendProfileInvalid": MessageLookupByLibrary.simpleMessage(
+      "The profile could not be prepared. Check its format and settings.",
+    ),
+    "backendRevisionConflict": MessageLookupByLibrary.simpleMessage(
+      "The profile changed during the operation. Reopen it and try again.",
+    ),
     "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
       "Could not start FlClashM",
     ),
     "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
       "The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.",
+    ),
+    "backendSubscriptionDownloadFailed": MessageLookupByLibrary.simpleMessage(
+      "The subscription could not be downloaded. Check the connection and try again.",
+    ),
+    "backendSubscriptionHttpError": MessageLookupByLibrary.simpleMessage(
+      "The subscription server rejected the request. Check the link or contact the provider.",
     ),
     "backendTimeout": MessageLookupByLibrary.simpleMessage(
       "Background service did not respond in time",

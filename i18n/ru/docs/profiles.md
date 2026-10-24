@@ -80,13 +80,15 @@ HTTPS-список содержит одну стратегию на строк�
 | `strategy-test.request-concurrency` | `4` | Параллельных HTTP-запросов внутри кандидата |
 | `strategy-test.min-success-ratio` | `1.0` | Минимальная доля успешных запросов |
 | `strategy-selection.strategy-concurrency` | `4` | Одновременно проверяемых стратегий |
-| `strategy-selection.startup-timeout` | `15s` | Бюджет подбора до запуска узла |
+| `strategy-selection.startup-timeout` | `0s` | Бюджет подбора до запуска узла |
 | `strategy-selection.continue-in-background` | `true` | Продолжать список в фоне после fallback |
 | `strategy-selection.fallback-strategy` | встроенная стратегия | Временная стратегия, если подбор не успел |
 | `strategy-selection.retry-after` | `5m` | Пауза перед новым подбором после fallback |
 | `strategy-selection.cache.ttl` | `7d` | Время жизни кэша |
 | `strategy-selection.cache.recheck-after` | `1d` | Интервал повторной проверки |
 | `strategy-selection.cache.failure-threshold` | `2` | Число ошибок до сброса кэша |
+
+При `0s` узел сразу запускается с сохранённой или резервной стратегией, подбор продолжается в фоне. Без фонового подбора бюджет по умолчанию — `15s`.
 
 </details>
 

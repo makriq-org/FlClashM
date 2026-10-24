@@ -98,13 +98,15 @@ proxies:
 | `strategy-test.request-concurrency` | `4` | درخواست‌های HTTP موازی درون یک نامزد |
 | `strategy-test.min-success-ratio` | `1.0` | کمترین نسبت درخواست‌های موفق |
 | `strategy-selection.strategy-concurrency` | `4` | راهبردهای هم‌زمان بررسی‌شونده |
-| `strategy-selection.startup-timeout` | `15s` | بودجهٔ انتخاب پیش از شروع نود |
+| `strategy-selection.startup-timeout` | `0s` | بودجهٔ انتخاب پیش از شروع نود |
 | `strategy-selection.continue-in-background` | `true` | ادامهٔ فهرست در پس‌زمینه پس از fallback |
 | `strategy-selection.fallback-strategy` | راهبرد داخلی | راهبرد موقت اگر انتخاب به‌موقع تمام نشد |
 | `strategy-selection.retry-after` | `5m` | مکث پیش از انتخاب تازه پس از fallback |
 | `strategy-selection.cache.ttl` | `7d` | عمر کش |
 | `strategy-selection.cache.recheck-after` | `1d` | فاصلهٔ بررسی مجدد |
 | `strategy-selection.cache.failure-threshold` | `2` | تعداد خطا تا بازنشانی کش |
+
+با `0s` نود بلافاصله با راهبرد ذخیره‌شده یا جایگزین آغاز می‌شود و انتخاب در پس‌زمینه ادامه می‌یابد. بدون انتخاب پس‌زمینه، بودجهٔ پیش‌فرض `15s` است.
 
 </details>
 

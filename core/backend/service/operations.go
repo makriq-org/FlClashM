@@ -19,17 +19,18 @@ const dataVersion = 1
 const maxLedgerBytes = 2 << 20
 
 type Receipt struct {
-	PermissionRequired bool   `json:"permissionRequired,omitempty"`
-	OperationID        string `json:"operationId"`
-	Fingerprint        string `json:"fingerprint"`
-	Method             string `json:"method"`
-	Status             string `json:"status"`
-	Error              string `json:"error,omitempty"`
-	ErrorCode          string `json:"errorCode,omitempty"` // backend.ErrorCode* values
-	ProfileID          string `json:"profileId,omitempty"`
-	Revision           uint64 `json:"revision,omitempty"`
-	RuntimeOperationID string `json:"runtimeOperationId,omitempty"`
-	Blob               *Blob  `json:"blob,omitempty"`
+	PermissionRequired bool           `json:"permissionRequired,omitempty"`
+	OperationID        string         `json:"operationId"`
+	Fingerprint        string         `json:"fingerprint"`
+	Method             string         `json:"method"`
+	Status             string         `json:"status"`
+	Error              string         `json:"error,omitempty"`
+	ErrorCode          string         `json:"errorCode,omitempty"` // backend.ErrorCode* values
+	ErrorDetails       map[string]any `json:"errorDetails,omitempty"`
+	ProfileID          string         `json:"profileId,omitempty"`
+	Revision           uint64         `json:"revision,omitempty"`
+	RuntimeOperationID string         `json:"runtimeOperationId,omitempty"`
+	Blob               *Blob          `json:"blob,omitempty"`
 }
 type appDocument struct {
 	NoticesMigrated     bool             `json:"noticesMigrated,omitempty"`
@@ -250,6 +251,7 @@ func (s *operationStore) finish(op *operation, result Receipt, err error) {
 		// Status keeps its established meaning; ErrorCode classifies the
 		// cause, e.g. a runtime step superseded by a newer user command.
 		result.ErrorCode = backend.ErrorCode(err)
+		result.ErrorDetails = backend.FailureDetails(err)
 		if op.ctx.Err() != nil {
 			result.Status = "cancelled"
 			if op.parent != nil && op.parent.Err() != nil {

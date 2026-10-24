@@ -283,7 +283,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
       "bucket": "budget",
-      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+      "reason": "Платформенная склейка Android и ограничение фрагментов IPC защищают общий буфер Binder при передаче больших профилей."
     },
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt",
@@ -383,7 +383,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt",
       "bucket": "budget",
-      "reason": "Lifecycle удалённого процесса mihomo сохраняется без зависимости от Flutter UI."
+      "reason": "Lifecycle удалённого процесса и последовательная передача ответов и событий через общий буфер Binder принадлежат Android host."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",
@@ -603,7 +603,7 @@
     {
       "path": "lib/providers/state.dart",
       "bucket": "budget",
-      "reason": "Продуктовые правила селекторов вынесены в lib/product/subscription и lib/product/platform; в base остались только тонкие провайдеры-обёртки."
+      "reason": "Продуктовые селекторы и доступность вкладки прокси до подготовки групп переданы product-слою."
     },
     {
       "path": "lib/services/subscription_notification_service.dart",
@@ -613,7 +613,7 @@
     {
       "path": "lib/state.dart",
       "bucket": "budget",
-      "reason": "GlobalState проецирует снимки Go backend и отправляет правки настроек через backend-клиент; compile, security и runtime в Dart не остаются."
+      "reason": "GlobalState проецирует снимки Go backend; параллельная подготовка цвета UI не задерживает чтение настроек и имеет безопасный резервный цвет."
     },
     {
       "path": "lib/utils/device_info_service.dart",
@@ -1078,7 +1078,7 @@
     {
       "path": "core/backend/transport/process.go",
       "bucket": "budget",
-      "reason": "Единый Go RuntimeCoordinator владеет политиками внешних узлов; адаптеры реализуют процессы, DNS и проверки соединений с переносимыми host-тестами."
+      "reason": "Go-адаптер управляет дочерними процессами; ограниченный штатный выход OlcRTC освобождает комнату провайдера до принудительной остановки."
     },
     {
       "path": "core/backend/transport/process_test.go",
@@ -1454,6 +1454,11 @@
       "path": "core/backend/node_reconcile.go",
       "bucket": "budget",
       "reason": "Политика внешних узлов разделена по проверкам, подбору стратегий и сопровождению без смены координатора или поведения."
+    },
+    {
+      "path": "core/backend/errors.go",
+      "bucket": "budget",
+      "reason": "Структурированные причины ошибок Go API отделяют локализованное сообщение UI от диагностики."
     }
   ]
 }

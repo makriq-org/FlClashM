@@ -51,6 +51,7 @@ type Repository struct {
 	path          string
 	state         Document
 	validate      Validator
+	validated     map[string]string // source digests validated by this process
 	syncDirectory func(string) error
 }
 
@@ -296,8 +297,19 @@ func (r *Repository) Put(ctx context.Context, metadata Object, source string, ex
 		return Record{}, errors.New("profile exceeds size limit")
 	}
 	metadata = clone(metadata)
-	if err = r.validate(ctx, source); err != nil {
-		return Record{}, err
+	// Subscription headers and timestamps often change while the source stays
+	// byte-for-byte identical. Its committed revision was already validated;
+	// do not reopen the isolated parser or fetch its dependencies again.
+	previous, readErr := r.metadata(id)
+	sourceDigest := digest(source)
+	r.mu.Lock()
+	validated := r.validated[id] == sourceDigest
+	r.mu.Unlock()
+	unchanged := validated && readErr == nil && expected != 0 && previous.Revision == expected && !previous.SourceMissing && previous.Digest == sourceDigest
+	if !unchanged {
+		if err = r.validate(ctx, source); err != nil {
+			return Record{}, err
+		}
 	}
 	if err = ctx.Err(); err != nil {
 		return Record{}, err
@@ -338,6 +350,10 @@ func (r *Repository) Put(ctx context.Context, metadata Object, source string, ex
 	if err = r.persist(next); err != nil {
 		return Record{}, err
 	}
+	if r.validated == nil {
+		r.validated = map[string]string{}
+	}
+	r.validated[id] = sourceDigest
 	return cloneRecord(record), nil
 }
 func (r *Repository) Delete(id string, expected uint64) error {

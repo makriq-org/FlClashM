@@ -458,3 +458,79 @@ func TestLargeAnchorProfileIsAcceptedAndAliasBombRejected(t *testing.T) {
 		t.Fatal("billion laughs profile accepted")
 	}
 }
+
+func TestStormDNSCacheChangesWithWireFormatAndMTULimits(t *testing.T) {
+	compiler := &ExternalCompiler{}
+	raw := Object{"domains": []any{"tunnel.example.com"}, "encryption": "xor", "encryption-key": "a secret key", "resolvers": []any{"8.8.8.8"}}
+	fingerprint := func() string {
+		t.Helper()
+		node := Node{ID: "stormdns-test", Port: 36200, Metadata: map[string]string{}, Files: map[string]string{}}
+		if err := compiler.buildStormDNS(context.Background(), raw, &node); err != nil {
+			t.Fatal(err)
+		}
+		return node.Metadata["cache-fingerprint"]
+	}
+	initial := fingerprint()
+	raw["encryption"] = "chacha20"
+	if fingerprint() == initial {
+		t.Fatal("encryption change reused MTU cache")
+	}
+	changed := fingerprint()
+	raw["encryption-key"] = "another secret key"
+	if fingerprint() == changed {
+		t.Fatal("server key change reused MTU cache")
+	}
+	changed = fingerprint()
+	raw["mtu"] = Object{"download": Object{"min": 128, "max": 1200}}
+	if fingerprint() == changed {
+		t.Fatal("new MTU limits reused old cached sizes")
+	}
+}
+
+func TestByeDPIBackgroundSelectionHasNoDefaultStartupWait(t *testing.T) {
+	for _, background := range []bool{true, false} {
+		node := Node{ID: "byedpi-test", Host: "127.0.0.1", Port: 35600, Files: map[string]string{}}
+		raw := Object{"mode": "auto", "strategies": []any{"-d1"}, "strategy-selection": Object{"continue-in-background": background}}
+		if err := (&ExternalCompiler{}).buildByeDPI(context.Background(), raw, &node); err != nil {
+			t.Fatal(err)
+		}
+		var options struct {
+			Selection struct {
+				Timeout int `json:"foreground-timeout"`
+			} `json:"selection"`
+		}
+		for _, body := range node.Files {
+			if err := json.Unmarshal([]byte(body), &options); err != nil {
+				t.Fatal(err)
+			}
+		}
+		expected := 0
+		if !background {
+			expected = 15
+		}
+		if options.Selection.Timeout != expected {
+			t.Fatal("default foreground budget", background, options.Selection.Timeout)
+		}
+	}
+}
+
+func TestPreparationFailureKeepsTimeoutAndCancellationCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cause error
+		code  string
+	}{
+		{"timeout", context.DeadlineExceeded, "timeout"},
+		{"cancelled", context.Canceled, backend.ErrorCodeCancelled},
+		{"invalid", errors.New("invalid profile"), "profile_invalid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Compiler{Validate: func(context.Context, Object) error { return tc.cause }}
+			raw, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "rules: ['MATCH,DIRECT']"}, Settings: Object{}})
+			_, err := c.Compile(context.Background(), raw, 1)
+			if !errors.Is(err, tc.cause) || backend.ErrorCode(err) != tc.code {
+				t.Fatalf("wrong preparation error: code=%s err=%v", backend.ErrorCode(err), err)
+			}
+		})
+	}
+}

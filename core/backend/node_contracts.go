@@ -29,6 +29,7 @@ type NodeCheck struct {
 	Concurrency     int      `json:"concurrency"`
 	MinSuccessRatio *float64 `json:"min-success-ratio,omitempty"`
 	Resolver        string   `json:"resolver,omitempty"`
+	RequireSuccess  bool     `json:"-"` // strategy verification, not connectivity
 }
 type NodeActivation struct {
 	Mode string `json:"mode"`
@@ -52,9 +53,10 @@ type NodeLaunch struct {
 	Port     int // Probe listener allocated by the host, zero uses the compiled port.
 }
 type NodeProbe struct {
-	Host          string
-	Port          int
-	URL, Resolver string
+	Host           string
+	Port           int
+	URL, Resolver  string
+	RequireSuccess bool
 }
 
 // NodeAdapter implements external-process mechanisms. It makes no decisions

@@ -69,7 +69,7 @@ func (c *runtimeCoordinator) checkNode(ctx context.Context, node NodePlan, check
 					timeout = 5 * time.Second
 				}
 				probeCtx, done := context.WithTimeout(checkCtx, timeout)
-				passed, err := c.nodeOptions.Adapter.Probe(probeCtx, NodeProbe{Host: node.Host, Port: node.Port, URL: address, Resolver: check.Resolver})
+				passed, err := c.nodeOptions.Adapter.Probe(probeCtx, NodeProbe{Host: node.Host, Port: node.Port, URL: address, Resolver: check.Resolver, RequireSuccess: check.RequireSuccess})
 				done()
 				results <- passed && err == nil
 			}

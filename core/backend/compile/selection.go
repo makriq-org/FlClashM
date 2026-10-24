@@ -50,6 +50,11 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 		value.CatalogRevision = 0
 		value.Profile.Revision = 0
 		delete(value.Profile.Metadata, "selectedMap")
+		// Subscription bookkeeping and UI expansion do not alter a runtime.
+		// Keep label, provider headers, overrides and unknown fields significant.
+		for _, key := range []string{"lastUpdateDate", "subscriptionInfo", "url", "autoUpdate", "autoUpdateDuration", "unfoldSet"} {
+			delete(value.Profile.Metadata, key)
+		}
 		raw, _ := json.Marshal(value)
 		return raw
 	}

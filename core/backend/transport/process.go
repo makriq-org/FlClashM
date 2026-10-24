@@ -26,9 +26,10 @@ import (
 )
 
 type process struct {
-	command *exec.Cmd
-	done    chan struct{}
-	exitErr error // Written before closing done; readers synchronize on done.
+	command  *exec.Cmd
+	graceful bool
+	done     chan struct{}
+	exitErr  error // Written before closing done; readers synchronize on done.
 }
 type ProcessAdapter struct {
 	epoch       uint64
@@ -293,7 +294,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	output := newProcessOutput(node.Type, a.Log)
 	command.Stdout = output
 	command.Stderr = output
-	p := &process{command: command, done: make(chan struct{})}
+	p := &process{command: command, graceful: node.Type == "olcrtc", done: make(chan struct{})}
 	started := make(chan error, 1)
 	pin := bindChildLifetime(command)
 	go func() {
@@ -330,33 +331,54 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 }
 func (a *ProcessAdapter) Stop(ctx context.Context, id string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if a.versions == nil {
 		a.versions = map[string]uint64{}
 	}
 	a.versions[id]++
 	p := a.processes[id]
+	a.mu.Unlock()
 	if p == nil {
 		return nil
 	}
 	select {
 	case <-p.done:
-		delete(a.processes, id)
+		a.forgetProcess(id, p)
 		return nil
 	default:
 	}
-	// No asynchronous process may survive a successful fence. Kill is deliberate:
-	// transport configs/cache are owned by Go, and stdin is never interactive.
+	// OlcRTC must leave the provider room before a replacement joins it. Killing
+	// it outright strands guest participants and stale media subscriptions.
+	// Keep the fence bounded and still kill a child that cannot shut down.
+	if p.graceful && p.command.Process.Signal(os.Interrupt) == nil {
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-p.done:
+			a.forgetProcess(id, p)
+			return nil
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+	}
 	err := p.command.Process.Kill()
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
 	select {
 	case <-p.done:
-		delete(a.processes, id)
+		a.forgetProcess(id, p)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// forgetProcess must not remove a replacement started after the old child exited.
+func (a *ProcessAdapter) forgetProcess(id string, p *process) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.processes[id] == p {
+		delete(a.processes, id)
 	}
 }
 func (a *ProcessAdapter) StopAll(ctx context.Context) error {

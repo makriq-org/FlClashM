@@ -680,3 +680,32 @@ func TestEmptyProviderHeaderClearsThePreviousNamespaceValue(t *testing.T) {
 		t.Fatal("empty volatile notice was retained", merged)
 	}
 }
+
+func TestIdenticalSubscriptionSourceReusesOnlyProcessLocalValidation(t *testing.T) {
+	directory := t.TempDir()
+	validations := 0
+	validate := func(ctx context.Context, source string) error { validations++; return validator(ctx, source) }
+	r, err := Open(directory, validate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := create(t, r, "one", "")
+	second, err := r.Put(context.Background(), metadata("one", ""), first.Source, first.Revision)
+	if err != nil || validations != 1 {
+		t.Fatal("identical source revalidated", validations, err)
+	}
+	r, err = Open(directory, validate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := r.Put(context.Background(), metadata("one", ""), first.Source, second.Revision)
+	if err != nil || validations != 2 {
+		t.Fatal("new process trusted old parser", validations, err)
+	}
+	if _, err = r.Put(context.Background(), metadata("one", ""), "invalid", third.Revision); err == nil {
+		t.Fatal("changed source bypassed validation")
+	}
+	if validations != 3 {
+		t.Fatal(validations)
+	}
+}

@@ -278,6 +278,21 @@ func (c *runtimeCoordinator) observeNode(ctx context.Context, node *nodeRuntime)
 			node.observed = "unknown"
 			return err
 		}
+		if observation.State == "running" && node.observed == "starting" {
+			listening, listenErr := c.nodeOptions.Adapter.Listening(ctx, node.plan)
+			if listenErr != nil {
+				node.nextObservation = now.Add(time.Second)
+				return listenErr
+			}
+			if listening {
+				node.observed = "running"
+			} else if now.Before(node.optionalDeadline) {
+				node.nextObservation = now.Add(time.Second)
+				return nil
+			} else {
+				observation.State = "degraded"
+			}
+		}
 		if observation.State != "running" {
 			node.observed = observation.State
 			if now.Before(node.retryUntil) {
@@ -286,7 +301,12 @@ func (c *runtimeCoordinator) observeNode(ctx context.Context, node *nodeRuntime)
 			_ = c.nodeOptions.Adapter.Stop(ctx, node.plan.ID)
 			if err = c.launchNode(ctx, node); err != nil {
 				node.observed = "degraded"
-				node.retryUntil = c.now().Add(5 * time.Minute)
+				// Transient provider/handshake failures must not strand a selected
+				// node for five minutes. Bound retries with exponential backoff.
+				node.restartFailures++
+				delay := time.Second * time.Duration(min(30, 1<<min(node.restartFailures-1, 5)))
+				node.retryUntil = c.now().Add(delay)
+				node.nextObservation = node.retryUntil
 				return err
 			}
 		}

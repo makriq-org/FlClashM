@@ -80,13 +80,15 @@ HTTPS lists contain one strategy per line; empty lines and lines starting with `
 | `strategy-test.request-concurrency` | `4` | Parallel HTTP requests inside a candidate |
 | `strategy-test.min-success-ratio` | `1.0` | Minimum fraction of successful requests |
 | `strategy-selection.strategy-concurrency` | `4` | Strategies checked at once |
-| `strategy-selection.startup-timeout` | `15s` | Selection budget before the node starts |
+| `strategy-selection.startup-timeout` | `0s` | Selection budget before the node starts |
 | `strategy-selection.continue-in-background` | `true` | Keep checking the list in the background after fallback |
 | `strategy-selection.fallback-strategy` | built-in strategy | Temporary strategy if selection did not finish in time |
 | `strategy-selection.retry-after` | `5m` | Pause before a new selection after fallback |
 | `strategy-selection.cache.ttl` | `7d` | Cache lifetime |
 | `strategy-selection.cache.recheck-after` | `1d` | Re-check interval |
 | `strategy-selection.cache.failure-threshold` | `2` | Errors before the cache is reset |
+
+With `0s`, the node starts immediately with the cached or fallback strategy and selection continues in the background. Without background selection, the default budget is `15s`.
 
 </details>
 

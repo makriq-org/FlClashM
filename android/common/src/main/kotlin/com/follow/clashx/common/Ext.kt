@@ -124,27 +124,19 @@ fun Service.startForegroundSafely(
 }
 
 
-private const val SMALL_PAYLOAD = 100 * 1024
-private const val CHUNK_64K = 64 * 1024
-private const val CHUNK_128K = 128 * 1024
-private const val CHUNK_256K = 256 * 1024
-private const val SIZE_1M = 1024 * 1024
-private const val SIZE_10M = 10 * 1024 * 1024
+// Binder's buffer is shared by all in-flight transactions in the process.
+// Large responses must not increase the fragment size under concurrent UI load.
+private const val AIDL_CHUNK_BYTES = 64 * 1024
 
 fun ByteArray.chunkedForAidl(): Sequence<ByteArray> = sequence {
     val total = size
-    if (total <= SMALL_PAYLOAD) {
+    if (total <= AIDL_CHUNK_BYTES) {
         yield(this@chunkedForAidl)
         return@sequence
     }
-    val chunk = when {
-        total <= SIZE_1M -> CHUNK_64K
-        total <= SIZE_10M -> CHUNK_128K
-        else -> CHUNK_256K
-    }
     var offset = 0
     while (offset < total) {
-        val end = (offset + chunk).coerceAtMost(total)
+        val end = (offset + AIDL_CHUNK_BYTES).coerceAtMost(total)
         yield(copyOfRange(offset, end))
         offset = end
     }

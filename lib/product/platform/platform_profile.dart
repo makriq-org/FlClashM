@@ -35,6 +35,9 @@ class ProductPlatformProfile {
   final bool supported;
   final bool preferCompactNavigation;
 
+  // Navigation is available before the backend has prepared its first groups.
+  bool get showProxiesNavigation => true;
+
   bool get isAndroid => kind == ProductPlatformKind.android;
 
   bool get isUnsupported => kind == ProductPlatformKind.unsupported;

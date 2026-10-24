@@ -183,3 +183,40 @@ func TestSOCKSProbeTLSDoHAndDomainFallback(t *testing.T) {
 		t.Fatal("private URL accepted")
 	}
 }
+
+func TestStrategyProbeRejectsHTTPFailuresWithoutChangingConnectivityChecks(t *testing.T) {
+	var status atomic.Int32
+	status.Store(403)
+	methods := make(chan string, 4)
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { methods <- r.Method; w.WriteHeader(int(status.Load())) }))
+	defer origin.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(origin.Certificate())
+	targets := make(chan string, 4)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), targets)
+	probe := SOCKSProbe{RootCAs: roots}
+	request := backend.NodeProbe{Host: host, Port: port, URL: "https://example.com:" + strconv.Itoa(origin.Listener.Addr().(*net.TCPAddr).Port) + "/check", Resolver: "system"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if ok, err := probe.Probe(ctx, request); err != nil || !ok {
+		t.Fatal("ordinary connectivity changed", ok, err)
+	}
+	if method := <-methods; method != http.MethodHead {
+		t.Fatal(method)
+	}
+	request.RequireSuccess = true
+	if ok, err := probe.Probe(ctx, request); err != nil || ok {
+		t.Fatal("block response verified a strategy", ok, err)
+	}
+	if method := <-methods; method != http.MethodGet {
+		t.Fatal(method)
+	}
+	status.Store(http.StatusFound)
+	if ok, err := probe.Probe(ctx, request); err != nil || ok {
+		t.Fatal("redirect verified a strategy", ok, err)
+	}
+	status.Store(204)
+	if ok, err := probe.Probe(ctx, request); err != nil || !ok {
+		t.Fatal("working strategy rejected", ok, err)
+	}
+}

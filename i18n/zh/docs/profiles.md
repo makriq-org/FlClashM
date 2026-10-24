@@ -80,13 +80,15 @@ HTTPS 列表每行一个策略；空行和以 `#` 开头的行被忽略。支持
 | `strategy-test.request-concurrency` | `4` | 单个候选内的并行 HTTP 请求数 |
 | `strategy-test.min-success-ratio` | `1.0` | 成功请求的最小比例 |
 | `strategy-selection.strategy-concurrency` | `4` | 同时检查的策略数 |
-| `strategy-selection.startup-timeout` | `15s` | 节点启动前的选择预算 |
+| `strategy-selection.startup-timeout` | `0s` | 节点启动前的选择预算 |
 | `strategy-selection.continue-in-background` | `true` | fallback 后是否在后台继续检查列表 |
 | `strategy-selection.fallback-strategy` | 内置策略 | 选择未及时完成时使用的临时策略 |
 | `strategy-selection.retry-after` | `5m` | fallback 后再次选择前的暂停 |
 | `strategy-selection.cache.ttl` | `7d` | 缓存生存期 |
 | `strategy-selection.cache.recheck-after` | `1d` | 重新检查间隔 |
 | `strategy-selection.cache.failure-threshold` | `2` | 重置缓存前的错误次数 |
+
+使用 `0s` 时，节点会立即以缓存或备用策略启动，并在后台继续选择。禁用后台选择时，默认预算为 `15s`。
 
 </details>
 

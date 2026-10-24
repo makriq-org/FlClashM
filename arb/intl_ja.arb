@@ -462,5 +462,11 @@
   "backendTimeout": "バックグラウンドサービスが時間内に応答しませんでした",
   "backendStartupFailed": "FlClashM を起動できませんでした",
   "backendStartupFailedDesc": "アプリはバックグラウンドサービスに接続できず、自動的に再試行を続けています。今すぐ再試行するか、サポート用にログをエクスポートできます。",
-  "retry": "再試行"
+  "retry": "再試行",
+  "backendProfileInvalid": "プロファイルを準備できませんでした。形式と設定を確認してください。",
+  "backendNodeStartFailed": "内蔵ノードを起動できませんでした。設定とログを確認してください。",
+  "backendSubscriptionDownloadFailed": "サブスクリプションをダウンロードできませんでした。接続を確認して再試行してください。",
+  "backendSubscriptionHttpError": "サブスクリプションサーバーがリクエストを拒否しました。リンクを確認するか、提供元にお問い合わせください。",
+  "backendRevisionConflict": "操作中にプロファイルが変更されました。開き直して再試行してください。",
+  "backendErrorDetailsHint": "詳細はログで確認できます。"
 }

@@ -557,6 +557,7 @@ func (c *runtimeCoordinator) execute(e *execution) {
 	e.receipt.Status = "succeeded"
 	if err != nil {
 		e.receipt.Status, e.receipt.ErrorCode, e.receipt.Error = c.failureLocked(e, err)
+		e.receipt.ErrorDetails = FailureDetails(err)
 	}
 	// A commit failure must leave the pending journal intact. A later recovery
 	// uses it to fence any operation that was never durably acknowledged.
@@ -1098,7 +1099,7 @@ func (c *runtimeCoordinator) failureLocked(e *execution, err error) (status, cod
 	case errors.Is(err, ErrSuperseded):
 		code, message = ErrorCodeSuperseded, "operation superseded by a newer command"
 	default:
-		return "failed", ErrorCodeFailed, describeError(err)
+		return "failed", ErrorCode(err), describeError(err)
 	}
 	return "cancelled", code, message
 }
@@ -1114,6 +1115,13 @@ func ErrorCode(err error) string {
 		return ErrorCodeSuperseded
 	case errors.Is(err, context.Canceled):
 		return ErrorCodeCancelled
+	}
+	var failure *Failure
+	if errors.As(err, &failure) {
+		return failure.Code
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
 	}
 	return ErrorCodeFailed
 }

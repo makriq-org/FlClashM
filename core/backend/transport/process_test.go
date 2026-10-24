@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +22,18 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv("FLCLASHM_TRANSPORT_HELPER") == "1" {
+		if mode := os.Getenv("FLCLASHM_TRANSPORT_SHUTDOWN"); mode != "" {
+			signals := make(chan os.Signal, 1)
+			signal.Notify(signals, os.Interrupt)
+			_ = os.WriteFile("ready", nil, 0600)
+			for range signals {
+				_ = os.WriteFile("interrupt-received", nil, 0600)
+				if mode == "graceful" {
+					_ = os.WriteFile("left-room", nil, 0600)
+					os.Exit(0)
+				}
+			}
+		}
 		if os.Getenv("FLCLASHM_TRANSPORT_FAIL") == "1" {
 			fmt.Fprintln(os.Stdout, "helper stdout")
 			fmt.Fprint(os.Stderr, "configuration rejected")
@@ -314,4 +327,77 @@ func TestProcessDiesWithServiceHost(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("transport survived its service host")
+}
+
+func TestOlcRTCStopLeavesRoomAndStillFencesStuckChildren(t *testing.T) {
+	for _, mode := range []string{"graceful", "stuck"} {
+		t.Run(mode, func(t *testing.T) {
+			directory := t.TempDir()
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := exec.Command(executable)
+			command.Dir = directory
+			command.Env = append(os.Environ(), "FLCLASHM_TRANSPORT_HELPER=1", "FLCLASHM_TRANSPORT_SHUTDOWN="+mode)
+			if err = command.Start(); err != nil {
+				t.Fatal(err)
+			}
+			p := &process{command: command, graceful: true, done: make(chan struct{})}
+			go func() { p.exitErr = command.Wait(); close(p.done) }()
+			defer func() { _ = command.Process.Kill(); <-p.done }()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if _, err := os.Stat(filepath.Join(directory, "ready")); err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("helper did not start")
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			adapter := &ProcessAdapter{processes: map[string]*process{"olcrtc-test": p}}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			stopped := make(chan error, 1)
+			go func() { stopped <- adapter.Stop(ctx, "olcrtc-test") }()
+			if mode == "stuck" {
+				deadline := time.Now().Add(time.Second)
+				for {
+					if _, err := os.Stat(filepath.Join(directory, "interrupt-received")); err == nil {
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("child did not receive interrupt")
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+				observed := make(chan error, 1)
+				go func() { _, err := adapter.Observe(context.Background(), "other-node"); observed <- err }()
+				select {
+				case err := <-observed:
+					if err != nil {
+						t.Fatal(err)
+					}
+				case <-time.After(500 * time.Millisecond):
+					t.Fatal("OlcRTC shutdown blocked another node")
+				}
+			}
+			if err = <-stopped; err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-p.done:
+			default:
+				t.Fatal("stop returned before child exit")
+			}
+			_, left := os.Stat(filepath.Join(directory, "left-room"))
+			if (left == nil) != (mode == "graceful") {
+				t.Fatal("provider room cleanup did not match shutdown mode", left)
+			}
+			if len(adapter.processes) != 0 {
+				t.Fatal("stopped child retained")
+			}
+		})
+	}
 }

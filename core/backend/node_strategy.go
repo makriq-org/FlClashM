@@ -76,7 +76,7 @@ func (c *runtimeCoordinator) selectForeground(ctx context.Context, n *nodeRuntim
 	options := n.auto
 	fingerprint := autoFingerprint(c.nodeOptions.ABI, *options)
 	cached, _ := c.nodeOptions.Cache.Read(ctx, n.plan.ID, scope)
-	valid := cached.Fingerprint == fingerprint && cached.SelectionRevision == 2
+	valid := cached.Fingerprint == fingerprint && cached.SelectionRevision == 3
 	n.cache = cached
 	n.pending = false
 	n.recheck = false
@@ -114,8 +114,20 @@ func (c *runtimeCoordinator) selectForeground(ctx context.Context, n *nodeRuntim
 	if next >= len(options.Strategies) {
 		next = 0
 	}
-	n.cache = StrategyCache{Version: 1, Fingerprint: fingerprint, Strategy: n.strategy, CheckedAt: c.now().UTC(), SelectionRevision: 2, Verified: verified, NextIndex: next}
-	return c.nodeOptions.Cache.Write(ctx, n.plan.ID, scope, n.cache)
+	n.cache = StrategyCache{Version: 1, Fingerprint: fingerprint, Strategy: n.strategy, CheckedAt: c.now().UTC(), SelectionRevision: 3, Verified: verified, NextIndex: next}
+	err = c.nodeOptions.Cache.Write(ctx, n.plan.ID, scope, n.cache)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil && !n.plan.Check.Required {
+		// Cache persistence is optional: the selected/fallback strategy is
+		// already usable in memory. Probe cleanup failures above remain fatal.
+		if diagnostics, ok := c.engine.(RuntimeDiagnostics); ok {
+			diagnostics.RuntimeFailure("node.strategy.cache", err)
+		}
+		return nil
+	}
+	return err
 }
 func (c *runtimeCoordinator) probeStrategies(ctx context.Context, n *nodeRuntime, start int, budget time.Duration) (string, int, error) {
 	options := n.auto
@@ -188,7 +200,7 @@ func (c *runtimeCoordinator) probeBatch(ctx context.Context, n *nodeRuntime, str
 				passed := false
 				if err == nil {
 					ratio := n.auto.Test.Ratio
-					passed, err = c.checkNode(child, launch.Node, NodeCheck{URLs: n.auto.Test.URLs, Timeout: n.auto.Test.Timeout, Requests: n.auto.Test.Requests, Concurrency: n.auto.Test.Concurrency, MinSuccessRatio: &ratio, Resolver: n.auto.Test.Resolver})
+					passed, err = c.checkNode(child, launch.Node, NodeCheck{URLs: n.auto.Test.URLs, Timeout: n.auto.Test.Timeout, Requests: n.auto.Test.Requests, Concurrency: n.auto.Test.Concurrency, MinSuccessRatio: &ratio, Resolver: n.auto.Test.Resolver, RequireSuccess: true})
 				}
 				cleanup, done := context.WithTimeout(context.Background(), 15*time.Second)
 				defer done()
@@ -289,7 +301,7 @@ func (c *runtimeCoordinator) continueSelection(ctx context.Context, node *nodeRu
 	}
 	previous := node.cache
 	previousStrategy := node.strategy
-	next := StrategyCache{Version: 1, Fingerprint: previous.Fingerprint, Strategy: selected, CheckedAt: c.now().UTC(), SelectionRevision: 2, Verified: verified}
+	next := StrategyCache{Version: 1, Fingerprint: previous.Fingerprint, Strategy: selected, CheckedAt: c.now().UTC(), SelectionRevision: 3, Verified: verified}
 	if selected != previousStrategy {
 		if err := c.nodeOptions.Adapter.Stop(ctx, node.plan.ID); err != nil {
 			return err
