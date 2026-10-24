@@ -11,13 +11,19 @@ typedef BackendTransport = Future<Map<String, dynamic>> Function(
 /// Typed failure of a backend request or operation. [message] is the short
 /// cause reported by the backend; [toString] returns it without a Dart prefix.
 class BackendException implements Exception {
-  const BackendException(this.code, this.message, {this.operationId});
+  const BackendException(
+    this.code,
+    this.message, {
+    this.operationId,
+    this.details = const {},
+  });
 
   /// Receipt `errorCode` (`superseded`, `cancelled`, `closed`, `failed`), API
   /// error code, or `unavailable` when the backend could not be reached.
   final String code;
   final String message;
   final String? operationId;
+  final Map<String, dynamic> details;
 
   static const superseded = 'superseded';
   static const cancelled = 'cancelled';
@@ -45,6 +51,7 @@ class BackendCommittedException extends BackendException {
         cause is BackendException ? cause.code : BackendException.failed,
         BackendClient._plain(cause),
         operationId: cause is BackendException ? cause.operationId : null,
+        details: cause is BackendException ? cause.details : const {},
       );
 
   final Map<String, dynamic> receipt;
@@ -65,12 +72,14 @@ class BackendClient {
     required this._transport,
     required this._events,
     Stream<void>? reconnects,
+    this.requestTimeout = const Duration(seconds: 15),
   }) : _reconnects = reconnects ?? const Stream<void>.empty();
 
   /// Go rejects engine commands once eight are pending; stay well below.
   static const engineCommandLimit = 4;
 
   final BackendTransport _transport;
+  final Duration requestTimeout;
   final Stream<Map<String, dynamic>> _events;
   final Stream<void> _reconnects;
   final _changes = StreamController<Map<String, dynamic>>.broadcast(sync: true);
@@ -140,7 +149,13 @@ class BackendClient {
         'operationId': operation,
         'method': method,
         'params': ?params,
-      });
+      }).timeout(requestTimeout);
+    } on TimeoutException {
+      throw BackendException(
+        'timeout',
+        'Backend request did not respond',
+        operationId: operation,
+      );
     } on BackendException {
       rethrow;
     } catch (error) {
@@ -171,6 +186,7 @@ class BackendClient {
             : BackendException.failed,
         '${error['message'] ?? ''}',
         operationId: operation,
+        details: _map(error['errorDetails']),
       );
     }
     return response['result'];
@@ -302,6 +318,7 @@ class BackendClient {
             : BackendException.failed,
         '${receipt['error'] ?? ''}',
         operationId: operation,
+        details: _map(receipt['errorDetails']),
       );
     }
     return receipt;

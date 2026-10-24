@@ -515,5 +515,11 @@
   "backendTimeout": "Background service did not respond in time",
   "backendStartupFailed": "Could not start FlClashM",
   "backendStartupFailedDesc": "The app could not connect to its background service and keeps retrying automatically. You can retry now or export logs for support.",
-  "retry": "Retry"
+  "retry": "Retry",
+  "backendProfileInvalid": "The profile could not be prepared. Check its format and settings.",
+  "backendNodeStartFailed": "The built-in node could not start. Check its settings and the logs.",
+  "backendSubscriptionDownloadFailed": "The subscription could not be downloaded. Check the connection and try again.",
+  "backendSubscriptionHttpError": "The subscription server rejected the request. Check the link or contact the provider.",
+  "backendRevisionConflict": "The profile changed during the operation. Reopen it and try again.",
+  "backendErrorDetailsHint": "Details are available in the logs."
 }

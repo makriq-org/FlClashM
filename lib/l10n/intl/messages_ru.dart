@@ -149,17 +149,35 @@ class MessageLookup extends MessageLookupByLibrary {
     "backendClosed": MessageLookupByLibrary.simpleMessage(
       "Фоновая служба остановилась до завершения операции",
     ),
+    "backendErrorDetailsHint": MessageLookupByLibrary.simpleMessage(
+      "Подробности доступны в журнале.",
+    ),
+    "backendNodeStartFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось запустить встроенный узел. Проверьте его настройки и журнал.",
+    ),
     "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
       "Операция отменена",
     ),
     "backendOperationFailed": MessageLookupByLibrary.simpleMessage(
       "Операция не выполнена",
     ),
+    "backendProfileInvalid": MessageLookupByLibrary.simpleMessage(
+      "Не удалось подготовить профиль. Проверьте его формат и настройки.",
+    ),
+    "backendRevisionConflict": MessageLookupByLibrary.simpleMessage(
+      "Профиль изменился во время операции. Откройте его заново и повторите попытку.",
+    ),
     "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
       "Не удалось запустить FlClashM",
     ),
     "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
       "Приложение не смогло подключиться к фоновой службе и продолжает попытки автоматически. Можно повторить сейчас или экспортировать логи для поддержки.",
+    ),
+    "backendSubscriptionDownloadFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось скачать подписку. Проверьте подключение и повторите попытку.",
+    ),
+    "backendSubscriptionHttpError": MessageLookupByLibrary.simpleMessage(
+      "Сервер подписки отклонил запрос. Проверьте ссылку или обратитесь к провайдеру.",
     ),
     "backendTimeout": MessageLookupByLibrary.simpleMessage(
       "Фоновая служба не ответила вовремя",

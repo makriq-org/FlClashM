@@ -113,15 +113,33 @@ class MessageLookup extends MessageLookupByLibrary {
     "backendClosed": MessageLookupByLibrary.simpleMessage(
       "操作の完了前にバックグラウンドサービスが停止しました",
     ),
+    "backendErrorDetailsHint": MessageLookupByLibrary.simpleMessage(
+      "詳細はログで確認できます。",
+    ),
+    "backendNodeStartFailed": MessageLookupByLibrary.simpleMessage(
+      "内蔵ノードを起動できませんでした。設定とログを確認してください。",
+    ),
     "backendOperationCancelled": MessageLookupByLibrary.simpleMessage(
       "操作はキャンセルされました",
     ),
     "backendOperationFailed": MessageLookupByLibrary.simpleMessage("操作に失敗しました"),
+    "backendProfileInvalid": MessageLookupByLibrary.simpleMessage(
+      "プロファイルを準備できませんでした。形式と設定を確認してください。",
+    ),
+    "backendRevisionConflict": MessageLookupByLibrary.simpleMessage(
+      "操作中にプロファイルが変更されました。開き直して再試行してください。",
+    ),
     "backendStartupFailed": MessageLookupByLibrary.simpleMessage(
       "FlClashM を起動できませんでした",
     ),
     "backendStartupFailedDesc": MessageLookupByLibrary.simpleMessage(
       "アプリはバックグラウンドサービスに接続できず、自動的に再試行を続けています。今すぐ再試行するか、サポート用にログをエクスポートできます。",
+    ),
+    "backendSubscriptionDownloadFailed": MessageLookupByLibrary.simpleMessage(
+      "サブスクリプションをダウンロードできませんでした。接続を確認して再試行してください。",
+    ),
+    "backendSubscriptionHttpError": MessageLookupByLibrary.simpleMessage(
+      "サブスクリプションサーバーがリクエストを拒否しました。リンクを確認するか、提供元にお問い合わせください。",
     ),
     "backendTimeout": MessageLookupByLibrary.simpleMessage(
       "バックグラウンドサービスが時間内に応答しませんでした",

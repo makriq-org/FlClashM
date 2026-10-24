@@ -10,6 +10,7 @@ import (
 
 	"core/backend"
 	"core/backend/compile"
+	"core/backend/profiles"
 )
 
 func (a *App) Handle(raw []byte) []byte {
@@ -155,7 +156,7 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	if err != nil {
 		response.Result = nil
-		response.Error = &backend.APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: backend.ErrorCode(err)}
+		response.Error = &backend.APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: backend.ErrorCode(err), ErrorDetails: backend.FailureDetails(err)}
 		encoded, _ := json.Marshal(response)
 		return encoded
 	}
@@ -288,6 +289,9 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 	}
 	a.workers.Go(func() {
 		result, err := a.perform(ctx, request.Method, params, operation.receipt.OperationID)
+		if errors.Is(err, profiles.ErrConflict) {
+			err = backend.WithFailure(err, "conflict", nil)
+		}
 		a.operations.finish(operation, result, err)
 		a.publish()
 	})

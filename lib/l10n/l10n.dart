@@ -1,6 +1,7 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import 'intl/messages_all.dart';
 
 // **************************************************************************
@@ -4072,6 +4073,66 @@ class AppLocalizations {
   /// `Retry`
   String get retry {
     return Intl.message('Retry', name: 'retry', desc: '', args: []);
+  }
+
+  /// `The profile could not be prepared. Check its format and settings.`
+  String get backendProfileInvalid {
+    return Intl.message(
+      'The profile could not be prepared. Check its format and settings.',
+      name: 'backendProfileInvalid',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The built-in node could not start. Check its settings and the logs.`
+  String get backendNodeStartFailed {
+    return Intl.message(
+      'The built-in node could not start. Check its settings and the logs.',
+      name: 'backendNodeStartFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The subscription could not be downloaded. Check the connection and try again.`
+  String get backendSubscriptionDownloadFailed {
+    return Intl.message(
+      'The subscription could not be downloaded. Check the connection and try again.',
+      name: 'backendSubscriptionDownloadFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The subscription server rejected the request. Check the link or contact the provider.`
+  String get backendSubscriptionHttpError {
+    return Intl.message(
+      'The subscription server rejected the request. Check the link or contact the provider.',
+      name: 'backendSubscriptionHttpError',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The profile changed during the operation. Reopen it and try again.`
+  String get backendRevisionConflict {
+    return Intl.message(
+      'The profile changed during the operation. Reopen it and try again.',
+      name: 'backendRevisionConflict',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Details are available in the logs.`
+  String get backendErrorDetailsHint {
+    return Intl.message(
+      'Details are available in the logs.',
+      name: 'backendErrorDetailsHint',
+      desc: '',
+      args: [],
+    );
   }
 }
 

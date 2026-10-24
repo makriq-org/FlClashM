@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flclashx/product/backend/backend_client.dart';
 import 'package:flclashx/product/backend/backend_errors.dart';
+import 'package:flclashx/product/backend/profile_refresh.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class ClientHost {
@@ -652,7 +653,7 @@ void main() {
         const BackendException('failed', 'profile revision changed'),
         labels,
       ),
-      'Ошибка: profile revision changed',
+      'Ошибка',
     );
     expect(
       formatBackendError(
@@ -737,4 +738,39 @@ void main() {
     await reconnects.close();
     await host.close();
   });
+  test('lost IPC reply times out and releases profile refresh loading', () async {
+    final refreshes = ProfileRefreshes();
+    final states = <bool>[];
+    final client = BackendClient(
+      transport: (_) => Completer<Map<String, dynamic>>().future,
+      events: const Stream.empty(),
+      requestTimeout: const Duration(milliseconds: 5),
+    );
+    await expectLater(
+      refreshes.run(
+        'one',
+        refresh: () async { await client.request('subscription.refresh'); },
+        setLoading: ({required loading}) => states.add(loading),
+      ),
+      throwsA(isA<BackendException>().having((e) => e.code, 'timeout', 'timeout')),
+    );
+    expect(states, [true, false]);
+  });
+
+  test('semantic failures use localized text and safe context', () {
+    const labels = BackendErrorLabels(
+      unavailable: 'Служба недоступна', failed: 'Ошибка', cancelled: 'Отменено',
+      closed: 'Закрыто', timeout: 'Нет ответа',
+      causes: {'node_start_failed': 'Не удалось запустить узел',
+        'subscription_http_error': 'Сервер отклонил запрос'},
+      detailsHint: 'Подробности в журнале',
+    );
+    expect(formatBackendError(const BackendException('node_start_failed', 'process exited', details: {'node': 'Jazz'}), labels),
+      'Не удалось запустить узел (Jazz)');
+    expect(formatBackendError(const BackendException('subscription_http_error', 'HTTP status 403', details: {'status': 403}), labels),
+      'Сервер отклонил запрос (HTTP 403)');
+    expect(formatBackendError(const BackendException('failed', 'internal English cause'), labels),
+      'Ошибка. Подробности в журнале');
+  });
+
 }

@@ -15,9 +15,10 @@ const MaxRequestBytes = 16 << 20
 // the same values as Receipt.ErrorCode (superseded, cancelled, closed, failed).
 // Message is human-readable text only.
 type APIError struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	ErrorCode string `json:"errorCode,omitempty"`
+	Code         string         `json:"code"`
+	Message      string         `json:"message"`
+	ErrorCode    string         `json:"errorCode,omitempty"`
+	ErrorDetails map[string]any `json:"errorDetails,omitempty"`
 }
 type Response struct {
 	APIVersion  int       `json:"apiVersion"`
@@ -90,7 +91,7 @@ func (b *Backend) Handle(raw []byte) []byte {
 		response.Result, err = b.Submit(request)
 	}
 	if err != nil {
-		response.Error = &APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: ErrorCode(err)}
+		response.Error = &APIError{Code: "command_rejected", Message: err.Error(), ErrorCode: ErrorCode(err), ErrorDetails: FailureDetails(err)}
 		response.Result = nil
 		result, _ := json.Marshal(response)
 		return result
