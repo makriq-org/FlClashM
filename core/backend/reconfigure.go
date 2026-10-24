@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 )
 
@@ -132,13 +131,11 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 			if !selected {
 				continue
 			}
-			if err = c.launchNode(e.ctx, node); err != nil {
+			if err = c.launchSelectedNode(e.ctx, node); err != nil {
 				return true, err
 			}
-			healthy, checkErr := c.nodeOptions.Inspection.TestGroup(e.ctx, node.plan.Name, node.plan.Activation.Wake.URLs)
-			if checkErr != nil || !healthy {
-				return true, errors.Join(checkErr, errors.New("selected reserve node is not reachable"))
-			}
+			// Explicit selection is user intent, including an unreachable node.
+			// Connectivity only gates autonomous reserve activation.
 		}
 	}
 	c.residentDigest = ""
@@ -147,6 +144,7 @@ func (c *runtimeCoordinator) trySelection(e *execution, previous Document, next 
 	}
 	// Selection-only plans share node definitions, so prepared nodes match.
 	c.adoptResidentPlan(old, next)
+	c.publishNodes()
 	var before, after struct {
 		Selected map[string]string `json:"selected-map"`
 		Close    bool              `json:"closeConnectionsOnSelect"`

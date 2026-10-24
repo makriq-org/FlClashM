@@ -145,11 +145,19 @@ func (e *ExternalCompiler) buildStormDNS(ctx context.Context, raw Object, node *
 	if err != nil {
 		return err
 	}
+	// Cached MTUs are negotiated for a specific wire format and server key.
+	// Reusing XOR-era or larger MTUs after changing encryption/limits can make
+	// a cached startup silently drop traffic until the cache is removed.
+	keyDigest := sha256.Sum256([]byte(key))
 	fingerprintData := struct {
-		Runtime   string   `json:"runtime"`
-		Domains   []string `json:"domains"`
-		Resolvers []string `json:"resolvers"`
-	}{"git-ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc", domains, lines}
+		Runtime    string   `json:"runtime"`
+		Domains    []string `json:"domains"`
+		Resolvers  []string `json:"resolvers"`
+		Encryption int      `json:"encryption"`
+		KeyDigest  string   `json:"keyDigest"`
+		MTU        Object   `json:"mtu"`
+		BaseEncode bool     `json:"baseEncode"`
+	}{"git-ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc", domains, lines, code, hex.EncodeToString(keyDigest[:]), object(raw["mtu"]), object(raw["runtime"])["base-encode"] == true}
 	var canonical bytes.Buffer
 	encoder := json.NewEncoder(&canonical)
 	encoder.SetEscapeHTML(false)

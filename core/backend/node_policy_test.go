@@ -627,3 +627,145 @@ func TestUIDetachStopsPreparedNodesAndFencesLateWarm(t *testing.T) {
 		t.Fatal("Stop after detach kept UI-only node processes")
 	}
 }
+
+type parallelNodeHost struct {
+	*nodeHost
+	entered chan string
+	release chan struct{}
+}
+
+func (h *parallelNodeHost) Start(ctx context.Context, launch NodeLaunch) error {
+	h.entered <- launch.Node.ID
+	select {
+	case <-h.release:
+		return h.nodeHost.Start(ctx, launch)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func TestIndependentNodesStartConcurrently(t *testing.T) {
+	mechanism := &parallelNodeHost{nodeHost: newNodeHost(), entered: make(chan string, 4), release: make(chan struct{})}
+	engine := newHost()
+	b, err := Open(newStore(t), engine, hostEngine{engine}, nil, hostPlatform{engine}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	first := reservePlan()
+	first.Activation = nil
+	second := first.Clone()
+	second.ID = "stormdns-" + strings.Repeat("b", 32)
+	second.Port++
+	second.Name = "Second"
+	_, err = b.Submit(Request{APIVersion: 1, OperationID: "connect", Method: "connect", Input: Input(nodeInput(first, second))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		select {
+		case <-mechanism.entered:
+		case <-time.After(time.Second):
+			close(mechanism.release)
+			t.Fatal("one node blocked the other's startup")
+		}
+	}
+	close(mechanism.release)
+	if _, err = b.Await(context.Background(), "connect"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestManualReserveSelectionDoesNotRequireConnectivity(t *testing.T) {
+	mechanism := newNodeHost()
+	mechanism.groupHealthy = false
+	engine := newHost()
+	b, err := Open(newStore(t), engine, selectionHostEngine{hostEngine{engine}}, nil, hostPlatform{engine}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	node := reservePlan()
+	node.Name = "Unreachable"
+	payload := map[string]any{"nodes": []NodePlan{node}, "selected-map": map[string]string{"Reserve": "DIRECT"}}
+	raw, _ := json.Marshal(payload)
+	run(t, b, "connect", "connect", string(raw))
+	payload["selected-map"] = map[string]string{"Reserve": node.Name}
+	raw, _ = json.Marshal(payload)
+	run(t, b, "select", "apply", string(raw))
+	if s := b.Snapshot(); s.Observed.State != "running" || !s.Nodes[0].Awake {
+		t.Fatal("manual unreachable selection failed", s)
+	}
+}
+
+type readinessNodeHost struct {
+	*nodeHost
+	listenerChecks int
+}
+
+func (h *readinessNodeHost) Listening(ctx context.Context, node NodePlan) (bool, error) {
+	h.listenerChecks++
+	return h.listenerChecks >= 3, ctx.Err()
+}
+func (h *readinessNodeHost) TestGroup(ctx context.Context, name string, _ []string) (bool, error) {
+	return name == "Storm" && h.listenerChecks >= 3, ctx.Err()
+}
+func TestAutonomousWakeWaitsForListenerBeforeTestingTheTunnel(t *testing.T) {
+	mechanism := &readinessNodeHost{nodeHost: newNodeHost()}
+	engine := newHost()
+	b, err := Open(newStore(t), engine, hostEngine{engine}, nil, hostPlatform{engine}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	node := reservePlan()
+	node.Activation.Wake.Failures = 1
+	run(t, b, "connect", "connect", nodeInput(node))
+	if err = b.ReconcileNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s := b.Snapshot(); !s.Nodes[0].Awake || mechanism.listenerChecks < 3 {
+		t.Fatal("wake tested/killed the node before its listener was ready", s)
+	}
+}
+
+type recoveringNodeHost struct {
+	*nodeHost
+	attempts int
+}
+
+func (h *recoveringNodeHost) Start(ctx context.Context, launch NodeLaunch) error {
+	h.attempts++
+	if h.attempts < 3 {
+		return errors.New("temporary provider failure")
+	}
+	return h.nodeHost.Start(ctx, launch)
+}
+func TestOptionalNodeFailureDoesNotRollbackAndRetriesPromptly(t *testing.T) {
+	mechanism := &recoveringNodeHost{nodeHost: newNodeHost()}
+	engine := newHost()
+	b, err := Open(newStore(t), engine, hostEngine{engine}, nil, hostPlatform{engine}, NodeOptions{Adapter: mechanism, Inspection: mechanism, Cache: mechanism, ABI: "host", Now: mechanism.now, ManualTicks: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	node := reservePlan()
+	node.Activation = nil
+	run(t, b, "connect", "connect", nodeInput(node))
+	if s := b.Snapshot(); s.Observed.State != "running" || s.Nodes[0].State != "degraded" {
+		t.Fatal("optional node rolled back runtime", s)
+	}
+	mechanism.advance(5 * time.Second)
+	if err = b.ReconcileNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if mechanism.attempts != 2 {
+		t.Fatal("first retry did not run", mechanism.attempts)
+	}
+	mechanism.advance(time.Second)
+	if err = b.ReconcileNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s := b.Snapshot(); mechanism.attempts != 3 || s.Nodes[0].State != "running" {
+		t.Fatal("node waited five minutes after a temporary failure", s, mechanism.attempts)
+	}
+}

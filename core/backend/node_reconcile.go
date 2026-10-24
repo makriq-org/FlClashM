@@ -286,7 +286,12 @@ func (c *runtimeCoordinator) observeNode(ctx context.Context, node *nodeRuntime)
 			_ = c.nodeOptions.Adapter.Stop(ctx, node.plan.ID)
 			if err = c.launchNode(ctx, node); err != nil {
 				node.observed = "degraded"
-				node.retryUntil = c.now().Add(5 * time.Minute)
+				// Transient provider/handshake failures must not strand a selected
+				// node for five minutes. Bound retries with exponential backoff.
+				node.restartFailures++
+				delay := time.Second * time.Duration(min(30, 1<<min(node.restartFailures-1, 5)))
+				node.retryUntil = c.now().Add(delay)
+				node.nextObservation = node.retryUntil
 				return err
 			}
 		}
