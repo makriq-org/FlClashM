@@ -62,7 +62,7 @@
     {"path": "byedpi.strategy-test.min-success-ratio", "type": "number", "modes": ["auto"], "hasDefault": true, "default": 1.0, "minimum": 0, "maximum": 1, "exclusiveMinimum": true},
     {"path": "byedpi.strategy-selection", "type": "object", "modes": ["auto"]},
     {"path": "byedpi.strategy-selection.strategy-concurrency", "type": "integer", "modes": ["auto"], "hasDefault": true, "default": 4, "minimum": 1, "maximum": 16},
-    {"path": "byedpi.strategy-selection.startup-timeout", "type": "string", "additionalTypes": ["integer"], "modes": ["auto"], "hasDefault": true, "default": "15s"},
+    {"path": "byedpi.strategy-selection.startup-timeout", "type": "string", "additionalTypes": ["integer"], "modes": ["auto"], "hasDefault": true, "default": "0s"},
     {"path": "byedpi.strategy-selection.continue-in-background", "type": "boolean", "modes": ["auto"], "hasDefault": true, "default": true},
     {"path": "byedpi.strategy-selection.fallback-strategy", "type": "string", "modes": ["auto"]},
     {"path": "byedpi.strategy-selection.retry-after", "type": "string", "additionalTypes": ["integer"], "modes": ["auto"], "hasDefault": true, "default": "5m"},

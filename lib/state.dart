@@ -158,15 +158,18 @@ class GlobalState {
       traffics: FixedList(30),
       totalTraffic: Traffic(),
     );
-    await _initDynamicColor();
-    await init();
+    await Future.wait([_initDynamicColor(), init()]);
   }
 
   Future<void> _initDynamicColor() async {
+    accentColor = const Color(defaultPrimaryColor);
     try {
-      corePalette = await DynamicColorPlugin.getCorePalette();
-      accentColor = await DynamicColorPlugin.getAccentColor() ??
-          const Color(defaultPrimaryColor);
+      final colors = await Future.wait([
+        DynamicColorPlugin.getCorePalette(),
+        DynamicColorPlugin.getAccentColor(),
+      ]).timeout(const Duration(milliseconds: 500));
+      corePalette = colors[0] as CorePalette?;
+      accentColor = colors[1] as Color? ?? accentColor;
     } catch (_) {}
   }
 

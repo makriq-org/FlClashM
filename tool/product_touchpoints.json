@@ -102,7 +102,7 @@
     {
       "path": "lib/providers/state.dart",
       "boundary": "subscription-and-platform-selectors",
-      "reason": "State selectors stay thin in base and delegate product advisory and display policy into lib/product/subscription.",
+      "reason": "Базовые селекторы передают product-слою оформление подписок, платформенную навигацию и доступность прокси при запуске.",
       "targets": [
         "lib/product/platform/platform_profile.dart",
         "lib/product/subscription/product_subscription.dart"

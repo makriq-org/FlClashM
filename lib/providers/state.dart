@@ -64,11 +64,11 @@ GroupsState currentGroupsState(Ref ref) {
 @riverpod
 NavigationItemsState navigationsState(Ref ref) {
   final openLogs = ref.watch(appSettingProvider).openLogs;
-  final hasProxies = ref.watch(
-    currentGroupsStateProvider.select((state) => state.value.isNotEmpty),
-  );
   return NavigationItemsState(
-    value: navigation.getItems(openLogs: openLogs, hasProxies: hasProxies),
+    value: navigation.getItems(
+      openLogs: openLogs,
+      hasProxies: productPlatform.showProxiesNavigation,
+    ),
   );
 }
 

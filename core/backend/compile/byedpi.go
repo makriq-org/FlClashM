@@ -181,13 +181,17 @@ func (e *ExternalCompiler) buildByeDPI(ctx context.Context, raw Object, node *No
 	if err != nil {
 		return err
 	}
-	foreground, err := wholeSeconds(selection["startup-timeout"], 15*time.Second, time.Minute, false)
+	foreground, err := wholeSeconds(selection["startup-timeout"], 0, time.Minute, true)
 	if err != nil {
 		return err
 	}
 	background := true
 	if value, ok := selection["continue-in-background"]; ok {
 		background = value == true
+	}
+	// Synchronous-only selection still needs a useful budget when omitted.
+	if !background && selection["startup-timeout"] == nil {
+		foreground = 15
 	}
 	fallback := ByeDPIFallback
 	if value, ok := selection["fallback-strategy"]; ok {

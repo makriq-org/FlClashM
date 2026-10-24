@@ -64,3 +64,29 @@ func TestSelectionReusesValidatedPlanWithoutNetworkOrParser(t *testing.T) {
 		t.Fatal("legacy plan was reused")
 	}
 }
+
+func TestSubscriptionBookkeepingDoesNotRecompileTheRuntime(t *testing.T) {
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	old := Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "rules: ['MATCH,DIRECT']", Metadata: Object{}}, Settings: Object{}}
+	before, _ := json.Marshal(old)
+	plan, err := c.Compile(context.Background(), before, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old.Profile.Metadata["lastUpdateDate"] = "2026-10-24T12:00:00Z"
+	old.Profile.Metadata["subscriptionInfo"] = Object{"download": 123}
+	old.Profile.Revision++
+	after, _ := json.Marshal(old)
+	next, err := c.CompileSelection(context.Background(), after, before, plan, 2)
+	if err != nil || next == nil || next.Digest() != plan.Digest() {
+		t.Fatal("bookkeeping rebuilt runtime", err)
+	}
+	for _, key := range []string{"providerHeaders", "overrideData", "label", "futureRuntimeField"} {
+		old.Profile.Metadata[key] = "changed"
+		after, _ = json.Marshal(old)
+		if next, err = c.CompileSelection(context.Background(), after, before, plan, 3); err != nil || next != nil {
+			t.Fatalf("%s reused stale plan: %v", key, err)
+		}
+		delete(old.Profile.Metadata, key)
+	}
+}
