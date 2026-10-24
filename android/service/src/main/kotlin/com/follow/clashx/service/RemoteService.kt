@@ -11,6 +11,8 @@ import com.follow.clashx.core.InvokeInterface
 import com.follow.clashx.service.models.NotificationParams
 import com.google.gson.Gson
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.resume
@@ -20,11 +22,14 @@ class RemoteService : Service() {
     private val eventLock = Any()
     private var eventListener: IEventInterface? = null
     private var eventDeath: IBinder.DeathRecipient? = null
+    // Responses and events share the receiving process's Binder buffer. Keep
+    // only one acknowledged stream in flight, including while Flutter polls.
+    private val dispatchLock = Mutex()
 
     private suspend fun dispatchChunked(
         data: String,
         send: (bytes: ByteArray, isSuccess: Boolean, ack: IAckInterface) -> Unit,
-    ) {
+    ): Unit = dispatchLock.withLock {
         val bytes = data.toByteArray(Charsets.UTF_8)
         val chunks = bytes.chunkedForAidl().toList()
         for ((i, chunk) in chunks.withIndex()) {

@@ -283,7 +283,7 @@
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
       "bucket": "budget",
-      "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
+      "reason": "Платформенная склейка Android и ограничение фрагментов IPC защищают общий буфер Binder при передаче больших профилей."
     },
     {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt",
@@ -383,7 +383,7 @@
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/RemoteService.kt",
       "bucket": "budget",
-      "reason": "Lifecycle удалённого процесса mihomo сохраняется без зависимости от Flutter UI."
+      "reason": "Lifecycle удалённого процесса и последовательная передача ответов и событий через общий буфер Binder принадлежат Android host."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/State.kt",

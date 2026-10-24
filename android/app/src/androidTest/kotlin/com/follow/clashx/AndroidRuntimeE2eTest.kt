@@ -260,6 +260,16 @@ class AndroidRuntimeE2eTest {
         importProfile("fixture", largeSource)
         val record = Service.backend("profile.get", JSONObject().put("profileId", "fixture"))
         assertEquals(largeSource, record.getString("source"))
+        // Replies compete with Flutter's snapshots/events in the same Binder
+        // buffer during the seed phase. Verify complete concurrent transfers.
+        coroutineScope {
+            List(3) {
+                async {
+                    val copy = Service.backend("profile.get", JSONObject().put("profileId", "fixture"))
+                    assertEquals(largeSource, copy.getString("source"))
+                }
+            }.awaitAll()
+        }
         Service.backendCommand("runtime.start")
         val runtime = snapshot()
         assertEquals("running", runtime.getJSONObject("observed").getString("state"))
