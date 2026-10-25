@@ -29,6 +29,7 @@ commit проекции нет. Flutter не выполняет runtime-комп
 - authoring.evaluate {script:string,config:object} → {config:object}; только editor preview, не применение runtime.
 - authoring.import {expectedRevision:int,profileId?:string,metadata?:object,source?:string,token?:string,ageSecretKey?:string,links?:bool,select?:bool,replace?:bool,providerSources?:{name:blobToken}} → receipt. Go парсит и сохраняет весь импорт одним CAS с ремапом коллизий. UI может показывать локальный preview, но отправляет исходный blob. Платформенные пути не передаются.
 - Существующие profile.import.file / profile.export используют blob API; profile.import.url получает metadata (URL внутри metadata.url). Метаданные обычного профиля — profile.put с expectedRevision; выбор — profile.select; подписки — subscription.refresh. Настройки — settings.patch. Резервные копии — backup.export/restore с blob.
+- Отправка заголовков устройства разрешена только при отсутствии запрета во всех трёх местах: request.deviceHeaders, metadata.sendDeviceHeaders профиля и корневом settings.sendDeviceHeaders. Go проверяет сохранённые запреты в общем загрузчике подписок для импорта, ручного/фонового обновления и восстановления исходника; отсутствие поля сохраняет прежнее значение по умолчанию true.
 
 ## Ресурсы, обслуживание и runtime
 

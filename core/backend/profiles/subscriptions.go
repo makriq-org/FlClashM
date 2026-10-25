@@ -97,8 +97,9 @@ func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Objec
 	}
 	userAgent := s.UserAgent
 	explicitUserAgent := false
+	settings := s.Repository.Snapshot().Settings
 	var patch Object
-	_ = json.Unmarshal(s.Repository.Snapshot().Settings["patchClashConfig"], &patch)
+	_ = json.Unmarshal(settings["patchClashConfig"], &patch)
 	if value, ok := patch["global-ua"]; ok && string(value) != "null" {
 		if json.Unmarshal(value, &userAgent) == nil {
 			explicitUserAgent = true
@@ -108,7 +109,12 @@ func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Objec
 		userAgent = "FlClashM"
 	}
 	request.Header.Set("User-Agent", userAgent)
-	if sendDeviceHeaders && s.DeviceHeaders != nil {
+	// Any saved opt-out wins, including headless refreshes without UI consent.
+	var profileConsent, hostConsent *bool
+	_ = json.Unmarshal(profile.Metadata["sendDeviceHeaders"], &profileConsent)
+	_ = json.Unmarshal(settings["sendDeviceHeaders"], &hostConsent)
+	if sendDeviceHeaders && (profileConsent == nil || *profileConsent) &&
+		(hostConsent == nil || *hostConsent) && s.DeviceHeaders != nil {
 		headers, err := s.DeviceHeaders(ctx)
 		if err != nil {
 			return Record{}, err
