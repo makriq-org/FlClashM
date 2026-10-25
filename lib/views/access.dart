@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/l10n/l10n.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flclashx/product/services/product_services.dart';
+import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
+import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,460 +19,599 @@ class AccessView extends ConsumerStatefulWidget {
   ConsumerState<AccessView> createState() => _AccessViewState();
 }
 
-class _AccessViewState extends ConsumerState<AccessView> {
-  final _searchController = TextEditingController();
-  final _searchFocusNode = FocusNode();
-  final _scrollController = ScrollController();
-  final _loadCompleter = Completer<List<Package>>();
-  late AccessControlEditorState _editorState;
-  late final ProfileManagedAccessController _managedAccessController;
-  bool _profileManaged = false;
-  ProfileManagedAccessNotice _notice = ProfileManagedAccessNotice.none;
-  bool _isTV = false;
-  bool _searchEditing = false;
+class _AccessViewState extends ConsumerState<AccessView>
+    with RouteSettledMixin<AccessView> {
+  late ScrollController _controller;
+  List<String>? _pinedList;
+  bool _isInit = false;
+  bool _installedAppsPermissionGranted = true;
+
+  final _completer = Completer();
 
   @override
   void initState() {
     super.initState();
-    final isRunning = ref.read(runTimeProvider) != null;
-    final initialProfileAccess =
-        isRunning ? globalState.activeProfileAccessControl : null;
-    _editorState = productServices.accessControl.resolveEditorState(
-      accessControl: ref.read(vpnSettingProvider).accessControl,
-      profileAccessControl: initialProfileAccess,
-      previousState: null,
-    );
-    _profileManaged = initialProfileAccess != null;
-    _managedAccessController =
-        productServices.accessControl.createProfileManagedController(
-      readProfileAccessControl: globalState.readProfileAccessControl,
-    );
-    globalState.activeProfileAccessControlNotifier
-        .addListener(_handleProfileAccessControlChanged);
-    _loadCompleter.complete(_loadPackages());
-    unawaited(_refreshManagedAccess());
-    system.isAndroidTV.then((value) {
-      if (mounted && value) setState(() => _isTV = value);
+    _controller = sheetScrollController(context);
+    final accessControl = ref
+        .read(vpnSettingProvider.select((state) => state.accessControlProps))
+        .copyWith();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.read(accessControlStateProvider.notifier).value = accessControl;
+      _isInit = true;
+      _pinList();
     });
-    _searchFocusNode.addListener(_onSearchFocusChange);
-    _searchFocusNode.onKeyEvent = _onSearchKey;
+    ref.listenManual(
+      accessControlStateProvider.select((state) => state.mode),
+      (_, _) => _pinList(),
+    );
+    _completer.complete(_loadPackages());
   }
 
-  void _onSearchFocusChange() {
-    if (!_searchFocusNode.hasFocus && _searchEditing) {
-      setState(() => _searchEditing = false);
+  @override
+  void didSettleRoute() => setState(() {});
+
+  Future<void> _loadPackages() async {
+    final action = ref.read(systemActionProvider.notifier);
+    final packages = await action.getPackages();
+    final granted =
+        packages.isNotEmpty || await action.isInstalledAppsPermissionGranted();
+    if (!mounted || granted == _installedAppsPermissionGranted) {
+      return;
     }
+    setState(() {
+      _installedAppsPermissionGranted = granted;
+    });
   }
 
-  KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
-    if (!_isTV || _searchEditing || event is! KeyDownEvent) {
-      return KeyEventResult.ignored;
+  Future<void> _handleGrantInstalledAppsPermission() async {
+    final appLocalizations = context.appLocalizations;
+    final granted = await ref
+        .read(systemActionProvider.notifier)
+        .requestInstalledAppsPermission();
+    if (!mounted) {
+      return;
     }
-    if (event.logicalKey == LogicalKeyboardKey.select ||
-        event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.gameButtonA) {
-      setState(() => _searchEditing = true);
-      SystemChannels.textInput.invokeMethod('TextInput.show');
-      return KeyEventResult.handled;
+    if (!granted) {
+      final res = await dialogs.showMessage(
+        message: TextSpan(
+          text: appLocalizations.installedAppsPermissionDeniedMessage,
+        ),
+        confirmText: appLocalizations.settings,
+      );
+      if (res == true) {
+        await app?.openAppSettings();
+      }
+      return;
     }
-    return KeyEventResult.ignored;
+    await globalState.loadingRun(_loadPackages, tag: LoadingTag.access);
+  }
+
+  void _pinList() {
+    if (!_isInit || !mounted) {
+      return;
+    }
+    setState(() {
+      _pinedList = ref.read(accessControlStateProvider).currentList;
+    });
   }
 
   @override
   void dispose() {
-    globalState.activeProfileAccessControlNotifier
-        .removeListener(_handleProfileAccessControlChanged);
-    _managedAccessController.dispose();
-    _persist();
-    _searchFocusNode.removeListener(_onSearchFocusChange);
-    _searchFocusNode.dispose();
-    _searchController.dispose();
-    _scrollController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _handleProfileAccessControlChanged() {
-    if (!mounted) {
-      return;
+  IconButtonData _buildSelectAllAction({
+    required bool isSelectedAll,
+    required List<String> allValueList,
+  }) {
+    void onPressed() {
+      ref.read(accessControlStateProvider.notifier).update((state) {
+        final newSet = Set<String>.from(state.currentList);
+        final isSelectedAll = newSet.containsAll(allValueList);
+        if (isSelectedAll) {
+          newSet.removeAll(allValueList);
+        } else {
+          newSet.addAll(allValueList);
+        }
+        return state.copyWithNewList(newSet.toList());
+      });
     }
-    unawaited(_refreshManagedAccess());
+
+    final appLocalizations = context.appLocalizations;
+    return isSelectedAll
+        ? IconButtonData(
+            glyph: AppGlyphs.deselect,
+            tooltip: appLocalizations.cancelSelectAll,
+            onPressed: onPressed,
+          )
+        : IconButtonData(
+            glyph: AppGlyphs.selectAll,
+            tooltip: appLocalizations.selectAll,
+            onPressed: onPressed,
+          );
   }
 
-  Future<void> _refreshManagedAccess() async {
-    final isRunning = ref.read(runTimeProvider) != null;
-    final managed = await _managedAccessController.refresh(
-      isRunning: isRunning,
-      activeProfileAccessControl: globalState.activeProfileAccessControl,
+  Future<void> _handleToSetting() async {
+    await showSheet<int>(
+      context: context,
+      builder: (context) {
+        final appLocalizations = context.appLocalizations;
+        return CommonScaffold(
+          body: const AccessControlPanel(),
+          title: appLocalizations.accessControlSettings,
+        );
+      },
     );
-    if (!mounted || managed == null) {
-      return;
-    }
-    if ((ref.read(runTimeProvider) != null) != isRunning) {
-      unawaited(_refreshManagedAccess());
-      return;
-    }
-    setState(() {
-      _editorState = productServices.accessControl.reconcileManagedEditorState(
-        manualAccessControl: ref.read(vpnSettingProvider).accessControl,
-        previousState: _editorState,
-        wasManaged: _profileManaged,
-        managedAccess: managed,
-      );
-      _profileManaged = managed.managed;
-      _notice = managed.notice;
+  }
+
+  void _handleSelected(String packageName) {
+    ref.read(accessControlStateProvider.notifier).update((state) {
+      final newSet = Set<String>.from(state.currentList)
+        ..addOrRemove(packageName);
+      return state.copyWithNewList(newSet.toList());
     });
   }
 
-  void _persist() {
-    if (_profileManaged || !_editorState.dirty) return;
-    ref.read(vpnSettingProvider.notifier).updateState(
-          (state) => productServices.accessControl.applyEditorState(
-            state,
-            _editorState,
+  void _handleEnable(bool enable) {
+    ref.read(accessControlStateProvider.notifier).update((state) {
+      return state.copyWith(enable: enable);
+    });
+  }
+
+  Future<void> _handleBack() async {
+    final appLocalizations = context.appLocalizations;
+    final res = await dialogs.showMessage(
+      title: appLocalizations.tip,
+      message: TextSpan(text: appLocalizations.saveChanges),
+    );
+    if (res == null) {
+      return;
+    }
+    if (res) {
+      _handleSave();
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  AccessControlProps _getRealAccessControlProps(
+    AccessControlProps accessControl,
+  ) {
+    final packages = ref.read(packagesProvider);
+    if (packages.isEmpty) {
+      return accessControl;
+    }
+    final viewPackageNames = packages
+        .whereVisible(
+          isFilterSystemApp: accessControl.isFilterSystemApp,
+          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
+        )
+        .map((item) => item.packageName)
+        .toSet();
+    return accessControl.copyWithNewList(
+      accessControl.currentList
+          .where((item) => viewPackageNames.contains(item))
+          .toList()
+        ..sort(),
+    );
+  }
+
+  void _handleSave() {
+    final accessControl = ref.read(accessControlStateProvider);
+    ref
+        .read(vpnSettingProvider.notifier)
+        .update(
+          (state) => state.copyWith(
+            accessControlProps: _getRealAccessControlProps(accessControl),
           ),
         );
-    _editorState = _editorState.copyWith(dirty: false);
   }
 
-  void _toggleApp(String pkg) {
-    setState(() {
-      _editorState = productServices.accessControl.togglePackage(
-        _editorState,
-        pkg,
+  Future<void> _exportToClipboard() async {
+    await globalState.safeRun(() {
+      final currentList = ref.read(
+        accessControlStateProvider.select((state) => state.currentList),
       );
+      Clipboard.setData(ClipboardData(text: currentList.join('\n')));
     });
   }
 
-  void _switchMode() {
-    setState(() {
-      _editorState = productServices.accessControl.switchMode(_editorState);
+  Future<void> _importFormClipboard() async {
+    await globalState.safeRun(() async {
+      final data = await Clipboard.getData('text/plain');
+      final text = data?.text;
+      if (text == null) return;
+      final list = text.split('\n');
+      ref
+          .read(accessControlStateProvider.notifier)
+          .update((state) => state.copyWithNewList(list.toSet().toList()));
     });
   }
 
-  Future<List<Package>> _loadPackages() =>
-      productServices.accessControl.ensurePackagesLoaded(
-        isMobileView: ref.read(isMobileViewProvider),
-        cachedPackages: ref.read(packagesProvider),
-        onPackagesLoaded: (packages) {
-          ref.read(packagesProvider.notifier).value = packages;
-        },
-      );
+  List<CommonPopupMenuItem> _buildMenuItems(
+    BuildContext context, {
+    required bool enable,
+  }) {
+    final appLocalizations = context.appLocalizations;
+    return [
+      CommonPopupMenuItem(
+        glyph: AppGlyphs.toggle,
+        label: appLocalizations.accessControl,
+        subItems: [
+          CommonPopupMenuItem(
+            label: appLocalizations.turnOn,
+            checked: enable,
+            onPressed: () => _handleEnable(true),
+          ),
+          CommonPopupMenuItem(
+            label: appLocalizations.turnOff,
+            checked: !enable,
+            onPressed: () => _handleEnable(false),
+          ),
+        ],
+      ),
+      CommonPopupMenuItem(
+        glyph: AppGlyphs.sliders,
+        label: appLocalizations.settings,
+        onPressed: _handleToSetting,
+      ),
+      CommonPopupMenuItem(
+        glyph: AppGlyphs.moreCircle,
+        label: appLocalizations.action,
+        subItems: [
+          CommonPopupMenuItem(
+            glyph: AppGlyphs.copy,
+            label: appLocalizations.clipboardExport,
+            onPressed: _exportToClipboard,
+          ),
+          CommonPopupMenuItem(
+            glyph: AppGlyphs.paste,
+            label: appLocalizations.clipboardImport,
+            onPressed: _importFormClipboard,
+          ),
+        ],
+      ),
+    ];
+  }
 
-  void _showModeHelp() {
-    final appLocale = AppLocalizations.of(context);
-    final title = _editorState.mode == AccessControlMode.acceptSelected
-        ? appLocale.includeInVpn
-        : appLocale.excludeFromVpn;
-    final desc = _editorState.mode == AccessControlMode.acceptSelected
-        ? appLocale.whitelistModeDesc
-        : appLocale.blacklistModeDesc;
-    unawaited(
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(desc),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+  Widget _buildContent({
+    required List<Package> packages,
+    required Set<String> selected,
+    required bool isSearching,
+  }) {
+    return FutureBuilder(
+      future: _completer.future,
+      builder: (context, snapshot) {
+        final appLocalizations = context.appLocalizations;
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CommonCircleLoading.page());
+        }
+        return NullStatusSwitcher(
+          isEmpty: packages.isEmpty,
+          isSearching: isSearching,
+          nullStatus: NullStatus(
+            label: appLocalizations.noData,
+            illustration: NullStatusIllustration.apps,
+          ),
+          child: CommonScrollBar(
+            controller: _controller,
+            child: ListView.builder(
+              controller: _controller,
+              padding: EdgeInsets.only(bottom: BottomInsetScope.of(context)),
+              scrollCacheExtent: arrivalScrollCacheExtent(routeSettled),
+              itemCount: packages.length,
+              itemExtent: 72,
+              itemBuilder: (_, index) {
+                final package = packages[index];
+                return PackageListItem(
+                  key: Key(package.packageName),
+                  package: package,
+                  value: selected.contains(package.packageName),
+                  onChanged: (value) {
+                    _handleSelected(package.packageName);
+                  },
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInstalledAppsPermissionStatus() {
+    final appLocalizations = context.appLocalizations;
+    return NullStatus(
+      label: appLocalizations.installedAppsPermissionRequired,
+      description: appLocalizations.installedAppsPermissionDesc,
+      illustration: NullStatusIllustration.permission,
+      action: TonalButton(
+        size: TonalButtonSize.bar,
+        glyph: AppGlyphs.lockOpen,
+        label: appLocalizations.authorize,
+        onPressed: _handleGrantInstalledAppsPermission,
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    ref
-      ..listen(
-        runTimeProvider.select((runTime) => runTime != null),
-        (_, __) => unawaited(_refreshManagedAccess()),
-      )
-      ..listen(
-        currentProfileProvider.select(
-          (profile) => (profile?.id, profile?.lastUpdateDate),
+  Widget _buildBannerBar({
+    required bool enable,
+    required AccessControlMode mode,
+    required int count,
+  }) {
+    final appLocalizations = context.appLocalizations;
+    final level = context.raisedSurfaceLevel;
+    final backgroundColor = level.colorOf(context.colorScheme);
+    if (!enable) {
+      return MaterialBanner(
+        backgroundColor: backgroundColor,
+        dividerColor: Colors.transparent,
+        leading: GlyphIcon(AppGlyphs.info, color: context.colorScheme.outline),
+        content: Text(
+          appLocalizations.accessControlDisabledDesc,
+          style: TextStyle(color: context.colorScheme.onSurfaceVariant),
         ),
-        (_, __) => unawaited(_refreshManagedAccess()),
-      );
-    final packages = ref.watch(packagesProvider);
-    final filtered = productServices.accessControl.filterPackages(
-      packages: packages,
-      editorState: _editorState,
-    );
-    final appLocale = AppLocalizations.of(context);
-    final isWhitelist = _editorState.isWhitelist;
-    final noticeMessage = switch (_notice) {
-      ProfileManagedAccessNotice.none => null,
-      ProfileManagedAccessNotice.drift => appLocale.accessControlDriftNote,
-      ProfileManagedAccessNotice.verificationUnavailable =>
-        appLocale.accessControlVerificationUnavailableNote,
-    };
-
-    return PopScope(
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) _persist();
-      },
-      child: Column(
-        children: [
-          ListItem.switchItem(
-            title: Row(
-              children: [
-                Flexible(child: Text(appLocale.appAccessControl)),
-                if (_profileManaged) ...[
-                  const SizedBox(width: 8),
-                  const Icon(Icons.lock_outline, size: 16),
-                ],
-              ],
-            ),
-            subtitle: Text(appLocale.accessControlDesc),
-            delegate: SwitchDelegate(
-              value: _editorState.enabled,
-              onChanged: _profileManaged
-                  ? null
-                  : (v) => setState(() {
-                        _editorState = productServices.accessControl.setEnabled(
-                          _editorState,
-                          enabled: v,
-                        );
-                      }),
-            ),
-          ),
-          if (noticeMessage != null)
-            ProductAccessControlNotice(message: noticeMessage),
-          const Divider(height: 1),
-          Expanded(
-            child: DisabledMask(
-              status: !_editorState.enabled,
-              child: Column(
-                children: [
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: GestureDetector(
-                      onLongPress: _showModeHelp,
-                      child: SegmentedButton<AccessControlMode>(
-                        segments: [
-                          ButtonSegment(
-                            value: AccessControlMode.acceptSelected,
-                            label: Text(appLocale.includeInVpn),
-                            icon: const Icon(Icons.check_circle_outline,
-                                size: 18),
-                          ),
-                          ButtonSegment(
-                            value: AccessControlMode.rejectSelected,
-                            label: Text(appLocale.excludeFromVpn),
-                            icon: const Icon(Icons.remove_circle_outline,
-                                size: 18),
-                          ),
-                        ],
-                        selected: {_editorState.mode},
-                        onSelectionChanged:
-                            _profileManaged ? null : (_) => _switchMode(),
-                        showSelectedIcon: false,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      readOnly: _isTV && !_searchEditing,
-                      onSubmitted: (_) {
-                        if (_isTV) setState(() => _searchEditing = false);
-                      },
-                      decoration: InputDecoration(
-                        hintText: appLocale.search,
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        suffixIcon: _editorState.query.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _editorState =
-                                        productServices.accessControl.setQuery(
-                                      _editorState,
-                                      '',
-                                    );
-                                  });
-                                },
-                              )
-                            : null,
-                      ),
-                      onChanged: (v) => setState(() {
-                        _editorState = productServices.accessControl.setQuery(
-                          _editorState,
-                          v,
-                        );
-                      }),
-                    ),
-                  ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.android),
-                          tooltip: appLocale.systemApp,
-                          isSelected: _editorState.showSystemApps,
-                          onPressed: () => setState(() {
-                            _editorState = productServices.accessControl
-                                .toggleShowSystemApps(_editorState);
-                          }),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.wifi_off),
-                          tooltip: appLocale.noNetworkApp,
-                          isSelected: _editorState.showNoInternetApps,
-                          onPressed: () => setState(() {
-                            _editorState = productServices.accessControl
-                                .toggleShowNoInternetApps(_editorState);
-                          }),
-                        ),
-                        const Spacer(),
-                        if (!_profileManaged &&
-                            _editorState.selectedPackages.isNotEmpty)
-                          TextButton.icon(
-                            icon: const Icon(Icons.clear_all, size: 18),
-                            label:
-                                Text('${_editorState.selectedPackages.length}'),
-                            onPressed: () => setState(() {
-                              _editorState = productServices.accessControl
-                                  .clearSelection(_editorState);
-                            }),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: FutureBuilder(
-                      future: _loadCompleter.future,
-                      builder: (_, snap) {
-                        if (snap.connectionState != ConnectionState.done) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        if (filtered.isEmpty) {
-                          return Center(
-                            child: Text(
-                              appLocale.noData,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                          );
-                        }
-                        return ListView.builder(
-                          controller: _scrollController,
-                          itemCount: filtered.length,
-                          itemExtent: 72,
-                          itemBuilder: (_, i) {
-                            final pkg = filtered[i];
-                            final selected = _editorState.selectedPackages
-                                .contains(pkg.packageName);
-                            return _AppTile(
-                              package: pkg,
-                              selected: selected,
-                              isWhitelist: isWhitelist,
-                              onTap: _profileManaged
-                                  ? null
-                                  : () => _toggleApp(pkg.packageName),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+        actions: [
+          SurfaceScope(
+            level: level,
+            child: TonalButton(
+              size: TonalButtonSize.compact,
+              label: appLocalizations.turnOn,
+              onPressed: () => _handleEnable(true),
             ),
           ),
         ],
+      );
+    }
+    final describe = mode == AccessControlMode.acceptSelected
+        ? appLocalizations.accessControlAllowDesc
+        : appLocalizations.accessControlNotAllowDesc;
+    final textStyle = AppTextStyle.subheadline
+        .of(context, emphasized: true)
+        .copyWith(color: context.colorScheme.onPrimary);
+    return MaterialBanner(
+      backgroundColor: backgroundColor,
+      dividerColor: Colors.transparent,
+      content: Text(describe),
+      actions: [
+        Card.filled(
+          color: context.colorScheme.primary,
+          elevation: 0,
+          shape: AppShape.md,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(appLocalizations.selected, style: textStyle),
+                const SizedBox(width: 4),
+                Flexible(child: Text('$count', style: textStyle)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onSearch(String value) {
+    ref.read(queryProvider(QueryTag.access).notifier).value = value;
+    _pinList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLoading = ref.watch(loadingProvider(LoadingTag.access));
+    final query = SearchQuery(ref.watch(queryProvider(QueryTag.access)));
+    final packages = ref.watch(packagesProvider);
+    final accessControl = ref.watch(accessControlStateProvider);
+    final viewPackages = packages
+        .getViewList(
+          pinedList: _pinedList ?? [],
+          sortType: accessControl.sort,
+          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
+          isFilterSystemApp: accessControl.isFilterSystemApp,
+        )
+        .whereMatches(query, (package) => [package.label, package.packageName])
+        .toList();
+    final mode = accessControl.mode;
+    final currentList = accessControl.currentList;
+    final viewPackageNameList = viewPackages.map((e) => e.packageName).toList();
+    final valueList = currentList.intersection(viewPackageNameList);
+    final needsInstalledAppsPermission =
+        packages.isEmpty && !_installedAppsPermissionGranted;
+    final selectAllAction =
+        accessControl.enable &&
+            !needsInstalledAppsPermission &&
+            viewPackageNameList.isNotEmpty
+        ? _buildSelectAllAction(
+            isSelectedAll: valueList.length == viewPackageNameList.length,
+            allValueList: viewPackageNameList,
+          )
+        : null;
+    final hasChanges = ref.watch(
+      vpnSettingProvider.select(
+        (state) =>
+            _getRealAccessControlProps(state.accessControlProps) !=
+            _getRealAccessControlProps(accessControl),
+      ),
+    );
+    return CommonPopScope(
+      onPop: hasChanges
+          ? (_) {
+              _handleBack();
+              return false;
+            }
+          : null,
+      child: CommonScaffold(
+        isLoading: isLoading,
+        searchState: AppBarSearchState(onSearch: _onSearch),
+        searchActions: [?selectAllAction],
+        title: context.appLocalizations.appAccessControl,
+        confirmationAction: hasChanges
+            ? IconButtonData(
+                glyph: AppGlyphs.check,
+                onPressed: _handleSave,
+                tooltip: context.appLocalizations.save,
+              )
+            : null,
+        menuItems: [
+          ..._buildMenuItems(context, enable: accessControl.enable),
+          if (selectAllAction != null)
+            CommonPopupMenuItem(
+              glyph: selectAllAction.glyph,
+              label: selectAllAction.tooltip!,
+              onPressed: selectAllAction.onPressed,
+            ),
+        ],
+        body: AppBarClearance(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildBannerBar(
+                enable: accessControl.enable,
+                mode: mode,
+                count: valueList.length,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: needsInstalledAppsPermission
+                    ? _buildInstalledAppsPermissionStatus()
+                    : DisabledMask(
+                        status: !accessControl.enable,
+                        child: _buildContent(
+                          packages: viewPackages,
+                          selected: valueList.toSet(),
+                          isSearching: query.isNotEmpty,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _AppTile extends StatelessWidget {
-  const _AppTile({
-    required this.package,
-    required this.selected,
-    required this.isWhitelist,
-    required this.onTap,
-  });
-
+class PackageListItem extends StatelessWidget {
   final Package package;
-  final bool selected;
-  final bool isWhitelist;
-  final VoidCallback? onTap;
+  final bool value;
+  final void Function(bool?) onChanged;
+
+  const PackageListItem({
+    super.key,
+    required this.package,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final Color? color;
-    final IconData icon;
-    if (selected) {
-      color = isWhitelist ? Colors.green : Colors.red;
-      icon = isWhitelist ? Icons.check_circle : Icons.remove_circle;
-    } else {
-      color = null;
-      icon = Icons.radio_button_unchecked;
-    }
+    return ListItem.checkbox(
+      leading: PackageIcon(packageName: package.packageName, size: 48),
+      title: Text(
+        package.label,
+        style: const TextStyle(overflow: TextOverflow.ellipsis),
+        maxLines: 1,
+      ),
+      subtitle: Text(
+        package.packageName,
+        style: const TextStyle(overflow: TextOverflow.ellipsis),
+        maxLines: 1,
+      ),
+      value: value,
+      onChanged: onChanged,
+    );
+  }
+}
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: FutureBuilder<ImageProvider?>(
-                future: productServices.accessControl.readPackageIcon(
-                  package.packageName,
-                ),
-                builder: (_, snap) {
-                  if (snap.data == null) return const SizedBox();
-                  return Image(
-                    image: snap.data!,
-                    gaplessPlayback: true,
-                    width: 48,
-                    height: 48,
-                  );
+class AccessControlPanel extends StatelessWidget {
+  const AccessControlPanel({super.key});
+
+  static ConfigWriter<T> _writer<T>(
+    AccessControlProps Function(AccessControlProps state, T value) update,
+  ) {
+    return (ref, value) => ref
+        .read(accessControlStateProvider.notifier)
+        .update((state) => update(state, value));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+      ).copyWith(top: context.contentTopPadding, bottom: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          generateSection(
+            items: [
+              ConfigOptionsItem<AccessControlMode>(
+                title: (l) => l.mode,
+                options: AccessControlMode.values,
+                textBuilder: (mode) => switch (mode) {
+                  AccessControlMode.acceptSelected =>
+                    appLocalizations.whitelistMode,
+                  AccessControlMode.rejectSelected =>
+                    appLocalizations.blacklistMode,
                 },
+                selector: accessControlStateProvider.select(
+                  (state) => state.mode,
+                ),
+                onChanged: _writer(
+                  (state, value) => state.copyWith(mode: value),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    package.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    package.packageName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+              ConfigOptionsItem<AccessSortType>(
+                title: (l) => l.sort,
+                options: AccessSortType.values,
+                textBuilder: (type) => switch (type) {
+                  AccessSortType.none => appLocalizations.defaultText,
+                  AccessSortType.name => appLocalizations.name,
+                  AccessSortType.time => appLocalizations.time,
+                },
+                selector: accessControlStateProvider.select(
+                  (state) => state.sort,
+                ),
+                onChanged: _writer(
+                  (state, value) => state.copyWith(sort: value),
+                ),
               ),
-            ),
-            Icon(icon, color: color),
-          ],
-        ),
+            ],
+          ),
+          generateSection(
+            title: appLocalizations.source,
+            items: [
+              ConfigToggleItem(
+                title: (l) => l.systemApp,
+                selector: accessControlStateProvider.select(
+                  (state) => !state.isFilterSystemApp,
+                ),
+                onChanged: _writer(
+                  (state, value) => state.copyWith(isFilterSystemApp: !value),
+                ),
+              ),
+              ConfigToggleItem(
+                title: (l) => l.noNetworkApp,
+                selector: accessControlStateProvider.select(
+                  (state) => !state.isFilterNonInternetApp,
+                ),
+                onChanged: _writer(
+                  (state, value) =>
+                      state.copyWith(isFilterNonInternetApp: !value),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

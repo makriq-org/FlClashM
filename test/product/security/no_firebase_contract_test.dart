@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Firebase telemetry stays absent from Android and app contracts', () {
-    const forbiddenMarkers = <String, List<String>>{
+    final forbiddenMarkers = <String, List<String>>{
       'android/settings.gradle.kts': [
         'com.google.gms.google-services',
         'com.google.firebase.crashlytics',
@@ -19,16 +19,14 @@ void main() {
         'google-services.json',
       ],
       'android/common/src/main/kotlin/com/follow/clashx/common/GlobalState.kt':
-          [
-        'FirebaseApp',
-        'FirebaseCrashlytics',
-      ],
+          ['FirebaseApp', 'FirebaseCrashlytics'],
       'android/service/src/main/aidl/com/follow/clashx/service/IRemoteInterface.aidl':
-          [
-        'setCrashlytics',
-      ],
+          ['setCrashlytics'],
       'lib/models/config.dart': ['crashlytics'],
-      'lib/views/application_setting.dart': ['crashlytics'],
+      for (final file in Directory(
+        'lib/views',
+      ).listSync(recursive: true).whereType<File>())
+        if (file.path.endsWith('.dart')) file.path: ['crashlytics'],
       'arb/intl_en.arb': ['crashlytics'],
       'arb/intl_ja.arb': ['crashlytics'],
       'arb/intl_ru.arb': ['crashlytics'],

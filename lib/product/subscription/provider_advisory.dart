@@ -41,9 +41,8 @@ class ProductProviderAdvisory {
           buyPlanUrl: _trimmedHeader(_providerHeader(headers, 'buyplan')),
           buyTrafficUrl: _trimmedHeader(_providerHeader(headers, 'buytraffic')),
           globalModeEnabled:
-              _trimmedHeader(
-                _providerHeader(headers, 'globalmode'),
-              ).toLowerCase() !=
+              _trimmedHeader(_providerHeader(headers, 'globalmode'))
+                  .toLowerCase() !=
               'false',
           newDashboard: _parseBoolHeader(_providerHeader(headers, 'newboard')),
           denyDashboardEditing: _parseBoolHeader(

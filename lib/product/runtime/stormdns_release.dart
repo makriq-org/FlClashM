@@ -2,7 +2,8 @@ const stormDnsPinnedCommit = 'ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc';
 const stormDnsPinnedReleaseTag = 'git-$stormDnsPinnedCommit';
 const stormDnsPinnedGoVersion = 'go1.27.2';
 const stormDnsPinnedNdkVersion = '28.0.13004108';
-const stormDnsSourceRepository = 'https://github.com/nullroute1970/StormDNS.git';
+const stormDnsSourceRepository =
+    'https://github.com/nullroute1970/StormDNS.git';
 const stormDnsBundledAssetRoot = 'assets/runtimes/stormdns/android';
 const stormDnsRuntimeDirectoryName = 'stormdns';
 const stormDnsExecutableFileName = 'stormdns';

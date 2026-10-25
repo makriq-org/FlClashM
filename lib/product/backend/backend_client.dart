@@ -420,6 +420,10 @@ class BackendClient {
     unawaited(refresh().catchError(_changes.addError));
   }
 
+  /// Exact Go settings for the 0.5 frontend, which supports endpoint strings.
+  Map<String, dynamic> get sourceSettings =>
+      _copy(_map(_map(_snapshot['catalog'])['settings']));
+
   Map<String, dynamic> get settings {
     final catalog = _map(_snapshot['catalog']);
     final values = _copy(_map(catalog['settings']));

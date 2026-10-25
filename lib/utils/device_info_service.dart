@@ -58,8 +58,8 @@ class DeviceInfoService {
       const keyPath = r'SOFTWARE\Microsoft\Cryptography';
       const valueName = 'MachineGuid';
 
-      final key = Registry.openPath(RegistryHive.localMachine, path: keyPath);
-      final data = key.getValue(valueName);
+      final key = LOCAL_MACHINE.open(keyPath);
+      final data = key.getString(valueName);
       key.close();
 
       return data?.toString();

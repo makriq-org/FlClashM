@@ -23,37 +23,36 @@ dependencies:
     path: plugins/proxy
   window_ext:
     path: plugins/window_ext
-  launch_at_startup: ^0.5.1
+  launch_at_startup:
+    git:
+      url: https://github.com/chen08209/launch_at_startup.git
+      ref: e930ce65c5804343103447e01d39fccabedc8681
   json_annotation: ^4.12.0
-  file_picker: ^11.0.3
+  file_picker: ^12.3.0
   mobile_scanner: ^7.4.2
   app_links: ^7.2.2
-  win32_registry: ^2.1.0
-  # Keep the platform-channel release: newer versions add an unrelated native
-  # desktop engine and require GTK headers even for the Android client tests.
-  tray_manager: ^0.5.3
+  win32_registry: ^3.0.3
   qr_flutter: ^4.1.0
   shelf: ^1.4.2
   shelf_router: ^1.1.4
   http: ^1.6.0
-  network_info_plus: ^7.0.0
   collection: ^1.19.1
   animations: ^3.0.0
-  package_info_plus: ^9.0.1
+  package_info_plus: ^10.2.2
   url_launcher: ^6.3.3
   freezed_annotation: ^3.1.0
   image_picker: ^1.2.4
   webdav_client: ^1.2.2
   dio: ^5.11.1
-  win32: ^5.15.0
+  win32: ^6.4.0
   ffi: ^2.2.0
-  archive: ^4.4.0
+  archive: ^4.3.0
   lpinyin: ^2.0.3
   emoji_regex: ^0.0.5
   hotkey_manager: ^0.2.3
   uni_platform: ^0.1.3
-  device_info_plus: ^12.4.0
-  connectivity_plus: ^7.3.1
+  device_info_plus: ^13.3.0
+  connectivity_plus: 7.2.0
   screen_retriever: ^0.2.2
   defer_pointer: ^0.0.2
   flutter_riverpod: ^3.4.3
@@ -74,8 +73,32 @@ dependencies:
   # In-app zashboard panel (Android/iOS/macOS; no Windows/Linux implementation —
   # those fall back to the external browser).
   webview_flutter: ^4.14.1
+  flutter_local_notifications: ^22.3.2
+  rust_api:
+    path: plugins/rust_api
+  material_ui: ^1.5.0
+  shared_preferences_platform_interface: ^2.4.2
+  window:
+    path: plugins/window
+  tray:
+    path: plugins/tray
+  wifi_ssid:
+    path: plugins/wifi_ssid
+  code_forge:
+    path: plugins/code_forge
+  riverpod: ^3.4.3
+  material_color_utilities: ^0.13.0
+  material_new_shapes: ^1.0.0
+  path_parsing: ^1.1.0
+  super_sliver_list: ^0.4.1
+  drift: ^2.35.1
+  drift_flutter: ^0.3.1
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
+  analyzer: 14.5.0
+  package_config: ^2.2.0
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
@@ -86,6 +109,10 @@ dev_dependencies:
   riverpod_generator: ^4.0.9
   riverpod_lint: ^3.1.9
   flutter_launcher_icons: ^0.14.4
+  drift_dev: ^2.35.1
+  sqlite3: ^3.7.0
+  cross_file: ^0.3.5+5
+  mocktail: ^1.0.5
 
 flutter:
   uses-material-design: true
@@ -96,6 +123,12 @@ flutter:
     - assets/images/avatars/
     - assets/runtimes/byedpi/android/byebyeedpi-strategies.list
     - assets/images/icons/
+    - assets/images/avatar/
+    - assets/images/flags/
+    - assets/images/services/
+    - assets/ca/ca-certificates.crt
+  shaders:
+    - shaders/liquid_glass.frag
   fonts:
     - family: JetBrainsMono
       fonts:

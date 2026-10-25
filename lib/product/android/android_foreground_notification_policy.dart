@@ -38,7 +38,7 @@ class AndroidForegroundNotificationPolicy {
     }
 
     final displayHints = ProductProviderAdvisory.fromProfile(profile).display;
-    final profileName = profile.label ?? profile.id;
+    final profileName = profile.label;
     final serviceName = displayHints.serviceName;
     final serverGroupName = displayHints.serverInfoGroupName;
     final serverName = _resolveServerName(
@@ -54,10 +54,7 @@ class AndroidForegroundNotificationPolicy {
     );
   }
 
-  String buildTitle(
-    Profile? profile, {
-    Iterable<Group> groups = const [],
-  }) =>
+  String buildTitle(Profile? profile, {Iterable<Group> groups = const []}) =>
       buildSnapshot(profile, groups: groups).title;
 
   String? buildTitleForProxyChange(

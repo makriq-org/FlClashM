@@ -1,0 +1,105 @@
+part of 'database.dart';
+
+@DataClassName('RawScript')
+class Scripts extends Table {
+  @override
+  String get tableName => 'scripts';
+
+  IntColumn get id => integer()();
+
+  TextColumn get label => text()();
+  TextColumn get content => text().withDefault(const Constant(''))();
+
+  DateTimeColumn get lastUpdateTime => dateTime()();
+
+  TextColumn get url => text().nullable()();
+
+  IntColumn get order => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftAccessor(tables: [Scripts])
+class ScriptsDao extends DatabaseAccessor<Database> with _$ScriptsDaoMixin {
+  ScriptsDao(super.attachedDatabase);
+
+  Selectable<Script> query() {
+    return scripts.readable(
+      (row) => row.toScript(),
+      orderBy: [
+        (t) => OrderingTerm(expression: t.order, nulls: NullsOrder.last),
+        (t) => OrderingTerm.asc(t.id),
+      ],
+    );
+  }
+
+  Future<void> putAll(Iterable<ScriptsCompanion> items) async {
+    await batch((b) async {
+      b.insertAllOnConflictUpdate(scripts, items);
+    });
+  }
+
+  Selectable<Script> get(int scriptId) {
+    return scripts.readable(
+      (row) => row.toScript(),
+      where: (t) => t.id.equals(scriptId),
+    );
+  }
+
+  Selectable<int> ids() {
+    final query = scripts.selectOnly()..addColumns([scripts.id]);
+    return query.map((row) => row.read(scripts.id)!);
+  }
+
+  Selectable<String> fileNames() => ids().map((id) => '$id.js');
+
+  Future<void> setAll(Iterable<Script> scripts) async {
+    await batch((b) async {
+      await setAllWithBatch(b, scripts);
+    });
+  }
+
+  void putAllWithBatch(Batch batch, Iterable<Script> scripts) {
+    batch.insertAllOnConflictUpdate(
+      this.scripts,
+      scripts.map((item) => item.toCompanion()),
+    );
+  }
+
+  Future<void> setAllWithBatch(Batch batch, Iterable<Script> scripts) async {
+    final List<ScriptsCompanion> items = [];
+    final List<int> ids = [];
+    for (final script in scripts) {
+      ids.add(script.id);
+      items.add(script.toCompanion());
+    }
+    this.scripts.setAll(batch, items, deleteFilter: (t) => t.id.isNotIn(ids));
+  }
+}
+
+extension RawScriptExt on RawScript {
+  Script toScript() {
+    return Script(
+      id: id,
+      label: label,
+      source: content,
+      lastUpdateTime: lastUpdateTime,
+      url: url,
+      order: order,
+    );
+  }
+}
+
+extension ScriptsCompanionExt on Script {
+  ScriptsCompanion toCompanion([int? order]) {
+    return ScriptsCompanion.insert(
+      id: Value(id),
+      label: label,
+      content: Value(source),
+      lastUpdateTime: lastUpdateTime,
+      url: Value(url),
+      order: Value(order ?? this.order),
+    );
+  }
+}

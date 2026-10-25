@@ -9,9 +9,8 @@ final class DiagnosticFileWriter {
     required this.source,
     this.maxFileBytes = 512 * 1024,
     this.maxFiles = 4,
-  })  : assert(
-            maxFileBytes > 0, 'Diagnostic files must have a positive limit.'),
-        assert(maxFiles > 0, 'At least one diagnostic file must be retained.');
+  }) : assert(maxFileBytes > 0, 'Diagnostic files must have a positive limit.'),
+       assert(maxFiles > 0, 'At least one diagnostic file must be retained.');
 
   final Directory directory;
   final String source;

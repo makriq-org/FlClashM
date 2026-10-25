@@ -13,10 +13,7 @@ const byedpiStrategyListAssetPath =
     '$byedpiBundledAssetRoot/byebyeedpi-strategies.list';
 
 class ByedpiReleaseAsset {
-  const ByedpiReleaseAsset({
-    required this.abi,
-    required this.cliArch,
-  });
+  const ByedpiReleaseAsset({required this.abi, required this.cliArch});
 
   final String abi;
   final String cliArch;
@@ -25,16 +22,7 @@ class ByedpiReleaseAsset {
 }
 
 const byedpiReleaseAssets = <String, ByedpiReleaseAsset>{
-  'armeabi-v7a': ByedpiReleaseAsset(
-    abi: 'armeabi-v7a',
-    cliArch: 'arm',
-  ),
-  'arm64-v8a': ByedpiReleaseAsset(
-    abi: 'arm64-v8a',
-    cliArch: 'arm64',
-  ),
-  'x86_64': ByedpiReleaseAsset(
-    abi: 'x86_64',
-    cliArch: 'amd64',
-  ),
+  'armeabi-v7a': ByedpiReleaseAsset(abi: 'armeabi-v7a', cliArch: 'arm'),
+  'arm64-v8a': ByedpiReleaseAsset(abi: 'arm64-v8a', cliArch: 'arm64'),
+  'x86_64': ByedpiReleaseAsset(abi: 'x86_64', cliArch: 'amd64'),
 };

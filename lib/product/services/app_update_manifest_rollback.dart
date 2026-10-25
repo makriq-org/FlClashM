@@ -62,8 +62,5 @@ class SharedPreferencesAppUpdateManifestRollbackGuard
       publishedAtMillis < 0) {
     throw const FormatException('Invalid app update rollback state.');
   }
-  return (
-    versionCode: versionCode,
-    publishedAtMillis: publishedAtMillis,
-  );
+  return (versionCode: versionCode, publishedAtMillis: publishedAtMillis);
 }

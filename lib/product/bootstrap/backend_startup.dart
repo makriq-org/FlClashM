@@ -8,7 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../common/common.dart';
 import '../../l10n/l10n.dart';
 import '../../state.dart';
-import '../backend/backend_errors.dart';
+import '../backend/backend.dart';
 import '../diagnostics/product_diagnostic_exporter.dart';
 
 /// Startup that keeps the UI reachable when the backend cannot be opened: a
@@ -102,7 +102,7 @@ Future<void> presentBackendStartup(BackendStartup startup) async {
 }
 
 /// Exports the local diagnostic archive without the backend.
-Future<bool> exportStartupLogs() async {
+Future<bool> exportStartupLogs({bool backendAvailable = false}) async {
   await fileLogger.flush();
   final info = await PackageInfo.fromPlatform();
   final data = await productDiagnosticExporter.buildArchive(
@@ -111,8 +111,15 @@ Future<bool> exportStartupLogs() async {
       appVersion: info.version,
       buildNumber: info.buildNumber,
       appTag: globalState.appVersionTag,
-      coreVersion: globalState.coreVersion ?? '',
-      runtime: const {'uiAttached': false, 'backendAvailable': false},
+      coreVersion: globalState.coreVersion,
+      runtime: {
+        'uiAttached': backendAvailable,
+        'backendAvailable': backendAvailable,
+        if (backendAvailable)
+          ...Map<String, Object?>.from(
+            backendClient.snapshot['runtime'] as Map? ?? {},
+          ),
+      },
     ),
   );
   final fileName = utils.logFile.replaceFirst(RegExp(r'\.log$'), '.zip');
@@ -192,7 +199,10 @@ class _BackendStartupPage extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                Text(l10n.backendStartupFailedDesc, textAlign: TextAlign.center),
+                Text(
+                  l10n.backendStartupFailedDesc,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 12),
                 ValueListenableBuilder<Object?>(
                   valueListenable: startup.error,

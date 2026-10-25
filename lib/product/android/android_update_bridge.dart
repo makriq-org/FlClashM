@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../clash/clash.dart';
 import '../../common/common.dart';
 import '../../state.dart';
+import '../../ui/context.dart';
 import '../../widgets/dialog.dart';
 import '../backend/backend.dart';
 import '../services/app_update_manifest.dart';
@@ -822,7 +823,9 @@ Widget _preReleaseChip(BuildContext context) => Chip(
   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
   clipBehavior: Clip.antiAlias,
   labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-  side: BorderSide(color: Theme.of(context).dividerColor.opacity15),
+  side: BorderSide(
+    color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+  ),
   labelStyle: Theme.of(context).textTheme.bodyMedium,
   label: Text(appLocalizations.preReleaseLabel),
 );

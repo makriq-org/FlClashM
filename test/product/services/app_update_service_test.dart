@@ -537,7 +537,7 @@ void main() {
 
     setUp(() {
       tempDir = Directory.systemTemp.createTempSync('app-update-service-');
-      globalState.isPre = false;
+      globalState.appEnv = 'stable';
     });
 
     tearDown(() {

@@ -114,9 +114,8 @@ final class DiagnosticArchiveBuilder {
     }
 
     final manifestBytes = utf8.encode(
-      const JsonEncoder.withIndent(
-        '  ',
-      ).convert(manifest.toJson(files: fileEntries)),
+      const JsonEncoder.withIndent('  ')
+          .convert(manifest.toJson(files: fileEntries)),
     );
     archive.addFile(
       ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
