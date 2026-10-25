@@ -11,14 +11,15 @@ void main(List<String> args) async {
     }
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: 'rust',
-      extraCargoEnvironmentVariables: _bindgenEnvironment(input),
+      extraCargoEnvironmentVariables: bindgenEnvironment(input),
     ).run(input: input, output: output);
   });
 }
 
 // rquickjs runs bindgen on Android, which must load the NDK's libclang; Linux
-// NDKs before r26 keep it under lib64, later ones and every macOS NDK under lib.
-Map<String, String> _bindgenEnvironment(BuildInput input) {
+// NDKs before r26 keep it under lib64, later ones and every macOS NDK under lib;
+// Windows keeps libclang.dll under bin.
+Map<String, String> bindgenEnvironment(BuildInput input) {
   if (!input.config.buildCodeAssets ||
       input.config.code.targetOS != OS.android) {
     return const {};
@@ -28,7 +29,7 @@ Map<String, String> _bindgenEnvironment(BuildInput input) {
     return const {};
   }
   final llvmRoot = File.fromUri(compiler).parent.parent;
-  for (final name in const ['lib', 'lib64']) {
+  for (final name in const ['lib', 'lib64', 'bin']) {
     final directory = Directory(
       '${llvmRoot.path}${Platform.pathSeparator}$name',
     );
@@ -40,7 +41,7 @@ Map<String, String> _bindgenEnvironment(BuildInput input) {
     }
   }
   throw StateError(
-    'No libclang under ${llvmRoot.path} (lib or lib64); the NDK Flutter '
+    'No libclang under ${llvmRoot.path} (lib, lib64 or bin); the NDK Flutter '
     'passed cannot run bindgen for rquickjs',
   );
 }
