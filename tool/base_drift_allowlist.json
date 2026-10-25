@@ -2294,6 +2294,46 @@
       "path": "lib/ui/flutter_material_compat.dart",
       "bucket": "budget",
       "reason": "Совместимые локализации и тема Flutter Material позволяют существующим fork окнам обновления и WebView работать внутри нового material_ui app без второго Navigator."
+    },
+    {
+      "path": "lib/providers/actions/geo_resource.dart",
+      "bucket": "budget",
+      "reason": "Обновление Geo завершается по terminal Go receipt вместо отсутствующих upstream scheduler events; индикатор снимается и при ошибке."
+    },
+    {
+      "path": "core/backend_resource.go",
+      "bucket": "budget",
+      "reason": "Runtime resource export разрешает только имя/тип текущего provider и чтение bounded файлов в trusted cache через os.Root; каталог и произвольные platform paths недоступны."
+    },
+    {
+      "path": "core/backend_resource_test.go",
+      "bucket": "budget",
+      "reason": "Runtime resource export разрешает только имя/тип текущего provider и чтение bounded файлов в trusted cache через os.Root; каталог и произвольные platform paths недоступны."
+    },
+    {
+      "path": "core/backend/service/CONTRACT.md",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/backend/service/resource_export.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/backend/service/resource_export_test.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/profilecodec/dump.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/profilecodec/dump_test.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
     }
   ]
 }

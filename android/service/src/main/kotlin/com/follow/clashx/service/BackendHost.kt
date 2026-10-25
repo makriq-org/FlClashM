@@ -244,12 +244,18 @@ object BackendHost {
     }
 
     private fun installBundledGeo() {
-        for (name in listOf("geoip.metadb", "ASN.mmdb", "GeoIP.dat", "GeoSite.dat")) {
+        val bundled = mapOf(
+            "geoip.metadb" to "GEOIP.metadb",
+            "ASN.mmdb" to "ASN.mmdb",
+            "GeoIP.dat" to "GEOIP.dat",
+            "GeoSite.dat" to "GEOSITE.dat",
+        )
+        for ((name, asset) in bundled) {
             val target = File(application.filesDir, name)
             if (target.exists()) continue
             val temporary = File.createTempFile("geo-", ".tmp", application.filesDir)
             try {
-                application.assets.open("flutter_assets/assets/data/$name").use { input ->
+                application.assets.open("flutter_assets/assets/data/$asset").use { input ->
                     FileOutputStream(temporary).use { output -> input.copyTo(output); output.fd.sync() }
                 }
                 check(temporary.renameTo(target)) { "bundled geo installation failed" }

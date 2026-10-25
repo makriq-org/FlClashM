@@ -38,11 +38,9 @@ class GeoResourceAction extends _$GeoResourceAction {
         .stop(geoResource.updatingKey, current);
   }
 
-  /// Completes once the Core has accepted the update, not once it finishes.
-  /// Completion arrives as a geo-update event through [handleCoreUpdate];
-  /// callers that need it watch [isUpdatingProvider] for the key to clear.
-  /// A request the Core turns down leaves an update already running as it
-  /// was.
+  /// Go completes its receipt after the download and engine effect finish.
+  /// Presentation state follows that receipt rather than upstream scheduler
+  /// events, which our backend does not emit.
   Future<void> updateGeoResource(
     GeoResource geoResource, {
     bool announceSuccess = true,
@@ -56,6 +54,7 @@ class GeoResourceAction extends _$GeoResourceAction {
       if (message.isNotEmpty) {
         throw MessageException(message);
       }
+      handleCoreUpdate(geoResource.name, false, false, null);
     } catch (_) {
       if (previous != null) {
         _manualUpdates[geoResource] = previous;

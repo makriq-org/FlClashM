@@ -112,7 +112,13 @@ class CoreLib extends CoreHandlerInterface {
         ),
         CoreMethod.updateGeoData => (
           'geo.update',
-          <String, dynamic>{'geo-type': arguments},
+          <String, dynamic>{
+            'geo-type': switch (arguments) {
+              'GEOIP' => 'GeoIp',
+              'GEOSITE' => 'GeoSite',
+              _ => arguments,
+            },
+          },
         ),
         _ => throw StateError('Unsupported engine command'),
       };
@@ -134,6 +140,7 @@ class CoreLib extends CoreHandlerInterface {
         // Legacy engine helpers sometimes wrap JSON in a string.
         result = decodeLegacyResult(result);
       }
+      result = normalizeLegacyJson(result);
       if (method == CoreMethod.getProxies &&
           result is Map &&
           !result.containsKey('proxies')) {
@@ -149,4 +156,15 @@ class CoreLib extends CoreHandlerInterface {
 final _lib = CoreLib();
 CoreLib? get coreLib => Platform.isAndroid ? _lib : null;
 
-dynamic decodeLegacyResult(String value) => jsonDecode(value);
+dynamic decodeLegacyResult(String value) =>
+    value.isEmpty ? null : jsonDecode(value);
+
+/// MethodChannel maps have dynamic keys; generated JSON models require strings
+/// at every level, including empty maps inside a snapshot.
+dynamic normalizeLegacyJson(Object? value) => switch (value) {
+  Map value => value.map<String, dynamic>(
+    (key, value) => MapEntry(key as String, normalizeLegacyJson(value)),
+  ),
+  List value => value.map(normalizeLegacyJson).toList(),
+  _ => value,
+};

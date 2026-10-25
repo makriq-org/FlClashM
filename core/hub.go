@@ -761,9 +761,10 @@ func handleGetExternalProviders() string {
 func handleGetExternalProvider(externalProviderName string) string {
 	runLock.Lock()
 	defer runLock.Unlock()
-	externalProvider, exist := externalProviders[externalProviderName]
+	// Provider-loaded events can arrive before the UI has requested the list.
+	externalProvider, exist := getExternalProvidersRaw()[externalProviderName]
 	if !exist {
-		return ""
+		return "null"
 	}
 	e, err := toExternalProvider(externalProvider)
 	if err != nil {
