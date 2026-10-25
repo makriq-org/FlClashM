@@ -77,7 +77,7 @@ bool customProfileTargetIsValid(Ref ref, String profileId, String? target) {
 /// A rule line joins its fields with commas, so the core reads a name holding
 /// one as cut short.
 bool _isRuleLineTarget(CustomProfileData data, String? target) =>
-    data.isRuleTarget(target) && !target!.contains(',');
+    data.isRuleLineTarget(target);
 
 @riverpod
 bool customProfileProxyProviderIsValid(
@@ -809,7 +809,7 @@ List<CustomIssue> proxyGroupIssues(ProxyGroup group, CustomProfileData data) {
   final invalidEmptyFallback =
       emptyFallback.isNotEmpty &&
       !reservedProxyNames.contains(emptyFallback) &&
-      !data.namedProxies.contains(emptyFallback);
+      !data.proxies.contains(emptyFallback);
   final missingProviders = use
       .where((item) => !data.proxyProviders.contains(item))
       .toList();

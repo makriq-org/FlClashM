@@ -27,6 +27,32 @@ func customRequest(t *testing.T) (Compiler, Input) {
 	data["clashProviders"] = []authoring.Object{row(Object{"id": 6, "label": "Domains", "format": "yaml", "behavior": "domain", "contentBase64": base64.StdEncoding.EncodeToString([]byte("payload: ['+.example.com']"))})}
 	return c, Input{Version: 1, Profile: &RawProfile{ID: "custom-id", SourceMissing: true, Metadata: Object{"type": "custom", "label": "Custom", "providerHeaders": Object{"flclashm-androidsecure": "true"}}}, Settings: Object{}, Authoring: data, Profiles: map[string]RawProfile{"provider-id": {ID: "provider-id", Text: "proxies: [{name: DPI, type: byedpi, mode: manual, args: '--disorder 1'}]", Metadata: Object{"label": "Subscription"}}}}
 }
+func TestCustomCompileKeepsRuleAndFallbackProxyDependencies(t *testing.T) {
+	for _, mode := range []string{"rule", "empty-fallback"} {
+		t.Run(mode, func(t *testing.T) {
+			c, request := customRequest(t)
+			request.Authoring["customProxies"] = append(request.Authoring["customProxies"],
+				row(Object{"id": 7, "definition": Object{"name": "Hop", "type": "socks5", "server": "hop.test", "port": 1080}}))
+			request.Authoring["proxyDialers"] = []authoring.Object{row(Object{"profileId": "custom-id", "proxyId": 2, "target": "Hop"})}
+			request.Authoring["rules"] = []authoring.Object{row(Object{"id": 4, "profileId": "custom-id", "ruleAction": "MATCH", "ruleTarget": "Unused"})}
+			request.Authoring["proxyGroups"] = nil
+			if mode == "empty-fallback" {
+				request.Authoring["proxyGroups"] = []authoring.Object{row(Object{"id": 3, "profileId": "custom-id", "name": "Proxy", "type": "select", "proxies": []any{"DIRECT"}, "empty-fallback": "Unused"})}
+				request.Authoring["rules"][0]["ruleTarget"] = authoring.Value("Proxy")
+			}
+			// A different profile must not pull its dependencies into this one.
+			request.Authoring["rules"] = append(request.Authoring["rules"], row(Object{"id": 8, "profileId": "other", "ruleAction": "MATCH", "ruleTarget": "Server"}))
+			result := prepared(t, c, request)
+			var names []string
+			for _, proxy := range list(result.Config["proxies"]) {
+				names = append(names, text(object(proxy)["name"]))
+			}
+			if !reflect.DeepEqual(names, []string{"Unused", "Hop"}) {
+				t.Fatalf("referenced proxies and dialer dependencies must survive, unrelated proxies must not: %v", names)
+			}
+		})
+	}
+}
 func TestCustomCompileUsesValidatorSecurityAndExternalProviderNodes(t *testing.T) {
 	c, request := customRequest(t)
 	calls := 0

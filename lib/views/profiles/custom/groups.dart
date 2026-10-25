@@ -627,7 +627,7 @@ class _EditProxyGroupViewState extends ConsumerState<EditProxyGroupView> {
             final proxies = ref.watch(
               customProfileDataProvider(
                 profileId,
-              ).select((data) => data?.namedProxies ?? const <String>{}),
+              ).select((data) => data?.proxies ?? const <String>{}),
             );
             return SelectionSheet<String>(
               title: context.appLocalizations.emptyFallback,

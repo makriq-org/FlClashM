@@ -866,11 +866,17 @@ extension CustomProfileDataExt on CustomProfileData {
         if (proxies.contains(name)) name,
   });
 
-  /// A local proxy reaches the config only when a group names it.
+  /// DNS/NTP targets retain the profile's explicitly named proxy scope.
   bool isRuleTarget(String? name) =>
       ruleTargets.contains(name) ||
       name == GroupName.GLOBAL.name ||
       namedProxies.contains(name);
+
+  /// Go includes local proxies referenced directly by profile rule lines.
+  bool isRuleLineTarget(String? name) =>
+      name != null &&
+      !name.contains(',') &&
+      (isRuleTarget(name) || proxies.contains(name));
 }
 
 @freezed

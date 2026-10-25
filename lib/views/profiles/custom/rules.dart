@@ -383,7 +383,7 @@ class _AddOrEditRuleViewState extends ConsumerState<_AddOrEditRuleView> {
                   in profileData?.proxyGroups ?? const <ProxyGroup>[])
                 item.name: item.type.name,
             };
-            final named = profileData?.namedProxies ?? const <String>{};
+            final named = profileData?.proxies ?? const <String>{};
             final proxyTypes = {
               for (final item
                   in ref.watch(customProxiesProvider).value ??

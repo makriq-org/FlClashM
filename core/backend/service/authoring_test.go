@@ -148,6 +148,35 @@ func TestAuthoringUIContractCustomInspectRenderPreviewAndCAS(t *testing.T) {
 	request(t, app, "validate-legacy", "profile.validate", map[string]any{"source": "rules: ['MATCH,DIRECT']"})
 	waitDomain(t, app, "validate-legacy")
 }
+func TestAuthoringImportKeepsRuleAndFallbackOnlyProxies(t *testing.T) {
+	for _, mode := range []string{"rule", "empty-fallback"} {
+		t.Run(mode, func(t *testing.T) {
+			app, _ := testAuthoringApp(t)
+			source := "proxies: [{name: Solo, type: socks5, server: example.com, port: 1080}]\n"
+			if mode == "rule" {
+				source += "rules: ['MATCH,Solo']\n"
+			} else {
+				source += "proxy-groups: [{name: Proxy, type: select, proxies: [DIRECT], empty-fallback: Solo}]\nrules: ['MATCH,Proxy']\n"
+			}
+			snapshot := authoringRequest(t, app)
+			request(t, app, "import-dependency", "authoring.import", map[string]any{"source": source, "profileId": "dependency", "expectedRevision": snapshot.Revision})
+			waitDomain(t, app, "import-dependency")
+			blob, err := app.renderProfile(context.Background(), "dependency")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config compile.Object
+			if err := json.Unmarshal(readBlobBytes(t, app, &blob), &config); err != nil {
+				t.Fatal(err)
+			}
+			proxies := config["proxies"].([]any)
+			if len(proxies) != 1 || proxies[0].(map[string]any)["name"] != "Solo" {
+				t.Fatalf("import/render lost the referenced proxy: %v", config)
+			}
+		})
+	}
+}
+
 func TestAuthoringImportRenamesReferencesAndRoundTripsBackup(t *testing.T) {
 	app, opts := testAuthoringApp(t)
 	request(t, app, "existing-custom", "profile.put", map[string]any{"metadata": map[string]any{"id": "existing", "type": "custom", "label": "Existing"}})

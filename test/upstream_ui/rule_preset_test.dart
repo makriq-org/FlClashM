@@ -8,6 +8,24 @@ import 'package:material_ui/material_ui.dart';
 import '../helpers/test_app.dart';
 
 void main() {
+  test('custom rules can target a local proxy without a group membership', () {
+    const data = CustomProfileData(
+      ruleTargets: {'DIRECT', 'Proxy'},
+      proxies: {'Solo'},
+    );
+    expect(data.namedProxies, isEmpty);
+    expect(data.isRuleLineTarget('Solo'), isTrue);
+    expect(data.isRuleLineTarget('Proxy'), isTrue);
+    expect(data.isRuleLineTarget('Missing'), isFalse);
+    expect(data.isRuleLineTarget(null), isFalse);
+    expect(data.isRuleTarget('Solo'), isFalse);
+    expect(
+      const CustomProfileData(proxies: {'Bad,Name'})
+          .isRuleLineTarget('Bad,Name'),
+      isFalse,
+    );
+  });
+
   group('RulePreset', () {
     test('every raw rule round-trips through Rule.parse', () {
       for (final preset in RulePreset.values) {

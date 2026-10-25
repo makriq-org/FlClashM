@@ -763,7 +763,7 @@
     {
       "path": "lib/models/clash_config.dart",
       "bucket": "budget",
-      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+      "reason": "Абстрактные модели приведены к Freezed 4; прямые цели правил согласованы с Go без расширения области DNS/NTP."
     },
     {
       "path": "lib/models/common.dart",
@@ -2183,7 +2183,7 @@
     {
       "path": "lib/providers/state/custom.dart",
       "bucket": "budget",
-      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+      "reason": "Тонкий UI adapter сохраняет строковые IDs и Go-backed данные; цели правил и резервные выходы согласованы с зависимостями Go compiler."
     },
     {
       "path": "lib/providers/state/profile.dart",
@@ -2243,7 +2243,7 @@
     {
       "path": "lib/views/profiles/custom/groups.dart",
       "bucket": "budget",
-      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+      "reason": "Экран адаптирован к строковым profileId и Go snapshots/commands; резервный выход выбирается среди локальных узлов без обязательного членства в группе."
     },
     {
       "path": "lib/views/profiles/custom/members.dart",
@@ -2258,7 +2258,7 @@
     {
       "path": "lib/views/profiles/custom/rules.dart",
       "bucket": "budget",
-      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+      "reason": "Экран адаптирован к строковым profileId и Go snapshots/commands; прямой целью правила может быть локальный узел вне групп."
     },
     {
       "path": "lib/views/profiles/edit.dart",

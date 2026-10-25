@@ -36,11 +36,21 @@ func (c *Compiler) customConfig(ctx context.Context, request Input) (Object, err
 		for _, proxy := range list(group["proxies"]) {
 			named[text(proxy)] = true
 		}
+		if fallback := text(group["empty-fallback"]); fallback != "" {
+			named[fallback] = true
+		}
 		for _, provider := range list(group["use"]) {
 			used[text(provider)] = true
 		}
 		allProxies = allProxies || group["include-all-proxies"] == true
 		allProviders = allProviders || group["include-all-providers"] == true
+	}
+	profileRules := authoring.Scoped(request.Authoring["rules"], id)
+	for _, rule := range profileRules {
+		// SUB-RULE names a rule section rather than an outbound.
+		if target := authoring.String(rule, "ruleTarget"); target != "" && authoring.Action(rule) != "SUB-RULE" {
+			named[target] = true
+		}
 	}
 	dialers := map[string]string{}
 	for _, row := range authoring.Scoped(request.Authoring["proxyDialers"], id) {
@@ -143,7 +153,7 @@ func (c *Compiler) customConfig(ctx context.Context, request Input) (Object, err
 		}
 	}
 	rules := []any{}
-	for _, row := range authoring.Scoped(request.Authoring["rules"], id) {
+	for _, row := range profileRules {
 		line, err := authoring.RuleLine(row)
 		if err != nil {
 			return nil, err
