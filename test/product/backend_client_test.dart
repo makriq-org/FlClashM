@@ -95,6 +95,93 @@ class ClientHost {
 }
 
 void main() {
+  test(
+    'source epoch changes only on reconnect or backend replacement',
+    () async {
+      final host = ClientHost();
+      final reconnects = StreamController<void>.broadcast();
+      final client = BackendClient(
+        transport: host.call,
+        events: host.events.stream,
+        reconnects: reconnects.stream,
+      );
+      addTearDown(host.close);
+      addTearDown(reconnects.close);
+      addTearDown(client.detach);
+      await client.attach();
+      final initial = client.sourceRevision;
+      await client.refresh();
+      expect(client.sourceRevision, initial);
+      host.sequence++;
+      host.events.add({
+        'apiVersion': 1,
+        'seq': host.sequence,
+        'runtime': host.runtime,
+        'catalogRevision': host.revision,
+      });
+      expect(client.sourceRevision, initial);
+      var refreshed = client.changes.first;
+      reconnects.add(null);
+      await refreshed;
+      final reconnected = client.sourceRevision;
+      expect(reconnected, greaterThan(initial));
+      host.instance = 'replacement';
+      await client.refresh();
+      final replaced = client.sourceRevision;
+      expect(replaced, greaterThan(reconnected));
+      refreshed = client.changes.first;
+      reconnects.add(null);
+      await refreshed;
+      expect(client.sourceRevision, greaterThan(replaced));
+    },
+  );
+
+  for (final failRead in [false, true]) {
+    test(
+      'blob cleanup preserves export result, failed read=$failRead',
+      () async {
+        final host = ClientHost()..blobs.addAll([1, 2, 3]);
+        final client = BackendClient(
+          transport: (request) async {
+            switch (request['method']) {
+              case 'profile.export':
+                return {
+                  'apiVersion': 1,
+                  'result': {
+                    'status': 'succeeded',
+                    'blob': {'token': 'private-token', 'size': 3},
+                  },
+                };
+              case 'blob.delete':
+                throw const BackendException('cleanup', 'cleanup failed');
+              case 'blob.read' when failRead:
+                throw const BackendException('primary', 'read failed');
+            }
+            return host.call(request);
+          },
+          events: host.events.stream,
+        );
+        addTearDown(host.close);
+        addTearDown(client.detach);
+        if (failRead) {
+          await expectLater(
+            client.exportProfile('one'),
+            throwsA(
+              isA<BackendException>().having(
+                (e) => e.code,
+                'primary error',
+                'primary',
+              ),
+            ),
+          );
+        } else {
+          expect(await client.exportProfile('one'), [1, 2, 3]);
+        }
+      },
+    );
+  }
+
+
   for (final method in ['profile.put', 'profile.import.file']) {
     for (final concurrent in [false, true]) {
       test(

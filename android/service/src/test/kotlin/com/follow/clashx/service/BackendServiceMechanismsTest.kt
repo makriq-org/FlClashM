@@ -92,7 +92,8 @@ class BackendServiceMechanismsTest {
     @Test fun onlyStateEventsRefreshPresentation() {
         assertTrue(BackendEvents.refreshesPresentation("backend"))
         assertTrue(BackendEvents.refreshesPresentation("delay"))
-        for (type in listOf("log", "request", "loaded", "runtimeLog", "backendPlatform", "", null)) {
+        assertTrue(BackendEvents.refreshesPresentation("routeChanged"))
+        for (type in listOf("log", "request", "dns", "loaded", "runtimeLog", "backendPlatform", "", null)) {
             assertFalse(type.toString(), BackendEvents.refreshesPresentation(type))
         }
     }

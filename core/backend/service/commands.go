@@ -22,6 +22,46 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	apply := false
 	switch method {
+	case "provider.export", "authoring.resource.export":
+		return a.exportResource(ctx, method, params)
+	case "storage.clearCache", "storage.collect", "profile.clearCache":
+		return a.cacheCommand(ctx, method, params, operationID)
+	case "authoring.replace":
+		var err error
+		result, err = a.replaceAuthoring(ctx, params, operationID)
+		if err != nil {
+			return result, err
+		}
+		if result.RuntimeOperationID != "" {
+			return result, nil
+		}
+		apply = true
+	case "authoring.import":
+		var err error
+		result, err = a.importAuthoring(ctx, params)
+		if err != nil {
+			return result, err
+		}
+		apply = a.isCurrent(result.ProfileID)
+	case "resource.put", "resource.refresh", "authoring.resource.update":
+		var err error
+		result, err = a.resourceMutation(ctx, method, params)
+		if err != nil {
+			return result, err
+		}
+		apply = true
+	case "profile.render":
+		var p struct {
+			ProfileID string `json:"profileId"`
+		}
+		if err := decodeParams(params, &p); err != nil {
+			return result, err
+		}
+		blob, err := a.renderProfile(ctx, p.ProfileID)
+		if err != nil {
+			return result, err
+		}
+		return Receipt{Blob: &blob, ProfileID: p.ProfileID, Revision: a.profiles.Snapshot().Revision}, nil
 	case "data.reset":
 		if err := decodeParams(params, &struct{}{}); err != nil {
 			return result, err
@@ -168,6 +208,10 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
+		if string(record.Metadata["type"]) == `"custom"` {
+			blob, err := a.renderProfile(ctx, request.ProfileID)
+			return Receipt{Blob: &blob, ProfileID: request.ProfileID, Revision: record.Revision}, err
+		}
 		blob, err := a.newBlob()
 		if err != nil {
 			return result, err
@@ -200,6 +244,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		return result, err
 	case "profile.import.file":
 		var request struct {
+			AgeSecretKey     string          `json:"ageSecretKey"`
 			Token            string          `json:"token"`
 			Metadata         profiles.Object `json:"metadata"`
 			Select           bool            `json:"select"`
@@ -207,6 +252,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
+		}
+		if request.Metadata == nil {
+			return result, errors.New("profile metadata is required")
 		}
 		name, err := a.blobPath(request.Token)
 		if err != nil {
@@ -216,7 +264,14 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
-		nested, _ := json.Marshal(map[string]any{"metadata": request.Metadata, "source": string(source), "select": request.Select, "expectedRevision": request.ExpectedRevision})
+		decoded, err := a.readSource(ctx, sourceParams{Source: string(source), AgeSecretKey: request.AgeSecretKey})
+		if err != nil {
+			return result, err
+		}
+		if request.AgeSecretKey != "" {
+			request.Metadata["ageSecretKey"] = jsonValue(request.AgeSecretKey)
+		}
+		nested, _ := json.Marshal(map[string]any{"metadata": request.Metadata, "source": decoded, "select": request.Select, "expectedRevision": request.ExpectedRevision})
 		return a.perform(ctx, "profile.put", nested, operationID)
 	case "settings.patch":
 		var request struct {
@@ -259,6 +314,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Metadata == nil {
 			return result, errors.New("profile metadata is required")
 		}
+		if request.Source == nil && string(request.Metadata["type"]) == `"custom"` && request.ExpectedRevision == 0 {
+			source := "{}"
+			request.Source = &source
+			request.Metadata["autoUpdate"] = jsonValue(false)
+		}
 		var id string
 		_ = json.Unmarshal(request.Metadata["id"], &id)
 		if id == "" {
@@ -287,13 +347,13 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			}
 			apply = true
 		} else {
-			if a.isCurrent(id) {
+			if a.isCurrent(id) || a.currentUsesProfile(id) {
 				if request.Source != nil {
 					apply = true
 				} else {
 					for key := range request.Metadata {
 						switch key {
-						case "selectedMap", "overrideData", "providerHeaders", "label":
+						case "selectedMap", "overrideData", "overrides", "extendType", "scriptId", "matchTarget", "type", "providerHeaders", "label":
 							apply = true
 						}
 					}
@@ -308,6 +368,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
 		}
+		uses := a.currentUsesProfile(request.ProfileID)
 		var err error
 		apply, err = a.profiles.DeleteWithSelection(request.ProfileID, request.ExpectedRevision, func() error {
 			if err := a.operations.disableBootstrap(); err != nil {
@@ -320,6 +381,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
+		apply = apply || uses
 		result.ProfileID = request.ProfileID
 		if result.RuntimeOperationID != "" {
 			return result, nil
@@ -418,7 +480,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			request.Source = string(bytes)
 		}
 		return result, a.validateSource(ctx, request.Source)
-	case "subscription.refresh":
+	case "subscription.refresh", "subscription.update":
 		var request struct {
 			ProfileID     string `json:"profileId"`
 			DeviceHeaders *bool  `json:"deviceHeaders"`

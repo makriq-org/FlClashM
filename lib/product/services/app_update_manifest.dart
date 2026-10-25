@@ -10,8 +10,9 @@ const sourceForgeProjectUrl =
     'https://sourceforge.net/projects/$sourceForgeProjectName';
 const sourceForgeUpdateRootUrl =
     'https://$sourceForgeProjectName.sourceforge.io/update';
-final appUpdateReleaseTagPattern =
-    RegExp(r'^v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$');
+final appUpdateReleaseTagPattern = RegExp(
+  r'^v\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$',
+);
 final appUpdateAndroidApkAssetPattern = RegExp(
   r'-android(?:-([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*))?\.apk$',
 );
@@ -135,18 +136,18 @@ class AppUpdateManifest {
   final List<AppUpdateManifestAsset> assets;
 
   Map<String, dynamic> toJson() => {
-        'schemaVersion': appUpdateManifestSchemaVersion,
-        'channel': channel.wireName,
-        'release': {
-          'tagName': tagName,
-          'versionName': versionName,
-          'versionCode': versionCode,
-          'publishedAt': publishedAt.toUtc().toIso8601String(),
-          'body': body,
-          'htmlUrl': htmlUrl,
-          'assets': assets.map((asset) => asset.toJson()).toList(),
-        },
-      };
+    'schemaVersion': appUpdateManifestSchemaVersion,
+    'channel': channel.wireName,
+    'release': {
+      'tagName': tagName,
+      'versionName': versionName,
+      'versionCode': versionCode,
+      'publishedAt': publishedAt.toUtc().toIso8601String(),
+      'body': body,
+      'htmlUrl': htmlUrl,
+      'assets': assets.map((asset) => asset.toJson()).toList(),
+    },
+  };
 }
 
 class AppUpdateManifestAsset {
@@ -179,14 +180,16 @@ class AppUpdateManifestAsset {
     if (versionCode != null && (versionCode is! int || versionCode <= 0)) {
       throw const FormatException('Invalid app update asset version code.');
     }
-    final urls = rawUrls.map((value) {
-      final url = value?.toString() ?? '';
-      final uri = Uri.tryParse(url);
-      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-        throw const FormatException('Invalid app update asset URL.');
-      }
-      return url;
-    }).toList(growable: false);
+    final urls = rawUrls
+        .map((value) {
+          final url = value?.toString() ?? '';
+          final uri = Uri.tryParse(url);
+          if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+            throw const FormatException('Invalid app update asset URL.');
+          }
+          return url;
+        })
+        .toList(growable: false);
 
     if (!isAppUpdateAndroidApkAssetName(name)) {
       throw const FormatException('Manifest asset is not an Android APK.');
@@ -208,12 +211,12 @@ class AppUpdateManifestAsset {
   final int? versionCode;
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'size': size,
-        'sha256': sha256,
-        'urls': urls,
-        if (versionCode != null) 'versionCode': versionCode,
-      };
+    'name': name,
+    'size': size,
+    'sha256': sha256,
+    'urls': urls,
+    if (versionCode != null) 'versionCode': versionCode,
+  };
 }
 
 class AppUpdateManifestVerifier {
@@ -264,8 +267,7 @@ String appUpdateManifestSignatureUrl(AppUpdateChannel channel) =>
 bool appUpdateReleaseTagMatchesChannel(
   String tagName,
   AppUpdateChannel channel,
-) =>
-    (channel == AppUpdateChannel.prerelease) == tagName.contains('-');
+) => (channel == AppUpdateChannel.prerelease) == tagName.contains('-');
 
 bool isAppUpdateAndroidApkAssetName(String name) =>
     appUpdateAndroidApkAssetPattern.hasMatch(name);

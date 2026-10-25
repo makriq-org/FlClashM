@@ -1,10 +1,11 @@
-.PHONY: deps dev install-dev test analyze analyze-app boundaries actions-pinning release-contract drift check go-check \
+.PHONY: deps generate dev install-dev test analyze analyze-app boundaries actions-pinning release-contract drift check go-check \
 	fetch-upstream release clean cleanLocal android_arm64 android_app \
 	android_stable android_arm64_core
 .NOTPARALLEL: check
 
 ANALYZE_PATHS := lib/product test/product test/tool \
 	tool/check_product_boundaries.dart \
+	tool/check_base_drift.dart tool/generate_flutter.dart \
 	tool/check_actions_pinning.dart \
 	tool/check_release_continuity.dart \
 	tool/check_android_release_artifacts.dart \
@@ -16,6 +17,10 @@ ANALYZE_PATHS := lib/product test/product test/tool \
 
 deps:
 	flutter pub get
+	cd plugins/rust_api && flutter pub get
+
+generate: deps
+	dart run tool/generate_flutter.dart build
 
 dev: deps
 	dart ./setup.dart android --arch arm64 --out core
@@ -25,7 +30,7 @@ install-dev: dev
 	adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 test: deps
-	flutter test test/product test/tool
+	flutter test test/product test/tool test/upstream_ui
 
 analyze: deps
 	flutter analyze --fatal-infos $(ANALYZE_PATHS)

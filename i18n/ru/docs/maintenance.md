@@ -23,6 +23,8 @@ nix develop -c make go-check
 <details>
 <summary>Без Nix и отдельная тестовая установка</summary>
 
+Нативному Rust-редактору нужен NDK r28 или новее с `libclang`. `ANDROID_NDK` задаёт NDK для сборки Go, а Flutter native hooks используют `ANDROID_NDK_HOME`: обе переменные должны указывать на выбранный NDK. Nix и общий setup CI задают их автоматически. При сборке без Nix перед командами ниже задайте `export ANDROID_NDK_HOME="$ANDROID_NDK"`.
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core
@@ -55,7 +57,7 @@ RuntimeCoordinator — единственный владелец изменяе�
 
 При замене backend или восстановлении Binder-соединения живой UI повторяет `ui.attach` с новым `operationId` и `restore: true`. Go восстанавливает присутствие UI и подготовку узлов без повторного `autoRun`; остановленное намерение после явного Stop сохраняется. Без `restore` первое открытие использует обычную политику `autoRun`.
 
-Base-код обращается к `lib/product/**` через `tool/product_touchpoints.json`; виджеты регистрируются в `allowedProductUi`. Экраны `lib/views/**` остаются в базе с минимальными хуками. Прочие base-изменения объясняются в `tool/base_drift_allowlist.json`. Координацию и legacy SharedPreferences как источник состояния в Dart/Kotlin не возвращать.
+Base-код обращается к `lib/product/**` через `tool/product_touchpoints.json`; виджеты регистрируются в `allowedProductUi`. Живые экраны сохраняются в `lib/views/**` без дублирования в product; их можно развивать под архитектуру FlClashM с соблюдением guards и allowlist и регистрацией связей с product в touchpoints. Проверяемые base-изменения объясняются в `tool/base_drift_allowlist.json`; touchpoint не заменяет эту запись. Координацию и legacy SharedPreferences как источник состояния в Dart/Kotlin не возвращать.
 
 <details>
 <summary>Контракты backend при изменении runtime</summary>
@@ -98,16 +100,19 @@ JS работает в Goja без доступа к API платформы, с 
 
 ## 🔄 Обновление апстрима и узлов
 
-Создайте ветку от целевой ветки форка, выполните команды ниже и разрешите конфликты. Имя Dart-пакета остаётся `flclashx`. После merge сразу проверьте base drift; новые пути зарегистрируйте с причиной. Без upstream задайте `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
+Архитектура и надёжность самостоятельного Go backend важнее минимального расхождения с апстримом. Исправления и возможности переносите выборочно; полный merge выбирайте после оценки пользы, конфликтов и влияния на runtime. Границы Flutter ↔ backend и base ↔ product сохраняются.
+
+Создайте ветку от целевой ветки форка. После fetch явно выберите upstream ref (ветку или тег), зафиксируйте полный SHA в описании работы/PR и перенесите выбранные изменения либо выполните обоснованный merge этого SHA. Наш Dart-пакет — `flclashx`; проверьте имя пакета апстрима (например, `fl_clash`) и при необходимости адаптируйте импорты и генерацию.
+
+Сразу проверьте дрейф относительно выбранного SHA командой `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Альтернатива — явный общий предок через `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints и allowlist остаются обязательными. По умолчанию guard и CI используют `upstreamImport.commit` из `tool/base_drift_allowlist.json`. Точные копии сверяются с этим SHA (допустима только замена имени Dart-пакета); остальные base-изменения требуют причины в allowlist, связи с product — также записи в touchpoints. При обновлении pin меняйте fetch в CI. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 
-`tool/prepare_core.sh` пересоздаёт `core/vendor`, применяет патчи без fuzz и проверяет регрессию Mieru. Сборка использует `-mod=vendor`, общий module cache не меняется. Патчи: таймаут закрытого Mieru QUIC, HTTP command gate backend и синхронизация доступа к системному DNS. При обновлении проверяйте каждый патч; удаляйте исправленный апстримом патч с его вызовом, сохраняя vendor для оставшихся.
+`tool/prepare_core.sh` пересоздаёт `core/vendor`, применяет патчи без fuzz и проверяет регрессию Mieru. Сборка использует `-mod=vendor`, общий module cache не меняется. Патчи: HTTP command gate backend и синхронизация доступа к системному DNS. Исправление таймаута закрытого Mieru QUIC вошло в зависимость; отдельно сохраняется регрессионный тест. При обновлении проверяйте каждый патч; удаляйте исправленный апстримом патч с его вызовом, сохраняя vendor для оставшихся.
 
 Версии, исходные коммиты, ABI и SHA-256 узлов закреплены в `lib/product/runtime/*_release.dart`; зависимости — в [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), заметки о сборке — в [ресурсах](../../../assets/runtimes/). Обновление и откат меняют закрепления, зависимости и бинарники вместе; затем пересобираются и проверяются выпускаемые ABI.
 
@@ -207,3 +212,5 @@ https://flclashm.sourceforge.io/update/pre.json
 Максимальные versionCode и время публикации хранятся отдельно по каналам. Старый подписанный каталог отклоняется, Android не допускает понижение APK. Откат — новый исправляющий выпуск с большим кодом. При смене ключа сначала выпускается переходная версия с новым открытым ключом.
 
 </details>
+
+Генерация Flutter/Drift/Riverpod: `nix develop -c make generate`. Wrapper `tool/generate_flutter.dart` каждый раз строит настоящий Flutter SDK summary с `sky_engine/_embedder.yaml`, затем запускает build_runner. Это требуется Nix, где Flutter Dart разрешается в standalone SDK; общий pub cache не меняется. После `build_runner clean` снова используйте wrapper.

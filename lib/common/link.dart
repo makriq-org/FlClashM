@@ -1,55 +1,79 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 
 import 'print.dart';
+import 'protocol.dart';
+import 'string.dart';
 
-typedef InstallConfigCallBack = void Function(String url);
+String? profileUrlFromQrCodes(Iterable<String?> values) {
+  for (final value in values) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) {
+      continue;
+    }
+    if (text.isUrl || text.isShareLink) {
+      return text;
+    }
+    final uri = Uri.tryParse(text);
+    if (uri == null || !protocolSchemes.contains(uri.scheme)) {
+      continue;
+    }
+    final url = _installConfigUrl(uri);
+    if (url != null && url.isUrl) {
+      return url;
+    }
+  }
+  return null;
+}
+
+String? _installConfigUrl(Uri uri) {
+  if (uri.host != 'install-config') {
+    return null;
+  }
+  final url = uri.queryParameters['url']?.trim();
+  return url == null || url.isEmpty ? null : url;
+}
 
 class LinkManager {
-  factory LinkManager() {
-    _instance ??= LinkManager._internal();
-    return _instance!;
-  }
-
-  LinkManager._internal() {
-    _appLinks = AppLinks();
-  }
   static LinkManager? _instance;
-  late AppLinks _appLinks;
   StreamSubscription? subscription;
-  Uri? _lastHandledUri;
-  DateTime? _lastHandledAt;
+  Uri? _pendingUri;
 
-  Future<void> initAppLinksListen(installConfigCallBack) async {
-    commonPrint.log("initAppLinksListen");
-    destroy();
-    subscription = _appLinks.uriLinkStream.listen(
-      (uri) => _handleInstallConfigUri(uri, installConfigCallBack),
-    );
-    final initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) {
-      _handleInstallConfigUri(initialUri, installConfigCallBack);
+  LinkManager._internal();
+
+  @visibleForTesting
+  Stream<Uri> Function() uriLinkStream = () => AppLinks().uriLinkStream;
+
+  /// Linux argv: the gtk plugin hooks GApplication too late to see it.
+  void seedInitialLink(List<String> args) {
+    for (final arg in args) {
+      final uri = Uri.tryParse(arg);
+      if (uri != null && protocolSchemes.contains(uri.scheme)) {
+        _pendingUri = uri;
+        return;
+      }
     }
   }
 
-  void _handleInstallConfigUri(
-    Uri uri,
-    InstallConfigCallBack installConfigCallBack,
-  ) {
-    final now = DateTime.now();
-    if (_lastHandledUri == uri &&
-        _lastHandledAt != null &&
-        now.difference(_lastHandledAt!) < const Duration(seconds: 1)) {
-      return;
+  Future<void> initAppLinksListen(
+    Function(String url) installConfigCallBack,
+  ) async {
+    destroy();
+    subscription = uriLinkStream().listen((uri) {
+      _handle(uri, installConfigCallBack);
+    });
+    final pending = _pendingUri;
+    _pendingUri = null;
+    if (pending != null) {
+      _handle(pending, installConfigCallBack);
     }
-    _lastHandledUri = uri;
-    _lastHandledAt = now;
+  }
+
+  void _handle(Uri uri, Function(String url) installConfigCallBack) {
     commonPrint.log('onAppLink: $uri');
-    if (uri.host != 'install-config') {
-      return;
-    }
-    final url = uri.queryParameters['url'];
+    final url = _installConfigUrl(uri);
     if (url != null) {
       installConfigCallBack(url);
     }
@@ -60,6 +84,11 @@ class LinkManager {
       subscription?.cancel();
       subscription = null;
     }
+  }
+
+  factory LinkManager() {
+    _instance ??= LinkManager._internal();
+    return _instance!;
   }
 }
 

@@ -1,121 +1,162 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
-import 'package:flclashx/common/app_localizations.dart';
+import 'package:flclashx/common/boot_record.dart';
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+
+const _platformProbeTimeout = Duration(seconds: 2);
 
 class App {
+  static App? _instance;
+  late MethodChannel methodChannel;
+  Function()? onExit;
+  Function()? onPackagesChanged;
+  final floatingKeyboard = ValueNotifier(false);
+
+  App._internal() {
+    methodChannel = const MethodChannel("app");
+    methodChannel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'exit':
+          if (onExit != null) {
+            await onExit!();
+          }
+        case 'packagesChanged':
+          onPackagesChanged?.call();
+        case 'floatingImeChanged':
+          floatingKeyboard.value = call.arguments as bool;
+        default:
+          throw MissingPluginException();
+      }
+    });
+  }
 
   factory App() {
     _instance ??= App._internal();
     return _instance!;
   }
 
-  App._internal() {
-    methodChannel = const MethodChannel("app");
-    methodChannel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case "exit":
-          if (onExit != null) {
-            await onExit!();
-          }
-        case "getText":
-          try {
-            return Intl.message(call.arguments as String);
-          } catch (_) {
-            return "";
-          }
-        default:
-          throw MissingPluginException();
-      }
-    });
+  Future<bool?> moveTaskToBack() async {
+    return methodChannel.invokeMethod<bool>('moveTaskToBack');
   }
-  static App? _instance;
-  late MethodChannel methodChannel;
-  Function()? onExit;
 
-  Future<bool?> moveTaskToBack() async => methodChannel.invokeMethod<bool>("moveTaskToBack");
+  Future<String?> getAndroidId() async {
+    return methodChannel.invokeMethod<String>('getAndroidId');
+  }
 
   Future<List<Package>> getPackages() async {
-    final packagesString =
-        await methodChannel.invokeMethod<String>("getPackages");
-    return Isolate.run<List<Package>>(() {
-      final List<dynamic> packagesRaw =
-          packagesString != null ? json.decode(packagesString) : [];
-      return packagesRaw.map((e) => Package.fromJson(e)).toSet().toList();
-    });
-  }
-
-  Future<List<String>> getInstalledPackageNames() async {
-    final packageNames = await methodChannel.invokeListMethod<String>(
-      "getInstalledPackageNames",
+    final packagesString = await methodChannel.invokeMethod<String>(
+      'getPackages',
     );
-    return packageNames ?? const [];
+    final List<dynamic> packagesRaw =
+        (await packagesString?.decodeJson<List<dynamic>>()) ?? [];
+    return packagesRaw.map((e) => Package.fromJson(e)).toSet().toList();
   }
 
-  Future<bool> openFile(String path) async => await methodChannel.invokeMethod<bool>("openFile", {
-          "path": path,
-        }) ??
-        false;
+  Future<bool> isInstalledAppsPermissionGranted() async {
+    return await methodChannel.invokeMethod<bool>(
+          'isInstalledAppsPermissionGranted',
+        ) ??
+        true;
+  }
 
-  final _iconCache = <String, ImageProvider?>{};
-  final _iconFutures = <String, Future<ImageProvider?>>{};
+  Future<bool> requestInstalledAppsPermission() async {
+    return await methodChannel.invokeMethod<bool>(
+          'requestInstalledAppsPermission',
+        ) ??
+        false;
+  }
+
+  final Map<String, ImageProvider?> _packageIcons = {};
+  final Map<String, Future<ImageProvider?>> _packageIconTasks = {};
+  final TaskPool _packageIconPool = TaskPool(maxConcurrentIconLoads);
+
+  ImageProvider? getCachedPackageIcon(String packageName) {
+    return _packageIcons[packageName];
+  }
 
   Future<ImageProvider?> getPackageIcon(String packageName) {
-    if (_iconCache.containsKey(packageName)) {
-      return Future.value(_iconCache[packageName]);
+    if (_packageIcons.containsKey(packageName)) {
+      return Future.value(_packageIcons[packageName]);
     }
-    return _iconFutures[packageName] ??= _fetchIcon(packageName);
+    return _packageIconTasks[packageName] ??= _loadPackageIcon(packageName);
   }
 
-  Future<ImageProvider?> _fetchIcon(String packageName) async {
-    final base64 = await methodChannel.invokeMethod<String>("getPackageIcon", {
-      "packageName": packageName,
-    });
-    final icon = base64 != null ? MemoryImage(base64Decode(base64)) : null;
-    _iconCache[packageName] = icon;
-    _iconFutures.remove(packageName);
+  Future<ImageProvider?> _loadPackageIcon(String packageName) async {
+    var icon = await _requestPackageIcon(packageName);
+    if (icon == null && packageName.isNotEmpty) {
+      icon = await getPackageIcon('');
+    }
+    _packageIcons[packageName] = icon;
+    unawaited(_packageIconTasks.remove(packageName));
     return icon;
   }
 
-  Future<bool?> tip(String? message) async => methodChannel.invokeMethod<bool>("tip", {
-      "message": "$message",
+  Future<ImageProvider?> _requestPackageIcon(String packageName) async {
+    try {
+      final path = await _packageIconPool.run(
+        () => methodChannel.invokeMethod<String>('getPackageIcon', {
+          'packageName': packageName,
+        }),
+      );
+      if (path == null || path.isEmpty) {
+        return null;
+      }
+      try { return MemoryImage(base64Decode(path)); } on FormatException { return FileImage(File(path)); }
+    } catch (error) {
+      commonPrint.log('getPackageIcon error: $error');
+      return null;
+    }
+  }
+
+  @visibleForTesting
+  void clearPackageIconCache() {
+    _packageIcons.clear();
+    _packageIconTasks.clear();
+  }
+
+  Future<bool?> tip(String? message) async {
+    return methodChannel.invokeMethod<bool>('tip', {'message': '$message'});
+  }
+
+  Future<bool?> initShortcuts() async {
+    return methodChannel.invokeMethod<bool>('initShortcuts', {
+      'start': currentAppLocalizations.start,
+      'stop': currentAppLocalizations.stop,
+      'toggle': currentAppLocalizations.toggle,
     });
+  }
 
-  Future<bool?> initShortcuts() async => methodChannel.invokeMethod<bool>(
-      "initShortcuts",
-      <String, String>{
-        "toggle": appLocalizations.toggle,
-        "start": appLocalizations.start,
-        "stop": appLocalizations.stop,
-      },
-    );
-
-  Future<bool?> updateExcludeFromRecents(bool value) async => methodChannel.invokeMethod<bool>("updateExcludeFromRecents", {
-      "value": value,
+  Future<bool?> updateExcludeFromRecents(bool value) async {
+    return methodChannel.invokeMethod<bool>('updateExcludeFromRecents', {
+      'value': value,
     });
+  }
 
-  /// Whether the app is exempt from battery optimization (the key OEM survival
-  /// lever). Returns true on pre-M / non-Android.
-  Future<bool> isIgnoringBatteryOptimizations() async =>
-      await methodChannel.invokeMethod<bool>("isIgnoringBatteryOptimizations") ??
-      false;
+  Future<bool?> openAppSettings() async {
+    if (!Platform.isAndroid) return false;
+    return methodChannel.invokeMethod<bool>('openAppSettings');
+  }
 
-  /// Re-promptable battery-optimization exemption request.
-  Future<bool> requestIgnoreBatteryOptimizations() async =>
-      await methodChannel
-          .invokeMethod<bool>("requestIgnoreBatteryOptimizations") ??
-      false;
-
-  /// Opens the OEM autostart/background-start allowlist (or app details as a
-  /// fallback) so BootReceiver and sticky restarts aren't blocked at OEM level.
-  Future<bool> openAutoStartSettings() async =>
-      await methodChannel.invokeMethod<bool>("openAutoStartSettings") ?? false;
+  Future<AppExitInfo?> getLastExitInfo() async {
+    try {
+      final raw = await methodChannel
+          .invokeMapMethod<String, Object?>('getLastExitInfo')
+          .timeout(_platformProbeTimeout);
+      return AppExitInfo.fromJson(raw);
+    } catch (error) {
+      commonPrint.log(
+        'Failed to read the last process exit info: ${compactError(error)}',
+        logLevel: LogLevel.warning,
+      );
+      return null;
+    }
+  }
 }
 
-final app = Platform.isAndroid ? App() : null;
+final app = system.isAndroid ? App() : null;

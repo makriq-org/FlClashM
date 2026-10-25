@@ -53,14 +53,14 @@ void main(List<String> args) {
   if (runtimeConstants != null) {
     _expectQuotedValue(
       content: runtimeConstants,
-      pattern: RegExp(r'const\s+packageName\s*=\s*"([^"]+)";'),
+      pattern: RegExp(r'''const\s+packageName\s*=\s*['"]([^'"]+)['"];'''),
       expected: contract.applicationId,
       label: 'runtime packageName',
       failures: failures,
     );
     _expectQuotedValue(
       content: runtimeConstants,
-      pattern: RegExp(r'const\s+repository\s*=\s*"([^"]+)";'),
+      pattern: RegExp(r'''const\s+repository\s*=\s*['"]([^'"]+)['"];'''),
       expected: contract.releaseRepository,
       label: 'runtime release repository',
       failures: failures,

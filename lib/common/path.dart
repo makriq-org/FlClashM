@@ -2,41 +2,59 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 
 class AppPath {
+  static AppPath? _instance;
+  late ResolveOnce<Directory> _dataDir;
+  late ResolveOnce<Directory?> _downloadDir;
+  late ResolveOnce<Directory> _tempDir;
+  Completer<Directory> cacheDir = Completer();
+
+  @visibleForTesting
+  static Future<Directory> Function() supportDirectory =
+      getApplicationSupportDirectory;
+
+  @visibleForTesting
+  static Future<Directory> Function() temporaryDirectory =
+      getTemporaryDirectory;
+
+  @visibleForTesting
+  static Future<Directory> Function() cacheDirectory =
+      getApplicationCacheDirectory;
+
+  @visibleForTesting
+  static Future<Directory?> Function() downloadDirectory =
+      getDownloadsDirectory;
+
+  AppPath._internal() {
+    _bind();
+  }
+
+  @visibleForTesting
+  Future<void> rebind() async {
+    cacheDir = Completer();
+    _bind();
+    await Future.wait([_dataDir.value, _downloadDir.value, _tempDir.value]);
+  }
+
+  void _bind() {
+    _dataDir = ResolveOnce(supportDirectory);
+    _downloadDir = ResolveOnce(downloadDirectory);
+    _tempDir = ResolveOnce(temporaryDirectory);
+    cacheDirectory().then(cacheDir.complete);
+  }
 
   factory AppPath() {
     _instance ??= AppPath._internal();
     return _instance!;
   }
 
-  AppPath._internal() {
-    appDirPath = join(dirname(Platform.resolvedExecutable));
-    getApplicationSupportDirectory().then((value) {
-      dataDir.complete(value);
-    }).catchError((e) {
-      dataDir.completeError(e);
-    });
-    getTemporaryDirectory().then((value) {
-      tempDir.complete(value);
-    }).catchError((e) {
-      tempDir.completeError(e);
-    });
-    getDownloadsDirectory().then((value) {
-      downloadDir.complete(value);
-    }).catchError((e) {
-      downloadDir.completeError(e);
-    });
+  String get executableExtension {
+    return system.isWindows ? '.exe' : '';
   }
-  static AppPath? _instance;
-  Completer<Directory> dataDir = Completer();
-  Completer<Directory> downloadDir = Completer();
-  Completer<Directory> tempDir = Completer();
-  late String appDirPath;
-
-  String get executableExtension => Platform.isWindows ? ".exe" : "";
 
   String get executableDirPath {
     final currentExecutablePath = Platform.resolvedExecutable;
@@ -44,82 +62,115 @@ class AppPath {
   }
 
   String get corePath {
-    if (Platform.isMacOS) {
-      // Core is stored in Application Support/com.follow.clash/cores/ (copied by Swift code on launch)
-      // Permissions are set automatically in Swift
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/com.follow.clash/cores/FlClashCore';
-    }
-    return join(executableDirPath, "FlClashCore$executableExtension");
+    return join(executableDirPath, 'FlClashCore$executableExtension');
   }
 
-  String get corePendingPath => '$corePath.pending';
-
-  /// Allow-list consumed by the Windows helper service; lives next to the
-  /// helper exe so per-machine installs keep it admin-writable only.
-  String get allowedCoreHashPath =>
-      join(executableDirPath, "allowed_core.sha256");
-
-  String get helperPath => join(executableDirPath, "$appHelperService$executableExtension");
+  String get helperPath {
+    return join(executableDirPath, '$appHelperService$executableExtension');
+  }
 
   Future<String> get downloadDirPath async {
-    final directory = await downloadDir.future;
-    return directory.path;
+    final directory = await _downloadDir.value;
+    return directory?.path ?? await homeDirPath;
   }
 
   Future<String> get homeDirPath async {
-    final directory = await dataDir.future;
+    final directory = await _dataDir.value;
     return directory.path;
   }
 
+  Future<String> get databasePath async {
+    final mHomeDirPath = await homeDirPath;
+    return join(mHomeDirPath, 'database.sqlite');
+  }
+
+  Future<String> get tempFilePath async {
+    final mTempDir = await _tempDir.value;
+    return join(mTempDir.path, 'temp$uniqueId');
+  }
+
   Future<String> get lockFilePath async {
-    final directory = await dataDir.future;
-    return join(directory.path, "FlClashM.lock");
+    final homeDirPath = await appPath.homeDirPath;
+    return join(homeDirPath, 'FlClash.lock');
+  }
+
+  Future<String> get configFilePath async {
+    final mHomeDirPath = await homeDirPath;
+    return join(mHomeDirPath, 'config.yaml');
   }
 
   Future<String> get sharedPreferencesPath async {
-    final directory = await dataDir.future;
-    return join(directory.path, "shared_preferences.json");
+    final directory = await _dataDir.value;
+    return join(directory.path, 'shared_preferences.json');
   }
 
   Future<String> get profilesPath async {
-    final directory = await dataDir.future;
+    final directory = await _dataDir.value;
     return join(directory.path, profilesDirectoryName);
   }
 
-  Future<String> getProfilePath(String id) async {
-    final directory = await profilesPath;
-    return join(directory, "$id.yaml");
+  Future<String> getProfilePath(String fileName) async {
+    return join(await profilesPath, '$fileName.yaml');
   }
 
-  Future<String> getProvidersDirPath(String id) async {
-    final directory = await profilesPath;
+  Future<String> get scriptsDirPath async {
+    final path = await homeDirPath;
+    return join(path, 'scripts');
+  }
+
+  Future<String> getScriptPath(String fileName) async {
+    final path = await scriptsDirPath;
+    return join(path, '$fileName.js');
+  }
+
+  Future<String> get providerCacheRootPath async {
+    final directory = await homeDirPath;
+    return join(directory, providersDirectoryName);
+  }
+
+  Future<String> getProviderCachePath(String fileName) async {
     return join(
-      directory,
-      "providers",
-      id,
+      await providerCacheRootPath,
+      rulesProviderDirectoryName,
+      fileName,
     );
   }
 
-  Future<String> getProvidersFilePath(
-    String id,
-    String type,
-    String url,
-  ) async {
+  Future<String> getProvidersRootPath() async {
     final directory = await profilesPath;
-    return join(
-      directory,
-      "providers",
-      id,
-      type,
-      url.toMd5(),
-    );
+    return join(directory, providersDirectoryName);
+  }
+
+  Future<String> getProviderDirPath(String profileId, String type) async {
+    final directory = await getProvidersRootPath();
+    return join(directory, profileId.toString(), type);
+  }
+
+  Future<void> ensureProviderDirs(String profileId) async {
+    for (final type in const [
+      proxiesProviderDirectoryName,
+      rulesProviderDirectoryName,
+    ]) {
+      final directory = Directory(await getProviderDirPath(profileId, type));
+      if (await directory.exists()) {
+        continue;
+      }
+      await directory.create(recursive: true);
+    }
   }
 
   Future<String> get tempPath async {
-    final directory = await tempDir.future;
+    final directory = await _tempDir.value;
     return directory.path;
   }
 }
 
 final appPath = AppPath();
+
+String getBackupFileName() {
+  return '${appName}_backup_${DateTime.now().show}.zip';
+}
+
+String get logFileName {
+  return '${appName}_${DateTime.now().show}.log';
+}

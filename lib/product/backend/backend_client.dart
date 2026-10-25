@@ -96,6 +96,7 @@ class BackendClient {
   String _instance = '';
   int _sequence = -1;
   int _viewGeneration = 0;
+  int _sourceRevision = 0;
   bool _uiOpened = false;
   bool _restoreUIRequested = false;
 
@@ -103,6 +104,11 @@ class BackendClient {
   Map<String, dynamic> get snapshot => _copy(_snapshot);
   Map<String, dynamic> get runtimeView => _copy(_view);
   int get runtimeViewGeneration => _viewGeneration;
+
+  /// Projection invalidation epoch, independent of catalog revision numbers.
+  /// A reconnected or replaced backend must rebuild ephemeral projections even
+  /// when its catalog has the same revision as the previous instance.
+  int get sourceRevision => _sourceRevision;
   bool get attached => _subscription != null;
 
   String operationId() =>
@@ -121,6 +127,7 @@ class BackendClient {
     // A replaced backend may have published events before the new binding
     // delivered them; only a full snapshot restores the projection.
     _reconnectSubscription ??= _reconnects.listen((_) {
+      _sourceRevision++;
       _restoreUIRequested = _uiOpened;
       _resync();
     });
@@ -364,6 +371,7 @@ class BackendClient {
       }
       final restoreUI =
           _uiOpened && (_restoreUIRequested || instance != _instance);
+      if (instance != _instance) _sourceRevision++;
       _instance = instance;
       _sequence = sequence;
       _snapshot = _copy(second);
@@ -419,6 +427,10 @@ class BackendClient {
   void _resync() {
     unawaited(refresh().catchError(_changes.addError));
   }
+
+  /// Exact Go settings for the 0.5 frontend, which supports endpoint strings.
+  Map<String, dynamic> get sourceSettings =>
+      _copy(_map(_map(_snapshot['catalog'])['settings']));
 
   Map<String, dynamic> get settings {
     final catalog = _map(_snapshot['catalog']);
@@ -479,7 +491,7 @@ class BackendClient {
     try {
       return await download(token, (blob['size'] as num).toInt());
     } finally {
-      await request('blob.delete', {'token': token});
+      await discardBlob(token);
     }
   }
 
@@ -498,11 +510,7 @@ class BackendClient {
         'select': select,
       });
     } finally {
-      try {
-        await request('blob.delete', {'token': token});
-      } catch (_) {
-        // Cleanup must not hide the committed write and its exact revision.
-      }
+      await discardBlob(token);
     }
   }
 
@@ -520,8 +528,18 @@ class BackendClient {
       }
       return token;
     } catch (_) {
-      await request('blob.delete', {'token': token});
+      await discardBlob(token);
       rethrow;
+    }
+  }
+
+  /// Transfer cleanup must preserve the primary result or failure. Blobs are
+  /// bounded temporary backend artifacts and can be collected after reconnect.
+  Future<void> discardBlob(String token) async {
+    try {
+      await request('blob.delete', {'token': token});
+    } catch (_) {
+      // A dropped connection must not turn a committed write into a failure.
     }
   }
 

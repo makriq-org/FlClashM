@@ -1,0 +1,214 @@
+package main
+
+import (
+	"context"
+	"maps"
+	"sync"
+	"time"
+)
+
+// mihomo has no hook for a health check moving a URLTest or Fallback pick, so
+// the picks are re-read on this timer while the host watches.
+const routePollInterval = time.Second
+
+type routeTracker struct {
+	mu               sync.Mutex
+	epoch            uint64
+	picksVersion     uint64
+	picks            map[string]string
+	providerVersions map[string]uint32
+	ruleSets         map[string]any
+	watched          bool
+	watchSeq         uint64
+	stopPoll         context.CancelFunc
+}
+
+var (
+	currentRoute routeTracker
+
+	publishRoute = func(state RouteState) {
+		queueRoutePublication(state)
+	}
+)
+
+var routeDelivery struct {
+	once  sync.Once
+	queue chan RouteState
+}
+
+// A route update can originate while the engine lock is held. Coalesce pending
+// snapshots and deliver outside that lock, so a JNI upcall cannot re-enter it.
+func queueRoutePublication(state RouteState) {
+	routeDelivery.once.Do(func() {
+		routeDelivery.queue = make(chan RouteState, 1)
+		go func() {
+			for value := range routeDelivery.queue {
+				if hostWantsEvents() {
+					sendMessage(Message{Type: RouteChangedMessage, Data: value})
+				}
+			}
+		}()
+	})
+	select {
+	case routeDelivery.queue <- state:
+	default:
+		select {
+		case <-routeDelivery.queue:
+		default:
+		}
+		select {
+		case routeDelivery.queue <- state:
+		default:
+		}
+	}
+}
+
+func routeStateLocked() RouteState {
+	picks := currentRoute.picks
+	if picks == nil {
+		picks = map[string]string{}
+	}
+	return RouteState{
+		CoreEpoch:    currentRoute.epoch,
+		PicksVersion: currentRoute.picksVersion,
+		Picks:        maps.Clone(picks),
+	}
+}
+
+func routeState() RouteState {
+	currentRoute.mu.Lock()
+	defer currentRoute.mu.Unlock()
+	return routeStateLocked()
+}
+
+func routeStamp() (epoch, picksVersion uint64) {
+	currentRoute.mu.Lock()
+	defer currentRoute.mu.Unlock()
+	return currentRoute.epoch, currentRoute.picksVersion
+}
+
+func readPicks() (map[string]string, map[string]uint32) {
+	picks := map[string]string{}
+	for name, proxy := range allProxies() {
+		if group, ok := adapterAs[pickableGroup](proxy); ok {
+			picks[name] = group.Now()
+		}
+	}
+	providers := providersSnapshot()
+	versions := make(map[string]uint32, len(providers))
+	for name, p := range providers {
+		versions[name] = p.Version()
+	}
+	return picks, versions
+}
+
+// mihomo swaps in a new strategy each time a rule set, manually or on its
+// interval, loads new content.
+func readRuleSets() map[string]any {
+	providers := ruleProvidersSnapshot()
+	ruleSets := make(map[string]any, len(providers))
+	for name, p := range providers {
+		ruleSets[name] = p.Strategy()
+	}
+	return ruleSets
+}
+
+// A provider that swapped its list is a structural change: the names may
+// survive while the servers behind them do not. The caller holds selectMu.
+func refreshRouteLocked(structural bool) {
+	picks, versions := readPicks()
+	ruleSets := readRuleSets()
+
+	currentRoute.mu.Lock()
+	if currentRoute.providerVersions != nil && !maps.Equal(versions, currentRoute.providerVersions) {
+		structural = true
+	}
+	if currentRoute.ruleSets != nil && !maps.Equal(ruleSets, currentRoute.ruleSets) {
+		structural = true
+	}
+	currentRoute.providerVersions = versions
+	currentRoute.ruleSets = ruleSets
+	if structural {
+		currentRoute.epoch++
+	}
+	changed := structural
+	if !maps.Equal(picks, currentRoute.picks) {
+		currentRoute.picks = picks
+		currentRoute.picksVersion++
+		changed = true
+	}
+	if !changed || !currentRoute.watched {
+		currentRoute.mu.Unlock()
+		return
+	}
+	state := routeStateLocked()
+	currentRoute.mu.Unlock()
+	publishRoute(state)
+}
+
+func refreshRoute() {
+	selectMu.Lock()
+	defer selectMu.Unlock()
+	refreshRouteLocked(false)
+}
+
+func bumpRouteEpoch() {
+	selectMu.Lock()
+	defer selectMu.Unlock()
+	refreshRouteLocked(true)
+}
+
+func handleWatchRoute(watch bool, seq uint64) RouteState {
+	refreshRoute()
+
+	currentRoute.mu.Lock()
+	defer currentRoute.mu.Unlock()
+	if seq < currentRoute.watchSeq {
+		return routeStateLocked()
+	}
+	currentRoute.watchSeq = seq
+	currentRoute.watched = watch
+	if watch && currentRoute.stopPoll == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		currentRoute.stopPoll = cancel
+		go pollRoute(ctx)
+	}
+	if !watch {
+		stopRoutePollLocked()
+	}
+	return routeStateLocked()
+}
+
+// The stop takes its own place in the call order: a watch dispatched before
+// it, the newest one included, may still be waiting to run.
+func stopRouteWatch() {
+	currentRoute.mu.Lock()
+	defer currentRoute.mu.Unlock()
+	currentRoute.watchSeq = max(currentRoute.watchSeq, methodCallSeq.Add(1))
+	currentRoute.watched = false
+	stopRoutePollLocked()
+}
+
+func stopRoutePollLocked() {
+	if currentRoute.stopPoll != nil {
+		currentRoute.stopPoll()
+		currentRoute.stopPoll = nil
+	}
+}
+
+// With the listeners down the host pins every probe to DIRECT, so the picks
+// do not matter until they come back.
+func pollRoute(ctx context.Context) {
+	ticker := time.NewTicker(routePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if diagnosticRunning() {
+				refreshRoute()
+			}
+		}
+	}
+}

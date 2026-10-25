@@ -37,6 +37,11 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.Result
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import androidx.core.view.OnApplyWindowInsetsListener
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,6 +65,23 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var activityRef: WeakReference<Activity>? = null
 
     private lateinit var channel: MethodChannel
+    private lateinit var frontendChannel: MethodChannel
+    private var activityBinding: ActivityPluginBinding? = null
+    private val activityResultListener = PluginRegistry.ActivityResultListener(::onActivityResult)
+    private val permissionsResultListener = PluginRegistry.RequestPermissionsResultListener(::onRequestPermissionsResultListener)
+    private val explicitInstalledAppsCallbacks = mutableListOf<(Boolean) -> Unit>()
+    private val localNetworkCallbacks = mutableListOf<(Boolean) -> Unit>()
+    private val isTelevision by lazy {
+        val pm = FlClashApplication.getAppContext().packageManager
+        @Suppress("DEPRECATION")
+        (pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION) || pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK))
+    }
+    private var floatingIme = false
+    private val imeInsetsListener = OnApplyWindowInsetsListener { view, insets ->
+        val ime = WindowInsetsCompat.Type.ime()
+        reportFloatingIme(insets.isVisible(ime) && insets.getInsets(ime).bottom == 0)
+        ViewCompat.onApplyWindowInsets(view, insets)
+    }
 
     private lateinit var scope: CoroutineScope
 
@@ -84,6 +106,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private val packageChangesReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             invalidatePackageCaches()
+            frontendChannel.invokeMethod("packagesChanged", null)
         }
     }
 
@@ -103,32 +126,43 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "app")
         channel.setMethodCallHandler(this)
+        frontendChannel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.makriq.flclash/app")
+        frontendChannel.setMethodCallHandler { call, result ->
+            if (call.method == "getPackageIcon") {
+                reply(result) { PackageIconFiles.path(FlClashApplication.getAppContext(), call.argument<String>("packageName").orEmpty()) }
+            } else onMethodCall(call, result)
+        }
         registerPackageChangesReceiver()
     }
 
     private fun initShortcuts(toggle: String, start: String, stop: String) {
         val ctx = FlClashApplication.getAppContext()
-        val icon = IconCompat.createWithResource(ctx, R.mipmap.ic_launcher_round)
+
         val toggleShortcut = ShortcutInfoCompat.Builder(ctx, "toggle")
             .setShortLabel(toggle)
-            .setIcon(icon)
+            .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_toggle))
+            .setRank(2)
             .setIntent(ctx.getActionIntent("CHANGE"))
             .build()
         val startShortcut = ShortcutInfoCompat.Builder(ctx, "start")
             .setShortLabel(start)
-            .setIcon(icon)
+            .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_start))
+            .setRank(0)
             .setIntent(ctx.getActionIntent("START"))
             .build()
         val stopShortcut = ShortcutInfoCompat.Builder(ctx, "stop")
             .setShortLabel(stop)
-            .setIcon(icon)
+            .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_stop))
+            .setRank(1)
             .setIntent(ctx.getActionIntent("STOP"))
             .build()
-        ShortcutManagerCompat.setDynamicShortcuts(ctx, listOf(toggleShortcut, startShortcut, stopShortcut))
+        ShortcutManagerCompat.setDynamicShortcuts(ctx, listOf(startShortcut, stopShortcut, toggleShortcut))
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        frontendChannel.setMethodCallHandler(null)
+        resolvePendingPermissions()
         unregisterPackageChangesReceiver()
         scope.cancel()
     }
@@ -219,21 +253,32 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 result.success(true)
             }
 
+            "getAndroidId" -> reply(result) {
+                Settings.Secure.getString(FlClashApplication.getAppContext().contentResolver, Settings.Secure.ANDROID_ID)
+            }
+            "getLastExitInfo" -> reply(result) { lastExitInfo() }
+            "openAppSettings" -> result.success(openAppSettings())
+            "isInstalledAppsPermissionGranted" -> reply(result) { hasInstalledAppsPermission() }
+            "requestInstalledAppsPermission" -> {
+                if (hasInstalledAppsPermission()) result.success(true)
+                else if (activityRef?.get() == null) result.success(false)
+                else {
+                    explicitInstalledAppsCallbacks.add { result.success(it) }
+                    withInstalledAppsPermission { resolveInstalledAppsRequests() }
+                }
+            }
+            "isLocalNetworkPermissionGranted" -> result.success(hasLocalNetworkPermission())
+            "requestLocalNetworkPermission" -> requestLocalNetworkPermission { result.success(it) }
+
             "getPackages" -> {
                 withInstalledAppsPermission {
-                    scope.launch(Dispatchers.IO) {
-                        val json = getPackagesToJson()
-                        result.successOnMain(json)
-                    }
+                    reply(result) { getPackagesToJson() }
                 }
             }
 
             "getInstalledPackageNames" -> {
                 withInstalledAppsPermission {
-                    scope.launch(Dispatchers.IO) {
-                        val names = getInstalledPackageNames()
-                        result.successOnMain(names)
-                    }
+                    reply(result) { getInstalledPackageNames() }
                 }
             }
 
@@ -634,40 +679,59 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        detachActivity()
+        activityBinding = binding
         activityRef = WeakReference(binding.activity)
-        binding.addActivityResultListener(::onActivityResult)
-        binding.addRequestPermissionsResultListener(::onRequestPermissionsResultListener)
+        binding.addActivityResultListener(activityResultListener)
+        binding.addRequestPermissionsResultListener(permissionsResultListener)
+        if (isTelevision) ViewCompat.setOnApplyWindowInsetsListener(binding.activity.window.decorView, imeInsetsListener)
     }
 
-    override fun onDetachedFromActivityForConfigChanges() {
+    private fun detachActivity() {
+        if (isTelevision) {
+            activityRef?.get()?.window?.decorView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
+            reportFloatingIme(false)
+        }
+        activityBinding?.removeActivityResultListener(activityResultListener)
+        activityBinding?.removeRequestPermissionsResultListener(permissionsResultListener)
+        activityBinding = null
         activityRef = null
     }
 
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        activityRef = WeakReference(binding.activity)
-        // Re-register result listeners: a non-handled config change recreates the
-        // ActivityPluginBinding and drops the old listeners, so an in-flight VPN
-        // consent result would otherwise never arrive — permanently stranding the
-        // queued vpnCallBacks (the consent dialog would never relaunch).
-        binding.addActivityResultListener(::onActivityResult)
-        binding.addRequestPermissionsResultListener(::onRequestPermissionsResultListener)
+    private fun reportFloatingIme(value: Boolean) {
+        if (floatingIme == value) return
+        floatingIme = value
+        frontendChannel.invokeMethod("floatingImeChanged", value)
     }
+
+    override fun onDetachedFromActivityForConfigChanges() = detachActivity()
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = onAttachedToActivity(binding)
 
     override fun onDetachedFromActivity() {
         channel.invokeMethod("exit", null)
-        activityRef = null
-        // Resolve and clear any pending consent callbacks so waiting Dart start
-        // calls don't hang and the launch gate is re-armed for the next request
-        // (restores the old single-callback self-healing behaviour).
-        val pending = vpnCallBacks.toList()
+        frontendChannel.invokeMethod("exit", null)
+        detachActivity()
+        resolvePendingPermissions()
+    }
+
+    private fun resolvePendingPermissions() {
+        val vpn = vpnCallBacks.toList()
         vpnCallBacks.clear()
-        pending.forEach { it.invoke(false) }
-        // Same for a permission dialog interrupted by activity teardown: resolve
-        // waiters so the package-list fetch proceeds (with whatever is visible)
-        // instead of stranding the Dart call.
-        val pendingApps = installedAppsCallbacks.toList()
+        vpn.forEach { it(false) }
+        val apps = installedAppsCallbacks.toList()
         installedAppsCallbacks.clear()
-        pendingApps.forEach { it.invoke() }
+        apps.forEach { it() }
+        resolveInstalledAppsRequests()
+        val network = localNetworkCallbacks.toList()
+        localNetworkCallbacks.clear()
+        network.forEach { it(false) }
+    }
+
+    private fun resolveInstalledAppsRequests() {
+        val callbacks = explicitInstalledAppsCallbacks.toList()
+        explicitInstalledAppsCallbacks.clear()
+        val granted = hasInstalledAppsPermission()
+        callbacks.forEach { it(granted) }
     }
 
     private fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
@@ -676,8 +740,9 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             val pending = vpnCallBacks.toList()
             vpnCallBacks.clear()
             pending.forEach { it.invoke(granted) }
+            return true
         }
-        return true
+        return false
     }
 
     private fun onRequestPermissionsResultListener(
@@ -687,6 +752,7 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     ): Boolean {
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
             isBlockNotification = true
+            return true
         }
         if (requestCode == GET_INSTALLED_APPS_PERMISSION_REQUEST_CODE) {
             if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
@@ -700,8 +766,56 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             val pending = installedAppsCallbacks.toList()
             installedAppsCallbacks.clear()
             pending.forEach { it.invoke() }
+            resolveInstalledAppsRequests()
+            return true
         }
-        return true
+        if (requestCode == LOCAL_NETWORK_PERMISSION_REQUEST_CODE) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            val pending = localNetworkCallbacks.toList()
+            localNetworkCallbacks.clear()
+            pending.forEach { it(granted) }
+            return true
+        }
+        return false
+    }
+
+    private fun hasLocalNetworkPermission(): Boolean = Build.VERSION.SDK_INT < 37 ||
+        ContextCompat.checkSelfPermission(FlClashApplication.getAppContext(), LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
+
+    fun requestLocalNetworkPermission(callback: (Boolean) -> Unit) {
+        if (hasLocalNetworkPermission()) { callback(true); return }
+        val activity = activityRef?.get() ?: run { callback(false); return }
+        val pending = localNetworkCallbacks.isNotEmpty()
+        localNetworkCallbacks.add(callback)
+        if (!pending) ActivityCompat.requestPermissions(activity, arrayOf(LOCAL_NETWORK_PERMISSION), LOCAL_NETWORK_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun openAppSettings(): Boolean = runCatching {
+        val context = FlClashApplication.getAppContext()
+        (activityRef?.get() ?: context).startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    }.getOrDefault(false)
+
+    private fun lastExitInfo(): Map<String, Any?>? {
+        if (Build.VERSION.SDK_INT < 30) return null
+        val context = FlClashApplication.getAppContext()
+        val manager = context.getSystemService(ActivityManager::class.java) ?: return null
+        val info = manager.getHistoricalProcessExitReasons(context.packageName, 0, 16)
+            .firstOrNull { it.processName == context.packageName } ?: return null
+        return mapOf("reason" to info.reason, "status" to info.status, "timestamp" to info.timestamp,
+            "description" to info.description, "importance" to info.importance,
+            "pss" to info.pss, "rss" to info.rss, "processName" to info.processName)
+    }
+
+    private fun reply(result: Result, block: suspend () -> Any?) {
+        scope.launch(Dispatchers.IO) {
+            // Flutter Result may reply from any thread. Keep package-list JSON
+            // and codec serialization off main together with PackageManager IO.
+            try { result.success(block()) }
+            catch (error: Exception) { result.error("PLATFORM_ERROR", error.message, null) }
+        }
     }
 
     private fun Result.successOnMain(value: Any?) {
@@ -713,6 +827,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private companion object {
+        const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
+        const val LOCAL_NETWORK_PERMISSION_REQUEST_CODE = 1004
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     }
 }

@@ -3,17 +3,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
-import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/backend/backend_connection.dart';
 import 'package:flutter/services.dart';
 
-import 'interface.dart';
+import '../core/event.dart';
 
 /// Android-only bridge to the `com.makriq.flclash/service` AIDL service living
 /// in the `:remote` process. Replaces the old FFI + dart-port / service-isolate
 /// architecture: every call now goes through a MethodChannel and is forwarded
 /// across AIDL to the Go core.
-class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
+class ClashLib  {
   factory ClashLib() => _instance ??= ClashLib._internal();
   static ClashLib? _instance;
 
@@ -126,7 +125,9 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
             );
             return null;
           }
-          handleResult(ActionResult.fromJson(json.decode(raw)));
+          for (final event in coreEventsFromData(message)) {
+            coreEventManager.sendEvent(event);
+          }
         } catch (e) {
           commonPrint.log('event parse err: $e raw=$raw');
         }
@@ -143,12 +144,10 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     }
   }
 
-  @override
   Future<bool> preload() => _crashCount > _maxCrashRetries
       ? Future.value(false)
       : _connection.ensure();
 
-  @override
   Future<bool> destroy() async {
     _connection.invalidate();
     try {
@@ -159,7 +158,6 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
     return true;
   }
 
-  @override
   void reStart() {
     _connection.invalidate();
     _crashCount = 0;
@@ -177,125 +175,20 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
 
   // :remote rejects the legacy `shutdown` action; unbinding is the only
   // teardown the UI owns.
-  @override
   Future<bool> shutdown() => destroy();
 
-  @override
-  Future<void> sendMessage(String message) async {
-    try {
-      final res = await _channel.invokeMethod<String>('invokeAction', message);
-      if (res == null || res.isEmpty) {
-        _failPendingCompleter(message, 'empty response');
-        return;
-      }
-      try {
-        handleResult(ActionResult.fromJson(json.decode(res)));
-      } catch (e) {
-        commonPrint.log('invokeAction parse err: $e');
-        _failPendingCompleter(message, res);
-      }
-    } catch (e) {
-      commonPrint.log('sendMessage channel error: $e');
-      _failPendingCompleter(message, '$e');
-    }
-  }
-
-  void _failPendingCompleter(String message, String reason) {
-    try {
-      final decoded = json.decode(message);
-      if (decoded is Map<String, dynamic>) {
-        final id = decoded['id'] as String?;
-        final method = decoded['method'] as String?;
-        if (id != null) {
-          final completer = callbackCompleterMap.remove(id);
-          if (completer != null && !completer.isCompleted) {
-            commonPrint.log('_failPendingCompleter: method=$method reason=$reason');
-            // Complete with the typed default (not null) so a Completer<bool/String/Map>
-            // resolves immediately instead of throwing TypeError and hanging to timeout.
-            completer.complete(callbackDefaultMap.remove(id));
-          }
-        }
-      }
-    } catch (e) {
-      commonPrint.log('_failPendingCompleter parse error: $e reason=$reason');
-    }
-  }
-
-  // --- fork-specific straight-through methods (native returns direct result) --
-
-  @override
-  Future<String> getAndroidVpnOptions() async {
-    try {
-      return (await _channel
-              .invokeMethod<String>('getAndroidVpnOptions')
-              .timeout(const Duration(seconds: 10))) ??
-          '';
-    } catch (e) {
-      commonPrint.log('getAndroidVpnOptions error: $e');
-      return '';
-    }
-  }
-
-  @override
-  Future<String> getAppliedAndroidVpnOptions() async {
-    try {
-      return (await _channel
-              .invokeMethod<String>('getAppliedAndroidVpnOptions')
-              .timeout(const Duration(seconds: 10))) ??
-          '';
-    } catch (e) {
-      commonPrint.log('getAppliedAndroidVpnOptions error: $e');
-      return '';
-    }
-  }
-
-  /// null means the tunnel is confirmed stopped. A failed probe (channel
-  /// error / timeout) THROWS instead of returning null — callers must be able
-  /// to tell "stopped" from "unknown", otherwise a slow bind on cold start
-  /// gets treated as "stopped" and actively kills a live VPN.
-  @override
-  Future<DateTime?> getRunTime() async {
-    final rt = await _channel
-        .invokeMethod('getRunTime')
-        .timeout(const Duration(seconds: 10));
-    final ms = (rt is int) ? rt : int.tryParse('$rt');
-    if (ms == null || ms == 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(ms);
-  }
-
-  @override
-  Future<String> getCurrentProfileName() async {
-    try {
-      return (await _channel
-              .invokeMethod<String>('getCurrentProfileName')
-              .timeout(const Duration(seconds: 10))) ??
-          '';
-    } catch (e) {
-      commonPrint.log('getCurrentProfileName error: $e');
-      return '';
-    }
-  }
-
-  /// Push foreground-notification params (title/server/content) so the
-  /// :remote service can render the sticky notification without having to
-  /// call back into Dart.
-  Future<void> updateNotificationParams({
-    required String title,
-    String server = '',
-    bool onlyStatisticsProxy = false,
-  }) async {
-    try {
-      await _channel
-          .invokeMethod('updateNotificationParams', json.encode({
-            'title': title,
-            'stopText': server,
-            'onlyStatisticsProxy': onlyStatisticsProxy,
-          }))
-          .timeout(const Duration(seconds: 10));
-    } catch (e) {
-      commonPrint.log('updateNotificationParams error: $e');
-    }
+  Future<String> getAppliedAndroidVpnOptions()=>readAppliedVpnOptions();
+  Future<String> readAppliedVpnOptions() async => await _channel.invokeMethod<String>('getAppliedAndroidVpnOptions') ?? '';
+  Future<dynamic> invokeAction(String method, Object? data) async {
+    if (!await preload()) throw StateError('Android backend unavailable');
+    final raw = await _channel.invokeMethod<String>('invokeAction', jsonEncode({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'method': method, 'data': data,
+    }));
+    if (raw == null) throw StateError('No response for $method');
+    final response = jsonDecode(raw) as Map;
+    if (response['code'] != 0) throw StateError('${response['data']}');
+    return response['data'];
   }
 }
-
 ClashLib? get clashLib => Platform.isAndroid ? ClashLib() : null;

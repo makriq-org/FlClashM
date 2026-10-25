@@ -23,6 +23,8 @@ nix develop -c make go-check
 <details>
 <summary>不用 Nix 与独立测试安装</summary>
 
+原生 Rust 编辑器需要包含 `libclang` 的 NDK r28 或更新版本。`ANDROID_NDK` 用于 Go 构建，Flutter native hooks 则使用 `ANDROID_NDK_HOME`；两者必须指向所选 NDK。Nix 和共享 CI 配置会自动设置这些变量。不使用 Nix 时，请在下方命令之前执行 `export ANDROID_NDK_HOME="$ANDROID_NDK"`。
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core
@@ -55,7 +57,7 @@ RuntimeCoordinator 是可变运行状态的唯一所有者。后端独立于 Flu
 
 后端实例更换或 Binder 连接恢复时，仍在运行的 UI 使用新的 `operationId` 和 `restore: true` 再次发送 `ui.attach`。Go 恢复 UI 会话和节点准备，不会再次执行 `autoRun`；显式 Stop 后的停止意图保持不变。不带 `restore` 的首次打开使用正常的 `autoRun` 策略。
 
-基础代码通过 `tool/product_touchpoints.json` 调用 `lib/product/**`；组件登记在 `allowedProductUi`。`lib/views/**` 保留于基础层，仅添加少量钩子。其他基础修改需在 `tool/base_drift_allowlist.json` 说明原因。不要将协调逻辑或作为状态来源的旧 SharedPreferences 放回 Dart/Kotlin。
+基础代码通过 `tool/product_touchpoints.json` 调用 `lib/product/**`；组件登记在 `allowedProductUi`。现有页面保留在 `lib/views/**`，不要在 product 中复制；可根据 FlClashM 架构演进，同时遵守 guards 和 allowlist，并将与 product 的连接登记为 touchpoints。受检查的基础修改需在 `tool/base_drift_allowlist.json` 说明原因；touchpoint 不能替代该记录。不要将协调逻辑或作为状态来源的旧 SharedPreferences 放回 Dart/Kotlin。
 
 <details>
 <summary>修改运行时须保持的后端约定</summary>
@@ -98,16 +100,19 @@ JS 在 Goja 中运行，无主机绑定，支持 deadline/cancel。公共列表�
 
 ## 🔄 更新上游与节点
 
-从目标分支创建工作分支，执行下列命令并解决冲突。Dart 包名保持 `flclashx`。合并后立即检查 base drift，新路径须说明原因。无 upstream 时使用 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE`。运行时修改先以 `-preN` 发布并在 Android 真机验证。
+独立 Go backend 的架构和可靠性优先于尽量减少与上游的差异。选择性移植修复和功能；评估收益、冲突和运行时影响后再决定是否完整合并。保留 Flutter ↔ backend 和 base ↔ product 边界。
+
+从目标分支创建工作分支。fetch 后明确选择上游 ref（分支或标签），在工作说明或 PR 中记录完整 SHA，然后移植选定修改，或有充分理由地合并该 SHA。我们的 Dart 包名为 `flclashx`；检查上游包名（例如 `fl_clash`），必要时调整导入和代码生成。
+
+立即运行 `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`，相对于选定 SHA 检查差异。也可通过 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE` 指定共同祖先。guards、touchpoints 和 allowlist 仍为强制要求。guard 和 CI 默认使用 `tool/base_drift_allowlist.json` 中的 `upstreamImport.commit`。原样导入的文件按此 SHA 校验，仅允许 Dart 包名替换；其他 base 修改须在 allowlist 中说明原因，连接 product 还须登记 touchpoint。更新固定提交时也须更新 CI 的 fetch。运行时修改先以 `-preN` 发布并在 Android 真机验证。
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 
-`tool/prepare_core.sh` 重建 `core/vendor`，无 fuzz 应用补丁并检查 Mieru 回归。构建使用 `-mod=vendor`，不修改共享模块缓存。补丁涉及 Mieru 已关闭 QUIC 超时、后端 HTTP 命令入口和系统 DNS 访问同步。更新时逐一检查；上游修复后删除对应补丁及调用，为其余补丁保留 vendor。
+`tool/prepare_core.sh` 重建 `core/vendor`，无 fuzz 应用补丁并检查 Mieru 回归。构建使用 `-mod=vendor`，不修改共享模块缓存。补丁涉及后端 HTTP 命令入口和系统 DNS 访问同步。Mieru 已关闭 QUIC 超时修复已进入上游，仍保留回归测试。更新时逐一检查；上游修复后删除对应补丁及调用，为其余补丁保留 vendor。
 
 节点版本、源码提交、ABI 和 SHA-256 固定在 `lib/product/runtime/*_release.dart`；依赖见 [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md)，构建说明见[资源目录](../../../assets/runtimes/)。升级和回滚应同时调整固定版本、依赖与二进制，然后重建并验证发布 ABI。
 
@@ -198,3 +203,5 @@ https://flclashm.sourceforge.io/update/pre.json
 各渠道分别保存最高 versionCode 和发布时间。旧的已签名目录会被拒绝，Android 也禁止 APK 降级。回滚通过编号更高的修正版本完成。轮换密钥时，先发布含新公钥的过渡版本。
 
 </details>
+
+使用 `nix develop -c make generate` 生成 Flutter/Drift/Riverpod 代码。`tool/generate_flutter.dart` 先通过 `sky_engine/_embedder.yaml` 构建真实 Flutter SDK summary，再运行 build_runner，适配 Nix 将 Flutter Dart 解析为独立 SDK 的情况，不修改共享 pub cache。执行 `build_runner clean` 后仍应使用该 wrapper。

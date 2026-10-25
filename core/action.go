@@ -9,9 +9,10 @@ import (
 )
 
 type Action struct {
-	Id     string      `json:"id"`
-	Method Method      `json:"method"`
-	Data   interface{} `json:"data"`
+	Id      string      `json:"id"`
+	Method  Method      `json:"method"`
+	Data    interface{} `json:"data"`
+	callSeq uint64
 }
 
 // Keep domain settings/metadata exact across the outer native action envelope.
@@ -21,7 +22,11 @@ func (action *Action) UnmarshalJSON(raw []byte) error {
 	type wire Action
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	return decoder.Decode((*wire)(action))
+	if err := decoder.Decode((*wire)(action)); err != nil {
+		return err
+	}
+	action.callSeq = methodCallSeq.Add(1)
+	return nil
 }
 
 type ActionResult struct {
@@ -51,6 +56,9 @@ func (result ActionResult) error(data interface{}) {
 
 func handleAction(action *Action, result ActionResult) {
 	if handleBackendAction(action, result) {
+		return
+	}
+	if handleDiagnosticAction(action, result) {
 		return
 	}
 	if backendManaged.Load() && legacyRuntimeMutation(action.Method) {

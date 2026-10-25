@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"core/backend"
+	"core/backend/authoring"
 )
 
 type RawProfile struct {
@@ -24,10 +25,12 @@ type RawProfile struct {
 	Metadata      Object `json:"metadata"`
 }
 type Input struct {
-	Version         int         `json:"version"`
-	CatalogRevision uint64      `json:"catalogRevision,omitempty"`
-	Profile         *RawProfile `json:"profile"`
-	Settings        Object      `json:"settings"`
+	Authoring       authoring.Collections `json:"authoring,omitempty"`
+	Profiles        map[string]RawProfile `json:"profiles,omitempty"`
+	Version         int                   `json:"version"`
+	CatalogRevision uint64                `json:"catalogRevision,omitempty"`
+	Profile         *RawProfile           `json:"profile"`
+	Settings        Object                `json:"settings"`
 }
 type Capabilities struct {
 	Platform          string
@@ -69,12 +72,15 @@ type Prepared struct {
 	CloseConnectionsOnSelect bool     `json:"closeConnectionsOnSelect"`
 }
 type Compiler struct {
-	Capabilities Capabilities
-	Scripts      ScriptEvaluator
-	Nodes        NodeCompiler
-	Validate     EngineValidator
-	Lists        PackageLists
-	Policy       SecurityPolicy
+	CompileRuleSet   RuleSetCompiler
+	DecodeProfile    func(context.Context, string, string) (string, error)
+	DecodeShareLinks ShareLinkDecoder
+	Capabilities     Capabilities
+	Scripts          ScriptEvaluator
+	Nodes            NodeCompiler
+	Validate         EngineValidator
+	Lists            PackageLists
+	Policy           SecurityPolicy
 }
 type PackageLists interface {
 	Read(context.Context, string, string) (string, error)
@@ -119,7 +125,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	if c.Validate == nil {
 		return Prepared{}, errors.New("engine validator is required")
 	}
-	if request.Profile != nil && request.Profile.SourceMissing {
+	if request.Profile != nil && request.Profile.SourceMissing && request.Profile.Metadata["type"] != "custom" {
 		return Prepared{}, errors.New("profile source is unavailable")
 	}
 	settings := request.Settings
@@ -146,14 +152,21 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 			return Prepared{}, errors.New("invalid profile id")
 		}
 		var err error
-		config, profilePolicyOrder, err = parseProfile(request.Profile.Text)
+		if request.Profile.Metadata["type"] == "custom" {
+			config, err = c.customConfig(ctx, request)
+		} else {
+			config, profilePolicyOrder, err = parseProfile(request.Profile.Text)
+		}
 		if err != nil {
 			return Prepared{}, err
 		}
 		metadata = request.Profile.Metadata
 		selected = object(metadata["selectedMap"])
 	}
-	script := currentScript(settings)
+	script, scriptErr := authoredScript(request)
+	if scriptErr != nil {
+		return Prepared{}, scriptErr
+	}
 	if script != "" {
 		if c.Scripts == nil {
 			return Prepared{}, errors.New("script evaluator is required")
@@ -215,8 +228,8 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 			return Prepared{}, err
 		}
 	} else {
-		for _, entry := range list(config["proxies"]) {
-			if isExternal(text(object(entry)["type"])) {
+		for _, entry := range proxySlots(config) {
+			if isExternal(text(object(entry.values[entry.index])["type"])) {
 				return Prepared{}, errors.New("external transport compiler is required")
 			}
 		}
@@ -240,14 +253,6 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 		actualTun[key] = value
 	}
 	config["tun"] = actualTun
-	for _, sniffer := range object(object(config["sniffer"])["sniff"]) {
-		s := object(sniffer)
-		if values, ok := s["ports"].([]any); ok {
-			for i, v := range values {
-				values[i] = fmt.Sprint(v)
-			}
-		}
-	}
 	for section, kind := range map[string]string{"proxy-providers": "proxies", "rule-providers": "rules"} {
 		for _, value := range object(config[section]) {
 			provider := object(value)
@@ -272,9 +277,15 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	dns := object(config["dns"])
 	enabled := dns["enable"] == true
 	policyOrder := profilePolicyOrder
-	if settings["overrideDns"] == true || !enabled {
-		dns = copyObject(object(patch["dns"]))
-		if !enabled {
+	_, hasSharedDnsKeys := object(settings["patchClashConfig"])["dns-override-keys"]
+	_, hasProfileDnsKeys := object(metadata["overrides"])["dns-override-keys"]
+	if settings["overrideDns"] == true && !hasSharedDnsKeys && !hasProfileDnsKeys || !enabled {
+		if metadata["type"] == "custom" && !enabled {
+			dns = mergeSection(dns, Object{"enable": true, "enhanced-mode": "fake-ip", "nameserver": []any{"https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query"}}, "dns")
+		} else {
+			dns = copyObject(object(patch["dns"]))
+		}
+		if !enabled && metadata["type"] != "custom" {
 			dns["nameserver"] = append(list(dns["nameserver"]), "system://")
 		}
 		policy := object(dns["nameserver-policy"])
@@ -285,10 +296,52 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 		policyOrder = patchPolicyOrder
 	}
 	config["dns"] = dns
-	rules := list(config["rules"])
+	policyChanged, overrideErr := c.applyKeyOverrides(config, settings, metadata)
+	if overrideErr != nil {
+		return Prepared{}, overrideErr
+	}
+	dns = object(config["dns"])
+	if policyChanged {
+		if keys, present, _ := overrideKeys(object(metadata["overrides"]), "dns"); present && contains(keys, "nameserver-policy") {
+			profilePolicyOrder = jsonKeyOrder(input, "profile", "metadata", "overrides", "dns", "nameserver-policy")
+			policyOrder = profilePolicyOrder
+		} else {
+			policyOrder = patchPolicyOrder
+		}
+	}
+	if object(settings["networkProps"])["appendSystemDns"] == true {
+		servers := list(dns["nameserver"])
+		found := false
+		for _, server := range servers {
+			found = found || server == "system://"
+		}
+		if !found {
+			dns["nameserver"] = append(servers, "system://")
+		}
+	}
+	for _, sniffer := range object(object(config["sniffer"])["sniff"]) {
+		s := object(sniffer)
+		if values, ok := s["ports"].([]any); ok {
+			for i, v := range values {
+				values[i] = fmt.Sprint(v)
+			}
+		}
+	}
+
+	rules, ruleErr := authoredRules(config, request, script)
+	if ruleErr != nil {
+		return Prepared{}, ruleErr
+	}
+	if request.Profile != nil {
+		config["rules"] = rules
+		if err := c.injectRuleProviders(ctx, config, request); err != nil {
+			return Prepared{}, err
+		}
+	}
+
 	delete(config, "rules")
 	overrideData := object(metadata["overrideData"])
-	if overrideData["enable"] == true && script == "" {
+	if overrideData["enable"] == true && script == "" && metadata["type"] != "custom" {
 		rule := object(overrideData["rule"])
 		key := "addedRules"
 		if rule["type"] == "override" {

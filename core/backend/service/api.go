@@ -9,8 +9,10 @@ import (
 	"unicode/utf8"
 
 	"core/backend"
+	"core/backend/authoring"
 	"core/backend/compile"
 	"core/backend/profiles"
+	"time"
 )
 
 func (a *App) Handle(raw []byte) []byte {
@@ -48,6 +50,75 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	var err error
 	switch request.Method {
+	case "authoring.snapshot":
+		response.Result = a.profiles.AuthoringSnapshot()
+	case "authoring.evaluate":
+		var p struct {
+			Script string         `json:"script"`
+			Config compile.Object `json:"config"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			if p.Config == nil {
+				err = errors.New("config object is required")
+			} else {
+				var config compile.Object
+				config, err = (compile.JavaScript{Timeout: 2 * time.Second}).Evaluate(a.ctx, p.Script, p.Config)
+				response.Result = map[string]any{"config": config}
+			}
+		}
+	case "authoring.parseLinks":
+		var p struct {
+			Source string `json:"source"`
+			Token  string `json:"token"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			var source string
+			source, err = a.readSource(a.ctx, sourceParams{Source: p.Source, Token: p.Token})
+			if err == nil {
+				var proxies []compile.Object
+				proxies, err = a.compiler.ParseLinks(a.ctx, source)
+				response.Result = map[string]any{"proxies": proxies}
+			}
+		}
+	case "provider.inspect":
+		var p providerResourceParams
+		if err = decodeParams(request.Input, &p); err == nil {
+			var data []byte
+			data, err = a.providerResource(a.ctx, p)
+			if err == nil {
+				response.Result = inspectResource(data)
+			}
+		}
+	case "authoring.resource.read":
+		var p struct {
+			Collection string          `json:"collection"`
+			ID         json.RawMessage `json:"id"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			response.Result, err = a.readResource(a.ctx, p.Collection, authoring.ID(p.ID))
+		}
+	case "resource.get":
+		var p struct {
+			Collection string          `json:"collection"`
+			ID         json.RawMessage `json:"id"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			var row authoring.Object
+			var rev uint64
+			row, rev, err = a.profiles.Resource(a.ctx, p.Collection, authoring.ID(p.ID))
+			response.Result = map[string]any{"revision": rev, "declaration": row}
+		}
+	case "profile.validate":
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(request.Input, &fields)
+		if _, preview := fields["ageSecretKey"]; preview {
+			var p sourceParams
+			if err = decodeParams(request.Input, &p); err == nil {
+				response.Result = a.validatePreview(a.ctx, p)
+			}
+		} else {
+			response.Result, err = a.submit(request)
+		}
 	case "presentation":
 		response.Result = a.Presentation()
 	case "snapshot":
@@ -83,7 +154,12 @@ func (a *App) Handle(raw []byte) []byte {
 			if readErr != nil {
 				err = readErr
 			} else {
-				response.Result, err = a.compiler.Inspect(a.ctx, record.Source, params.ProfileID)
+				var captured []byte
+				captured, err = a.captureProfileInput(&params.ProfileID)
+				if err == nil {
+					response.Result, err = a.compiler.InspectProfile(a.ctx, captured)
+				}
+				_ = record
 			}
 		}
 	case "operation.get", "operation.cancel":
@@ -270,7 +346,7 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 		return Receipt{}, errors.New("data reset in progress")
 	}
 	switch request.Method {
-	case "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "provider.export", "authoring.resource.export", "storage.clearCache", "storage.collect", "profile.clearCache", "authoring.replace", "authoring.import", "authoring.resource.update", "resource.put", "resource.refresh", "profile.render", "subscription.update", "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

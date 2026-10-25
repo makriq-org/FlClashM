@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/observable"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -33,17 +33,17 @@ import (
 )
 
 var (
-	isInit              atomic.Bool
-	externalProviders   = map[string]cp.Provider{}
-	logSubscriber       observable.Subscription[log.Event]
-	healthCheckStopCh   chan struct{}
-	healthCheckChMu     sync.Mutex
-	healthCheckMu       sync.Mutex
-	healthCheckSeen     = map[string]string{}
-	requestStopCh       chan struct{}
-	requestChMu         sync.Mutex
-	requestMu           sync.Mutex
-	requestSeen         = map[string]bool{}
+	isInit            atomic.Bool
+	externalProviders = map[string]cp.Provider{}
+	logSubscriber     observable.Subscription[log.Event]
+	healthCheckStopCh chan struct{}
+	healthCheckChMu   sync.Mutex
+	healthCheckMu     sync.Mutex
+	healthCheckSeen   = map[string]string{}
+	requestStopCh     chan struct{}
+	requestChMu       sync.Mutex
+	requestMu         sync.Mutex
+	requestSeen       = map[string]bool{}
 	// uiActive reflects whether the Flutter UI is in the foreground. When false
 	// (app backgrounded) the request forwarder is paused and the health-check
 	// forwarder slows to backgroundHealthCheckInterval, so the core stops pinging
@@ -171,6 +171,7 @@ func handleForceGc() {
 }
 
 func handleShutdown() bool {
+	stopRouteWatch()
 	runLock.Lock()
 	defer runLock.Unlock()
 	stopHealthCheckForwarder()
@@ -379,6 +380,7 @@ func handleSetUiActive(active bool) {
 		go forwardHealthCheckDelays()
 	} else {
 		stopRequestForwarder()
+		stopRouteWatch()
 	}
 }
 
@@ -759,9 +761,10 @@ func handleGetExternalProviders() string {
 func handleGetExternalProvider(externalProviderName string) string {
 	runLock.Lock()
 	defer runLock.Unlock()
-	externalProvider, exist := externalProviders[externalProviderName]
+	// Provider-loaded events can arrive before the UI has requested the list.
+	externalProvider, exist := getExternalProvidersRaw()[externalProviderName]
 	if !exist {
-		return ""
+		return "null"
 	}
 	e, err := toExternalProvider(externalProvider)
 	if err != nil {

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../../common/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import 'backend_client.dart';
 
 /// Localized prefixes for failures reported by the backend.
@@ -16,21 +16,22 @@ class BackendErrorLabels {
   });
 
   factory BackendErrorLabels.current() => BackendErrorLabels(
-    unavailable: appLocalizations.backendUnavailable,
-    failed: appLocalizations.backendOperationFailed,
-    cancelled: appLocalizations.backendOperationCancelled,
-    closed: appLocalizations.backendClosed,
-    timeout: appLocalizations.backendTimeout,
+    unavailable: AppLocalizations.current.backendUnavailable,
+    failed: AppLocalizations.current.backendOperationFailed,
+    cancelled: AppLocalizations.current.backendOperationCancelled,
+    closed: AppLocalizations.current.backendClosed,
+    timeout: AppLocalizations.current.backendTimeout,
     causes: {
-      'timeout': appLocalizations.backendTimeout,
-      'profile_invalid': appLocalizations.backendProfileInvalid,
-      'node_start_failed': appLocalizations.backendNodeStartFailed,
+      'timeout': AppLocalizations.current.backendTimeout,
+      'profile_invalid': AppLocalizations.current.backendProfileInvalid,
+      'node_start_failed': AppLocalizations.current.backendNodeStartFailed,
       'subscription_download_failed':
-          appLocalizations.backendSubscriptionDownloadFailed,
-      'subscription_http_error': appLocalizations.backendSubscriptionHttpError,
-      'conflict': appLocalizations.backendRevisionConflict,
+          AppLocalizations.current.backendSubscriptionDownloadFailed,
+      'subscription_http_error':
+          AppLocalizations.current.backendSubscriptionHttpError,
+      'conflict': AppLocalizations.current.backendRevisionConflict,
     },
-    detailsHint: appLocalizations.backendErrorDetailsHint,
+    detailsHint: AppLocalizations.current.backendErrorDetailsHint,
   );
 
   final String unavailable;

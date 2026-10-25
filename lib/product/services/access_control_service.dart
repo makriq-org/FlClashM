@@ -235,7 +235,7 @@ class AccessControlService {
   VpnProps applyEditorState(
     VpnProps vpnProps,
     AccessControlEditorState editorState,
-  ) => vpnProps.copyWith(accessControl: editorState.toAccessControl());
+  ) => vpnProps.copyWith(accessControlProps: editorState.toAccessControl());
 
   List<Package> filterPackages({
     required List<Package> packages,

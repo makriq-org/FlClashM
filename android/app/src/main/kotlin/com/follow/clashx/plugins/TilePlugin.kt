@@ -8,11 +8,14 @@ import io.flutter.plugin.common.MethodChannel
 /** Compatibility presentation channel. Native actions are submitted directly to Go. */
 class TilePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var channel: MethodChannel
+    private lateinit var frontendChannel: MethodChannel
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, "tile")
         channel.setMethodCallHandler(this)
+        frontendChannel = MethodChannel(binding.binaryMessenger, "com.makriq.flclash/tile")
+        frontendChannel.setMethodCallHandler(this)
     }
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) { channel.setMethodCallHandler(null) }
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) { channel.setMethodCallHandler(null); frontendChannel.setMethodCallHandler(null) }
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "serviceReady", "updateTile", "updateMode", "updateGlobalModeEnabled" -> { GlobalState.syncStatus(); result.success(null) }

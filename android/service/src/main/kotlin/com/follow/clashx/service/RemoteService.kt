@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.os.RemoteException
+import com.follow.clashx.common.BoundedEventRelay
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.common.chunkedForAidl
 import com.follow.clashx.core.Core
@@ -25,6 +26,7 @@ class RemoteService : Service() {
     // Responses and events share the receiving process's Binder buffer. Keep
     // only one acknowledged stream in flight, including while Flutter polls.
     private val dispatchLock = Mutex()
+    private var events: BoundedEventRelay<Pair<IEventInterface, String>>? = null
 
     private suspend fun dispatchChunked(
         data: String,
@@ -70,19 +72,11 @@ class RemoteService : Service() {
         }
     }
 
-    private val allowed = setOf(
-        "backend", "getIsInit", "forceGc", "getProxies", "getTraffic", "getTotalTraffic",
-        "asyncTestDelay", "getConnections", "getExternalProviders", "getExternalProvider",
-        "getCountryCode", "getMemory", "getCoreVersion", "healthCheck", "healthProbe",
-        "setUiActive", "startLog", "stopLog", "tunnelHTTPRequest", "cancelTunnelHTTPRequest",
-        "getRuntimeSnapshot", "getAndroidVpnOptions", "getRunTime", "getCurrentProfileName",
-    )
-
     private val stub = object : IRemoteInterface.Stub() {
         override fun invokeAction(data: String, callback: ICallbackInterface) {
             GlobalState.launch {
                 val request = runCatching { JSONObject(data) }.getOrNull()
-                if (request == null || request.optString("method") !in allowed) {
+                if (request == null || !UIActionPolicy.allows(request.optString("method"))) {
                     val failure = JSONObject().put("id", request?.optString("id") ?: "")
                         .put("method", request?.optString("method") ?: "")
                         .put("code", -1).put("data", "unsupported UI action")
@@ -145,15 +139,17 @@ class RemoteService : Service() {
         try { event.asBinder().linkToDeath(death, 0) }
         catch (_: RemoteException) { replaceListener(null); return@synchronized }
         BackendHost.onEvent = { result ->
-            GlobalState.launch {
-                val id = UUID.randomUUID().toString()
-                dispatchChunked(result) { bytes, last, ack -> event.onEvent(id, bytes, last, ack) }
-            }
+            events?.offer(event to result)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        events = BoundedEventRelay(GlobalState.scope) { (listener, result) ->
+            if (synchronized(eventLock) { eventListener !== listener }) return@BoundedEventRelay
+            val id = UUID.randomUUID().toString()
+            dispatchChunked(result) { bytes, last, ack -> listener.onEvent(id, bytes, last, ack) }
+        }
         GlobalState.launch {
             runCatching { BackendHost.initialize() }
                 .onFailure { GlobalState.log("backend initialization failed: ${it.message}") }
@@ -162,6 +158,8 @@ class RemoteService : Service() {
     override fun onBind(intent: Intent?): IBinder = stub
     override fun onDestroy() {
         replaceListener(null)
+        events?.close()
+        events = null
         // Do not close the process-owned backend when a UI unbinds this bridge.
         super.onDestroy()
     }

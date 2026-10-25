@@ -1,5 +1,3 @@
-// ignore_for_file: invalid_annotation_target
-
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -7,47 +5,50 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'generated/core.freezed.dart';
 part 'generated/core.g.dart';
 
-abstract mixin class AppMessageListener {
-  void onLog(Log log) {}
-
-  void onDelay(Delay delay) {}
-
-  void onRequest(Connection connection) {}
-
-  void onLoaded(String providerName) {}
-}
-
-// abstract mixin class ServiceMessageListener {
-//   onProtect(Fd fd) {}
-//
-//   onProcess(ProcessData process) {}
-// }
-
 @freezed
 abstract class SetupParams with _$SetupParams {
   const factory SetupParams({
-    @JsonKey(name: "config") required Map<String, dynamic> config,
-    @JsonKey(name: "selected-map") required Map<String, String> selectedMap,
-    @JsonKey(name: "test-url") required String testUrl,
+    @JsonKey(name: 'selected-map') required Map<String, String> selectedMap,
+    @JsonKey(name: 'test-url') required String testUrl,
+    @Default(false) @JsonKey(name: 'skip-cert-verify') bool skipCertVerify,
+    @JsonKey(includeIfNull: false) SetupBase? base,
   }) = _SetupParams;
 
   factory SetupParams.fromJson(Map<String, dynamic> json) =>
       _$SetupParamsFromJson(json);
 }
 
-// extension SetupParamsExt on SetupParams {
-//   Map<String, dynamic> get json {
-//     final json = Map<String, dynamic>.from(config);
-//     json["selected-map"] = selectedMap;
-//     json["test-url"] = testUrl;
-//     return json;
-//   }
-// }
+@freezed
+abstract class SetupBase with _$SetupBase {
+  const factory SetupBase({required String path, required String overlay}) =
+      _SetupBase;
+
+  factory SetupBase.fromJson(Map<String, dynamic> json) =>
+      _$SetupBaseFromJson(json);
+}
+
+@freezed
+abstract class ProfileBase with _$ProfileBase {
+  const factory ProfileBase({
+    required Map<String, dynamic> config,
+    @Default('') String digest,
+    @Default([]) @JsonKey(name: 'match-rules') List<String> matchRules,
+    @Default(0) int proxies,
+    @Default(0) @JsonKey(name: 'proxy-groups') int proxyGroups,
+    @Default(0) int rules,
+
+    /// The keys the file names itself, top level and `tun.*`.
+    @Default([]) List<String> present,
+  }) = _ProfileBase;
+
+  factory ProfileBase.fromJson(Map<String, dynamic> json) =>
+      _$ProfileBaseFromJson(json);
+}
 
 @freezed
 abstract class UpdateParams with _$UpdateParams {
   const factory UpdateParams({
-    required Tun tun,
+    @JsonKey(toJson: _tunCoreJson) required Tun tun,
     @JsonKey(name: 'mixed-port') required int mixedPort,
     @JsonKey(name: 'allow-lan') required bool allowLan,
     @JsonKey(name: 'find-process-mode')
@@ -56,53 +57,80 @@ abstract class UpdateParams with _$UpdateParams {
     @JsonKey(name: 'log-level') required LogLevel logLevel,
     required bool ipv6,
     @JsonKey(name: 'tcp-concurrent') required bool tcpConcurrent,
-    @JsonKey(name: 'external-controller')
-    required ExternalControllerStatus externalController,
+    @JsonKey(name: 'external-controller') required String externalController,
+    @Default('') String secret,
     @JsonKey(name: 'unified-delay') required bool unifiedDelay,
+    @Default([]) List<String> authentication,
+    @Default(false) @JsonKey(name: 'geo-auto-update') bool geoAutoUpdate,
+    @Default(24) @JsonKey(name: 'geo-update-interval') int geoUpdateInterval,
+    @Default({}) @JsonKey(name: 'geox-url') Map<String, String> geoXUrl,
+    @Default(false) @JsonKey(name: 'skip-cert-verify') bool skipCertVerify,
   }) = _UpdateParams;
 
   factory UpdateParams.fromJson(Map<String, dynamic> json) =>
       _$UpdateParamsFromJson(json);
 }
 
-@freezed
-abstract class CoreState with _$CoreState {
-  const factory CoreState({
-    @JsonKey(name: "vpn-props") required VpnProps vpnProps,
-    @JsonKey(name: "only-statistics-proxy") required bool onlyStatisticsProxy,
-    @JsonKey(name: "current-profile-name") required String currentProfileName,
-    @JsonKey(name: "bypass-domain") @Default([]) List<String> bypassDomain,
-  }) = _CoreState;
-
-  factory CoreState.fromJson(Map<String, Object?> json) =>
-      _$CoreStateFromJson(json);
-}
+Map<String, Object?> _tunCoreJson(Tun tun) => tun.coreJson;
 
 @freezed
-abstract class AndroidVpnOptions with _$AndroidVpnOptions {
-  const factory AndroidVpnOptions({
+abstract class VpnOptions with _$VpnOptions {
+  const factory VpnOptions({
     required bool enable,
     required int port,
-    required AccessControl? accessControl,
+    required bool ipv6,
+    required bool dnsHijacking,
+    required AccessControlProps accessControlProps,
     required bool allowBypass,
     required bool systemProxy,
     required List<String> bypassDomain,
-    required String ipv4Address,
-    required String ipv6Address,
+    required String stack,
     @Default([]) List<String> routeAddress,
-    required String dnsServerAddress,
-    @Default([]) List<String> includePackage,
-    @Default([]) List<String> excludePackage,
-  }) = _AndroidVpnOptions;
+    @Default(0) int mtu,
+    @Default('') String congestionController,
+  }) = _VpnOptions;
 
-  factory AndroidVpnOptions.fromJson(Map<String, Object?> json) =>
-      _$AndroidVpnOptionsFromJson(json);
+  factory VpnOptions.fromJson(Map<String, Object?> json) =>
+      _$VpnOptionsFromJson(json);
+}
+
+extension VpnOptionsExt on VpnOptions {
+  /// Only what `ServiceController.start` and `VpnService.handleStart` read.
+  VpnOptions get effective {
+    if (!enable) {
+      return const VpnOptions(
+        enable: false,
+        port: 0,
+        ipv6: false,
+        dnsHijacking: false,
+        accessControlProps: AccessControlProps(),
+        allowBypass: false,
+        systemProxy: false,
+        bypassDomain: [],
+        stack: '',
+      );
+    }
+    final accessControl = accessControlProps;
+    final accepts = accessControl.mode == AccessControlMode.acceptSelected;
+    return copyWith(
+      port: systemProxy ? port : 0,
+      bypassDomain: systemProxy ? bypassDomain : const [],
+      accessControlProps: accessControl.enable
+          ? AccessControlProps(
+              enable: true,
+              mode: accessControl.mode,
+              acceptList: accepts ? accessControl.acceptList : const [],
+              rejectList: accepts ? const [] : accessControl.rejectList,
+            )
+          : const AccessControlProps(),
+    );
+  }
 }
 
 @freezed
 abstract class InitParams with _$InitParams {
   const factory InitParams({
-    @JsonKey(name: "home-dir") required String homeDir,
+    @JsonKey(name: 'home-dir') required String homeDir,
     required int version,
   }) = _InitParams;
 
@@ -113,8 +141,8 @@ abstract class InitParams with _$InitParams {
 @freezed
 abstract class ChangeProxyParams with _$ChangeProxyParams {
   const factory ChangeProxyParams({
-    @JsonKey(name: "group-name") required String groupName,
-    @JsonKey(name: "proxy-name") required String proxyName,
+    @JsonKey(name: 'group-name') required String groupName,
+    @JsonKey(name: 'proxy-name') required String proxyName,
   }) = _ChangeProxyParams;
 
   factory ChangeProxyParams.fromJson(Map<String, Object?> json) =>
@@ -122,91 +150,150 @@ abstract class ChangeProxyParams with _$ChangeProxyParams {
 }
 
 @freezed
-abstract class UpdateGeoDataParams with _$UpdateGeoDataParams {
-  const factory UpdateGeoDataParams({
-    @JsonKey(name: "geo-type") required String geoType,
-    @JsonKey(name: "geo-name") required String geoName,
-  }) = _UpdateGeoDataParams;
+abstract class ChangeProxyResult with _$ChangeProxyResult {
+  const factory ChangeProxyResult({
+    @Default('') String message,
+    @Default(false) bool changed,
+  }) = _ChangeProxyResult;
 
-  factory UpdateGeoDataParams.fromJson(Map<String, Object?> json) =>
-      _$UpdateGeoDataParamsFromJson(json);
+  factory ChangeProxyResult.fromJson(Map<String, Object?> json) =>
+      _$ChangeProxyResultFromJson(json);
 }
 
 @freezed
-abstract class AppMessage with _$AppMessage {
-  const factory AppMessage({
-    required AppMessageType type,
-    dynamic data,
-  }) = _AppMessage;
+abstract class RouteSnapshot with _$RouteSnapshot {
+  const factory RouteSnapshot({
+    @JsonKey(name: 'core-epoch') @Default(0) int coreEpoch,
+    @JsonKey(name: 'picks-version') @Default(0) int picksVersion,
+    @Default({}) Map<String, String> picks,
+  }) = _RouteSnapshot;
 
-  factory AppMessage.fromJson(Map<String, Object?> json) =>
-      _$AppMessageFromJson(json);
+  factory RouteSnapshot.fromJson(Map<String, Object?> json) =>
+      _$RouteSnapshotFromJson(json);
 }
 
 @freezed
-abstract class InvokeMessage with _$InvokeMessage {
-  const factory InvokeMessage({
-    required InvokeMessageType type,
-    dynamic data,
-  }) = _InvokeMessage;
+abstract class CoreEvent with _$CoreEvent {
+  const factory CoreEvent({required CoreEventType type, dynamic data}) =
+      _CoreEvent;
 
-  factory InvokeMessage.fromJson(Map<String, Object?> json) =>
-      _$InvokeMessageFromJson(json);
+  factory CoreEvent.fromJson(Map<String, Object?> json) =>
+      _$CoreEventFromJson(json);
 }
 
 @freezed
 abstract class Delay with _$Delay {
-  const factory Delay({
-    required String name,
-    required String url,
-    int? value,
-  }) = _Delay;
+  const factory Delay({required String name, required String url, int? value}) =
+      _Delay;
 
   factory Delay.fromJson(Map<String, Object?> json) => _$DelayFromJson(json);
 }
 
 @freezed
-abstract class Now with _$Now {
-  const factory Now({
-    required String name,
-    required String value,
-  }) = _Now;
+abstract class ProbeParams with _$ProbeParams {
+  const factory ProbeParams({
+    required String url,
+    @JsonKey(name: 'proxy-name') @Default('') String proxyName,
+    @Default({}) Map<String, String> headers,
+    required int timeout,
+    @JsonKey(name: 'max-body') @Default(0) int maxBody,
+  }) = _ProbeParams;
 
-  factory Now.fromJson(Map<String, Object?> json) => _$NowFromJson(json);
+  factory ProbeParams.fromJson(Map<String, Object?> json) =>
+      _$ProbeParamsFromJson(json);
 }
 
-// @freezed
-// class ProcessData with _$ProcessData {
-//   const factory ProcessData({
-//     required String id,
-//     required Metadata metadata,
-//   }) = _ProcessData;
-//
-//   factory ProcessData.fromJson(Map<String, Object?> json) =>
-//       _$ProcessDataFromJson(json);
-// }
-//
-// @freezed
-// class Fd with _$Fd {
-//   const factory Fd({
-//     required String id,
-//     required int value,
-//   }) = _Fd;
-//
-//   factory Fd.fromJson(Map<String, Object?> json) => _$FdFromJson(json);
-// }
+@freezed
+abstract class ProbeResult with _$ProbeResult {
+  const factory ProbeResult({
+    @JsonKey(name: 'status-code') @Default(0) int statusCode,
+    @Default(0) int delay,
+    @Default('') String body,
+    @Default('') String url,
+    @Default([]) List<String> chains,
+    @Default('') String rule,
+    @JsonKey(name: 'rule-payload') @Default('') String rulePayload,
+    String? error,
+    String? message,
+  }) = _ProbeResult;
+
+  factory ProbeResult.fromJson(Map<String, Object?> json) =>
+      _$ProbeResultFromJson(json);
+}
 
 @freezed
-abstract class ProviderSubscriptionInfo with _$ProviderSubscriptionInfo {
-  const factory ProviderSubscriptionInfo({
-    @JsonKey(name: "UPLOAD") @Default(0) int upload,
-    @JsonKey(name: "DOWNLOAD") @Default(0) int download,
-    @JsonKey(name: "TOTAL") @Default(0) int total,
-    @JsonKey(name: "EXPIRE") @Default(0) int expire,
-  }) = _ProviderSubscriptionInfo;
+abstract class OutboundIpParams with _$OutboundIpParams {
+  const factory OutboundIpParams({
+    @JsonKey(name: 'proxy-name') @Default('') String proxyName,
+    @Default([]) List<String> urls,
+    required int timeout,
+  }) = _OutboundIpParams;
 
-  factory ProviderSubscriptionInfo.fromJson(Map<String, Object?> json) =>
-      _$ProviderSubscriptionInfoFromJson(json);
+  factory OutboundIpParams.fromJson(Map<String, Object?> json) =>
+      _$OutboundIpParamsFromJson(json);
+}
+
+@freezed
+abstract class OutboundIpResult with _$OutboundIpResult {
+  const factory OutboundIpResult({
+    @Default('') String url,
+    @Default('') String body,
+    @Default(0) int delay,
+    @Default([]) List<String> chains,
+    String? error,
+    @JsonKey(name: 'core-epoch') @Default(0) int coreEpoch,
+    @JsonKey(name: 'picks-version') @Default(0) int picksVersion,
+  }) = _OutboundIpResult;
+
+  factory OutboundIpResult.fromJson(Map<String, Object?> json) =>
+      _$OutboundIpResultFromJson(json);
+}
+
+@freezed
+abstract class ServiceCheckParams with _$ServiceCheckParams {
+  const factory ServiceCheckParams({
+    @JsonKey(name: 'proxy-name') @Default('') String proxyName,
+    @Default([]) List<String> names,
+    required int timeout,
+  }) = _ServiceCheckParams;
+
+  factory ServiceCheckParams.fromJson(Map<String, Object?> json) =>
+      _$ServiceCheckParamsFromJson(json);
+}
+
+@freezed
+abstract class ServiceCheckItem with _$ServiceCheckItem {
+  const factory ServiceCheckItem({
+    @Default('') String name,
+    @Default('') String status,
+    @Default('') String region,
+    @Default(0) int delay,
+    @Default([]) List<String> chains,
+    @JsonKey(name: 'checked-at') @Default(0) int checkedAt,
+    @JsonKey(name: 'core-epoch') @Default(0) int coreEpoch,
+    @JsonKey(name: 'picks-version') @Default(0) int picksVersion,
+  }) = _ServiceCheckItem;
+
+  factory ServiceCheckItem.fromJson(Map<String, Object?> json) =>
+      _$ServiceCheckItemFromJson(json);
+}
+
+@freezed
+abstract class CoreMemoryStats with _$CoreMemoryStats {
+  const factory CoreMemoryStats({
+    @Default(0) int rss,
+    @Default(0) int heapInuse,
+    @Default(0) int heapIdle,
+    @Default(0) int stackInuse,
+    @Default(0) int runtimeOther,
+  }) = _CoreMemoryStats;
+
+  factory CoreMemoryStats.fromJson(Map<String, Object?> json) =>
+      _$CoreMemoryStatsFromJson(json);
+}
+
+extension CoreMemoryStatsExt on CoreMemoryStats {
+  int get runtimeTotal => heapInuse + heapIdle + stackInuse + runtimeOther;
 }
 
 SubscriptionInfo? subscriptionInfoFormCore(Map<String, Object?>? json) {
@@ -226,47 +313,27 @@ abstract class ExternalProvider with _$ExternalProvider {
     required String type,
     String? path,
     required int count,
-    @JsonKey(name: "subscription-info", fromJson: subscriptionInfoFormCore)
+    @JsonKey(name: 'subscription-info', fromJson: subscriptionInfoFormCore)
     SubscriptionInfo? subscriptionInfo,
-    @Default(false) bool isUpdating,
-    @JsonKey(name: "vehicle-type") required String vehicleType,
-    @JsonKey(name: "update-at") required DateTime updateAt,
+    @JsonKey(name: 'vehicle-type') required String vehicleType,
+    @JsonKey(name: 'update-at') required DateTime updateAt,
   }) = _ExternalProvider;
 
   factory ExternalProvider.fromJson(Map<String, Object?> json) =>
       _$ExternalProviderFromJson(json);
 }
 
-@freezed
-abstract class Action with _$Action {
-  const factory Action({
-    required ActionMethod method,
-    required dynamic data,
-    required String id,
-  }) = _Action;
-
-  factory Action.fromJson(Map<String, Object?> json) => _$ActionFromJson(json);
+extension ExternalProviderExt on ExternalProvider {
+  String get updatingKey => 'provider_$name';
 }
 
 @freezed
-abstract class ActionResult with _$ActionResult {
-  const factory ActionResult({
-    required ActionMethod method,
-    required dynamic data,
-    String? id,
-    @Default(ResultType.success) ResultType code,
-  }) = _ActionResult;
+abstract class ProxiesData with _$ProxiesData {
+  const factory ProxiesData({
+    required Map<String, dynamic> proxies,
+    required List<String> all,
+  }) = _ProxiesData;
 
-  factory ActionResult.fromJson(Map<String, Object?> json) =>
-      _$ActionResultFromJson(json);
-}
-
-extension ActionResultExt on ActionResult {
-  Result get toResult {
-    if (code == ResultType.success) {
-      return Result.success(data);
-    } else {
-      return Result.error(data);
-    }
-  }
+  factory ProxiesData.fromJson(Map<String, Object?> json) =>
+      _$ProxiesDataFromJson(json);
 }

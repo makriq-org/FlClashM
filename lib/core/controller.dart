@@ -1,0 +1,292 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:io';
+import '../product/backend/backend.dart';
+
+import 'package:flclashx/common/common.dart';
+import 'package:flclashx/core/core.dart';
+import 'package:flclashx/core/interface.dart';
+import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart';
+import 'package:path/path.dart';
+
+class CoreController {
+  static CoreController? _instance;
+  late CoreHandlerInterface _interface;
+
+  CoreController._internal() {
+    if (system.isAndroid) {
+      _interface = coreLib!;
+    } else {
+      _interface = coreService!;
+    }
+  }
+
+  @visibleForTesting
+  CoreController.test(this._interface) {
+    _instance = this;
+  }
+
+  @visibleForTesting
+  CoreController.scoped(this._interface);
+
+  @visibleForTesting
+  static void resetInstance() {
+    _instance = null;
+  }
+
+  factory CoreController() {
+    _instance ??= CoreController._internal();
+    return _instance!;
+  }
+
+  Future<CoreLifecycleResult> start() => _interface.start();
+
+  Future<CoreLifecycleResult> restart() => _interface.restart();
+
+  Future<CoreLifecycleResult> stop() => _interface.stop();
+
+  Future<CoreLifecycleResult> close() => _interface.close();
+
+  static Future<void> ensureHomeDir() async {
+    final homePath = await appPath.homeDirPath;
+    final homeDir = Directory(homePath);
+    final isExists = await homeDir.exists();
+    if (!isExists) {
+      await homeDir.create(recursive: true);
+    }
+    await system.grantHomeDirAccess(homePath);
+  }
+
+  static Future<void> initGeo() async {
+    final homePath = await appPath.homeDirPath;
+    const geoFileNameList = [MMDB, GEOIP, GEOSITE, ASN];
+    try {
+      for (final geoFileName in geoFileNameList) {
+        final geoFile = File(join(homePath, geoFileName));
+        final isExists = await geoFile.exists();
+        if (isExists) {
+          continue;
+        }
+        final data = await rootBundle.load('assets/data/$geoFileName');
+        final List<int> bytes = data.buffer.asUint8List();
+        await geoFile.writeAsBytes(bytes, flush: true);
+      }
+    } catch (e) {
+      commonPrint.log(
+        'Failed to initialize geo data: $e',
+        logLevel: LogLevel.error,
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> init(int version) async {
+    await backendClient.attach();
+    return backendClient.attached;
+  }
+
+  FutureOr<bool> get isInit => _interface.isInit;
+
+  Future<String> validateConfig(String path) => validateConfigWithData(File(path).readAsStringSync());
+  Future<String> validateProfile(String path, [String ageSecretKey = '']) async {
+    return _validate(await File(path).readAsBytes(), ageSecretKey);
+  }
+  Future<String> _validate(List<int> bytes, String key) async {
+    final token = await backendClient.upload(Uint8List.fromList(bytes));
+    try {
+      final result = await backendClient.request('profile.validate', {'token': token, 'ageSecretKey': key});
+      return (result as Map)['message'] as String;
+    } finally { await backendClient.discardBlob(token); }
+  }
+
+  Future<List<String>> validateProxies(List<Map<String, dynamic>> proxies) {
+    if (proxies.isEmpty) {
+      return Future.value(const []);
+    }
+    return _interface.validateProxies(proxies);
+  }
+
+  Future<List<String>> validateFilters(List<String> filters) {
+    if (filters.isEmpty) {
+      return Future.value(const []);
+    }
+    return _interface.validateFilters(filters);
+  }
+
+  Future<List<String>> encodeShareLinks(List<Map<String, dynamic>> proxies) {
+    if (proxies.isEmpty) {
+      return Future.value(const []);
+    }
+    return _interface.encodeShareLinks(proxies);
+  }
+
+  Future<List<List<Map<String, dynamic>>>> decodeShareLinks(
+    List<String> lines,
+  ) {
+    if (lines.isEmpty) {
+      return Future.value(const []);
+    }
+    return _interface.decodeShareLinks(lines);
+  }
+
+  Future<String> validateConfigWithData(String data) => _validate(utf8.encode(data), '');
+
+  Future<List<Group>> getProxiesGroups({
+    required ProxiesSortType sortType,
+    required DelayMap delayMap,
+    required Map<String, String> selectedMap,
+    required String defaultTestUrl,
+  }) async {
+    final proxiesData = await _interface.getProxies();
+    return toGroupsTask(
+      ComputeGroupsState(
+        proxiesData: proxiesData,
+        sortType: sortType,
+        delayMap: delayMap,
+        selectedMap: selectedMap,
+        defaultTestUrl: defaultTestUrl,
+      ),
+    );
+  }
+
+  Future<ChangeProxyResult> changeProxy(ChangeProxyParams changeProxyParams) {
+    return _interface.changeProxy(changeProxyParams);
+  }
+
+  Future<RouteSnapshot?> watchRoute(bool watch) {
+    return _interface.watchRoute(watch);
+  }
+
+  Future<List<TrackerInfo>> getConnections() async {
+    return _interface.getConnections();
+  }
+
+  Future<int> getConnectionCount() async {
+    return _interface.getConnectionCount();
+  }
+
+  Future<void> closeConnection(String id) async {
+    await _interface.closeConnection(id);
+  }
+
+  Future<void> closeConnections() async {
+    await _interface.closeConnections();
+  }
+
+  Future<void> resetConnections() async {
+    await _interface.resetConnections();
+  }
+
+  Future<List<ExternalProvider>> getExternalProviders() async {
+    return _interface.getExternalProviders();
+  }
+
+  Future<ExternalProvider?> getExternalProvider(
+    String externalProviderName,
+  ) async {
+    return _interface.getExternalProvider(externalProviderName);
+  }
+
+  Future<String> updateGeoData(String type) {
+    return _interface.updateGeoData(type);
+  }
+
+  Future<String> sideLoadExternalProvider({
+    required String providerName,
+    required String data,
+  }) {
+    return _interface.sideLoadExternalProvider(
+      providerName: providerName,
+      data: data,
+    );
+  }
+
+  Future<String> updateExternalProvider({required String providerName}) async {
+    return _interface.updateExternalProvider(providerName);
+  }
+
+  Future<bool> startListener() async {
+    return _interface.startListener();
+  }
+
+  Future<bool> stopListener() async {
+    return _interface.stopListener();
+  }
+
+  Future<Delay?> getDelay(String url, String proxyName) async {
+    return _interface.asyncTestDelay(url, proxyName);
+  }
+
+  Future<ProbeResult?> probe(ProbeParams params) => _interface.probe(params);
+
+  Future<OutboundIpResult?> outboundIp(OutboundIpParams params) =>
+      _interface.outboundIp(params);
+
+  Future<List<ServiceCheckItem>> serviceCheck(ServiceCheckParams params) =>
+      _interface.serviceCheck(params);
+
+  Future<Map<String, dynamic>> getConfig(String id) async {
+    final result = await backendClient.request('profile.inspect', {'profileId': id});
+    return Map<String,dynamic>.from((result as Map)['config'] as Map);
+  }
+  Future<Map<String, dynamic>> getProfileOutbounds(String id) async {
+    final result = await backendClient.request('profile.inspect', {'profileId': id});
+    return Map<String,dynamic>.from((result as Map)['outbounds'] as Map);
+  }
+  Future<({ProfileBase base,String path})> getProfileBase(String id) async {
+    final result=await backendClient.request('profile.inspect',{'profileId':id}) as Map;
+    return (base:ProfileBase.fromJson(Map<String,dynamic>.from(result['base'] as Map)),path:'');
+  }
+
+  Future<Traffic> getTraffic(bool onlyStatisticsProxy) async {
+    return _interface.getTraffic(onlyStatisticsProxy);
+  }
+
+  Future<Traffic> getTotalTraffic(bool onlyStatisticsProxy) async {
+    return _interface.getTotalTraffic(onlyStatisticsProxy);
+  }
+
+  Future<CoreMemoryStats?> getMemoryStats() async {
+    return _interface.getMemoryStats();
+  }
+
+  Future<String> getCoreVersion() async {
+    return _interface.getCoreVersion();
+  }
+
+  Future<bool> shutdown() => _interface.shutdown();
+
+  void resetTraffic() {
+    unawaited(backendClient.command('engine.command', {'method': 'traffic.reset'}));
+  }
+
+  void startLog() {
+    _interface.startLog();
+  }
+
+  void setHostActive(bool active) {
+    _interface.setHostActive(active);
+  }
+
+  void stopLog() {
+    _interface.stopLog();
+  }
+
+  Future<void> requestGc() async {
+    await _interface.forceGc();
+  }
+
+  Future<void> crash() async {
+    await _interface.crash();
+  }
+
+  Future<String> clearEffect(String profileId) async {
+    return backendClient.command('profile.clearCache', {'profileId': profileId}).then((_) => '');
+  }
+}
+
+final coreController = CoreController();

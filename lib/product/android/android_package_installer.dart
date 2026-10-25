@@ -11,9 +11,6 @@ class MethodChannelAndroidPackageInstaller implements AndroidPackageInstaller {
 
   @override
   Future<bool> install(String path) async =>
-      await _channel.invokeMethod<bool>(
-        'installPackage',
-        {'path': path},
-      ) ??
+      await _channel.invokeMethod<bool>('installPackage', {'path': path}) ??
       false;
 }

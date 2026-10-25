@@ -132,10 +132,16 @@ jobs:
         run: |
           git remote add upstream https://github.com/pluralplay/FlClashX.git 2>/dev/null || \
             git remote set-url upstream https://github.com/pluralplay/FlClashX.git
-          git fetch --no-tags upstream +refs/heads/dev:refs/remotes/upstream/dev
+          git fetch --no-tags upstream 5b38c0c7dfba726b8335407d0df5e6205e2d9bfa
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
+
+      - name: Generate Flutter models and projections
+        run: dart run tool/generate_flutter.dart build
 
       - name: Check product boundaries
         run: dart tool/check_product_boundaries.dart
@@ -147,13 +153,13 @@ jobs:
         run: dart tool/check_base_drift.dart
 
       - name: Run product and tool tests
-        run: flutter test test/product test/tool
+        run: flutter test test/product test/tool test/upstream_ui
 
       - name: Analyze application compile errors
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_base_drift.dart tool/generate_flutter.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   android-unit-tests:
     needs: detect-changes
@@ -175,6 +181,11 @@ jobs:
           cmdline-tools-version: '16111833' # 23.0
           packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
 
+      # The shared editor setup also exposes this choice as ANDROID_NDK_HOME
+      # for Flutter, independently of Gradle's android.ndkVersion.
+      - name: Select Android NDK for native hooks
+        run: echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -183,6 +194,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
@@ -237,6 +251,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
@@ -346,6 +363,9 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
@@ -426,6 +446,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

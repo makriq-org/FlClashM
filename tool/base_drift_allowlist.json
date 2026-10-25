@@ -1,4 +1,9 @@
 {
+  "upstreamImport": {
+    "commit": "5b38c0c7dfba726b8335407d0df5e6205e2d9bfa",
+    "sourcePackage": "fl_clash",
+    "localPackage": "flclashx"
+  },
   "allowedBaseDrift": [
     {
       "path": "android/common/build.gradle.kts",
@@ -473,7 +478,7 @@
     {
       "path": "lib/views/tools.dart",
       "bucket": "budget",
-      "reason": "Экран текущей конфигурации читает живой snapshot ядра вместо устаревшего Dart-кэша."
+      "reason": "Живые Settings сохраняют Go-backed Zashboard и навигацию; prerelease Switch и экспорт диагностики находятся на вложенных экранах."
     },
     {
       "path": "lib/common/link.dart",
@@ -623,7 +628,7 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
+      "reason": "Живой material_ui About сохраняет обновления форка, добавляет productContributors, скрывает Telegram и ссылается на фактический upstream FlClashX."
     },
     {
       "path": "lib/views/access.dart",
@@ -638,7 +643,7 @@
     {
       "path": "lib/views/config/general.dart",
       "bucket": "budget",
-      "reason": "Живой экран сети скрывает mixed-port через типизированный product advisory для обоих совместимых префиксов."
+      "reason": "Живые общие настройки сохраняют androidSecure, prerelease Switch, фактический уровень логов профиля и mount общего запрета отправки HWID."
     },
     {
       "path": "lib/views/config/network.dart",
@@ -703,7 +708,7 @@
     {
       "path": "lib/views/logs.dart",
       "bucket": "budget",
-      "reason": "Лента логов строит элементы лениво и вычисляет высоты по запросу без полной предварительной загрузки."
+      "reason": "Живой material_ui список логов экспортирует полный диагностический ZIP общим со startup механизмом."
     },
     {
       "path": "lib/views/proxies/list.dart",
@@ -758,7 +763,7 @@
     {
       "path": "lib/models/clash_config.dart",
       "bucket": "budget",
-      "reason": "Абстрактные декларации моделей приведены к контракту Freezed 4."
+      "reason": "Абстрактные модели приведены к Freezed 4; прямые цели правил согласованы с Go без расширения области DNS/NTP."
     },
     {
       "path": "lib/models/common.dart",
@@ -1459,6 +1464,901 @@
       "path": "core/backend/errors.go",
       "bucket": "budget",
       "reason": "Структурированные причины ошибок Go API отделяют локализованное сообщение UI от диагностики."
+    },
+    {
+      "path": "android/UPSTREAM_050.md",
+      "bucket": "budget",
+      "reason": "Зафиксированы реальные transport/platform контракты независимого Android host и результаты его проверок."
+    },
+    {
+      "path": "android/app/.gradle/config.properties",
+      "bucket": "budget",
+      "reason": "Удалён отслеживаемый локальный путь Android Studio; JDK задаётся декларативным Nix/CI окружением."
+    },
+    {
+      "path": "android/app/proguard-rules.pro",
+      "bucket": "budget",
+      "reason": "R8 сохраняет JNI, AIDL и Parcelable контракты независимого Android backend форка."
+    },
+    {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/plugins/AndroidTransportCompatibilityTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/extensions/Ext.kt",
+      "bucket": "budget",
+      "reason": "Сохранена Android-интеграция FlClashM с независимым host; пакетные метаданные и extension не берут runtime-владение."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/models/Package.kt",
+      "bucket": "budget",
+      "reason": "Сохранена Android-интеграция FlClashM с независимым host; пакетные метаданные и extension не берут runtime-владение."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/BatteryPlugin.kt",
+      "bucket": "budget",
+      "reason": "Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PackageIconFiles.kt",
+      "bucket": "budget",
+      "reason": "Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_widget_play.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_widget_stop.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_bg.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_fab_off.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_fab_on.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_mode_btn_active.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_mode_btn_inactive.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_toggle_bg.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/layout/widget_mode.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/layout/widget_on_off.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-night-v27/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-night-v36/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-v27/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-v36/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values/colors.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values/ic_launcher_background.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/network_security_config.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/shortcuts.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/widget_mode_info.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/widget_on_off_info.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/PackageIconFilesTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/common/src/main/AndroidManifest.xml",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/BoundedEventRelay.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Enums.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/PendingCallback.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/BoundedEventRelayTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/PendingCallbackTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/.gitignore",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/CMakeLists.txt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/arm64-v8a/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/armeabi-v7a/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/x86_64/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/jni_helper.cpp",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/java/com/follow/clashx/core/InvokeInterface.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/java/com/follow/clashx/core/TunInterface.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/packaging/apk/make_config.yaml",
+      "bucket": "budget",
+      "reason": "Сохранены параметры Android-пакета и релизного канала FlClashM вместо upstream desktop packaging."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IAckInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/ICallbackInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IEventInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IResultInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IStateCallback.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IVoidInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/AccessControlProps.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/NotificationParams.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/VpnOptions.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/Module.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/ModuleLoader.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/UIActionPolicy.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/models/VpnOptions.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/UIActionPolicyTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "core/backend/authoring/CONTRACT.md",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/authoring/collections.go",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/authoring/rules.go",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/compile/authoring.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/overrides.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/resources.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/profiles/authoring.go",
+      "bucket": "budget",
+      "reason": "Единый каталог Go атомарно сохраняет authoring, метаданные и удаления по общей CAS-ревизии."
+    },
+    {
+      "path": "core/backend/profiles/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Единый каталог Go атомарно сохраняет authoring, метаданные и удаления по общей CAS-ревизии."
+    },
+    {
+      "path": "core/backend/service/authoring.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/cache.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/cache_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/custom_import.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend_cache.go",
+      "bucket": "budget",
+      "reason": "Очистка производных кешей проходит очередь координатора и сохраняет планы, профили и живые fake-IP/selection."
+    },
+    {
+      "path": "core/backend_cache_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Очистка производных кешей проходит очередь координатора и сохраняет планы, профили и живые fake-IP/selection."
+    },
+    {
+      "path": "core/diagnostic_bridge.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_bridge_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_helpers_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_protocol.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_query.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_query_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_watch.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/filter.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/filter_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/lib.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/lib_other.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/outbound_ip.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/outbound_ip_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/probe.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/probe_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/profilecodec/links.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/links_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/rules.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/rules_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/region.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/route.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/server.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/service_check.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_check_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_rules.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_rules_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/share_link.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/slots.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/state/state.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "lib/bootstrap.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/clash/clash.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/common/app_localizations.dart",
+      "bucket": "budget",
+      "reason": "Локализация ошибок engine/backend объединяет новые upstream сообщения с контрактами FlClashM."
+    },
+    {
+      "path": "lib/common/backup.dart",
+      "bucket": "budget",
+      "reason": "Backup фасад использует Go backup API и временные файлы только для обмена/экспорта."
+    },
+    {
+      "path": "lib/common/boot_guard.dart",
+      "bucket": "budget",
+      "reason": "Сохранена диагностика запуска FlClashM и запись результатов bootstrap без переноса runtime-политики в UI."
+    },
+    {
+      "path": "lib/common/boot_record.dart",
+      "bucket": "budget",
+      "reason": "Сохранена диагностика запуска FlClashM и запись результатов bootstrap без переноса runtime-политики в UI."
+    },
+    {
+      "path": "lib/common/javascript.dart",
+      "bucket": "budget",
+      "reason": "Preview скриптов использует authoring.evaluate в Goja вместо второго runtime в Dart."
+    },
+    {
+      "path": "lib/common/proxy.dart",
+      "bucket": "budget",
+      "reason": "Тонкий facade сохраняет product ProxySelector в новом дереве UI без собственной координации runtime."
+    },
+    {
+      "path": "lib/common/task.dart",
+      "bucket": "budget",
+      "reason": "Представление engine proxy mappings адаптировано к Go helper; Dart-преобразования обслуживают только preview/UI."
+    },
+    {
+      "path": "lib/core/controller.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/core/interface.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/core/lib.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/database/clash_providers.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/database.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/dialers.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/generated/database.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/database/groups.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/profiles.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/projection.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/rules.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/scripts.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/features/form/nested_form_sheet.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/manager/app_manager.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/manager/core_manager.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/models/generated/state.freezed.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/models/state.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/action.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/actions/backup.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/clash_providers.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/common.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/core.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profile_headers.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profile_settings.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profiles.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/setup.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/store.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/app.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/database.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/generated/action.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/providers/generated/database.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/providers/state/custom.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs и Go-backed данные; цели правил и резервные выходы согласованы с зависимостями Go compiler."
+    },
+    {
+      "path": "lib/providers/state/profile.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/ui/inherited.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/views/config/dns.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/ntp.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/override.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/providers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/sniffer.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/tun.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/add.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/custom.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/dialers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/groups.dart",
+      "bucket": "budget",
+      "reason": "Экран адаптирован к строковым profileId и Go snapshots/commands; резервный выход выбирается среди локальных узлов без обязательного членства в группе."
+    },
+    {
+      "path": "lib/views/profiles/custom/members.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/providers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/rules.dart",
+      "bucket": "budget",
+      "reason": "Экран адаптирован к строковым profileId и Go snapshots/commands; прямой целью правила может быть локальный узел вне групп."
+    },
+    {
+      "path": "lib/views/profiles/edit.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/extend.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/script.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/standard.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/zashboard.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/widgets/dialog.dart",
+      "bucket": "budget",
+      "reason": "Совместимый диалог сохранён для fork APK updater с ограниченным размером и прокруткой длинного changelog."
+    },
+    {
+      "path": "lib/ui/flutter_material_compat.dart",
+      "bucket": "budget",
+      "reason": "Совместимые локализации и тема Flutter Material позволяют существующим fork окнам обновления и WebView работать внутри нового material_ui app без второго Navigator."
+    },
+    {
+      "path": "lib/providers/actions/geo_resource.dart",
+      "bucket": "budget",
+      "reason": "Обновление Geo завершается по terminal Go receipt вместо отсутствующих upstream scheduler events; индикатор снимается и при ошибке."
+    },
+    {
+      "path": "core/backend_resource.go",
+      "bucket": "budget",
+      "reason": "Runtime resource export разрешает только имя/тип текущего provider и чтение bounded файлов в trusted cache через os.Root; каталог и произвольные platform paths недоступны."
+    },
+    {
+      "path": "core/backend_resource_test.go",
+      "bucket": "budget",
+      "reason": "Runtime resource export разрешает только имя/тип текущего provider и чтение bounded файлов в trusted cache через os.Root; каталог и произвольные platform paths недоступны."
+    },
+    {
+      "path": "core/backend/service/CONTRACT.md",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/backend/service/resource_export.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/backend/service/resource_export_test.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/profilecodec/dump.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "core/profilecodec/dump_test.go",
+      "bucket": "budget",
+      "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "lib/providers/actions/icon_sets.dart",
+      "bucket": "budget",
+      "reason": "Обновление сохранённого набора иконок выполняет Go authoring.resource.update с CAS; SQL получает только подтверждённую проекцию."
+    },
+    {
+      "path": "lib/views/config/scripts.dart",
+      "bucket": "budget",
+      "reason": "Скрипты хранятся в Go authoring, поэтому удаление записи не читает и не удаляет legacy platform path из Dart."
+    },
+    {
+      "path": "lib/views/proxies/providers.dart",
+      "bucket": "budget",
+      "reason": "Редактор runtime providers использует inspect/export Go blob API; чтение и запись cache-файлов остаются в Go."
+    },
+    {
+      "path": "lib/providers/state/proxies.dart",
+      "bucket": "budget",
+      "reason": "В глобальном режиме GLOBAL показывается первой; порядок остальных групп профиля и фильтрация режима по правилам сохранены."
+    },
+    {
+      "path": "core/backend/profiles/subscription_privacy_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии Go проверяют общий и профильный запрет HWID при импорте, ручном и фоновом обновлении подписок без Flutter."
     }
   ]
 }

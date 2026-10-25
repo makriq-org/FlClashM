@@ -9,19 +9,18 @@ class ProductSubscriptionDisplayPolicy {
     required Mode mode,
     required List<Group> groups,
     required bool globalOverrideEnabled,
-  }) =>
-      switch (mode) {
-        Mode.direct => const [],
-        Mode.global => globalOverrideEnabled
-            ? groups
-                .where((item) => item.name == GroupName.GLOBAL.name)
-                .toList()
-            : groups.toList(),
-        Mode.rule => groups
-            .where((item) => item.hidden == false)
-            .where((item) => item.name != GroupName.GLOBAL.name)
-            .toList(),
-      };
+  }) => switch (mode) {
+    Mode.direct => const [],
+    Mode.global =>
+      globalOverrideEnabled
+          ? groups.where((item) => item.name == GroupName.GLOBAL.name).toList()
+          : groups.toList(),
+    Mode.rule =>
+      groups
+          .where((item) => item.hidden == false)
+          .where((item) => item.name != GroupName.GLOBAL.name)
+          .toList(),
+  };
 
   ProductProviderAdvisory advisoryForProfile(Profile? profile) =>
       ProductProviderAdvisory.fromProfile(profile);
@@ -32,21 +31,19 @@ class ProductSubscriptionDisplayPolicy {
   bool resolveEffectiveNewDashboard({
     required bool? settingValue,
     required ProductDisplayHints displayHints,
-  }) =>
-      settingValue ?? displayHints.newDashboard;
+  }) => settingValue ?? displayHints.newDashboard;
 
   bool isDashboardEditingLocked({
     required bool effectiveNewDashboard,
     required ProductDisplayHints displayHints,
-  }) =>
-      displayHints.denyDashboardEditing || effectiveNewDashboard;
+  }) => displayHints.denyDashboardEditing || effectiveNewDashboard;
 
   String resolveNotificationTitle(Profile profile) {
     final displayHints = displayHintsForProfile(profile);
     if (displayHints.serviceName.isNotEmpty) {
       return displayHints.serviceName;
     }
-    return profile.label ?? profile.id;
+    return profile.label;
   }
 
   String resolveNotificationSupportUrl(Profile profile) =>

@@ -23,6 +23,8 @@ nix develop -c make go-check
 <details>
 <summary>Without Nix and separate test installation</summary>
 
+The native Rust editor requires NDK r28 or newer with `libclang`. `ANDROID_NDK` selects the NDK for Go builds, while Flutter native hooks use `ANDROID_NDK_HOME`: both must point to the selected NDK. Nix and the shared CI setup set them automatically. When building without Nix, run `export ANDROID_NDK_HOME="$ANDROID_NDK"` before the commands below.
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core
@@ -55,7 +57,7 @@ RuntimeCoordinator is the sole owner of mutable runtime state. The backend lives
 
 When the backend instance changes or the Binder connection recovers, a live UI repeats `ui.attach` with a new `operationId` and `restore: true`. Go restores UI presence and node preparation without repeating `autoRun`; the stopped intent after an explicit Stop is preserved. Without `restore`, the first opening uses the normal `autoRun` policy.
 
-Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widgets are registered in `allowedProductUi`. `lib/views/**` stays in base with minimal hooks. Other base changes require reasons in `tool/base_drift_allowlist.json`. Do not restore coordination or legacy SharedPreferences as state authority in Dart/Kotlin.
+Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widgets are registered in `allowedProductUi`. Keep live screens in `lib/views/**` without duplicating them in product; they may evolve to fit the FlClashM architecture while complying with guards and the allowlist and registering links to product as touchpoints. Tracked base changes require reasons in `tool/base_drift_allowlist.json`; a touchpoint does not replace that entry. Do not restore coordination or legacy SharedPreferences as state authority in Dart/Kotlin.
 
 <details>
 <summary>Backend contracts when changing runtime</summary>
@@ -98,16 +100,19 @@ Queues and rotation bound writes; slow logs do not block node shutdown. Android 
 
 ## 🔄 Updating upstream and nodes
 
-Create a branch from the target fork branch, run the commands below and resolve conflicts. The Dart package stays `flclashx`. Check base drift immediately after merging; register new paths with reasons. Without upstream, pass `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Runtime changes first ship as `-preN` with real Android verification.
+The architecture and reliability of the independent Go backend take priority over minimizing upstream differences. Port fixes and features selectively; choose a full merge after assessing its benefits, conflicts and runtime impact. Preserve the Flutter ↔ backend and base ↔ product boundaries.
+
+Create a branch from the target fork branch. After fetching, explicitly choose an upstream ref (branch or tag), record its full SHA in the work/PR description, and port selected changes or perform a justified merge of that SHA. Our Dart package is `flclashx`; check the upstream package name (for example, `fl_clash`) and adapt imports and generation when needed.
+
+Immediately check drift against the selected SHA with `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Alternatively, supply an explicit common ancestor via `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints and the allowlist remain mandatory. The guard and CI default to `upstreamImport.commit` in `tool/base_drift_allowlist.json`. Exact imports are verified against that SHA, allowing only the Dart package rename. Other base changes require reasons in the allowlist; links to product also need touchpoint entries. Update the CI fetch when changing the pin. Runtime changes first ship as `-preN` with real Android verification.
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 
-`tool/prepare_core.sh` recreates `core/vendor`, applies patches without fuzz and checks the Mieru regression. Builds use `-mod=vendor` without changing the shared module cache. Patches cover closed Mieru QUIC timeouts, the backend HTTP command gate and synchronized system DNS access. Recheck each patch on update; remove upstream-fixed patches and their invocations while retaining vendor for remaining patches.
+`tool/prepare_core.sh` recreates `core/vendor`, applies patches without fuzz and checks the Mieru regression. Builds use `-mod=vendor` without changing the shared module cache. Patches cover the backend HTTP command gate and synchronized system DNS access. The closed Mieru QUIC timeout fix is now upstream; its regression test is retained. Recheck each patch on update; remove upstream-fixed patches and their invocations while retaining vendor for remaining patches.
 
 Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runtime/*_release.dart`; dependencies are in [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), build notes in [assets](../../../assets/runtimes/). Updates and rollbacks change pins, dependencies and binaries together; then rebuild and verify released ABIs.
 
@@ -206,3 +211,5 @@ Publish `releases/<tag>` files first, then the pointer signature, then JSON last
 Highest versionCode and publication time are stored per channel. Older signed manifests are rejected, and Android blocks APK downgrades. Roll back with a new corrective release carrying a higher code. Key rotation first requires a transitional app release containing the new public key.
 
 </details>
+
+Generate Flutter/Drift/Riverpod code with `nix develop -c make generate`. `tool/generate_flutter.dart` builds a real Flutter SDK summary using `sky_engine/_embedder.yaml` before running build_runner. This handles Nix resolving Flutter Dart to a standalone SDK without modifying the shared pub cache. Use the wrapper again after `build_runner clean`.

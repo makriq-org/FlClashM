@@ -66,8 +66,7 @@ class AndroidShellService {
   String buildForegroundNotificationTitle({
     required Profile? profile,
     Iterable<Group> groups = const [],
-  }) =>
-      foregroundNotification.buildTitle(profile, groups: groups);
+  }) => foregroundNotification.buildTitle(profile, groups: groups);
 
   Future<void> pushForegroundNotificationTitle(String title) {
     if (title.isEmpty) {
@@ -89,10 +88,7 @@ class AndroidShellService {
     Iterable<Group> groups = const [],
   }) async {
     await pushForegroundNotificationTitle(
-      buildForegroundNotificationTitle(
-        profile: profile,
-        groups: groups,
-      ),
+      buildForegroundNotificationTitle(profile: profile, groups: groups),
     );
   }
 

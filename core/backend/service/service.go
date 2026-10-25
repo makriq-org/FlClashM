@@ -4,7 +4,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -17,6 +16,7 @@ import (
 	_ "time/tzdata"
 
 	"core/backend"
+	"core/backend/authoring"
 	"core/backend/compile"
 	"core/backend/profiles"
 )
@@ -38,8 +38,13 @@ type Options struct {
 	UserAgent        string
 	Ticks            <-chan time.Time
 	Now              func() time.Time
+
+	// ReadProviderResource resolves a runtime provider by name and kind (proxy/rule).
+	// The host must enforce the 16 MiB read limit and never interpret names as paths.
+	ReadProviderResource func(context.Context, string, string) ([]byte, error)
 }
 type App struct {
+	readProviderResource                func(context.Context, string, string) ([]byte, error)
 	noticeMu                            sync.Mutex
 	now                                 func() time.Time
 	runtimeMu                           sync.Mutex
@@ -95,6 +100,9 @@ func Open(options Options) (*App, error) {
 	if options.Compiler == nil || options.ValidateSource == nil {
 		return nil, errors.New("backend compiler and source validator are required")
 	}
+	if options.Compiler.DecodeProfile == nil {
+		options.Compiler.DecodeProfile = compile.DecodeProfile
+	}
 	operations, err := openOperations(options.Directory, options.LegacyRunning, options.LegacyTimeZone, options.LegacyUTCOffset)
 	if err != nil {
 		return nil, err
@@ -126,6 +134,7 @@ func Open(options Options) (*App, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{directory: options.Directory, platform: options.Platform, inspection: options.Nodes.Inspection, runtime: runtime, profiles: repository, compiler: options.Compiler, validateSource: options.ValidateSource, operations: operations, ctx: ctx, cancel: cancel, subscribers: map[uint64]chan Event{}}
+	app.readProviderResource = options.ReadProviderResource
 	app.now = options.Now
 	if app.now == nil {
 		app.now = time.Now
@@ -144,7 +153,7 @@ func Open(options Options) (*App, error) {
 	if zoneErr != nil {
 		zone = time.FixedZone("legacy", operations.document.LegacyUTCOffset)
 	}
-	app.subscriptions = &profiles.Subscriptions{Repository: repository, Client: client, DeviceHeaders: options.DeviceHeaders, UserAgent: options.UserAgent, Now: options.Now, LegacyTimeZone: zone, OnUpdated: app.profileUpdated}
+	app.subscriptions = &profiles.Subscriptions{Repository: repository, Client: client, DeviceHeaders: options.DeviceHeaders, UserAgent: options.UserAgent, Now: options.Now, LegacyTimeZone: zone, OnUpdated: app.profileUpdated, DecodeSource: options.Compiler.DecodeProfile}
 	runtimeEvents, detach := runtime.Subscribe(1)
 	app.workers.Go(func() {
 		defer detach()
@@ -265,18 +274,23 @@ func newID(prefix string) string {
 	}
 	return prefix + "-" + hex.EncodeToString(nonce)
 }
-func (a *App) captureInput() (backend.Input, error) {
+func (a *App) captureInput() (backend.Input, error) { return a.captureProfileInput(nil) }
+func (a *App) captureProfileInput(profileID *string) (backend.Input, error) {
 	for range 8 {
 		catalog := a.profiles.Snapshot()
 		var id string
 		_ = json.Unmarshal(catalog.Settings["currentProfileId"], &id)
+		if profileID != nil {
+			id = *profileID
+		}
 		// Raw values keep member order of ordered engine maps such as
 		// dns.nameserver-policy; the compiler decodes them as needed.
 		settings := compile.Object{}
 		for key, value := range catalog.Settings {
 			settings[key] = json.RawMessage(value)
 		}
-		request := compile.Input{Version: 1, Settings: settings, CatalogRevision: catalog.Revision}
+		request := compile.Input{Version: 1, Settings: settings, CatalogRevision: catalog.Revision, Authoring: catalog.Authoring}
+		custom := false
 		if id != "" {
 			record, err := a.profiles.Get(id)
 			if err != nil {
@@ -287,12 +301,49 @@ func (a *App) captureInput() (backend.Input, error) {
 					return nil, err
 				}
 			} else {
-				rawMeta, _ := json.Marshal(record.Metadata)
-				decoder := json.NewDecoder(bytes.NewReader(rawMeta))
-				decoder.UseNumber()
-				var metadata compile.Object
-				_ = decoder.Decode(&metadata)
+				metadata := compile.Object{}
+				for key, raw := range record.Metadata {
+					metadata[key] = json.RawMessage(raw)
+				}
+				custom = string(record.Metadata["type"]) == `"custom"`
 				request.Profile = &compile.RawProfile{ID: id, Text: record.Source, Metadata: metadata, Revision: record.Revision, SourceMissing: record.SourceMissing}
+			}
+		}
+		if profileID != nil && request.Profile == nil {
+			return nil, profiles.ErrNotFound
+		}
+		if request.Profile != nil && custom {
+			used := map[string]bool{}
+			all := false
+			for _, row := range authoring.Scoped(catalog.Authoring["proxyGroups"], id) {
+				var names []string
+				_ = json.Unmarshal(row["use"], &names)
+				for _, name := range names {
+					used[name] = true
+				}
+				all = all || string(row["include-all-providers"]) == "true" || string(row["include-all"]) == "true"
+			}
+			request.Profiles = map[string]compile.RawProfile{}
+			for _, entry := range catalog.Profiles {
+				var label, kind, key string
+				_ = json.Unmarshal(entry.Metadata["type"], &kind)
+				_ = json.Unmarshal(entry.Metadata["id"], &key)
+				_ = json.Unmarshal(entry.Metadata["label"], &label)
+				if label == "" {
+					label = key
+				}
+				if kind == "custom" || !all && !used[label] {
+					continue
+				}
+				record, err := a.profiles.Get(key)
+				if err != nil {
+					return nil, err
+				}
+				meta := compile.Object{}
+				for key, raw := range record.Metadata {
+					meta[key] = json.RawMessage(raw)
+				}
+				request.Profiles[key] = compile.RawProfile{ID: key, Text: record.Source, Metadata: meta, Revision: record.Revision, SourceMissing: record.SourceMissing}
 			}
 		}
 		if a.profiles.Snapshot().Revision != catalog.Revision {
@@ -377,13 +428,13 @@ func (a *App) profileUpdated(ctx context.Context, id string, revision uint64) er
 	}
 	var applied compile.Input
 	_ = json.Unmarshal(input, &applied)
-	if applied.Profile == nil || applied.Profile.ID != id {
+	if applied.Profile == nil || (applied.Profile.ID != id && !a.currentUsesProfile(id)) {
 		return nil
 	}
 	catalog := a.profiles.Snapshot()
 	var current string
 	_ = json.Unmarshal(catalog.Settings["currentProfileId"], &current)
-	if current != id {
+	if current != applied.Profile.ID {
 		return nil
 	}
 	receipt, err := a.applyCurrent(newID("subscription"), false)

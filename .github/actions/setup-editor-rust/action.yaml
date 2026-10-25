@@ -1,0 +1,25 @@
+name: Setup editor Rust
+description: Install the pinned editor toolchain and Android standard libraries
+runs:
+  using: composite
+  steps:
+    # Flutter resolves native-hook compilers through ANDROID_NDK_HOME, whereas
+    # our Go build uses ANDROID_NDK. Override the runner's preinstalled NDK too.
+    - name: Select pinned NDK for Flutter native hooks
+      if: runner.os == 'Linux' && env.ANDROID_NDK != ''
+      shell: bash
+      run: |
+        test -d "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64"
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK" >> "$GITHUB_ENV"
+    - name: Install pinned Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install 1.99.0 --profile minimal
+        rustup target add --toolchain 1.99.0 aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+        echo 'RUSTUP_TOOLCHAIN=1.99.0' >> "$GITHUB_ENV"
+    - name: Install editor host build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y libx11-dev libxkbcommon-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev

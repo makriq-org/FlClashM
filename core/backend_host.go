@@ -226,7 +226,8 @@ func openApplicationBackend(options backendHostOptions) error {
 	}}
 	backendManaged.Store(true)
 	app, err := application.Open(application.Options{
-		Directory: filepath.Join(options.Home, "backend"), LegacySettings: options.Legacy, LegacyRunning: options.LegacyRunning, LegacyTimeZone: options.TimeZone, LegacyUTCOffset: options.UTCOffset,
+		ReadProviderResource: readBackendProviderResource,
+		Directory:            filepath.Join(options.Home, "backend"), LegacySettings: options.Legacy, LegacyRunning: options.LegacyRunning, LegacyTimeZone: options.TimeZone, LegacyUTCOffset: options.UTCOffset,
 		Compiler: compiler, ValidateSource: func(ctx context.Context, source string) error {
 			// Validation uses exactly the normal preparation pipeline, without
 			// installing a plan or starting a process.
@@ -425,6 +426,7 @@ func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error
 		return err
 	}
 	handleSetState(string(payload.State))
+	bumpRouteEpoch()
 	return ctx.Err()
 }
 
@@ -497,6 +499,7 @@ func (backendEngine) ApplySelection(ctx context.Context, old, next *backend.Runt
 	}
 	runLock.Unlock()
 	handleSetState(string(payload.State))
+	refreshRoute()
 	return ctx.Err()
 }
 func (backendEngine) Start(ctx context.Context) error {

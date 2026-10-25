@@ -10,8 +10,10 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_js
   hotkey_manager_linux
   screen_retriever_linux
-  tray_manager
+  tray
   url_launcher_linux
+  wifi_ssid
+  window
   window_manager
 )
 

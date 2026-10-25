@@ -22,15 +22,16 @@ String truncateDiagnosticUtf8(
 
   while (index < value.length) {
     final first = value.codeUnitAt(index);
-    final isSurrogatePair = first >= 0xd800 &&
+    final isSurrogatePair =
+        first >= 0xd800 &&
         first <= 0xdbff &&
         index + 1 < value.length &&
         value.codeUnitAt(index + 1) >= 0xdc00 &&
         value.codeUnitAt(index + 1) <= 0xdfff;
     final codePoint = isSurrogatePair
         ? 0x10000 +
-            ((first - 0xd800) << 10) +
-            (value.codeUnitAt(index + 1) - 0xdc00)
+              ((first - 0xd800) << 10) +
+              (value.codeUnitAt(index + 1) - 0xdc00)
         : first;
     final codePointBytes = _utf8CodePointLength(codePoint);
     if (bytes + codePointBytes > maxBytes) break;
@@ -49,15 +50,16 @@ int diagnosticUtf8Length(String value) {
   var index = 0;
   while (index < value.length) {
     final first = value.codeUnitAt(index);
-    final isSurrogatePair = first >= 0xd800 &&
+    final isSurrogatePair =
+        first >= 0xd800 &&
         first <= 0xdbff &&
         index + 1 < value.length &&
         value.codeUnitAt(index + 1) >= 0xdc00 &&
         value.codeUnitAt(index + 1) <= 0xdfff;
     final codePoint = isSurrogatePair
         ? 0x10000 +
-            ((first - 0xd800) << 10) +
-            (value.codeUnitAt(index + 1) - 0xdc00)
+              ((first - 0xd800) << 10) +
+              (value.codeUnitAt(index + 1) - 0xdc00)
         : first;
     result += _utf8CodePointLength(codePoint);
     index += isSurrogatePair ? 2 : 1;

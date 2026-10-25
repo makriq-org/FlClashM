@@ -32,6 +32,37 @@ func upload(t *testing.T, app *App, data []byte) Blob {
 	return blob
 }
 
+func TestFileImportRequiresMetadataBeforeWritingAgeKey(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	blob := upload(t, app, []byte("rules: ['MATCH,DIRECT']\n"))
+	for _, metadata := range []any{nil, map[string]any{"id": "with-key"}} {
+		id := "without-metadata"
+		if metadata != nil {
+			id = "with-metadata"
+		}
+		request(t, app, id, "profile.import.file", map[string]any{"token": blob.Token, "ageSecretKey": "saved-key", "metadata": metadata})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		result, err := app.Await(ctx, id)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if metadata == nil {
+			if result.Status != "failed" || result.Error != "profile metadata is required" {
+				t.Fatalf("invalid metadata did not fail safely: %+v", result)
+			}
+		} else {
+			if result.Status != "succeeded" {
+				t.Fatalf("valid metadata failed after rejected import: %+v", result)
+			}
+			record, err := app.profiles.Get("with-key")
+			if err != nil || string(record.Metadata["ageSecretKey"]) != `"saved-key"` {
+				t.Fatal("import lost age key", record, err)
+			}
+		}
+	}
+}
+
 func TestProfileExportPreservesLegacyBytesAndBlobEditsUseRevision(t *testing.T) {
 	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
 	original := []byte{'#', 0xff, '\n', 'a', ':', ' ', 'b', '\n'}

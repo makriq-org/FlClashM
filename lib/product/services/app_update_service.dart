@@ -11,17 +11,12 @@ typedef AsyncTaskRunner = Future<T?> Function<T>(
   String? title,
 });
 
-enum AppUpdateCheckTrigger {
-  automatic,
-  manual,
-}
+enum AppUpdateCheckTrigger { automatic, manual }
 
 typedef SkipAppUpdateRelease = Future<void> Function(String tagName);
 
 class AppUpdateService {
-  const AppUpdateService({
-    this.platform = const AndroidUpdateBridge(),
-  });
+  const AppUpdateService({this.platform = const AndroidUpdateBridge()});
 
   final AppUpdatePlatformBridge platform;
 
@@ -151,12 +146,12 @@ class AppUpdateService {
         asset: androidAsset.apkAsset,
         downloadTask: (onReceiveProgress, cancellation) =>
             platform.downloadReleaseAsset(
-          androidAsset.apkAsset,
-          tempFile.path,
-          expectedSha256: expectedSha256,
-          onReceiveProgress: onReceiveProgress,
-          cancellation: cancellation,
-        ),
+              androidAsset.apkAsset,
+              tempFile.path,
+              expectedSha256: expectedSha256,
+              onReceiveProgress: onReceiveProgress,
+              cancellation: cancellation,
+            ),
       );
     } on AppUpdateDownloadCancelledException {
       if (tempFile.existsSync()) {
