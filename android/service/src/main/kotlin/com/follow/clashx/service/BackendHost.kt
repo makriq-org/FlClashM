@@ -265,7 +265,7 @@ internal object BackendEvents {
     /** Go application events (runtime, catalog, settings, operations) change
      * the presentation. Delay results can move an auto-selecting group to
      * another node shown in the notification title; logs and requests cannot. */
-    fun refreshesPresentation(type: String?): Boolean = type == "backend" || type == "delay"
+    fun refreshesPresentation(type: String?): Boolean = type == "backend" || type == "delay" || type == "routeChanged"
 
     /** Normalized Flutter ThemeMode name from Go settings: light, dark or system. */
     fun themeMode(value: String?): String {

@@ -1,33 +1,27 @@
 package com.follow.clashx.plugins
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import androidx.core.app.NotificationCompat
 import com.follow.clashx.GlobalState
-import com.follow.clashx.RunState
 import com.follow.clashx.Service
-import com.follow.clashx.common.Components
+import com.follow.clashx.common.BoundedEventRelay
 import com.follow.clashx.common.GlobalState as CommonGlobalState
 import com.follow.clashx.common.diagnostics.DiagnosticLog
 import com.follow.clashx.service.models.NotificationParams
 import com.google.gson.Gson
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.StandardMethodCodec
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 class ServicePlugin :
     FlutterPlugin,
@@ -38,26 +32,50 @@ class ServicePlugin :
     }
 
     private var job = SupervisorJob()
-    override val coroutineContext get() = job + Dispatchers.Main
+    override val coroutineContext get() = job + Dispatchers.Default
 
+    private lateinit var messenger: BinaryMessenger
     private lateinit var channel: MethodChannel
+    private lateinit var coreChannel: MethodChannel
+    @Volatile private var utf8Events = false
     private lateinit var context: Context
-    private var eventChannel = Channel<String?>(256, BufferOverflow.DROP_OLDEST)
+    private var events: BoundedEventRelay<String?>? = null
     private val gson = Gson()
     @Volatile private var attached = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         job = SupervisorJob()
-        eventChannel = Channel(256, BufferOverflow.DROP_OLDEST)
         context = binding.applicationContext
+        messenger = binding.binaryMessenger
         channel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/service")
         channel.setMethodCallHandler(this)
+        coreChannel = MethodChannel(binding.binaryMessenger, "$CHANNEL_NAMESPACE/core",
+            StandardMethodCodec.INSTANCE, binding.binaryMessenger.makeBackgroundTaskQueue())
+        coreChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "invokeMethod", "invokeAction" -> handleInvokeAction(call, result, utf8 = true)
+                else -> result.notImplemented()
+            }
+        }
         attached = true
         // Single FIFO consumer so events (logs/traffic/state) reach Flutter strictly in
         // order, instead of racing across a Semaphore-bounded parallel dispatch pool.
-        launch {
-            for (value in eventChannel) {
-                invokeOnMain("event", value)
+        events = BoundedEventRelay(this) { value ->
+            val argument = if (utf8Events) value?.toByteArray(Charsets.UTF_8) else value
+            val message = StandardMethodCodec.INSTANCE.encodeMethodCall(MethodCall("event", argument))
+            // Encode outside main as well: observations may contain large lists.
+            // Wait for the platform hop: posting a Handler task per event would
+            // drain the bounded channel into an unbounded main-looper backlog.
+            withContext(Dispatchers.Main) {
+                suspendCancellableCoroutine<Unit> { delivery ->
+                    if (!attached) delivery.resume(Unit)
+                    else messenger.send("$CHANNEL_NAMESPACE/service", message) {
+                        // A standard MethodChannel handler replies after processing
+                        // the event. Keep one outstanding message even when Dart
+                        // stalls; command replies and Stop use a separate path.
+                        if (delivery.isActive) delivery.resume(Unit)
+                    }
+                }
             }
         }
     }
@@ -65,8 +83,10 @@ class ServicePlugin :
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         attached = false
         channel.setMethodCallHandler(null)
+        coreChannel.setMethodCallHandler(null)
         job.cancel()
-        eventChannel.cancel()
+        events?.close()
+        events = null
         // The engine is gone, so nothing consumes events anymore — drop OUR remote
         // listener so a dead engine doesn't keep the cross-process pipe pumping into
         // an unconsumed channel. Owner-guarded: if a recreated activity's new engine
@@ -79,13 +99,23 @@ class ServicePlugin :
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "init" -> handleInit(result)
+            "init" -> {
+                utf8Events = (call.arguments as? Map<*, *>)?.get("eventEncoding") == "utf8"
+                handleInit(result)
+            }
             "shutdown" -> handleShutdown(result)
             "invokeAction" -> handleInvokeAction(call, result)
             "requestVpnPermission" -> {
-                if (android.net.VpnService.prepare(context) == null) result.successOnMain(true)
-                else GlobalState.getCurrentAppPlugin()?.requestVpnPermission { result.successOnMain(it) }
-                    ?: result.successOnMain(false)
+                val plugin = GlobalState.getCurrentAppPlugin()
+                val prepareVpn = {
+                    if (android.net.VpnService.prepare(context) == null) result.successOnMain(true)
+                    else plugin?.requestVpnPermission { result.successOnMain(it) }
+                        ?: result.successOnMain(false)
+                }
+                // Android 17 restricts LAN access separately. Ask from a visible
+                // Activity, but refusal must not prevent the internet VPN itself.
+                if (plugin != null) plugin.requestLocalNetworkPermission { prepareVpn() }
+                else prepareVpn()
             }
             "syncState" -> launch { GlobalState.handleSyncState(); result.successOnMain(true) }
             "updateNotificationParams" -> handleUpdateNotificationParams(call, result)
@@ -144,12 +174,19 @@ class ServicePlugin :
         invokeOnMain("crash", message)
     }
 
-    private fun handleInvokeAction(call: MethodCall, result: MethodChannel.Result) {
-        val data = call.arguments<String>() ?: run { result.successOnMain(""); return }
+    private fun handleInvokeAction(call: MethodCall, result: MethodChannel.Result, utf8: Boolean = false) {
+        val data = call.arguments as? String ?: run {
+            result.errorOnMain("INVALID_ARGUMENT", "Action envelope must be a JSON string", null)
+            return
+        }
         launch {
             // Service.invokeAction completes the callback exactly once (real result /
             // registration failure / watchdog), so don't also complete here.
-            Service.invokeAction(data) { payload -> result.successOnMain(payload) }
+            Service.invokeAction(data) { payload ->
+                // Result is thread-safe. Encode large replies here, never in a
+                // main Handler task (which would stall input and explicit Stop).
+                runCatching { result.success(if (utf8) payload.toByteArray(Charsets.UTF_8) else payload) }
+            }
                 .onFailure {
                     DiagnosticLog.e(
                         "ServicePlugin",
@@ -190,7 +227,7 @@ class ServicePlugin :
     }
 
     private fun dispatchEvent(value: String?) {
-        eventChannel.trySend(value)
+        events?.offer(value)
     }
 
     private fun invokeOnMain(method: String, argument: Any?) {
