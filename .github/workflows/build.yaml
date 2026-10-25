@@ -203,6 +203,15 @@ jobs:
           flutter-version: "3.47.7"
           cache: true
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '16111833' # 23.0
+          packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
+
+      - name: Select Android NDK for native hooks
+        run: echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
       - name: Require continuity signing for tag releases
         if: env.HAS_RELEASE_SIGNING != 'true'
         run: |
