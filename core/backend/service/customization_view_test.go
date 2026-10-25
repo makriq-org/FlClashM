@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -56,5 +58,52 @@ func TestModernAppearancePersistsWithEitherPrefix(t *testing.T) {
 				t.Fatal("priority, ownership or invalid value", theme)
 			}
 		})
+	}
+}
+
+// TestAppearancePaletteAndWidgetsMatchLegacy covers absent palettes and aliases
+// through both customization paths, including explicitly empty saved palettes.
+func TestAppearancePaletteAndWidgetsMatchLegacy(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		for _, saved := range []bool{false, true} {
+			t.Run(fmt.Sprintf("custom=%v/saved=%v", custom, saved), func(t *testing.T) {
+				app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+				if saved {
+					if err := app.patchSettings(context.Background(), profiles.Object{"themeProps": jsonValue(map[string]any{"primaryColors": []uint64{}})}, 0); err != nil {
+						t.Fatal(err)
+					}
+				}
+				headers := map[string]string{"flclashm-view": "app.color:123456", "flclashm-widgets": "outboundModeV2,trafficUsage,profiles,outboundModeV2,unknown"}
+				if custom {
+					headers["flclashm-custom"] = "update"
+					headers["flclashm-hex"] = "123456"
+				}
+				if err := app.customize(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false); err != nil {
+					t.Fatal(err)
+				}
+				var theme struct {
+					Colors []uint64 `json:"primaryColors"`
+				}
+				if err := json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme); err != nil {
+					t.Fatal(err)
+				}
+				expected := []uint64{0xff123456}
+				if !saved {
+					expected = append(defaultProviderPrimaryColors(), expected...)
+				}
+				if !reflect.DeepEqual(theme.Colors, expected) {
+					t.Fatalf("palette %v, want %v", theme.Colors, expected)
+				}
+				var settings struct {
+					Widgets []string `json:"dashboardWidgets"`
+				}
+				if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(settings.Widgets, []string{"outboundModeV2", "trafficUsage", "profiles"}) {
+					t.Fatal(settings.Widgets)
+				}
+			})
+		}
 	}
 }

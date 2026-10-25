@@ -44,16 +44,7 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 			appPatch[field] = jsonValue(enabled[token])
 		}
 	}
-	widgets := []string{}
-	names := map[string]string{}
-	for _, name := range []string{"networkSpeed", "outboundModeV2", "outboundMode", "trafficUsage", "announce", "metainfo", "networkDetection", "tunButton", "vpnButton", "systemProxyButton", "intranetIp", "memoryInfo", "changeServerButton", "serviceInfo", "zashboardButton", "currentOutbound", "announcement", "networkTakeover", "serviceStatus", "profiles", "proxyGroups", "connectionStats"} {
-		names[strings.ToLower(name)] = name
-	}
-	for _, name := range strings.Split(header("widgets"), ",") {
-		if canonical := names[strings.ToLower(strings.TrimSpace(name))]; canonical != "" {
-			widgets = append(widgets, canonical)
-		}
-	}
+	widgets := providerWidgets(header("widgets"))
 	if len(widgets) > 0 {
 		appPatch["dashboardWidgets"] = jsonValue(widgets)
 	}
@@ -69,7 +60,7 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 		if color, err := strconv.ParseUint(hexValue, 16, 32); err == nil {
 			var current profiles.Object
 			_ = json.Unmarshal(catalog.Settings["themeProps"], &current)
-			colors := []uint64{0xFF795548, 0xFF03A9F4, 0xFFFFFF00, 0xFFBBC9CC, 0xFFABD397, 0xFFD8C0C3, 0xFF665390}
+			colors := defaultProviderPrimaryColors()
 			if value, ok := current["primaryColors"]; ok {
 				_ = json.Unmarshal(value, &colors)
 			}
@@ -115,4 +106,26 @@ func (a *App) deviceHeadersEnabled(requested bool) bool {
 func (a *App) deviceHeadersRequested(requested *bool) bool {
 	enabled := requested == nil || *requested
 	return a.deviceHeadersEnabled(enabled)
+}
+
+// defaultProviderPrimaryColors returns a fresh palette for each customization.
+func defaultProviderPrimaryColors() []uint64 {
+	return []uint64{0xFF795548, 0xFF03A9F4, 0xFFFFFF00, 0xFFBBC9CC, 0xFFABD397, 0xFFD8C0C3, 0xFF665390}
+}
+
+// providerWidgets accepts modern names and legacy aliases in both header paths.
+func providerWidgets(raw string) []string {
+	names := map[string]string{}
+	for _, name := range []string{"networkSpeed", "outboundModeV2", "outboundMode", "trafficUsage", "announce", "metainfo", "networkDetection", "tunButton", "vpnButton", "systemProxyButton", "intranetIp", "memoryInfo", "changeServerButton", "serviceInfo", "zashboardButton", "currentOutbound", "announcement", "networkTakeover", "serviceStatus", "profiles", "proxyGroups", "connectionStats"} {
+		names[strings.ToLower(name)] = name
+	}
+	widgets := []string{}
+	seen := map[string]bool{}
+	for _, name := range strings.Split(raw, ",") {
+		if canonical := names[strings.ToLower(strings.TrimSpace(name))]; canonical != "" && !seen[canonical] {
+			seen[canonical] = true
+			widgets = append(widgets, canonical)
+		}
+	}
+	return widgets
 }

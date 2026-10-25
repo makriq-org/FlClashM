@@ -51,18 +51,7 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 				set(appPatch, field, "app."+field, enabled[flag])
 			}
 		}
-		names := map[string]string{}
-		for _, name := range []string{"currentOutbound", "announcement", "networkSpeed", "outboundMode", "vpnButton", "networkTakeover", "serviceStatus", "profiles", "proxyGroups", "connectionStats", "intranetIp", "memoryInfo"} {
-			names[strings.ToLower(name)] = name
-		}
-		widgets := []string{}
-		seen := map[string]bool{}
-		for _, name := range strings.Split(profiles.ProviderHeader(headers, "widgets"), ",") {
-			if canonical := names[strings.ToLower(strings.TrimSpace(name))]; canonical != "" && !seen[canonical] {
-				seen[canonical] = true
-				widgets = append(widgets, canonical)
-			}
-		}
+		widgets := providerWidgets(profiles.ProviderHeader(headers, "widgets"))
 		if len(widgets) > 0 {
 			appPatch["dashboardWidgets"] = jsonValue(widgets)
 		}
@@ -117,8 +106,10 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 			theme["primaryColor"] = jsonValue(color)
 			var current profiles.Object
 			_ = json.Unmarshal(catalog.Settings["themeProps"], &current)
-			var colors []uint64
-			_ = json.Unmarshal(current["primaryColors"], &colors)
+			colors := defaultProviderPrimaryColors()
+			if value, ok := current["primaryColors"]; ok {
+				_ = json.Unmarshal(value, &colors)
+			}
 			found := false
 			for _, item := range colors {
 				found = found || item == color
