@@ -1,6 +1,7 @@
 package com.follow.clashx.common
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -11,7 +12,16 @@ import kotlinx.coroutines.launch
 class BoundedEventRelay<T>(scope: CoroutineScope, capacity: Int = 256, deliver: suspend (T) -> Unit) {
     private val queue = Channel<T>(capacity, BufferOverflow.DROP_OLDEST)
     private val worker = scope.launch {
-        for (event in queue) deliver(event)
+        for (event in queue) {
+            try {
+                deliver(event)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A failed UI observation must not stop subsequent deliveries.
+                // Missing observations recover from the next Go snapshot.
+            }
+        }
     }
 
     fun offer(event: T): Boolean = queue.trySend(event).isSuccess

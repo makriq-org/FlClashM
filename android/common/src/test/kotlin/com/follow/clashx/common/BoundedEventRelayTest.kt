@@ -1,6 +1,9 @@
 package com.follow.clashx.common
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -10,6 +13,42 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BoundedEventRelayTest {
+    @Test fun failedDeliveryDoesNotStopSubsequentEvents() = runBlocking {
+        val complete = CompletableDeferred<Unit>()
+        val attempted = mutableListOf<Int>()
+        val relay = BoundedEventRelay<Int>(this) {
+            attempted.add(it)
+            if (it == 1) throw IllegalStateException("Flutter delivery failed")
+            complete.complete(Unit)
+        }
+        try {
+            assertTrue(relay.offer(1))
+            assertTrue(relay.offer(2))
+            withTimeout(1000) { complete.await() }
+            assertEquals(listOf(1, 2), attempted)
+        } finally { relay.close() }
+    }
+
+    @Test fun deliveryCancellationStopsWorkerBeforeNextQueuedEvent() = runBlocking {
+        val parent = Job(coroutineContext[Job])
+        val attempted = mutableListOf<Int>()
+        val relay = BoundedEventRelay<Int>(CoroutineScope(coroutineContext + parent)) {
+            attempted.add(it)
+            throw CancellationException("Engine detached")
+        }
+        try {
+            val worker = parent.children.single()
+            assertTrue(relay.offer(1))
+            assertTrue(relay.offer(2))
+            withTimeout(1000) { worker.join() }
+            assertTrue(worker.isCancelled)
+            assertEquals(listOf(1), attempted)
+        } finally {
+            relay.close()
+            parent.cancel()
+        }
+    }
+
     @Test fun slowConsumerDoesNotBlockCommandsOrCreateAnUnboundedBacklog() = runBlocking {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
