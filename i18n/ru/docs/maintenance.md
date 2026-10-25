@@ -102,7 +102,7 @@ JS работает в Goja без доступа к API платформы, с 
 
 Создайте ветку от целевой ветки форка. После fetch явно выберите upstream ref (ветку или тег), зафиксируйте полный SHA в описании работы/PR и перенесите выбранные изменения либо выполните обоснованный merge этого SHA. Наш Dart-пакет — `flclashx`; проверьте имя пакета апстрима (например, `fl_clash`) и при необходимости адаптируйте импорты и генерацию.
 
-Сразу проверьте дрейф относительно выбранного SHA командой `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Альтернатива — явный общий предок через `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints и allowlist остаются обязательными: проверяемые новые base-пути требуют причины в allowlist, связи с product — также записи в touchpoints. Текущие `make check` и CI по умолчанию проверяют дрейф относительно `upstream/dev`; проверка выбранного SHA их не заменяет. Смена базы/правил CI — отдельная реализация. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
+Сразу проверьте дрейф относительно выбранного SHA командой `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Альтернатива — явный общий предок через `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints и allowlist остаются обязательными. По умолчанию guard и CI используют `upstreamImport.commit` из `tool/base_drift_allowlist.json`. Точные копии сверяются с этим SHA (допустима только замена имени Dart-пакета); остальные base-изменения требуют причины в allowlist, связи с product — также записи в touchpoints. При обновлении pin меняйте fetch в CI. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
 
 ```bash
 git fetch upstream
@@ -210,3 +210,5 @@ https://flclashm.sourceforge.io/update/pre.json
 Максимальные versionCode и время публикации хранятся отдельно по каналам. Старый подписанный каталог отклоняется, Android не допускает понижение APK. Откат — новый исправляющий выпуск с большим кодом. При смене ключа сначала выпускается переходная версия с новым открытым ключом.
 
 </details>
+
+Генерация Flutter/Drift/Riverpod: `nix develop -c make generate`. Wrapper `tool/generate_flutter.dart` каждый раз строит настоящий Flutter SDK summary с `sky_engine/_embedder.yaml`, затем запускает build_runner. Это требуется Nix, где Flutter Dart разрешается в standalone SDK; общий pub cache не меняется. После `build_runner clean` снова используйте wrapper.

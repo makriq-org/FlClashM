@@ -29,12 +29,13 @@ Flutter не могут быть авторитетным постоянным �
 
 Расширение конструктора:
 
-- `authoring.snapshot`: `{revision, collections}`; коллекции `scripts`, `rules`,
+- `authoring.snapshot`: `{revision, profiles, collections}`; коллекции `scripts`, `rules`,
   `disabledRules`, `proxyGroups`, `clashProviders`, `customProxies`, `proxyDialers`,
   `iconRecords`, `iconSets` — JSON-массивы деклараций в формате моделей апстрима;
   ссылки на профиль — строковые `profileId`.
-- `authoring.replace`: `{expectedRevision, collections}`; атомарное сохранение
-  через обычную квитанцию Go, проверка ссылок/имён и ревизии.
+- `authoring.replace`: `{expectedRevision, collections, profiles?, deletedProfileIds?}`;
+  метаданные, удаления и декларации сохраняются одной CAS-транзакцией. Квитанция
+  содержит общую revision. Snapshot также захватывает profiles под тем же mutex.
 - Строки scripts содержат `content`; локальные rule providers содержат
   `contentBase64`. `authoring.resource.read/update` адресуют только разрешённую
   коллекцию и ID; загрузки и материализация файлов принадлежат Go.
@@ -59,8 +60,10 @@ Rust-компонент апстрима размещается в UI-слое �
 предварительного просмотра также направляется в Go API. Версия Rust 1.99.0 и
 зависимости закреплены; Nix предоставляет Android std декларативно, CI использует
 ту же версию. Обновление: исходники plugin, Cargo.lock и toolchain меняются вместе.
-Откат производится откатом интеграционного коммита с сохранением исходных данных
-Go; формат хранения профилей не заменяется на Flutter SQLite.
+Формат хранения остаётся Go-каталогом, без Flutter SQLite. Старый бинарник со
+строгим decoder не понимает поле authoring: перед откатом нужно сохранить каталог
+и восстановить совместимый backup. Полные контракты — в
+`core/backend/authoring/CONTRACT.md` и `lib/product/backend/upstream_contract.md`.
 
 ## Владение файлами при параллельной работе
 
@@ -76,3 +79,11 @@ Go; формат хранения профилей не заменяется н�
 Каждый исполнитель работает в собственном worktree, делает русские тематические
 коммиты без AI-трейлеров и сообщает их SHA. Не менять ветки другого исполнителя,
 не откатывать чужие правки. Никаких push/PR/merge в `dev` у исполнителей.
+
+## Воспроизводимая генерация
+
+`nix develop -c make generate` запускает `tool/generate_flutter.dart`: настоящий
+Flutter SDK summary строится с sky_engine embedder из package_config, даже если
+Nix разрешил Dart в standalone SDK. Затем работает обычный build_runner; shared
+pub cache не меняется. После clean wrapper запускается снова. Drift combining
+builder выводит database.g.dart в lib/database/generated.

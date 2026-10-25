@@ -116,7 +116,7 @@ JS در Goja بدون host bindings و با deadline/cancel اجرا می‌شو
 
 از شاخهٔ هدف فورک شاخهٔ کاری بسازید. پس از fetch، مرجع بالادست (شاخه یا برچسب) را صریحاً انتخاب و SHA کامل آن را در شرح کار یا PR ثبت کنید؛ سپس تغییرات منتخب را منتقل کنید یا با دلیل آن SHA را ادغام کنید. نام بستهٔ Dart ما `flclashx` است؛ نام بستهٔ بالادست (مثلاً `fl_clash`) را بررسی و در صورت نیاز importها و تولید کد را تطبیق دهید.
 
-بلافاصله با `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>` اختلاف را نسبت به SHA منتخب بررسی کنید. می‌توان نیای مشترک را نیز با `--merge-base=<sha>` یا `BASE_DRIFT_MERGE_BASE` مشخص کرد. guards، touchpoints و allowlist همچنان الزامی‌اند: مسیرهای جدید base تحت بررسی به دلیل در allowlist نیاز دارند و ارتباط با product به ثبت touchpoint هم نیاز دارد. در حال حاضر `make check` و CI به‌طور پیش‌فرض اختلاف را نسبت به `upstream/dev` بررسی می‌کنند؛ بررسی SHA منتخب جایگزین آن‌ها نیست. تغییر مبنا یا قواعد CI به پیاده‌سازی جداگانه نیاز دارد. تغییرات runtime ابتدا با `-preN` و بررسی روی Android واقعی منتشر می‌شوند.
+بلافاصله با `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>` اختلاف را نسبت به SHA منتخب بررسی کنید. می‌توان نیای مشترک را نیز با `--merge-base=<sha>` یا `BASE_DRIFT_MERGE_BASE` مشخص کرد. guards، touchpoints و allowlist همچنان الزامی‌اند. مبنای پیش‌فرض guard و CI مقدار `upstreamImport.commit` در `tool/base_drift_allowlist.json` است. فایل‌های واردشده با همان SHA مقایسه می‌شوند و فقط تغییر نام بستهٔ Dart مجاز است. سایر تغییرات base به دلیل در allowlist و ارتباط با product به touchpoint نیاز دارند. با تغییر pin، fetch در CI را نیز به‌روز کنید. تغییرات runtime ابتدا با `-preN` و بررسی روی Android واقعی منتشر می‌شوند.
 
 <div dir="ltr">
 
@@ -229,3 +229,5 @@ https://flclashm.sourceforge.io/update/pre.json
 </details>
 
 </div>
+
+برای تولید کد Flutter/Drift/Riverpod از `nix develop -c make generate` استفاده کنید. `tool/generate_flutter.dart` پیش از build_runner با `sky_engine/_embedder.yaml` یک Flutter SDK summary واقعی می‌سازد. این کار مشکل resolve شدن Dart در Nix به SDK مستقل را بدون تغییر pub cache مشترک رفع می‌کند. پس از `build_runner clean` دوباره از wrapper استفاده کنید.

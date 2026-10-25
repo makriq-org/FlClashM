@@ -102,7 +102,7 @@ JS 在 Goja 中运行，无主机绑定，支持 deadline/cancel。公共列表�
 
 从目标分支创建工作分支。fetch 后明确选择上游 ref（分支或标签），在工作说明或 PR 中记录完整 SHA，然后移植选定修改，或有充分理由地合并该 SHA。我们的 Dart 包名为 `flclashx`；检查上游包名（例如 `fl_clash`），必要时调整导入和代码生成。
 
-立即运行 `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`，相对于选定 SHA 检查差异。也可通过 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE` 指定共同祖先。guards、touchpoints 和 allowlist 仍为强制要求：受检查的新 base 路径须在 allowlist 中说明原因，连接 product 还须登记 touchpoint。当前 `make check` 和 CI 默认相对于 `upstream/dev` 检查差异；选定 SHA 的检查不能替代它们。修改 CI 基准或规则需要单独实现。运行时修改先以 `-preN` 发布并在 Android 真机验证。
+立即运行 `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`，相对于选定 SHA 检查差异。也可通过 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE` 指定共同祖先。guards、touchpoints 和 allowlist 仍为强制要求。guard 和 CI 默认使用 `tool/base_drift_allowlist.json` 中的 `upstreamImport.commit`。原样导入的文件按此 SHA 校验，仅允许 Dart 包名替换；其他 base 修改须在 allowlist 中说明原因，连接 product 还须登记 touchpoint。更新固定提交时也须更新 CI 的 fetch。运行时修改先以 `-preN` 发布并在 Android 真机验证。
 
 ```bash
 git fetch upstream
@@ -201,3 +201,5 @@ https://flclashm.sourceforge.io/update/pre.json
 各渠道分别保存最高 versionCode 和发布时间。旧的已签名目录会被拒绝，Android 也禁止 APK 降级。回滚通过编号更高的修正版本完成。轮换密钥时，先发布含新公钥的过渡版本。
 
 </details>
+
+使用 `nix develop -c make generate` 生成 Flutter/Drift/Riverpod 代码。`tool/generate_flutter.dart` 先通过 `sky_engine/_embedder.yaml` 构建真实 Flutter SDK summary，再运行 build_runner，适配 Nix 将 Flutter Dart 解析为独立 SDK 的情况，不修改共享 pub cache。执行 `build_runner clean` 后仍应使用该 wrapper。

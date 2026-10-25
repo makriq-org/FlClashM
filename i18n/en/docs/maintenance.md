@@ -102,7 +102,7 @@ The architecture and reliability of the independent Go backend take priority ove
 
 Create a branch from the target fork branch. After fetching, explicitly choose an upstream ref (branch or tag), record its full SHA in the work/PR description, and port selected changes or perform a justified merge of that SHA. Our Dart package is `flclashx`; check the upstream package name (for example, `fl_clash`) and adapt imports and generation when needed.
 
-Immediately check drift against the selected SHA with `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Alternatively, supply an explicit common ancestor via `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints and the allowlist remain mandatory: new tracked base paths need reasons in the allowlist, and links to product also need touchpoint entries. Current `make check` and CI default to checking drift against `upstream/dev`; checking the selected SHA does not replace them. Changing the CI baseline/rules requires a separate implementation. Runtime changes first ship as `-preN` with real Android verification.
+Immediately check drift against the selected SHA with `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Alternatively, supply an explicit common ancestor via `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints and the allowlist remain mandatory. The guard and CI default to `upstreamImport.commit` in `tool/base_drift_allowlist.json`. Exact imports are verified against that SHA, allowing only the Dart package rename. Other base changes require reasons in the allowlist; links to product also need touchpoint entries. Update the CI fetch when changing the pin. Runtime changes first ship as `-preN` with real Android verification.
 
 ```bash
 git fetch upstream
@@ -209,3 +209,5 @@ Publish `releases/<tag>` files first, then the pointer signature, then JSON last
 Highest versionCode and publication time are stored per channel. Older signed manifests are rejected, and Android blocks APK downgrades. Roll back with a new corrective release carrying a higher code. Key rotation first requires a transitional app release containing the new public key.
 
 </details>
+
+Generate Flutter/Drift/Riverpod code with `nix develop -c make generate`. `tool/generate_flutter.dart` builds a real Flutter SDK summary using `sky_engine/_embedder.yaml` before running build_runner. This handles Nix resolving Flutter Dart to a standalone SDK without modifying the shared pub cache. Use the wrapper again after `build_runner clean`.
