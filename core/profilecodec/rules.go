@@ -5,13 +5,13 @@ package profilecodec
 import (
 	"bytes"
 	"errors"
-	"github.com/metacubex/mihomo/common/yaml"
-	cp "github.com/metacubex/mihomo/constant/provider"
-	rp "github.com/metacubex/mihomo/rules/provider"
-	"io"
 	"net/netip"
 	"slices"
 	"strings"
+
+	"github.com/metacubex/mihomo/common/yaml"
+	cp "github.com/metacubex/mihomo/constant/provider"
+	rp "github.com/metacubex/mihomo/rules/provider"
 )
 
 type RuleSetInfo struct {
@@ -28,12 +28,11 @@ var zstdMagic = []byte{0x28, 0xB5, 0x2F, 0xFD}
 
 func CompileRules(buf []byte, allowEmpty bool) (*RuleSetInfo, []byte, error) {
 	if bytes.HasPrefix(buf, zstdMagic) {
-		for _, behavior := range []cp.RuleBehavior{cp.Domain, cp.IPCIDR} {
-			if rp.ConvertToMrs(buf, behavior, cp.MrsRule, io.Discard) == nil {
-				return ruleSetInfo(cp.MrsRule, behavior), nil, nil
-			}
+		behavior, _, err := dumpMrs(buf)
+		if err != nil {
+			return nil, nil, err
 		}
-		return nil, nil, errRuleSetInvalid
+		return ruleSetInfo(cp.MrsRule, behavior), nil, nil
 	}
 	format, entries := ruleSetEntries(buf)
 	if len(entries) == 0 && allowEmpty {

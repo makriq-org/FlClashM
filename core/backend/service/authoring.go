@@ -272,17 +272,9 @@ func (a *App) readResource(ctx context.Context, collection, id string) (any, err
 	if err != nil {
 		return nil, err
 	}
-	var data []byte
-	if encoded := authoring.String(row, "contentBase64"); encoded != "" {
-		data, err = base64.StdEncoding.DecodeString(encoded)
-	} else {
-		data = []byte(authoring.String(row, "content"))
-	}
+	data, err := savedResourceBytes(row, collection)
 	if err != nil {
 		return nil, err
-	}
-	if collection == "iconSets" && len(data) == 0 && row["icons"] != nil {
-		data = append([]byte(nil), row["icons"]...)
 	}
 	result := map[string]any{"contentBase64": base64.StdEncoding.EncodeToString(data), "size": len(data)}
 	if last := authoring.String(row, "lastUpdateTime"); last != "" {

@@ -22,6 +22,8 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	apply := false
 	switch method {
+	case "provider.export", "authoring.resource.export":
+		return a.exportResource(ctx, method, params)
 	case "storage.clearCache", "storage.collect", "profile.clearCache":
 		return a.cacheCommand(ctx, method, params, operationID)
 	case "authoring.replace":

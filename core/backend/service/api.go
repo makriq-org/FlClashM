@@ -80,6 +80,15 @@ func (a *App) Handle(raw []byte) []byte {
 				response.Result = map[string]any{"proxies": proxies}
 			}
 		}
+	case "provider.inspect":
+		var p providerResourceParams
+		if err = decodeParams(request.Input, &p); err == nil {
+			var data []byte
+			data, err = a.providerResource(a.ctx, p)
+			if err == nil {
+				response.Result = inspectResource(data)
+			}
+		}
 	case "authoring.resource.read":
 		var p struct {
 			Collection string          `json:"collection"`
@@ -337,7 +346,7 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 		return Receipt{}, errors.New("data reset in progress")
 	}
 	switch request.Method {
-	case "storage.clearCache", "storage.collect", "profile.clearCache", "authoring.replace", "authoring.import", "authoring.resource.update", "resource.put", "resource.refresh", "profile.render", "subscription.update", "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "provider.export", "authoring.resource.export", "storage.clearCache", "storage.collect", "profile.clearCache", "authoring.replace", "authoring.import", "authoring.resource.update", "resource.put", "resource.refresh", "profile.render", "subscription.update", "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

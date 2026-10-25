@@ -38,8 +38,13 @@ type Options struct {
 	UserAgent        string
 	Ticks            <-chan time.Time
 	Now              func() time.Time
+
+	// ReadProviderResource resolves a runtime provider by name and kind (proxy/rule).
+	// The host must enforce the 16 MiB read limit and never interpret names as paths.
+	ReadProviderResource func(context.Context, string, string) ([]byte, error)
 }
 type App struct {
+	readProviderResource                func(context.Context, string, string) ([]byte, error)
 	noticeMu                            sync.Mutex
 	now                                 func() time.Time
 	runtimeMu                           sync.Mutex
@@ -129,6 +134,7 @@ func Open(options Options) (*App, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{directory: options.Directory, platform: options.Platform, inspection: options.Nodes.Inspection, runtime: runtime, profiles: repository, compiler: options.Compiler, validateSource: options.ValidateSource, operations: operations, ctx: ctx, cancel: cancel, subscribers: map[uint64]chan Event{}}
+	app.readProviderResource = options.ReadProviderResource
 	app.now = options.Now
 	if app.now == nil {
 		app.now = time.Now
