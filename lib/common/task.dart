@@ -661,8 +661,8 @@ Future<MigrationData> migrateLegacyConfig({
     profiles.add(Profile.fromJson(rawProfile));
   }
   final currentProfileId = configMap['currentProfileId'];
-  configMap['currentProfileId'] = currentProfileId != null
-      ? idMap[currentProfileId]
+  configMap['currentProfileId'] = currentProfileId is String
+      ? currentProfileId
       : null;
   return MigrationData(
     configMap: configMap,

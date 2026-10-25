@@ -37,6 +37,7 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
   }
 
   Future<void> apply(ProfileSettingsSource source) async {
+    final generation = ++_generation;
     final id = source.id;
     if (id == null ||
         source.type == ProfileType.custom ||
@@ -44,7 +45,6 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
       ref.read(managedClashKeysProvider.notifier).set(const {});
       return;
     }
-    final generation = ++_generation;
     final ProfileBase base;
     try {
       base = (await _core.getProfileBase(id)).base;

@@ -31,7 +31,7 @@ class BackupAction extends _$BackupAction {
               RestoreStrategy.override,
         });
       } finally {
-        await backendClient.request('blob.delete', {'token': token});
+        await backendClient.discardBlob(token);
       }
       return true;
     });
@@ -69,7 +69,7 @@ class BackupAction extends _$BackupAction {
       );
       return path;
     } finally {
-      await backendClient.request('blob.delete', {'token': blob['token']});
+      await backendClient.discardBlob(blob['token'] as String);
     }
   }
 }
