@@ -110,7 +110,7 @@ git fetch origin
 nix develop -c make check go-check
 ```
 
-`tool/prepare_core.sh` recreates `core/vendor`, applies patches without fuzz and checks the Mieru regression. Builds use `-mod=vendor` without changing the shared module cache. Patches cover closed Mieru QUIC timeouts, the backend HTTP command gate and synchronized system DNS access. Recheck each patch on update; remove upstream-fixed patches and their invocations while retaining vendor for remaining patches.
+`tool/prepare_core.sh` recreates `core/vendor`, applies patches without fuzz and checks the Mieru regression. Builds use `-mod=vendor` without changing the shared module cache. Patches cover the backend HTTP command gate and synchronized system DNS access. The closed Mieru QUIC timeout fix is now upstream; its regression test is retained. Recheck each patch on update; remove upstream-fixed patches and their invocations while retaining vendor for remaining patches.
 
 Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runtime/*_release.dart`; dependencies are in [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md), build notes in [assets](../../../assets/runtimes/). Updates and rollbacks change pins, dependencies and binaries together; then rebuild and verify released ABIs.
 

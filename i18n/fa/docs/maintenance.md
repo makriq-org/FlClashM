@@ -128,7 +128,7 @@ nix develop -c make check go-check
 
 </div>
 
-`tool/prepare_core.sh` پوشهٔ `core/vendor` را از نو می‌سازد، patchها را بدون fuzz اعمال و رگرسیون Mieru را بررسی می‌کند. ساخت از `-mod=vendor` استفاده می‌کند و کش مشترک ماژول را تغییر نمی‌دهد. patchها برای timeout QUIC بستهٔ Mieru، درگاه فرمان HTTP backend و همگام‌سازی دسترسی DNS سیستم‌اند. در هر ارتقا بررسی‌شان کنید؛ patch اصلاح‌شده در بالادست و فراخوانی‌اش را حذف و vendor را برای بقیه حفظ کنید.
+`tool/prepare_core.sh` پوشهٔ `core/vendor` را از نو می‌سازد، patchها را بدون fuzz اعمال و رگرسیون Mieru را بررسی می‌کند. ساخت از `-mod=vendor` استفاده می‌کند و کش مشترک ماژول را تغییر نمی‌دهد. patchها برای درگاه فرمان HTTP backend و همگام‌سازی دسترسی DNS سیستم‌اند. اصلاح timeout QUIC بستهٔ Mieru وارد بالادست شده و آزمون رگرسیون آن حفظ شده است. در هر ارتقا بررسی‌شان کنید؛ patch اصلاح‌شده در بالادست و فراخوانی‌اش را حذف و vendor را برای بقیه حفظ کنید.
 
 نسخه، کامیت منبع، ABI و SHA-256 نودها در `lib/product/runtime/*_release.dart` تثبیت شده‌اند؛ وابستگی‌ها در [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md) و یادداشت ساخت در [منابع](../../../assets/runtimes/) هستند. ارتقا و بازگشت باید pin، وابستگی و باینری را با هم تغییر دهند؛ سپس ABIهای انتشار را دوباره بسازید و بررسی کنید.
 

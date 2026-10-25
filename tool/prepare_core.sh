@@ -5,7 +5,7 @@ set -euo pipefail
 task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$task_root/core"
 go mod vendor
-patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-mieru-terminal-timeout.patch"
+patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mieru-terminal-timeout-regression.patch"
 patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-embedded-command-gate.patch"
 patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-android-system-dns-lock.patch"
 

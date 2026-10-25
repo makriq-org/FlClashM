@@ -110,7 +110,7 @@ git fetch origin
 nix develop -c make check go-check
 ```
 
-`tool/prepare_core.sh` 重建 `core/vendor`，无 fuzz 应用补丁并检查 Mieru 回归。构建使用 `-mod=vendor`，不修改共享模块缓存。补丁涉及 Mieru 已关闭 QUIC 超时、后端 HTTP 命令入口和系统 DNS 访问同步。更新时逐一检查；上游修复后删除对应补丁及调用，为其余补丁保留 vendor。
+`tool/prepare_core.sh` 重建 `core/vendor`，无 fuzz 应用补丁并检查 Mieru 回归。构建使用 `-mod=vendor`，不修改共享模块缓存。补丁涉及后端 HTTP 命令入口和系统 DNS 访问同步。Mieru 已关闭 QUIC 超时修复已进入上游，仍保留回归测试。更新时逐一检查；上游修复后删除对应补丁及调用，为其余补丁保留 vendor。
 
 节点版本、源码提交、ABI 和 SHA-256 固定在 `lib/product/runtime/*_release.dart`；依赖见 [tool/runtime_go_modules](../../../tool/runtime_go_modules/README.md)，构建说明见[资源目录](../../../assets/runtimes/)。升级和回滚应同时调整固定版本、依赖与二进制，然后重建并验证发布 ABI。
 
