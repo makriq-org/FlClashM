@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/product/services/product_contributors.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -50,9 +51,8 @@ const _gratitude = [
   Person(avatar: 'assets/images/avatar/legiz.jpg', name: 'legiz'),
 ];
 
-const _upstreamRepository = 'chen08209/FlClash';
+const _upstreamRepository = 'pluralplay/FlClashX';
 const _coreRepository = 'MetaCubeX/mihomo';
-const _telegram = 'https://t.me/flclashx';
 
 /// The running core's version when it answers, else the one this build was
 /// made with, else nothing.
@@ -141,17 +141,23 @@ class AboutView extends ConsumerWidget {
                 url: 'https://github.com/$_coreRepository',
                 label: 'github.com/$_coreRepository',
               ),
-              _buildLinkItem(
-                glyph: AppGlyphs.send,
-                title: 'Telegram',
-                url: _telegram,
-                label: 't.me/flclashx',
-              ),
             ],
           ),
           generateSection(
             title: appLocalizations.otherContributors,
-            items: const [_PeopleRow(people: _contributors)],
+            items: [
+              _PeopleRow(
+                people: [
+                  for (final contributor in productContributors)
+                    Person(
+                      avatar: contributor.avatar,
+                      name: contributor.name,
+                      link: contributor.link,
+                    ),
+                  ..._contributors,
+                ],
+              ),
+            ],
           ),
           generateSection(
             title: appLocalizations.thanks,

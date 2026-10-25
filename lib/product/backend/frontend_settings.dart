@@ -17,6 +17,11 @@ Map<String, dynamic> frontendSettings(Map<String, dynamic> input) {
       json[e.value] = json[e.key];
     }
   }
+  // The upstream view model shortened this key; Go keeps the fork's schema.
+  final appSetting = json['appSettingProps'];
+  if (appSetting is Map && appSetting.containsKey('skippedAppUpdateTagName')) {
+    appSetting['skippedAppUpdateTag'] = appSetting['skippedAppUpdateTagName'];
+  }
   final vpn = json['vpnProps'];
   if (vpn is Map && !vpn.containsKey('accessControlProps')) {
     vpn['accessControlProps'] = vpn['accessControl'];
@@ -34,6 +39,12 @@ Map<String, dynamic> backendSettings(Config config) {
   };
   for (final e in aliases.entries) {
     if (json.containsKey(e.key)) json[e.value] = json.remove(e.key);
+  }
+  final appSetting = json['appSetting'];
+  if (appSetting is Map && appSetting.containsKey('skippedAppUpdateTag')) {
+    appSetting['skippedAppUpdateTagName'] = appSetting.remove(
+      'skippedAppUpdateTag',
+    );
   }
   final vpn = json['vpnProps'];
   if (vpn is Map) vpn['accessControl'] = vpn.remove('accessControlProps');

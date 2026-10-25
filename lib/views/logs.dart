@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/bootstrap/backend_startup.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -90,7 +91,7 @@ class _LogsViewState extends ConsumerState<LogsView>
   Future<void> _handleExport() async {
     final appLocalizations = context.appLocalizations;
     final res = await globalState.safeRun<bool>(() async {
-      return ref.read(logsProvider.notifier).exportLogs();
+      return exportStartupLogs(backendAvailable: true);
     }, title: appLocalizations.exportLogs);
     if (res != true) return;
     unawaited(

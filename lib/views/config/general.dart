@@ -6,6 +6,7 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/views/config/on_demand.dart';
+import 'package:flclashx/views/logs.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -319,6 +320,31 @@ ConfigToggleItem _appSettingToggle({
   );
 }
 
+class IncludePrereleaseUpdatesItem extends ConsumerWidget {
+  const IncludePrereleaseUpdatesItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final value = ref.watch(
+      appSettingProvider.select((state) => state.includePrereleaseUpdates),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.includePrereleaseUpdates),
+      subtitle: Text(appLocalizations.includePrereleaseUpdatesDesc),
+      value: value,
+      onChanged: (value) => ref
+          .read(appSettingProvider.notifier)
+          .update(
+            (state) => state.copyWith(
+              includePrereleaseUpdates: value,
+              skippedAppUpdateTag: '',
+            ),
+          ),
+    );
+  }
+}
+
 class GeneralView extends ConsumerWidget {
   const GeneralView({super.key});
 
@@ -456,6 +482,7 @@ class GeneralView extends ConsumerWidget {
         select: (state) => state.autoCheckUpdate,
         update: (state, value) => state.copyWith(autoCheckUpdate: value),
       ),
+      const IncludePrereleaseUpdatesItem(),
     ];
   }
 
@@ -490,7 +517,7 @@ class GeneralView extends ConsumerWidget {
     ];
   }
 
-  List<Widget> _logItems() {
+  List<Widget> _logItems(AppLocalizations appLocalizations) {
     return [
       const LogLevelItem(),
       _appSettingToggle(
@@ -498,6 +525,11 @@ class GeneralView extends ConsumerWidget {
         managedKey: 'app.openLogs',
         select: (state) => state.openLogs,
         update: (state, value) => state.copyWith(openLogs: value),
+      ),
+      ListItem.open(
+        leading: const GlyphIcon(AppGlyphs.logs),
+        title: Text(appLocalizations.logs),
+        widget: const LogsView(),
       ),
       if (system.isDesktop) const OpenLogsFolderItem(),
       const ReturnToProviderItem(),
@@ -567,7 +599,7 @@ class GeneralView extends ConsumerWidget {
           ),
           generateSection(
             title: appLocalizations.logsAndDiagnostics,
-            items: _logItems(),
+            items: _logItems(appLocalizations),
             footer: appLocalizations.logcatDesc,
           ),
         ],

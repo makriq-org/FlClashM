@@ -1,5 +1,4 @@
 import 'dart:async';
-import '../product/bootstrap/backend_startup.dart';
 import '../product/backend/backend.dart';
 import 'zashboard.dart';
 
@@ -47,11 +46,6 @@ class _ToolViewState extends ConsumerState<ToolsView> {
       items: [
         const _DisclaimerItem(),
         if (enableDeveloperMode) const _DeveloperItem(),
-        ListItem(title:Text(context.appLocalizations.exportLogs),onTap:()=>unawaited(exportStartupLogs(backendAvailable:true))),
-        ListItem(title:Text(context.appLocalizations.includePrereleaseUpdates),onTap:() async {
-          final s=ref.read(appSettingProvider);
-          ref.read(appSettingProvider.notifier).update((v)=>v.copyWith(includePrereleaseUpdates:!s.includePrereleaseUpdates));
-        }),
         const _InfoItem(),
       ],
     );
