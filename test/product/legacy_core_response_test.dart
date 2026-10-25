@@ -29,4 +29,16 @@ void main() {
     );
     expect(proxies.proxies['group'], isA<Map<String, dynamic>>());
   });
+
+  test('flat engine proxies become a typed upstream proxy envelope', () {
+    final response = legacyProxyEnvelope(<dynamic, dynamic>{
+      'group': <String, dynamic>{
+        'type': 'Selector',
+        'all': ['DIRECT'],
+      },
+    });
+    final proxies = ProxiesData.fromJson(response);
+    expect(proxies.all, ['group']);
+    expect(proxies.proxies['group']['all'], ['DIRECT']);
+  });
 }

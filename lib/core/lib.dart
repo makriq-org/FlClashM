@@ -141,10 +141,8 @@ class CoreLib extends CoreHandlerInterface {
         result = decodeLegacyResult(result);
       }
       result = normalizeLegacyJson(result);
-      if (method == CoreMethod.getProxies &&
-          result is Map &&
-          !result.containsKey('proxies')) {
-        result = {'proxies': result, 'all': result.keys.toList()};
+      if (method == CoreMethod.getProxies && result is Map) {
+        result = legacyProxyEnvelope(result);
       }
       if (method == CoreMethod.getConnections && result is Map)
         result = result['connections'];
@@ -158,6 +156,14 @@ CoreLib? get coreLib => Platform.isAndroid ? _lib : null;
 
 dynamic decodeLegacyResult(String value) =>
     value.isEmpty ? null : jsonDecode(value);
+
+Map<String, dynamic> legacyProxyEnvelope(Map<dynamic, dynamic> proxies) =>
+    proxies.containsKey('proxies')
+    ? Map<String, dynamic>.from(proxies)
+    : <String, dynamic>{
+        'proxies': Map<String, dynamic>.from(proxies),
+        'all': proxies.keys.cast<String>().toList(),
+      };
 
 /// MethodChannel maps have dynamic keys; generated JSON models require strings
 /// at every level, including empty maps inside a snapshot.

@@ -2334,6 +2334,11 @@
       "path": "core/profilecodec/dump_test.go",
       "bucket": "budget",
       "reason": "Экспорт ресурсов через Go blob API ограничивает размер и MRS распаковку; UI передаёт имя ресурса вместо platform path."
+    },
+    {
+      "path": "lib/providers/actions/icon_sets.dart",
+      "bucket": "budget",
+      "reason": "Обновление сохранённого набора иконок выполняет Go authoring.resource.update с CAS; SQL получает только подтверждённую проекцию."
     }
   ]
 }

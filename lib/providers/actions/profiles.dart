@@ -22,7 +22,6 @@ class ProfilesAction extends _$ProfilesAction {
 
   Future<void> deleteProfile(String id) async {
     await ref.read(profilesProvider.notifier).del(id);
-    await clearEffect(id);
     final currentProfileId = ref.read(currentProfileIdProvider);
     if (currentProfileId == id) {
       final profiles = ref.read(profilesProvider);
@@ -494,12 +493,6 @@ class ProfilesAction extends _$ProfilesAction {
   }
 
   Future<void> clearEffect(String profileId) async {
-    final profilePath = await appPath.getProfilePath(profileId.toString());
-    final profileFile = File(profilePath);
-    final isExists = await profileFile.exists();
-    if (isExists) {
-      await profileFile.safeDelete(recursive: true);
-    }
     try {
       final error = await _core.clearEffect(profileId);
       if (error.isNotEmpty) {

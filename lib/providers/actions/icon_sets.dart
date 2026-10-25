@@ -37,29 +37,15 @@ class IconSetsAction extends _$IconSetsAction {
   }
 
   Future<IconSet> sync(IconSet iconSet) async {
-    final before = await _stored(iconSet.id);
-    final content = await _download(iconSet.url);
-    final latest = before == null ? null : await _stored(iconSet.id);
-    if (before != null && (latest == null || latest.url != before.url)) {
-      return latest ?? iconSet;
-    }
-    final base = switch ((before, latest)) {
-      (final before?, final latest?) => latest.copyWith(
-        name: iconSet.name == before.name ? latest.name : iconSet.name,
-        url: iconSet.url,
-      ),
-      _ => iconSet,
-    };
-    return _put(
-      base.copyWith(icons: content.icons, lastUpdateTime: DateTime.now()),
-    );
-  }
-
-  Future<IconSet?> _stored(int id) async {
-    final rows =
-        ref.read(iconSetsProvider).value ??
-        await database.iconSetsDao.query().get();
-    return rows.where((item) => item.id == id).firstOrNull;
+    // Keep an explicit rename, then let Go download and CAS the resource.
+    await database.iconSets.put(iconSet.toCompanion());
+    await backendClient.command('authoring.resource.update', {
+      'collection': 'iconSets',
+      'id': iconSet.id,
+    });
+    await database.refreshFromGo();
+    final rows = await database.iconSetsDao.query().get();
+    return rows.firstWhere((item) => item.id == iconSet.id);
   }
 
   IconSet _put(IconSet iconSet) {
