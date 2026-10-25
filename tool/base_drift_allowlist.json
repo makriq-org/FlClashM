@@ -2354,6 +2354,11 @@
       "path": "lib/providers/state/proxies.dart",
       "bucket": "budget",
       "reason": "В глобальном режиме GLOBAL показывается первой; порядок остальных групп профиля и фильтрация режима по правилам сохранены."
+    },
+    {
+      "path": "core/backend/profiles/subscription_privacy_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии Go проверяют общий и профильный запрет HWID при импорте, ручном и фоновом обновлении подписок без Flutter."
     }
   ]
 }
