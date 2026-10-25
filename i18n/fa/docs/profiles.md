@@ -489,7 +489,7 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-custom: add` هنگام افزودن و `update` در هر به‌روزرسانی فقط `hex`، `widgets` و `settings` را اعمال می‌کند؛ سایر هدرها به آن وابسته نیستند. `flclashm-settings` وقتی `overrideProviderSettings` خاموش باشد اعمال می‌شود: پرچم‌های موجود فعال و پرچم‌های غایب به `false` بازنشانی می‌شوند. `androidsecure` فقط mixed-port را می‌بندد و انتخاب VPN را حفظ می‌کند. گروه `GLOBAL` از `flclashm-override` / `flclashx-override` پشتیبانی می‌کند و اولی اولویت دارد.
 
-قالب جدید `view` با کلیدهای `proxies.*` و `app.*` بدون `custom` هم اعمال می‌شود؛ تنظیمات تحت کنترل کاربر اولویت دارند. بدون `custom`، هدرهای `settings` و `widgets` هم مستقیم اعمال می‌شوند. اگر هر دو پیشوند یک هدر ارسال شوند، کل مقدار `flclashm-*` انتخاب می‌شود و مقادیر ادغام نمی‌شوند.
+برای پروفایل انتخاب‌شده، قالب جدید `view` با کلیدهای `proxies.*` و `app.*` بدون `custom` هم اعمال می‌شود؛ تنظیمات تحت کنترل کاربر اولویت دارند. بدون `custom`، هدرهای `settings` و `widgets` هم مستقیم اعمال می‌شوند. اگر هر دو پیشوند یک هدر ارسال شوند، کل مقدار `flclashm-*` انتخاب می‌شود و مقادیر ادغام نمی‌شوند.
 
 <details>
 <summary>مرجع هدرها و قالب‌ها</summary>

@@ -13,13 +13,24 @@ import (
 // Provider customization is a data policy. It runs headlessly and persists its
 // result; Flutter only renders the projected settings and display-only headers.
 func (a *App) customize(ctx context.Context, metadata profiles.Object, isNew bool) error {
-	if err := a.customizeLegacy(ctx, metadata, isNew); err != nil {
+	return a.customizeForProfile(ctx, metadata, isNew, false)
+}
+
+// customizeForProfile distinguishes explicit selection from an inactive import.
+func (a *App) customizeForProfile(ctx context.Context, metadata profiles.Object, isNew, selecting bool) error {
+	var id string
+	_ = json.Unmarshal(metadata["id"], &id)
+	active := selecting || a.isCurrent(id)
+	if err := a.customizeLegacy(ctx, metadata, isNew, active); err != nil {
 		return err
+	}
+	if !active {
+		return nil
 	}
 	return a.customizeView(ctx, metadata)
 }
 
-func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew bool) error {
+func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew, active bool) error {
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
 	header := func(suffix string) string { return strings.TrimSpace(profiles.ProviderHeader(headers, suffix)) }
@@ -44,6 +55,9 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 			enabled[strings.ToLower(strings.TrimSpace(value))] = true
 		}
 		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate", "openLogs": "openlogs", "closeConnections": "closeconnections"} {
+			if !active && (field == "openLogs" || field == "closeConnections") {
+				continue
+			}
 			if !slices.Contains(owned, "app."+field) {
 				appPatch[field] = jsonValue(enabled[token])
 			}

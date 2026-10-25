@@ -431,7 +431,7 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-custom: add` applies `hex`, `widgets` and `settings` on import, `update` on every refresh; other headers do not depend on it. `flclashm-settings` applies when `overrideProviderSettings` is off: listed flags are enabled, absent flags reset to `false`. `androidsecure` only disables mixed-port, preserving the VPN choice. `GLOBAL` supports `flclashm-override` / `flclashx-override`, with the first taking priority.
 
-The new `view` format with `proxies.*` and `app.*` keys also applies without `custom`; settings taken over by the user keep priority. Without `custom`, `settings` and `widgets` also apply directly. If both prefixes of a header are supplied, the entire `flclashm-*` value wins; values are not merged.
+For the selected profile, the new `view` format with `proxies.*` and `app.*` keys also applies without `custom`; settings taken over by the user keep priority. Without `custom`, `settings` and `widgets` also apply directly. If both prefixes of a header are supplied, the entire `flclashm-*` value wins; values are not merged.
 
 <details>
 <summary>Header and format reference</summary>

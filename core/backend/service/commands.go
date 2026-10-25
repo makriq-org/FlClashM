@@ -402,7 +402,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			if err != nil {
 				return result, err
 			}
-			if err = a.customize(ctx, record.Metadata, false); err != nil {
+			if err = a.customizeForProfile(ctx, record.Metadata, false, true); err != nil {
 				return result, err
 			}
 		}
@@ -517,7 +517,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err != nil {
 			return result, err
 		}
-		if err = a.customize(ctx, record.Metadata, true); err != nil {
+		if err = a.customizeForProfile(ctx, record.Metadata, true, request.Select); err != nil {
 			return result, err
 		}
 		if request.Select {

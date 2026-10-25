@@ -17,7 +17,7 @@ func TestProviderCustomizationPersistsWithoutUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata := profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-custom": "update", "flclashm-settings": "autostart,autoupdate", "flclashm-hex": "#ABCDEF:vibrant:pureblack", "flclashm-widgets": "outboundModeV2,trafficUsage,unknown", "flclashm-view": "type:tab;sort:delay;icon:standard;card:oneline"})}
-	if err := app.customize(context.Background(), metadata, false); err != nil {
+	if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
 		t.Fatal(err)
 	}
 	catalog := app.Snapshot().Catalog
@@ -39,7 +39,7 @@ func TestProviderCustomizationPersistsWithoutUI(t *testing.T) {
 	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"overrideProviderSettings": false})}, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.customize(context.Background(), metadata, false); err != nil {
+	if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
 		t.Fatal(err)
 	}
 	_ = json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings)
@@ -65,7 +65,7 @@ func TestCustomizationTriggerAndLiteralDisplayCompatibility(t *testing.T) {
 				t.Fatal(err)
 			}
 			metadata := profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-custom": test.trigger, "flclashm-settings": "autorun"})}
-			if err := app.customize(context.Background(), metadata, test.newProfile); err != nil {
+			if err := app.customizeForProfile(context.Background(), metadata, test.newProfile, true); err != nil {
 				t.Fatal(err)
 			}
 			var settings struct {

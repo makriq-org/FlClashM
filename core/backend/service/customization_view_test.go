@@ -20,7 +20,7 @@ func TestModernAppearancePersistsWithEitherPrefix(t *testing.T) {
 				prefix + "settings": "openlogs,closeconnections",
 				prefix + "widgets":  "profiles,proxyGroups",
 			})}
-			if err := app.customize(context.Background(), metadata, false); err != nil {
+			if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
 				t.Fatal(err)
 			}
 			read := func(key string) map[string]any {
@@ -50,7 +50,7 @@ func TestModernAppearancePersistsWithEitherPrefix(t *testing.T) {
 				t.Fatal(err)
 			}
 			metadata["providerHeaders"] = jsonValue(map[string]string{"flclashx-view": "app.glass:none;app.black:false", "flclashm-view": "app.glass:standard;app.black:true;app.color:invalid"})
-			if err := app.customize(context.Background(), metadata, false); err != nil {
+			if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
 				t.Fatal(err)
 			}
 			theme = read("themeProps")
@@ -78,7 +78,7 @@ func TestAppearancePaletteAndWidgetsMatchLegacy(t *testing.T) {
 					headers["flclashm-custom"] = "update"
 					headers["flclashm-hex"] = "123456"
 				}
-				if err := app.customize(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false); err != nil {
+				if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false, true); err != nil {
 					t.Fatal(err)
 				}
 				var theme struct {
@@ -120,7 +120,7 @@ func TestProviderSwitchOwnership(t *testing.T) {
 			if custom {
 				headers["flclashm-custom"] = "update"
 			}
-			if err := app.customize(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false); err != nil {
+			if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false, true); err != nil {
 				t.Fatal(err)
 			}
 			var settings struct {
@@ -133,6 +133,48 @@ func TestProviderSwitchOwnership(t *testing.T) {
 			}
 			if !settings.Close || settings.Logs || !settings.Update {
 				t.Fatal(settings)
+			}
+		})
+	}
+}
+
+// TestInactiveProfileCustomization waits for selection before changing app controls.
+func TestInactiveProfileCustomization(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		t.Run(fmt.Sprint(custom), func(t *testing.T) {
+			app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+			if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"closeConnections": true, "openLogs": true})}, 0); err != nil {
+				t.Fatal(err)
+			}
+			headers := map[string]string{"flclashm-settings": "autoupdate", "flclashm-view": "app.glass:ultra"}
+			if custom {
+				headers["flclashm-custom"] = "update"
+			}
+			metadata := profiles.Object{"id": jsonValue("inactive"), "providerHeaders": jsonValue(headers)}
+			if err := app.customizeForProfile(context.Background(), metadata, true, false); err != nil {
+				t.Fatal(err)
+			}
+			read := func() {
+				var settings struct {
+					Close bool `json:"closeConnections"`
+					Logs  bool `json:"openLogs"`
+				}
+				_ = json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings)
+				if !settings.Close || !settings.Logs {
+					t.Fatal("inactive subscription changed controls", settings)
+				}
+			}
+			read()
+			if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
+				t.Fatal(err)
+			}
+			var settings struct {
+				Close bool `json:"closeConnections"`
+				Logs  bool `json:"openLogs"`
+			}
+			_ = json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings)
+			if settings.Close || settings.Logs {
+				t.Fatal("selection did not apply controls", settings)
 			}
 		})
 	}
