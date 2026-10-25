@@ -60,7 +60,7 @@ class FrontendProjection {
     final run = _tail.then((_) async {
       final c = _container;
       if (c == null) return;
-      await database.refreshFromGo();
+      await database.refreshFromGo(ifChanged: true);
       final config = Config.fromJson(
         frontendSettings(backendClient.sourceSettings),
       );

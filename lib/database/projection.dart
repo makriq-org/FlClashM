@@ -9,6 +9,8 @@ class ProjectionWrites extends QueryInterceptor {
   QueryExecutorUser? _user;
   final _dirty = <QueryExecutor>{};
   final _roots = <TransactionExecutor>{};
+  int? _projectedSourceRevision;
+  int? _projectedCatalogRevision;
 
   @override
   Future<bool> ensureOpen(QueryExecutor executor, QueryExecutorUser user) {
@@ -79,9 +81,20 @@ class ProjectionWrites extends QueryInterceptor {
 }
 
 extension BackendProjection on Database {
-  Future<void> refreshFromGo() async {
+  /// Explicit reads always rebuild; runtime notifications can reuse the last
+  /// committed SQL snapshot. Keep this cursor here so form read-backs share it.
+  Future<void> refreshFromGo({bool ifChanged = false}) async {
     await runZoned(
       () => transaction(() async {
+        final sourceRevision = client!.sourceRevision;
+        if (ifChanged &&
+            writes?._projectedSourceRevision == sourceRevision &&
+            writes?._projectedCatalogRevision == client!.catalogRevision) {
+          return;
+        }
+        // Invalidate before requesting: failed reads or a reset during the
+        // request must never make an old equality suppress the next refresh.
+        writes?._projectedSourceRevision = null;
         final snapshot = Map<String, dynamic>.from(
           await client!.request('authoring.snapshot') as Map,
         );
@@ -118,10 +131,9 @@ extension BackendProjection on Database {
           );
           b.insertAll(
             rules,
-            _rows(
-              collections,
-              'rules',
-            ).map((v) => Rule.fromJson(v).toCompanion()),
+            _rows(collections, 'rules').map(
+              (v) => Rule.fromJson(v).toCompanion(v['profileId'] as String?),
+            ),
           );
           b.insertAll(
             disabledRules,
@@ -172,9 +184,14 @@ extension BackendProjection on Database {
         });
         authoringRevision = (snapshot['revision'] as num).toInt();
         projectedProfileIds = profiles.map((p) => p.id).toList();
+        writes?._projectedCatalogRevision = authoringRevision;
+        writes?._projectedSourceRevision = sourceRevision;
       }),
       zoneValues: {_projectionZone: this},
-    );
+    ).catchError((Object error, StackTrace stack) {
+      writes?._projectedSourceRevision = null;
+      Error.throwWithStackTrace(error, stack);
+    });
   }
 
   Future<void> persistProjection(QueryExecutor executor) async {
@@ -197,7 +214,11 @@ extension BackendProjection on Database {
         scripts,
         (v) => (v as RawScript).toScript().toJson(),
       ),
-      'rules': await rows(rules, (v) => (v as RawRule).toRule().toJson()),
+      // Rule JSON is also used in mihomo configs, where scope is excluded.
+      'rules': await rows(rules, (v) {
+        final row = v as RawRule;
+        return {...row.toRule().toJson(), 'profileId': row.profileId};
+      }),
       'disabledRules': await rows(
         disabledRules,
         (v) => (v as RawDisabledRule).toDisabledRule().toJson(),
@@ -241,7 +262,7 @@ extension BackendProjection on Database {
         ],
       });
     } finally {
-      if (token != null) await client!.request('blob.delete', {'token': token});
+      if (token != null) await client!.discardBlob(token);
     }
     authoringRevision = (receipt['revision'] as num).toInt();
     projectedProfileIds = ids.toList();
