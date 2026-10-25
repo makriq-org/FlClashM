@@ -119,11 +119,7 @@ class BackendResourceClient {
       // Its receipt still owns a blob which must be released.
       final blob = error.receipt['blob'];
       if (blob is Map && blob['token'] is String) {
-        try {
-          await client.request('blob.delete', {'token': blob['token']});
-        } catch (_) {
-          // Preserve the command failure if cleanup also loses IPC.
-        }
+        await client.discardBlob(blob['token'] as String);
       }
       rethrow;
     }
@@ -132,21 +128,12 @@ class BackendResourceClient {
       throw _invalidExport;
     }
     final token = blob['token'] as String;
-    var downloaded = false;
     try {
       final size = blob['size'];
       if (size is! int || size < 0) throw _invalidExport;
-      final bytes = await client.download(token, size);
-      downloaded = true;
-      return bytes;
+      return await client.download(token, size);
     } finally {
-      try {
-        await client.request('blob.delete', {'token': token});
-      } catch (_) {
-        // Cleanup failure is visible after success, but must not mask a read
-        // failure (which carries the useful backend cause).
-        if (downloaded) rethrow;
-      }
+      await client.discardBlob(token);
     }
   }
 }

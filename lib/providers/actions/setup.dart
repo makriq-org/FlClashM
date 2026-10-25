@@ -73,7 +73,7 @@ class SetupAction extends _$SetupAction {
         ),
       );
     } finally {
-      await backendClient.request('blob.delete', {'token': blob['token']});
+      await backendClient.discardBlob(blob['token'] as String);
     }
   }
 }

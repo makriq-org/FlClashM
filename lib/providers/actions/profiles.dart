@@ -313,7 +313,7 @@ class ProfilesAction extends _$ProfilesAction {
     try {
       await backendClient.command('authoring.import',{'expectedRevision':snapshot['revision'],'profileId':profileId,'token':token,'replace':true});
       await database.refreshFromGo();
-    } finally { await backendClient.request('blob.delete',{'token':token}); }
+    } finally { await backendClient.discardBlob(token); }
   }
 
   void _showProfiles() {

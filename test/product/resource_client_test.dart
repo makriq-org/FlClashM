@@ -309,12 +309,10 @@ void main() {
     expect(host.calls('blob.delete'), hasLength(1));
   });
 
-  test('cleanup failure after a successful read is visible', () async {
+  test('cleanup failure preserves a successfully exported resource', () async {
     final host = _ResourceHost()..failures['blob.delete'] = 'cleanup_failed';
-    await expectLater(
-      host.resources.exportProvider(name: 'rules', type: 'Rule'),
-      throwsA(_backendError('cleanup_failed')),
-    );
+    expect(await host.resources.exportProvider(name: 'rules', type: 'Rule'), host.bytes);
+    expect(host.calls('blob.delete'), hasLength(1));
   });
 
   test(

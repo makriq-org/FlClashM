@@ -100,7 +100,7 @@ class CoreController {
     try {
       final result = await backendClient.request('profile.validate', {'token': token, 'ageSecretKey': key});
       return (result as Map)['message'] as String;
-    } finally { await backendClient.request('blob.delete', {'token': token}); }
+    } finally { await backendClient.discardBlob(token); }
   }
 
   Future<List<String>> validateProxies(List<Map<String, dynamic>> proxies) {
