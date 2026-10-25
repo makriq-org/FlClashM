@@ -137,6 +137,9 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
+
       - name: Check product boundaries
         run: dart tool/check_product_boundaries.dart
 
@@ -183,6 +186,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
@@ -237,6 +243,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
@@ -346,6 +355,9 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
@@ -426,6 +438,9 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Setup editor Rust
+        uses: ./.github/actions/setup-editor-rust
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

@@ -5,18 +5,42 @@
     "github:NixOS/nixpkgs/6510408d147d8c5e6d76043e899e9251756f6a75";
   inputs.nixpkgsGo.url =
     "github:NixOS/nixpkgs/6510408d147d8c5e6d76043e899e9251756f6a75";
+  inputs.rust-overlay = {
+    url = "github:oxalica/rust-overlay/5b9f1198b59bcb31c5c3250b332e7d77590e6306";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
-  outputs = { nixpkgs, nixpkgsGo, ... }:
+  outputs = { nixpkgs, nixpkgsGo, rust-overlay, ... }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs {
         inherit system;
+        overlays = [ rust-overlay.overlays.default ];
         config = {
           allowUnfree = true;
           android_sdk.accept_license = true;
         };
       };
       goPkgs = import nixpkgsGo { inherit system; };
+      editorRust = pkgs.rust-bin.stable."1.99.0".minimal.override {
+        targets = [
+          "aarch64-linux-android"
+          "armv7-linux-androideabi"
+          "x86_64-linux-android"
+        ];
+      };
+      # Native Assets calls `rustup run 1.99.0 cargo` explicitly. Make that
+      # version available declaratively without installing into ~/.rustup.
+      editorRustupHome = pkgs.runCommand "flclashm-editor-rustup-home" { } ''
+        mkdir -p "$out/toolchains"
+        ln -s ${editorRust} "$out/toolchains/1.99.0-x86_64-unknown-linux-gnu"
+        cat > "$out/settings.toml" <<'EOF'
+        version = "12"
+        default_toolchain = "1.99.0-x86_64-unknown-linux-gnu"
+        profile = "minimal"
+        [overrides]
+        EOF
+      '';
       # Keep the release toolchain pristine: nixpkgs Go patches net/mime with
       # store paths, changing the Android binaries and their pinned digests.
       olcrtcGo = pkgs.stdenvNoCC.mkDerivation {
@@ -52,6 +76,8 @@
           flutter
           jdk17
           goPkgs.go_1_27
+          editorRust
+          rustup
           bash
           git
           patch
@@ -78,6 +104,8 @@
         ANDROID_NDK = "${sdkRoot}/ndk/28.0.13004108";
         FLCLASHM_OLCRTC_GO = "${olcrtcGo}/bin/go";
         JAVA_HOME = "${pkgs.jdk17.home}";
+        RUSTUP_HOME = "${editorRustupHome}";
+        RUSTUP_TOOLCHAIN = "${editorRust}";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         GRADLE_OPTS =
           "-Dorg.gradle.project.android.aapt2FromMavenOverride=${sdkRoot}/build-tools/37.0.0/aapt2";
