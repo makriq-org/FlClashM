@@ -2339,6 +2339,16 @@
       "path": "lib/providers/actions/icon_sets.dart",
       "bucket": "budget",
       "reason": "Обновление сохранённого набора иконок выполняет Go authoring.resource.update с CAS; SQL получает только подтверждённую проекцию."
+    },
+    {
+      "path": "lib/views/config/scripts.dart",
+      "bucket": "budget",
+      "reason": "Скрипты хранятся в Go authoring, поэтому удаление записи не читает и не удаляет legacy platform path из Dart."
+    },
+    {
+      "path": "lib/views/proxies/providers.dart",
+      "bucket": "budget",
+      "reason": "Редактор runtime providers использует inspect/export Go blob API; чтение и запись cache-файлов остаются в Go."
     }
   ]
 }
