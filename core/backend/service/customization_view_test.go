@@ -107,3 +107,33 @@ func TestAppearancePaletteAndWidgetsMatchLegacy(t *testing.T) {
 		}
 	}
 }
+
+// TestProviderSwitchOwnership applies the same user opt-out to both header paths.
+func TestProviderSwitchOwnership(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		t.Run(fmt.Sprint(custom), func(t *testing.T) {
+			app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+			if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"closeConnections": true, "openLogs": false, "ownedSettings": []string{"app.closeConnections", "app.openLogs"}})}, 0); err != nil {
+				t.Fatal(err)
+			}
+			headers := map[string]string{"flclashm-settings": "openlogs,autoupdate"}
+			if custom {
+				headers["flclashm-custom"] = "update"
+			}
+			if err := app.customize(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false); err != nil {
+				t.Fatal(err)
+			}
+			var settings struct {
+				Close  bool `json:"closeConnections"`
+				Logs   bool `json:"openLogs"`
+				Update bool `json:"autoCheckUpdate"`
+			}
+			if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+				t.Fatal(err)
+			}
+			if !settings.Close || settings.Logs || !settings.Update {
+				t.Fatal(settings)
+			}
+		})
+	}
+}

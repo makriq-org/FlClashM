@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -31,6 +32,8 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 	appPatch := profiles.Object{}
 	var appSettings profiles.Object
 	_ = json.Unmarshal(catalog.Settings["appSetting"], &appSettings)
+	var owned []string
+	_ = json.Unmarshal(appSettings["ownedSettings"], &owned)
 	var override bool
 	_ = json.Unmarshal(appSettings["overrideProviderSettings"], &override)
 	_, hasM := headers["flclashm-settings"]
@@ -41,7 +44,9 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 			enabled[strings.ToLower(strings.TrimSpace(value))] = true
 		}
 		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate", "openLogs": "openlogs", "closeConnections": "closeconnections"} {
-			appPatch[field] = jsonValue(enabled[token])
+			if !slices.Contains(owned, "app."+field) {
+				appPatch[field] = jsonValue(enabled[token])
+			}
 		}
 	}
 	widgets := providerWidgets(header("widgets"))
