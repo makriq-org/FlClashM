@@ -253,6 +253,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if err := decodeParams(params, &request); err != nil {
 			return result, err
 		}
+		if request.Metadata == nil {
+			return result, errors.New("profile metadata is required")
+		}
 		name, err := a.blobPath(request.Token)
 		if err != nil {
 			return result, err
