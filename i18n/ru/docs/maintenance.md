@@ -55,7 +55,7 @@ RuntimeCoordinator — единственный владелец изменяе�
 
 При замене backend или восстановлении Binder-соединения живой UI повторяет `ui.attach` с новым `operationId` и `restore: true`. Go восстанавливает присутствие UI и подготовку узлов без повторного `autoRun`; остановленное намерение после явного Stop сохраняется. Без `restore` первое открытие использует обычную политику `autoRun`.
 
-Base-код обращается к `lib/product/**` через `tool/product_touchpoints.json`; виджеты регистрируются в `allowedProductUi`. Экраны `lib/views/**` остаются в базе с минимальными хуками. Прочие base-изменения объясняются в `tool/base_drift_allowlist.json`. Координацию и legacy SharedPreferences как источник состояния в Dart/Kotlin не возвращать.
+Base-код обращается к `lib/product/**` через `tool/product_touchpoints.json`; виджеты регистрируются в `allowedProductUi`. Живые экраны сохраняются в `lib/views/**` без дублирования в product; их можно развивать под архитектуру FlClashM с соблюдением guards и allowlist и регистрацией связей с product в touchpoints. Проверяемые base-изменения объясняются в `tool/base_drift_allowlist.json`; touchpoint не заменяет эту запись. Координацию и legacy SharedPreferences как источник состояния в Dart/Kotlin не возвращать.
 
 <details>
 <summary>Контракты backend при изменении runtime</summary>
@@ -98,12 +98,15 @@ JS работает в Goja без доступа к API платформы, с 
 
 ## 🔄 Обновление апстрима и узлов
 
-Создайте ветку от целевой ветки форка, выполните команды ниже и разрешите конфликты. Имя Dart-пакета остаётся `flclashx`. После merge сразу проверьте base drift; новые пути зарегистрируйте с причиной. Без upstream задайте `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
+Архитектура и надёжность самостоятельного Go backend важнее минимального расхождения с апстримом. Исправления и возможности переносите выборочно; полный merge выбирайте после оценки пользы, конфликтов и влияния на runtime. Границы Flutter ↔ backend и base ↔ product сохраняются.
+
+Создайте ветку от целевой ветки форка. После fetch явно выберите upstream ref (ветку или тег), зафиксируйте полный SHA в описании работы/PR и перенесите выбранные изменения либо выполните обоснованный merge этого SHA. Наш Dart-пакет — `flclashx`; проверьте имя пакета апстрима (например, `fl_clash`) и при необходимости адаптируйте импорты и генерацию.
+
+Сразу проверьте дрейф относительно выбранного SHA командой `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Альтернатива — явный общий предок через `--merge-base=<sha>` или `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints и allowlist остаются обязательными: проверяемые новые base-пути требуют причины в allowlist, связи с product — также записи в touchpoints. Текущие `make check` и CI по умолчанию проверяют дрейф относительно `upstream/dev`; проверка выбранного SHA их не заменяет. Смена базы/правил CI — отдельная реализация. Изменения runtime сначала выпускаются как `-preN` с проверкой на реальном Android.
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 

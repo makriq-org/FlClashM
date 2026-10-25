@@ -55,7 +55,7 @@ RuntimeCoordinator 是可变运行状态的唯一所有者。后端独立于 Flu
 
 后端实例更换或 Binder 连接恢复时，仍在运行的 UI 使用新的 `operationId` 和 `restore: true` 再次发送 `ui.attach`。Go 恢复 UI 会话和节点准备，不会再次执行 `autoRun`；显式 Stop 后的停止意图保持不变。不带 `restore` 的首次打开使用正常的 `autoRun` 策略。
 
-基础代码通过 `tool/product_touchpoints.json` 调用 `lib/product/**`；组件登记在 `allowedProductUi`。`lib/views/**` 保留于基础层，仅添加少量钩子。其他基础修改需在 `tool/base_drift_allowlist.json` 说明原因。不要将协调逻辑或作为状态来源的旧 SharedPreferences 放回 Dart/Kotlin。
+基础代码通过 `tool/product_touchpoints.json` 调用 `lib/product/**`；组件登记在 `allowedProductUi`。现有页面保留在 `lib/views/**`，不要在 product 中复制；可根据 FlClashM 架构演进，同时遵守 guards 和 allowlist，并将与 product 的连接登记为 touchpoints。受检查的基础修改需在 `tool/base_drift_allowlist.json` 说明原因；touchpoint 不能替代该记录。不要将协调逻辑或作为状态来源的旧 SharedPreferences 放回 Dart/Kotlin。
 
 <details>
 <summary>修改运行时须保持的后端约定</summary>
@@ -98,12 +98,15 @@ JS 在 Goja 中运行，无主机绑定，支持 deadline/cancel。公共列表�
 
 ## 🔄 更新上游与节点
 
-从目标分支创建工作分支，执行下列命令并解决冲突。Dart 包名保持 `flclashx`。合并后立即检查 base drift，新路径须说明原因。无 upstream 时使用 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE`。运行时修改先以 `-preN` 发布并在 Android 真机验证。
+独立 Go backend 的架构和可靠性优先于尽量减少与上游的差异。选择性移植修复和功能；评估收益、冲突和运行时影响后再决定是否完整合并。保留 Flutter ↔ backend 和 base ↔ product 边界。
+
+从目标分支创建工作分支。fetch 后明确选择上游 ref（分支或标签），在工作说明或 PR 中记录完整 SHA，然后移植选定修改，或有充分理由地合并该 SHA。我们的 Dart 包名为 `flclashx`；检查上游包名（例如 `fl_clash`），必要时调整导入和代码生成。
+
+立即运行 `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`，相对于选定 SHA 检查差异。也可通过 `--merge-base=<sha>` 或 `BASE_DRIFT_MERGE_BASE` 指定共同祖先。guards、touchpoints 和 allowlist 仍为强制要求：受检查的新 base 路径须在 allowlist 中说明原因，连接 product 还须登记 touchpoint。当前 `make check` 和 CI 默认相对于 `upstream/dev` 检查差异；选定 SHA 的检查不能替代它们。修改 CI 基准或规则需要单独实现。运行时修改先以 `-preN` 发布并在 Android 真机验证。
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 

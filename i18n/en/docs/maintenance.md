@@ -55,7 +55,7 @@ RuntimeCoordinator is the sole owner of mutable runtime state. The backend lives
 
 When the backend instance changes or the Binder connection recovers, a live UI repeats `ui.attach` with a new `operationId` and `restore: true`. Go restores UI presence and node preparation without repeating `autoRun`; the stopped intent after an explicit Stop is preserved. Without `restore`, the first opening uses the normal `autoRun` policy.
 
-Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widgets are registered in `allowedProductUi`. `lib/views/**` stays in base with minimal hooks. Other base changes require reasons in `tool/base_drift_allowlist.json`. Do not restore coordination or legacy SharedPreferences as state authority in Dart/Kotlin.
+Base code reaches `lib/product/**` through `tool/product_touchpoints.json`; widgets are registered in `allowedProductUi`. Keep live screens in `lib/views/**` without duplicating them in product; they may evolve to fit the FlClashM architecture while complying with guards and the allowlist and registering links to product as touchpoints. Tracked base changes require reasons in `tool/base_drift_allowlist.json`; a touchpoint does not replace that entry. Do not restore coordination or legacy SharedPreferences as state authority in Dart/Kotlin.
 
 <details>
 <summary>Backend contracts when changing runtime</summary>
@@ -98,12 +98,15 @@ Queues and rotation bound writes; slow logs do not block node shutdown. Android 
 
 ## 🔄 Updating upstream and nodes
 
-Create a branch from the target fork branch, run the commands below and resolve conflicts. The Dart package stays `flclashx`. Check base drift immediately after merging; register new paths with reasons. Without upstream, pass `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Runtime changes first ship as `-preN` with real Android verification.
+The architecture and reliability of the independent Go backend take priority over minimizing upstream differences. Port fixes and features selectively; choose a full merge after assessing its benefits, conflicts and runtime impact. Preserve the Flutter ↔ backend and base ↔ product boundaries.
+
+Create a branch from the target fork branch. After fetching, explicitly choose an upstream ref (branch or tag), record its full SHA in the work/PR description, and port selected changes or perform a justified merge of that SHA. Our Dart package is `flclashx`; check the upstream package name (for example, `fl_clash`) and adapt imports and generation when needed.
+
+Immediately check drift against the selected SHA with `dart tool/check_base_drift.dart --upstream-ref=<upstream-sha>`. Alternatively, supply an explicit common ancestor via `--merge-base=<sha>` or `BASE_DRIFT_MERGE_BASE`. Guards, touchpoints and the allowlist remain mandatory: new tracked base paths need reasons in the allowlist, and links to product also need touchpoint entries. Current `make check` and CI default to checking drift against `upstream/dev`; checking the selected SHA does not replace them. Changing the CI baseline/rules requires a separate implementation. Runtime changes first ship as `-preN` with real Android verification.
 
 ```bash
 git fetch upstream
 git fetch origin
-git merge upstream/dev
 nix develop -c make check go-check
 ```
 
