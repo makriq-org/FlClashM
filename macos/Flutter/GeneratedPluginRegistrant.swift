@@ -10,19 +10,21 @@ import connectivity_plus
 import desktop_multi_window
 import device_info_plus
 import dynamic_color
-import file_picker
+import file_picker_darwin
 import file_selector_macos
 import flutter_js
+import flutter_local_notifications
 import hotkey_manager_macos
 import mobile_scanner
-import network_info_plus
 import package_info_plus
 import screen_retriever_macos
 import shared_preferences_foundation
 import sqflite_darwin
-import tray_manager
+import tray
 import url_launcher_macos
 import webview_flutter_wkwebview
+import wifi_ssid
+import window
 import window_ext
 import window_manager
 
@@ -35,16 +37,18 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
   FlutterJsPlugin.register(with: registry.registrar(forPlugin: "FlutterJsPlugin"))
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
   HotkeyManagerMacosPlugin.register(with: registry.registrar(forPlugin: "HotkeyManagerMacosPlugin"))
   MobileScannerPlugin.register(with: registry.registrar(forPlugin: "MobileScannerPlugin"))
-  NetworkInfoPlusPlugin.register(with: registry.registrar(forPlugin: "NetworkInfoPlusPlugin"))
   FPPPackageInfoPlusPlugin.register(with: registry.registrar(forPlugin: "FPPPackageInfoPlusPlugin"))
   ScreenRetrieverMacosPlugin.register(with: registry.registrar(forPlugin: "ScreenRetrieverMacosPlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
-  TrayManagerPlugin.register(with: registry.registrar(forPlugin: "TrayManagerPlugin"))
+  TrayPlugin.register(with: registry.registrar(forPlugin: "TrayPlugin"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   WebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "WebViewFlutterPlugin"))
+  WifiSsidPlugin.register(with: registry.registrar(forPlugin: "WifiSsidPlugin"))
+  WindowPlugin.register(with: registry.registrar(forPlugin: "WindowPlugin"))
   WindowExtPlugin.register(with: registry.registrar(forPlugin: "WindowExtPlugin"))
   WindowManagerPlugin.register(with: registry.registrar(forPlugin: "WindowManagerPlugin"))
 }

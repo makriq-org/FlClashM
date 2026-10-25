@@ -110,6 +110,12 @@ dependencies {
     implementation("com.google.code.gson:gson:2.14.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     testImplementation(kotlin("test"))
+    // Flutter integration_test contributes older runtime versions. AGP 9
+    // resolves instrumentation consistently with the app runtime classpath.
+    constraints {
+        implementation("androidx.test:runner:1.7.0")
+        implementation("androidx.test:core:1.7.0")
+    }
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
