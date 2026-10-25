@@ -425,6 +425,7 @@ func (backendEngine) Apply(ctx context.Context, plan *backend.RuntimePlan) error
 		return err
 	}
 	handleSetState(string(payload.State))
+	bumpRouteEpoch()
 	return ctx.Err()
 }
 
@@ -497,6 +498,7 @@ func (backendEngine) ApplySelection(ctx context.Context, old, next *backend.Runt
 	}
 	runLock.Unlock()
 	handleSetState(string(payload.State))
+	refreshRoute()
 	return ctx.Err()
 }
 func (backendEngine) Start(ctx context.Context) error {

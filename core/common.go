@@ -455,6 +455,7 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 		applyConfig = embeddedExecutorConfig(currentConfig)
 	}
 	executor.ApplyConfig(applyConfig, true)
+	watchResolvers()
 	close(applyFinished)
 	<-cancelFinished
 	if err := ctx.Err(); err != nil {
