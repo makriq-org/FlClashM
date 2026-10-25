@@ -33,7 +33,10 @@ Map<String, String> _bindgenEnvironment(BuildInput input) {
       '${llvmRoot.path}${Platform.pathSeparator}$name',
     );
     if (directory.existsSync() && directory.listSync().any(_isLibclang)) {
-      return {'LIBCLANG_PATH': directory.path};
+      return {
+        'LIBCLANG_PATH': directory.path,
+        'CLANG_PATH': File.fromUri(compiler).path,
+      };
     }
   }
   throw StateError(

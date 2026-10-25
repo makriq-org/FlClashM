@@ -17,6 +17,7 @@ ANALYZE_PATHS := lib/product test/product test/tool \
 
 deps:
 	flutter pub get
+	cd plugins/rust_api && flutter pub get
 
 generate: deps
 	dart run tool/generate_flutter.dart build

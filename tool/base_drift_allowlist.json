@@ -13,7 +13,7 @@
     {
       "path": "android/settings.gradle.kts",
       "bucket": "budget",
-      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением. SDK-плагины из Nix store собираются из одноразовой writable-копии в Gradle cache; immutable SDK не меняется."
+      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением."
     },
     {
       "path": "core/go.mod",
