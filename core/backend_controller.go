@@ -270,6 +270,10 @@ func (backendEngine) Command(ctx context.Context, command backend.EngineCommand)
 		return errors.New("invalid engine command parameters")
 	}
 	switch command.Method {
+	case "cache.clear":
+		return clearBackendCache(ctx, command.Params)
+	case "cache.collect":
+		return collectBackendCache(ctx, command.Params)
 	case "controller.dispatch":
 		value, ok := controllerCommands.LoadAndDelete(params.Token)
 		if !ok {
