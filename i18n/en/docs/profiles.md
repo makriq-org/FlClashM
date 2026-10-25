@@ -6,6 +6,14 @@ Import a subscription into the app to use an existing configuration. This refere
 
 [Nodes](#nodes) · [Sleeping reserve](#activation) · [Checks](#checks) · [Apps](#apps) · [Subscription headers](#headers)
 
+## Profile builder and editor
+
+Create a profile in the app from nodes, groups and rules without a source YAML file. Shared resources and scripts are available in configuration; local rule lists can be imported, previewed and edited. MRS supports a text preview while preserving its original bytes.
+
+Imported profiles support YAML editing, overrides and a preview of the resulting configuration. Script previews do not change the running connection. The background service saves changes, so closing the interface does not interrupt the connection or subscription updates.
+
+Save a backup before upgrading. After saving new profiles or resources, older app versions may be unable to open the updated storage. Downgrading requires a backup made by the older version; it will not include later changes.
+
 ## 🚀 Minimal profile
 
 ```yaml

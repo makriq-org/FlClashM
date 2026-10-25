@@ -134,6 +134,24 @@
       "targets": [
         "lib/product/pages/zashboard.dart"
       ]
+    },
+    {
+      "path": "lib/views/config/providers.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Редактор получает содержимое ресурса по Go blob API и идентификатору; файловые пути ядра не читает.",
+      "targets": [
+        "lib/product/backend/backend.dart",
+        "lib/product/backend/resource_client.dart"
+      ]
+    },
+    {
+      "path": "lib/views/proxies/providers.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Редактор получает содержимое ресурса по Go blob API и идентификатору; файловые пути ядра не читает.",
+      "targets": [
+        "lib/product/backend/backend.dart",
+        "lib/product/backend/resource_client.dart"
+      ]
     }
   ],
   "allowedProductUi": [
