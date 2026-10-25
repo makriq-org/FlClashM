@@ -696,14 +696,14 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "disclaimer": MessageLookupByLibrary.simpleMessage("Aviso legal"),
     "disclaimerDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClashX es un cliente gratuito y de código abierto basado en el núcleo Mihomo. Aquí tienes en breve qué hace, qué no hace y qué datos recoge. Al pulsar «Acepto» aceptas estas condiciones.",
+      "FlClashM es un cliente gratuito y de código abierto basado en el núcleo Mihomo. Aquí tienes en breve qué hace, qué no hace y qué datos recoge. Al pulsar «Acepto» aceptas estas condiciones.",
     ),
     "disclaimerLicenseContent": MessageLookupByLibrary.simpleMessage(
       "El código fuente es abierto bajo la licencia GPL-3.0. El núcleo Mihomo y otros componentes de terceros tienen sus propias licencias. Los autores no responden por compilaciones modificadas o distribuidas por terceros.",
     ),
     "disclaimerLicenseTitle": MessageLookupByLibrary.simpleMessage("Licencia"),
     "disclaimerPrivacyContent": MessageLookupByLibrary.simpleMessage(
-      "Para encontrar errores, la aplicación recoge datos técnicos mediante Google Firebase: informes de fallos, versiones de la aplicación y del sistema, modelo del dispositivo y estadísticas anónimas de uso de funciones.\n\nLos enlaces de suscripción, el contenido de las configuraciones, los servidores, los sitios visitados, las conexiones, el tráfico y los registros nunca se recogen ni se envían. Se quedan solo en tu dispositivo.",
+      "La aplicación no envía estadísticas de uso ni informes de fallos. Los enlaces de suscripción, las configuraciones, los servidores, los sitios visitados, las conexiones, el tráfico y los registros permanecen en tu dispositivo. Tú decides si exportas los datos de diagnóstico.",
     ),
     "disclaimerPrivacyTitle": MessageLookupByLibrary.simpleMessage("Tus datos"),
     "disclaimerResponsibilityContent": MessageLookupByLibrary.simpleMessage(

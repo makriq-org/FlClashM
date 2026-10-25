@@ -544,14 +544,14 @@ class MessageLookup extends MessageLookupByLibrary {
     "discardChanges": MessageLookupByLibrary.simpleMessage("변경 사항을 취소하시겠습니까?"),
     "disclaimer": MessageLookupByLibrary.simpleMessage("면책 조항"),
     "disclaimerDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClashX는 Mihomo 코어 기반의 무료 오픈소스 클라이언트입니다. 무엇을 하고, 무엇을 하지 않으며, 어떤 데이터를 수집하는지 간단히 안내합니다. “동의합니다”를 누르면 이 조건에 동의하는 것입니다.",
+      "FlClashM는 Mihomo 코어 기반의 무료 오픈소스 클라이언트입니다. 무엇을 하고, 무엇을 하지 않으며, 어떤 데이터를 수집하는지 간단히 안내합니다. “동의합니다”를 누르면 이 조건에 동의하는 것입니다.",
     ),
     "disclaimerLicenseContent": MessageLookupByLibrary.simpleMessage(
       "소스 코드는 GPL-3.0 라이선스로 공개되어 있습니다. Mihomo 코어와 기타 제3자 구성 요소는 각자의 라이선스를 따릅니다. 수정되었거나 제3자가 배포한 빌드에 대해 작성자는 책임지지 않습니다.",
     ),
     "disclaimerLicenseTitle": MessageLookupByLibrary.simpleMessage("라이선스"),
     "disclaimerPrivacyContent": MessageLookupByLibrary.simpleMessage(
-      "오류를 찾기 위해 이 앱은 Google Firebase를 통해 기술 데이터를 수집합니다. 충돌 보고서, 앱과 시스템 버전, 기기 모델, 익명화된 기능 사용 통계입니다.\n\n구독 링크, 설정 내용, 서버, 방문한 사이트, 연결, 트래픽, 로그는 수집하거나 어디로도 전송하지 않습니다. 기기에만 남습니다.",
+      "앱은 사용 통계나 충돌 보고서를 전송하지 않습니다. 구독 링크, 설정, 서버, 방문한 사이트, 연결, 트래픽 및 로그는 기기에 저장됩니다. 진단 정보를 내보낼지는 사용자가 직접 결정합니다.",
     ),
     "disclaimerPrivacyTitle": MessageLookupByLibrary.simpleMessage("데이터"),
     "disclaimerResponsibilityContent": MessageLookupByLibrary.simpleMessage(

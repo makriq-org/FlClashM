@@ -27,10 +27,9 @@ void main() {
         'lib/views',
       ).listSync(recursive: true).whereType<File>())
         if (file.path.endsWith('.dart')) file.path: ['crashlytics'],
-      'arb/intl_en.arb': ['crashlytics'],
-      'arb/intl_ja.arb': ['crashlytics'],
-      'arb/intl_ru.arb': ['crashlytics'],
-      'arb/intl_zh_CN.arb': ['crashlytics'],
+      'pubspec.yaml': ['firebase_'],
+      for (final file in Directory('arb').listSync().whereType<File>())
+        if (file.path.endsWith('.arb')) file.path: ['crashlytics', 'Firebase'],
     };
 
     for (final entry in forbiddenMarkers.entries) {

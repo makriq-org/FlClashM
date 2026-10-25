@@ -811,14 +811,14 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "disclaimer": MessageLookupByLibrary.simpleMessage("Disclaimer"),
     "disclaimerDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClashX is a free, open-source client built on the Mihomo core. Here is a short note on what it does, what it does not do and what data it collects. By tapping “I agree” you accept these terms.",
+      "FlClashM is a free, open-source client built on the Mihomo core. Here is a short note on what it does, what it does not do and what data it collects. By tapping “I agree” you accept these terms.",
     ),
     "disclaimerLicenseContent": MessageLookupByLibrary.simpleMessage(
       "The source code is open under the GPL-3.0 license. The Mihomo core and other third-party components carry their own licenses. The authors are not responsible for modified builds or builds distributed by third parties.",
     ),
     "disclaimerLicenseTitle": MessageLookupByLibrary.simpleMessage("License"),
     "disclaimerPrivacyContent": MessageLookupByLibrary.simpleMessage(
-      "To find bugs the app collects technical data through Google Firebase: crash reports, the app and system versions, the device model and anonymised statistics on feature use.\n\nSubscription links, configuration contents, servers, visited sites, connections, traffic and logs are never collected or sent anywhere. They stay on your device only.",
+      "The app does not send analytics or crash reports. Subscription links, configurations, servers, visited sites, connections, traffic and logs stay on your device. You decide whether to export diagnostics.",
     ),
     "disclaimerPrivacyTitle": MessageLookupByLibrary.simpleMessage("Your data"),
     "disclaimerResponsibilityContent": MessageLookupByLibrary.simpleMessage(

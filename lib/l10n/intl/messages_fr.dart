@@ -697,14 +697,14 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "disclaimer": MessageLookupByLibrary.simpleMessage("Avertissement"),
     "disclaimerDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClashX est un client gratuit et open source basé sur le cœur Mihomo. Voici en bref ce qu’il fait, ce qu’il ne fait pas et quelles données il collecte. En appuyant sur « J’accepte », vous acceptez ces conditions.",
+      "FlClashM est un client gratuit et open source basé sur le cœur Mihomo. Voici en bref ce qu’il fait, ce qu’il ne fait pas et quelles données il collecte. En appuyant sur « J’accepte », vous acceptez ces conditions.",
     ),
     "disclaimerLicenseContent": MessageLookupByLibrary.simpleMessage(
       "Le code source est ouvert sous licence GPL-3.0. Le cœur Mihomo et les autres composants tiers ont leurs propres licences. Les auteurs ne répondent pas des versions modifiées ou distribuées par des tiers.",
     ),
     "disclaimerLicenseTitle": MessageLookupByLibrary.simpleMessage("Licence"),
     "disclaimerPrivacyContent": MessageLookupByLibrary.simpleMessage(
-      "Pour trouver les bugs, l’application collecte des données techniques via Google Firebase : rapports de plantage, versions de l’application et du système, modèle de l’appareil et statistiques anonymisées d’utilisation des fonctions.\n\nLes liens d’abonnement, le contenu des configurations, les serveurs, les sites visités, les connexions, le trafic et les journaux ne sont jamais collectés ni envoyés. Ils restent uniquement sur votre appareil.",
+      "L’application n’envoie ni statistiques d’utilisation ni rapports de plantage. Les liens d’abonnement, configurations, serveurs, sites visités, connexions, trafic et journaux restent sur votre appareil. Vous décidez d’exporter ou non les données de diagnostic.",
     ),
     "disclaimerPrivacyTitle": MessageLookupByLibrary.simpleMessage(
       "Vos données",
