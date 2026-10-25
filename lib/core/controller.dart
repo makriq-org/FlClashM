@@ -205,14 +205,6 @@ class CoreController {
     );
   }
 
-  Future<String> dumpRuleSet(String path) {
-    return _interface.dumpRuleSet(path);
-  }
-
-  Future<RuleSetInfo> compileRuleSet(String name, {String url = ''}) {
-    return _interface.compileRuleSet(name, url: url);
-  }
-
   Future<String> updateExternalProvider({required String providerName}) async {
     return _interface.updateExternalProvider(providerName);
   }

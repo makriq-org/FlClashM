@@ -1,21 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/common.dart';
 import 'package:flclashx/models/core.dart';
 import 'package:flclashx/models/profile.dart';
 import 'package:flclashx/pages/editor.dart';
+import 'package:flclashx/product/backend/backend.dart';
+import 'package:flclashx/product/backend/resource_client.dart';
 import 'package:flclashx/providers/action.dart';
 import 'package:flclashx/providers/app.dart';
-import 'package:flclashx/providers/core.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
-import 'package:material_ui/material_ui.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ExternalProvidersSliver extends ConsumerStatefulWidget {
   final List<ExternalProvider> providers;
@@ -116,42 +115,76 @@ class ProviderItem extends ConsumerStatefulWidget {
 }
 
 class _ProviderItemState extends ConsumerState<ProviderItem> {
-  _ProviderFile _file = _ProviderFile.binary;
+  final _resources = BackendResourceClient(backendClient);
+  ProviderInspection? _inspection;
+  Object? _inspectionError;
+  int _inspectionRequest = 0;
   bool _isAppRuleSet = false;
 
   ExternalProvider get provider => widget.provider;
 
   bool get _isSyncable => provider.vehicleType == 'HTTP' || _isAppRuleSet;
 
+  // The opaque path is only a capability flag. Inline/Compatible providers
+  // have no cached resource, so inspecting them would only produce errors.
+  bool get _hasResource =>
+      provider.path?.isNotEmpty == true &&
+      provider.vehicleType != 'Inline' &&
+      provider.vehicleType != 'Compatible';
+
   @override
   void initState() {
     super.initState();
-    unawaited(_probeFile());
+    unawaited(_inspectProvider());
   }
 
   @override
   void didUpdateWidget(covariant ProviderItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.provider.path != provider.path ||
+    if (oldWidget.provider.name != provider.name ||
+        oldWidget.provider.type != provider.type ||
+        oldWidget.provider.path != provider.path ||
+        oldWidget.provider.vehicleType != provider.vehicleType ||
         oldWidget.provider.updateAt != provider.updateAt) {
-      unawaited(_probeFile());
+      unawaited(_inspectProvider());
     }
   }
 
-  Future<void> _probeFile() async {
+  Future<void> _inspectProvider() async {
+    if (!mounted) return;
+    final request = ++_inspectionRequest;
+    if (!_hasResource) {
+      setState(() {
+        _inspection = null;
+        _inspectionError = null;
+        _isAppRuleSet = false;
+      });
+      return;
+    }
+    final current = provider;
     final clashProvidersAction = ref.read(
       clashProvidersActionProvider.notifier,
     );
-    final file = await _probeProviderFile(provider.path);
-    final isAppRuleSet =
-        await clashProvidersAction.remoteProviderOf(provider) != null;
-    if (!mounted || (file == _file && isAppRuleSet == _isAppRuleSet)) {
-      return;
+    try {
+      final inspection = await _resources.inspectProvider(
+        name: current.name,
+        type: current.type,
+      );
+      final isAppRuleSet =
+          await clashProvidersAction.remoteProviderOf(current) != null;
+      if (!mounted || request != _inspectionRequest) return;
+      setState(() {
+        _inspection = inspection;
+        _inspectionError = null;
+        _isAppRuleSet = isAppRuleSet;
+      });
+    } catch (error) {
+      if (!mounted || request != _inspectionRequest) return;
+      setState(() {
+        _inspection = null;
+        _inspectionError = error;
+      });
     }
-    setState(() {
-      _file = file;
-      _isAppRuleSet = isAppRuleSet;
-    });
   }
 
   Future<void> _handleUpdateProvider() async {
@@ -165,6 +198,7 @@ class _ProviderItemState extends ConsumerState<ProviderItem> {
       if (message.isNotEmpty) throw MessageException(message);
     }, silence: false);
     proxiesAction.updateGroupsDebounce();
+    await _inspectProvider();
   }
 
   Future<void> _handleSideLoadProvider() async {
@@ -175,32 +209,31 @@ class _ProviderItemState extends ConsumerState<ProviderItem> {
       await _sideLoadProvider(ref, provider, await platformFile.readBytes());
     });
     proxiesAction.updateGroupsDebounce();
+    await _inspectProvider();
   }
 
   void _handleEditProvider(BuildContext context) {
-    final path = provider.path;
-    if (path == null || path.isEmpty) return;
     unawaited(
       BaseNavigator.push<void>(
         context,
-        _EditProviderView(provider: provider, path: path),
-      ),
+        _EditProviderView(provider: provider),
+      ).then((_) {
+        if (mounted) unawaited(_inspectProvider());
+      }),
     );
   }
 
   void _handlePreviewProvider(BuildContext context) {
-    final path = provider.path;
-    if (path == null || path.isEmpty) return;
-    final core = ref.read(coreHandlerProvider);
-    final isRuleSet = _file == _ProviderFile.ruleSet;
+    final current = provider;
     unawaited(
       BaseNavigator.push<void>(
         context,
         EditorPage(
-          title: provider.name,
-          load: isRuleSet
-              ? () => core.dumpRuleSet(path)
-              : () => _readProviderText(path),
+          title: current.name,
+          load: () => _resources.readProviderText(
+            name: current.name,
+            type: current.type,
+          ),
           schema: EditorSchema.provider,
         ),
       ),
@@ -237,7 +270,8 @@ class _ProviderItemState extends ConsumerState<ProviderItem> {
     final appLocalizations = context.appLocalizations;
     final subscriptionInfo = provider.subscriptionInfo;
     return [
-      if (_file == _ProviderFile.text)
+      if (_inspection?.format == ResourceFormat.text &&
+          _inspection?.editable == true)
         CommonPopupMenuItem(
           glyph: AppGlyphs.edit,
           label: appLocalizations.edit,
@@ -245,7 +279,7 @@ class _ProviderItemState extends ConsumerState<ProviderItem> {
             _handleEditProvider(context);
           },
         ),
-      if (_file == _ProviderFile.ruleSet)
+      if (_inspection?.format == ResourceFormat.mrs)
         CommonPopupMenuItem(
           glyph: AppGlyphs.eye,
           label: appLocalizations.preview,
@@ -280,13 +314,22 @@ class _ProviderItemState extends ConsumerState<ProviderItem> {
   @override
   Widget build(BuildContext context) {
     final isUpdating = ref.watch(isUpdatingProvider(provider.updatingKey));
-    final previewable = _file != _ProviderFile.binary;
+    final previewable =
+        _inspection != null && _inspection!.format != ResourceFormat.binary;
+    final inspectionError = _inspectionError;
     return ContextMenuRegion(
       menuItems: isUpdating ? null : _menuItems(context),
       child: _ExternalProviderItem(
         provider: provider,
         isUpdating: isUpdating,
-        onPressed: isUpdating || !previewable
+        error: inspectionError == null
+            ? null
+            : userFacingErrorMessage(inspectionError, context.appLocalizations),
+        onPressed: isUpdating
+            ? null
+            : inspectionError != null
+            ? () => unawaited(_inspectProvider())
+            : !previewable
             ? null
             : () => _handlePreviewProvider(context),
       ),
@@ -298,11 +341,13 @@ class _ExternalProviderItem extends StatelessWidget {
   final ExternalProvider provider;
   final bool isUpdating;
   final VoidCallback? onPressed;
+  final String? error;
 
   const _ExternalProviderItem({
     required this.provider,
     required this.isUpdating,
     this.onPressed,
+    this.error,
   });
 
   @override
@@ -316,10 +361,13 @@ class _ExternalProviderItem extends StatelessWidget {
         title: provider.name,
         expire: provider.subscriptionInfo?.expireDate,
       ),
-      subtitle: Text(switch (provider.type) {
-        'Proxy' => appLocalizations.proxiesCount(count, count.compact),
-        _ => appLocalizations.rulesCount(count, count.compact),
-      }),
+      subtitle: Text(
+        error ??
+            switch (provider.type) {
+              'Proxy' => appLocalizations.proxiesCount(count, count.compact),
+              _ => appLocalizations.rulesCount(count, count.compact),
+            },
+      ),
       trailing: AnimatedSwitcher(
         duration: context.motionDuration(commonDuration),
         layoutBuilder: (current, previous) => Stack(
@@ -341,43 +389,6 @@ class _ExternalProviderItem extends StatelessWidget {
   }
 }
 
-Future<String> _readProviderText(String path) async {
-  try {
-    return await readTextFileTask(path) ?? '';
-  } on FormatException {
-    throw MessageException(currentAppLocalizations.nonTextProviderFile);
-  }
-}
-
-const _zstdMagic = [0x28, 0xB5, 0x2F, 0xFD];
-const _probeLength = 512;
-
-enum _ProviderFile { text, ruleSet, binary }
-
-// An .mrs rule set is a zstd stream and any other binary file gives itself
-// away with a NUL byte; neither can go through the Core's string side-load,
-// but the Core can dump an .mrs set back to text for reading.
-Future<_ProviderFile> _probeProviderFile(String? path) async {
-  if (path == null || path.isEmpty) {
-    return _ProviderFile.binary;
-  }
-  try {
-    final file = File(path);
-    if (!await file.exists()) {
-      return _ProviderFile.text;
-    }
-    final head = await file
-        .openRead(0, _probeLength)
-        .fold<List<int>>(<int>[], (bytes, chunk) => bytes..addAll(chunk));
-    if (listEquals(head.take(_zstdMagic.length).toList(), _zstdMagic)) {
-      return _ProviderFile.ruleSet;
-    }
-    return head.contains(0) ? _ProviderFile.binary : _ProviderFile.text;
-  } catch (_) {
-    return _ProviderFile.binary;
-  }
-}
-
 String _decodeProviderFile(List<int> bytes) {
   try {
     return utf8.decode(bytes);
@@ -391,21 +402,17 @@ Future<void> _sideLoadProvider(
   ExternalProvider provider,
   List<int> bytes,
 ) async {
-  final path = provider.path;
-  if (path == null) return;
   final data = _decodeProviderFile(bytes);
   final message = await ref
       .read(proxiesActionProvider.notifier)
       .sideLoadExternalProvider(provider, data, showLoading: true);
   if (message.isNotEmpty) throw MessageException(message);
-  await File(path).safeWriteAsBytes(bytes);
 }
 
 class _EditProviderView extends ConsumerStatefulWidget {
   final ExternalProvider provider;
-  final String path;
 
-  const _EditProviderView({required this.provider, required this.path});
+  const _EditProviderView({required this.provider});
 
   @override
   ConsumerState<_EditProviderView> createState() => _EditProviderViewState();
@@ -414,7 +421,9 @@ class _EditProviderView extends ConsumerStatefulWidget {
 class _EditProviderViewState extends ConsumerState<_EditProviderView> {
   String? _raw;
 
-  Future<String> _load() async => _raw = await _readProviderText(widget.path);
+  Future<String> _load() async => _raw = await BackendResourceClient(
+    backendClient,
+  ).readProviderText(name: widget.provider.name, type: widget.provider.type);
 
   Future<void> _handleSave(BuildContext context, String content) async {
     final proxiesAction = ref.read(proxiesActionProvider.notifier);

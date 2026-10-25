@@ -33,7 +33,12 @@ commit проекции нет. Flutter не выполняет runtime-комп
 ## Ресурсы, обслуживание и runtime
 
 - authoring.resource.update {collection:'clashProviders'|'scripts'|'iconSets',id:int} → receipt; Go загружает и обновляет authoring.
-- authoring.resource.read {collection,id} → {contentBase64:string,lastModified:string|null,size:int}.
+- authoring.resource.read {collection,id} → {contentBase64:string,lastModified:string|null,size:int}; метаданные и совместимость проекции. Редактор провайдеров получает содержимое через export.
+- provider.inspect {name:string,type:'proxy'|'rule'} → {format:'text'|'mrs'|'binary',size:int,editable:bool}. Имя сохраняется без изменений; UI нормализует ExternalProvider.type (`Proxy`/`Rule`) в нижний регистр. Opaque path используется только как признак наличия cache: Inline/Compatible и записи без path не запрашивают inspect. Ошибка inspect показывается пользователю, а не превращается в binary.
+- provider.export {name:string,type:'proxy'|'rule',asText?:bool} → receipt.blob:{token:string,size:int}. Runtime-ресурс открывает Go по имени и типу; платформенные пути UI не читает. MRS раскрывается в текст только для preview, редактируется только editable text.
+- authoring.resource.export {collection:'clashProviders'|'scripts'|'iconSets',id:int,asText?:bool} → receipt.blob:{token:string,size:int}. Для явного preview remote provider без contentBase64 UI сначала вызывает authoring.resource.update; фоновый просмотр списка не скачивает ресурс.
+- Оба export ожидаются через BackendClient.command, затем download(token,size); blob.delete выполняется в finally, в том числе при ошибках чтения/декодирования. Если export завершился, но обновление снимка упало, blob удаляется из сохранённой квитанции. Ошибка cleanup не скрывает исходную ошибку чтения.
+- provider.sideload остаётся engine.command с params:{name:string,data:string}: Go SideUpdate сохраняет cache. UI не выполняет дополнительную запись File; имя не подменяется id или путём. Старые controller.dumpRuleSet/compileRuleSet больше не участвуют в редакторах.
 - storage.clearCache {} → receipt; storage.collect {} → receipt; profile.clearCache {profileId:string} → receipt. Backend проводит cache.clear / cache.collect через координатор.
 - data.reset {} — полный сброс. backup.restore поддерживает onlyProfiles и replace.
 - runtime.start/stop/apply/restart и proxy.select остаются Go API v1. engine.command использует {method,params}: connection.close,connections.close,connections.reset,traffic.reset,provider.refresh,provider.sideload,geo.update.

@@ -6,12 +6,14 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/features/form/form.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/pages/editor.dart';
+import 'package:flclashx/product/backend/backend.dart';
+import 'package:flclashx/product/backend/resource_client.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ClashProvidersView extends ConsumerStatefulWidget {
   const ClashProvidersView({super.key});
@@ -22,6 +24,7 @@ class ClashProvidersView extends ConsumerStatefulWidget {
 
 class _ClashProvidersViewState extends ConsumerState<ClashProvidersView> {
   late final ClashProvidersAction _providersAction;
+  final _resources = BackendResourceClient(backendClient);
 
   @override
   void initState() {
@@ -213,7 +216,12 @@ class _ClashProvidersViewState extends ConsumerState<ClashProvidersView> {
         EditorPage(
           titleEditable: true,
           title: provider?.label ?? '',
-          load: () async => raw = (await provider?.content) ?? '',
+          load: () async => raw = provider == null
+              ? ''
+              : await _resources.readAuthoringText(
+                  collection: AuthoringResourceCollection.clashProviders,
+                  id: provider.id,
+                ),
           schema: EditorSchema.provider,
           onSave: (_, title, content) =>
               _handleEditorSave(title, content, provider: provider),
@@ -225,15 +233,16 @@ class _ClashProvidersViewState extends ConsumerState<ClashProvidersView> {
   }
 
   void _handlePreview(ClashProvider provider) {
-    final core = ref.read(coreHandlerProvider);
     unawaited(
       BaseNavigator.push(
         context,
         EditorPage(
           title: provider.label,
-          load: () async => provider.isTextContent
-              ? (await provider.content) ?? ''
-              : core.dumpRuleSet(provider.id.toString()),
+          load: () => _resources.readAuthoringText(
+            collection: AuthoringResourceCollection.clashProviders,
+            id: provider.id,
+            refresh: provider.isRemote && provider.contentBase64.isEmpty,
+          ),
           schema: EditorSchema.provider,
         ),
       ),
@@ -360,9 +369,8 @@ class _ClashProvidersViewState extends ConsumerState<ClashProvidersView> {
         label: appLocalizations.nullTip(appLocalizations.ruleProviders),
       ),
       child: ReorderableListView.builder(
-        padding: const EdgeInsets.all(
-          16,
-        ).copyWith(top: context.contentTopPadding),
+        padding: const EdgeInsets.all(16)
+            .copyWith(top: context.contentTopPadding),
         buildDefaultDragHandles: false,
         itemCount: providers.length,
         itemBuilder: (_, index) => _buildItem(providers, index),
