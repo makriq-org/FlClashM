@@ -121,10 +121,9 @@
     {
       "path": "lib/views/tools.dart",
       "boundary": "backend-ui-client",
-      "reason": "Fork инструменты используют Go API и существующий экран восстановления backend.",
+      "reason": "Настройки Zashboard читаются из Go backend; экспорт диагностики доступен на вложенном экране логов.",
       "targets": [
-        "lib/product/backend/backend.dart",
-        "lib/product/bootstrap/backend_startup.dart"
+        "lib/product/backend/backend.dart"
       ]
     },
     {
@@ -151,6 +150,22 @@
       "targets": [
         "lib/product/backend/backend.dart",
         "lib/product/backend/resource_client.dart"
+      ]
+    },
+    {
+      "path": "lib/views/about.dart",
+      "boundary": "product-contributors",
+      "reason": "Живой About дополняет upstream contributors данными участников форка из единого productContributors.",
+      "targets": [
+        "lib/product/services/product_contributors.dart"
+      ]
+    },
+    {
+      "path": "lib/views/logs.dart",
+      "boundary": "diagnostic-export",
+      "reason": "Кнопка экспорта живого экрана логов использует общий со startup экспорт полного диагностического ZIP.",
+      "targets": [
+        "lib/product/bootstrap/backend_startup.dart"
       ]
     }
   ],

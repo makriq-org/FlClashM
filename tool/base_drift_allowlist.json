@@ -478,7 +478,7 @@
     {
       "path": "lib/views/tools.dart",
       "bucket": "budget",
-      "reason": "Экран текущей конфигурации читает живой snapshot ядра вместо устаревшего Dart-кэша."
+      "reason": "Живые Settings сохраняют Go-backed Zashboard и навигацию; prerelease Switch и экспорт диагностики находятся на вложенных экранах."
     },
     {
       "path": "lib/common/link.dart",
@@ -628,7 +628,7 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой about-экран оставлен апстримным и делегирует только ручную проверку обновлений в ProductServices."
+      "reason": "Живой material_ui About сохраняет обновления форка, добавляет productContributors, скрывает Telegram и ссылается на фактический upstream FlClashX."
     },
     {
       "path": "lib/views/access.dart",
@@ -643,7 +643,7 @@
     {
       "path": "lib/views/config/general.dart",
       "bucket": "budget",
-      "reason": "Живой экран сети скрывает mixed-port через типизированный product advisory для обоих совместимых префиксов."
+      "reason": "Живые общие настройки сохраняют androidSecure, prerelease Switch со сбросом пропущенного релиза и доступ к Logs при скрытой навигации логов."
     },
     {
       "path": "lib/views/config/network.dart",
@@ -708,7 +708,7 @@
     {
       "path": "lib/views/logs.dart",
       "bucket": "budget",
-      "reason": "Лента логов строит элементы лениво и вычисляет высоты по запросу без полной предварительной загрузки."
+      "reason": "Живой material_ui список логов экспортирует полный диагностический ZIP общим со startup механизмом."
     },
     {
       "path": "lib/views/proxies/list.dart",
