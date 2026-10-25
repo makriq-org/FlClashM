@@ -81,43 +81,30 @@ allowlist helpers/запрет runtime setters и ключи кэша. Instrumen
 transport-канала и завершение Stop при неподтверждённом событии Flutter. Существующие AndroidRuntimeE2eTest сохраняют проверки большого
 chunked профиля, validator, Stop и восстановления без Flutter.
 
-## Проверка и требования к объединению
+## Проверка совместимости
 
-В этом участке прошли сборка x86_64 core через `dart setup.dart android --arch
-amd64 --out core`, 39 Kotlin unit-тестов, сборка debug APK и instrumentation APK.
-На Android 16 x86_64 прошёл полный `.github/scripts/run-android-emulator-e2e.sh`:
-8 тестов и три дополнительные фазы headless lifecycle. После расширения проверки
-Stop при неподтверждённом событии отдельно повторены все три transport-теста.
+Kotlin unit-тесты очереди событий проверяют продолжение после ошибки отдельной
+доставки и сохранение отмены coroutine. Ошибка наблюдения не должна отключать
+последующие события; отмена при остановке host должна завершать доставку.
+
 Android 17 LAN consent, MIUI PowerKeeper и TV floating IME требуют устройства
-соответствующего типа; emulator Android 16 проверяет транспорт и общий lifecycle.
+соответствующего типа. Эмулятор Android 16 проверяет транспорт и общий lifecycle;
+перед выпуском нужны проверки на реальных Android ABI.
 
-Product boundary guard прошёл. Оба base-drift прогона запущены: относительно
-закреплённого SHA есть также прежние расхождения seed; относительно `upstream/dev`
-остались 19 Android-путей без записи в allowlist. Интегратор должен зарегистрировать
-их с причинами (реестр принадлежит его участку):
+## Учёт расхождений с апстримом
 
-```text
-android/UPSTREAM_050.md
-android/app/src/androidTest/kotlin/com/follow/clashx/plugins/AndroidTransportCompatibilityTest.kt
-android/app/src/main/kotlin/com/follow/clashx/DisplayModes.kt
-android/app/src/main/kotlin/com/follow/clashx/HighRefreshRate.kt
-android/app/src/main/kotlin/com/follow/clashx/extensions/Ext.kt
-android/app/src/main/kotlin/com/follow/clashx/plugins/BatteryPlugin.kt
-android/app/src/main/kotlin/com/follow/clashx/plugins/PackageIconFiles.kt
-android/app/src/main/res/drawable/ic_shortcut_start.xml
-android/app/src/main/res/drawable/ic_shortcut_stop.xml
-android/app/src/main/res/drawable/ic_shortcut_toggle.xml
-android/app/src/main/res/values/colors.xml
-android/app/src/test/kotlin/com/follow/clashx/DisplayModesTest.kt
-android/app/src/test/kotlin/com/follow/clashx/plugins/PackageIconFilesTest.kt
-android/common/src/main/kotlin/com/follow/clashx/common/BoundedEventRelay.kt
-android/common/src/main/kotlin/com/follow/clashx/common/PendingCallback.kt
-android/common/src/test/kotlin/com/follow/clashx/common/BoundedEventRelayTest.kt
-android/common/src/test/kotlin/com/follow/clashx/common/PendingCallbackTest.kt
-android/service/src/main/kotlin/com/follow/clashx/service/UIActionPolicy.kt
-android/service/src/test/kotlin/com/follow/clashx/service/UIActionPolicyTest.kt
-```
+`tool/base_drift_allowlist.json` закрепляет источник через `upstreamImport.commit`.
+Следующие файлы побайтно совпадают с указанным выше SHA и проверяются guard как
+точные копии апстрима, без отдельных записей в `allowedBaseDrift`:
 
-Новые Go helpers должны объединяться с dispatcher интегратора: Android только
-разрешает и передаёт их, не реализует engine/domain операции повторно. После
-объединения требуется общий Flutter analyze/test и повторная сборка Android.
+- `android/app/src/main/kotlin/com/follow/clashx/DisplayModes.kt`
+- `android/app/src/main/kotlin/com/follow/clashx/HighRefreshRate.kt`
+- `android/app/src/test/kotlin/com/follow/clashx/DisplayModesTest.kt`
+- `android/app/src/main/res/drawable/ic_shortcut_start.xml`
+- `android/app/src/main/res/drawable/ic_shortcut_stop.xml`
+- `android/app/src/main/res/drawable/ic_shortcut_toggle.xml`
+
+Локальные адаптации Android host и их тесты учитываются отдельно в
+`allowedBaseDrift` с причиной. При изменении точной копии она также требует
+регистрации как локальная адаптация. Проверку выполняет
+`dart tool/check_base_drift.dart` относительно закреплённого источника.
