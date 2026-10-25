@@ -13,8 +13,8 @@ void main() {
       overrides: [
         groupsProvider.overrideWithBuild(
           (_, _) => const [
-            Group(name: 'GLOBAL', type: GroupType.Selector, hidden: true),
             Group(name: 'configured', type: GroupType.Selector, hidden: false),
+            Group(name: 'GLOBAL', type: GroupType.Selector, hidden: true),
           ],
         ),
       ],

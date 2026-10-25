@@ -2349,6 +2349,11 @@
       "path": "lib/views/proxies/providers.dart",
       "bucket": "budget",
       "reason": "Редактор runtime providers использует inspect/export Go blob API; чтение и запись cache-файлов остаются в Go."
+    },
+    {
+      "path": "lib/providers/state/proxies.dart",
+      "bucket": "budget",
+      "reason": "В глобальном режиме GLOBAL показывается первой; порядок остальных групп профиля и фильтрация режима по правилам сохранены."
     }
   ]
 }

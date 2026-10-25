@@ -8,7 +8,10 @@ GroupsState currentGroupsState(Ref ref) {
   final groups = ref.watch(groupsProvider);
   final shown = switch (mode) {
     Mode.direct => const <Group>[],
-    Mode.global => groups,
+    Mode.global => [
+      ...groups.where((item) => item.name == GroupName.GLOBAL.name),
+      ...groups.where((item) => item.name != GroupName.GLOBAL.name),
+    ],
     Mode.rule => groups.where((item) => item.hidden == false),
   };
   return GroupsState(value: shown.map(_withoutSelection).toList());

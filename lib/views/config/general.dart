@@ -6,7 +6,6 @@ import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/views/config/on_demand.dart';
-import 'package:flclashx/views/logs.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -517,7 +516,7 @@ class GeneralView extends ConsumerWidget {
     ];
   }
 
-  List<Widget> _logItems(AppLocalizations appLocalizations) {
+  List<Widget> _logItems() {
     return [
       const LogLevelItem(),
       _appSettingToggle(
@@ -525,11 +524,6 @@ class GeneralView extends ConsumerWidget {
         managedKey: 'app.openLogs',
         select: (state) => state.openLogs,
         update: (state, value) => state.copyWith(openLogs: value),
-      ),
-      ListItem.open(
-        leading: const GlyphIcon(AppGlyphs.logs),
-        title: Text(appLocalizations.logs),
-        widget: const LogsView(),
       ),
       if (system.isDesktop) const OpenLogsFolderItem(),
       const ReturnToProviderItem(),
@@ -599,7 +593,7 @@ class GeneralView extends ConsumerWidget {
           ),
           generateSection(
             title: appLocalizations.logsAndDiagnostics,
-            items: _logItems(appLocalizations),
+            items: _logItems(),
             footer: appLocalizations.logcatDesc,
           ),
         ],

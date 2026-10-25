@@ -129,6 +129,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('General has no shortcut to the Logs tab', (tester) async {
+    await _pump(tester, const GeneralView());
+    final labels = tester.element(find.byType(GeneralView)).appLocalizations;
+    expect(find.text(labels.logs), findsNothing);
+    expect(find.byType(LogsView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final initiallyEnabled in [false, true]) {
     testWidgets(
       'General switch persists channel change from $initiallyEnabled through Go',
@@ -216,7 +224,7 @@ void main() {
   }
 
   testWidgets(
-    'General opens Logs with navigation logs off and exports full ZIP',
+    'Logs exports the full diagnostic ZIP',
     (tester) async {
       final temp = await tester.runAsync(
         () => Directory.systemTemp.createTemp('feedback-diagnostics'),
@@ -279,12 +287,8 @@ void main() {
       final archivePicker = _ArchivePicker();
       FilePickerPlatform.instance = archivePicker;
       addTearDown(() => FilePickerPlatform.instance = oldPicker);
-      final container = await _pump(tester, const GeneralView());
-      expect(container.read(appSettingProvider).openLogs, isFalse);
-      final labels = tester.element(find.byType(GeneralView)).appLocalizations;
-      await tester.ensureVisible(find.text(labels.logs));
-      await tester.tap(find.text(labels.logs));
-      await tester.pumpAndSettle();
+      await _pump(tester, const LogsView());
+      final labels = tester.element(find.byType(LogsView)).appLocalizations;
       expect(find.byType(LogsView), findsOneWidget);
       expect(find.byTooltip(labels.exportLogs).hitTestable(), findsOneWidget);
       await tester.tap(find.byTooltip(labels.exportLogs));

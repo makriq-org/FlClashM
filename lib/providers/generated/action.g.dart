@@ -209,7 +209,7 @@ final class ProfileSettingsActionProvider
 }
 
 String _$profileSettingsActionHash() =>
-    r'eceedfc501eae04a04b94e400224b9b436941f0d';
+    r'335c6b9a6200da9fbd6c64f5be461ff3d7c423cf';
 
 /// The current subscription's or file's config keys become the app's
 /// settings on every update and switch (see [syncProfileSettings]); a custom
@@ -264,7 +264,7 @@ final class SetupActionProvider extends $NotifierProvider<SetupAction, void> {
   }
 }
 
-String _$setupActionHash() => r'a9e5f32065cccc20f81d153128eca82fe6b82710';
+String _$setupActionHash() => r'b66b3e3d79dfa893c2c969b542da1302f9ddd2ed';
 
 abstract class _$SetupAction extends $Notifier<void> {
   void build();
@@ -315,7 +315,7 @@ final class BackupActionProvider extends $NotifierProvider<BackupAction, void> {
   }
 }
 
-String _$backupActionHash() => r'5cffb0396005415a2459604c1d953da0c6abdf9c';
+String _$backupActionHash() => r'0a3b68b803267943979047eb507f51bff5ee5cf5';
 
 abstract class _$BackupAction extends $Notifier<void> {
   void build();
@@ -623,7 +623,7 @@ final class ProfilesActionProvider
   }
 }
 
-String _$profilesActionHash() => r'de8abc841629baff0912324b8d715fe7ee760f35';
+String _$profilesActionHash() => r'425a88f7058a4cf1f80a3c0a270117c26432e854';
 
 abstract class _$ProfilesAction extends $Notifier<void> {
   void build();
