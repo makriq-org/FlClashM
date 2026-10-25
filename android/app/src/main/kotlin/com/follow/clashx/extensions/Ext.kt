@@ -14,7 +14,7 @@ import java.io.ByteArrayOutputStream
 suspend fun Drawable.getBase64(): String {
     val drawable = this
     return withContext(Dispatchers.IO) {
-        val bitmap = drawable.toBitmap()
+        val bitmap = drawable.toBitmap(width = 128, height = 128)
         val byteArrayOutputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
         bitmap.recycle()

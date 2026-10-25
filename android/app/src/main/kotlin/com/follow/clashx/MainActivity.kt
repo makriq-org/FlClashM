@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
+import com.follow.clashx.plugins.BatteryPlugin
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.DiagnosticsPlugin
 import com.follow.clashx.plugins.ServicePlugin
@@ -18,14 +19,23 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
+    private val highRefreshRate by lazy { HighRefreshRate(this) }
+
     private var boundEngine: FlutterEngine? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme()
         super.onCreate(savedInstanceState)
-        // High refresh rate is driven from Dart via the flutter_displaymode package
-        // (see main.dart) — it pins the fastest mode at the current resolution and
-        // handles the OEM quirks that a hand-rolled preferredDisplayModeId missed.
+    }
+
+    override fun onResume() {
+        super.onResume()
+        highRefreshRate.pin()
+    }
+
+    override fun onPause() {
+        highRefreshRate.release()
+        super.onPause()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -49,6 +59,7 @@ class MainActivity : FlutterActivity() {
             }
 
         flutterEngine.plugins.add(AppPlugin())
+        flutterEngine.plugins.add(BatteryPlugin())
         flutterEngine.plugins.add(DiagnosticsPlugin())
         flutterEngine.plugins.add(ServicePlugin())
         flutterEngine.plugins.add(TilePlugin())

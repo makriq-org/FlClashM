@@ -32,7 +32,7 @@ class TempActivity : Activity() {
                 GlobalState.handleStop()
                 finishAndRemoveTask()
             }
-            wrapAction("CHANGE") -> {
+            wrapAction("CHANGE"), wrapAction("TOGGLE") -> {
                 val vpnIntent = VpnService.prepare(this)
                 if (vpnIntent != null && GlobalState.runStateFlow.value != RunState.START) {
                     Log.d(TAG, "Toggle needs VPN permission first")
