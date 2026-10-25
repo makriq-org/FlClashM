@@ -1464,6 +1464,521 @@
       "path": "core/backend/errors.go",
       "bucket": "budget",
       "reason": "Структурированные причины ошибок Go API отделяют локализованное сообщение UI от диагностики."
+    },
+    {
+      "path": "android/UPSTREAM_050.md",
+      "bucket": "budget",
+      "reason": "Зафиксированы реальные transport/platform контракты независимого Android host и результаты его проверок."
+    },
+    {
+      "path": "android/app/.gradle/config.properties",
+      "bucket": "budget",
+      "reason": "Удалён отслеживаемый локальный путь Android Studio; JDK задаётся декларативным Nix/CI окружением."
+    },
+    {
+      "path": "android/app/proguard-rules.pro",
+      "bucket": "budget",
+      "reason": "R8 сохраняет JNI, AIDL и Parcelable контракты независимого Android backend форка."
+    },
+    {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/plugins/AndroidTransportCompatibilityTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/extensions/Ext.kt",
+      "bucket": "budget",
+      "reason": "Сохранена Android-интеграция FlClashM с независимым host; пакетные метаданные и extension не берут runtime-владение."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/models/Package.kt",
+      "bucket": "budget",
+      "reason": "Сохранена Android-интеграция FlClashM с независимым host; пакетные метаданные и extension не берут runtime-владение."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/BatteryPlugin.kt",
+      "bucket": "budget",
+      "reason": "Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PackageIconFiles.kt",
+      "bucket": "budget",
+      "reason": "Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_widget_play.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_widget_stop.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_bg.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_fab_off.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_fab_on.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_mode_btn_active.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_mode_btn_inactive.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/widget_toggle_bg.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/layout/widget_mode.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/layout/widget_on_off.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-night-v27/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-night-v36/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-v27/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values-v36/styles.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values/colors.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/values/ic_launcher_background.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/network_security_config.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/shortcuts.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/widget_mode_info.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/main/res/xml/widget_on_off_info.xml",
+      "bucket": "budget",
+      "reason": "Ресурсы темы, native shortcuts и виджетов форка работают с Go backend без открытого Flutter; сохранены ограничения сетевой политики."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/plugins/PackageIconFilesTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Android platform plugin адаптирован к новому UI без возврата runtime-владения из Go; permissions, icons и battery используют системные API."
+    },
+    {
+      "path": "android/common/src/main/AndroidManifest.xml",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/BoundedEventRelay.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/Enums.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/PendingCallback.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/BoundedEventRelayTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/PendingCallbackTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/.gitignore",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/CMakeLists.txt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/arm64-v8a/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/armeabi-v7a/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/includes/x86_64/libclash.h",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/cpp/jni_helper.cpp",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/java/com/follow/clashx/core/InvokeInterface.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/core/src/main/java/com/follow/clashx/core/TunInterface.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/packaging/apk/make_config.yaml",
+      "bucket": "budget",
+      "reason": "Сохранены параметры Android-пакета и релизного канала FlClashM вместо upstream desktop packaging."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IAckInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/ICallbackInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IEventInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IResultInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IStateCallback.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/IVoidInterface.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/AccessControlProps.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/NotificationParams.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/aidl/com/follow/clashx/service/models/VpnOptions.aidl",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/Module.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/ModuleLoader.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/UIActionPolicy.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/models/VpnOptions.kt",
+      "bucket": "budget",
+      "reason": "Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "android/service/src/test/kotlin/com/follow/clashx/service/UIActionPolicyTest.kt",
+      "bucket": "budget",
+      "reason": "Регрессии: Сохранён независимый Android host/JNI/Binder: Go владеет runtime, IPC имеет ACK, ограниченные очереди и изолированный validator."
+    },
+    {
+      "path": "core/backend/authoring/CONTRACT.md",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/authoring/collections.go",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/authoring/rules.go",
+      "bucket": "budget",
+      "reason": "Go владеет декларациями конструктора, проверкой ссылок и правилами; точный API-контракт закреплён рядом."
+    },
+    {
+      "path": "core/backend/compile/authoring.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/overrides.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/compile/resources.go",
+      "bucket": "budget",
+      "reason": "Go собирает custom-профили и ресурсы, применяет overrides и изолированно валидирует результат."
+    },
+    {
+      "path": "core/backend/profiles/authoring.go",
+      "bucket": "budget",
+      "reason": "Единый каталог Go атомарно сохраняет authoring, метаданные и удаления по общей CAS-ревизии."
+    },
+    {
+      "path": "core/backend/profiles/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Единый каталог Go атомарно сохраняет authoring, метаданные и удаления по общей CAS-ревизии."
+    },
+    {
+      "path": "core/backend/service/authoring.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/authoring_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/cache.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/cache_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend/service/custom_import.go",
+      "bucket": "budget",
+      "reason": "Go API v1 обслуживает конструктор, preview, импорт, ресурсы и очистку через существующие квитанции."
+    },
+    {
+      "path": "core/backend_cache.go",
+      "bucket": "budget",
+      "reason": "Очистка производных кешей проходит очередь координатора и сохраняет планы, профили и живые fake-IP/selection."
+    },
+    {
+      "path": "core/backend_cache_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Очистка производных кешей проходит очередь координатора и сохраняет планы, профили и живые fake-IP/selection."
+    },
+    {
+      "path": "core/diagnostic_bridge.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_bridge_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_helpers_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/diagnostic_protocol.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_query.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_query_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/dns_watch.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/filter.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/filter_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/lib.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/lib_other.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/outbound_ip.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/outbound_ip_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/probe.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/probe_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/profilecodec/links.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/links_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/rules.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/profilecodec/rules_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/region.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/route.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/server.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "core/service_check.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_check_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_rules.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/service_rules_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии: Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/share_link.go",
+      "bucket": "budget",
+      "reason": "Чистые Go codecs ссылок и наборов правил переиспользуются backend и UI helpers без владения runtime."
+    },
+    {
+      "path": "core/slots.go",
+      "bucket": "budget",
+      "reason": "Read-only диагностика апстрима адаптирована к engine под Go coordinator: bounded события, изоляция validator и приоритет Stop."
+    },
+    {
+      "path": "core/state/state.go",
+      "bucket": "budget",
+      "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
     }
   ]
 }

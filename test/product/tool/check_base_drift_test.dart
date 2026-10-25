@@ -1,9 +1,58 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../tool/check_base_drift.dart';
 
 void main() {
   group('pinned upstream import', () {
+    test('verifies pinned bytes and rejects edits and symlinks', () {
+      final previous = Directory.current;
+      final temporary = Directory.systemTemp.createTempSync('upstream-drift-');
+      try {
+        Directory.current = temporary;
+        void git(List<String> arguments) {
+          final result = Process.runSync('git', arguments);
+          expect(result.exitCode, 0, reason: '${result.stderr}');
+        }
+
+        git(['init', '--quiet']);
+        Directory('lib').createSync();
+        final file = File('lib/view.dart')
+          ..writeAsStringSync("import 'package:fl_clash/models.dart';\n");
+        git(['add', '.']);
+        git([
+          '-c',
+          'user.name=Guard test',
+          '-c',
+          'user.email=guard@example.invalid',
+          'commit',
+          '--quiet',
+          '-m',
+          'source',
+        ]);
+        final sha =
+            (Process.runSync('git', ['rev-parse', 'HEAD']).stdout as String)
+                .trim();
+        final config = UpstreamImport(sha, 'fl_clash', 'flclashx');
+        file.writeAsStringSync("import 'package:flclashx/models.dart';\n");
+        expect(matchesUpstreamImport(file.path, config), isTrue);
+        file.writeAsStringSync(
+          "import 'package:flclashx/models.dart';\n// edited\n",
+        );
+        expect(matchesUpstreamImport(file.path, config), isFalse);
+        file.deleteSync();
+        expect(matchesUpstreamImport(file.path, config), isFalse);
+        expect(matchesUpstreamImport('lib/removed.dart', config), isTrue);
+        File('outside.dart')
+            .writeAsStringSync("import 'package:flclashx/models.dart';\n");
+        Link(file.path).createSync('../outside.dart');
+        expect(matchesUpstreamImport(file.path, config), isFalse);
+      } finally {
+        Directory.current = previous;
+        temporary.deleteSync(recursive: true);
+      }
+    });
     test('requires immutable source and valid package names', () {
       expect(
         () => UpstreamImport.fromJson({
