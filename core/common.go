@@ -146,6 +146,19 @@ func proxiesWithDescriptions() map[string]interface{} {
 		if hasDesc && desc != "" {
 			item["serverDescription"] = desc
 		}
+		// mihomo's synthetic GLOBAL has no explicit hidden field. Upstream
+		// hides that selector in rule mode, while a configured GLOBAL remains
+		// a regular group. Only the synthetic selector uses the reserved provider.
+		if name == "GLOBAL" {
+			if group, ok := proxy.Adapter().(outboundgroup.ProxyGroup); ok {
+				for _, pd := range group.Providers() {
+					if pd.Name() == provider.ReservedName {
+						item["hidden"] = true
+						break
+					}
+				}
+			}
+		}
 		result[name] = item
 	}
 	return result

@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
 import '../clash/lib.dart';
 import '../product/backend/backend.dart';
@@ -11,6 +11,14 @@ import 'method.dart';
 /// Thin compatibility transport for upstream read-only UI helpers.
 /// Runtime and persistence mutations exclusively use Go API v1.
 class CoreLib extends CoreHandlerInterface {
+  CoreLib({Future<dynamic> Function(String, Object?)? legacyInvoke})
+    : _legacyInvoke = legacyInvoke ?? _invokeAndroidAction;
+
+  final Future<dynamic> Function(String, Object?) _legacyInvoke;
+
+  static Future<dynamic> _invokeAndroidAction(String method, Object? data) =>
+      clashLib!.invokeAction(method, data);
+
   int _revision = 0;
   @override
   Future<CoreLifecycleResult> start() async {
@@ -72,7 +80,7 @@ class CoreLib extends CoreHandlerInterface {
     if (method == CoreMethod.getIsInit) {
       result = backendClient.attached;
     } else if (method == CoreMethod.changeProxy) {
-      final data = Map<String, dynamic>.from(arguments as Map);
+      final data = Map<String, dynamic>.from(arguments! as Map);
       await backendClient.command('proxy.select', {
         'group': data['group-name'],
         'proxy': data['proxy-name'],
@@ -106,8 +114,8 @@ class CoreLib extends CoreHandlerInterface {
         CoreMethod.sideLoadExternalProvider => (
           'provider.sideload',
           <String, dynamic>{
-            'name': (arguments as Map)['providerName'],
-            'data': arguments['data'],
+            'name': (arguments! as Map)['providerName'],
+            'data': (arguments as Map)['data'],
           },
         ),
         CoreMethod.updateGeoData => (
@@ -133,9 +141,18 @@ class CoreLib extends CoreHandlerInterface {
           ? ''
           : true;
     } else {
-      result = await clashLib!
-          .invokeAction(method.name, arguments)
-          .timeout(timeout ?? const Duration(seconds: 60));
+      // The retained delay action predates the structured diagnostic API and
+      // expects JSON inside Action.data. Other diagnostics accept objects.
+      final data = method == CoreMethod.asyncTestDelay
+          ? jsonEncode(arguments)
+          : arguments;
+      final action = method == CoreMethod.getProxies
+          ? 'getProxiesData'
+          : method.name;
+      result = await _legacyInvoke(
+        action,
+        data,
+      ).timeout(timeout ?? const Duration(seconds: 60));
       if (result is String && T != String) {
         // Legacy engine helpers sometimes wrap JSON in a string.
         result = decodeLegacyResult(result);
@@ -144,8 +161,9 @@ class CoreLib extends CoreHandlerInterface {
       if (method == CoreMethod.getProxies && result is Map) {
         result = legacyProxyEnvelope(result);
       }
-      if (method == CoreMethod.getConnections && result is Map)
+      if (method == CoreMethod.getConnections && result is Map) {
         result = result['connections'];
+      }
     }
     return result as T?;
   }
@@ -168,9 +186,9 @@ Map<String, dynamic> legacyProxyEnvelope(Map<dynamic, dynamic> proxies) =>
 /// MethodChannel maps have dynamic keys; generated JSON models require strings
 /// at every level, including empty maps inside a snapshot.
 dynamic normalizeLegacyJson(Object? value) => switch (value) {
-  Map value => value.map<String, dynamic>(
+  final Map value => value.map<String, dynamic>(
     (key, value) => MapEntry(key as String, normalizeLegacyJson(value)),
   ),
-  List value => value.map(normalizeLegacyJson).toList(),
+  final List value => value.map(normalizeLegacyJson).toList(),
   _ => value,
 };
