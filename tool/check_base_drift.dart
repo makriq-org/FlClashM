@@ -33,6 +33,11 @@ void main(List<String> args) {
   BaseDriftAllowlist? allowlist;
   try {
     allowlist = readAllowlist();
+    config = BaseDriftCliConfig.parse(
+      args,
+      Platform.environment,
+      defaultRef: allowlist.upstreamImport?.commit,
+    );
   } on Object catch (error) {
     failures.add('$error');
   }
@@ -42,12 +47,27 @@ void main(List<String> args) {
     return;
   }
 
+  final upstreamImport = allowlist!.upstreamImport;
+  if (upstreamImport != null) {
+    final exists = Process.runSync('git', [
+      'cat-file',
+      '-e',
+      '${upstreamImport.commit}^{commit}',
+    ]);
+    if (exists.exitCode != 0) {
+      _printFailure([
+        'Pinned upstream import ${upstreamImport.commit} is missing; fetch it before checking drift.',
+      ]);
+      return;
+    }
+  }
+
   final mergeBaseLookup = resolveMergeBase(config!);
   if (mergeBaseLookup.skipReason != null) {
     stdout
       ..writeln('Base drift guard skipped.')
       ..writeln(mergeBaseLookup.skipReason)
-      ..writeln('Allowlist entries: ${allowlist!.entries.length}.');
+      ..writeln('Allowlist entries: ${allowlist.entries.length}.');
     return;
   }
 
@@ -60,9 +80,20 @@ void main(List<String> args) {
     return;
   }
 
+  final importedPaths = <String>{};
+  if (upstreamImport != null) {
+    for (final path in changedPaths) {
+      if (_isTrackedBasePath(path) &&
+          matchesUpstreamImport(path, upstreamImport)) {
+        importedPaths.add(path);
+      }
+    }
+  }
+
   final result = scanBaseDrift(
-    allowlist!,
+    allowlist,
     changedPaths: changedPaths,
+    importedPaths: importedPaths,
     failures: failures,
   );
 
@@ -131,8 +162,11 @@ MergeBaseLookupResult resolveMergeBase(BaseDriftCliConfig config) {
     );
   }
 
-  final result =
-      Process.runSync('git', ['merge-base', 'HEAD', config.upstreamRef]);
+  final result = Process.runSync('git', [
+    'merge-base',
+    'HEAD',
+    config.upstreamRef,
+  ]);
   if (result.exitCode != 0) {
     return MergeBaseLookupResult.skip(
       'Could not compute merge-base with `${config.upstreamRef}`. '
@@ -151,46 +185,39 @@ MergeBaseLookupResult resolveMergeBase(BaseDriftCliConfig config) {
   return MergeBaseLookupResult.found(resolvedMergeBase);
 }
 
-List<String> listChangedBaseFiles({
-  required String mergeBase,
-}) {
-  final changedPaths = <String>{};
-
-  changedPaths.addAll(_listGitPaths(
-    [
-      'diff',
-      '--name-only',
-      '$mergeBase..HEAD',
-      ...trackedBasePathspecs,
-    ],
-    errorPrefix: 'Failed to list committed base files',
-  ));
-  changedPaths.addAll(_listGitPaths(
-    [
-      'diff',
-      '--name-only',
-      '--cached',
-      ...trackedBasePathspecs,
-    ],
-    errorPrefix: 'Failed to list staged base files',
-  ));
-  changedPaths.addAll(_listGitPaths(
-    [
-      'diff',
-      '--name-only',
-      ...trackedBasePathspecs,
-    ],
-    errorPrefix: 'Failed to list unstaged base files',
-  ));
-  changedPaths.addAll(_listGitPaths(
-    [
-      'ls-files',
-      '--others',
-      '--exclude-standard',
-      ...trackedBasePathspecs,
-    ],
-    errorPrefix: 'Failed to list untracked base files',
-  ));
+List<String> listChangedBaseFiles({required String mergeBase}) {
+  final changedPaths = <String>{}
+    ..addAll(
+      _listGitPaths([
+        'diff',
+        '--name-only',
+        '$mergeBase..HEAD',
+        ...trackedBasePathspecs,
+      ], errorPrefix: 'Failed to list committed base files'),
+    )
+    ..addAll(
+      _listGitPaths([
+        'diff',
+        '--name-only',
+        '--cached',
+        ...trackedBasePathspecs,
+      ], errorPrefix: 'Failed to list staged base files'),
+    )
+    ..addAll(
+      _listGitPaths([
+        'diff',
+        '--name-only',
+        ...trackedBasePathspecs,
+      ], errorPrefix: 'Failed to list unstaged base files'),
+    )
+    ..addAll(
+      _listGitPaths([
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+        ...trackedBasePathspecs,
+      ], errorPrefix: 'Failed to list untracked base files'),
+    );
 
   final sortedPaths = changedPaths.toList()..sort();
   return List.unmodifiable(sortedPaths);
@@ -200,6 +227,7 @@ BaseDriftScanResult scanBaseDrift(
   BaseDriftAllowlist allowlist, {
   required Iterable<String> changedPaths,
   required List<String> failures,
+  Set<String> importedPaths = const {},
 }) {
   final allowedByPath = <String, BaseDriftEntry>{};
   for (final entry in allowlist.entries) {
@@ -221,15 +249,19 @@ BaseDriftScanResult scanBaseDrift(
     allowedByPath[normalizedPath] = entry;
   }
 
-  final bucketCounts = {
-    for (final bucket in allowedBuckets) bucket: 0,
-  };
+  final bucketCounts = {for (final bucket in allowedBuckets) bucket: 0};
   final unexpectedPaths = <String>[];
+  var allowlistedCount = 0;
+  var importedCount = 0;
   final normalizedChangedPaths =
       changedPaths.map(normalizePath).toSet().toList()..sort();
 
   for (final path in normalizedChangedPaths) {
     if (!_isTrackedBasePath(path)) {
+      continue;
+    }
+    if (importedPaths.contains(path)) {
+      importedCount++;
       continue;
     }
     final entry = allowedByPath[path];
@@ -238,6 +270,7 @@ BaseDriftScanResult scanBaseDrift(
       continue;
     }
     bucketCounts[entry.bucket] = bucketCounts[entry.bucket]! + 1;
+    allowlistedCount++;
   }
 
   if (unexpectedPaths.isNotEmpty) {
@@ -248,7 +281,8 @@ BaseDriftScanResult scanBaseDrift(
   }
 
   return BaseDriftScanResult(
-    allowlistedCount: normalizedChangedPaths.length - unexpectedPaths.length,
+    allowlistedCount: allowlistedCount,
+    importedCount: importedCount,
     outsideAllowlistCount: unexpectedPaths.length,
     bucketCounts: bucketCounts,
   );
@@ -311,10 +345,12 @@ class BaseDriftCliConfig {
 
   factory BaseDriftCliConfig.parse(
     List<String> args,
-    Map<String, String> environment,
-  ) {
-    String? mergeBase = environment[mergeBaseEnvKey];
-    var upstreamRef = environment[upstreamRefEnvKey] ?? defaultUpstreamRef;
+    Map<String, String> environment, {
+    String? defaultRef,
+  }) {
+    var mergeBase = environment[mergeBaseEnvKey];
+    var upstreamRef =
+        environment[upstreamRefEnvKey] ?? defaultRef ?? defaultUpstreamRef;
 
     for (var index = 0; index < args.length; index++) {
       final argument = args[index];
@@ -343,10 +379,7 @@ class BaseDriftCliConfig {
       throw StateError('Unknown argument `$argument`.');
     }
 
-    return BaseDriftCliConfig(
-      mergeBase: mergeBase,
-      upstreamRef: upstreamRef,
-    );
+    return BaseDriftCliConfig(mergeBase: mergeBase, upstreamRef: upstreamRef);
   }
 
   final String? mergeBase;
@@ -354,10 +387,7 @@ class BaseDriftCliConfig {
 }
 
 class MergeBaseLookupResult {
-  const MergeBaseLookupResult._({
-    this.mergeBase,
-    this.skipReason,
-  });
+  const MergeBaseLookupResult._({this.mergeBase, this.skipReason});
 
   factory MergeBaseLookupResult.found(String mergeBase) =>
       MergeBaseLookupResult._(mergeBase: mergeBase);
@@ -374,48 +404,119 @@ class BaseDriftScanResult {
     required this.allowlistedCount,
     required this.outsideAllowlistCount,
     required this.bucketCounts,
+    this.importedCount = 0,
   });
 
   final int allowlistedCount;
+  final int importedCount;
   final int outsideAllowlistCount;
   final Map<String, int> bucketCounts;
 
   String get summaryLine =>
-      'Changed base files: ${allowlistedCount + outsideAllowlistCount}. '
+      'Changed base files: ${allowlistedCount + importedCount + outsideAllowlistCount}. '
       'Allowlisted: $allowlistedCount. '
+      'Unmodified upstream imports: $importedCount. '
       'New outside allowlist: $outsideAllowlistCount.';
 
-  String get bucketSummaryLine => 'Buckets: budget=${bucketCounts['budget']}, '
+  String get bucketSummaryLine =>
+      'Buckets: budget=${bucketCounts['budget']}, '
       'rename=${bucketCounts['rename']}, '
       'incapsulate-pending=${bucketCounts['incapsulate-pending']}, '
       'revert-pending=${bucketCounts['revert-pending']}.';
 }
 
 class BaseDriftAllowlist {
-  const BaseDriftAllowlist({
-    required this.entries,
-  });
+  const BaseDriftAllowlist({required this.entries, this.upstreamImport});
 
   factory BaseDriftAllowlist.fromJson(Map<String, dynamic> json) {
     final value = json['allowedBaseDrift'];
     if (value is! List) {
       throw StateError(
-          '`allowedBaseDrift` must be a list in `$allowlistPath`.');
+        '`allowedBaseDrift` must be a list in `$allowlistPath`.',
+      );
     }
 
     return BaseDriftAllowlist(
-      entries: value.map((item) {
-        if (item is! Map<String, dynamic>) {
-          throw StateError(
-            'Each allowlist entry in `$allowlistPath` must be an object.',
-          );
-        }
-        return BaseDriftEntry.fromJson(item);
-      }).toList(growable: false),
+      upstreamImport: json['upstreamImport'] == null
+          ? null
+          : UpstreamImport.fromJson(json['upstreamImport']),
+      entries: value
+          .map((item) {
+            if (item is! Map<String, dynamic>) {
+              throw StateError(
+                'Each allowlist entry in `$allowlistPath` must be an object.',
+              );
+            }
+            return BaseDriftEntry.fromJson(item);
+          })
+          .toList(growable: false),
     );
   }
 
   final List<BaseDriftEntry> entries;
+  final UpstreamImport? upstreamImport;
+}
+
+class UpstreamImport {
+  const UpstreamImport(this.commit, this.sourcePackage, this.localPackage);
+  factory UpstreamImport.fromJson(dynamic value) {
+    if (value is! Map<String, dynamic> ||
+        value['commit'] is! String ||
+        !RegExp(r'^[0-9a-f]{40}$').hasMatch(value['commit'] as String) ||
+        value['sourcePackage'] is! String ||
+        !RegExp(r'^[a-z][a-z0-9_]*$')
+            .hasMatch(value['sourcePackage'] as String) ||
+        value['localPackage'] is! String ||
+        !RegExp(r'^[a-z][a-z0-9_]*$')
+            .hasMatch(value['localPackage'] as String)) {
+      throw StateError(
+        'upstreamImport must pin a full SHA and valid Dart package names.',
+      );
+    }
+    return UpstreamImport(
+      value['commit'] as String,
+      value['sourcePackage'] as String,
+      value['localPackage'] as String,
+    );
+  }
+  final String commit;
+  final String sourcePackage;
+  final String localPackage;
+}
+
+String normalizeImportedDart(String source, UpstreamImport config) =>
+    source.replaceAll(
+      'package:${config.sourcePackage}/',
+      'package:${config.localPackage}/',
+    );
+
+/// Imported code is exempt only while its bytes match the pinned source.
+/// The sole permitted mechanical rewrite is our existing Dart package name.
+bool matchesUpstreamImport(String path, UpstreamImport config) {
+  final source = Process.runSync(
+    'git',
+    ['show', '${config.commit}:$path'],
+    stdoutEncoding: null,
+    stderrEncoding: null,
+  );
+  final type = FileSystemEntity.typeSync(path, followLinks: false);
+  if (source.exitCode != 0) return type == FileSystemEntityType.notFound;
+  if (type != FileSystemEntityType.file) return false;
+  final expected = source.stdout as List<int>;
+  final actual = File(path).readAsBytesSync();
+  if (path.endsWith('.dart')) {
+    try {
+      return normalizeImportedDart(utf8.decode(expected), config) ==
+          utf8.decode(actual);
+    } on FormatException {
+      return false;
+    }
+  }
+  if (expected.length != actual.length) return false;
+  for (var index = 0; index < expected.length; index++) {
+    if (expected[index] != actual[index]) return false;
+  }
+  return true;
 }
 
 class BaseDriftEntry {
@@ -429,11 +530,7 @@ class BaseDriftEntry {
     final path = normalizePath(_readString(json, key: 'path'));
     final reason = _readString(json, key: 'reason');
     final bucket = _readBucket(json);
-    return BaseDriftEntry(
-      path: path,
-      reason: reason,
-      bucket: bucket,
-    );
+    return BaseDriftEntry(path: path, reason: reason, bucket: bucket);
   }
 
   final String path;
@@ -441,10 +538,7 @@ class BaseDriftEntry {
   final String bucket;
 }
 
-String _readString(
-  Map<String, dynamic> json, {
-  required String key,
-}) {
+String _readString(Map<String, dynamic> json, {required String key}) {
   final value = json[key];
   if (value is! String || value.isEmpty) {
     throw StateError('`$key` must be a non-empty string in `$allowlistPath`.');

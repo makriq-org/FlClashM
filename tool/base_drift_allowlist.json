@@ -1,4 +1,9 @@
 {
+  "upstreamImport": {
+    "commit": "5b38c0c7dfba726b8335407d0df5e6205e2d9bfa",
+    "sourcePackage": "fl_clash",
+    "localPackage": "flclashx"
+  },
   "allowedBaseDrift": [
     {
       "path": "android/common/build.gradle.kts",

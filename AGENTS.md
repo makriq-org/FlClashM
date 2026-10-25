@@ -59,9 +59,10 @@ legacy SharedPreferences после однократной миграции ка
   запись с причиной в `allowedProductUi` (`tool/product_touchpoints.json`).
 - Связи base → product регистрировать в `product_touchpoints.json`. Изменённые
   base-пути, проверяемые `dart tool/check_base_drift.dart`, должны иметь запись
-  с причиной в `tool/base_drift_allowlist.json`; touchpoint её не заменяет.
-- Эти guards и реестры остаются обязательными до отдельного изменения CI; новая
-  политика работы с апстримом их не отключает.
+  с причиной в `tool/base_drift_allowlist.json`; touchpoint её не заменяет. Точные
+  копии выбранного апстрима проверяются по `upstreamImport.commit` в том же файле;
+  допускается только механическая замена имени Dart-пакета. Новая адаптация
+  перестаёт считаться точной копией и требует причины в allowlist.
 
 ## Ветки
 
@@ -218,10 +219,10 @@ chore: обновлён Go до 1.26 и зависимости ядра
    merge-base с HEAD). Явный merge-base можно задать через `--merge-base=<sha>`
    или `BASE_DRIFT_MERGE_BASE`; это общий предок, а не произвольная вершина апстрима.
 4. Финальные проверки: `dart tool/check_product_boundaries.dart`, `flutter test test/product`,
-   `dart tool/check_base_drift.dart`. Последняя команда и текущий CI по умолчанию
-   используют `upstream/dev`; проверка выбранного SHA их не заменяет. Новые base-пути
-   зарегистрировать в allowlist с причиной, связи с product — также в touchpoints.
-   Смена базы/правил CI требует отдельной реализации.
+   `dart tool/check_base_drift.dart`. По умолчанию guard и CI используют закреплённый
+   `upstreamImport.commit` из allowlist; CI обязан получить этот коммит. Точные копии
+   сверяются с ним, остальные base-изменения зарегистрировать с причиной, связи
+   с product — также в touchpoints. При смене апстрима обновить pin и fetch в CI.
 5. Синк без изменений, заметных пользователю, отдельного релиза не требует и входит в
    ближайший выпуск. Синк, затрагивающий runtime path, сначала проводить через `-preN`
    с проверкой на реальных Android ABI.
