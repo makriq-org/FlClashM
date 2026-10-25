@@ -33,7 +33,7 @@ func TestProviderCustomizationPersistsWithoutUI(t *testing.T) {
 	}
 	var style map[string]any
 	_ = json.Unmarshal(catalog.Settings["proxiesStyle"], &style)
-	if style["type"] != "tab" || style["iconStyle"] != "icon" || style["cardType"] != "oneline" {
+	if style["type"] != "tab" || style["iconStyle"] != "filled" || style["cardType"] != "compact" {
 		t.Fatal(style)
 	}
 	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"overrideProviderSettings": false})}, 0); err != nil {

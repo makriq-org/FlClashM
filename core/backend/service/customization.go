@@ -12,6 +12,13 @@ import (
 // Provider customization is a data policy. It runs headlessly and persists its
 // result; Flutter only renders the projected settings and display-only headers.
 func (a *App) customize(ctx context.Context, metadata profiles.Object, isNew bool) error {
+	if err := a.customizeLegacy(ctx, metadata, isNew); err != nil {
+		return err
+	}
+	return a.customizeView(ctx, metadata)
+}
+
+func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew bool) error {
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
 	header := func(suffix string) string { return strings.TrimSpace(profiles.ProviderHeader(headers, suffix)) }
@@ -33,13 +40,13 @@ func (a *App) customize(ctx context.Context, metadata profiles.Object, isNew boo
 		for _, value := range strings.Split(header("settings"), ",") {
 			enabled[strings.ToLower(strings.TrimSpace(value))] = true
 		}
-		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate"} {
+		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate", "openLogs": "openlogs", "closeConnections": "closeconnections"} {
 			appPatch[field] = jsonValue(enabled[token])
 		}
 	}
 	widgets := []string{}
 	names := map[string]string{}
-	for _, name := range []string{"networkSpeed", "outboundModeV2", "outboundMode", "trafficUsage", "announce", "metainfo", "networkDetection", "tunButton", "vpnButton", "systemProxyButton", "intranetIp", "memoryInfo", "changeServerButton", "serviceInfo", "zashboardButton"} {
+	for _, name := range []string{"networkSpeed", "outboundModeV2", "outboundMode", "trafficUsage", "announce", "metainfo", "networkDetection", "tunButton", "vpnButton", "systemProxyButton", "intranetIp", "memoryInfo", "changeServerButton", "serviceInfo", "zashboardButton", "currentOutbound", "announcement", "networkTakeover", "serviceStatus", "profiles", "proxyGroups", "connectionStats"} {
 		names[strings.ToLower(name)] = name
 	}
 	for _, name := range strings.Split(header("widgets"), ",") {
@@ -90,28 +97,6 @@ func (a *App) customize(ctx context.Context, metadata profiles.Object, isNew boo
 			}
 			patch["themeProps"] = jsonValue(theme)
 		}
-	}
-	style := profiles.Object{}
-	allowed := map[string][]string{"type": {"list", "tab"}, "sort": {"none", "delay", "name"}, "layout": {"loose", "standard", "tight"}, "icon": {"icon", "none", "standard"}, "card": {"expand", "shrink", "min", "oneline"}}
-	fields := map[string]string{"type": "type", "sort": "sortType", "layout": "layout", "icon": "iconStyle", "card": "cardType"}
-	for _, setting := range strings.Split(header("view"), ";") {
-		parts := strings.Split(setting, ":")
-		if len(parts) != 2 {
-			continue
-		}
-		key, value := strings.ToLower(strings.TrimSpace(parts[0])), strings.ToLower(strings.TrimSpace(parts[1]))
-		for _, known := range allowed[key] {
-			if value == known {
-				if key == "icon" && value == "standard" {
-					value = "icon"
-				}
-				style[fields[key]] = jsonValue(value)
-				break
-			}
-		}
-	}
-	if len(style) > 0 {
-		patch["proxiesStyle"] = jsonValue(style)
 	}
 	if len(patch) == 0 {
 		return nil

@@ -237,7 +237,8 @@ Map<String, String> providerHeadersOf(Map<String, List<String>> headers) {
     for (final MapEntry(:key, :value) in headers.entries)
       if (value.isNotEmpty)
         if (providerHeaderNames.contains(key.toLowerCase()) ||
-            key.toLowerCase().startsWith(providerHeaderPrefix))
+            key.toLowerCase().startsWith(providerHeaderPrefix) ||
+            key.toLowerCase().startsWith('flclashm-'))
           key.toLowerCase(): value.first,
   };
 }

@@ -481,13 +481,15 @@ tun:
 ```text
 flclashm-custom: update
 flclashm-hex: 5c6bc0:vibrant:pureblack
-flclashm-view: type:tab;sort:delay;card:min
+flclashm-view: proxies.type:tab;proxies.sort:delay;proxies.card:compact;app.board:extended;app.glass:ultra
 flclashm-settings: autostart,autoupdate
 ```
 
 </div>
 
-`flclashm-custom: add` هنگام افزودن و `update` در هر به‌روزرسانی فقط `hex`، `view`، `widgets` و `settings` را اعمال می‌کند؛ سایر هدرها به آن وابسته نیستند. `flclashm-settings` وقتی `overrideProviderSettings` خاموش باشد اعمال می‌شود: پرچم‌های موجود فعال و پرچم‌های غایب به `false` بازنشانی می‌شوند. `androidsecure` فقط mixed-port را می‌بندد و انتخاب VPN را حفظ می‌کند. گروه `GLOBAL` از `flclashm-override` / `flclashx-override` پشتیبانی می‌کند و اولی اولویت دارد.
+`flclashm-custom: add` هنگام افزودن و `update` در هر به‌روزرسانی فقط `hex`، `widgets` و `settings` را اعمال می‌کند؛ سایر هدرها به آن وابسته نیستند. `flclashm-settings` وقتی `overrideProviderSettings` خاموش باشد اعمال می‌شود: پرچم‌های موجود فعال و پرچم‌های غایب به `false` بازنشانی می‌شوند. `androidsecure` فقط mixed-port را می‌بندد و انتخاب VPN را حفظ می‌کند. گروه `GLOBAL` از `flclashm-override` / `flclashx-override` پشتیبانی می‌کند و اولی اولویت دارد.
+
+قالب جدید `view` با کلیدهای `proxies.*` و `app.*` بدون `custom` هم اعمال می‌شود؛ تنظیمات تحت کنترل کاربر اولویت دارند. بدون `custom`، هدرهای `settings` و `widgets` هم مستقیم اعمال می‌شوند. اگر هر دو پیشوند یک هدر ارسال شوند، کل مقدار `flclashm-*` انتخاب می‌شود و مقادیر ادغام نمی‌شوند.
 
 <details>
 <summary>مرجع هدرها و قالب‌ها</summary>
@@ -498,7 +500,8 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-background` | `URL[,opacity]` | پس‌زمینه؛ نمایانی اختیاری تصویر 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | رنگ‌بندی |
 | `flclashm-widgets` | `list` | ترتیب ابزارک‌ها |
-| `flclashm-view` | `key:value;…` | چیدمان صفحهٔ نودها |
+| `flclashm-view` | `key:value;…` | ظاهر برنامه و چیدمان صفحهٔ نودها |
+| `flclashm-special` | `androidsecure,denywidgets,noglobal` | پرچم‌های جداشده با ویرگول: بستن mixed-port در Android، منع ویرایش داشبورد، پنهان‌کردن حالت global. این هدر جایگزین پرچم‌های قدیمی مستقل می‌شود؛ مقدار خالی محدودیت‌ها را پاک می‌کند |
 | `flclashm-newboard` | `true/false` | داشبورد جدید |
 | `flclashm-denywidgets` | `true/false` | منع ویرایش داشبورد |
 | `flclashm-servicename` | `base64` | نام سرویس |
@@ -518,15 +521,24 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-hex`: رنگ hexadecimal 6/8 رقمی با `#` اختیاری، سپس نوع Material 3 و `pureblack`. انواع: `tonalSpot`، `fidelity`، `monochrome`، `neutral`، `vibrant`، `expressive`، `content`، `rainbow`، `fruitSalad`.
 
-جفت‌های `flclashm-view` با `;` جدا می‌شوند؛ همهٔ کلیدها اختیاری‌اند:
+قالب جدید `flclashm-view` (همچنین `flclashx-view`)؛ جفت‌ها با `;` جدا می‌شوند و همهٔ کلیدها اختیاری‌اند:
 
 | کلید | مقادیر مجاز |
 |------|-------------|
-| `type` | `list`، `tab` |
-| `sort` | `none`، `delay`، `name` |
-| `layout` | `loose`، `standard`، `tight` |
-| `icon` | `icon` (یا `standard`)، `none` |
-| `card` | `expand`، `shrink`، `min`، `oneline` |
+| `proxies.type` | `list`, `tab` |
+| `proxies.sort` | `none`, `delay`, `name` |
+| `proxies.layout` | `loose`, `standard`, `tight` |
+| `proxies.icon` | `filled`, `plain`, `hidden` |
+| `proxies.card` | `loose`, `standard`, `compact` |
+| `app.board` | `extended`, `standard` |
+| `app.navbar` | `floating`, `docked` |
+| `app.tabs` | `slide`, `fade` |
+| `app.glass` | `none`, `standard`, `ultra` |
+| `app.color` | `RRGGBB`, `AARRGGBB` |
+| `app.style` | `vivid`, `tinted`, `soft`, `monochrome` |
+| `app.black` | `true`, `false` |
+
+کلیدهای کوتاه قدیمی `type`، `sort`، `layout`، `icon` و `card` نیز پشتیبانی می‌شوند. برای `icon`: `icon`/`standard` → `filled` و `none` → `hidden`؛ برای `card`: `expand` → `loose`، `shrink` → `standard` و `min`/`oneline` → `compact`.
 
 پرچم‌های `flclashm-settings`:
 
@@ -537,6 +549,8 @@ flclashm-settings: autostart,autoupdate
 | `autorun` | اجرای برنامه هنگام شروع سیستم *(دسکتاپ)* |
 | `shadowstart` | اجرای خاموش (پس‌زمینه) |
 | `minimize` | کوچک‌سازی به سینی هنگام خروج *(دسکتاپ)* |
+| `openlogs` | جمع‌آوری گزارش‌ها |
+| `closeconnections` | بستن اتصال‌ها هنگام تغییر نود |
 
 </details>
 

@@ -425,11 +425,13 @@ HTTP-ответ подписки содержит YAML в теле и подск
 ```text
 flclashm-custom: update
 flclashm-hex: 5c6bc0:vibrant:pureblack
-flclashm-view: type:tab;sort:delay;card:min
+flclashm-view: proxies.type:tab;proxies.sort:delay;proxies.card:compact;app.board:extended;app.glass:ultra
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` применяет `hex`, `view`, `widgets` и `settings` при добавлении, `update` — при каждом обновлении; остальные заголовки от него не зависят. `flclashm-settings` применяется, если выключен `overrideProviderSettings`; перечисленные флаги включаются, отсутствующие сбрасываются в `false`. `androidsecure` отключает только mixed-port, не меняя выбор VPN. Поля `flclashm-override` / `flclashx-override` поддерживаются в группе `GLOBAL`, приоритет у первого.
+`flclashm-custom: add` применяет `hex`, `widgets` и `settings` при добавлении, `update` — при каждом обновлении; остальные заголовки от него не зависят. `flclashm-settings` применяется, если выключен `overrideProviderSettings`; перечисленные флаги включаются, отсутствующие сбрасываются в `false`. `androidsecure` отключает только mixed-port, не меняя выбор VPN. Поля `flclashm-override` / `flclashx-override` поддерживаются в группе `GLOBAL`, приоритет у первого.
+
+Новый формат `view` с ключами `proxies.*` и `app.*` применяется и без `custom`; выбранные пользователем собственные настройки сохраняют приоритет. Без `custom` заголовки `settings` и `widgets` также применяются напрямую. Если переданы оба префикса одного заголовка, целиком выбирается `flclashm-*`, без объединения значений.
 
 <details>
 <summary>Справочник заголовков и форматов</summary>
@@ -440,7 +442,8 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-background` | `URL[,opacity]` | Фон; необязательная видимость изображения 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Цветовая тема |
 | `flclashm-widgets` | `list` | Порядок виджетов |
-| `flclashm-view` | `key:value;…` | Вид страницы узлов |
+| `flclashm-view` | `key:value;…` | Оформление приложения и страницы узлов |
+| `flclashm-special` | `androidsecure,denywidgets,noglobal` | Флаги через запятую: отключить mixed-port на Android, запретить редактирование панели, скрыть global. При наличии заменяет отдельные старые флаги; пустое значение снимает ограничения |
 | `flclashm-newboard` | `true/false` | Новая панель |
 | `flclashm-denywidgets` | `true/false` | Запрет редактирования дашборда |
 | `flclashm-servicename` | `base64` | Название сервиса |
@@ -460,15 +463,24 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-hex`: цвет из 6/8 hex-символов с необязательным `#`, затем вариант Material 3 и `pureblack`. Варианты: `tonalSpot`, `fidelity`, `monochrome`, `neutral`, `vibrant`, `expressive`, `content`, `rainbow`, `fruitSalad`.
 
-Пары `flclashm-view` разделяются `;`; все ключи необязательны:
+Новый формат `flclashm-view` (также `flclashx-view`); пары разделяются `;`, все ключи необязательны:
 
 | Ключ | Допустимые значения |
 |------|---------------------|
-| `type` | `list`, `tab` |
-| `sort` | `none`, `delay`, `name` |
-| `layout` | `loose`, `standard`, `tight` |
-| `icon` | `icon` (или `standard`), `none` |
-| `card` | `expand`, `shrink`, `min`, `oneline` |
+| `proxies.type` | `list`, `tab` |
+| `proxies.sort` | `none`, `delay`, `name` |
+| `proxies.layout` | `loose`, `standard`, `tight` |
+| `proxies.icon` | `filled`, `plain`, `hidden` |
+| `proxies.card` | `loose`, `standard`, `compact` |
+| `app.board` | `extended`, `standard` |
+| `app.navbar` | `floating`, `docked` |
+| `app.tabs` | `slide`, `fade` |
+| `app.glass` | `none`, `standard`, `ultra` |
+| `app.color` | `RRGGBB`, `AARRGGBB` |
+| `app.style` | `vivid`, `tinted`, `soft`, `monochrome` |
+| `app.black` | `true`, `false` |
+
+Прежние короткие ключи `type`, `sort`, `layout`, `icon`, `card` также поддерживаются. Для `icon`: `icon`/`standard` → `filled`, `none` → `hidden`; для `card`: `expand` → `loose`, `shrink` → `standard`, `min`/`oneline` → `compact`.
 
 Флаги `flclashm-settings`:
 
@@ -479,5 +491,7 @@ flclashm-settings: autostart,autoupdate
 | `autorun` | Запуск приложения при старте системы *(desktop)* |
 | `shadowstart` | Тихий (фоновый) запуск |
 | `minimize` | Сворачивание в трей при выходе *(desktop)* |
+| `openlogs` | Сбор логов |
+| `closeconnections` | Закрытие соединений при смене узла |
 
 </details>

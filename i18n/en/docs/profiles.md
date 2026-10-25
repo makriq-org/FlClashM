@@ -425,11 +425,13 @@ The subscription HTTP response carries YAML in its body and hints in headers. Bo
 ```text
 flclashm-custom: update
 flclashm-hex: 5c6bc0:vibrant:pureblack
-flclashm-view: type:tab;sort:delay;card:min
+flclashm-view: proxies.type:tab;proxies.sort:delay;proxies.card:compact;app.board:extended;app.glass:ultra
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` applies `hex`, `view`, `widgets` and `settings` on import, `update` on every refresh; other headers do not depend on it. `flclashm-settings` applies when `overrideProviderSettings` is off: listed flags are enabled, absent flags reset to `false`. `androidsecure` only disables mixed-port, preserving the VPN choice. `GLOBAL` supports `flclashm-override` / `flclashx-override`, with the first taking priority.
+`flclashm-custom: add` applies `hex`, `widgets` and `settings` on import, `update` on every refresh; other headers do not depend on it. `flclashm-settings` applies when `overrideProviderSettings` is off: listed flags are enabled, absent flags reset to `false`. `androidsecure` only disables mixed-port, preserving the VPN choice. `GLOBAL` supports `flclashm-override` / `flclashx-override`, with the first taking priority.
+
+The new `view` format with `proxies.*` and `app.*` keys also applies without `custom`; settings taken over by the user keep priority. Without `custom`, `settings` and `widgets` also apply directly. If both prefixes of a header are supplied, the entire `flclashm-*` value wins; values are not merged.
 
 <details>
 <summary>Header and format reference</summary>
@@ -440,7 +442,8 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-background` | `URL[,opacity]` | Background; optional image visibility 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | Color theme |
 | `flclashm-widgets` | `list` | Widget order |
-| `flclashm-view` | `key:value;…` | Node page layout |
+| `flclashm-view` | `key:value;…` | App appearance and node page layout |
+| `flclashm-special` | `androidsecure,denywidgets,noglobal` | Comma-separated flags: disable mixed-port on Android, prevent dashboard editing, hide global mode. When present, replaces legacy standalone flags; an empty value clears restrictions |
 | `flclashm-newboard` | `true/false` | New dashboard |
 | `flclashm-denywidgets` | `true/false` | Disable dashboard editing |
 | `flclashm-servicename` | `base64` | Service name |
@@ -460,15 +463,24 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-hex`: a 6/8-digit hexadecimal color with optional `#`, then a Material 3 variant and `pureblack`. Variants: `tonalSpot`, `fidelity`, `monochrome`, `neutral`, `vibrant`, `expressive`, `content`, `rainbow`, `fruitSalad`.
 
-`flclashm-view` pairs are separated by `;`; all keys are optional:
+New `flclashm-view` format (also `flclashx-view`); pairs are separated by `;`, all keys are optional:
 
 | Key | Allowed values |
 |-----|----------------|
-| `type` | `list`, `tab` |
-| `sort` | `none`, `delay`, `name` |
-| `layout` | `loose`, `standard`, `tight` |
-| `icon` | `icon` (or `standard`), `none` |
-| `card` | `expand`, `shrink`, `min`, `oneline` |
+| `proxies.type` | `list`, `tab` |
+| `proxies.sort` | `none`, `delay`, `name` |
+| `proxies.layout` | `loose`, `standard`, `tight` |
+| `proxies.icon` | `filled`, `plain`, `hidden` |
+| `proxies.card` | `loose`, `standard`, `compact` |
+| `app.board` | `extended`, `standard` |
+| `app.navbar` | `floating`, `docked` |
+| `app.tabs` | `slide`, `fade` |
+| `app.glass` | `none`, `standard`, `ultra` |
+| `app.color` | `RRGGBB`, `AARRGGBB` |
+| `app.style` | `vivid`, `tinted`, `soft`, `monochrome` |
+| `app.black` | `true`, `false` |
+
+Legacy short keys `type`, `sort`, `layout`, `icon`, `card` are also accepted. For `icon`: `icon`/`standard` → `filled`, `none` → `hidden`; for `card`: `expand` → `loose`, `shrink` → `standard`, `min`/`oneline` → `compact`.
 
 `flclashm-settings` flags:
 
@@ -479,5 +491,7 @@ flclashm-settings: autostart,autoupdate
 | `autorun` | Launch the app on system start *(desktop)* |
 | `shadowstart` | Silent (background) launch |
 | `minimize` | Minimize to tray on exit *(desktop)* |
+| `openlogs` | Log collection |
+| `closeconnections` | Close connections when switching nodes |
 
 </details>

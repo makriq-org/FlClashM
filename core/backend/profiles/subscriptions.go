@@ -229,6 +229,26 @@ func ProviderHeader(headers map[string]string, suffix string) string {
 	}
 	return headers["flclashx-"+suffix]
 }
+
+// ProviderSpecial prefers the combined modern header, including an explicit
+// empty value; otherwise legacy standalone flags remain compatible.
+func ProviderSpecial(headers map[string]string, flag string) bool {
+	_, hasM := headers["flclashm-special"]
+	_, hasX := headers["flclashx-special"]
+	if hasM || hasX {
+		for _, item := range strings.Split(ProviderHeader(headers, "special"), ",") {
+			if strings.EqualFold(strings.TrimSpace(item), flag) {
+				return true
+			}
+		}
+		return false
+	}
+	if flag == "noglobal" {
+		return strings.EqualFold(strings.TrimSpace(ProviderHeader(headers, "globalmode")), "false")
+	}
+	return strings.EqualFold(strings.TrimSpace(ProviderHeader(headers, flag)), "true")
+}
+
 func collectProviderHeaders(headers http.Header) map[string]string {
 	result := map[string]string{}
 	for name, values := range headers {
