@@ -3,6 +3,7 @@ import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/features/form/form.dart';
 import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/widgets/send_device_headers_toggle.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/views/config/on_demand.dart';
@@ -17,12 +18,18 @@ class LogLevelItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, ref) {
+    final managed = ref.watch(settingLockedProvider('clash.log-level'));
+    final savedLevel = ref.watch(
+      patchClashConfigProvider.select((state) => state.logLevel),
+    );
     return ConfigOptionsItem<LogLevel>(
       title: (l) => l.logLevel,
       managedKey: 'clash.log-level',
       options: LogLevel.values,
       textBuilder: (logLevel) => logLevel.name,
-      selector: patchClashConfigProvider.select((state) => state.logLevel),
+      selector: managed
+          ? profileSettingsActionProvider.select((level) => level ?? savedLevel)
+          : patchClashConfigProvider.select((state) => state.logLevel),
       onChanged: (ref, value) => ref
           .read(patchClashConfigProvider.notifier)
           .update((state) => state.copyWith(logLevel: value)),
@@ -470,6 +477,7 @@ class GeneralView extends ConsumerWidget {
 
   List<Widget> _requestItems() {
     return [
+      const SendDeviceHeadersToggle(),
       _appSettingToggle(
         title: (l) => l.checkCertificate,
         select: (state) => state.checkCertificate,
@@ -545,9 +553,8 @@ class GeneralView extends ConsumerWidget {
     return BaseScaffold(
       title: appLocalizations.general,
       body: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-        ).copyWith(top: context.appBarInset, bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16)
+            .copyWith(top: context.appBarInset, bottom: 16),
         children: [
           const ManagedSettingsHint(keys: generalPageKeys),
           generateSection(

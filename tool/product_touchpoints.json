@@ -167,6 +167,14 @@
       "targets": [
         "lib/product/bootstrap/backend_startup.dart"
       ]
+    },
+    {
+      "path": "lib/views/config/general.dart",
+      "boundary": "host-privacy-preference",
+      "reason": "Общие настройки монтируют форковый переключатель общего запрета HWID; чтение и запись выполняются через Go snapshots/settings.patch.",
+      "targets": [
+        "lib/product/widgets/send_device_headers_toggle.dart"
+      ]
     }
   ],
   "allowedProductUi": [
@@ -189,6 +197,10 @@
     {
       "path": "lib/product/pages/zashboard.dart",
       "reason": "Fork WebView сохраняет встроенный Zashboard, внешний браузер и обработку ошибок; runtime-команды идут через Go controller."
+    },
+    {
+      "path": "lib/product/widgets/send_device_headers_toggle.dart",
+      "reason": "Форковый общий запрет отправки HWID хранится в Go отдельно от настроек отдельных подписок."
     }
   ]
 }

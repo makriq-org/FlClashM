@@ -24,7 +24,7 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
   int _generation = 0;
 
   @override
-  void build() {
+  LogLevel? build() {
     ref.listen(
       currentProfileProvider.select(profileSettingsSourceOf),
       (_, next) => scheduleMicrotask(() => unawaited(apply(next))),
@@ -34,10 +34,12 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
         apply(profileSettingsSourceOf(ref.read(currentProfileProvider))),
       ),
     );
+    return null;
   }
 
   Future<void> apply(ProfileSettingsSource source) async {
     final generation = ++_generation;
+    state = null;
     final id = source.id;
     if (id == null ||
         source.type == ProfileType.custom ||
@@ -58,6 +60,9 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
     if (generation != _generation) {
       return;
     }
-    ref.read(managedClashKeysProvider.notifier).set(managedClashKeysOf(base.present));
+    state = LogLevel.values.asNameMap()[base.config['log-level']];
+    ref
+        .read(managedClashKeysProvider.notifier)
+        .set(managedClashKeysOf(base.present));
   }
 }

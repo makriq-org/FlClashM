@@ -643,7 +643,7 @@
     {
       "path": "lib/views/config/general.dart",
       "bucket": "budget",
-      "reason": "Живые общие настройки сохраняют androidSecure, prerelease Switch со сбросом пропущенного релиза и доступ к Logs при скрытой навигации логов."
+      "reason": "Живые общие настройки сохраняют androidSecure, prerelease Switch, фактический уровень логов профиля и mount общего запрета отправки HWID."
     },
     {
       "path": "lib/views/config/network.dart",

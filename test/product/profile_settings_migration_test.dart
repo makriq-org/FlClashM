@@ -47,13 +47,54 @@ void main() {
         extendType: type == 'script' ? ExtendType.script : ExtendType.standard,
       ));
       core.pending.complete((
-        base: const ProfileBase(config: {}, present: ['allow-lan']),
+        base: const ProfileBase(
+          config: {'log-level': 'debug'},
+          present: ['allow-lan', 'log-level'],
+        ),
         path: '',
       ));
       await old;
       expect(container.read(managedClashKeysProvider), isEmpty);
+      expect(container.read(profileSettingsActionProvider), isNull);
     });
   }
+
+  test(
+    'profile inspection projects its log level and clears it on deselection',
+    () async {
+      final core = _DelayedCore();
+      final container = ProviderContainer(
+        overrides: [
+          currentProfileProvider.overrideWith((_) => null),
+          coreHandlerProvider.overrideWith((_) => core),
+        ],
+      );
+      addTearDown(container.dispose);
+      final action = container.read(profileSettingsActionProvider.notifier);
+      await Future<void>.delayed(Duration.zero);
+      core.pending.complete((
+        base: const ProfileBase(
+          config: {'log-level': 'debug'},
+          present: ['log-level'],
+        ),
+        path: '',
+      ));
+      await action.apply((
+        id: 'file-a',
+        updatedAt: null,
+        type: ProfileType.file,
+        extendType: ExtendType.standard,
+      ));
+      expect(container.read(profileSettingsActionProvider), LogLevel.debug);
+      await action.apply((
+        id: null,
+        updatedAt: null,
+        type: null,
+        extendType: null,
+      ));
+      expect(container.read(profileSettingsActionProvider), isNull);
+    },
+  );
 
   for (final selected in <Object?>['legacy-id', 17, null]) {
     test(
@@ -67,7 +108,7 @@ void main() {
           configMap: {
             'currentProfileId': selected,
             'profiles': [
-            {'id': 'legacy-id', 'autoUpdateDuration': 0},
+              {'id': 'legacy-id', 'autoUpdateDuration': 0},
             ],
           },
           sourcePath: '${directory.path}/source',

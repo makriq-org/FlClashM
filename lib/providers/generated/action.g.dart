@@ -177,7 +177,7 @@ final profileSettingsActionProvider = ProfileSettingsActionProvider._();
 /// settings on every update and switch (see [syncProfileSettings]); a custom
 /// profile has no file and a scripted one may rewrite the keys, so both skip.
 final class ProfileSettingsActionProvider
-    extends $NotifierProvider<ProfileSettingsAction, void> {
+    extends $NotifierProvider<ProfileSettingsAction, LogLevel?> {
   /// The current subscription's or file's config keys become the app's
   /// settings on every update and switch (see [syncProfileSettings]); a custom
   /// profile has no file and a scripted one may rewrite the keys, so both skip.
@@ -200,32 +200,32 @@ final class ProfileSettingsActionProvider
   ProfileSettingsAction create() => ProfileSettingsAction();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(void value) {
+  Override overrideWithValue(LogLevel? value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<void>(value),
+      providerOverride: $SyncValueProvider<LogLevel?>(value),
     );
   }
 }
 
 String _$profileSettingsActionHash() =>
-    r'335c6b9a6200da9fbd6c64f5be461ff3d7c423cf';
+    r'b4b003adb2d5644168b2f8cbe509358172c5a39b';
 
 /// The current subscription's or file's config keys become the app's
 /// settings on every update and switch (see [syncProfileSettings]); a custom
 /// profile has no file and a scripted one may rewrite the keys, so both skip.
 
-abstract class _$ProfileSettingsAction extends $Notifier<void> {
-  void build();
+abstract class _$ProfileSettingsAction extends $Notifier<LogLevel?> {
+  LogLevel? build();
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
-    final ref = this.ref as $Ref<void, void>;
+    final ref = this.ref as $Ref<LogLevel?, LogLevel?>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<void, void>,
-              void,
+              AnyNotifier<LogLevel?, LogLevel?>,
+              LogLevel?,
               Object?,
               Object?
             >;

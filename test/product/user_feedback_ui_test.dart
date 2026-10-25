@@ -5,10 +5,12 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/product/backend/backend_client.dart';
 import 'package:flclashx/product/backend/frontend_settings.dart';
 import 'package:flclashx/product/services/product_contributors.dart';
+import 'package:flclashx/product/widgets/send_device_headers_toggle.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/list.dart';
@@ -21,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../helpers/test_app.dart';
 
@@ -28,6 +31,7 @@ Future<ProviderContainer> _pump(
   WidgetTester tester,
   Widget child, {
   Config config = const Config(themeProps: ThemeProps()),
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
@@ -36,6 +40,7 @@ Future<ProviderContainer> _pump(
   final container = ProviderContainer(
     overrides: [
       ...buildConfigOverrides(config),
+      ...overrides,
       currentProfileProvider.overrideWith((ref) => null),
       navigationItemsStateProvider.overrideWith(
         (ref) => const NavigationItemsState(value: []),
@@ -134,6 +139,127 @@ void main() {
     final labels = tester.element(find.byType(GeneralView)).appLocalizations;
     expect(find.text(labels.logs), findsNothing);
     expect(find.byType(LogsView), findsNothing);
+    expect(find.byType(SendDeviceHeadersToggle), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Log level shows the profile until the user takes it over', (
+    tester,
+  ) async {
+    final container = await _pump(
+      tester,
+      const Material(child: LogLevelItem()),
+      config: const Config(
+        themeProps: ThemeProps(),
+        patchClashConfig: PatchClashConfig(logLevel: LogLevel.warning),
+      ),
+      overrides: [
+        managedClashKeysProvider.overrideWithBuild(
+          (_, _) => {'clash.log-level'},
+        ),
+        profileSettingsActionProvider.overrideWithBuild(
+          (_, _) => LogLevel.debug,
+        ),
+      ],
+    );
+    expect(find.text('debug'), findsOneWidget);
+    expect(find.text('warning'), findsNothing);
+    expect(find.byType(IgnorePointer), findsWidgets);
+    container
+        .read(managedSettingsActionProvider.notifier)
+        .takeOver('clash.log-level');
+    await tester.pumpAndSettle();
+    expect(find.text('warning'), findsOneWidget);
+    expect(find.text('debug'), findsNothing);
+    expect(container.read(settingLockedProvider('clash.log-level')), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final initial in <bool?>[null, true, false]) {
+    testWidgets('HWID host preference $initial saves through Go', (
+      tester,
+    ) async {
+      final settings = <String, dynamic>{
+        'sendDeviceHeaders': ?initial,
+        'futureSetting': 'keep',
+      };
+      final patches = <Map>[];
+      final pending = Completer<void>();
+      final client = BackendClient(
+        events: const Stream.empty(),
+        transport: (request) async {
+          final method = request['method'];
+          if (method == 'settings.patch') {
+            final patch = (request['params'] as Map)['patch'] as Map;
+            patches.add(patch);
+            await pending.future;
+            settings.addAll(Map<String, dynamic>.from(patch));
+          }
+          return {
+            'apiVersion': 1,
+            'result': method == 'snapshot'
+                ? {
+                    'seq': 1,
+                    'runtime': {'instanceId': 'privacy'},
+                    'catalog': {'settings': settings},
+                  }
+                : {'status': 'succeeded'},
+          };
+        },
+      );
+      await client.attach();
+      addTearDown(client.detach);
+      await _pump(tester, Material(child: SendDeviceHeadersToggle(client: client)));
+      final toggle = find.byType(Switch);
+      final previous = initial ?? true;
+      expect(tester.widget<Switch>(toggle).value, previous);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(tester.widget<Switch>(toggle).onChanged, isNull);
+      expect(tester.widget<Switch>(toggle).value, previous);
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, !previous);
+      expect(patches, [
+        {'sendDeviceHeaders': !previous},
+      ]);
+      expect(settings['futureSetting'], 'keep');
+      settings['sendDeviceHeaders'] = previous;
+      await client.refresh();
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, previous);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('Rejected HWID change keeps the confirmed preference', (
+    tester,
+  ) async {
+    final client = BackendClient(
+      events: const Stream.empty(),
+      transport: (request) async => request['method'] == 'settings.patch'
+          ? {
+              'apiVersion': 1,
+              'error': {'code': 'failed', 'message': 'Save rejected'},
+            }
+          : {
+              'apiVersion': 1,
+              'result': {
+                'seq': 1,
+                'runtime': {'instanceId': 'privacy'},
+                'catalog': {
+                  'settings': {'sendDeviceHeaders': false},
+                },
+              },
+            },
+    );
+    await client.attach();
+    addTearDown(client.detach);
+    await _pump(tester, Material(child: SendDeviceHeadersToggle(client: client)));
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
     expect(tester.takeException(), isNull);
   });
 
