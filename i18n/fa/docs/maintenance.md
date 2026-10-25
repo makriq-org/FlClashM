@@ -31,6 +31,8 @@ nix develop -c make go-check
 
 <div dir="ltr">
 
+ویرایشگر بومی Rust به NDK r28 یا جدیدتر همراه با `libclang` نیاز دارد. متغیر `ANDROID_NDK` نسخهٔ NDK را برای ساخت Go تعیین می‌کند، اما hookهای بومی Flutter از `ANDROID_NDK_HOME` استفاده می‌کنند؛ هر دو باید به NDK انتخاب‌شده اشاره کنند. Nix و تنظیمات مشترک CI این متغیرها را خودکار تنظیم می‌کنند. برای ساخت بدون Nix، پیش از فرمان‌های زیر `export ANDROID_NDK_HOME="$ANDROID_NDK"` را اجرا کنید.
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core

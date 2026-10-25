@@ -23,6 +23,8 @@ nix develop -c make go-check
 <details>
 <summary>不用 Nix 与独立测试安装</summary>
 
+原生 Rust 编辑器需要包含 `libclang` 的 NDK r28 或更新版本。`ANDROID_NDK` 用于 Go 构建，Flutter native hooks 则使用 `ANDROID_NDK_HOME`；两者必须指向所选 NDK。Nix 和共享 CI 配置会自动设置这些变量。不使用 Nix 时，请在下方命令之前执行 `export ANDROID_NDK_HOME="$ANDROID_NDK"`。
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core

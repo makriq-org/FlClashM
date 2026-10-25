@@ -181,8 +181,8 @@ jobs:
           cmdline-tools-version: '16111833' # 23.0
           packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
 
-      # Dart native hooks discover the NDK independently of Gradle's
-      # android.ndkVersion. Flutter's default r27 has no libclang for bindgen.
+      # The shared editor setup also exposes this choice as ANDROID_NDK_HOME
+      # for Flutter, independently of Gradle's android.ndkVersion.
       - name: Select Android NDK for native hooks
         run: echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
 

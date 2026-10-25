@@ -102,6 +102,7 @@
         ANDROID_HOME = sdkRoot;
         ANDROID_SDK_ROOT = sdkRoot;
         ANDROID_NDK = "${sdkRoot}/ndk/28.0.13004108";
+        ANDROID_NDK_HOME = "${sdkRoot}/ndk/28.0.13004108";
         FLCLASHM_OLCRTC_GO = "${olcrtcGo}/bin/go";
         JAVA_HOME = "${pkgs.jdk17.home}";
         RUSTUP_HOME = "${editorRustupHome}";

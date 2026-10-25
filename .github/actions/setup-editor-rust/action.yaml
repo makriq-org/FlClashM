@@ -3,6 +3,14 @@ description: Install the pinned editor toolchain and Android standard libraries
 runs:
   using: composite
   steps:
+    # Flutter resolves native-hook compilers through ANDROID_NDK_HOME, whereas
+    # our Go build uses ANDROID_NDK. Override the runner's preinstalled NDK too.
+    - name: Select pinned NDK for Flutter native hooks
+      if: runner.os == 'Linux' && env.ANDROID_NDK != ''
+      shell: bash
+      run: |
+        test -d "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64"
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK" >> "$GITHUB_ENV"
     - name: Install pinned Rust toolchain
       shell: bash
       run: |

@@ -23,6 +23,8 @@ nix develop -c make go-check
 <details>
 <summary>Without Nix and separate test installation</summary>
 
+The native Rust editor requires NDK r28 or newer with `libclang`. `ANDROID_NDK` selects the NDK for Go builds, while Flutter native hooks use `ANDROID_NDK_HOME`: both must point to the selected NDK. Nix and the shared CI setup set them automatically. When building without Nix, run `export ANDROID_NDK_HOME="$ANDROID_NDK"` before the commands below.
+
 ```bash
 flutter pub get
 dart setup.dart android --arch arm64 --out core
