@@ -13,7 +13,7 @@
     {
       "path": "android/settings.gradle.kts",
       "bucket": "budget",
-      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением."
+      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением. SDK-плагины из Nix store собираются из одноразовой writable-копии в Gradle cache; immutable SDK не меняется."
     },
     {
       "path": "core/go.mod",
@@ -1979,6 +1979,321 @@
       "path": "core/state/state.go",
       "bucket": "budget",
       "reason": "Сохранён существующий bridge форка с независимым Go backend; upstream runtime control в Dart не возвращается."
+    },
+    {
+      "path": "lib/bootstrap.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/clash/clash.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/common/app_localizations.dart",
+      "bucket": "budget",
+      "reason": "Локализация ошибок engine/backend объединяет новые upstream сообщения с контрактами FlClashM."
+    },
+    {
+      "path": "lib/common/backup.dart",
+      "bucket": "budget",
+      "reason": "Backup фасад использует Go backup API и временные файлы только для обмена/экспорта."
+    },
+    {
+      "path": "lib/common/boot_guard.dart",
+      "bucket": "budget",
+      "reason": "Сохранена диагностика запуска FlClashM и запись результатов bootstrap без переноса runtime-политики в UI."
+    },
+    {
+      "path": "lib/common/boot_record.dart",
+      "bucket": "budget",
+      "reason": "Сохранена диагностика запуска FlClashM и запись результатов bootstrap без переноса runtime-политики в UI."
+    },
+    {
+      "path": "lib/common/javascript.dart",
+      "bucket": "budget",
+      "reason": "Preview скриптов использует authoring.evaluate в Goja вместо второго runtime в Dart."
+    },
+    {
+      "path": "lib/common/proxy.dart",
+      "bucket": "budget",
+      "reason": "Тонкий facade сохраняет product ProxySelector в новом дереве UI без собственной координации runtime."
+    },
+    {
+      "path": "lib/common/task.dart",
+      "bucket": "budget",
+      "reason": "Представление engine proxy mappings адаптировано к Go helper; Dart-преобразования обслуживают только preview/UI."
+    },
+    {
+      "path": "lib/core/controller.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/core/interface.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/core/lib.dart",
+      "bucket": "budget",
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+    },
+    {
+      "path": "lib/database/clash_providers.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/database.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/dialers.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/generated/database.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/database/groups.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/profiles.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/projection.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/rules.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/database/scripts.dart",
+      "bucket": "budget",
+      "reason": "Drift адаптирован как NativeDatabase.memory projection: строки profileId и атомарный CAS всех деклараций в Go до SQL commit."
+    },
+    {
+      "path": "lib/features/form/nested_form_sheet.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/manager/app_manager.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/manager/core_manager.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/models/generated/state.freezed.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/models/state.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/action.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/actions/backup.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/clash_providers.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/common.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/core.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profile_headers.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profile_settings.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/profiles.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/setup.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/actions/store.dart",
+      "bucket": "budget",
+      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+    },
+    {
+      "path": "lib/providers/app.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/database.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/generated/action.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/providers/generated/database.g.dart",
+      "bucket": "budget",
+      "reason": "Штатная Flutter/Drift/Riverpod generation отражает строковые ID и Go-backed модели/провайдеры; руками не редактируется."
+    },
+    {
+      "path": "lib/providers/state/custom.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/providers/state/profile.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/ui/inherited.dart",
+      "bucket": "budget",
+      "reason": "Тонкий UI adapter сохраняет строковые IDs, Go-backed настройки/снимки и существующие fork возможности при полном импорте нового UI."
+    },
+    {
+      "path": "lib/views/config/dns.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/ntp.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/override.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/providers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/sniffer.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/config/tun.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/add.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/custom.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/dialers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/groups.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/members.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/providers.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/custom/rules.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/edit.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/extend.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/script.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/profiles/extend/standard.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/views/zashboard.dart",
+      "bucket": "budget",
+      "reason": "Новый экран адаптирован к строковым profileId и Go snapshots/commands; исходный UI апстрима сохраняется в base."
+    },
+    {
+      "path": "lib/widgets/dialog.dart",
+      "bucket": "budget",
+      "reason": "Совместимый диалог сохранён для fork APK updater с ограниченным размером и прокруткой длинного changelog."
+    },
+    {
+      "path": "lib/ui/flutter_material_compat.dart",
+      "bucket": "budget",
+      "reason": "Совместимые локализации и тема Flutter Material позволяют существующим fork окнам обновления и WebView работать внутри нового material_ui app без второго Navigator."
     }
   ]
 }

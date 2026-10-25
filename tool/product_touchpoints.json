@@ -1,167 +1,13 @@
 {
   "allowedProductImports": [
     {
-      "path": "lib/application.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "Базовая оболочка передаёт Android shortcuts продуктовому слою; смена сети обновляет только IP в UI.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/clash/core.dart",
+      "path": "lib/bootstrap.dart",
       "boundary": "backend-ui-client",
-      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
-      "targets": [
-        "lib/product/backend/backend.dart"
-      ]
-    },
-    {
-      "path": "lib/common/android.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "Android exit hook stays as a thin base consumer of AndroidShellService.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/common/file_logger.dart",
-      "boundary": "local-diagnostics",
-      "reason": "The upstream logger remains a stable facade while the product layer owns bounded, pre-write-redacted diagnostic persistence.",
-      "targets": [
-        "lib/product/diagnostics/diagnostic_recorder.dart"
-      ]
-    },
-    {
-      "path": "lib/common/print.dart",
-      "boundary": "local-diagnostics",
-      "reason": "The shared print facade applies the product redaction policy before logcat, file and in-app log consumers see a message.",
-      "targets": [
-        "lib/product/diagnostics/diagnostic_redactor.dart"
-      ]
-    },
-    {
-      "path": "lib/common/system.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "System helpers stay a thin base delegate for Android task-back behavior.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/controller.dart",
-      "boundary": "backend-ui-client",
-      "reason": "AppController передаёт действия в Go backend и обновляет UI из снимков; product-сервисы обслуживают Android shell, экспорт логов и оформление подписок.",
+      "reason": "Bootstrap связывает тонкий UI с Go snapshots/settings и перестраиваемой SQL-проекцией, без собственной runtime-политики.",
       "targets": [
         "lib/product/backend/backend.dart",
-        "lib/product/diagnostics/product_diagnostics.dart",
-        "lib/product/services/product_services.dart",
-        "lib/product/subscription/product_subscription.dart"
-      ]
-    },
-    {
-      "path": "lib/main.dart",
-      "boundary": "bootstrap-entrypoint",
-      "reason": "Main stays a single bootstrap handoff into AppBootstrap.",
-      "targets": [
-        "lib/product/bootstrap/app_bootstrap.dart"
-      ]
-    },
-    {
-      "path": "lib/manager/android_manager.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "AndroidManager stays a thin base consumer for exclude-from-recents shell sync.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/manager/app_state_manager.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "AppStateManager may forward runtime mode and global-mode changes into AndroidShellService.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/models/profile.dart",
-      "boundary": "backend-ui-client",
-      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
-      "targets": [
-        "lib/product/backend/backend.dart"
-      ]
-    },
-    {
-      "path": "lib/providers/config.dart",
-      "boundary": "platform-shell-bootstrap",
-      "reason": "Config providers stay a thin base trigger for Android tile refresh after persisted profile changes.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/providers/state.dart",
-      "boundary": "subscription-and-platform-selectors",
-      "reason": "Базовые селекторы передают product-слою оформление подписок, платформенную навигацию и доступность прокси при запуске.",
-      "targets": [
-        "lib/product/platform/platform_profile.dart",
-        "lib/product/subscription/product_subscription.dart"
-      ]
-    },
-    {
-      "path": "lib/state.dart",
-      "boundary": "global-runtime-wiring",
-      "reason": "GlobalState projects Go backend snapshots and submits settings edits through the backend client; it owns no runtime or compile policy.",
-      "targets": [
-        "lib/product/backend/backend.dart"
-      ]
-    },
-    {
-      "path": "lib/views/about.dart",
-      "boundary": "ui-product-services",
-      "reason": "AboutView stays upstream-owned and delegates only the manual app-update check into ProductServices.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/views/access.dart",
-      "boundary": "ui-product-services",
-      "reason": "AccessView stays in base UI and uses ProductServices only for access-control editor state, package loading and profile-managed locks.",
-      "targets": [
-        "lib/product/services/product_services.dart"
-      ]
-    },
-    {
-      "path": "lib/views/application_setting.dart",
-      "boundary": "ui-product-services",
-      "reason": "Settings items ask the product layer which switches the subscription provider actually manages, instead of hardcoding the lock in base UI.",
-      "targets": [
-        "lib/product/subscription/provider_managed_app_settings.dart"
-      ]
-    },
-    {
-      "path": "lib/views/config/general.dart",
-      "boundary": "backend-ui-client",
-      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
-      "targets": [
-        "lib/product/backend/backend.dart"
-      ]
-    },
-    {
-      "path": "lib/views/profiles/edit_profile.dart",
-      "boundary": "backend-ui-client",
-      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
-      "targets": [
-        "lib/product/backend/backend.dart"
-      ]
-    },
-    {
-      "path": "lib/views/profiles/profiles.dart",
-      "boundary": "ui-product-advisory",
-      "reason": "ProfilesView keeps the live upstream page and reads product advisory data only for the support link menu hint.",
-      "targets": [
-        "lib/product/subscription/provider_advisory.dart"
+        "lib/product/backend/frontend_projection.dart",
+        "lib/product/backend/frontend_settings.dart"
       ]
     },
     {
@@ -173,11 +19,120 @@
       ]
     },
     {
-      "path": "lib/views/proxies/list.dart",
-      "boundary": "proxy-list-layout",
-      "reason": "Страница прокси использует product-виджет с точной длиной групп и ленивыми строками.",
+      "path": "lib/common/javascript.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Предварительный просмотр скрипта делегируется изолированному authoring.evaluate в Go.",
       "targets": [
-        "lib/product/widgets/proxy_group_sliver.dart"
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/common/preferences.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Совместимый UI facade читает/сохраняет настройки через Go, без второго дискового источника истины.",
+      "targets": [
+        "lib/product/backend/backend.dart",
+        "lib/product/backend/frontend_settings.dart"
+      ]
+    },
+    {
+      "path": "lib/core/controller.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Core facade переводит пользовательские действия в существующий Go API v1.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/core/lib.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Диагностический facade использует существующий backend-клиент и transport без второго runtime owner.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/database/database.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Drift хранит только memory projection; каждая запись фиксируется CAS в Go до SQL commit.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/main.dart",
+      "boundary": "bootstrap-entrypoint",
+      "reason": "Main stays a single bootstrap handoff into AppBootstrap.",
+      "targets": [
+        "lib/product/bootstrap/app_bootstrap.dart"
+      ]
+    },
+    {
+      "path": "lib/manager/app_manager.dart",
+      "boundary": "backend-ui-client",
+      "reason": "App lifecycle сбрасывает отложенные UI-настройки через backend, не координируя runtime.",
+      "targets": [
+        "lib/product/backend/frontend_settings.dart"
+      ]
+    },
+    {
+      "path": "lib/models/common.dart",
+      "boundary": "backend-ui-client",
+      "reason": "ProfileBase читается через profile.inspect; разбор/доступ к исходникам принадлежит Go.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/models/profile.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий интерфейсный клиент передаёт пользовательские действия в Go backend и проецирует его снимки.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/action.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Базовые действия передаются backend-клиенту; product services сохраняют APK updater и Android shell.",
+      "targets": [
+        "lib/product/backend/backend.dart",
+        "lib/product/backend/frontend_settings.dart",
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
+      "path": "lib/providers/state.dart",
+      "boundary": "subscription-and-platform-selectors",
+      "reason": "Базовые селекторы передают product-слою оформление подписок, платформенную навигацию и доступность прокси при запуске.",
+      "targets": [
+        "lib/product/subscription/product_subscription.dart"
+      ]
+    },
+    {
+      "path": "lib/state.dart",
+      "boundary": "global-runtime-wiring",
+      "reason": "GlobalState projects Go backend snapshots and submits settings edits through the backend client; it owns no runtime or compile policy.",
+      "targets": [
+        "lib/product/backend/backend_client.dart",
+        "lib/product/backend/backend_errors.dart"
+      ]
+    },
+    {
+      "path": "lib/views/tools.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Fork инструменты используют Go API и существующий экран восстановления backend.",
+      "targets": [
+        "lib/product/backend/backend.dart",
+        "lib/product/bootstrap/backend_startup.dart"
+      ]
+    },
+    {
+      "path": "lib/views/zashboard.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий mount открывает fork WebView Zashboard и внешний браузер с Go-owned controller.",
+      "targets": [
+        "lib/product/pages/zashboard.dart"
       ]
     }
   ],
@@ -197,6 +152,10 @@
     {
       "path": "lib/product/bootstrap/backend_startup.dart",
       "reason": "Экран восстановления при недоступном фоновом backend на старте: повтор подключения и экспорт логов без работающего Go API."
+    },
+    {
+      "path": "lib/product/pages/zashboard.dart",
+      "reason": "Fork WebView сохраняет встроенный Zashboard, внешний браузер и обработку ошибок; runtime-команды идут через Go controller."
     }
   ]
 }

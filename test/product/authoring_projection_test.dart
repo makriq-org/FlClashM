@@ -61,7 +61,7 @@ class AuthoringHost {
         };
       case 'authoring.replace':
         final params = request['params'] as Map;
-        if (conflict || params['expectedRevision'] != revision)
+        if (conflict || params['expectedRevision'] != revision) {
           return {
             'apiVersion': 1,
             'error': {
@@ -69,6 +69,7 @@ class AuthoringHost {
               'message': 'authoring revision changed',
             },
           };
+        }
         collections = copy(
           Map<String, dynamic>.from(params['collections'] as Map),
         );

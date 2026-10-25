@@ -1,7 +1,5 @@
 // ignore_for_file: constant_identifier_names
 
-export '../ui/metrics.dart' show commonDuration;
-
 import 'dart:io';
 import 'dart:math';
 
@@ -10,6 +8,8 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:material_ui/material_ui.dart';
+
+export '../ui/metrics.dart' show commonDuration;
 
 const appName = 'FlClashM';
 const appHelperService = 'FlClashXHelperService';

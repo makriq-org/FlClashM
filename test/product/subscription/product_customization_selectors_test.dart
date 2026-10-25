@@ -6,19 +6,21 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('explicit user override disables advisory new dashboard mode', () {
     final profiles = [
-        Profile(
-          id: 'profile-1',
-          autoUpdateDuration: Duration.zero,
-          providerHeaders: {
-            'flclashm-newboard': 'true',
-          },
+      const Profile(
+        id: 'profile-1',
+        autoUpdateDuration: Duration.zero,
+        providerHeaders: {'flclashm-newboard': 'true'},
+      ),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        profilesProvider.overrideWithBuild((_, _) => profiles),
+        currentProfileIdProvider.overrideWithBuild((_, _) => 'profile-1'),
+        appSettingProvider.overrideWithBuild(
+          (_, _) => const AppSettingProps(newDashboard: false),
         ),
-      ];
-    final container = ProviderContainer(overrides:[
-      profilesProvider.overrideWithBuild((_,_)=>profiles),
-      currentProfileIdProvider.overrideWithBuild((_,_)=>'profile-1'),
-      appSettingProvider.overrideWithBuild((_,_)=>const AppSettingProps(newDashboard:false)),
-    ]);
+      ],
+    );
     addTearDown(container.dispose);
 
     expect(container.read(effectiveNewDashboardProvider), isFalse);
@@ -27,20 +29,24 @@ void main() {
 
   test('denywidgets still locks dashboard editing independently', () {
     final profiles = [
-        Profile(
-          id: 'profile-1',
-          autoUpdateDuration: Duration.zero,
-          providerHeaders: {
-            'flclashm-newboard': 'true',
-            'flclashm-denywidgets': 'true',
-          },
+      const Profile(
+        id: 'profile-1',
+        autoUpdateDuration: Duration.zero,
+        providerHeaders: {
+          'flclashm-newboard': 'true',
+          'flclashm-denywidgets': 'true',
+        },
+      ),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        profilesProvider.overrideWithBuild((_, _) => profiles),
+        currentProfileIdProvider.overrideWithBuild((_, _) => 'profile-1'),
+        appSettingProvider.overrideWithBuild(
+          (_, _) => const AppSettingProps(newDashboard: false),
         ),
-      ];
-    final container = ProviderContainer(overrides:[
-      profilesProvider.overrideWithBuild((_,_)=>profiles),
-      currentProfileIdProvider.overrideWithBuild((_,_)=>'profile-1'),
-      appSettingProvider.overrideWithBuild((_,_)=>const AppSettingProps(newDashboard:false)),
-    ]);
+      ],
+    );
     addTearDown(container.dispose);
 
     expect(container.read(effectiveNewDashboardProvider), isFalse);
