@@ -230,7 +230,8 @@ func collectRemoteRequests(config Object) ([]RemoteListRequest, error) {
 	requests := []RemoteListRequest{}
 	indices := map[string]int{}
 	counts := map[string]int{}
-	for _, entry := range list(config["proxies"]) {
+	for _, slot := range proxySlots(config) {
+		entry := slot.values[slot.index]
 		raw := object(entry)
 		kind := strings.ToLower(strings.TrimSpace(text(raw["type"])))
 		if kind != "byedpi" && kind != "stormdns" {

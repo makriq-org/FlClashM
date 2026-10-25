@@ -19,6 +19,8 @@ import (
 	"sync"
 	"syscall"
 	"unicode/utf8"
+
+	"core/backend/authoring"
 )
 
 const Version = 1
@@ -38,11 +40,12 @@ type Record struct {
 	Digest        string `json:"digest"`
 }
 type Document struct {
-	Version  int      `json:"version"`
-	Revision uint64   `json:"revision"`
-	Migrated bool     `json:"migrated"`
-	Settings Object   `json:"settings"`
-	Profiles []Record `json:"profiles"`
+	Authoring authoring.Collections `json:"authoring,omitempty"`
+	Version   int                   `json:"version"`
+	Revision  uint64                `json:"revision"`
+	Migrated  bool                  `json:"migrated"`
+	Settings  Object                `json:"settings"`
+	Profiles  []Record              `json:"profiles"`
 }
 type Validator func(context.Context, string) error
 
@@ -230,6 +233,12 @@ func (r *Repository) Migrate(ctx context.Context, rawSettings []byte, readSource
 	next := clone(r.state)
 	next.Settings = settings
 	delete(next.Settings, "profiles")
+	if raw := next.Settings["authoring"]; len(raw) > 0 {
+		if err := json.Unmarshal(raw, &next.Authoring); err != nil {
+			return err
+		}
+		delete(next.Settings, "authoring")
+	}
 	next.Migrated = true
 	seen := map[string]bool{}
 	for _, m := range metadata {
@@ -347,6 +356,9 @@ func (r *Repository) Put(ctx context.Context, metadata Object, source string, ex
 	} else {
 		next.Profiles[index] = record
 	}
+	if index >= 0 {
+		renameProvider(&next, r.state.Profiles[index].Metadata, record.Metadata)
+	}
 	if err = r.persist(next); err != nil {
 		return Record{}, err
 	}
@@ -377,6 +389,8 @@ func (r *Repository) DeleteWithSelection(id string, expected uint64, beforeLast 
 			return false, ErrConflict
 		}
 		next.Profiles = append(next.Profiles[:i], next.Profiles[i+1:]...)
+		authoring.PruneProfile(next.Authoring, id)
+		renameProvider(&next, p.Metadata, nil)
 		var current string
 		_ = json.Unmarshal(next.Settings["currentProfileId"], &current)
 		changed := current == id
@@ -401,6 +415,9 @@ func (r *Repository) UpdateSettings(settings Object, expected uint64) error {
 	if expected != r.state.Revision {
 		return ErrConflict
 	}
+	if _, ok := settings["authoring"]; ok {
+		return errors.New("authoring must be changed through authoring.replace")
+	}
 	if _, ok := settings["profiles"]; ok {
 		return errors.New("profiles must be changed through the repository")
 	}
@@ -424,6 +441,9 @@ func (r *Repository) ExportLegacy() ([]byte, error) {
 		return nil, err
 	}
 	settings["profiles"] = raw
+	if len(r.state.Authoring) > 0 {
+		settings["authoring"] = mustJSON(authoring.Normalize(r.state.Authoring))
+	}
 	return json.Marshal(settings)
 }
 func ReadLegacySource(directory, id string) (string, error) {
@@ -484,7 +504,7 @@ func mergeObjects(previous, patch Object) Object {
 
 func structuredObject(key string) bool {
 	switch key {
-	case "appSetting", "patchClashConfig", "networkProps", "vpnProps", "themeProps", "proxiesStyle", "windowProps", "scriptProps", "textScale", "tun", "dns", "geox-url", "fallback-filter", "accessControl", "overrideData", "rule":
+	case "appSetting", "patchClashConfig", "networkProps", "vpnProps", "themeProps", "proxiesStyle", "windowProps", "scriptProps", "textScale", "tun", "dns", "geox-url", "accessControl", "overrideData", "rule", "overrides", "ntp", "sniffer", "sniff", "fallback-filter", "tun-override":
 		return true
 	}
 	return false
@@ -567,24 +587,31 @@ func (r *Repository) writeSource(source string) error {
 	defer dir.Close()
 	return dir.Sync()
 }
-func (r *Repository) pruneSources() {
+func (r *Repository) pruneSources() { _ = r.collectSources() }
+func (r *Repository) collectSources() error {
 	keep := map[string]bool{}
 	for _, p := range r.state.Profiles {
 		keep[p.Digest+".yaml"] = true
 	}
 	directory := filepath.Join(filepath.Dir(r.path), "sources")
 	files, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
-		return
+		return err
 	}
 	for _, f := range files {
 		if !f.Type().IsRegular() || keep[f.Name()] || len(f.Name()) != 69 || !strings.HasSuffix(f.Name(), ".yaml") {
 			continue
 		}
 		if _, err := hex.DecodeString(strings.TrimSuffix(f.Name(), ".yaml")); err == nil {
-			_ = os.Remove(filepath.Join(directory, f.Name()))
+			if err = os.Remove(filepath.Join(directory, f.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (r *Repository) Reorder(ctx context.Context, ids []string, expected uint64) error {
@@ -646,6 +673,7 @@ func (r *Repository) UpdateMetadata(ctx context.Context, id string, patch Object
 		}
 		record.Revision = r.state.Revision + 1
 		next.Profiles[i] = record
+		renameProvider(&next, r.state.Profiles[i].Metadata, record.Metadata)
 		if err := r.persist(next); err != nil {
 			return Record{}, err
 		}
@@ -706,6 +734,14 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		return errors.New("invalid backup settings")
 	}
 	compatibleSettings(settings)
+	var incoming authoring.Collections
+	hasAuthoring := len(settings["authoring"]) > 0
+	if hasAuthoring {
+		if err := json.Unmarshal(settings["authoring"], &incoming); err != nil {
+			return err
+		}
+		delete(settings, "authoring")
+	}
 	var metadata []Object
 	if raw := settings["profiles"]; len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &metadata); err != nil {
@@ -765,6 +801,23 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 			next.Profiles = append(next.Profiles, record)
 		} else {
 			next.Profiles[index] = record
+		}
+	}
+	if hasAuthoring {
+		if replace {
+			next.Authoring = incoming
+		} else {
+			next.Authoring = authoring.Merge(next.Authoring, incoming)
+		}
+		if err := validateAuthoring(next); err != nil {
+			return err
+		}
+	} else if replace {
+		for _, p := range r.state.Profiles {
+			id, _ := profileID(p.Metadata)
+			if !seen[id] {
+				authoring.PruneProfile(next.Authoring, id)
+			}
 		}
 	}
 	var current string

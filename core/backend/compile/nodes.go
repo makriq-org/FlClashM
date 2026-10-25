@@ -65,7 +65,8 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		}
 	}
 	nodes := []Node{}
-	for index, entry := range list(config["proxies"]) {
+	for _, slot := range proxySlots(config) {
+		entry := slot.values[slot.index]
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -146,7 +147,7 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
 		nodes = append(nodes, node)
-		list(config["proxies"])[index] = Object{"name": name, "type": "socks5", "server": node.Host, "port": port, "udp": udp}
+		slot.values[slot.index] = Object{"name": name, "type": "socks5", "server": node.Host, "port": port, "udp": udp}
 	}
 	return nodes, nil
 }
@@ -252,11 +253,8 @@ func groupChecks(config Object, name string) ([]string, []string, error) {
 	direct := []string{}
 	for _, item := range groups {
 		group := object(item)
-		for _, member := range list(group["proxies"]) {
-			if strings.TrimSpace(text(member)) == name && text(group["name"]) != "" {
-				direct = append(direct, text(group["name"]))
-				break
-			}
+		if groupContainsProxy(config, group, name) && text(group["name"]) != "" {
+			direct = append(direct, text(group["name"]))
 		}
 	}
 	members := map[string]bool{name: true}
@@ -270,8 +268,8 @@ func groupChecks(config Object, name string) ([]string, []string, error) {
 				continue
 			}
 			found := false
-			for _, entry := range list(group["proxies"]) {
-				found = found || members[strings.TrimSpace(text(entry))]
+			for member := range members {
+				found = found || groupContainsProxy(config, group, member)
 			}
 			if !found {
 				continue
@@ -346,4 +344,34 @@ func artifact(node *Node, name string, value any) error {
 	}
 	node.Files["built-in-proxies/"+node.Type+"/"+node.ID+"/"+name] = string(raw)
 	return nil
+}
+
+func groupContainsProxy(config, group Object, name string) bool {
+	for _, member := range list(group["proxies"]) {
+		if strings.TrimSpace(text(member)) == name {
+			return true
+		}
+	}
+	if group["include-all-proxies"] == true {
+		for _, entry := range list(config["proxies"]) {
+			if text(object(entry)["name"]) == name {
+				return true
+			}
+		}
+	}
+	uses := map[string]bool{}
+	for _, entry := range list(group["use"]) {
+		uses[text(entry)] = true
+	}
+	for key, value := range object(config["proxy-providers"]) {
+		if !uses[key] && group["include-all-providers"] != true {
+			continue
+		}
+		for _, entry := range list(object(value)["payload"]) {
+			if text(object(entry)["name"]) == name {
+				return true
+			}
+		}
+	}
+	return false
 }

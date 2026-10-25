@@ -26,6 +26,7 @@ type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 type Subscriptions struct {
+	DecodeSource   func(context.Context, string, string) (string, error)
 	UserAgent      string
 	LegacyTimeZone *time.Location
 	Repository     *Repository
@@ -193,7 +194,19 @@ func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Objec
 	}
 	metadata["subscriptionInfo"] = mustJSON(info)
 	metadata["lastUpdateDate"] = mustJSON(s.now().UTC().Format(time.RFC3339Nano))
-	updated, err := s.Repository.Put(ctx, metadata, string(raw), profile.Revision)
+	source := string(raw)
+	var secret string
+	_ = json.Unmarshal(metadata["ageSecretKey"], &secret)
+	if secret != "" {
+		if s.DecodeSource == nil {
+			return Record{}, errors.New("encrypted profile decoder is unavailable")
+		}
+		source, err = s.DecodeSource(ctx, source, secret)
+		if err != nil {
+			return Record{}, err
+		}
+	}
+	updated, err := s.Repository.Put(ctx, metadata, source, profile.Revision)
 	if err != nil {
 		return Record{}, err
 	}
