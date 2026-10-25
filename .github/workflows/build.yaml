@@ -49,6 +49,9 @@ jobs:
       - name: Setup editor Rust
         uses: ./.github/actions/setup-editor-rust
 
+      - name: Generate Flutter models and projections
+        run: dart run tool/generate_flutter.dart build
+
       - name: Check product boundaries
         run: dart tool/check_product_boundaries.dart
 
@@ -62,10 +65,10 @@ jobs:
         run: dart tool/check_base_drift.dart
 
       - name: Run product and tool tests
-        run: flutter test test/product test/tool
+        run: flutter test test/product test/tool test/upstream_ui
 
       - name: Run targeted analyze
-        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
+        run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_base_drift.dart tool/generate_flutter.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   build:
     runs-on: ubuntu-latest

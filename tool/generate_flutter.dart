@@ -49,7 +49,10 @@ Future<void> main(List<String> arguments) async {
     flush: true,
   );
   stdout.writeln('Flutter SDK summary: $embedder');
-  final process = await Process.start(Platform.resolvedExecutable, [
+  // Keep Flutter's pub SDK context as well as its embedder. Invoking the
+  // resolved standalone Dart here makes pub reject Flutter SDK dependencies.
+  final process = await Process.start('flutter', [
+    'pub',
     'run',
     'build_runner',
     ...arguments.isEmpty ? ['build'] : arguments,
