@@ -41,4 +41,12 @@ void main() {
     expect(proxies.all, ['group']);
     expect(proxies.proxies['group']['all'], ['DIRECT']);
   });
+
+  test('a group named proxies is not mistaken for a response envelope', () {
+    final response = legacyProxyEnvelope({
+      'proxies': {'type': 'Selector', 'all': ['DIRECT']},
+      'all': {'type': 'Selector', 'all': ['DIRECT']},
+    });
+    expect(ProxiesData.fromJson(response).all, ['proxies', 'all']);
+  });
 }

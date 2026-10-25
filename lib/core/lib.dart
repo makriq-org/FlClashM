@@ -158,7 +158,7 @@ dynamic decodeLegacyResult(String value) =>
     value.isEmpty ? null : jsonDecode(value);
 
 Map<String, dynamic> legacyProxyEnvelope(Map<dynamic, dynamic> proxies) =>
-    proxies.containsKey('proxies')
+    proxies['proxies'] is Map && proxies['all'] is List
     ? Map<String, dynamic>.from(proxies)
     : <String, dynamic>{
         'proxies': Map<String, dynamic>.from(proxies),
