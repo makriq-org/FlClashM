@@ -277,6 +277,20 @@ func MergeProviderHeaders(previous, incoming map[string]string) map[string]strin
 			delete(merged, "flclashx-"+suffix)
 		}
 	}
+	// A fresh legacy restriction header signals a format rollback. Do not let
+	// a cached combined header override the restrictions in this response.
+	_, specialM := incoming["flclashm-special"]
+	_, specialX := incoming["flclashx-special"]
+	if !specialM && !specialX {
+		for _, prefix := range []string{"flclashm-", "flclashx-"} {
+			for _, suffix := range []string{"androidsecure", "globalmode", "denywidgets"} {
+				if _, present := incoming[prefix+suffix]; present {
+					delete(merged, "flclashm-special")
+					delete(merged, "flclashx-special")
+				}
+			}
+		}
+	}
 	for k, v := range incoming {
 		merged[k] = v
 	}
