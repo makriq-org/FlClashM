@@ -54,7 +54,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}-${{ inputs.worker_key || 'parent' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}-${{ inputs.worker_key || 'parent' }}-${{ inputs.arm64_runner || 'auto' }}
   cancel-in-progress: true
 
 permissions: {}
