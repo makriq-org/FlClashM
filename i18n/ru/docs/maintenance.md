@@ -217,8 +217,13 @@ https://flclashm.sourceforge.io/update/pre.json
 
 ### Blacksmith и резервные runners CI
 
-Все workflows используют общий `select-ci-runner`: короткие служебные задания
+Workflows проверок и очистки используют общий `select-ci-runner`: короткие служебные задания
 получают Blacksmith 2 vCPU, guards и unit-тесты — 4 vCPU, сборки и эмулятор — 8 vCPU.
+Workflows выпуска (`build`, `build-core`), публикации (`publish`), восстановления
+каталога обновлений и проверки релизной непрерывности целиком выполняются на GitHub.
+Это исключает зависимость критического пути от квоты Blacksmith: предварительная
+проба не резервирует машины для следующих jobs. Весь граф выпуска, включая сборку,
+остаётся на GitHub; автоматический повтор публикации не требуется.
 Размеры выше 8 vCPU запрещены тестом CI. Сам управляющий шаг работает на GitHub,
 запускает короткую пробу Blacksmith без компиляции и ждёт назначения машины не более
 120 секунд. При недоступности сервиса, отказе API или блокировке по лимиту jobs
@@ -232,7 +237,7 @@ APK дочернего запуска копируется в артефакты
 недоступен уже после выбора runner, строгий контроль очереди есть только у ARM64.
 
 Ручные `arm64_only=true` и `arm64_runner=github` позволяют проверить ARM64 на GitHub.
-Repository variable `BLACKSMITH_DISABLED=true` переключает все workflows на GitHub
+Repository variable `BLACKSMITH_DISABLED=true` переключает все оставшиеся workflows на GitHub
 без правок YAML. Ручной E2E-only по умолчанию использует `e2e_runner=auto` и общий выбор runner.
 Явный выбор машины сохраняется для сравнений; `BLACKSMITH_DISABLED=true` имеет приоритет.
 

@@ -13,15 +13,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  select-runner:
-    permissions:
-      contents: read
-      actions: write
-    uses: ./.github/workflows/select-ci-runner.yaml
-
   release-continuity:
-    needs: select-runner
-    runs-on: ${{ needs.select-runner.outputs.small }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

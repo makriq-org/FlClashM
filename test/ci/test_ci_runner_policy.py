@@ -15,13 +15,25 @@ class RunnerPolicyTest(unittest.TestCase):
                 self.assertLessEqual(int(size), 8, str(path))
         self.assertTrue(found)
 
-    def test_only_control_jobs_directly_use_github(self):
-        for path in (ROOT / '.github/workflows').glob('*.yaml'):
-            text = path.read_text()
-            if path.name in ['select-ci-runner.yaml', 'android-base-verification.yaml']:
-                continue
-            self.assertNotIn('runs-on: ubuntu-latest', text, str(path))
-            self.assertIn('uses: ./.github/workflows/select-ci-runner.yaml', text)
+    def test_release_workflows_do_not_depend_on_blacksmith(self):
+        # No preflight reservation can guarantee that a later publish job
+        # receives a runner. Keep the whole release graph on GitHub, including
+        # build prerequisites, so quota exhaustion cannot block publication.
+        critical = ['build.yaml', 'build-core.yaml', 'publish.yaml',
+                    'repair-update-manifest.yaml', 'continuity.yaml']
+        for name in critical:
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertNotIn('select-runner', text, name)
+            self.assertNotIn('blacksmith-', text, name)
+            runners = re.findall(r'^    runs-on: (.+)$', text, re.MULTILINE)
+            self.assertTrue(runners, name)
+            self.assertTrue(all(value == 'ubuntu-latest' for value in runners), name)
+
+    def test_verification_workflows_keep_blacksmith_selection(self):
+        for name in ['go-backend-verification.yaml', 'secret-scan.yaml',
+                     'android-base-verification.yaml', 'clean-actions.yaml']:
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertIn('uses: ./.github/workflows/select-ci-runner.yaml', text, name)
 
     def test_manual_e2e_defaults_to_shared_runner_policy(self):
         text = (ROOT / '.github/workflows/android-base-verification.yaml').read_text()

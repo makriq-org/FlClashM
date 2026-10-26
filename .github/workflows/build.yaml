@@ -19,15 +19,8 @@ env:
   NDK_VERSION: "28.0.13004108"
 
 jobs:
-  select-runner:
-    permissions:
-      contents: read
-      actions: write
-    uses: ./.github/workflows/select-ci-runner.yaml
-
   release-guards:
-    needs: select-runner
-    runs-on: ${{ needs.select-runner.outputs.medium }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -78,8 +71,8 @@ jobs:
         run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_product_boundaries.dart tool/check_base_drift.dart tool/generate_flutter.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/write_app_update_manifest.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   build:
-    runs-on: ${{ needs.select-runner.outputs.large }}
-    needs: [select-runner, release-guards]
+    runs-on: ubuntu-latest
+    needs: [release-guards]
     permissions:
       contents: read
     steps:
@@ -173,8 +166,8 @@ jobs:
           overwrite: true
 
   build-android-artifacts:
-    runs-on: ${{ needs.select-runner.outputs.large }}
-    needs: [select-runner, build]
+    runs-on: ubuntu-latest
+    needs: [build]
     permissions:
       contents: read
     strategy:
@@ -270,8 +263,8 @@ jobs:
           overwrite: true
 
   package:
-    runs-on: ${{ needs.select-runner.outputs.large }}
-    needs: [select-runner, build-android-artifacts]
+    runs-on: ubuntu-latest
+    needs: [build-android-artifacts]
     permissions:
       contents: read
     steps:
@@ -351,9 +344,9 @@ jobs:
   upload:
     permissions:
       contents: write
-    needs: [select-runner, package]
+    needs: [package]
     if: always() && (needs.package.result == 'success')
-    runs-on: ${{ needs.select-runner.outputs.small }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
