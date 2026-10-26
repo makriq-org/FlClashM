@@ -11,7 +11,7 @@ import 'package:material_ui/material_ui.dart';
 
 export '../ui/metrics.dart' show commonDuration;
 
-const appName = 'FlClashM';
+const appName = 'FlClashM CI benchmark';
 const appHelperService = 'FlClashXHelperService';
 const coreManifestName = 'manifest.json';
 const browserUa =
