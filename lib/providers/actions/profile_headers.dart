@@ -51,7 +51,8 @@ class ProfileHeadersAction extends _$ProfileHeadersAction {
   }
 
   void apply(ProfileHeaderSettings settings) {
-    final owned = ref.read(appSettingProvider).ownedSettings;
+    final appSettings = ref.read(appSettingProvider);
+    final owned = appSettings.ownedSettings;
     T? asked<T>(String key, T? value) => owned.contains(key) ? null : value;
     if (settings.view case final view?) {
       ref
@@ -109,7 +110,8 @@ class ProfileHeadersAction extends _$ProfileHeadersAction {
           .read(appSettingProvider.notifier)
           .update((state) => state.copyWith(dashboardWidgets: widgets));
     }
-    if (settings.switches case final switches?) {
+    if (settings.switches case final switches?
+        when !appSettings.overrideProviderSettings) {
       bool? said(String flag) => owned.contains(appSwitchSettings[flag])
           ? null
           : switches.contains(flag);
