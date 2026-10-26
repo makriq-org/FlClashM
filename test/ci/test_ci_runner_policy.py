@@ -29,6 +29,7 @@ class RunnerPolicyTest(unittest.TestCase):
         self.assertIn('default: auto', options)
         e2e = text.split('  android-emulator-e2e:', 1)[1]
         selection = next(line for line in e2e.splitlines() if 'runs-on:' in line)
+        self.assertIn("inputs.e2e_only", selection)
         self.assertIn("inputs.e2e_runner != 'auto'", selection)
         self.assertIn("vars.BLACKSMITH_DISABLED != 'true'", selection)
         self.assertIn('needs.select-runner.outputs.large', selection)
