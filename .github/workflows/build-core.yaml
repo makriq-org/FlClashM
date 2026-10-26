@@ -90,7 +90,7 @@ jobs:
           path: dist/FlClashCore-android-${{ matrix.abi }}.zip
 
   release:
-    needs: build
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: write

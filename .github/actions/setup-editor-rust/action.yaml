@@ -1,5 +1,14 @@
 name: Setup editor Rust
 description: Install the pinned editor toolchain and Android standard libraries
+inputs:
+  targets:
+    description: Rust Android targets needed by this job
+    required: false
+    default: aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+  install-host-deps:
+    description: Install Linux desktop editor build dependencies
+    required: false
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -13,12 +22,15 @@ runs:
         echo "ANDROID_NDK_HOME=$ANDROID_NDK" >> "$GITHUB_ENV"
     - name: Install pinned Rust toolchain
       shell: bash
+      env:
+        RUST_TARGETS: ${{ inputs.targets }}
       run: |
         rustup toolchain install 1.99.0 --profile minimal
-        rustup target add --toolchain 1.99.0 aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+        read -r -a targets <<< "$RUST_TARGETS"
+        rustup target add --toolchain 1.99.0 "${targets[@]}"
         echo 'RUSTUP_TOOLCHAIN=1.99.0' >> "$GITHUB_ENV"
     - name: Install editor host build dependencies
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && inputs.install-host-deps == 'true'
       shell: bash
       run: |
         sudo apt-get update

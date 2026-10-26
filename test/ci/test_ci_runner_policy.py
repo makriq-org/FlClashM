@@ -1,0 +1,62 @@
+import re
+import subprocess
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).parents[2]
+
+
+class RunnerPolicyTest(unittest.TestCase):
+    def test_blacksmith_sizes_never_exceed_eight(self):
+        found = []
+        for path in (ROOT / '.github').rglob('*.yaml'):
+            for size in re.findall(r'blacksmith-(\d+)vcpu-', path.read_text()):
+                found.append(int(size))
+                self.assertLessEqual(int(size), 8, str(path))
+        self.assertTrue(found)
+
+    def test_release_workflows_do_not_depend_on_blacksmith(self):
+        # No preflight reservation can guarantee that a later publish job
+        # receives a runner. Keep the whole release graph on GitHub, including
+        # build prerequisites, so quota exhaustion cannot block publication.
+        critical = ['build.yaml', 'build-core.yaml', 'publish.yaml',
+                    'repair-update-manifest.yaml', 'continuity.yaml']
+        for name in critical:
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertNotIn('select-runner', text, name)
+            self.assertNotIn('blacksmith-', text, name)
+            runners = re.findall(r'^    runs-on: (.+)$', text, re.MULTILINE)
+            self.assertTrue(runners, name)
+            self.assertTrue(all(value == 'ubuntu-latest' for value in runners), name)
+
+    def test_verification_workflows_keep_blacksmith_selection(self):
+        for name in ['go-backend-verification.yaml', 'secret-scan.yaml',
+                     'android-base-verification.yaml', 'clean-actions.yaml']:
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertIn('uses: ./.github/workflows/select-ci-runner.yaml', text, name)
+
+    def test_manual_e2e_defaults_to_shared_runner_policy(self):
+        text = (ROOT / '.github/workflows/android-base-verification.yaml').read_text()
+        options = text.split('      e2e_runner:', 1)[1].split('      e2e_only:', 1)[0]
+        self.assertIn('default: auto', options)
+        e2e = text.split('  android-emulator-e2e:', 1)[1]
+        selection = next(line for line in e2e.splitlines() if 'runs-on:' in line)
+        self.assertIn("inputs.e2e_only", selection)
+        self.assertIn("inputs.e2e_runner != 'auto'", selection)
+        self.assertIn("vars.BLACKSMITH_DISABLED != 'true'", selection)
+        self.assertIn('needs.select-runner.outputs.large', selection)
+
+    def test_sdkmanager_success_is_not_overridden_by_yes_sigpipe(self):
+        # Composite actions explicitly enable pipefail. A consumer that exits
+        # after one accepted answer must retain its successful exit code.
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c',
+                                 'sdkmanager() { read -r answer; test "$answer" = y; }; sdkmanager < <(yes)'],
+                                capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        action = (ROOT / '.github/actions/build-arm64-smoke/action.yaml').read_text()
+        self.assertIn('< <(yes)', action)
+        self.assertNotIn('yes | sdkmanager', action)
+
+
+if __name__ == '__main__':
+    unittest.main()

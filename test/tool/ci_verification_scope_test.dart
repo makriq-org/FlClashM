@@ -18,6 +18,7 @@ void main() {
     String base = 'base',
     bool baseAvailable = true,
     bool e2eOnly = false,
+    bool arm64Only = false,
   }) async {
     final directory = Directory.systemTemp.createTempSync('ci-scope-');
     addTearDown(() => directory.deleteSync(recursive: true));
@@ -45,6 +46,7 @@ $script''',
         'CHANGED_FILES': files.join('\n'),
         'EVENT_NAME': event,
         'E2E_ONLY': '$e2eOnly',
+        'ARM64_ONLY': '$arm64Only',
         'BASE_SHA': base,
         'BASE_AVAILABLE': '$baseAvailable',
         'HEAD_SHA': 'head',
@@ -82,6 +84,10 @@ $script''',
     'tool/runtime_go_modules/olcrtc.mod',
     'lib/product/runtime/olcrtc_release.dart',
     '.github/workflows/android-base-verification.yaml',
+    '.github/workflows/select-ci-runner.yaml',
+    '.github/actions/build-arm64-smoke/action.yaml',
+    '.github/actions/setup-editor-rust/action.yaml',
+    '.github/scripts/arm64_runner_fallback.py',
   ]) {
     test('$path keeps full Android coverage', () async {
       await expectScope([path], [true, true, true, true]);
@@ -115,7 +121,10 @@ $script''',
   });
 
   test('documentation skips build and test jobs', () async {
-    await expectScope(['i18n/ru/docs/profiles.md'], [false, false, false, false]);
+    await expectScope(
+      ['i18n/ru/docs/profiles.md'],
+      [false, false, false, false],
+    );
   });
 
   test('mixed changes preserve the widest required scope', () async {
@@ -142,6 +151,23 @@ $script''',
       [false, false, false, true],
       event: 'workflow_dispatch',
       e2eOnly: true,
+    );
+  });
+
+  test('manual ARM64 verification excludes emulator and extra ABI', () async {
+    await expectScope(
+      [],
+      [false, true, false, false],
+      event: 'workflow_dispatch',
+      arm64Only: true,
+    );
+  });
+
+  test('ARM64-only input cannot reduce automatic verification', () async {
+    await expectScope(
+      ['core/backend/coordinator.go'],
+      [true, true, true, true],
+      arm64Only: true,
     );
   });
 

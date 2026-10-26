@@ -1,5 +1,5 @@
 name: android-base-verification
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Android verification / {0}', inputs.e2e_runner) || github.workflow }}
+run-name: ${{ inputs.arm64_worker && format('ARM64 worker / {0}', inputs.worker_key) || (github.event_name == 'workflow_dispatch' && format('Android verification / {0}', inputs.e2e_runner) || github.workflow) }}
 
 on:
   pull_request:
@@ -9,15 +9,47 @@ on:
       - dev
   workflow_dispatch:
     inputs:
+      worker_probe:
+        description: Internal availability probe without a build
+        type: boolean
+        default: false
+      arm64_worker:
+        description: Internal ARM64 worker; does not run other checks
+        type: boolean
+        default: false
+      worker_key:
+        description: Internal correlation key
+        type: string
+        default: ''
+      source_sha:
+        description: Exact source commit for the internal worker
+        type: string
+        default: ''
+      worker_deadline:
+        description: Latest UTC epoch at which the internal worker may start
+        type: string
+        default: '0'
+      arm64_only:
+        description: Run only the ARM64 build (including runner fallback)
+        type: boolean
+        default: false
+      arm64_runner:
+        description: ARM64 runner policy
+        type: choice
+        default: auto
+        options:
+          - auto
+          - github
       backend_test:
         description: "Собрать ARM64 APK в отдельном пакете .backendtest"
         type: boolean
         default: false
       e2e_runner:
-        description: "Раннер E2E для сравнения скорости (Blacksmith требует подключения)"
+        description: "Раннер E2E: auto использует общий выбор с резервным GitHub"
         type: choice
-        default: ubuntu-latest
+        default: auto
         options:
+          - auto
           - ubuntu-latest
           - blacksmith-4vcpu-ubuntu-2404
           - blacksmith-8vcpu-ubuntu-2404
@@ -27,7 +59,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}-${{ inputs.worker_key || 'parent' }}-${{ inputs.arm64_runner || 'auto' }}
   cancel-in-progress: true
 
 permissions: {}
@@ -38,8 +70,19 @@ env:
   GRADLE_OPTS: "-Dorg.gradle.caching=true"
 
 jobs:
+  select-runner:
+    if: ${{ !inputs.arm64_worker }}
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/select-ci-runner.yaml
+    with:
+      policy: ${{ inputs.arm64_runner || 'auto' }}
+
   detect-changes:
-    runs-on: ubuntu-latest
+    needs: select-runner
+    if: ${{ !inputs.arm64_worker }}
+    runs-on: ${{ needs.select-runner.outputs.small }}
     permissions:
       contents: read
     outputs:
@@ -62,6 +105,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           E2E_ONLY: ${{ inputs.e2e_only }}
+          ARM64_ONLY: ${{ inputs.arm64_only }}
         run: |
           verification=false
           android=false
@@ -70,6 +114,8 @@ jobs:
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$E2E_ONLY" = true ]; then
             e2e=true
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${ARM64_ONLY:-false}" = true ]; then
+            android=true
           elif [ "$EVENT_NAME" = "workflow_dispatch" ] || \
              [ -z "$BASE_SHA" ] || \
              [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
@@ -81,19 +127,19 @@ jobs:
           else
             changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
 
-            if grep -Eq '^(\.github/workflows/|analysis_options\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/|CHANGELOG\.md$|\.github/(pre_)?release_template\.md$)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/(workflows/|actions/|scripts/arm64_runner_fallback\.py$)|test/ci/|analysis_options\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|test/(product|tool)/|tool/|CHANGELOG\.md$|\.github/(pre_)?release_template\.md$)' <<< "$changed_files"; then
               verification=true
             fi
 
-            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/))' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/(actions/(build-arm64-smoke|setup-editor-rust)/|scripts/arm64_runner_fallback\.py$)|\.github/workflows/(android-base-verification|select-ci-runner)\.yaml$|android/|assets/|plugins/|core/|lib/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/))' <<< "$changed_files"; then
               android=true
             fi
 
-            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/runtime/)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/(actions/(build-arm64-smoke|setup-editor-rust)/|scripts/arm64_runner_fallback\.py$)|\.github/workflows/(android-base-verification|select-ci-runner)\.yaml$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/runtime/)' <<< "$changed_files"; then
               full_matrix=true
             fi
 
-            if grep -Eq '^(\.github/workflows/android-base-verification\.yaml$|\.github/scripts/run-android-emulator-e2e\.sh$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/(android|backend|bootstrap|runtime)/|lib/clash/|lib/(application|controller|main|state)\.dart$)' <<< "$changed_files"; then
+            if grep -Eq '^(\.github/(actions/(build-arm64-smoke|setup-editor-rust)/|scripts/arm64_runner_fallback\.py$)|\.github/workflows/(android-base-verification|select-ci-runner)\.yaml$|\.github/scripts/run-android-emulator-e2e\.sh$|android/|plugins/|core/|assets/runtimes/|pubspec\.(yaml|lock)$|setup\.dart$|tool/(prepare_core\.sh$|patches/|runtime_go_modules/)|lib/product/(android|backend|bootstrap|runtime)/|lib/clash/|lib/(application|controller|main|state)\.dart$)' <<< "$changed_files"; then
               e2e=true
             fi
           fi
@@ -106,9 +152,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   base-guards:
-    needs: detect-changes
+    needs: [select-runner, detect-changes]
     if: needs.detect-changes.outputs.verification == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.select-runner.outputs.medium }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -127,6 +173,9 @@ jobs:
 
       - name: Check GitHub Actions pinning
         run: dart tool/check_actions_pinning.dart
+
+      - name: Test ARM64 runner fallback
+        run: python3 -m unittest discover -s test/ci -v
 
       - name: Fetch upstream base
         run: |
@@ -162,9 +211,9 @@ jobs:
         run: flutter analyze --fatal-infos lib/product test/product test/tool tool/check_actions_pinning.dart tool/check_product_boundaries.dart tool/check_base_drift.dart tool/generate_flutter.dart tool/check_release_continuity.dart tool/check_android_release_artifacts.dart tool/check_android_release_signing.dart tool/write_release_metadata.dart tool/release_contract.dart setup.dart lib/common/constant.dart lib/core_version.dart
 
   android-unit-tests:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.android == 'true'
-    runs-on: ubuntu-latest
+    needs: [select-runner, detect-changes]
+    if: needs.detect-changes.outputs.android == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.arm64_only)
+    runs-on: ${{ needs.select-runner.outputs.medium }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -219,103 +268,54 @@ jobs:
             :service:testDebugUnitTest
 
   android-smoke:
-    needs: detect-changes
+    needs: [select-runner, detect-changes]
     if: needs.detect-changes.outputs.android == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     permissions:
       contents: read
+      actions: write
     steps:
       - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Try bounded Blacksmith build
+        id: remote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKER_REF: ${{ github.head_ref || github.ref_name }}
+          WORKER_WORKFLOW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_SHA: ${{ github.sha }}
+          CAN_DISPATCH: ${{ needs.select-runner.outputs.large != 'ubuntu-latest' && inputs.arm64_runner != 'github' && vars.BLACKSMITH_DISABLED != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+          BACKEND_TEST: ${{ inputs.backend_test && 'true' || 'false' }}
+        run: python3 .github/scripts/arm64_runner_fallback.py
+
+      - name: Checkout source for GitHub fallback
+        if: steps.remote.outputs.fallback == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - name: Build on GitHub-hosted runner
+        if: steps.remote.outputs.fallback == 'true'
+        uses: ./.github/actions/build-arm64-smoke
         with:
-          cmdline-tools-version: '16111833' # 23.0
-          packages: platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358
+          backend-test: ${{ inputs.backend_test && 'true' || 'false' }}
 
-      - name: Install Android NDK
-        run: |
-          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
-          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      - name: Download Blacksmith APK
+        if: steps.remote.outputs.remote_run_id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          flutter-version: "3.47.7"
-          cache: true
+          name: android-arm64-test-apk
+          path: ${{ runner.temp }}/android-arm64-apk
+          run-id: ${{ steps.remote.outputs.remote_run_id }}
+          github-token: ${{ github.token }}
 
-      - name: Get Flutter dependencies
-        run: flutter pub get
-
-      - name: Setup editor Rust
-        uses: ./.github/actions/setup-editor-rust
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-        with:
-          gradle-version: "9.8.1"
-          # Fork PRs read the base cache; trusted branches and internal PRs warm it.
-          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.2"
-          cache: false
-
-      - name: Cache Android Go modules and build outputs
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-android-v1-${{ runner.os }}-${{ runner.arch }}-arm64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-${{ hashFiles('core/**/*.go', 'core/**/*.c', 'core/**/*.h', 'tool/patches/**', 'tool/prepare_core.sh', 'setup.dart', 'lib/product/runtime/*_release.dart') }}
-          restore-keys: |
-            go-android-v1-${{ runner.os }}-${{ runner.arch }}-arm64-1.27.2-ndk${{ env.NDK_VERSION }}-${{ hashFiles('core/go.mod', 'core/go.sum', 'tool/runtime_go_modules/*.mod', 'tool/runtime_go_modules/*.sum') }}-
-
-      - name: Build Android core smoke artifact
-        run: dart setup.dart android --arch arm64 --out core
-
-      - name: Build Android arm64 release smoke APK
-        env:
-          ORG_GRADLE_PROJECT_backendTest: ${{ inputs.backend_test && 'true' || 'false' }}
-        shell: bash
-        run: |
-          core_version=$(sed -n "s/^const String kCoreVersionFromSource = '\\(.*\\)';$/\\1/p" lib/core_version.dart)
-          test -n "$core_version"
-          flutter build apk \
-            --release \
-            --target-platform android-arm64 \
-            --dart-define=APP_ENV=pre \
-            --dart-define=CORE_VERSION="$core_version"
-
-      - name: Assert smoke artifact exists
-        run: test -f build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Verify and collect installable ARM64 test APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk=build/app/outputs/flutter-apk/app-release.apk
-          destination="$RUNNER_TEMP/android-arm64-apk"
-          mkdir -p "$destination"
-          expected_package=com.makriq.flclash.dev
-          if [ "${{ inputs.backend_test && 'true' || 'false' }}" = true ]; then
-            expected_package=com.makriq.flclash.backendtest
-          fi
-          "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2" dump badging "$apk" > "$destination/package.txt"
-          grep -F "package: name='$expected_package' " "$destination/package.txt"
-          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify --print-certs "$apk" > "$destination/signature.txt"
-          cp "$apk" "$destination/FlClashM-arm64.apk"
-          cd "$destination"
-          sha256sum FlClashM-arm64.apk > SHA256SUMS
-
-      - name: Upload installable ARM64 test APK
+      - name: Publish Blacksmith APK in parent run
+        if: steps.remote.outputs.remote_run_id != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-arm64-test-apk
@@ -323,10 +323,38 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  android-arm64-worker:
+    if: github.event_name == 'workflow_dispatch' && inputs.arm64_worker
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Reject expired worker
+        env:
+          DEADLINE: ${{ inputs.worker_deadline }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$DEADLINE" =~ ^[0-9]{10}$ ]]
+          test "$(date +%s)" -le "$DEADLINE"
+      - name: Checkout exact source
+        if: ${{ !inputs.worker_probe }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Build on Blacksmith
+        if: ${{ !inputs.worker_probe }}
+        uses: ./.github/actions/build-arm64-smoke
+        with:
+          backend-test: ${{ inputs.backend_test && 'true' || 'false' }}
+
   android-extra-abi-smoke:
-    needs: detect-changes
+    needs: [select-runner, detect-changes]
     if: needs.detect-changes.outputs.full-matrix == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.select-runner.outputs.large }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -407,9 +435,9 @@ jobs:
         run: test -f build/app/outputs/flutter-apk/app-release.apk
 
   android-emulator-e2e:
-    needs: detect-changes
+    needs: [select-runner, detect-changes]
     if: needs.detect-changes.outputs.e2e == 'true'
-    runs-on: ${{ inputs.e2e_runner || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_only && inputs.e2e_runner != 'auto' && vars.BLACKSMITH_DISABLED != 'true' && inputs.e2e_runner || needs.select-runner.outputs.large }}
     timeout-minutes: 60
     permissions:
       contents: read
