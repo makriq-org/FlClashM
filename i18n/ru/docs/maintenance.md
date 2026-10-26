@@ -214,3 +214,22 @@ https://flclashm.sourceforge.io/update/pre.json
 </details>
 
 Генерация Flutter/Drift/Riverpod: `nix develop -c make generate`. Wrapper `tool/generate_flutter.dart` каждый раз строит настоящий Flutter SDK summary с `sky_engine/_embedder.yaml`, затем запускает build_runner. Это требуется Nix, где Flutter Dart разрешается в standalone SDK; общий pub cache не меняется. После `build_runner clean` снова используйте wrapper.
+
+### Резервный runner для ARM64 CI
+
+`android-smoke` управляется GitHub-hosted runner. Он запускает отдельную сборку
+на Blacksmith 8 vCPU и ждёт назначения runner не более 120 секунд. Если Blacksmith
+не выдал машину (в том числе при блокировке по лимиту), дочерний запуск отменяется,
+после подтверждения отмены тот же composite action собирает APK на `ubuntu-latest`.
+Ошибка уже начавшейся сборки остаётся ошибкой CI; повтор на другом runner её не скрывает.
+APK дочернего запуска копируется в артефакты основного запуска.
+
+Fork PR собираются сразу на GitHub: им не требуется write-token для dispatch.
+При ручном запуске `arm64_only=true` оставляет только эту сборку, а
+`arm64_runner=github` проверяет прямой путь GitHub. Repository variable
+`BLACKSMITH_DISABLED=true` отключает Blacksmith для ARM64 без изменения workflow.
+
+Fallback реагирует на невозможность получить runner, а не читает биллинг Blacksmith.
+Если у организации включена платная оплата, исчерпание бесплатных минут может
+не остановить выдачу машин: этот механизм не является ограничителем расходов.
+Другие jobs и ручной выбор runner для E2E этим переключением не управляются.
