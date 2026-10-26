@@ -431,7 +431,7 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-custom: add` 在添加时应用 `hex`、`widgets` 和 `settings`，`update` 在每次更新时应用；其他响应头不受它控制。关闭 `overrideProviderSettings` 时才应用 `flclashm-settings`：列出的标志开启，未列出的重置为 `false`。`androidsecure` 仅关闭 mixed-port，不改变 VPN 选择。`GLOBAL` 支持 `flclashm-override` / `flclashx-override`，前者优先。
 
-对于选中的配置，带 `proxies.*` 和 `app.*` 键的新 `view` 格式无需 `custom` 即可应用；用户接管的设置优先。未提供 `custom` 时，`settings` 和 `widgets` 也会直接应用。同一响应头同时提供两个前缀时，完整采用 `flclashm-*` 的值，不合并。
+对于当前或明确选中的配置，带 `proxies.*` 和 `app.*` 键的新 `view` 格式无需 `custom` 即可应用；用户接管的设置优先。对于该配置，`settings` 和 `widgets` 也会在未提供 `custom` 时直接应用。如果导入时未选中配置，`custom: add` 中的 `openlogs` 和 `closeconnections` 会延迟到明确选择该配置时应用；其他 `add` 设置不会重复应用。同一响应头同时提供两个前缀时，完整采用 `flclashm-*` 的值，不合并。
 
 <details>
 <summary>响应头与格式参考</summary>
