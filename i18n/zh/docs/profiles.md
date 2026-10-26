@@ -425,11 +425,13 @@ VPN 运行时，界面显示最近一次成功建立隧道时的规则。仅重�
 ```text
 flclashm-custom: update
 flclashm-hex: 5c6bc0:vibrant:pureblack
-flclashm-view: type:tab;sort:delay;card:min
+flclashm-view: proxies.type:tab;proxies.sort:delay;proxies.card:compact;app.board:extended;app.glass:ultra
 flclashm-settings: autostart,autoupdate
 ```
 
-`flclashm-custom: add` 在添加时应用 `hex`、`view`、`widgets` 和 `settings`，`update` 在每次更新时应用；其他响应头不受它控制。关闭 `overrideProviderSettings` 时才应用 `flclashm-settings`：列出的标志开启，未列出的重置为 `false`。`androidsecure` 仅关闭 mixed-port，不改变 VPN 选择。`GLOBAL` 支持 `flclashm-override` / `flclashx-override`，前者优先。
+`flclashm-custom: add` 在添加时应用 `hex`、`widgets` 和 `settings`，`update` 在每次更新时应用；其他响应头不受它控制。关闭 `overrideProviderSettings` 时才应用 `flclashm-settings`：列出的标志开启，未列出的重置为 `false`。`androidsecure` 仅关闭 mixed-port，不改变 VPN 选择。`GLOBAL` 支持 `flclashm-override` / `flclashx-override`，前者优先。
+
+对于当前或明确选中的配置，带 `proxies.*` 和 `app.*` 键的新 `view` 格式无需 `custom` 即可应用；用户接管的设置优先。对于该配置，`settings` 和 `widgets` 也会在未提供 `custom` 时直接应用。如果导入时未选中配置，`custom: add` 中的 `openlogs` 和 `closeconnections` 会延迟到明确选择该配置时应用；其他 `add` 设置不会重复应用。同一响应头同时提供两个前缀时，完整采用 `flclashm-*` 的值，不合并。
 
 <details>
 <summary>响应头与格式参考</summary>
@@ -440,7 +442,8 @@ flclashm-settings: autostart,autoupdate
 | `flclashm-background` | `URL[,opacity]` | 背景；可选图片可见度 1–100 |
 | `flclashm-hex` | `HEX[:variant][:pureblack]` | 配色主题 |
 | `flclashm-widgets` | `list` | 小组件顺序 |
-| `flclashm-view` | `key:value;…` | 节点页面布局 |
+| `flclashm-view` | `key:value;…` | 应用外观和节点页面布局 |
+| `flclashm-special` | `androidsecure,denywidgets,noglobal` | 逗号分隔：在 Android 关闭 mixed-port、禁止编辑仪表盘、隐藏全局模式。提供此头时替代旧的独立标志；空值清除限制 |
 | `flclashm-newboard` | `true/false` | 新仪表盘 |
 | `flclashm-denywidgets` | `true/false` | 禁止编辑仪表盘 |
 | `flclashm-servicename` | `base64` | 服务名称 |
@@ -460,15 +463,24 @@ flclashm-settings: autostart,autoupdate
 
 `flclashm-hex`：6/8 位十六进制颜色，可带 `#`，后接 Material 3 方案和 `pureblack`。方案：`tonalSpot`、`fidelity`、`monochrome`、`neutral`、`vibrant`、`expressive`、`content`、`rainbow`、`fruitSalad`。
 
-`flclashm-view` 键值对以 `;` 分隔，所有键可选：
+新 `flclashm-view` 格式（也支持 `flclashx-view`）；键值对以 `;` 分隔，所有键可选：
 
 | 键 | 允许的值 |
 |----|----------|
-| `type` | `list`、`tab` |
-| `sort` | `none`、`delay`、`name` |
-| `layout` | `loose`、`standard`、`tight` |
-| `icon` | `icon`（或 `standard`）、`none` |
-| `card` | `expand`、`shrink`、`min`、`oneline` |
+| `proxies.type` | `list`, `tab` |
+| `proxies.sort` | `none`, `delay`, `name` |
+| `proxies.layout` | `loose`, `standard`, `tight` |
+| `proxies.icon` | `filled`, `plain`, `hidden` |
+| `proxies.card` | `loose`, `standard`, `compact` |
+| `app.board` | `extended`, `standard` |
+| `app.navbar` | `floating`, `docked` |
+| `app.tabs` | `slide`, `fade` |
+| `app.glass` | `none`, `standard`, `ultra` |
+| `app.color` | `RRGGBB`, `AARRGGBB` |
+| `app.style` | `vivid`, `tinted`, `soft`, `monochrome` |
+| `app.black` | `true`, `false` |
+
+仍支持旧短键 `type`、`sort`、`layout`、`icon`、`card`。`icon`：`icon`/`standard` → `filled`，`none` → `hidden`；`card`：`expand` → `loose`，`shrink` → `standard`，`min`/`oneline` → `compact`。
 
 `flclashm-settings` 标志：
 
@@ -479,5 +491,7 @@ flclashm-settings: autostart,autoupdate
 | `autorun` | 系统启动时启动应用 *(桌面)* |
 | `shadowstart` | 静默（后台）启动 |
 | `minimize` | 退出时最小化到托盘 *(桌面)* |
+| `openlogs` | 收集日志 |
+| `closeconnections` | 切换节点时关闭连接 |
 
 </details>

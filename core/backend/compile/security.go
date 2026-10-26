@@ -1,28 +1,26 @@
 package compile
 
-import "strings"
+import (
+	"encoding/json"
+
+	"core/backend/profiles"
+)
 
 // SecurityPolicy is applied to prepared settings before engine validation and
 // plan sealing. It is backend policy; platform adapters only enforce its result.
 type SecurityPolicy struct{}
 
 func (SecurityPolicy) ApplyPatch(patch Object, metadata Object, capabilities Capabilities) {
-	headers := object(metadata["providerHeaders"])
-	globalMode, present := headers["flclashm-globalmode"]
-	if !present {
-		globalMode = headers["flclashx-globalmode"]
-	}
-	if strings.EqualFold(strings.TrimSpace(text(globalMode)), "false") && patch["mode"] == "global" {
+	raw, _ := json.Marshal(metadata["providerHeaders"])
+	headers := map[string]string{}
+	_ = json.Unmarshal(raw, &headers)
+	if profiles.ProviderSpecial(headers, "noglobal") && patch["mode"] == "global" {
 		patch["mode"] = "rule"
 	}
 	if capabilities.Platform != "android" {
 		return
 	}
-	value, ok := headers["flclashm-androidsecure"]
-	if !ok {
-		value = headers["flclashx-androidsecure"]
-	}
-	if strings.EqualFold(strings.TrimSpace(text(value)), "true") {
+	if profiles.ProviderSpecial(headers, "androidsecure") {
 		patch["mixed-port"] = 0
 	}
 }

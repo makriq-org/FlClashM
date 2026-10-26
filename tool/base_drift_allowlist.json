@@ -2138,7 +2138,7 @@
     {
       "path": "lib/providers/actions/profile_headers.dart",
       "bucket": "budget",
-      "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
+      "reason": "Проекция заголовков сохраняет пользовательский запрет overrideProviderSettings, чтобы UI не отменял решение Go о настройках подписки."
     },
     {
       "path": "lib/providers/actions/profile_settings.dart",
@@ -2359,6 +2359,26 @@
       "path": "core/backend/profiles/subscription_privacy_test.go",
       "bucket": "budget",
       "reason": "Регрессии Go проверяют общий и профильный запрет HWID при импорте, ручном и фоновом обновлении подписок без Flutter."
+    },
+    {
+      "path": "lib/models/provider_headers.dart",
+      "bucket": "budget",
+      "reason": "Совместимость оформления FlClashM и FlClashX: приоритет flclashm- и поддержка прежних форматов заголовков."
+    },
+    {
+      "path": "core/backend/compile/security_headers_test.go",
+      "bucket": "budget",
+      "reason": "Go применяет новые заголовки оформления и special обоих префиксов; регрессии приоритета, пользовательских настроек и политики безопасности."
+    },
+    {
+      "path": "core/backend/service/customization_view.go",
+      "bucket": "budget",
+      "reason": "Go применяет новые заголовки оформления и special обоих префиксов; регрессии приоритета, пользовательских настроек и политики безопасности."
+    },
+    {
+      "path": "core/backend/service/customization_view_test.go",
+      "bucket": "budget",
+      "reason": "Go применяет новые заголовки оформления и special обоих префиксов; регрессии приоритета, пользовательских настроек и политики безопасности."
     }
   ]
 }

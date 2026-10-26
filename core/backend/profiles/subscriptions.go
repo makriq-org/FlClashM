@@ -229,6 +229,26 @@ func ProviderHeader(headers map[string]string, suffix string) string {
 	}
 	return headers["flclashx-"+suffix]
 }
+
+// ProviderSpecial prefers the combined modern header, including an explicit
+// empty value; otherwise legacy standalone flags remain compatible.
+func ProviderSpecial(headers map[string]string, flag string) bool {
+	_, hasM := headers["flclashm-special"]
+	_, hasX := headers["flclashx-special"]
+	if hasM || hasX {
+		for _, item := range strings.Split(ProviderHeader(headers, "special"), ",") {
+			if strings.EqualFold(strings.TrimSpace(item), flag) {
+				return true
+			}
+		}
+		return false
+	}
+	if flag == "noglobal" {
+		return strings.EqualFold(strings.TrimSpace(ProviderHeader(headers, "globalmode")), "false")
+	}
+	return strings.EqualFold(strings.TrimSpace(ProviderHeader(headers, flag)), "true")
+}
+
 func collectProviderHeaders(headers http.Header) map[string]string {
 	result := map[string]string{}
 	for name, values := range headers {
@@ -255,6 +275,20 @@ func MergeProviderHeaders(previous, incoming map[string]string) map[string]strin
 			_, suffix, _ := strings.Cut(key, "-")
 			delete(merged, "flclashm-"+suffix)
 			delete(merged, "flclashx-"+suffix)
+		}
+	}
+	// A fresh legacy restriction header signals a format rollback. Do not let
+	// a cached combined header override the restrictions in this response.
+	_, specialM := incoming["flclashm-special"]
+	_, specialX := incoming["flclashx-special"]
+	if !specialM && !specialX {
+		for _, prefix := range []string{"flclashm-", "flclashx-"} {
+			for _, suffix := range []string{"androidsecure", "globalmode", "denywidgets"} {
+				if _, present := incoming[prefix+suffix]; present {
+					delete(merged, "flclashm-special")
+					delete(merged, "flclashx-special")
+				}
+			}
 		}
 	}
 	for k, v := range incoming {

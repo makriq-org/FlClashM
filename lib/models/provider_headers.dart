@@ -19,7 +19,11 @@ class ProviderHeaders {
   final Map<String, String> _headers;
 
   String? text(String name) {
-    final value = _headers[name]?.trim();
+    final value =
+        (name.startsWith('flclashx-')
+                ? resolveFlClashProviderHeader(_headers, name.substring(9))
+                : _headers[name])
+            ?.trim();
     return value == null || value.isEmpty ? null : value;
   }
 
@@ -73,7 +77,7 @@ class ProviderHeaders {
 
   /// Flags of `flclashx-special`, the panel's one-off behaviours.
   Set<String>? get specials {
-    final raw = text('flclashx-special');
+    final raw = resolveFlClashProviderHeader(_headers, 'special');
     if (raw == null) {
       return null;
     }
@@ -83,12 +87,18 @@ class ProviderHeaders {
     };
   }
 
-  bool get androidSecure => specials?.contains('androidsecure') ?? false;
+  bool get androidSecure => specials != null
+      ? specials!.contains('androidsecure')
+      : _flag('flclashx-androidsecure');
 
-  bool get widgetEditingDenied => specials?.contains('denywidgets') ?? false;
+  bool get widgetEditingDenied => specials != null
+      ? specials!.contains('denywidgets')
+      : _flag('flclashx-denywidgets');
 
   /// `flclashx-special: noglobal` takes the Global outbound mode away.
-  bool get globalModeAllowed => !(specials?.contains('noglobal') ?? false);
+  bool get globalModeAllowed => specials != null
+      ? !specials!.contains('noglobal')
+      : text('flclashx-globalmode')?.toLowerCase() != 'false';
 
   String? get serviceName => _plainOrBase64(text('flclashx-servicename'));
 
@@ -297,8 +307,9 @@ class ViewRequest {
       if (colon == -1) {
         continue;
       }
-      final key = entry.substring(0, colon).trim().toLowerCase();
+      var key = entry.substring(0, colon).trim().toLowerCase();
       final value = entry.substring(colon + 1).trim().toLowerCase();
+      if (!key.contains('.')) key = '$proxiesPrefix$key';
       final app = key.startsWith(appPrefix);
       if (!app && !key.startsWith(proxiesPrefix)) {
         continue;
@@ -312,9 +323,22 @@ class ViewRequest {
         case (false, 'layout'):
           layout = named(ProxiesLayout.values, value) ?? layout;
         case (false, 'icon'):
-          icon = named(ProxiesIconStyle.values, value) ?? icon;
+          icon =
+              named(ProxiesIconStyle.values, switch (value) {
+                'icon' || 'standard' => 'filled',
+                'none' => 'hidden',
+                _ => value,
+              }) ??
+              icon;
         case (false, 'card'):
-          card = named(ProxyCardType.values, value) ?? card;
+          card =
+              named(ProxyCardType.values, switch (value) {
+                'expand' => 'loose',
+                'shrink' => 'standard',
+                'min' || 'oneline' => 'compact',
+                _ => value,
+              }) ??
+              card;
         case (true, 'board'):
           board = boardNames[value] ?? board;
         case (true, 'navbar'):
@@ -481,9 +505,9 @@ List<ProfileOffer> visibleOffersOf(Profile? profile, {DateTime? now}) {
     final show = threshold == null
         ? true
         : expire > 0 &&
-              DateTime.fromMillisecondsSinceEpoch(
-                    expire * 1000,
-                  ).difference(now ?? DateTime.now()).inDays <=
+              DateTime.fromMillisecondsSinceEpoch(expire * 1000)
+                      .difference(now ?? DateTime.now())
+                      .inDays <=
                   threshold;
     if (show) {
       offers.add(ProfileOffer(kind: ProfileOfferKind.buyPlan, url: plan.url));

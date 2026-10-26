@@ -709,3 +709,21 @@ func TestIdenticalSubscriptionSourceReusesOnlyProcessLocalValidation(t *testing.
 		t.Fatal(validations)
 	}
 }
+
+// TestRestrictionHeaderFormatRollback drops stale combined flags on fresh legacy responses.
+func TestRestrictionHeaderFormatRollback(t *testing.T) {
+	for _, oldPrefix := range []string{"flclashm-", "flclashx-"} {
+		for _, newPrefix := range []string{"flclashm-", "flclashx-"} {
+			for _, value := range []string{"", "denywidgets"} {
+				merged := MergeProviderHeaders(map[string]string{oldPrefix + "special": value}, map[string]string{newPrefix + "androidsecure": "true", newPrefix + "globalmode": "false"})
+				if !ProviderSpecial(merged, "androidsecure") || !ProviderSpecial(merged, "noglobal") {
+					t.Fatal("stale special bypassed fresh restrictions", merged)
+				}
+				merged = MergeProviderHeaders(merged, map[string]string{newPrefix + "special": "", newPrefix + "androidsecure": "true"})
+				if ProviderSpecial(merged, "androidsecure") {
+					t.Fatal("same-response combined precedence changed", merged)
+				}
+			}
+		}
+	}
+}
