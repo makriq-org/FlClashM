@@ -221,7 +221,7 @@ jobs:
   android-smoke:
     needs: detect-changes
     if: needs.detect-changes.outputs.android == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 45
     permissions:
       contents: read
@@ -254,6 +254,9 @@ jobs:
 
       - name: Setup editor Rust
         uses: ./.github/actions/setup-editor-rust
+        with:
+          targets: aarch64-linux-android
+          install-host-deps: 'false'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
