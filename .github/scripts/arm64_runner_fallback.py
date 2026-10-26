@@ -46,14 +46,16 @@ def execute(api=gh, sleep=time.sleep, clock=time.monotonic):
     body = {'ref': os.environ['WORKER_REF'], 'inputs': {
         'arm64_worker': 'true', 'worker_probe': os.environ.get('RUNNER_PROBE', 'false'), 'worker_key': key,
         'source_sha': os.environ['SOURCE_SHA'],
-        'worker_deadline': str(int(time.time()) + 120),
+        # Queue polling still stops at 120s; allow job initialization after
+        # a runner has been assigned near the end of that window.
+        'worker_deadline': str(int(time.time()) + 180),
         'backend_test': os.environ.get('BACKEND_TEST', 'false')}}
     run_id = None
     try:
         result = api(workflow + '/dispatches', 'POST', body)
         if result:
             run_id = result.get('workflow_run_id')
-    except RuntimeError as error:
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
         # A network failure may have happened after GitHub accepted the request.
         # Find and cancel any accepted worker rather than dispatching twice.
         print(f'Worker dispatch unavailable: {error}')

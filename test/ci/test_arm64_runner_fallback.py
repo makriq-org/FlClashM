@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -68,6 +69,33 @@ class FallbackTest(unittest.TestCase):
         self.assertEqual(self.run_worker(api), 42)
         self.assertFalse(api.cancelled)
         self.assertEqual(api.requests[0][2]['inputs']['source_sha'], 'merge-sha')
+
+    def test_worker_deadline_includes_job_initialization_margin(self):
+        api = API()
+        with patch.object(m.time, 'time', return_value=1_000_000_000):
+            self.run_worker(api)
+        deadline = int(api.requests[0][2]['inputs']['worker_deadline'])
+        self.assertGreaterEqual(deadline - 1_000_000_000, 120 + 30)
+
+    def test_dispatch_timeout_recovers_and_cancels_accepted_worker(self):
+        api = API('queued')
+        key = None
+        dispatches = 0
+        def timeout_after_accept(path, method='GET', body=None):
+            nonlocal key, dispatches
+            if path.endswith('/dispatches'):
+                dispatches += 1
+                key = body['inputs']['worker_key']
+                self.clock.sleep(30)
+                raise subprocess.TimeoutExpired(['gh', 'api'], 30)
+            if '/runs?event=' in path:
+                return {'workflow_runs': [{'id': 42,
+                         'display_title': 'ARM64 worker / ' + key}]}
+            return api(path, method, body)
+        self.assertIsNone(self.run_worker(timeout_after_accept))
+        self.assertEqual(dispatches, 1)
+        self.assertTrue(api.cancelled)
+        self.assertEqual(self.clock.now, 120)
 
     def test_queue_timeout_cancels_before_fallback(self):
         api = API('queued')
