@@ -357,14 +357,6 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	// The engine loader uses YAML tags, including when the payload is JSON.
 	// RawConfig's JSON tag is "rule", but UnmarshalRawConfig reads "rules".
 	config["rules"] = rules
-	if android {
-		for _, item := range list(config["proxy-groups"]) {
-			group := object(item)
-			if contains([]string{"fallback", "url-test", "load-balance"}, text(group["type"])) && group["lazy"] == false {
-				group["lazy"] = true
-			}
-		}
-	}
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}

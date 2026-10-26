@@ -74,6 +74,10 @@ var (
 // without spamming pings/UI updates.
 const backgroundHealthCheckInterval = 5 * time.Minute
 
+// Reading completed histories does not run URL tests. Keep UI delivery separate
+// from the profile's probe interval, including tests slower than the warm-up.
+const healthCheckPollInterval = time.Second
+
 func handleInitClash(paramsString string) bool {
 	var params = InitParams{}
 	err := json.Unmarshal([]byte(paramsString), &params)
@@ -197,9 +201,6 @@ func startHealthCheckForwarder() {
 	// desktop stop->start where the executor lives on) is deduped and the UI shows
 	// nothing until a value next changes.
 	resetHealthCheckForwarderState()
-	// setupConfig just ran runInitialProviderHealthChecks; stamp "fresh" so a
-	// screen-on edge right after start doesn't fire a redundant catch-up sweep.
-	lastProviderTouchNs.Store(time.Now().UnixNano())
 	// Stop+recreate atomically under one lock hold. Two starts can overlap
 	// (setupConfig and handleStartListener's goroutine, neither serialised by
 	// runLock here); a separate stop()-then-create would let the second overwrite
@@ -219,7 +220,7 @@ func startHealthCheckForwarder() {
 	// stays current — and the goroutine never reads the global without the lock.
 	minInterval := minHealthCheckInterval
 	go func(stopCh chan struct{}, minInterval time.Duration) {
-		log.Infoln("[HealthCheck] forwarder fg interval: %s, bg interval: %s", minInterval, backgroundHealthCheckInterval)
+		log.Infoln("[HealthCheck] result polling: %s, min probe interval: %s", healthCheckPollInterval, minInterval)
 		// Warm-up: surface pings the moment the tunnel comes up instead of after a
 		// full interval. Emit immediately (re-sends surviving histories), then a few
 		// quick follow-ups to catch the fresh url-tests setupConfig kicks off as they
@@ -236,15 +237,9 @@ func startHealthCheckForwarder() {
 			}
 		}
 		for {
-			// Recompute each cycle so foreground/background/screen transitions take
-			// effect on the next tick without restarting the goroutine. Steady-state
-			// cadence is the min group/provider interval from the config (minInterval);
-			// only a dark screen (or an idle app with no tunnel) drops to the slow tick.
-			interval := minInterval
-			if !uiActive.Load() && !touchGateOpen() &&
-				backgroundHealthCheckInterval > interval {
-				interval = backgroundHealthCheckInterval
-			}
+			// Foreground delivery polls completed histories independently of network
+			// checks. A hidden but active tunnel only needs periodic provider touches.
+			interval := healthCheckForwardInterval(minInterval, uiActive.Load(), touchGateOpen())
 			select {
 			case <-time.After(interval):
 				if uiActive.Load() {
@@ -266,6 +261,17 @@ func startHealthCheckForwarder() {
 			}
 		}
 	}(stopCh, minInterval)
+}
+
+func healthCheckForwardInterval(probeInterval time.Duration, visible, keepWarm bool) time.Duration {
+	if visible {
+		return min(healthCheckPollInterval, probeInterval/2)
+	}
+	if keepWarm {
+		// Lazy checks require a touch strictly less than one probe interval ago.
+		return probeInterval / 2
+	}
+	return backgroundHealthCheckInterval
 }
 
 func stopHealthCheckForwarder() {
@@ -376,8 +382,12 @@ func handleSetUiActive(active bool) {
 		// in healthCheckSeen — so a plain flush here would be fully de-duped and deliver
 		// NOTHING to the just-attached UI (the "no pings after a tile start" bug). Reset
 		// so the current delay histories re-emit on foreground.
-		resetHealthCheckForwarderState()
-		go forwardHealthCheckDelays()
+		runLock.Lock()
+		if currentConfig != nil {
+			// Interrupt a possible five-minute background wait on foreground.
+			startHealthCheckForwarder()
+		}
+		runLock.Unlock()
 	} else {
 		stopRequestForwarder()
 		stopRouteWatch()

@@ -66,31 +66,33 @@ func proxiesWithProviders() map[string]constant.Proxy {
 }
 
 func computeMinHealthCheckInterval(rawConfig *config.RawConfig) {
-	min := 300
-	for _, g := range rawConfig.ProxyGroup {
-		var iv int
-		switch v := g["interval"].(type) {
+	seconds := 300
+	include := func(value any) {
+		var interval int
+		switch v := value.(type) {
 		case int:
-			iv = v
+			interval = v
 		case float64:
-			iv = int(v)
+			interval = int(v)
 		case json.Number:
-			iv64, _ := v.Int64()
-			iv = int(iv64)
+			n, _ := v.Int64()
+			interval = int(n)
 		}
-		if iv > 0 && iv < min {
-			min = iv
+		if interval > 0 && interval < seconds {
+			seconds = interval
 		}
 	}
-	d := time.Duration(min) * time.Second
-	// Floor at 30s (was 5s): a tiny/misconfigured group interval would otherwise url-test
-	// every proxy as often as every 5s while foreground — bursts of TLS handshakes
-	// (CPU + radio + data) for marginally fresher latency numbers.
-	if d < 30*time.Second {
-		d = 30 * time.Second
+	for _, group := range rawConfig.ProxyGroup {
+		include(group["interval"])
 	}
-	log.Infoln("[HealthCheck] computed min interval from %d groups: %s", len(rawConfig.ProxyGroup), d)
-	minHealthCheckInterval = d
+	for _, p := range rawConfig.ProxyProvider {
+		if check, ok := p["health-check"].(map[string]any); ok {
+			include(check["interval"])
+		}
+	}
+	// Touching providers only marks usage; mihomo owns the actual probe cadence.
+	minHealthCheckInterval = time.Duration(seconds) * time.Second
+	log.Infoln("[HealthCheck] computed min probe interval: %s", minHealthCheckInterval)
 }
 
 // extractProxyDescriptionsFromRaw caches custom server descriptions by proxy name.
