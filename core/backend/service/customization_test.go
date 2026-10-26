@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -81,6 +83,80 @@ func TestCustomizationTriggerAndLiteralDisplayCompatibility(t *testing.T) {
 		for _, header := range []string{value, base64.StdEncoding.EncodeToString([]byte(value)), base64.RawURLEncoding.EncodeToString([]byte(value))} {
 			if got := decodeProviderHeader(header); got != value {
 				t.Fatalf("display header %q became %q", header, got)
+			}
+		}
+	}
+}
+
+// TestDeferredAddSettings keeps import-only fields intact when delayed controls
+// are applied after reopening the backend and explicitly selecting the profile.
+func TestDeferredAddSettings(t *testing.T) {
+	for _, prefix := range []string{"flclashm-", "flclashx-"} {
+		for _, override := range []bool{false, true} {
+			for _, owned := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/override=%v/owned=%v", prefix, override, owned), func(t *testing.T) {
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set(prefix+"custom", "add")
+						w.Header().Set(prefix+"settings", "openlogs,closeconnections,autoupdate")
+						w.Header().Set(prefix+"hex", "112233")
+						w.Header().Set(prefix+"widgets", "profiles")
+						_, _ = w.Write([]byte("rules: ['MATCH,DIRECT']"))
+					}))
+					defer server.Close()
+					opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+					opts.HTTPClient = server.Client()
+					app := openTestApp(t, opts)
+					ownedSettings := []string{}
+					if owned {
+						ownedSettings = append(ownedSettings, "app.closeConnections")
+					}
+					request(t, app, "initial", "settings.patch", map[string]any{"patch": map[string]any{"appSetting": map[string]any{"openLogs": false, "closeConnections": false, "overrideProviderSettings": override, "ownedSettings": ownedSettings}}})
+					waitDomain(t, app, "initial")
+					request(t, app, "import", "profile.import.url", map[string]any{"metadata": map[string]any{"id": "deferred", "url": server.URL}, "select": false})
+					waitDomain(t, app, "import")
+					read := func() (settings struct {
+						OpenLogs, CloseConnections, AutoCheckUpdate bool
+						DashboardWidgets                            []string
+					}) {
+						if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+							t.Fatal(err)
+						}
+						return
+					}
+					if settings := read(); settings.OpenLogs || settings.CloseConnections {
+						t.Fatal("inactive import changed controls", settings)
+					}
+					// Changes after import must not be replaced by add-only hints on selection.
+					request(t, app, "customize", "settings.patch", map[string]any{"patch": map[string]any{
+						"appSetting": map[string]any{"autoCheckUpdate": false, "dashboardWidgets": []string{"serviceStatus"}},
+						"themeProps": map[string]any{"primaryColor": uint64(0xffabcdef)},
+					}})
+					waitDomain(t, app, "customize")
+					if err := app.Close(); err != nil {
+						t.Fatal(err)
+					}
+					app = openTestApp(t, opts)
+					request(t, app, "select", "profile.select", map[string]any{"profileId": "deferred"})
+					waitDomain(t, app, "select")
+					settings := read()
+					if settings.OpenLogs != !override || settings.CloseConnections != (!override && !owned) {
+						t.Fatal("selection did not respect deferred controls and ownership", settings)
+					}
+					var theme struct{ PrimaryColor uint64 }
+					if err := json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme); err != nil {
+						t.Fatal(err)
+					}
+					if settings.AutoCheckUpdate || len(settings.DashboardWidgets) != 1 || settings.DashboardWidgets[0] != "serviceStatus" || theme.PrimaryColor != 0xffabcdef {
+						t.Fatal("selection replayed add-only hints", settings, theme)
+					}
+					request(t, app, "controls", "settings.patch", map[string]any{"patch": map[string]any{"appSetting": map[string]any{"openLogs": false, "closeConnections": false}}})
+					waitDomain(t, app, "controls")
+					request(t, app, "refresh", "subscription.refresh", map[string]any{"profileId": "deferred"})
+					waitDomain(t, app, "refresh")
+					if settings := read(); settings.OpenLogs || settings.CloseConnections {
+						t.Fatal("refresh replayed add-only controls", settings)
+					}
+				})
 			}
 		}
 	}

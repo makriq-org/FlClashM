@@ -21,7 +21,7 @@ func (a *App) customizeForProfile(ctx context.Context, metadata profiles.Object,
 	var id string
 	_ = json.Unmarshal(metadata["id"], &id)
 	active := selecting || a.isCurrent(id)
-	if err := a.customizeLegacy(ctx, metadata, isNew, active); err != nil {
+	if err := a.customizeLegacy(ctx, metadata, isNew, active, selecting); err != nil {
 		return err
 	}
 	if !active {
@@ -30,12 +30,15 @@ func (a *App) customizeForProfile(ctx context.Context, metadata profiles.Object,
 	return a.customizeView(ctx, metadata)
 }
 
-func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew, active bool) error {
+func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew, active, selecting bool) error {
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
 	header := func(suffix string) string { return strings.TrimSpace(profiles.ProviderHeader(headers, suffix)) }
 	trigger := strings.ToLower(header("custom"))
-	if trigger != "update" && (trigger != "add" || !isNew) {
+	// An inactive add import defers these controls until explicit selection.
+	// Replaying them must not replay import-only appearance or startup settings.
+	controlsOnly := trigger == "add" && !isNew && selecting
+	if trigger != "update" && (trigger != "add" || !isNew) && !controlsOnly {
 		return nil
 	}
 	catalog := a.profiles.Snapshot()
@@ -55,13 +58,20 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 			enabled[strings.ToLower(strings.TrimSpace(value))] = true
 		}
 		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate", "openLogs": "openlogs", "closeConnections": "closeconnections"} {
-			if !active && (field == "openLogs" || field == "closeConnections") {
+			control := field == "openLogs" || field == "closeConnections"
+			if (!active && control) || (controlsOnly && !control) {
 				continue
 			}
 			if !slices.Contains(owned, "app."+field) {
 				appPatch[field] = jsonValue(enabled[token])
 			}
 		}
+	}
+	if controlsOnly {
+		if len(appPatch) == 0 {
+			return nil
+		}
+		return a.patchSettings(ctx, profiles.Object{"appSetting": jsonValue(appPatch)}, 0)
 	}
 	widgets := providerWidgets(header("widgets"))
 	if len(widgets) > 0 {
