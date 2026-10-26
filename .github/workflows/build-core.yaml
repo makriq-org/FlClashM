@@ -19,8 +19,15 @@ env:
   NDK_VERSION: "28.0.13004108"
 
 jobs:
+  select-runner:
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/select-ci-runner.yaml
+
   build:
-    runs-on: ubuntu-latest
+    needs: select-runner
+    runs-on: ${{ needs.select-runner.outputs.large }}
     permissions:
       contents: read
     strategy:
@@ -90,8 +97,8 @@ jobs:
           path: dist/FlClashCore-android-${{ matrix.abi }}.zip
 
   release:
-    needs: build
-    runs-on: ubuntu-latest
+    needs: [select-runner, build]
+    runs-on: ${{ needs.select-runner.outputs.small }}
     permissions:
       contents: write
     steps:

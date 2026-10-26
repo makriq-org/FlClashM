@@ -44,7 +44,7 @@ def execute(api=gh, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + 120
     started_at = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time()-5))
     body = {'ref': os.environ['WORKER_REF'], 'inputs': {
-        'arm64_worker': 'true', 'worker_key': key,
+        'arm64_worker': 'true', 'worker_probe': os.environ.get('RUNNER_PROBE', 'false'), 'worker_key': key,
         'source_sha': os.environ['SOURCE_SHA'],
         'worker_deadline': str(int(time.time()) + 120),
         'backend_test': os.environ.get('BACKEND_TEST', 'false')}}
@@ -85,6 +85,8 @@ def execute(api=gh, sleep=time.sleep, clock=time.monotonic):
             sleep(5)
         else:
             if run_id is None:
+                if os.environ.get('RUNNER_PROBE') == 'true':
+                    return None
                 raise BuildFailure('Cannot identify dispatched worker; refusing duplicate build')
             cancel(api, repo, run_id, sleep)
             print('Blacksmith did not start within 120s; using GitHub.')
@@ -95,13 +97,15 @@ def execute(api=gh, sleep=time.sleep, clock=time.monotonic):
             run = api(f'{repo}/actions/runs/{run_id}')
             if run['status'] == 'completed':
                 if run['conclusion'] != 'success':
+                    if os.environ.get('RUNNER_PROBE') == 'true':
+                        return None
                     raise BuildFailure(f"Blacksmith build failed: {run['html_url']}")
                 print(f"Blacksmith build succeeded: {run['html_url']}")
                 return run_id
             sleep(10)
         cancel(api, repo, run_id, sleep)
         raise BuildFailure('Blacksmith build exceeded execution deadline')
-    except BaseException:
+    except BaseException as failure:
         if run_id:
             try:
                 run = api(f'{repo}/actions/runs/{run_id}')
@@ -109,6 +113,9 @@ def execute(api=gh, sleep=time.sleep, clock=time.monotonic):
                     cancel(api, repo, run_id, sleep)
             except Exception as error:
                 print(f'Worker cleanup failed: {error}')
+        if os.environ.get('RUNNER_PROBE') == 'true' and isinstance(failure, Exception) and not isinstance(failure, BuildFailure):
+            print(f'Availability probe failed; using GitHub: {failure}')
+            return None
         raise
 
 

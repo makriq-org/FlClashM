@@ -16,7 +16,7 @@ runs:
     - name: Install Android NDK
       shell: bash
       run: |
-        yes | sdkmanager "ndk;${{ env.NDK_VERSION }}"
+        sdkmanager "ndk;${{ env.NDK_VERSION }}" < <(yes)
         echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
 
     - name: Setup Flutter

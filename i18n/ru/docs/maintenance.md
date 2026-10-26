@@ -215,21 +215,27 @@ https://flclashm.sourceforge.io/update/pre.json
 
 Генерация Flutter/Drift/Riverpod: `nix develop -c make generate`. Wrapper `tool/generate_flutter.dart` каждый раз строит настоящий Flutter SDK summary с `sky_engine/_embedder.yaml`, затем запускает build_runner. Это требуется Nix, где Flutter Dart разрешается в standalone SDK; общий pub cache не меняется. После `build_runner clean` снова используйте wrapper.
 
-### Резервный runner для ARM64 CI
+### Blacksmith и резервные runners CI
 
-`android-smoke` управляется GitHub-hosted runner. Он запускает отдельную сборку
-на Blacksmith 8 vCPU и ждёт назначения runner не более 120 секунд. Если Blacksmith
-не выдал машину (в том числе при блокировке по лимиту), дочерний запуск отменяется,
-после подтверждения отмены тот же composite action собирает APK на `ubuntu-latest`.
-Ошибка уже начавшейся сборки остаётся ошибкой CI; повтор на другом runner её не скрывает.
+Все workflows используют общий `select-ci-runner`: короткие служебные задания
+получают Blacksmith 2 vCPU, guards и unit-тесты — 4 vCPU, сборки и эмулятор — 8 vCPU.
+Размеры выше 8 vCPU запрещены тестом CI. Сам управляющий шаг работает на GitHub,
+запускает короткую пробу Blacksmith без компиляции и ждёт назначения машины не более
+120 секунд. При недоступности сервиса, отказе API или блокировке по лимиту jobs
+данного workflow получают `ubuntu-latest`. Fork PR сразу используют GitHub.
+
+Для ARM64 дополнительно сохранён watchdog самой сборки: при отсутствии машины
+дочерний запуск отменяется, после подтверждения отмены тот же composite action
+собирает APK на GitHub. Ошибка начавшейся компиляции остаётся ошибкой CI.
 APK дочернего запуска копируется в артефакты основного запуска.
+Предварительная проба не резервирует квоту на весь workflow: если Blacksmith стал
+недоступен уже после выбора runner, строгий контроль очереди есть только у ARM64.
 
-Fork PR собираются сразу на GitHub: им не требуется write-token для dispatch.
-При ручном запуске `arm64_only=true` оставляет только эту сборку, а
-`arm64_runner=github` проверяет прямой путь GitHub. Repository variable
-`BLACKSMITH_DISABLED=true` отключает Blacksmith для ARM64 без изменения workflow.
+Ручные `arm64_only=true` и `arm64_runner=github` позволяют проверить ARM64 на GitHub.
+Repository variable `BLACKSMITH_DISABLED=true` переключает все workflows на GitHub
+без правок YAML. Явный выбор runner в ручном E2E-only запуске сохраняется.
 
 Fallback реагирует на невозможность получить runner, а не читает биллинг Blacksmith.
-Если у организации включена платная оплата, исчерпание бесплатных минут может
-не остановить выдачу машин: этот механизм не является ограничителем расходов.
-Другие jobs и ручной выбор runner для E2E этим переключением не управляются.
+При включённой платной оплате исчерпание бесплатных минут может не остановить выдачу
+машин: механизм не является ограничителем расходов. Перенос публикации/релиза
+проверен статически; реальные релизы ради проверки runner не создаются.

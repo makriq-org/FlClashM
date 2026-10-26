@@ -23,9 +23,16 @@ on:
 permissions: {}
 
 jobs:
+  select-runner:
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/select-ci-runner.yaml
+
   aur-publish:
+    needs: select-runner
     if: ${{ inputs.aur }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.select-runner.outputs.small }}
     permissions:
       contents: read
     steps:
@@ -134,10 +141,10 @@ jobs:
           fi
 
   notify:
-    needs: [aur-publish]
+    needs: [select-runner, aur-publish]
     # Runs even if AUR was skipped/failed, as long as Telegram is requested.
     if: ${{ always() && inputs.telegram }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.select-runner.outputs.small }}
     permissions:
       contents: read
     steps:

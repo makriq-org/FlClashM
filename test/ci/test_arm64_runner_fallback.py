@@ -101,6 +101,26 @@ class FallbackTest(unittest.TestCase):
         with self.assertRaises(m.BuildFailure):
             self.run_worker(unknown)
 
+    def test_probe_failure_selects_github(self):
+        os.environ['RUNNER_PROBE'] = 'true'
+        self.assertIsNone(self.run_worker(API('compile-error')))
+
+    def test_probe_network_error_selects_github(self):
+        os.environ['RUNNER_PROBE'] = 'true'
+        api = API('queued')
+        def broken(path, method='GET', body=None):
+            if path.endswith('/jobs?per_page=100'):
+                raise RuntimeError('connection error')
+            return api(path, method, body)
+        self.assertIsNone(self.run_worker(broken))
+        self.assertTrue(api.cancelled)
+
+    def test_probe_dispatch_cannot_start_a_build(self):
+        os.environ['RUNNER_PROBE'] = 'true'
+        api = API()
+        self.run_worker(api)
+        self.assertEqual(api.requests[0][2]['inputs']['worker_probe'], 'true')
+
     def test_cancellation_must_be_confirmed(self):
         def stuck(path, method='GET', body=None):
             return {'status': 'in_progress'} if method == 'GET' else None
