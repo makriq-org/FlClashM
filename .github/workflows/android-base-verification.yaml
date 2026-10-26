@@ -1,5 +1,5 @@
 name: android-base-verification
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('ARM64 build benchmark / {0}', inputs.e2e_runner) || github.workflow }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('ARM64 benchmark / {0} / {1}', inputs.e2e_runner, inputs.tuning) || github.workflow }}
 
 on:
   pull_request:
@@ -21,13 +21,21 @@ on:
           - ubuntu-latest
           - blacksmith-4vcpu-ubuntu-2404
           - blacksmith-8vcpu-ubuntu-2404
+          - blacksmith-16vcpu-ubuntu-2404
+      tuning:
+        description: "Настройки сборки для сравнения"
+        type: choice
+        default: baseline
+        options:
+          - baseline
+          - parallel
       e2e_only:
         description: "Запустить только E2E для замера скорости раннера"
         type: boolean
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.e2e_runner || 'automatic' }}-${{ inputs.tuning || 'baseline' }}
   cancel-in-progress: true
 
 permissions: {}
@@ -49,6 +57,25 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
+
+      - name: Record runner capacity
+        shell: bash
+        run: |
+          nproc
+          free -h
+          lscpu | head -n 22
+          echo "GOMAXPROCS=$(nproc --ignore=0 | awk '{print ($1 > 16 ? 16 : $1)}')" >> "$GITHUB_ENV"
+
+      - name: Tune CI Gradle parallelism
+        if: inputs.tuning == 'parallel'
+        shell: bash
+        run: |
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=2G -XX:+HeapDumpOnOutOfMemoryError/' android/gradle.properties
+          cat >> android/gradle.properties <<'EOF'
+          org.gradle.parallel=true
+          org.gradle.workers.max=16
+          org.gradle.caching=true
+          EOF
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
