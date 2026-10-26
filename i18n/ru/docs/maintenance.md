@@ -233,7 +233,8 @@ APK дочернего запуска копируется в артефакты
 
 Ручные `arm64_only=true` и `arm64_runner=github` позволяют проверить ARM64 на GitHub.
 Repository variable `BLACKSMITH_DISABLED=true` переключает все workflows на GitHub
-без правок YAML. Явный выбор runner в ручном E2E-only запуске сохраняется.
+без правок YAML. Ручной E2E-only по умолчанию использует `e2e_runner=auto` и общий выбор runner.
+Явный выбор машины сохраняется для сравнений; `BLACKSMITH_DISABLED=true` имеет приоритет.
 
 Fallback реагирует на невозможность получить runner, а не читает биллинг Blacksmith.
 При включённой платной оплате исчерпание бесплатных минут может не остановить выдачу

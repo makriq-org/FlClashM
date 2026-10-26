@@ -23,6 +23,16 @@ class RunnerPolicyTest(unittest.TestCase):
             self.assertNotIn('runs-on: ubuntu-latest', text, str(path))
             self.assertIn('uses: ./.github/workflows/select-ci-runner.yaml', text)
 
+    def test_manual_e2e_defaults_to_shared_runner_policy(self):
+        text = (ROOT / '.github/workflows/android-base-verification.yaml').read_text()
+        options = text.split('      e2e_runner:', 1)[1].split('      e2e_only:', 1)[0]
+        self.assertIn('default: auto', options)
+        e2e = text.split('  android-emulator-e2e:', 1)[1]
+        selection = next(line for line in e2e.splitlines() if 'runs-on:' in line)
+        self.assertIn("inputs.e2e_runner != 'auto'", selection)
+        self.assertIn("vars.BLACKSMITH_DISABLED != 'true'", selection)
+        self.assertIn('needs.select-runner.outputs.large', selection)
+
     def test_sdkmanager_success_is_not_overridden_by_yes_sigpipe(self):
         # Composite actions explicitly enable pipefail. A consumer that exits
         # after one accepted answer must retain its successful exit code.

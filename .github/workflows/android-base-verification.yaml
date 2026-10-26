@@ -45,10 +45,11 @@ on:
         type: boolean
         default: false
       e2e_runner:
-        description: "Раннер E2E для сравнения скорости (Blacksmith требует подключения)"
+        description: "Раннер E2E: auto использует общий выбор с резервным GitHub"
         type: choice
-        default: blacksmith-8vcpu-ubuntu-2404
+        default: auto
         options:
+          - auto
           - ubuntu-latest
           - blacksmith-4vcpu-ubuntu-2404
           - blacksmith-8vcpu-ubuntu-2404
@@ -436,7 +437,7 @@ jobs:
   android-emulator-e2e:
     needs: [select-runner, detect-changes]
     if: needs.detect-changes.outputs.e2e == 'true'
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_only && inputs.e2e_runner || needs.select-runner.outputs.large }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e_only && inputs.e2e_runner != 'auto' && vars.BLACKSMITH_DISABLED != 'true' && inputs.e2e_runner || needs.select-runner.outputs.large }}
     timeout-minutes: 60
     permissions:
       contents: read
