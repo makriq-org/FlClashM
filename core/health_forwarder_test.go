@@ -120,7 +120,8 @@ func TestCompiledAutomaticGroupKeepsCheckingWithoutTraffic(t *testing.T) {
 			}
 			input, _ := json.Marshal(compile.Input{Version: 1, Profile: &compile.RawProfile{
 				ID: "automatic",
-				Text: "proxies: [{name: dead, type: reject}, {name: healthy, type: direct}]\n" +
+				Text: "dns: {enable: true, nameserver: ['127.0.0.1']}\n" +
+					"proxies: [{name: dead, type: reject}, {name: healthy, type: direct}]\n" +
 					"proxy-groups: [{name: Auto, type: " + kind + ", proxies: [dead, healthy], lazy: false, interval: 1, url: '" + server.URL + "'}]\n" +
 					"rules: ['MATCH,Auto']",
 			}})
