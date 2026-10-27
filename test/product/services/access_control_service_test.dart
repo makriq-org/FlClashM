@@ -57,6 +57,13 @@ void main() {
     const manual = AccessControl(enable: true, rejectList: ['com.manual']);
     const profile = AccessControl(enable: true, rejectList: ['com.profile']);
 
+    test('protects an unsaved manual draft during a refresh', () {
+      final guard = AccessControlSaveGuard();
+      expect(guard.shouldConfirmExit(managed: false, draftChanged: true), isTrue);
+      expect(guard.shouldConfirmExit(managed: false, draftChanged: false), isFalse);
+      expect(guard.shouldConfirmExit(managed: true, draftChanged: true), isFalse);
+    });
+
     test('rejects a confirmation after ownership refresh or draft replacement', () {
       final guard = AccessControlSaveGuard();
       final ticket = guard.capture(manual);

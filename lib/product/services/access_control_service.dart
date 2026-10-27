@@ -118,6 +118,10 @@ class AccessControlSaveGuard {
 
   void invalidate() => _epoch++;
 
+  /// A refresh locks saving but must not hide an unsaved manual draft on exit.
+  bool shouldConfirmExit({required bool managed, required bool draftChanged}) =>
+      !managed && draftChanged;
+
   (int, AccessControl) capture(AccessControl draft) => (_epoch, draft);
 
   bool permits(

@@ -527,15 +527,17 @@ class _AccessViewState extends ConsumerState<AccessView>
             allValueList: viewPackageNameList,
           )
         : null;
-    final hasChanges =
-        !locked &&
-        ref.watch(
-          vpnSettingProvider.select(
-            (state) =>
-                _getRealAccessControlProps(state.accessControlProps) !=
-                _getRealAccessControlProps(accessControl),
-          ),
-        );
+    final draftChanged = ref.watch(
+      vpnSettingProvider.select(
+        (state) =>
+            _getRealAccessControlProps(state.accessControlProps) !=
+            _getRealAccessControlProps(accessControl),
+      ),
+    );
+    final hasChanges = _saveGuard.shouldConfirmExit(
+      managed: _managed.managed,
+      draftChanged: draftChanged,
+    );
     return CommonPopScope(
       onPop: hasChanges
           ? (_) {
@@ -548,7 +550,7 @@ class _AccessViewState extends ConsumerState<AccessView>
         searchState: AppBarSearchState(onSearch: _onSearch),
         searchActions: [?selectAllAction],
         title: context.appLocalizations.appAccessControl,
-        confirmationAction: hasChanges
+        confirmationAction: hasChanges && !locked
             ? IconButtonData(
                 glyph: AppGlyphs.check,
                 onPressed: () => _handleSave(),
