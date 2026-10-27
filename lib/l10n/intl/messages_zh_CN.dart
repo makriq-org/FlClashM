@@ -233,6 +233,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "选中应用将会被排除在VPN之外",
     ),
+    "accessControlProfileManaged": MessageLookupByLibrary.simpleMessage(
+      "由配置文件控制",
+    ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage("访问控制设置"),
     "accessControlVerificationUnavailableNote":
         MessageLookupByLibrary.simpleMessage("无法验证已应用的VPN规则，当前显示配置文件中声明的规则。"),

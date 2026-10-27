@@ -36,6 +36,14 @@
       ]
     },
     {
+      "path": "lib/views/access.dart",
+      "boundary": "android-access-control",
+      "reason": "Экран показывает применённые Android VPN и профильные правила через product service.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
       "path": "lib/core/controller.dart",
       "boundary": "backend-ui-client",
       "reason": "Core facade переводит пользовательские действия в существующий Go API v1.",

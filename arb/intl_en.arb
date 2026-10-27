@@ -84,6 +84,7 @@
   "preReleaseLabel": "Pre-release",
   "accessControl": "Access control",
   "accessControlDesc": "Access control picks which apps use the proxy.",
+  "accessControlProfileManaged": "Controlled by the profile",
   "accessControlDriftNote": "The rules applied by the Android VPN differ from your profile config.",
   "accessControlVerificationUnavailableNote": "The applied VPN rules could not be verified. The profile declaration is shown as a fallback.",
   "application": "Application Settings",

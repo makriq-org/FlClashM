@@ -745,6 +745,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Controlled by the profile`
+  String get accessControlProfileManaged {
+    return Intl.message(
+      'Controlled by the profile',
+      name: 'accessControlProfileManaged',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `The rules applied by the Android VPN differ from your profile config.`
   String get accessControlDriftNote {
     return Intl.message(

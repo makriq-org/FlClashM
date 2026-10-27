@@ -233,6 +233,13 @@ class CoreController {
     final result = await backendClient.request('profile.inspect', {'profileId': id});
     return Map<String,dynamic>.from((result as Map)['config'] as Map);
   }
+  Future<AccessControlProps?> getProfileAccessControl(String id) async {
+    final result = await backendClient.request('profile.inspect', {'profileId': id});
+    final access = (result as Map)['accessControl'];
+    return access == null
+        ? null
+        : AccessControlProps.fromJson(Map<String, dynamic>.from(access as Map));
+  }
   Future<Map<String, dynamic>> getProfileOutbounds(String id) async {
     final result = await backendClient.request('profile.inspect', {'profileId': id});
     return Map<String,dynamic>.from((result as Map)['outbounds'] as Map);

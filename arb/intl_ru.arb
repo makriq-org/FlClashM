@@ -84,6 +84,7 @@
   "preReleaseLabel": "Пре-релиз",
   "accessControl": "Контроль доступа",
   "accessControlDesc": "Контроль доступа определяет, какие приложения идут через прокси.",
+  "accessControlProfileManaged": "Управляется профилем",
   "accessControlDriftNote": "Правила, применённые Android VPN, отличаются от настроек профиля.",
   "accessControlVerificationUnavailableNote": "Не удалось проверить применённые правила VPN. Показаны правила из профиля.",
   "application": "Настройки приложения",

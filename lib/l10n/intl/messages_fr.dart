@@ -271,6 +271,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Les apps sélectionnées sont exclues du VPN",
     ),
+    "accessControlProfileManaged": MessageLookupByLibrary.simpleMessage(
+      "Contrôlé par le profil",
+    ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage(
       "Réglages du contrôle d’accès",
     ),

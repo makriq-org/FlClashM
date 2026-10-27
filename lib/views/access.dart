@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/core/core.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/providers/providers.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -25,6 +27,9 @@ class _AccessViewState extends ConsumerState<AccessView>
   List<String>? _pinedList;
   bool _isInit = false;
   bool _installedAppsPermissionGranted = true;
+  bool _resolvingProfile = false;
+  ProfileManagedAccess _managed = ProfileManagedAccess.none;
+  late final ProfileManagedAccessController _managedController;
 
   final _completer = Completer();
 
@@ -32,6 +37,15 @@ class _AccessViewState extends ConsumerState<AccessView>
   void initState() {
     super.initState();
     _controller = sheetScrollController(context);
+    _managedController = productServices.accessControl
+        .createProfileManagedController(
+          readProfileAccessControl: () async {
+            final profile = ref.read(currentProfileProvider);
+            return profile == null
+                ? null
+                : coreController.getProfileAccessControl(profile.id);
+          },
+        );
     final accessControl = ref
         .read(vpnSettingProvider.select((state) => state.accessControlProps))
         .copyWith();
@@ -42,7 +56,13 @@ class _AccessViewState extends ConsumerState<AccessView>
       ref.read(accessControlStateProvider.notifier).value = accessControl;
       _isInit = true;
       _pinList();
+      unawaited(_refreshManaged());
     });
+    ref.listenManual(
+      currentProfileProvider,
+      (_, _) => unawaited(_refreshManaged()),
+    );
+    ref.listenManual(runTimeProvider, (_, _) => unawaited(_refreshManaged()));
     ref.listenManual(
       accessControlStateProvider.select((state) => state.mode),
       (_, _) => _pinList(),
@@ -52,6 +72,33 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   @override
   void didSettleRoute() => setState(() {});
+
+  Future<void> _refreshManaged() async {
+    if (!mounted || !_isInit || !system.isAndroid) return;
+    setState(() => _resolvingProfile = true);
+    final resolved = await _managedController.refresh(
+      isRunning: ref.read(runTimeProvider) != null,
+      activeProfileAccessControl: null,
+    );
+    if (!mounted || resolved == null) return;
+    final wasManaged = _managed.managed;
+    if (resolved.managed || wasManaged) {
+      final old = ref.read(accessControlStateProvider);
+      final effective =
+          resolved.effectiveAccessControl ??
+          ref.read(vpnSettingProvider).accessControlProps;
+      ref.read(accessControlStateProvider.notifier).value = effective.copyWith(
+        sort: old.sort,
+        isFilterSystemApp: old.isFilterSystemApp,
+        isFilterNonInternetApp: old.isFilterNonInternetApp,
+      );
+    }
+    setState(() {
+      _managed = resolved;
+      _resolvingProfile = false;
+    });
+    _pinList();
+  }
 
   Future<void> _loadPackages() async {
     final action = ref.read(systemActionProvider.notifier);
@@ -100,6 +147,7 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   @override
   void dispose() {
+    _managedController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -141,7 +189,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       builder: (context) {
         final appLocalizations = context.appLocalizations;
         return CommonScaffold(
-          body: const AccessControlPanel(),
+          body: AccessControlPanel(managed: _managed.managed),
           title: appLocalizations.accessControlSettings,
         );
       },
@@ -236,30 +284,33 @@ class _AccessViewState extends ConsumerState<AccessView>
   List<CommonPopupMenuItem> _buildMenuItems(
     BuildContext context, {
     required bool enable,
+    required bool locked,
   }) {
     final appLocalizations = context.appLocalizations;
     return [
-      CommonPopupMenuItem(
-        glyph: AppGlyphs.toggle,
-        label: appLocalizations.accessControl,
-        subItems: [
-          CommonPopupMenuItem(
-            label: appLocalizations.turnOn,
-            checked: enable,
-            onPressed: () => _handleEnable(true),
-          ),
-          CommonPopupMenuItem(
-            label: appLocalizations.turnOff,
-            checked: !enable,
-            onPressed: () => _handleEnable(false),
-          ),
-        ],
-      ),
-      CommonPopupMenuItem(
-        glyph: AppGlyphs.sliders,
-        label: appLocalizations.settings,
-        onPressed: _handleToSetting,
-      ),
+      if (!locked)
+        CommonPopupMenuItem(
+          glyph: AppGlyphs.toggle,
+          label: appLocalizations.accessControl,
+          subItems: [
+            CommonPopupMenuItem(
+              label: appLocalizations.turnOn,
+              checked: enable,
+              onPressed: () => _handleEnable(true),
+            ),
+            CommonPopupMenuItem(
+              label: appLocalizations.turnOff,
+              checked: !enable,
+              onPressed: () => _handleEnable(false),
+            ),
+          ],
+        ),
+      if (!locked)
+        CommonPopupMenuItem(
+          glyph: AppGlyphs.sliders,
+          label: appLocalizations.settings,
+          onPressed: _handleToSetting,
+        ),
       CommonPopupMenuItem(
         glyph: AppGlyphs.moreCircle,
         label: appLocalizations.action,
@@ -269,11 +320,12 @@ class _AccessViewState extends ConsumerState<AccessView>
             label: appLocalizations.clipboardExport,
             onPressed: _exportToClipboard,
           ),
-          CommonPopupMenuItem(
-            glyph: AppGlyphs.paste,
-            label: appLocalizations.clipboardImport,
-            onPressed: _importFormClipboard,
-          ),
+          if (!locked)
+            CommonPopupMenuItem(
+              glyph: AppGlyphs.paste,
+              label: appLocalizations.clipboardImport,
+              onPressed: _importFormClipboard,
+            ),
         ],
       ),
     ];
@@ -283,6 +335,7 @@ class _AccessViewState extends ConsumerState<AccessView>
     required List<Package> packages,
     required Set<String> selected,
     required bool isSearching,
+    required bool locked,
   }) {
     return FutureBuilder(
       future: _completer.future,
@@ -308,13 +361,19 @@ class _AccessViewState extends ConsumerState<AccessView>
               itemExtent: 72,
               itemBuilder: (_, index) {
                 final package = packages[index];
-                return PackageListItem(
-                  key: Key(package.packageName),
-                  package: package,
-                  value: selected.contains(package.packageName),
-                  onChanged: (value) {
-                    _handleSelected(package.packageName);
-                  },
+                return Opacity(
+                  opacity: locked ? 0.5 : 1,
+                  child: IgnorePointer(
+                    ignoring: locked,
+                    child: PackageListItem(
+                      key: Key(package.packageName),
+                      package: package,
+                      value: selected.contains(package.packageName),
+                      onChanged: (value) {
+                        _handleSelected(package.packageName);
+                      },
+                    ),
+                  ),
                 );
               },
             ),
@@ -343,6 +402,7 @@ class _AccessViewState extends ConsumerState<AccessView>
     required bool enable,
     required AccessControlMode mode,
     required int count,
+    required bool locked,
   }) {
     final appLocalizations = context.appLocalizations;
     final level = context.raisedSurfaceLevel;
@@ -362,7 +422,7 @@ class _AccessViewState extends ConsumerState<AccessView>
             child: TonalButton(
               size: TonalButtonSize.compact,
               label: appLocalizations.turnOn,
-              onPressed: () => _handleEnable(true),
+              onPressed: locked ? null : () => _handleEnable(true),
             ),
           ),
         ],
@@ -410,12 +470,25 @@ class _AccessViewState extends ConsumerState<AccessView>
     final query = SearchQuery(ref.watch(queryProvider(QueryTag.access)));
     final packages = ref.watch(packagesProvider);
     final accessControl = ref.watch(accessControlStateProvider);
+    final visibleNames = packages
+        .whereVisible(
+          isFilterSystemApp: accessControl.isFilterSystemApp,
+          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
+        )
+        .map((package) => package.packageName)
+        .toSet();
+    final managedNames = accessControl.currentList.toSet();
     final viewPackages = packages
         .getViewList(
           pinedList: _pinedList ?? [],
           sortType: accessControl.sort,
-          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
-          isFilterSystemApp: accessControl.isFilterSystemApp,
+          isFilterNonInternetApp: false,
+          isFilterSystemApp: false,
+        )
+        .where(
+          (package) =>
+              visibleNames.contains(package.packageName) ||
+              (_managed.managed && managedNames.contains(package.packageName)),
         )
         .whereMatches(query, (package) => [package.label, package.packageName])
         .toList();
@@ -425,8 +498,10 @@ class _AccessViewState extends ConsumerState<AccessView>
     final valueList = currentList.intersection(viewPackageNameList);
     final needsInstalledAppsPermission =
         packages.isEmpty && !_installedAppsPermissionGranted;
+    final locked = _managed.managed || _resolvingProfile;
     final selectAllAction =
-        accessControl.enable &&
+        !locked &&
+            accessControl.enable &&
             !needsInstalledAppsPermission &&
             viewPackageNameList.isNotEmpty
         ? _buildSelectAllAction(
@@ -434,13 +509,15 @@ class _AccessViewState extends ConsumerState<AccessView>
             allValueList: viewPackageNameList,
           )
         : null;
-    final hasChanges = ref.watch(
-      vpnSettingProvider.select(
-        (state) =>
-            _getRealAccessControlProps(state.accessControlProps) !=
-            _getRealAccessControlProps(accessControl),
-      ),
-    );
+    final hasChanges =
+        !locked &&
+        ref.watch(
+          vpnSettingProvider.select(
+            (state) =>
+                _getRealAccessControlProps(state.accessControlProps) !=
+                _getRealAccessControlProps(accessControl),
+          ),
+        );
     return CommonPopScope(
       onPop: hasChanges
           ? (_) {
@@ -461,7 +538,11 @@ class _AccessViewState extends ConsumerState<AccessView>
               )
             : null,
         menuItems: [
-          ..._buildMenuItems(context, enable: accessControl.enable),
+          ..._buildMenuItems(
+            context,
+            enable: accessControl.enable,
+            locked: locked,
+          ),
           if (selectAllAction != null)
             CommonPopupMenuItem(
               glyph: selectAllAction.glyph,
@@ -477,18 +558,43 @@ class _AccessViewState extends ConsumerState<AccessView>
                 enable: accessControl.enable,
                 mode: mode,
                 count: valueList.length,
+                locked: locked,
               ),
+              if (_managed.managed)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      GlyphIcon(AppGlyphs.lock, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.appLocalizations.accessControlProfileManaged,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_managed.notice != ProfileManagedAccessNotice.none)
+                ProductAccessControlNotice(
+                  message: _managed.notice == ProfileManagedAccessNotice.drift
+                      ? context.appLocalizations.accessControlDriftNote
+                      : context
+                            .appLocalizations
+                            .accessControlVerificationUnavailableNote,
+                ),
               const SizedBox(height: 8),
               Expanded(
                 child: needsInstalledAppsPermission
                     ? _buildInstalledAppsPermissionStatus()
-                    : DisabledMask(
-                        status: !accessControl.enable,
-                        child: _buildContent(
-                          packages: viewPackages,
-                          selected: valueList.toSet(),
-                          isSearching: query.isNotEmpty,
-                        ),
+                    : _buildContent(
+                        packages: viewPackages,
+                        selected: valueList.toSet(),
+                        isSearching: query.isNotEmpty,
+                        locked: locked || !accessControl.enable,
                       ),
               ),
             ],
@@ -532,7 +638,8 @@ class PackageListItem extends StatelessWidget {
 }
 
 class AccessControlPanel extends StatelessWidget {
-  const AccessControlPanel({super.key});
+  const AccessControlPanel({super.key, this.managed = false});
+  final bool managed;
 
   static ConfigWriter<T> _writer<T>(
     AccessControlProps Function(AccessControlProps state, T value) update,
@@ -546,28 +653,33 @@ class AccessControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final appLocalizations = context.appLocalizations;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-      ).copyWith(top: context.contentTopPadding, bottom: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 16)
+          .copyWith(top: context.contentTopPadding, bottom: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           generateSection(
             items: [
-              ConfigOptionsItem<AccessControlMode>(
-                title: (l) => l.mode,
-                options: AccessControlMode.values,
-                textBuilder: (mode) => switch (mode) {
-                  AccessControlMode.acceptSelected =>
-                    appLocalizations.whitelistMode,
-                  AccessControlMode.rejectSelected =>
-                    appLocalizations.blacklistMode,
-                },
-                selector: accessControlStateProvider.select(
-                  (state) => state.mode,
-                ),
-                onChanged: _writer(
-                  (state, value) => state.copyWith(mode: value),
+              Opacity(
+                opacity: managed ? 0.5 : 1,
+                child: IgnorePointer(
+                  ignoring: managed,
+                  child: ConfigOptionsItem<AccessControlMode>(
+                    title: (l) => l.mode,
+                    options: AccessControlMode.values,
+                    textBuilder: (mode) => switch (mode) {
+                      AccessControlMode.acceptSelected =>
+                        appLocalizations.whitelistMode,
+                      AccessControlMode.rejectSelected =>
+                        appLocalizations.blacklistMode,
+                    },
+                    selector: accessControlStateProvider.select(
+                      (state) => state.mode,
+                    ),
+                    onChanged: _writer(
+                      (state, value) => state.copyWith(mode: value),
+                    ),
+                  ),
                 ),
               ),
               ConfigOptionsItem<AccessSortType>(

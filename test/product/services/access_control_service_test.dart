@@ -53,6 +53,51 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
 }
 
 void main() {
+  group('Android applied VPN options', () {
+    test(
+      'reads profile include and exclude lists from the Android snapshot',
+      () async {
+        final include = await AndroidRuntimeAccessPolicy(
+          appliedOptionsReader: () async =>
+              '{"includePackage":["com.android.chrome"],"excludePackage":null}',
+        ).readAppliedProfileAccess();
+        expect(include.available, isTrue);
+        expect(include.accessControl?.mode, AccessControlMode.acceptSelected);
+        expect(include.accessControl?.acceptList, ['com.android.chrome']);
+
+        final exclude = await AndroidRuntimeAccessPolicy(
+          appliedOptionsReader: () async =>
+              '{"includePackage":null,"excludePackage":["com.android.chrome"]}',
+        ).readAppliedProfileAccess();
+        expect(exclude.available, isTrue);
+        expect(exclude.accessControl?.mode, AccessControlMode.rejectSelected);
+        expect(exclude.accessControl?.rejectList, ['com.android.chrome']);
+      },
+    );
+
+    test(
+      'distinguishes missing and malformed snapshots from no profile rule',
+      () async {
+        for (final json in [
+          '',
+          '{"includePackage":[3]}',
+          '{"includePackage":[],"excludePackage":[]}',
+        ]) {
+          final result = await AndroidRuntimeAccessPolicy(
+            appliedOptionsReader: () async => json,
+          ).readAppliedProfileAccess();
+          expect(result.available, isFalse);
+        }
+        final result = await AndroidRuntimeAccessPolicy(
+          appliedOptionsReader: () async =>
+              '{"includePackage":null,"excludePackage":null}',
+        ).readAppliedProfileAccess();
+        expect(result.available, isTrue);
+        expect(result.accessControl, isNull);
+      },
+    );
+  });
+
   group('AccessControlService', () {
     test('builds editor state and persists it back to vpn props', () {
       const service = AccessControlService();

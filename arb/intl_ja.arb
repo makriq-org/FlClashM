@@ -1,4 +1,5 @@
 {
+  "accessControlProfileManaged": "プロファイルによって管理されています",
   "rule": "ルール",
   "global": "グローバル",
   "direct": "ダイレクト",

@@ -236,6 +236,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選択したアプリはVPNから除外されます",
     ),
+    "accessControlProfileManaged": MessageLookupByLibrary.simpleMessage(
+      "プロファイルによって管理されています",
+    ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage("アクセス制御の設定"),
     "accessControlVerificationUnavailableNote":
         MessageLookupByLibrary.simpleMessage(

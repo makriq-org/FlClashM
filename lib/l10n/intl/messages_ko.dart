@@ -232,6 +232,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "선택한 앱은 VPN에서 제외됩니다",
     ),
+    "accessControlProfileManaged": MessageLookupByLibrary.simpleMessage(
+      "프로필에서 관리합니다",
+    ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage("접근 제어 설정"),
     "account": MessageLookupByLibrary.simpleMessage("계정"),
     "action": MessageLookupByLibrary.simpleMessage("동작"),
