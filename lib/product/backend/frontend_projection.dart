@@ -15,9 +15,14 @@ class FrontendProjection {
   StreamSubscription<Map<String, dynamic>>? _events;
   Future<void> _tail = Future.value();
   Timer? _ticker;
+  var _hostVisibility = HostVisibilityProjection();
   final _watcher = ProjectionWatcher();
   void attach(ProviderContainer container) {
     _container = container;
+    _hostVisibility.dispose();
+    _hostVisibility = HostVisibilityProjection(
+      onError: (error) => commonPrint.log('Backend visibility: $error'),
+    );
     frontendSettingsStore.onSettled = () => unawaited(
       refresh().catchError((Object error) {
         commonPrint.log('Backend read-back: $error');
@@ -75,6 +80,13 @@ class FrontendProjection {
         frontendSettingsStore.projecting = false;
       }
       final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
+      final instance = runtime['instanceId'] as String?;
+      _hostVisibility.synchronize(instance, () async {
+        // A replacement service starts with presentation events disabled.
+        await c
+            .read(coreHandlerProvider)
+            .syncHostActive(c.read(appVisibleProvider));
+      });
       final changed = _watcher.observe(
         profileId: config.currentProfileId,
         appliedProfileId: backendClient.runtimeView['profileId'] as String?,

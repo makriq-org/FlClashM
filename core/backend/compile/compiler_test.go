@@ -109,8 +109,8 @@ rules: [MATCH,DIRECT]
 	if !reflect.DeepEqual(access["acceptList"], []any{"com.example.app"}) {
 		t.Fatalf("self bypass: %#v", access)
 	}
-	if object(list(result.Config["proxy-groups"])[0])["lazy"] != true {
-		t.Fatal("Android health check not deferred")
+	if object(list(result.Config["proxy-groups"])[0])["lazy"] != false {
+		t.Fatal("profile health check policy changed")
 	}
 	if !containsAny(list(object(result.Config["dns"])["nameserver"]), "system://") {
 		t.Fatal("disabled profile DNS needs system fallback")
