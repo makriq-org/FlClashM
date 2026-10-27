@@ -817,8 +817,8 @@ Future<void> _syncOlcRtcAssets() async {
   );
   final checkout = await _prepareOlcRtcSource();
   final temporary = await Directory.systemTemp.createTemp('flclashm-olcrtc-');
-  final sourceDir = Directory(_join(temporary.path, 'source'))..createSync();
   try {
+    final sourceDir = Directory(_join(temporary.path, 'source'))..createSync();
     final archive = _join(temporary.path, 'source.tar');
     await _exec(
       ['git', 'archive', '--format=tar', '--output=$archive', olcRtcPinnedCommit],
