@@ -301,9 +301,13 @@ func forwardHealthCheckDelays() {
 	runLock.Unlock()
 
 	for name, proxy := range proxies {
-		emitLatestDelay(name, "", proxy.DelayHistory())
-		for url, state := range proxy.ExtraDelayHistories() {
-			emitLatestDelay(name, url, state.History)
+		// A URL history is published after its generic measurement. Read it
+		// first so a newly completed response can be correlated on this tick.
+		extra := proxy.ExtraDelayHistories()
+		history := proxy.DelayHistory()
+		emitLatestDelay(name, "", history, nil)
+		for url, state := range extra {
+			emitLatestDelay(name, url, state.History, history)
 		}
 	}
 }
@@ -508,7 +512,22 @@ func forwardNewRequests() {
 	}
 }
 
-func emitLatestDelay(proxyName string, testURL string, history []constant.DelayHistory) {
+// mihomo retains a positive generic measurement for an HTTP response rejected
+// by expected-status, but records zero in that URL's history. Both records have
+// the same timestamp. This is a failed check (-2 in the UI), not a timeout (-1).
+func healthCheckDelayValue(latest constant.DelayHistory, measurements []constant.DelayHistory) int32 {
+	if latest.Delay != 0 {
+		return int32(latest.Delay)
+	}
+	for _, measurement := range measurements {
+		if measurement.Time.Equal(latest.Time) && measurement.Delay > 0 {
+			return -2
+		}
+	}
+	return -1
+}
+
+func emitLatestDelay(proxyName string, testURL string, history, measurements []constant.DelayHistory) {
 	if len(history) == 0 {
 		return
 	}
@@ -523,16 +542,12 @@ func emitLatestDelay(proxyName string, testURL string, history []constant.DelayH
 	healthCheckSeen[key] = signature
 	healthCheckMu.Unlock()
 
-	delayValue := int32(latest.Delay)
-	if latest.Delay == 0 {
-		delayValue = -1
-	}
 	sendMessage(Message{
 		Type: DelayMessage,
 		Data: &Delay{
 			Url:   testURL,
 			Name:  proxyName,
-			Value: delayValue,
+			Value: healthCheckDelayValue(latest, measurements),
 		},
 	})
 }

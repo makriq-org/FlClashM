@@ -9,10 +9,53 @@ import (
 	"time"
 
 	"core/backend/compile"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel"
 )
+
+func TestHTTPStatusRejectionIsNotReportedAsTimeout(t *testing.T) {
+	server := probeServer(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Millisecond)
+		if r.URL.Path == "/" {
+			w.Header().Set("Location", "/ok")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	proxy := namedProxy("status-test")
+	expected, _ := utils.NewUnsignedRanges[uint16]("200")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if delay, err := proxy.URLTest(ctx, server.URL, expected); err != nil || delay == 0 {
+		t.Fatal("redirect did not answer the HTTP request", delay, err)
+	}
+	failed := proxy.ExtraDelayHistories()[server.URL]
+	if failed.Alive {
+		t.Fatal("expected-status:200 unexpectedly accepted a redirect")
+	}
+	latest := failed.History[len(failed.History)-1]
+	if got := healthCheckDelayValue(latest, proxy.DelayHistory()); got != -2 {
+		t.Fatal("a received HTTP response was shown as a timeout", got)
+	}
+	// The final URL answers 200 with the same node and status requirement.
+	if _, err := proxy.URLTest(ctx, server.URL+"/ok", expected); err != nil {
+		t.Fatal(err)
+	}
+	success := proxy.ExtraDelayHistories()[server.URL+"/ok"]
+	if !success.Alive || healthCheckDelayValue(success.History[len(success.History)-1], proxy.DelayHistory()) <= 0 {
+		t.Fatal("the final URL was not reported as healthy")
+	}
+	// An unrelated successful probe must not disguise a network failure.
+	server.Close()
+	_, _ = proxy.URLTest(ctx, server.URL+"/closed", expected)
+	unreachable := proxy.ExtraDelayHistories()[server.URL+"/closed"]
+	if got := healthCheckDelayValue(unreachable.History[len(unreachable.History)-1], proxy.DelayHistory()); got != -1 {
+		t.Fatal("unrelated success replaced the failed network measurement", got)
+	}
+}
 
 func TestSlowCompletedPingIsForwardedBeforeNextNetworkCheck(t *testing.T) {
 	var requests atomic.Int32
