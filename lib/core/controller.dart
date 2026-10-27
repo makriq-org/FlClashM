@@ -272,6 +272,17 @@ class CoreController {
     _interface.setHostActive(active);
   }
 
+  /// Confirms delivery when restoring presentation on a replacement backend.
+  Future<void> syncHostActive(bool active) async {
+    final acknowledged = await _interface.invokeMethod<bool>(
+      method: CoreMethod.setHostActive,
+      arguments: active,
+    );
+    if (acknowledged != true) {
+      throw StateError('Host visibility update was not acknowledged');
+    }
+  }
+
   void stopLog() {
     _interface.stopLog();
   }

@@ -2028,7 +2028,7 @@
     {
       "path": "lib/core/controller.dart",
       "bucket": "budget",
-      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится."
+      "reason": "Совместимый Core facade использует Go backend/ActionResult transport и read-only engine helpers; upstream runtime owner не переносится. Подтверждённая передача видимости позволяет повторить синхронизацию после сбоя RPC."
     },
     {
       "path": "lib/core/interface.dart",
