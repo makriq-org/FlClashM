@@ -180,7 +180,11 @@ AndroidArch _requireArch(String name) {
 // c-shared process. Android 10/11 seccomp kills the process instead of returning
 // an error. Use Go's PID fallback for Android builds until the toolchain fixes it.
 Future<void> _withAndroidGoOverlay(Future<void> Function(String) build) async {
-  final result = await Process.run('go', ['env', 'GOROOT']);
+  final result = await Process.run(
+    'go',
+    ['env', 'GOROOT'],
+    workingDirectory: _projectPath(_coreDir),
+  );
   if (result.exitCode != 0) {
     throw StateError('Cannot locate Go toolchain: ${result.stderr}');
   }
