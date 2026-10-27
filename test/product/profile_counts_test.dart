@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/views/dashboard/widgets/profile_detail.dart';
@@ -19,6 +20,11 @@ class _Profile extends Notifier<Profile?> {
 
 class _Setup extends SetupAction {
   final requests = <String, Completer<String>>{};
+  int requestCount = 0;
+  (String?, int?) planRevision = ("service", 1);
+
+  @override
+  (String?, int?) get appliedPlanRevision => planRevision;
 
   @override
   Future<String> getProfileWithId(
@@ -27,6 +33,7 @@ class _Setup extends SetupAction {
     bool yaml = false,
   }) {
     if (!countsOnly) throw StateError('Expected counts-only request');
+    requestCount++;
     return (requests[profileId] = Completer<String>()).future;
   }
 }
@@ -77,5 +84,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+  testWidgets('empty group projections do not repeatedly reload counts', (
+    tester,
+  ) async {
+    final setup = _Setup();
+    final container = ProviderContainer(
+      overrides: [
+        setupActionProvider.overrideWith(() => setup),
+        currentProfileProvider.overrideWith(
+          (ref) => ref.watch(_profileProvider),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: _CountsView()),
+      ),
+    );
+    expect(setup.requestCount, 1);
+    container.read(groupsProvider.notifier).value = <Group>[];
+    await tester.pump();
+    container.read(groupsProvider.notifier).value = <Group>[];
+    await tester.pump();
+    expect(setup.requestCount, 1);
+    container.read(groupsProvider.notifier).value = [
+      const Group(name: 'Proxy', type: GroupType.Selector),
+    ];
+    await tester.pump();
+    expect(setup.requestCount, 2);
+    container.read(groupsProvider.notifier).value = <Group>[];
+    await tester.pump();
+    expect(setup.requestCount, 3);
+    container.read(groupsProvider.notifier).value = <Group>[];
+    await tester.pump();
+    expect(setup.requestCount, 3);
+    setup.planRevision = ('service', 2);
+    container.read(groupsProvider.notifier).value = <Group>[];
+    await tester.pump();
+    expect(setup.requestCount, 4);
   });
 }

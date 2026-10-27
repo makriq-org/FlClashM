@@ -60,26 +60,24 @@ class SetupAction extends _$SetupAction {
     return true;
   }
 
+  /// Identifies the applied runtime plan across backend restarts.
+  (String?, int?) get appliedPlanRevision {
+    final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
+    return (
+      runtime['instanceId'] as String?,
+      (runtime['appliedGeneration'] as num?)?.toInt(),
+    );
+  }
+
   Future<String> getProfileWithId(
     String profileId, {
     bool countsOnly = false,
     bool yaml = false,
   }) async {
-    final receipt = await backendClient.command('profile.render', {
-      'profileId': profileId,
-      if (countsOnly) 'countsOnly': true,
-      if (yaml) 'format': 'yaml',
-    });
-    final blob = receipt['blob'] as Map;
-    try {
-      return utf8.decode(
-        await backendClient.download(
-          blob['token'] as String,
-          (blob['size'] as num).toInt(),
-        ),
-      );
-    } finally {
-      await backendClient.discardBlob(blob['token'] as String);
-    }
+    return backendClient.renderProfile(
+      profileId,
+      countsOnly: countsOnly,
+      yaml: yaml,
+    );
   }
 }

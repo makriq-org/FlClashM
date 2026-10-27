@@ -484,6 +484,31 @@ class BackendClient {
   Future<Map<String, dynamic>> profile(String id) async =>
       _map(await request('profile.get', {'profileId': id}));
 
+  /// Render is read-only: waiting for it must not refresh projections or hide
+  /// its blob if a subsequent snapshot request fails.
+  Future<String> renderProfile(
+    String id, {
+    bool countsOnly = false,
+    bool yaml = false,
+  }) async {
+    final operation = operationId();
+    final receipt = _map(
+      await request('profile.render', {
+        'profileId': id,
+        if (countsOnly) 'countsOnly': true,
+        if (yaml) 'format': 'yaml',
+      }, operation),
+    );
+    final completed = await wait(operation, initial: receipt);
+    final blob = _map(completed['blob']);
+    final token = blob['token'] as String;
+    try {
+      return utf8.decode(await download(token, (blob['size'] as num).toInt()));
+    } finally {
+      await discardBlob(token);
+    }
+  }
+
   Future<Uint8List> exportProfile(String id) async {
     final receipt = await command('profile.export', {'profileId': id});
     final blob = _map(receipt['blob']);

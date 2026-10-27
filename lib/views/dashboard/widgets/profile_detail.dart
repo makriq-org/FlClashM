@@ -59,10 +59,14 @@ mixin ConfigCountsWatch<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   ConfigCounts? configCounts;
   bool configCountsFailed = false;
   var _generation = 0;
+  (String?, int?)? _lastAppliedPlan;
 
   @override
   void initState() {
     super.initState();
+    _lastAppliedPlan = ref
+        .read(setupActionProvider.notifier)
+        .appliedPlanRevision;
     final profile = ref.read(currentProfileProvider);
     if (profile != null) unawaited(_reloadCounts(profile.id));
   }
@@ -105,7 +109,15 @@ mixin ConfigCountsWatch<T extends ConsumerStatefulWidget> on ConsumerState<T> {
         if (next != null) unawaited(_reloadCounts(next.id));
       }
     });
-    ref.listen(groupsProvider, (_, _) {
+    ref.listen(groupsProvider, (previous, next) {
+      final appliedPlan = ref
+          .read(setupActionProvider.notifier)
+          .appliedPlanRevision;
+      final planChanged = appliedPlan != _lastAppliedPlan;
+      _lastAppliedPlan = appliedPlan;
+      // Empty projections are republished by unrelated backend events. A new
+      // applied plan still needs fresh counts, even if it has no groups.
+      if (!planChanged && previous?.isEmpty == true && next.isEmpty) return;
       final profile = ref.read(currentProfileProvider);
       if (profile != null) unawaited(_reloadCounts(profile.id));
     });
