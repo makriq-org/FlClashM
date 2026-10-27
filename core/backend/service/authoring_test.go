@@ -144,6 +144,24 @@ func TestAuthoringUIContractCustomInspectRenderPreviewAndCAS(t *testing.T) {
 	if len(counts) != 3 || counts["groups"] != 1 || counts["proxies"] != 1 || counts["rules"] != 1 || app.Snapshot().Runtime.Generation != generation {
 		t.Fatal("counts should describe the compiled profile without modifying runtime", counts)
 	}
+	request(t, app, "render-custom-yaml", "profile.render", map[string]any{"profileId": id, "format": "yaml"})
+	yamlReceipt := waitDomain(t, app, "render-custom-yaml")
+	yamlText := string(readBlobBytes(t, app, yamlReceipt.Blob))
+	parsed, err := compile.ParseProfile(yamlText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedJSON, err := json.Marshal(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var yamlDocument map[string]any
+	if err := json.Unmarshal(parsedJSON, &yamlDocument); err != nil || !reflect.DeepEqual(document, yamlDocument) {
+		t.Fatalf("YAML did not preserve compiled configuration: %v", err)
+	}
+	if !strings.Contains(yamlText, "\n") || !strings.Contains(yamlText, "proxy-groups:") || app.Snapshot().Runtime.Generation != generation {
+		t.Fatal("YAML preview must be readable and leave runtime unchanged")
+	}
 	var preview struct {
 		Config compile.Object `json:"config"`
 	}
@@ -180,7 +198,7 @@ func TestAuthoringImportKeepsRuleAndFallbackOnlyProxies(t *testing.T) {
 			snapshot := authoringRequest(t, app)
 			request(t, app, "import-dependency", "authoring.import", map[string]any{"source": source, "profileId": "dependency", "expectedRevision": snapshot.Revision})
 			waitDomain(t, app, "import-dependency")
-			blob, err := app.renderProfile(context.Background(), "dependency", false)
+			blob, err := app.renderProfile(context.Background(), "dependency", false, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -439,5 +457,29 @@ func TestAuthoringSaveSurvivesIsolatedCompilationFailure(t *testing.T) {
 	saved, err := app.ProfileSource("save-failure")
 	if err != nil || string(saved.Metadata["label"]) != `"Saved edit"` {
 		t.Fatal("failed compilation erased committed editor data", saved, err)
+	}
+}
+
+func TestRenderYAMLPreservesValuesAndMappingOrder(t *testing.T) {
+	data := []byte(`{"dns":{"nameserver-policy":{"z.example":["1.1.1.1"],"a.example":["2.2.2.2"]}},"rules":["MATCH,DIRECT"],"strings":["true","01","null","a: b"],"port":80}`)
+	output, err := renderYAML(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(output)
+	if !strings.Contains(text, "\n") || strings.Index(text, "z.example:") >= strings.Index(text, "a.example:") {
+		t.Fatalf("YAML lost mapping order or block formatting: %s", text)
+	}
+	parsed, err := compile.ParseProfile(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before, after any
+	if json.Unmarshal(data, &before) != nil || json.Unmarshal(raw, &after) != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("YAML changed values: %s", text)
 	}
 }

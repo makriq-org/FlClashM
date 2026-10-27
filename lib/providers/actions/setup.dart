@@ -63,10 +63,12 @@ class SetupAction extends _$SetupAction {
   Future<String> getProfileWithId(
     String profileId, {
     bool countsOnly = false,
+    bool yaml = false,
   }) async {
     final receipt = await backendClient.command('profile.render', {
       'profileId': profileId,
       if (countsOnly) 'countsOnly': true,
+      if (yaml) 'format': 'yaml',
     });
     final blob = receipt['blob'] as Map;
     try {

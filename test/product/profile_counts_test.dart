@@ -21,7 +21,11 @@ class _Setup extends SetupAction {
   final requests = <String, Completer<String>>{};
 
   @override
-  Future<String> getProfileWithId(String profileId, {bool countsOnly = false}) {
+  Future<String> getProfileWithId(
+    String profileId, {
+    bool countsOnly = false,
+    bool yaml = false,
+  }) {
     if (!countsOnly) throw StateError('Expected counts-only request');
     return (requests[profileId] = Completer<String>()).future;
   }

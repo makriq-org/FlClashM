@@ -696,6 +696,11 @@
       "reason": "Живой service-info виджет берет брендовые поля и ссылку поддержки через product display hints."
     },
     {
+      "path": "lib/views/profiles/preview.dart",
+      "bucket": "budget",
+      "reason": "Предпросмотр запрашивает читаемый YAML подготовленного профиля у Go backend."
+    },
+    {
       "path": "lib/views/profiles/edit_profile.dart",
       "bucket": "budget",
       "reason": "Живой редактор профиля валидирует конфиг через globalState.validateProfileConfigText при редактировании и сохранении."
