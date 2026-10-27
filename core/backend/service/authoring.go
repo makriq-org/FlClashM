@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -16,6 +17,8 @@ import (
 	"core/backend"
 	"core/backend/authoring"
 	"core/backend/profiles"
+
+	"go.yaml.in/yaml/v3"
 )
 
 type sourceParams struct {
@@ -66,7 +69,13 @@ func (a *App) validatePreview(ctx context.Context, p sourceParams) map[string]st
 	}
 	return map[string]string{"message": message}
 }
-func (a *App) renderProfile(ctx context.Context, id string) (Blob, error) {
+func (a *App) renderProfile(ctx context.Context, id string, countsOnly bool, format string) (Blob, error) {
+	if format != "" && format != "yaml" {
+		return Blob{}, errors.New("unsupported profile render format")
+	}
+	if countsOnly && format != "" {
+		return Blob{}, errors.New("counts do not support a render format")
+	}
 	input, err := a.captureProfileInput(&id)
 	if err != nil {
 		return Blob{}, err
@@ -75,9 +84,23 @@ func (a *App) renderProfile(ctx context.Context, id string) (Blob, error) {
 	if err != nil {
 		return Blob{}, err
 	}
-	data, err := json.Marshal(config)
+	var result any = config
+	if countsOnly {
+		length := func(key string) int {
+			values, _ := config[key].([]any)
+			return len(values)
+		}
+		result = map[string]int{"groups": length("proxy-groups"), "proxies": length("proxies"), "rules": length("rules")}
+	}
+	data, err := json.Marshal(result)
 	if err != nil {
 		return Blob{}, err
+	}
+	if format == "yaml" {
+		data, err = renderYAML(data)
+		if err != nil {
+			return Blob{}, err
+		}
 	}
 	blob, err := a.newBlob()
 	if err != nil {
@@ -91,6 +114,34 @@ func (a *App) renderProfile(ctx context.Context, id string) (Blob, error) {
 	blob.Size = size
 	return blob, nil
 }
+
+// Decode the JSON into an ordered YAML tree: order-sensitive mappings must
+// retain the exact order of the compiled document, including nested mappings.
+func renderYAML(data []byte) ([]byte, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return nil, err
+	}
+	var blockStyle func(*yaml.Node)
+	blockStyle = func(node *yaml.Node) {
+		node.Style = 0
+		for _, child := range node.Content {
+			blockStyle(child)
+		}
+	}
+	blockStyle(&document)
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&document); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
 func (a *App) replaceAuthoring(ctx context.Context, params json.RawMessage, operationID string) (Receipt, error) {
 	var p struct {
 		ExpectedRevision  *uint64               `json:"expectedRevision"`

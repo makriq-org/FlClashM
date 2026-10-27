@@ -52,12 +52,14 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		apply = true
 	case "profile.render":
 		var p struct {
-			ProfileID string `json:"profileId"`
+			ProfileID  string `json:"profileId"`
+			CountsOnly bool   `json:"countsOnly"`
+			Format     string `json:"format"`
 		}
 		if err := decodeParams(params, &p); err != nil {
 			return result, err
 		}
-		blob, err := a.renderProfile(ctx, p.ProfileID)
+		blob, err := a.renderProfile(ctx, p.ProfileID, p.CountsOnly, p.Format)
 		if err != nil {
 			return result, err
 		}
@@ -209,7 +211,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			return result, err
 		}
 		if string(record.Metadata["type"]) == `"custom"` {
-			blob, err := a.renderProfile(ctx, request.ProfileID)
+			blob, err := a.renderProfile(ctx, request.ProfileID, false, "")
 			return Receipt{Blob: &blob, ProfileID: request.ProfileID, Revision: record.Revision}, err
 		}
 		blob, err := a.newBlob()

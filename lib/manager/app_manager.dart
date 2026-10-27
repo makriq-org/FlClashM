@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import '../product/backend/frontend_settings.dart';
 
 import 'package:flclashx/common/common.dart';
@@ -60,7 +61,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
     // A provider nobody listens to is paused and would miss the updates.
     ref.listenManual(appVisibleProvider, (_, visible) {
       ref.read(coreHandlerProvider).setHostActive(visible);
-    });
+    }, fireImmediately: true);
     ref.listenManual(profileHeadersActionProvider, (_, _) {});
     ref.listenManual(profileSettingsActionProvider, (_, _) {});
     ref.listenManual(suspendProvider, (prev, next) {
