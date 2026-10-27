@@ -206,6 +206,10 @@ class AccessControlService {
 
   final RuntimeAccessPlatformBridge platform;
 
+  /// View filters do not remove packages from the saved Android VPN policy.
+  AccessControl normalizeManualAccess(AccessControl access) =>
+      access.copyWithNewList([...access.currentList]..sort());
+
   AccessControlEditorState createEditorState(AccessControl accessControl) =>
       AccessControlEditorState(
         enabled: accessControl.enable,

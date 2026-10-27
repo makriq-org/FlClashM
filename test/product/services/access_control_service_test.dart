@@ -144,6 +144,21 @@ void main() {
   });
 
   group('AccessControlService', () {
+    test('saving preserves selected packages hidden by display filters', () {
+      const manual = AccessControl(
+        enable: true,
+        mode: AccessControlMode.rejectSelected,
+        rejectList: ['org.example.user', 'com.android.system'],
+        isFilterSystemApp: true,
+        isFilterNonInternetApp: true,
+      );
+      final normalized = const AccessControlService().normalizeManualAccess(manual);
+      expect(normalized.rejectList, ['com.android.system', 'org.example.user']);
+      expect(normalized.isFilterSystemApp, isTrue);
+      expect(normalized.isFilterNonInternetApp, isTrue);
+      expect(manual.rejectList, ['org.example.user', 'com.android.system']);
+    });
+
     test('builds editor state and persists it back to vpn props', () {
       const service = AccessControlService();
       const accessControl = AccessControl(
