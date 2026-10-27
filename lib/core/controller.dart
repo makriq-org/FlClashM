@@ -16,6 +16,7 @@ import 'package:path/path.dart';
 class CoreController {
   static CoreController? _instance;
   late CoreHandlerInterface _interface;
+  Future<void> _hostVisibilityTail = Future.value();
 
   CoreController._internal() {
     if (system.isAndroid) {
@@ -276,7 +277,26 @@ class CoreController {
   }
 
   void setHostActive(bool active) {
-    _interface.setHostActive(active);
+    unawaited(
+      syncHostActive(active).catchError((Object error) {
+        commonPrint.log('Backend visibility: $error');
+      }),
+    );
+  }
+
+  /// Serializes lifecycle and restoration writes until each is acknowledged.
+  Future<void> syncHostActive(bool active) {
+    final delivery = _hostVisibilityTail.then((_) async {
+      final acknowledged = await _interface.invokeMethod<bool>(
+        method: CoreMethod.setHostActive,
+        arguments: active,
+      );
+      if (acknowledged != true) {
+        throw StateError('Host visibility update was not acknowledged');
+      }
+    });
+    _hostVisibilityTail = delivery.then<void>((_) {}, onError: (Object _) {});
+    return delivery;
   }
 
   void stopLog() {

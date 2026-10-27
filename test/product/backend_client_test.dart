@@ -96,6 +96,55 @@ class ClientHost {
 
 void main() {
   test(
+    'render reads and deletes its blob without refreshing projections',
+    () async {
+      final host = ClientHost()..blobs.addAll(utf8.encode('groups: 1\n'));
+      final calls = <String>[];
+      Map? renderParams;
+      final client = BackendClient(
+        transport: (request) async {
+          final method = request['method'] as String;
+          calls.add(method);
+          if (method == 'profile.render') {
+            renderParams = request['params'] as Map;
+            return {
+              'apiVersion': 1,
+              'result': {
+                'status': 'accepted',
+                'operationId': request['operationId'],
+              },
+            };
+          }
+          if (method == 'operation.get') {
+            return {
+              'apiVersion': 1,
+              'result': {
+                'status': 'succeeded',
+                'blob': {'token': 'private-token', 'size': host.blobs.length},
+              },
+            };
+          }
+          if (method == 'blob.delete') {
+            return {'apiVersion': 1, 'result': true};
+          }
+          return host.call(request);
+        },
+        events: host.events.stream,
+      );
+      addTearDown(host.close);
+      addTearDown(client.detach);
+      expect(await client.renderProfile('one', yaml: true), 'groups: 1\n');
+      expect(renderParams, {'profileId': 'one', 'format': 'yaml'});
+      expect(calls, [
+        'profile.render',
+        'operation.get',
+        'blob.read',
+        'blob.delete',
+      ]);
+    },
+  );
+
+  test(
     'source epoch changes only on reconnect or backend replacement',
     () async {
       final host = ClientHost();
