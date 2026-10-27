@@ -1,9 +1,9 @@
 diff --git a/internal/engine/vkcalls/media_update_test.go b/internal/engine/vkcalls/media_update_test.go
 new file mode 100644
-index 00000000..14ec5fc3
+index 00000000..f8c243cb
 --- /dev/null
 +++ b/internal/engine/vkcalls/media_update_test.go
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,117 @@
 +// ai-generated: media notification regression over a real producer data channel.
 +package vkcalls
 +
@@ -93,7 +93,7 @@ index 00000000..14ec5fc3
 +
 +func TestKnownParticipantMediaChangeResubscribes(t *testing.T) {
 +	command, received := mediaCommandPair(t)
-+	signal := &signalingClient{notifications: make(chan notification, 4), closed: make(chan struct{})}
++	signal := &signalingClient{notifications: make(chan notification), closed: make(chan struct{})}
 +	gen := &generation{signal: signal, command: command, registry: Registry{}, participants: map[string]bool{"7": true}, done: make(chan struct{})}
 +	s := &Session{}
 +	s.closed.Store(true) // The fake socket must not request a provider reconnect.
@@ -110,6 +110,14 @@ index 00000000..14ec5fc3
 +	expectCameraLayout(t, received, 1)
 +	// A duplicate join stays quiet; a later camera update must be requested again.
 +	signal.notifications <- notification{Notification: "participant-joined", ParticipantID: "7"}
++	// The loop cannot receive this barrier until it has handled the join.
++	signal.notifications <- notification{Notification: "test-barrier"}
++	gen.registryMu.Lock()
++	sequence := gen.commandSeq
++	gen.registryMu.Unlock()
++	if sequence != 1 {
++		t.Fatalf("duplicate join sent a layout: sequence = %d", sequence)
++	}
 +	signal.notifications <- notification{Notification: noteMediaChanged, ParticipantID: "7"}
 +	expectCameraLayout(t, received, 2)
 +}
