@@ -2384,6 +2384,11 @@
       "path": "core/health_forwarder_test.go",
       "bucket": "budget",
       "reason": "Регрессионные host-тесты проверяют фоновые проверки автоматических групп без трафика и независимую доставку пингов."
+    },
+    {
+      "path": "core/health_forwarder_delivery_test.go",
+      "bucket": "budget",
+      "reason": "Host-тест проверяет фактическую доставку готового пинга через JSON/socket transport без JNI и лишних сетевых проб."
     }
   ]
 }

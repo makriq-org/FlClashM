@@ -11,8 +11,6 @@ import (
 	"core/backend/compile"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/tunnel"
 )
 
 func TestHTTPStatusRejectionIsNotReportedAsTimeout(t *testing.T) {
@@ -54,55 +52,6 @@ func TestHTTPStatusRejectionIsNotReportedAsTimeout(t *testing.T) {
 	unreachable := proxy.ExtraDelayHistories()[server.URL+"/closed"]
 	if got := healthCheckDelayValue(unreachable.History[len(unreachable.History)-1], proxy.DelayHistory()); got != -1 {
 		t.Fatal("unrelated success replaced the failed network measurement", got)
-	}
-}
-
-func TestSlowCompletedPingIsForwardedBeforeNextNetworkCheck(t *testing.T) {
-	var requests atomic.Int32
-	server := probeServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		requests.Add(1)
-		time.Sleep(4 * time.Second) // Completes after the old three-second warm-up.
-		w.WriteHeader(http.StatusNoContent)
-	})
-	proxy := namedProxy("slow-health-test")
-	previousProxies, previousProviders := tunnel.Proxies(), tunnel.Providers()
-	runLock.Lock()
-	previousConfig, previousInterval := currentConfig, minHealthCheckInterval
-	previousUI := uiActive.Swap(true)
-	currentConfig, minHealthCheckInterval = &config.Config{}, 300*time.Second
-	tunnel.UpdateProxies(map[string]constant.Proxy{proxy.Name(): proxy}, nil)
-	startHealthCheckForwarder()
-	runLock.Unlock()
-	t.Cleanup(func() {
-		runLock.Lock()
-		defer runLock.Unlock()
-		stopHealthCheckForwarder()
-		currentConfig, minHealthCheckInterval = previousConfig, previousInterval
-		uiActive.Store(previousUI)
-		tunnel.UpdateProxies(previousProxies, previousProviders)
-		resetHealthCheckForwarderState()
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-	defer cancel()
-	if _, err := proxy.URLTest(ctx, server.URL, nil); err != nil {
-		t.Fatal(err)
-	}
-	key := proxy.Name() + "|" + server.URL
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		healthCheckMu.Lock()
-		seen := healthCheckSeen[key] != ""
-		healthCheckMu.Unlock()
-		if seen {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("completed ping still waits for the next 300-second probe interval")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if requests.Load() != 1 {
-		t.Fatal("history polling triggered extra network probes", requests.Load())
 	}
 }
 
