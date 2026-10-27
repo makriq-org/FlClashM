@@ -229,6 +229,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDisabledDesc": MessageLookupByLibrary.simpleMessage(
       "앱 접근 제어가 꺼져 있습니다",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "Android VPN에 적용된 규칙이 프로필 설정과 다릅니다.",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "선택한 앱은 VPN에서 제외됩니다",
     ),
@@ -236,6 +239,10 @@ class MessageLookup extends MessageLookupByLibrary {
       "프로필에서 관리합니다",
     ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage("접근 제어 설정"),
+    "accessControlVerificationUnavailableNote":
+        MessageLookupByLibrary.simpleMessage(
+          "적용된 VPN 규칙을 확인할 수 없습니다. 대신 프로필 설정이 표시됩니다.",
+        ),
     "account": MessageLookupByLibrary.simpleMessage("계정"),
     "action": MessageLookupByLibrary.simpleMessage("동작"),
     "actionDelayTest": MessageLookupByLibrary.simpleMessage("모든 지연 테스트"),

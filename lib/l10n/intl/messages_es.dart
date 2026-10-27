@@ -263,6 +263,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlDisabledDesc": MessageLookupByLibrary.simpleMessage(
       "El control de acceso de apps está desactivado",
     ),
+    "accessControlDriftNote": MessageLookupByLibrary.simpleMessage(
+      "Las reglas aplicadas por la VPN de Android difieren de la configuración del perfil.",
+    ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Las apps seleccionadas quedan excluidas de la VPN",
     ),
@@ -272,6 +275,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlSettings": MessageLookupByLibrary.simpleMessage(
       "Ajustes de control de acceso",
     ),
+    "accessControlVerificationUnavailableNote":
+        MessageLookupByLibrary.simpleMessage(
+          "No se pudieron verificar las reglas aplicadas por la VPN. Se muestra la configuración del perfil como alternativa.",
+        ),
     "account": MessageLookupByLibrary.simpleMessage("Cuenta"),
     "action": MessageLookupByLibrary.simpleMessage("Acción"),
     "actionDelayTest": MessageLookupByLibrary.simpleMessage(
