@@ -11,6 +11,7 @@ import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +32,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   ProfileManagedAccess _managed = ProfileManagedAccess.none;
   late final ProfileManagedAccessController _managedController;
   final _saveGuard = AccessControlSaveGuard();
+  final _panelLocked = ValueNotifier(false);
 
   final _completer = Completer();
 
@@ -77,6 +79,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   Future<void> _refreshManaged() async {
     if (!mounted || !_isInit || !system.isAndroid) return;
     _saveGuard.invalidate();
+    _panelLocked.value = true;
     setState(() => _resolvingProfile = true);
     final resolved = await _managedController.refresh(
       isRunning: ref.read(runTimeProvider) != null,
@@ -99,6 +102,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       _managed = resolved;
       _resolvingProfile = false;
     });
+    _panelLocked.value = resolved.managed;
     _pinList();
   }
 
@@ -150,6 +154,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   @override
   void dispose() {
     _managedController.dispose();
+    _panelLocked.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -191,7 +196,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       builder: (context) {
         final appLocalizations = context.appLocalizations;
         return CommonScaffold(
-          body: AccessControlPanel(managed: _managed.managed),
+          body: AccessControlPanel(locked: _panelLocked),
           title: appLocalizations.accessControlSettings,
         );
       },
@@ -651,8 +656,8 @@ class PackageListItem extends StatelessWidget {
 }
 
 class AccessControlPanel extends StatelessWidget {
-  const AccessControlPanel({super.key, this.managed = false});
-  final bool managed;
+  const AccessControlPanel({super.key, required this.locked});
+  final ValueListenable<bool> locked;
 
   static ConfigWriter<T> _writer<T>(
     AccessControlProps Function(AccessControlProps state, T value) update,
@@ -663,7 +668,12 @@ class AccessControlPanel extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: locked,
+    builder: (context, managed, _) => _buildPanel(context, managed),
+  );
+
+  Widget _buildPanel(BuildContext context, bool managed) {
     final appLocalizations = context.appLocalizations;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16)
@@ -676,6 +686,7 @@ class AccessControlPanel extends StatelessWidget {
               Opacity(
                 opacity: managed ? 0.5 : 1,
                 child: IgnorePointer(
+                  key: const ValueKey('access-control-mode-lock'),
                   ignoring: managed,
                   child: ConfigOptionsItem<AccessControlMode>(
                     title: (l) => l.mode,
