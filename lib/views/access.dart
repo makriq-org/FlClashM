@@ -32,6 +32,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   ProfileManagedAccess _managed = ProfileManagedAccess.none;
   late final ProfileManagedAccessController _managedController;
   final _saveGuard = AccessControlSaveGuard();
+  final _manualDraft = ManualAccessDraft();
   final _panelLocked = ValueNotifier(false);
 
   final _completer = Completer();
@@ -89,14 +90,19 @@ class _AccessViewState extends ConsumerState<AccessView>
     final wasManaged = _managed.managed;
     if (resolved.managed || wasManaged) {
       final old = ref.read(accessControlStateProvider);
-      final effective =
-          resolved.effectiveAccessControl ??
-          ref.read(vpnSettingProvider).accessControlProps;
-      ref.read(accessControlStateProvider.notifier).value = effective.copyWith(
-        sort: old.sort,
-        isFilterSystemApp: old.isFilterSystemApp,
-        isFilterNonInternetApp: old.isFilterNonInternetApp,
-      );
+      if (!wasManaged && resolved.managed) {
+        _manualDraft.suspend(old);
+      }
+      final effective = resolved.managed
+          ? resolved.effectiveAccessControl!.copyWith(
+              sort: old.sort,
+              isFilterSystemApp: old.isFilterSystemApp,
+              isFilterNonInternetApp: old.isFilterNonInternetApp,
+            )
+          : _manualDraft.restore(
+              ref.read(vpnSettingProvider).accessControlProps,
+            );
+      ref.read(accessControlStateProvider.notifier).value = effective;
     }
     setState(() {
       _managed = resolved;
@@ -218,6 +224,21 @@ class _AccessViewState extends ConsumerState<AccessView>
   }
 
   Future<void> _handleBack() async {
+    if (_managed.managed) {
+      final draft = _manualDraft.value;
+      final res = await dialogs.showMessage(
+        title: context.appLocalizations.tip,
+        message: TextSpan(text: context.appLocalizations.discardChanges),
+      );
+      if (!mounted ||
+          res != true ||
+          !_managed.managed ||
+          _manualDraft.value != draft) {
+        return;
+      }
+      Navigator.of(context).pop();
+      return;
+    }
     final ticket = _saveGuard.capture(ref.read(accessControlStateProvider));
     final appLocalizations = context.appLocalizations;
     final res = await dialogs.showMessage(
@@ -225,6 +246,14 @@ class _AccessViewState extends ConsumerState<AccessView>
       message: TextSpan(text: appLocalizations.saveChanges),
     );
     if (!mounted || res == null) {
+      return;
+    }
+    if (!_saveGuard.permits(
+      ticket,
+      currentDraft: ref.read(accessControlStateProvider),
+      managed: _managed.managed,
+      resolving: _resolvingProfile,
+    )) {
       return;
     }
     if (res) {
@@ -527,17 +556,15 @@ class _AccessViewState extends ConsumerState<AccessView>
             allValueList: viewPackageNameList,
           )
         : null;
+    final manualDraft = _manualDraft.value ?? accessControl;
     final draftChanged = ref.watch(
       vpnSettingProvider.select(
         (state) =>
             _getRealAccessControlProps(state.accessControlProps) !=
-            _getRealAccessControlProps(accessControl),
+            _getRealAccessControlProps(manualDraft),
       ),
     );
-    final hasChanges = _saveGuard.shouldConfirmExit(
-      managed: _managed.managed,
-      draftChanged: draftChanged,
-    );
+    final hasChanges = _saveGuard.shouldConfirmExit(draftChanged: draftChanged);
     return CommonPopScope(
       onPop: hasChanges
           ? (_) {

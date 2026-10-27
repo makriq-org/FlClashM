@@ -112,6 +112,21 @@ class ProfileManagedAccess {
 
 typedef ReadProfileAccessControl = Future<AccessControl?> Function();
 
+/// Keeps the manual editor draft separate while the profile owns the screen.
+class ManualAccessDraft {
+  AccessControl? _value;
+
+  AccessControl? get value => _value;
+
+  void suspend(AccessControl draft) => _value ??= draft;
+
+  AccessControl restore(AccessControl fallback) {
+    final draft = _value ?? fallback;
+    _value = null;
+    return draft;
+  }
+}
+
 /// Invalidates pending confirmations whenever the effective VPN owner changes.
 class AccessControlSaveGuard {
   int _epoch = 0;
@@ -119,8 +134,7 @@ class AccessControlSaveGuard {
   void invalidate() => _epoch++;
 
   /// A refresh locks saving but must not hide an unsaved manual draft on exit.
-  bool shouldConfirmExit({required bool managed, required bool draftChanged}) =>
-      !managed && draftChanged;
+  bool shouldConfirmExit({required bool draftChanged}) => draftChanged;
 
   (int, AccessControl) capture(AccessControl draft) => (_epoch, draft);
 

@@ -59,9 +59,20 @@ void main() {
 
     test('protects an unsaved manual draft during a refresh', () {
       final guard = AccessControlSaveGuard();
-      expect(guard.shouldConfirmExit(managed: false, draftChanged: true), isTrue);
-      expect(guard.shouldConfirmExit(managed: false, draftChanged: false), isFalse);
-      expect(guard.shouldConfirmExit(managed: true, draftChanged: true), isFalse);
+      expect(guard.shouldConfirmExit(draftChanged: true), isTrue);
+      expect(guard.shouldConfirmExit(draftChanged: false), isFalse);
+    });
+
+    test('retains manual edits across managed updates and restores them', () {
+      final draft = ManualAccessDraft();
+      expect(draft.value, isNull);
+      draft.suspend(manual);
+      draft.suspend(profile);
+      expect(draft.value, manual);
+      expect(AccessControlSaveGuard().shouldConfirmExit(draftChanged: draft.value != const AccessControl()), isTrue);
+      expect(draft.restore(const AccessControl()), manual);
+      expect(draft.value, isNull);
+      expect(draft.restore(profile), profile);
     });
 
     test('rejects a confirmation after ownership refresh or draft replacement', () {
