@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -87,7 +88,10 @@ func computeMinHealthCheckInterval(rawConfig *config.RawConfig) {
 	}
 	for _, p := range rawConfig.ProxyProvider {
 		if check, ok := p["health-check"].(map[string]any); ok {
-			include(check["interval"])
+			url, _ := check["url"].(string)
+			if check["enable"] == true && strings.TrimSpace(url) != "" {
+				include(check["interval"])
+			}
 		}
 	}
 	// Touching providers only marks usage; mihomo owns the actual probe cadence.

@@ -181,15 +181,28 @@ func TestHealthCheckDeliveryDoesNotWaitForProbeInterval(t *testing.T) {
 	}
 }
 
-func TestProviderIntervalIsIncludedInLazyTouchCadence(t *testing.T) {
+func TestProviderIntervalIsIncludedOnlyForActiveChecks(t *testing.T) {
 	previous := minHealthCheckInterval
 	t.Cleanup(func() { minHealthCheckInterval = previous })
-	raw, err := config.UnmarshalRawConfig([]byte("proxy-groups: [{name: Auto, type: fallback, interval: 100}]\nproxy-providers: {nodes: {health-check: {enable: true, interval: 5}}}"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	computeMinHealthCheckInterval(raw)
-	if minHealthCheckInterval != 5*time.Second {
-		t.Fatal("provider checks would go dormant", minHealthCheckInterval)
+	for _, test := range []struct {
+		name, check string
+		want        time.Duration
+	}{
+		{"enabled", "{enable: true, url: 'https://example.test/check', interval: 5}", 5 * time.Second},
+		{"disabled", "{enable: false, url: 'https://example.test/check', interval: 1}", 100 * time.Second},
+		{"not enabled", "{url: 'https://example.test/check', interval: 1}", 100 * time.Second},
+		{"empty URL", "{enable: true, url: '', interval: 1}", 100 * time.Second},
+		{"blank URL", "{enable: true, url: '  ', interval: 1}", 100 * time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw, err := config.UnmarshalRawConfig([]byte("proxy-groups: [{name: Auto, type: fallback, interval: 100}]\nproxy-providers: {nodes: {health-check: " + test.check + "}}"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			computeMinHealthCheckInterval(raw)
+			if minHealthCheckInterval != test.want {
+				t.Fatalf("touch interval = %v, want %v", minHealthCheckInterval, test.want)
+			}
+		})
 	}
 }
