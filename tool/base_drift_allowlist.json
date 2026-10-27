@@ -661,6 +661,11 @@
       "reason": "Живой dashboard оставлен в base и держит только lock-гейты и выбор вида через продуктовые селекторы."
     },
     {
+      "path": "lib/views/dashboard/widgets/profile_detail.dart",
+      "bucket": "budget",
+      "reason": "Карточка получает статистику скомпилированного профиля через Go API вместо устаревшего локального файла."
+    },
+    {
       "path": "lib/views/dashboard/widgets/announce_widget.dart",
       "bucket": "budget",
       "reason": "Живой announce-виджет читает текст только через currentProductDisplayHintsProvider."

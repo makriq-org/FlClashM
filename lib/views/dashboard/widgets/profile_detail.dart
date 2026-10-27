@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
@@ -11,10 +11,8 @@ import 'package:flclashx/views/profiles/preview.dart';
 import 'package:flclashx/views/profiles/profiles.dart';
 import 'package:flclashx/views/proxies/providers.dart';
 import 'package:flclashx/widgets/widgets.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:yaml/yaml.dart';
 
 const _statSpacing = 8.0;
 
@@ -57,87 +55,59 @@ ProfileStats profileStatsOf(
   );
 }
 
-({String md5, ConfigCounts counts})? _countsCache;
-
-// package:yaml holds a document in many times its size.
-const _maxCountedConfigBytes = 8 << 20;
-
-ConfigCounts? _cachedCounts() {
-  if (globalState.lastConfigCounts case final counts?) {
-    return counts;
-  }
-  final cache = _countsCache;
-  final md5 = globalState.lastConfigMd5;
-  return cache != null && cache.md5 == md5 ? cache.counts : null;
-}
-
-ConfigCounts? _countConfigFile(String path) {
-  final file = File(path);
-  if (file.lengthSync() > _maxCountedConfigBytes) {
-    return null;
-  }
-  final config = loadYaml(file.readAsStringSync());
-  return configCountsOf(config is Map ? config : const {});
-}
-
-/// Parsed in an isolate: a large profile takes far longer than a frame.
-Future<ConfigCounts?> _loadCounts() async {
-  if (_cachedCounts() case final counts?) {
-    return counts;
-  }
-  final md5 = globalState.lastConfigMd5;
-  final counts = await compute(_countConfigFile, await appPath.configFilePath);
-  if (md5 != null && counts != null) {
-    _countsCache = (md5: md5, counts: counts);
-  }
-  return counts;
-}
-
 mixin ConfigCountsWatch<T extends ConsumerStatefulWidget> on ConsumerState<T> {
-  ConfigCounts? configCounts = _cachedCounts();
+  ConfigCounts? configCounts;
   bool configCountsFailed = false;
   var _generation = 0;
 
   @override
   void initState() {
     super.initState();
-    if (configCounts == null) {
-      unawaited(_reloadCounts());
-    }
+    final profile = ref.read(currentProfileProvider);
+    if (profile != null) unawaited(_reloadCounts(profile.id));
   }
 
-  Future<void> _reloadCounts() async {
+  Future<void> _reloadCounts(String profileId) async {
     final generation = ++_generation;
-    ConfigCounts? counts;
-    var failed = false;
     try {
-      counts = await _loadCounts();
+      final raw = await ref
+          .read(setupActionProvider.notifier)
+          .getProfileWithId(profileId, countsOnly: true);
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final counts = (
+        groups: (data['groups'] as num).toInt(),
+        proxies: (data['proxies'] as num).toInt(),
+        rules: (data['rules'] as num).toInt(),
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        configCounts = counts;
+        configCountsFailed = false;
+      });
     } catch (error) {
-      commonPrint.log('read applied config error: $error');
-      failed = true;
+      commonPrint.log('read profile counts error: $error');
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        configCounts = null;
+        configCountsFailed = true;
+      });
     }
-    if (!mounted || generation != _generation) {
-      return;
-    }
-    setState(() {
-      configCounts = counts ?? configCounts;
-      configCountsFailed = failed || counts == null;
-    });
   }
 
-  /// Called from build: groups refresh after every applied setup.
   void watchConfigCounts() {
-    ref.listen(groupsProvider, (_, _) {
-      final cached = _cachedCounts();
-      if (cached == null) {
-        unawaited(_reloadCounts());
-      } else if (cached != configCounts) {
+    ref.listen(currentProfileProvider, (previous, next) {
+      if (previous != next) {
         _generation++;
         setState(() {
-          configCounts = cached;
+          configCounts = null;
           configCountsFailed = false;
         });
+        if (next != null) unawaited(_reloadCounts(next.id));
       }
+    });
+    ref.listen(groupsProvider, (_, _) {
+      final profile = ref.read(currentProfileProvider);
+      if (profile != null) unawaited(_reloadCounts(profile.id));
     });
   }
 }
@@ -187,9 +157,8 @@ class _ProfileDetailSheetState extends ConsumerState<ProfileDetailSheet>
       body: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-            ).copyWith(top: context.contentTopPadding, bottom: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16)
+                .copyWith(top: context.contentTopPadding, bottom: 20),
             sliver: SliverMainAxisGroup(
               slivers: [
                 SliverList.list(

@@ -24,7 +24,7 @@ commit проекции нет. Flutter не выполняет runtime-комп
 ## Редактор и импорт
 
 - profile.inspect {profileId:string} → {config:object,outbounds:object,base:object}. config — разобранный исходник, не RuntimePlan. outbounds — upstream {proxies:[],"proxy-groups":[],"proxy-providers":{}}. base — upstream ProfileBase: {config,digest,present,proxies,"proxy-groups",rules,"match-rules"}.
-- profile.render {profileId:string} → receipt.blob:{token:string,size:int}. Go компилирует; UI скачивает blob и удаляет его.
+- profile.render {profileId:string,countsOnly?:bool} → receipt.blob:{token:string,size:int}. Go компилирует; UI скачивает blob и удаляет его. При countsOnly blob содержит только числа groups, proxies и rules скомпилированного профиля.
 - profile.validate {token:string,ageSecretKey:string} → {message:string}; пустая строка — успешная проверка. Существующий source/token вызов без ageSecretKey сохраняет старый контракт квитанции.
 - authoring.evaluate {script:string,config:object} → {config:object}; только editor preview, не применение runtime.
 - authoring.import {expectedRevision:int,profileId?:string,metadata?:object,source?:string,token?:string,ageSecretKey?:string,links?:bool,select?:bool,replace?:bool,providerSources?:{name:blobToken}} → receipt. Go парсит и сохраняет весь импорт одним CAS с ремапом коллизий. UI может показывать локальный preview, но отправляет исходный blob. Платформенные пути не передаются.

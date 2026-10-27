@@ -66,7 +66,7 @@ func (a *App) validatePreview(ctx context.Context, p sourceParams) map[string]st
 	}
 	return map[string]string{"message": message}
 }
-func (a *App) renderProfile(ctx context.Context, id string) (Blob, error) {
+func (a *App) renderProfile(ctx context.Context, id string, countsOnly bool) (Blob, error) {
 	input, err := a.captureProfileInput(&id)
 	if err != nil {
 		return Blob{}, err
@@ -75,7 +75,15 @@ func (a *App) renderProfile(ctx context.Context, id string) (Blob, error) {
 	if err != nil {
 		return Blob{}, err
 	}
-	data, err := json.Marshal(config)
+	var result any = config
+	if countsOnly {
+		length := func(key string) int {
+			values, _ := config[key].([]any)
+			return len(values)
+		}
+		result = map[string]int{"groups": length("proxy-groups"), "proxies": length("proxies"), "rules": length("rules")}
+	}
+	data, err := json.Marshal(result)
 	if err != nil {
 		return Blob{}, err
 	}

@@ -125,6 +125,25 @@ func TestAuthoringUIContractCustomInspectRenderPreviewAndCAS(t *testing.T) {
 	if !strings.Contains(string(raw), `"MATCH,Proxy"`) || rendered.RuntimeOperationID != "" || app.Snapshot().Runtime.Generation != generation {
 		t.Fatal("render failed or changed runtime", rendered, string(raw))
 	}
+	request(t, app, "count-custom", "profile.render", map[string]any{"profileId": id, "countsOnly": true})
+	counted := waitDomain(t, app, "count-custom")
+	var counts map[string]int
+	if err := json.Unmarshal(readBlobBytes(t, app, counted.Blob), &counts); err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	for field, key := range map[string]string{"groups": "proxy-groups", "proxies": "proxies", "rules": "rules"} {
+		values, _ := document[key].([]any)
+		if counts[field] != len(values) {
+			t.Fatalf("%s count = %d, want %d", field, counts[field], len(values))
+		}
+	}
+	if len(counts) != 3 || counts["groups"] != 1 || counts["proxies"] != 1 || counts["rules"] != 1 || app.Snapshot().Runtime.Generation != generation {
+		t.Fatal("counts should describe the compiled profile without modifying runtime", counts)
+	}
 	var preview struct {
 		Config compile.Object `json:"config"`
 	}
@@ -161,7 +180,7 @@ func TestAuthoringImportKeepsRuleAndFallbackOnlyProxies(t *testing.T) {
 			snapshot := authoringRequest(t, app)
 			request(t, app, "import-dependency", "authoring.import", map[string]any{"source": source, "profileId": "dependency", "expectedRevision": snapshot.Revision})
 			waitDomain(t, app, "import-dependency")
-			blob, err := app.renderProfile(context.Background(), "dependency")
+			blob, err := app.renderProfile(context.Background(), "dependency", false)
 			if err != nil {
 				t.Fatal(err)
 			}
