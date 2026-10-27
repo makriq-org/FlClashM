@@ -961,6 +961,11 @@
       "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
     },
     {
+      "path": "core/backend/compile/inspect_test.go",
+      "bucket": "budget",
+      "reason": "Проверка пользовательского профиля возвращает правила пакетов для экрана раздельного туннелирования."
+    },
+    {
       "path": "core/backend/compile/lists.go",
       "bucket": "budget",
       "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."

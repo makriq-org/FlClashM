@@ -62,6 +62,12 @@ func (c *Compiler) InspectProfile(ctx context.Context, input []byte) (Inspection
 			_, err = c.applyKeyOverrides(result.Config, request.Settings, request.Profile.Metadata)
 		}
 		result.Diagnostics = []string{}
+		if err == nil && c.Capabilities.Platform == "android" {
+			result.AccessControl, err = c.splitPackages(ctx, copyObject(result.Config), request.Profile.ID, &result.Diagnostics)
+			if err == nil && result.AccessControl != nil {
+				result.AccessControl = c.Policy.AccessControl(result.AccessControl, c.Capabilities)
+			}
+		}
 	} else {
 		result, err = c.Inspect(ctx, request.Profile.Text, request.Profile.ID)
 	}
