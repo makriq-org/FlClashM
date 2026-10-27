@@ -1,0 +1,167 @@
+diff --git a/internal/engine/vkcalls/media_update_test.go b/internal/engine/vkcalls/media_update_test.go
+new file mode 100644
+index 00000000..14ec5fc3
+--- /dev/null
++++ b/internal/engine/vkcalls/media_update_test.go
+@@ -0,0 +1,109 @@
++// ai-generated: media notification regression over a real producer data channel.
++package vkcalls
++
++import (
++	"bytes"
++	"testing"
++	"time"
++
++	"github.com/pion/webrtc/v4"
++)
++
++func mediaCommandPair(t *testing.T) (*webrtc.DataChannel, <-chan []byte) {
++	t.Helper()
++	settings := webrtc.SettingEngine{}
++	// A loopback candidate keeps the regression runnable on isolated hosts.
++	settings.SetIncludeLoopbackCandidate(true)
++	api := webrtc.NewAPI(webrtc.WithSettingEngine(settings))
++	a, err := api.NewPeerConnection(webrtc.Configuration{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = a.Close() })
++	b, err := api.NewPeerConnection(webrtc.Configuration{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = b.Close() })
++	received := make(chan []byte, 4)
++	b.OnDataChannel(func(dc *webrtc.DataChannel) {
++		dc.OnMessage(func(message webrtc.DataChannelMessage) { received <- message.Data })
++	})
++	command, err := a.CreateDataChannel("producerCommand", nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	opened := make(chan struct{})
++	command.OnOpen(func() { close(opened) })
++	exchangeMediaCommandOffer(t, a, b)
++	select {
++	case <-opened:
++	case <-time.After(3 * time.Second):
++		t.Fatal("producer data channel did not open")
++	}
++	return command, received
++}
++
++func exchangeMediaCommandOffer(t *testing.T, a, b *webrtc.PeerConnection) {
++	t.Helper()
++	offer, err := a.CreateOffer(nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	gatherA := webrtc.GatheringCompletePromise(a)
++	if err = a.SetLocalDescription(offer); err != nil {
++		t.Fatal(err)
++	}
++	<-gatherA
++	if err = b.SetRemoteDescription(*a.LocalDescription()); err != nil {
++		t.Fatal(err)
++	}
++	answer, err := b.CreateAnswer(nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	gatherB := webrtc.GatheringCompletePromise(b)
++	if err = b.SetLocalDescription(answer); err != nil {
++		t.Fatal(err)
++	}
++	<-gatherB
++	if err = a.SetRemoteDescription(*b.LocalDescription()); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func expectCameraLayout(t *testing.T, received <-chan []byte, sequence byte) {
++	t.Helper()
++	select {
++	case frame := <-received:
++		// The pending camera has no registry id yet: ask for it by name.
++		if len(frame) < 3 || !bytes.Equal(frame[:3], []byte{0, 0, sequence}) || !bytes.Contains(frame, []byte("u7:sCAMERA")) {
++			t.Fatalf("unexpected camera layout %x", frame)
++		}
++	case <-time.After(2 * time.Second):
++		t.Fatal("camera change did not refresh the subscription")
++	}
++}
++
++func TestKnownParticipantMediaChangeResubscribes(t *testing.T) {
++	command, received := mediaCommandPair(t)
++	signal := &signalingClient{notifications: make(chan notification, 4), closed: make(chan struct{})}
++	gen := &generation{signal: signal, command: command, registry: Registry{}, participants: map[string]bool{"7": true}, done: make(chan struct{})}
++	s := &Session{}
++	s.closed.Store(true) // The fake socket must not request a provider reconnect.
++	done := make(chan struct{})
++	go func() { defer close(done); s.run(gen, notification{}) }()
++	t.Cleanup(func() {
++		close(signal.closed)
++		select {
++		case <-done:
++		case <-time.After(time.Second):
++			t.Error("session loop did not stop")
++		}
++	})
++	expectCameraLayout(t, received, 1)
++	// A duplicate join stays quiet; a later camera update must be requested again.
++	signal.notifications <- notification{Notification: "participant-joined", ParticipantID: "7"}
++	signal.notifications <- notification{Notification: noteMediaChanged, ParticipantID: "7"}
++	expectCameraLayout(t, received, 2)
++}
+diff --git a/internal/engine/vkcalls/signaling.go b/internal/engine/vkcalls/signaling.go
+index e2ce5aad..e3e85607 100644
+--- a/internal/engine/vkcalls/signaling.go
++++ b/internal/engine/vkcalls/signaling.go
+@@ -51,6 +51,8 @@ const (
+ 	fieldPeerID      = "peerId"
+ 	noteConnection   = "connection"
+ 	noteTopology     = "topology-changed"
++	// ai-generated: shared notification name for media subscription refresh.
++	noteMediaChanged = "media-settings-changed"
+ 	frameTypeError   = "error"
+ 	reasonHungup     = "HUNGUP"
+ 	topologyServer   = "SERVER"
+diff --git a/internal/engine/vkcalls/vkcalls.go b/internal/engine/vkcalls/vkcalls.go
+index 1a7aac83..5907c5d0 100644
+--- a/internal/engine/vkcalls/vkcalls.go
++++ b/internal/engine/vkcalls/vkcalls.go
+@@ -447,11 +447,8 @@ func (s *Session) run(gen *generation, connection notification) {
+ 		select {
+ 		case note := <-gen.signal.Notifications():
+ 			switch note.Notification {
+-			case "participant-joined", "media-settings-changed":
+-				// A camera may appear with either: ask for it by key.
+-				if id, err := decimalID(note.ParticipantID); err == nil && id != gen.signal.Self() && gen.noteParticipant(id) {
+-					gen.subscribeAll()
+-				}
++			case "participant-joined", noteMediaChanged:
++				gen.subscribeParticipant(note)
+ 			case "producer-updated":
+ 				if note.Description == "" || note.SessionID == gen.sessionID {
+ 					continue
+@@ -475,6 +472,20 @@ func (s *Session) run(gen *generation, connection notification) {
+ 	}
+ }
+ 
++// subscribeParticipant asks for a new participant's camera, and asks again
++// when an already known participant changes media after joining.
++// ai-generated: this function and the call from run.
++func (gen *generation) subscribeParticipant(note notification) {
++	id, err := decimalID(note.ParticipantID)
++	if err != nil || id == gen.signal.Self() {
++		return
++	}
++	fresh := gen.noteParticipant(id)
++	if fresh || note.Notification == noteMediaChanged {
++		gen.subscribeAll()
++	}
++}
++
+ // reanswer handles a renegotiation offer on the established transport: same
+ // shaping and accept handshake, no second connect wait.
+ func (s *Session) reanswer(gen *generation, offer string) error {

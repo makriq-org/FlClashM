@@ -6,6 +6,7 @@ buildid=none
 buildvcs=false
 ndk-28.0.13004108
 modules:e8239fb4b9a24d196f38e33d9f6960cd87bc57ae901d02565f3303c9042297f8
+patch:d7c59b8bd24317987b38431576b5b5e037c4ba4a582d48e2789bfb86e1764ebd
 armeabi-v7a:arm:7
 arm64-v8a:arm64:
 x86_64:amd64:

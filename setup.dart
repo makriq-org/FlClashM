@@ -18,6 +18,7 @@ const _coreVersionFile = 'lib/core_version.dart';
 const _ndkVersion = olcRtcPinnedNdkVersion;
 const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
+const _olcRtcPatchFile = 'tool/patches/olcrtc-vkcalls-media-refresh.patch';
 const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
 const _stormDnsStampFile = 'assets/runtimes/stormdns/android/release.txt';
 const _androidRuntimeJniRoot = 'android/app/src/main/jniLibs';
@@ -814,64 +815,85 @@ Future<void> _syncOlcRtcAssets() async {
     executable: goExecutable,
     requireUnpatched: true,
   );
-  final sourceDir = await _prepareOlcRtcSource();
-  final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
-  if (!targetRoot.existsSync()) {
-    targetRoot.createSync(recursive: true);
-  }
-
-  final ndkBin = _resolveNdkBinDir();
-  for (final asset in olcRtcReleaseAssets.values) {
-    final arch = _androidArches[asset.cliArch];
-    if (arch == null) {
-      throw StateError('Unknown olcrtc Android arch ${asset.cliArch}');
-    }
-
-    final target = File(_projectPath(asset.bundledAssetPath));
-    target.parent.createSync(recursive: true);
-    if (target.existsSync()) {
-      await target.delete();
-    }
-
-    final env = <String, String>{
-      ...Platform.environment,
-      'GOOS': 'android',
-      'GOARCH': asset.goArch,
-      'CGO_ENABLED': '1',
-      'CC': _join(ndkBin.path, arch.toolchain),
-    };
-    if (asset.goArm != null) {
-      env['GOARM'] = asset.goArm!;
-    }
-
+  final checkout = await _prepareOlcRtcSource();
+  final temporary = await Directory.systemTemp.createTemp('flclashm-olcrtc-');
+  final sourceDir = Directory(_join(temporary.path, 'source'))..createSync();
+  try {
+    final archive = _join(temporary.path, 'source.tar');
     await _exec(
-      [
-        goExecutable,
-        'build',
-        '-buildvcs=false',
-        '-trimpath',
-        '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
-        '-ldflags=-s -w -checklinkname=0 -buildid=',
-        '-o',
-        target.path,
-        './cmd/olcrtc',
-      ],
-      environment: env,
-      workingDirectory: sourceDir.path,
-      name: 'build olcrtc Android ${asset.abi}',
+      ['git', 'archive', '--format=tar', '--output=$archive', olcRtcPinnedCommit],
+      workingDirectory: checkout.path,
+      name: 'archive olcrtc pinned source',
     );
-
-    final digest = sha256.convert(await target.readAsBytes()).toString();
-    if (digest != asset.sha256) {
-      throw StateError(
-        'olcrtc ${asset.abi} digest mismatch: '
-        'expected ${asset.sha256}, got $digest',
-      );
+    await _exec(
+      ['tar', '-xf', archive, '-C', sourceDir.path],
+      name: 'extract olcrtc pinned source',
+    );
+    await _exec(
+      ['git', 'apply', _projectPath(_olcRtcPatchFile)],
+      workingDirectory: sourceDir.path,
+      name: 'patch olcrtc VK Calls',
+    );
+    final targetRoot = Directory(_projectPath(olcRtcBundledAssetRoot));
+    if (!targetRoot.existsSync()) {
+      targetRoot.createSync(recursive: true);
     }
-  }
 
-  stamp.parent.createSync(recursive: true);
-  await stamp.writeAsString(expectedStamp, flush: true);
+    final ndkBin = _resolveNdkBinDir();
+    for (final asset in olcRtcReleaseAssets.values) {
+      final arch = _androidArches[asset.cliArch];
+      if (arch == null) {
+        throw StateError('Unknown olcrtc Android arch ${asset.cliArch}');
+      }
+
+      final target = File(_projectPath(asset.bundledAssetPath));
+      target.parent.createSync(recursive: true);
+      if (target.existsSync()) {
+        await target.delete();
+      }
+
+      final env = <String, String>{
+        ...Platform.environment,
+        'GOOS': 'android',
+        'GOARCH': asset.goArch,
+        'CGO_ENABLED': '1',
+        'CC': _join(ndkBin.path, arch.toolchain),
+      };
+      if (asset.goArm != null) {
+        env['GOARM'] = asset.goArm!;
+      }
+
+      await _exec(
+        [
+          goExecutable,
+          'build',
+          '-buildvcs=false',
+          '-trimpath',
+          '-modfile=${_projectPath('tool', 'runtime_go_modules', 'olcrtc.mod')}',
+          '-ldflags=-s -w -checklinkname=0 -buildid=',
+          '-o',
+          target.path,
+          './cmd/olcrtc',
+        ],
+        environment: env,
+        workingDirectory: sourceDir.path,
+        name: 'build olcrtc Android ${asset.abi}',
+      );
+
+      final digest = sha256.convert(await target.readAsBytes()).toString();
+      if (digest != asset.sha256) {
+        throw StateError(
+          'olcrtc ${asset.abi} digest mismatch: '
+          'expected ${asset.sha256}, got $digest',
+        );
+      }
+    }
+
+    stamp.parent.createSync(recursive: true);
+    await stamp.writeAsString(expectedStamp, flush: true);
+  } finally {
+    await temporary.delete(recursive: true);
+  }
 }
 
 Future<void> _syncStormDnsAssets() async {
@@ -1084,6 +1106,7 @@ String _buildOlcRtcStamp() {
     'buildvcs=false',
     'ndk-$olcRtcPinnedNdkVersion',
     'modules:${_runtimeGoModuleDigest('olcrtc')}',
+    'patch:${sha256.convert(File(_projectPath(_olcRtcPatchFile)).readAsBytesSync())}',
     ...olcRtcReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
     ),

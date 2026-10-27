@@ -4,7 +4,8 @@
 исходников. `setup.dart` передаёт их через `go build -modfile`, чтобы получать
 исправления библиотек независимо от обновления исходного репозитория.
 Коммит источника, Go и NDK закреплены в соответствующем `*_release.dart`.
-OlcRTC собирается из `ghostlane-project/olcrtc` без локальных патчей; исходный
+OlcRTC собирается из `ghostlane-project/olcrtc` с локальным патчем
+`tool/patches/olcrtc-vkcalls-media-refresh.patch`; исходный
 module path `github.com/openlibrecommunity/olcrtc` сохранён самим Ghostlane.
 Новая зависимость `covert-dtls` закреплена на коммите, профиль DTLS остаётся выключенным.
 
@@ -20,7 +21,7 @@ module path `github.com/openlibrecommunity/olcrtc` сохранён самим G
 3. Пересобрать ARMv7, ARM64 и x86_64 с параметрами из `setup.dart`, записать
    SHA-256 двоичных файлов в `*_release.dart` и обновить `release.txt`.
    Строка `modules:` содержит SHA-256 объединённых байтов `.mod`, затем `.sum`;
-   изменение зависимостей тем самым инвалидирует кеш сборки.
+   строка `patch:` — SHA-256 патча. Изменение любого из них инвалидирует кеш сборки.
 4. Запустить `flutter test test/product/runtime` и проверить запуск/VPN на
    реальных Android-устройствах перед выпуском.
 

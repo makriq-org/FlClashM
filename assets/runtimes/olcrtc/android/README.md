@@ -5,7 +5,8 @@ dart setup.dart android --out runtime-assets
 ```
 
 Source: https://github.com/ghostlane-project/olcrtc (proofkit).
-The upstream source is built without local patches.
+The pinned source is built with `tool/patches/olcrtc-vkcalls-media-refresh.patch`.
+The patch digest is included in `release.txt`, so changing it invalidates the cache.
 
 The source commit is pinned in `lib/product/runtime/olcrtc_release.dart`.
 That contract also pins Go and Android NDK versions used for reproducible builds.
