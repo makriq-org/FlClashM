@@ -120,10 +120,16 @@ class ManualAccessDraft {
 
   void suspend(AccessControl draft) => _value ??= draft;
 
-  AccessControl restore(AccessControl fallback) {
+  AccessControl restore(AccessControl fallback, {AccessControl? viewSettings}) {
     final draft = _value ?? fallback;
     _value = null;
-    return draft;
+    return viewSettings == null
+        ? draft
+        : draft.copyWith(
+            sort: viewSettings.sort,
+            isFilterSystemApp: viewSettings.isFilterSystemApp,
+            isFilterNonInternetApp: viewSettings.isFilterNonInternetApp,
+          );
   }
 }
 

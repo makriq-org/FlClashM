@@ -71,7 +71,15 @@ void main() {
         ..suspend(profile);
       expect(draft.value, manual);
       expect(AccessControlSaveGuard().shouldConfirmExit(draftChanged: draft.value != const AccessControl()), isTrue);
-      expect(draft.restore(const AccessControl()), manual);
+      final restored = draft.restore(
+        const AccessControl(),
+        viewSettings: const AccessControl(sort: AccessSortType.time, isFilterSystemApp: false, isFilterNonInternetApp: false),
+      );
+      expect(restored.rejectList, manual.rejectList);
+      expect(restored.enable, manual.enable);
+      expect(restored.sort, AccessSortType.time);
+      expect(restored.isFilterSystemApp, isFalse);
+      expect(restored.isFilterNonInternetApp, isFalse);
       expect(draft.value, isNull);
       expect(draft.restore(profile), profile);
     });

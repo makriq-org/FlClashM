@@ -101,6 +101,7 @@ class _AccessViewState extends ConsumerState<AccessView>
             )
           : _manualDraft.restore(
               ref.read(vpnSettingProvider).accessControlProps,
+              viewSettings: old,
             );
       ref.read(accessControlStateProvider.notifier).value = effective;
     }
@@ -317,10 +318,19 @@ class _AccessViewState extends ConsumerState<AccessView>
   }
 
   Future<void> _importFormClipboard() async {
+    final ticket = _saveGuard.capture(ref.read(accessControlStateProvider));
     await globalState.safeRun(() async {
       final data = await Clipboard.getData('text/plain');
       final text = data?.text;
-      if (text == null) return;
+      if (!mounted ||
+          text == null ||
+          !_saveGuard.permits(
+            ticket,
+            currentDraft: ref.read(accessControlStateProvider),
+            managed: _managed.managed,
+            resolving: _resolvingProfile,
+          ))
+        return;
       final list = text.split('\n');
       ref
           .read(accessControlStateProvider.notifier)
