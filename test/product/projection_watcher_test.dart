@@ -7,13 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final failure in ['exception', 'missing acknowledgement', 'rejected']) {
-    test('host visibility retries $failure for the same backend', () async {
+    testWidgets('host visibility retries $failure without a new snapshot', (
+      tester,
+    ) async {
       var attempts = 0;
       final values = <bool>[];
+      final methods = <String>[];
       final core = CoreController.scoped(
         CoreLib(
           legacyInvoke: (method, data) async {
-            expect(method, 'setHostActive');
+            methods.add(method);
             values.add(data! as bool);
             if (attempts++ == 0) {
               if (failure == 'exception') {
@@ -25,39 +28,92 @@ void main() {
           },
         ),
       );
-      final visibility = HostVisibilityProjection();
-      Future<void> sync(String instance, {required bool visible}) =>
+      final errors = <Object>[];
+      final visibility = HostVisibilityProjection(onError: errors.add);
+      void sync(String instance, {required bool visible}) =>
           visibility.synchronize(instance, () => core.syncHostActive(visible));
-      await expectLater(sync('first', visible: true), throwsStateError);
-      await sync('first', visible: true);
-      await sync('first', visible: true); // Already acknowledged.
-      await sync('replacement', visible: false);
+      sync('first', visible: true);
+      await tester.pump();
+      await tester.pump();
+      expect(values, [true]);
+      expect(errors, hasLength(1));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(values, [true, true]);
+      sync('first', visible: true); // Already acknowledged.
+      sync('replacement', visible: false);
+      await tester.pump();
       expect(values, [true, true, false]);
+      expect(methods, everyElement('setHostActive'));
+      visibility.dispose();
     });
   }
 
-  test('host visibility waits for acknowledgement', () async {
-    final acknowledgement = Completer<bool>();
-    var calls = 0;
-    final core = CoreController.scoped(
-      CoreLib(
-        legacyInvoke: (_, _) {
-          calls++;
-          return acknowledgement.future;
-        },
-      ),
-    );
-    final visibility = HostVisibilityProjection();
-    var completed = false;
-    final pending = visibility
-        .synchronize('backend', () => core.syncHostActive(true))
-        .then((_) => completed = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(completed, isFalse);
-    acknowledgement.complete(true);
-    await pending;
-    await visibility.synchronize('backend', () => core.syncHostActive(true));
-    expect(calls, 1);
+  testWidgets(
+    'host visibility does not block projection while awaiting acknowledgement',
+    (tester) async {
+      final acknowledgement = Completer<bool>();
+      var calls = 0;
+      final core = CoreController.scoped(
+        CoreLib(
+          legacyInvoke: (_, _) {
+            calls++;
+            return acknowledgement.future;
+          },
+        ),
+      );
+      final visibility = HostVisibilityProjection()
+        ..synchronize('backend', () => core.syncHostActive(true));
+      await tester.pump();
+      expect(calls, 1);
+      // Snapshot work can continue while the RPC is still pending.
+      expect(acknowledgement.isCompleted, isFalse);
+      acknowledgement.complete(true);
+      await tester.pump();
+      visibility.synchronize('backend', () => core.syncHostActive(true));
+      expect(calls, 1);
+      visibility.dispose();
+    },
+  );
+
+  testWidgets('replacement and disposal cancel pending visibility retries', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final visibility = HostVisibilityProjection()
+      ..synchronize('old', () async {
+        calls.add('old');
+        throw StateError('unavailable');
+      });
+    await tester.pump();
+    visibility.synchronize('new', () async => calls.add('new'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(calls, ['old', 'new']);
+    visibility.synchronize('third', () async {
+      calls.add('third');
+      throw StateError('unavailable');
+    });
+    await tester.pump();
+    visibility.dispose();
+    await tester.pump(const Duration(seconds: 2));
+    expect(calls, ['old', 'new', 'third']);
+  });
+
+  testWidgets('replacement waits for an in-flight delivery', (tester) async {
+    final pending = Completer<void>();
+    final calls = <String>[];
+    final visibility = HostVisibilityProjection()
+      ..synchronize('old', () {
+        calls.add('old');
+        return pending.future;
+      })
+      ..synchronize('new', () async => calls.add('new'));
+    expect(calls, ['old']);
+    pending.complete();
+    await tester.pump();
+    expect(calls, ['old', 'new']);
+    visibility.dispose();
   });
 
   test('profile switches and new plans are reported once', () {

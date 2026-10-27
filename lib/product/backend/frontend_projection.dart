@@ -19,7 +19,10 @@ class FrontendProjection {
   final _watcher = ProjectionWatcher();
   void attach(ProviderContainer container) {
     _container = container;
-    _hostVisibility = HostVisibilityProjection();
+    _hostVisibility.dispose();
+    _hostVisibility = HostVisibilityProjection(
+      onError: (error) => commonPrint.log('Backend visibility: $error'),
+    );
     frontendSettingsStore.onSettled = () => unawaited(
       refresh().catchError((Object error) {
         commonPrint.log('Backend read-back: $error');
@@ -78,7 +81,7 @@ class FrontendProjection {
       }
       final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
       final instance = runtime['instanceId'] as String?;
-      await _hostVisibility.synchronize(instance, () async {
+      _hostVisibility.synchronize(instance, () async {
         // A replacement service starts with presentation events disabled.
         await c
             .read(coreHandlerProvider)
