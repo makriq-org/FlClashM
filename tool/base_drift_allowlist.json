@@ -6,6 +6,11 @@
   },
   "allowedBaseDrift": [
     {
+      "path": "lib/widgets/managed_setting.dart",
+      "bucket": "budget",
+      "reason": "Общая подпись единообразно объясняет управление настройками профиля и подписки."
+    },
+    {
       "path": "android/common/build.gradle.kts",
       "bucket": "budget",
       "reason": "Удаление Firebase SDK из общего Android-модуля является обязательным security-изменением форка."

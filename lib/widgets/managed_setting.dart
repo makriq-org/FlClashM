@@ -20,21 +20,43 @@ class ManagedSettingsHint extends ConsumerWidget {
     if (!managed) {
       return const SizedBox.shrink();
     }
+    return ManagedSettingsMessage(
+      message: context.appLocalizations.managedSettingsHint,
+    );
+  }
+}
+
+/// Shared caption for settings controlled by a profile or subscription.
+class ManagedSettingsMessage extends StatelessWidget {
+  const ManagedSettingsMessage({
+    super.key,
+    required this.message,
+    this.warning = false,
+  });
+
+  final String message;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning
+        ? context.colorScheme.error
+        : context.colorScheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GlyphIcon(
-            AppGlyphs.info,
+            warning ? AppGlyphs.warning : AppGlyphs.info,
             size: 18,
-            color: context.colorScheme.onSurfaceVariant,
+            color: color,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              context.appLocalizations.managedSettingsHint,
-              style: context.listCaptionStyle,
+              message,
+              style: context.listCaptionStyle.copyWith(color: color),
             ),
           ),
         ],

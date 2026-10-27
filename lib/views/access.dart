@@ -599,23 +599,12 @@ class _AccessViewState extends ConsumerState<AccessView>
                 count: valueList.length,
                 locked: locked,
               ),
+              if (_managed.managed ||
+                  _managed.notice != ProfileManagedAccessNotice.none)
+                const SizedBox(height: 12),
               if (_managed.managed)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      GlyphIcon(AppGlyphs.lock, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          context.appLocalizations.accessControlProfileManaged,
-                        ),
-                      ),
-                    ],
-                  ),
+                ManagedSettingsMessage(
+                  message: context.appLocalizations.accessControlProfileManaged,
                 ),
               if (_managed.notice != ProfileManagedAccessNotice.none)
                 ProductAccessControlNotice(
