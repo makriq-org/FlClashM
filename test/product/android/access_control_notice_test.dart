@@ -30,7 +30,7 @@ void main() {
       final warning = tester.widget<Text>(find.text('VPN state unavailable'));
       final context = tester.element(find.text('Profile controls this'));
       expect(managed.style, context.listCaptionStyle);
-      expect(warning.style?.color, Theme.of(context).colorScheme.error);
+      expect(warning.style?.color, Theme.of(context).colorScheme.warning);
       expect(
         find.byWidgetPredicate(
           (widget) => widget is GlyphIcon && widget.glyph == AppGlyphs.info,

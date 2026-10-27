@@ -40,7 +40,7 @@ class ManagedSettingsMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = warning
-        ? context.colorScheme.error
+        ? context.colorScheme.warning
         : context.colorScheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
