@@ -30,6 +30,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   bool _resolvingProfile = false;
   ProfileManagedAccess _managed = ProfileManagedAccess.none;
   late final ProfileManagedAccessController _managedController;
+  final _saveGuard = AccessControlSaveGuard();
 
   final _completer = Completer();
 
@@ -75,6 +76,7 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   Future<void> _refreshManaged() async {
     if (!mounted || !_isInit || !system.isAndroid) return;
+    _saveGuard.invalidate();
     setState(() => _resolvingProfile = true);
     final resolved = await _managedController.refresh(
       isRunning: ref.read(runTimeProvider) != null,
@@ -211,16 +213,17 @@ class _AccessViewState extends ConsumerState<AccessView>
   }
 
   Future<void> _handleBack() async {
+    final ticket = _saveGuard.capture(ref.read(accessControlStateProvider));
     final appLocalizations = context.appLocalizations;
     final res = await dialogs.showMessage(
       title: appLocalizations.tip,
       message: TextSpan(text: appLocalizations.saveChanges),
     );
-    if (res == null) {
+    if (!mounted || res == null) {
       return;
     }
     if (res) {
-      _handleSave();
+      if (!_handleSave(ticket: ticket)) return;
     }
     if (mounted) {
       Navigator.of(context).pop();
@@ -249,8 +252,17 @@ class _AccessViewState extends ConsumerState<AccessView>
     );
   }
 
-  void _handleSave() {
+  bool _handleSave({(int, AccessControl)? ticket}) {
+    if (!mounted) return false;
     final accessControl = ref.read(accessControlStateProvider);
+    if (!_saveGuard.permits(
+      ticket ?? _saveGuard.capture(accessControl),
+      currentDraft: accessControl,
+      managed: _managed.managed,
+      resolving: _resolvingProfile,
+    )) {
+      return false;
+    }
     ref
         .read(vpnSettingProvider.notifier)
         .update(
@@ -258,6 +270,7 @@ class _AccessViewState extends ConsumerState<AccessView>
             accessControlProps: _getRealAccessControlProps(accessControl),
           ),
         );
+    return true;
   }
 
   Future<void> _exportToClipboard() async {
@@ -533,7 +546,7 @@ class _AccessViewState extends ConsumerState<AccessView>
         confirmationAction: hasChanges
             ? IconButtonData(
                 glyph: AppGlyphs.check,
-                onPressed: _handleSave,
+                onPressed: () => _handleSave(),
                 tooltip: context.appLocalizations.save,
               )
             : null,

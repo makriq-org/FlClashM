@@ -53,6 +53,24 @@ class _FakeRuntimeAccessPlatform implements RuntimeAccessPlatformBridge {
 }
 
 void main() {
+  group('AccessControlSaveGuard', () {
+    const manual = AccessControl(enable: true, rejectList: ['com.manual']);
+    const profile = AccessControl(enable: true, rejectList: ['com.profile']);
+
+    test('rejects a confirmation after ownership refresh or draft replacement', () {
+      final guard = AccessControlSaveGuard();
+      final ticket = guard.capture(manual);
+      expect(guard.permits(ticket, currentDraft: manual, managed: false, resolving: false), isTrue);
+      expect(guard.permits(ticket, currentDraft: profile, managed: false, resolving: false), isFalse);
+      expect(guard.permits(ticket, currentDraft: manual, managed: true, resolving: false), isFalse);
+      expect(guard.permits(ticket, currentDraft: manual, managed: false, resolving: true), isFalse);
+      guard.invalidate();
+      expect(guard.permits(ticket, currentDraft: manual, managed: false, resolving: false), isFalse);
+      final fresh = guard.capture(manual);
+      expect(guard.permits(fresh, currentDraft: manual, managed: false, resolving: false), isTrue);
+    });
+  });
+
   group('Android applied VPN options', () {
     test(
       'reads profile include and exclude lists from the Android snapshot',

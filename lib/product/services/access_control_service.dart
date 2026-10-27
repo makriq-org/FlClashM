@@ -112,6 +112,26 @@ class ProfileManagedAccess {
 
 typedef ReadProfileAccessControl = Future<AccessControl?> Function();
 
+/// Invalidates pending confirmations whenever the effective VPN owner changes.
+class AccessControlSaveGuard {
+  int _epoch = 0;
+
+  void invalidate() => _epoch++;
+
+  (int, AccessControl) capture(AccessControl draft) => (_epoch, draft);
+
+  bool permits(
+    (int, AccessControl) ticket, {
+    required AccessControl currentDraft,
+    required bool managed,
+    required bool resolving,
+  }) =>
+      !managed &&
+      !resolving &&
+      ticket.$1 == _epoch &&
+      ticket.$2 == currentDraft;
+}
+
 class ProfileManagedAccessController {
   ProfileManagedAccessController({
     required this.service,
