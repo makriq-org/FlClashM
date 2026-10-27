@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -175,6 +176,37 @@ AndroidArch _requireArch(String name) {
   return arch;
 }
 
+// Go's pidfd probe can be intercepted by Android's native signal handler in a
+// c-shared process. Android 10/11 seccomp kills the process instead of returning
+// an error. Use Go's PID fallback for Android builds until the toolchain fixes it.
+Future<void> _withAndroidGoOverlay(Future<void> Function(String) build) async {
+  final result = await Process.run('go', ['env', 'GOROOT']);
+  if (result.exitCode != 0) {
+    throw StateError('Cannot locate Go toolchain: ${result.stderr}');
+  }
+  final source = File(_join(
+    (result.stdout as String).trim(), 'src', 'os', 'pidfd_linux.go',
+  ));
+  final contents = source.readAsStringSync();
+  const marker = 'func checkPidfd() error {';
+  if (marker.allMatches(contents).length != 1) {
+    throw StateError('Go pidfd implementation changed; review Android workaround');
+  }
+  final directory = Directory.systemTemp.createTempSync('flclashm-go-overlay-');
+  try {
+    final patched = File(_join(directory.path, 'pidfd_linux.go'))
+      ..writeAsStringSync(contents.replaceFirst(
+        marker,
+        '$marker\n\tif runtime.GOOS == "android" { return syscall.ENOSYS }',
+      ));
+    final overlay = File(_join(directory.path, 'overlay.json'))
+      ..writeAsStringSync(jsonEncode({'Replace': {source.path: patched.path}}));
+    await build(overlay.path);
+  } finally {
+    directory.deleteSync(recursive: true);
+  }
+}
+
 Future<void> _buildAndroidCore({
   required List<AndroidArch> arches,
   required String coreVersion,
@@ -222,10 +254,11 @@ Future<void> _buildAndroidCore({
     }
 
     final outFile = _join(abiDir.path, 'libclash.so');
-    await _exec(
+    await _withAndroidGoOverlay((overlay) => _exec(
       [
         'go',
         'build',
+        '-overlay=$overlay',
         '-mod=vendor',
         '-ldflags=-w -s -X github.com/metacubex/mihomo/constant.Version=$coreVersion',
         '-tags=with_gvisor,cmfa',
@@ -236,7 +269,7 @@ Future<void> _buildAndroidCore({
       environment: env,
       workingDirectory: _projectPath(_coreDir),
       name: 'build android core ${arch.abi}',
-    );
+    ));
 
     _collectHeaders(
       abiDir: abiDir,

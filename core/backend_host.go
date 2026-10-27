@@ -39,6 +39,23 @@ func backendTLSConfig(roots *x509.CertPool) *tls.Config {
 	return &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
 }
 
+func addHostCertificates(roots *x509.CertPool, certificates []string) error {
+	for _, encoded := range certificates {
+		der, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return errors.New("invalid host certificate")
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			// Android may trust older certificates that Go cannot parse. Do not
+			// let one incompatible certificate prevent the backend from starting.
+			continue
+		}
+		roots.AddCert(cert)
+	}
+	return nil
+}
+
 // Android's service process is the only composition root. The UI cannot supply
 // executable paths, capabilities or compiled plans to the application API.
 var applicationMu sync.Mutex
@@ -173,16 +190,8 @@ func openApplicationBackend(options backendHostOptions) error {
 	if roots == nil {
 		roots = x509.NewCertPool()
 	}
-	for _, encoded := range options.Certificates {
-		der, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			return errors.New("invalid host certificate")
-		}
-		cert, err := x509.ParseCertificate(der)
-		if err != nil {
-			return err
-		}
-		roots.AddCert(cert)
+	if err := addHostCertificates(roots, options.Certificates); err != nil {
+		return err
 	}
 	client := &http.Client{Timeout: 2 * time.Minute, Transport: &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {

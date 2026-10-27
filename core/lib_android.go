@@ -141,6 +141,12 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	}
 	tunCfg := currentConfig.General.Tun
 	runLock.Unlock()
+	// Android 10 and earlier reject SO_BINDTODEVICE for an unprivileged app.
+	// The system and mixed stacks require it to route TCP back into the TUN.
+	if version.Load() <= 29 && (tunCfg.Stack == constant.TunSystem || tunCfg.Stack == constant.TunMixed) {
+		log.Warnln("Android API %d requires gVisor TUN stack", version.Load())
+		tunCfg.Stack = constant.TunGvisor
+	}
 	tunLock.Lock()
 	defer tunLock.Unlock()
 	now := time.Now()
