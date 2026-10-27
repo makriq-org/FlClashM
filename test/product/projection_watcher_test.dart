@@ -116,6 +116,52 @@ void main() {
     visibility.dispose();
   });
 
+  test('lifecycle visibility waits for restoration acknowledgement', () async {
+    final first = Completer<bool>();
+    final applied = <bool>[];
+    final sent = <bool>[];
+    final core = CoreController.scoped(
+      CoreLib(
+        legacyInvoke: (_, data) async {
+          final visible = data! as bool;
+          sent.add(visible);
+          if (visible) await first.future;
+          applied.add(visible);
+          return true;
+        },
+      ),
+    );
+    final restoration = core.syncHostActive(true);
+    await Future<void>.delayed(Duration.zero);
+    core.setHostActive(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(sent, [true]);
+    first.complete(true);
+    await restoration;
+    await Future<void>.delayed(Duration.zero);
+    expect(sent, [true, false]);
+    expect(applied, [true, false]);
+  });
+
+  test('a failed visibility delivery does not block the next write', () async {
+    var attempts = 0;
+    final sent = <bool>[];
+    final core = CoreController.scoped(
+      CoreLib(
+        legacyInvoke: (_, data) async {
+          sent.add(data! as bool);
+          if (attempts++ == 0) throw StateError('unavailable');
+          return true;
+        },
+      ),
+    );
+    final failed = core.syncHostActive(true);
+    final next = core.syncHostActive(false);
+    await expectLater(failed, throwsStateError);
+    await next;
+    expect(sent, [true, false]);
+  });
+
   test('profile switches and new plans are reported once', () {
     final watcher = ProjectionWatcher();
     ProjectionChange observe(String? selected, String? applied, int? plan) =>
