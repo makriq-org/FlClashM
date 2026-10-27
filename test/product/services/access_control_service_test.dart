@@ -66,8 +66,9 @@ void main() {
     test('retains manual edits across managed updates and restores them', () {
       final draft = ManualAccessDraft();
       expect(draft.value, isNull);
-      draft.suspend(manual);
-      draft.suspend(profile);
+      draft
+        ..suspend(manual)
+        ..suspend(profile);
       expect(draft.value, manual);
       expect(AccessControlSaveGuard().shouldConfirmExit(draftChanged: draft.value != const AccessControl()), isTrue);
       expect(draft.restore(const AccessControl()), manual);
