@@ -8,10 +8,13 @@ ROOT = Path(__file__).parents[2]
 
 class RunnerPolicyTest(unittest.TestCase):
     def test_workflows_use_github_hosted_runners(self):
-        for path in (ROOT / '.github/workflows').glob('*.yaml'):
+        """Require explicit GitHub-hosted runners in every workflow."""
+        workflows = ROOT / '.github/workflows'
+        for path in [*workflows.glob('*.yaml'), *workflows.glob('*.yml')]:
             content = path.read_text()
-            runners = re.findall(r'^    runs-on: (.+)$', content, re.MULTILINE)
-            self.assertTrue(all(value == 'ubuntu-latest' for value in runners), str(path))
+            runners = re.findall(r'^    runs-on:[ \t]*([^\n]*)$', content, re.MULTILINE)
+            self.assertTrue(runners, str(path))
+            self.assertTrue(all(value.strip() == 'ubuntu-latest' for value in runners), str(path))
             self.assertNotIn('blacksmith', content.lower(), str(path))
 
     def test_sdkmanager_success_is_not_overridden_by_yes_sigpipe(self):
