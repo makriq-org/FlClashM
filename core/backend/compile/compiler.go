@@ -17,6 +17,10 @@ import (
 	"core/backend/authoring"
 )
 
+// accessControlSettingKey mirrors the Dart owned-setting key. Taking it over
+// makes the profile package rules inert without discarding the manual list.
+const accessControlSettingKey = "vpn.access-control"
+
 type RawProfile struct {
 	SourceMissing bool   `json:"sourceMissing,omitempty"`
 	ID            string `json:"id"`
@@ -214,10 +218,14 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	diagnostics := []string{}
 	var profileAccess Object
 	if android {
-		var err error
-		profileAccess, err = c.splitPackages(ctx, config, profileID, &diagnostics)
-		if err != nil {
-			return Prepared{}, err
+		if ownsSetting(settings, accessControlSettingKey) {
+			stripPackageRules(config)
+		} else {
+			var err error
+			profileAccess, err = c.splitPackages(ctx, config, profileID, &diagnostics)
+			if err != nil {
+				return Prepared{}, err
+			}
 		}
 	}
 	nodes := []Node{}
@@ -508,6 +516,33 @@ func splitValues(value string) any {
 	}
 	return value
 }
+func ownsSetting(settings Object, key string) bool {
+	for _, value := range list(object(settings["appSetting"])["ownedSettings"]) {
+		if text(value) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func stripPackageRules(config Object) {
+	if config["tun"] == nil {
+		return
+	}
+	tun := object(config["tun"])
+	for _, key := range []string{
+		"include-package",
+		"exclude-package",
+		"include-package-file",
+		"include-package-url",
+		"exclude-package-file",
+		"exclude-package-url",
+	} {
+		delete(tun, key)
+	}
+	config["tun"] = tun
+}
+
 func selfBypass(access Object, self []string) Object {
 	access = copyObject(access)
 	if len(self) == 0 {

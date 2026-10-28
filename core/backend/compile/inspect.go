@@ -27,15 +27,9 @@ func (c *Compiler) Inspect(ctx context.Context, source, profileID string) (Inspe
 		return Inspection{}, err
 	}
 	diagnostics := []string{}
-	var access Object
-	if c.Capabilities.Platform == "android" {
-		access, err = c.splitPackages(ctx, copyObject(config), profileID, &diagnostics)
-		if err != nil {
-			return Inspection{}, err
-		}
-		if access != nil {
-			access = c.Policy.AccessControl(access, c.Capabilities)
-		}
+	access, err := c.inspectAccessControl(ctx, config, profileID, &diagnostics)
+	if err != nil {
+		return Inspection{}, err
 	}
 	result := Inspection{Config: config, AccessControl: access, Diagnostics: diagnostics}
 	fillInspection(&result, source)
@@ -62,6 +56,14 @@ func (c *Compiler) InspectProfile(ctx context.Context, input []byte) (Inspection
 			_, err = c.applyKeyOverrides(result.Config, request.Settings, request.Profile.Metadata)
 		}
 		result.Diagnostics = []string{}
+		if err == nil {
+			result.AccessControl, err = c.inspectAccessControl(
+				ctx,
+				result.Config,
+				request.Profile.ID,
+				&result.Diagnostics,
+			)
+		}
 	} else {
 		result, err = c.Inspect(ctx, request.Profile.Text, request.Profile.ID)
 	}
@@ -74,6 +76,28 @@ func (c *Compiler) InspectProfile(ctx context.Context, input []byte) (Inspection
 		fillInspection(&result, source)
 	}
 	return result, err
+}
+
+// inspectAccessControl reports the rules the profile declares. Ownership is a
+// runtime decision: the editor still needs the declaration to offer handing
+// the setting back to the provider.
+func (c *Compiler) inspectAccessControl(
+	ctx context.Context,
+	config Object,
+	profileID string,
+	diagnostics *[]string,
+) (Object, error) {
+	if c.Capabilities.Platform != "android" {
+		return nil, nil
+	}
+	access, err := c.splitPackages(ctx, copyObject(config), profileID, diagnostics)
+	if err != nil {
+		return nil, err
+	}
+	if access != nil {
+		access = c.Policy.AccessControl(access, c.Capabilities)
+	}
+	return access, nil
 }
 
 func fillInspection(result *Inspection, source string) {

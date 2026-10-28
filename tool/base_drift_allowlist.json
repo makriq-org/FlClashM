@@ -2161,6 +2161,21 @@
       "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."
     },
     {
+      "path": "lib/providers/actions/managed.dart",
+      "bucket": "budget",
+      "reason": "Смена владельца правил доступа пересобирает runtime, потому что settings.patch не применяет ownedSettings."
+    },
+    {
+      "path": "lib/providers/state/managed.dart",
+      "bucket": "budget",
+      "reason": "Реестр управляемых настроек учитывает правила доступа, объявленные профилем, для блокировки и возврата управления."
+    },
+    {
+      "path": "lib/models/managed_settings.dart",
+      "bucket": "budget",
+      "reason": "Ключ vpn.access-control включает профильные правила доступа в общий реестр управляемых настроек."
+    },
+    {
       "path": "lib/providers/actions/setup.dart",
       "bucket": "budget",
       "reason": "Пользовательские действия нового UI направлены в Go API v1, включая импорт, ресурсы, настройки и runtime; Dart не исполняет runtime-политику."

@@ -2,6 +2,7 @@ package compile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -54,6 +55,65 @@ func TestAndroidPackageSelectorsAndPrivateSources(t *testing.T) {
 		t.Fatal("required package source failure ignored")
 	}
 }
+func TestOwnedAccessControlKeepsManualRules(t *testing.T) {
+	compiler := Compiler{
+		Capabilities: Capabilities{
+			Platform:     "android",
+			SelfPackages: []string{"com.makriq.flclash"},
+		},
+		Validate: func(context.Context, Object) error { return nil },
+	}
+	profile := &RawProfile{ID: "p", Text: "tun: {include-package: [com.example.one]}"}
+	settings := Object{
+		"appSetting": Object{"ownedSettings": []any{accessControlSettingKey}},
+		"vpnProps": Object{
+			"accessControl": Object{
+				"enable":     true,
+				"mode":       "rejectSelected",
+				"rejectList": []any{"com.manual"},
+			},
+		},
+	}
+
+	p := prepared(t, compiler, Input{Version: 1, Profile: profile, Settings: settings})
+	access := object(object(p.CoreState["vpn-props"])["accessControl"])
+	if !reflect.DeepEqual(access["rejectList"], []any{"com.manual", "com.makriq.flclash"}) {
+		t.Fatalf("manual rules were replaced: %#v", access)
+	}
+	if p.ProfileAccessControl != nil {
+		t.Fatalf("owned profile rules leaked into the plan: %#v", p.ProfileAccessControl)
+	}
+	if object(p.Config["tun"])["include-package"] != nil {
+		t.Fatalf("profile package rules stayed in the engine config: %#v", p.Config["tun"])
+	}
+
+	settings["appSetting"] = Object{}
+	p = prepared(t, compiler, Input{Version: 1, Profile: profile, Settings: settings})
+	access = object(object(p.CoreState["vpn-props"])["accessControl"])
+	if !reflect.DeepEqual(access["acceptList"], []any{"com.example.one"}) || p.ProfileAccessControl == nil {
+		t.Fatalf("profile rules stopped applying without ownership: %#v", access)
+	}
+}
+
+func TestCustomInspectionReportsDeclaredAccessControl(t *testing.T) {
+	compiler, request := customRequest(t)
+	request.Profile.Metadata["customConfig"] = Object{
+		"tun": Object{"include-package": []any{"com.example.one"}},
+	}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := compiler.InspectProfile(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access := object(inspection.AccessControl)
+	if !reflect.DeepEqual(access["acceptList"], []any{"com.example.one"}) {
+		t.Fatalf("custom profile rules were not inspected: %#v", access)
+	}
+}
+
 func TestBundledAutoStrategyAndLegacyAliases(t *testing.T) {
 	source := `proxies: [{name: Bye, type: byedpi, selection: {concurrency: 2, foreground-timeout: 10s, background: false}, strategy-test: {resolver: system, concurrency: 3}}]`
 	nodes, err := (&ExternalCompiler{}).Compile(context.Background(), mustProfile(t, source), defaults(), "")

@@ -172,6 +172,15 @@ class AccessControlService {
         sort: accessControl.sort,
       );
 
+  /// View filters and the app's own builds never enter the saved VPN policy.
+  AccessControl normalizeManualAccess(AccessControl access) =>
+      access.copyWithNewList(
+        access.currentList
+            .where((package) => !selfPackageNames.contains(package))
+            .toList()
+          ..sort(),
+      );
+
   AccessControlEditorState setQuery(
     AccessControlEditorState state,
     String query,

@@ -45,6 +45,9 @@ const managedClashKeys = {
 
 String clashSettingKey(String yamlKey) => 'clash.$yamlKey';
 
+/// Profile package rules and the manual Android VPN list are one setting.
+const accessControlSettingKey = 'vpn.access-control';
+
 /// The lockable keys of each settings page, for its hint.
 const generalPageKeys = {
   'app.minimizeOnExit',

@@ -4,6 +4,7 @@ import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/plugins/app.dart';
+import 'package:flclashx/product/services/product_services.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -44,9 +45,21 @@ class _AccessViewState extends ConsumerState<AccessView>
       _pinList();
     });
     ref.listenManual(
-      accessControlStateProvider.select((state) => state.mode),
+      accessControlViewProvider.select((state) => state.mode),
       (_, _) => _pinList(),
     );
+    ref.listenManual(settingLockedProvider(accessControlSettingKey), (
+      previous,
+      next,
+    ) {
+      if (next && previous == false) {
+        ref.read(accessControlStateProvider.notifier).value = ref
+            .read(vpnSettingProvider)
+            .accessControlProps
+            .copyWith();
+        _pinList();
+      }
+    });
     _completer.complete(_loadPackages());
   }
 
@@ -94,7 +107,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       return;
     }
     setState(() {
-      _pinedList = ref.read(accessControlStateProvider).currentList;
+      _pinedList = ref.read(accessControlViewProvider).currentList;
     });
   }
 
@@ -179,35 +192,14 @@ class _AccessViewState extends ConsumerState<AccessView>
     }
   }
 
-  AccessControlProps _getRealAccessControlProps(
-    AccessControlProps accessControl,
-  ) {
-    final packages = ref.read(packagesProvider);
-    if (packages.isEmpty) {
-      return accessControl;
-    }
-    final viewPackageNames = packages
-        .whereVisible(
-          isFilterSystemApp: accessControl.isFilterSystemApp,
-          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
-        )
-        .map((item) => item.packageName)
-        .toSet();
-    return accessControl.copyWithNewList(
-      accessControl.currentList
-          .where((item) => viewPackageNames.contains(item))
-          .toList()
-        ..sort(),
-    );
-  }
-
   void _handleSave() {
     final accessControl = ref.read(accessControlStateProvider);
     ref
         .read(vpnSettingProvider.notifier)
         .update(
           (state) => state.copyWith(
-            accessControlProps: _getRealAccessControlProps(accessControl),
+            accessControlProps: productServices.accessControl
+                .normalizeManualAccess(accessControl),
           ),
         );
   }
@@ -215,7 +207,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   Future<void> _exportToClipboard() async {
     await globalState.safeRun(() {
       final currentList = ref.read(
-        accessControlStateProvider.select((state) => state.currentList),
+        accessControlViewProvider.select((state) => state.currentList),
       );
       Clipboard.setData(ClipboardData(text: currentList.join('\n')));
     });
@@ -226,40 +218,57 @@ class _AccessViewState extends ConsumerState<AccessView>
       final data = await Clipboard.getData('text/plain');
       final text = data?.text;
       if (text == null) return;
-      final list = text.split('\n');
+      final list = text
+          .split('\n')
+          .where((name) => !selfPackageNames.contains(name));
       ref
           .read(accessControlStateProvider.notifier)
           .update((state) => state.copyWithNewList(list.toSet().toList()));
     });
   }
 
+  void _returnToProvider() {
+    ref
+        .read(managedSettingsActionProvider.notifier)
+        .release(accessControlSettingKey);
+  }
+
   List<CommonPopupMenuItem> _buildMenuItems(
     BuildContext context, {
     required bool enable,
+    required bool locked,
+    required bool releasable,
   }) {
     final appLocalizations = context.appLocalizations;
     return [
-      CommonPopupMenuItem(
-        glyph: AppGlyphs.toggle,
-        label: appLocalizations.accessControl,
-        subItems: [
-          CommonPopupMenuItem(
-            label: appLocalizations.turnOn,
-            checked: enable,
-            onPressed: () => _handleEnable(true),
-          ),
-          CommonPopupMenuItem(
-            label: appLocalizations.turnOff,
-            checked: !enable,
-            onPressed: () => _handleEnable(false),
-          ),
-        ],
-      ),
+      if (!locked)
+        CommonPopupMenuItem(
+          glyph: AppGlyphs.toggle,
+          label: appLocalizations.accessControl,
+          subItems: [
+            CommonPopupMenuItem(
+              label: appLocalizations.turnOn,
+              checked: enable,
+              onPressed: () => _handleEnable(true),
+            ),
+            CommonPopupMenuItem(
+              label: appLocalizations.turnOff,
+              checked: !enable,
+              onPressed: () => _handleEnable(false),
+            ),
+          ],
+        ),
       CommonPopupMenuItem(
         glyph: AppGlyphs.sliders,
         label: appLocalizations.settings,
         onPressed: _handleToSetting,
       ),
+      if (releasable)
+        CommonPopupMenuItem(
+          glyph: AppGlyphs.lock,
+          label: appLocalizations.returnToProvider,
+          onPressed: _returnToProvider,
+        ),
       CommonPopupMenuItem(
         glyph: AppGlyphs.moreCircle,
         label: appLocalizations.action,
@@ -269,11 +278,12 @@ class _AccessViewState extends ConsumerState<AccessView>
             label: appLocalizations.clipboardExport,
             onPressed: _exportToClipboard,
           ),
-          CommonPopupMenuItem(
-            glyph: AppGlyphs.paste,
-            label: appLocalizations.clipboardImport,
-            onPressed: _importFormClipboard,
-          ),
+          if (!locked)
+            CommonPopupMenuItem(
+              glyph: AppGlyphs.paste,
+              label: appLocalizations.clipboardImport,
+              onPressed: _importFormClipboard,
+            ),
         ],
       ),
     ];
@@ -357,12 +367,15 @@ class _AccessViewState extends ConsumerState<AccessView>
           style: TextStyle(color: context.colorScheme.onSurfaceVariant),
         ),
         actions: [
-          SurfaceScope(
-            level: level,
-            child: TonalButton(
-              size: TonalButtonSize.compact,
-              label: appLocalizations.turnOn,
-              onPressed: () => _handleEnable(true),
+          ManagedSetting(
+            settingKey: accessControlSettingKey,
+            child: SurfaceScope(
+              level: level,
+              child: TonalButton(
+                size: TonalButtonSize.compact,
+                label: appLocalizations.turnOn,
+                onPressed: () => _handleEnable(true),
+              ),
             ),
           ),
         ],
@@ -407,26 +420,49 @@ class _AccessViewState extends ConsumerState<AccessView>
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(loadingProvider(LoadingTag.access));
+    final declared = ref.watch(profileDeclaredAccessProvider);
     final query = SearchQuery(ref.watch(queryProvider(QueryTag.access)));
-    final packages = ref.watch(packagesProvider);
-    final accessControl = ref.watch(accessControlStateProvider);
+    final packages = ref
+        .watch(packagesProvider)
+        .where((package) => !selfPackageNames.contains(package.packageName))
+        .toList();
+    final accessControl = ref.watch(accessControlViewProvider);
+    final editor = ref.watch(accessControlStateProvider);
+    final locked = ref.watch(settingLockedProvider(accessControlSettingKey));
+    final releasable = ref.watch(
+      settingReleasableProvider(accessControlSettingKey),
+    );
+    final resolvingProfile =
+        system.isAndroid && declared.isLoading && !declared.hasValue;
+    final visibleNames = packages
+        .whereVisible(
+          isFilterSystemApp: accessControl.isFilterSystemApp,
+          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
+        )
+        .map((package) => package.packageName)
+        .toSet();
+    final selectedNames = accessControl.currentList.toSet();
     final viewPackages = packages
         .getViewList(
-          pinedList: _pinedList ?? [],
+          pinedList: _pinedList ?? accessControl.currentList,
           sortType: accessControl.sort,
-          isFilterNonInternetApp: accessControl.isFilterNonInternetApp,
-          isFilterSystemApp: accessControl.isFilterSystemApp,
+          isFilterNonInternetApp: false,
+          isFilterSystemApp: false,
+        )
+        .where(
+          (package) =>
+              visibleNames.contains(package.packageName) ||
+              selectedNames.contains(package.packageName),
         )
         .whereMatches(query, (package) => [package.label, package.packageName])
         .toList();
-    final mode = accessControl.mode;
-    final currentList = accessControl.currentList;
     final viewPackageNameList = viewPackages.map((e) => e.packageName).toList();
-    final valueList = currentList.intersection(viewPackageNameList);
+    final valueList = selectedNames.intersection(viewPackageNameList.toSet());
     final needsInstalledAppsPermission =
         packages.isEmpty && !_installedAppsPermissionGranted;
     final selectAllAction =
-        accessControl.enable &&
+        !locked &&
+            accessControl.enable &&
             !needsInstalledAppsPermission &&
             viewPackageNameList.isNotEmpty
         ? _buildSelectAllAction(
@@ -434,13 +470,13 @@ class _AccessViewState extends ConsumerState<AccessView>
             allValueList: viewPackageNameList,
           )
         : null;
-    final hasChanges = ref.watch(
-      vpnSettingProvider.select(
-        (state) =>
-            _getRealAccessControlProps(state.accessControlProps) !=
-            _getRealAccessControlProps(accessControl),
-      ),
+    final manual = ref.watch(
+      vpnSettingProvider.select((state) => state.accessControlProps),
     );
+    final service = productServices.accessControl;
+    final hasChanges =
+        service.normalizeManualAccess(manual) !=
+        service.normalizeManualAccess(editor);
     return CommonPopScope(
       onPop: hasChanges
           ? (_) {
@@ -451,49 +487,65 @@ class _AccessViewState extends ConsumerState<AccessView>
       child: CommonScaffold(
         isLoading: isLoading,
         searchState: AppBarSearchState(onSearch: _onSearch),
-        searchActions: [?selectAllAction],
+        searchActions: resolvingProfile ? const [] : [?selectAllAction],
         title: context.appLocalizations.appAccessControl,
-        confirmationAction: hasChanges
+        confirmationAction: hasChanges && !resolvingProfile
             ? IconButtonData(
                 glyph: AppGlyphs.check,
                 onPressed: _handleSave,
                 tooltip: context.appLocalizations.save,
               )
             : null,
-        menuItems: [
-          ..._buildMenuItems(context, enable: accessControl.enable),
-          if (selectAllAction != null)
-            CommonPopupMenuItem(
-              glyph: selectAllAction.glyph,
-              label: selectAllAction.tooltip!,
-              onPressed: selectAllAction.onPressed,
-            ),
-        ],
-        body: AppBarClearance(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildBannerBar(
-                enable: accessControl.enable,
-                mode: mode,
-                count: valueList.length,
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: needsInstalledAppsPermission
-                    ? _buildInstalledAppsPermissionStatus()
-                    : DisabledMask(
-                        status: !accessControl.enable,
-                        child: _buildContent(
-                          packages: viewPackages,
-                          selected: valueList.toSet(),
-                          isSearching: query.isNotEmpty,
-                        ),
+        menuItems: resolvingProfile
+            ? const []
+            : [
+                ..._buildMenuItems(
+                  context,
+                  enable: accessControl.enable,
+                  locked: locked,
+                  releasable: releasable,
+                ),
+                if (selectAllAction != null)
+                  CommonPopupMenuItem(
+                    glyph: selectAllAction.glyph,
+                    label: selectAllAction.tooltip!,
+                    onPressed: selectAllAction.onPressed,
+                  ),
+              ],
+        body: resolvingProfile
+            ? const Center(child: CommonCircleLoading.page())
+            : AppBarClearance(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildBannerBar(
+                      enable: accessControl.enable,
+                      mode: accessControl.mode,
+                      count: valueList.length,
+                    ),
+                    if (locked)
+                      const ManagedSettingsHint(
+                        keys: {accessControlSettingKey},
                       ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: needsInstalledAppsPermission
+                          ? _buildInstalledAppsPermissionStatus()
+                          : ManagedSetting(
+                              settingKey: accessControlSettingKey,
+                              child: DisabledMask(
+                                status: !accessControl.enable,
+                                child: _buildContent(
+                                  packages: viewPackages,
+                                  selected: selectedNames,
+                                  isSearching: query.isNotEmpty,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -531,7 +583,7 @@ class PackageListItem extends StatelessWidget {
   }
 }
 
-class AccessControlPanel extends StatelessWidget {
+class AccessControlPanel extends ConsumerWidget {
   const AccessControlPanel({super.key});
 
   static ConfigWriter<T> _writer<T>(
@@ -543,31 +595,33 @@ class AccessControlPanel extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-      ).copyWith(top: context.contentTopPadding, bottom: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 16)
+          .copyWith(top: context.contentTopPadding, bottom: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           generateSection(
             items: [
-              ConfigOptionsItem<AccessControlMode>(
-                title: (l) => l.mode,
-                options: AccessControlMode.values,
-                textBuilder: (mode) => switch (mode) {
-                  AccessControlMode.acceptSelected =>
-                    appLocalizations.whitelistMode,
-                  AccessControlMode.rejectSelected =>
-                    appLocalizations.blacklistMode,
-                },
-                selector: accessControlStateProvider.select(
-                  (state) => state.mode,
-                ),
-                onChanged: _writer(
-                  (state, value) => state.copyWith(mode: value),
+              ManagedSetting(
+                settingKey: accessControlSettingKey,
+                child: ConfigOptionsItem<AccessControlMode>(
+                  title: (l) => l.mode,
+                  options: AccessControlMode.values,
+                  textBuilder: (mode) => switch (mode) {
+                    AccessControlMode.acceptSelected =>
+                      appLocalizations.whitelistMode,
+                    AccessControlMode.rejectSelected =>
+                      appLocalizations.blacklistMode,
+                  },
+                  selector: accessControlViewProvider.select(
+                    (state) => state.mode,
+                  ),
+                  onChanged: _writer(
+                    (state, value) => state.copyWith(mode: value),
+                  ),
                 ),
               ),
               ConfigOptionsItem<AccessSortType>(
