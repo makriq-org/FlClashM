@@ -193,7 +193,7 @@ Cloudflare и raw.githubusercontent.com; файл 243 217 байт переда�
 
 ## 📦 Выпуск и откат
 
-Версия — `MAJOR.MINOR.PATCH[-preN]+ГГГГММДДnn` в `pubspec.yaml`. Несовместимые изменения требуют MAJOR, новые функции MINOR, исправления PATCH; учитывается и пользовательский эффект апстрима. `versionCode` каждого тега строго растёт. Тег `v<versionName>` ставится только на влитый в main коммит; релизный `applicationId` — `com.makriq.flclash`.
+Версия — `MAJOR.MINOR.PATCH[-preN]+ГГГГММДДnn` в `pubspec.yaml`. Несовместимые изменения требуют MAJOR, новые функции MINOR, исправления PATCH; учитывается и пользовательский эффект апстрима. `versionCode` каждого тега строго растёт. Тег `v<versionName>` ставится на влитый в `dev` коммит для пре-релиза и на влитый в `main` коммит для стабильного выпуска; релизный `applicationId` — `com.makriq.flclash`.
 
 Создайте `release/<версия>`, перенесите пользовательские пункты Unreleased в секцию CHANGELOG с точным будущим тегом, обновите версию и выполните проверки. После PR/merge поставьте тег и запушьте его. CI проверит подписи APK/AAB и опубликует universal/ABI APK, AAB, SHA-256 и `FlClashM-android-release-metadata.json`. Пре-релизы видны в приложении только при включённой настройке.
 
