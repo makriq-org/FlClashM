@@ -419,6 +419,7 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   @override
   Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
     final isLoading = ref.watch(loadingProvider(LoadingTag.access));
     final declared = ref.watch(profileDeclaredAccessProvider);
     final query = SearchQuery(ref.watch(queryProvider(QueryTag.access)));
@@ -434,6 +435,8 @@ class _AccessViewState extends ConsumerState<AccessView>
     );
     final resolvingProfile =
         system.isAndroid && declared.isLoading && !declared.hasValue;
+    final profileFailed = system.isAndroid && declared.hasError;
+    final profileUnavailable = resolvingProfile || profileFailed;
     final visibleNames = packages
         .whereVisible(
           isFilterSystemApp: accessControl.isFilterSystemApp,
@@ -475,8 +478,9 @@ class _AccessViewState extends ConsumerState<AccessView>
     );
     final service = productServices.accessControl;
     final hasChanges =
+        !profileUnavailable &&
         service.normalizeManualAccess(manual) !=
-        service.normalizeManualAccess(editor);
+            service.normalizeManualAccess(editor);
     return CommonPopScope(
       onPop: hasChanges
           ? (_) {
@@ -487,16 +491,16 @@ class _AccessViewState extends ConsumerState<AccessView>
       child: CommonScaffold(
         isLoading: isLoading,
         searchState: AppBarSearchState(onSearch: _onSearch),
-        searchActions: resolvingProfile ? const [] : [?selectAllAction],
+        searchActions: profileUnavailable ? const [] : [?selectAllAction],
         title: context.appLocalizations.appAccessControl,
-        confirmationAction: hasChanges && !resolvingProfile
+        confirmationAction: hasChanges
             ? IconButtonData(
                 glyph: AppGlyphs.check,
                 onPressed: _handleSave,
                 tooltip: context.appLocalizations.save,
               )
             : null,
-        menuItems: resolvingProfile
+        menuItems: profileUnavailable
             ? const []
             : [
                 ..._buildMenuItems(
@@ -514,6 +518,18 @@ class _AccessViewState extends ConsumerState<AccessView>
               ],
         body: resolvingProfile
             ? const Center(child: CommonCircleLoading.page())
+            : profileFailed
+            ? NullStatus(
+                label: appLocalizations.error,
+                illustration: NullStatusIllustration.error,
+                action: TonalButton(
+                  size: TonalButtonSize.bar,
+                  glyph: AppGlyphs.refresh,
+                  label: appLocalizations.retry,
+                  onPressed: () =>
+                      ref.invalidate(profileDeclaredAccessProvider),
+                ),
+              )
             : AppBarClearance(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
