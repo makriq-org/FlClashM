@@ -93,10 +93,11 @@ const maxConcurrentIconLoads = 8;
 
 const renderThrottleDuration = Duration(milliseconds: 300);
 const defaultUpdateDuration = Duration(days: 1);
-const MMDB = 'GEOIP.metadb';
+/// Geo database names as the engine and the Android host install them.
+const MMDB = 'geoip.metadb';
 const ASN = 'ASN.mmdb';
-const GEOIP = 'GEOIP.dat';
-const GEOSITE = 'GEOSITE.dat';
+const GEOIP = 'GeoIP.dat';
+const GEOSITE = 'GeoSite.dat';
 
 /// The macOS sidebar material is the finished look; the Windows accent
 /// effects need a tint over them to keep the rail readable.
