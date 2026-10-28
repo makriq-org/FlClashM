@@ -169,6 +169,14 @@
       ]
     },
     {
+      "path": "lib/views/access.dart",
+      "boundary": "android-access-editor",
+      "reason": "Живой редактор доступа нормализует сохраняемый список через product AccessControlService, не управляя runtime.",
+      "targets": [
+        "lib/product/services/product_services.dart"
+      ]
+    },
+    {
       "path": "lib/views/config/general.dart",
       "boundary": "host-privacy-preference",
       "reason": "Общие настройки монтируют форковый переключатель общего запрета HWID; чтение и запись выполняются через Go snapshots/settings.patch.",

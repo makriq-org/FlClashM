@@ -160,6 +160,57 @@ func TestPresentationSettingsDoNotSupersedeRuntime(t *testing.T) {
 	}
 }
 
+func TestAccessOwnershipPatchReappliesRuntimeWithoutUI(t *testing.T) {
+	engine := &testEngine{}
+	app := openTestApp(t, options(t, t.TempDir(), engine, make(chan time.Time)))
+	request(t, app, "manual", "settings.patch", map[string]any{"patch": map[string]any{"vpnProps": map[string]any{"accessControl": map[string]any{"enable": true, "mode": "rejectSelected", "rejectList": []string{"com.manual"}}}}})
+	waitDomain(t, app, "manual")
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "p"}, "source": "tun: {include-package: [com.profile]}", "select": true})
+	waitDomain(t, app, "add")
+	request(t, app, "start", "runtime.start", nil)
+	waitRuntime(t, app, "start")
+	assertMode := func(mode string) {
+		t.Helper()
+		engine.mu.Lock()
+		defer engine.mu.Unlock()
+		var plan struct {
+			CoreState struct {
+				VPN struct {
+					Access struct {
+						Mode string `json:"mode"`
+					} `json:"accessControl"`
+				} `json:"vpn-props"`
+			} `json:"coreState"`
+		}
+		if err := json.Unmarshal(engine.payload, &plan); err != nil || plan.CoreState.VPN.Access.Mode != mode {
+			t.Fatalf("expected %s access, got %s (%v): %s", mode, plan.CoreState.VPN.Access.Mode, err, engine.payload)
+		}
+	}
+	assertMode("acceptSelected")
+	for _, step := range []struct {
+		id    string
+		patch any
+		mode  string
+	}{
+		{"take", map[string]any{"ownedSettings": []string{"vpn.access-control"}}, "rejectSelected"},
+		{"release", map[string]any{"ownedSettings": []string{}}, "acceptSelected"},
+		{"take-again", map[string]any{"ownedSettings": []string{"vpn.access-control"}}, "rejectSelected"},
+		{"reset", nil, "acceptSelected"},
+	} {
+		request(t, app, step.id, "settings.patch", map[string]any{"patch": map[string]any{"appSetting": step.patch}})
+		receipt := waitDomain(t, app, step.id)
+		if receipt.RuntimeOperationID == "" {
+			t.Fatalf("%s did not schedule a runtime update", step.id)
+		}
+		waitRuntime(t, app, receipt.RuntimeOperationID)
+		assertMode(step.mode)
+	}
+	request(t, app, "other", "settings.patch", map[string]any{"patch": map[string]any{"appSetting": map[string]any{"ownedSettings": []string{"app.openLogs"}}}})
+	if receipt := waitDomain(t, app, "other"); receipt.RuntimeOperationID != "" {
+		t.Fatal("unrelated ownership unnecessarily reapplied runtime")
+	}
+}
+
 func TestConcurrentSubscriberDoesNotBlockApplicationPublication(t *testing.T) {
 	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
 	store, err := backend.NewFileStore(opts.Directory)

@@ -79,6 +79,27 @@ void main() {
       expect(updatedVpnProps.accessControl, accessControl);
     });
 
+    test('saving keeps hidden apps and drops the client itself', () {
+      const service = AccessControlService();
+      const accessControl = AccessControl(
+        enable: true,
+        mode: AccessControlMode.rejectSelected,
+        rejectList: [
+          'com.makriq.flclash',
+          'com.example.user',
+          'com.android.system',
+          'com.makriq.flclash.dev',
+        ],
+      );
+
+      final normalized = service.normalizeManualAccess(accessControl);
+
+      expect(normalized.currentList, [
+        'com.android.system',
+        'com.example.user',
+      ]);
+    });
+
     test('filters packages with selection priority and persisted toggles', () {
       const service = AccessControlService();
       final editorState = service.setQuery(

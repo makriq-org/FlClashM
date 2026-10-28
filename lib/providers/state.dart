@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
 import 'package:flclashx/common/common.dart';
+import 'package:flclashx/core/core.dart';
 import 'package:flclashx/database/database.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';

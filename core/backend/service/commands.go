@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"core/backend"
+	"core/backend/compile"
 	"core/backend/profiles"
 )
 
@@ -286,9 +288,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Patch == nil {
 			return result, errors.New("settings patch is required")
 		}
-		if err := a.patchSettings(ctx, request.Patch, request.ExpectedRevision); err != nil {
+		accessChanged, err := a.patchSettingsWithAccessChange(ctx, request.Patch, request.ExpectedRevision)
+		if err != nil {
 			return result, err
 		}
+		apply = accessChanged
 		for key := range request.Patch {
 			switch key {
 			case "patchClashConfig", "vpnProps", "networkProps", "overrideDns", "scriptProps", "currentProfileId":
@@ -549,23 +553,43 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	return result, nil
 }
 func (a *App) patchSettings(ctx context.Context, patch profiles.Object, expected uint64) error {
+	_, err := a.patchSettingsWithAccessChange(ctx, patch, expected)
+	return err
+}
+
+func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.Object, expected uint64) (bool, error) {
 	a.dataMu.Lock()
 	defer a.dataMu.Unlock()
 	for range 8 {
 		if err := ctx.Err(); err != nil {
-			return err
+			return false, err
 		}
-		revision := a.profiles.Snapshot().Revision
+		snapshot := a.profiles.Snapshot()
+		revision := snapshot.Revision
 		if expected != 0 && revision != expected {
-			return profiles.ErrConflict
+			return false, profiles.ErrConflict
 		}
 		err := a.profiles.UpdateSettings(patch, revision)
+		if err == nil {
+			before := accessControlOwned(snapshot.Settings["appSetting"])
+			after := accessControlOwned(a.profiles.Snapshot().Settings["appSetting"])
+			return before != after, nil
+		}
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
-			return err
+			return false, err
 		}
 	}
-	return profiles.ErrConflict
+	return false, profiles.ErrConflict
 }
+
+func accessControlOwned(raw json.RawMessage) bool {
+	var settings struct {
+		OwnedSettings []string `json:"ownedSettings"`
+	}
+	_ = json.Unmarshal(raw, &settings)
+	return slices.Contains(settings.OwnedSettings, compile.AccessControlSettingKey)
+}
+
 func (a *App) isCurrent(id string) bool {
 	var current string
 	_ = json.Unmarshal(a.profiles.Snapshot().Settings["currentProfileId"], &current)
