@@ -182,7 +182,7 @@ TLS 验证保持启用。首次运行遇到了测试电脑的 fake-IP DNS，服�
 
 ## 📦 发布与回滚
 
-`pubspec.yaml` 版本：`MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`。不兼容修改升 MAJOR，功能升 MINOR，修复升 PATCH，也需考虑上游对用户的影响。每个标签的 `versionCode` 必须严格递增。`v<versionName>` 标签仅打在已合入 main 的提交上；发布 `applicationId` 为 `com.makriq.flclash`。
+`pubspec.yaml` 版本：`MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`。不兼容修改升 MAJOR，功能升 MINOR，修复升 PATCH，也需考虑上游对用户的影响。每个标签的 `versionCode` 必须严格递增。预发行版的 `v<versionName>` 标签打在已合入 `dev` 的提交上，稳定版的标签打在已合入 `main` 的提交上；发布 `applicationId` 为 `com.makriq.flclash`。
 
 创建 `release/<version>`，将 Unreleased 中面向用户的条目移入与未来标签完全一致的 CHANGELOG 小节，更新版本并检查。PR 合并后打标签并推送。CI 验证 APK/AAB 签名，发布 universal/各 ABI APK、AAB、SHA-256 和 `FlClashM-android-release-metadata.json`。应用仅在设置开启后显示预发布。
 

@@ -204,7 +204,7 @@ MTS به تصمیم کاربر از آزمایش زنده کنار گذاشته 
 
 ## 📦 انتشار و بازگشت
 
-نسخه در `pubspec.yaml`: قالب `MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`. تغییر ناسازگار MAJOR، قابلیت MINOR و اصلاح PATCH می‌خواهد؛ اثر بالادست بر کاربر هم لحاظ می‌شود. `versionCode` هر tag باید اکیداً افزایش یابد. tag به‌شکل `v<versionName>` فقط روی کامیت ادغام‌شده در main قرار می‌گیرد؛ `applicationId` انتشار: `com.makriq.flclash`.
+نسخه در `pubspec.yaml`: قالب `MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`. تغییر ناسازگار MAJOR، قابلیت MINOR و اصلاح PATCH می‌خواهد؛ اثر بالادست بر کاربر هم لحاظ می‌شود. `versionCode` هر tag باید اکیداً افزایش یابد. tag به‌شکل `v<versionName>` برای پیش‌انتشار روی کامیت ادغام‌شده در `dev` و برای انتشار پایدار روی کامیت ادغام‌شده در `main` قرار می‌گیرد؛ `applicationId` انتشار: `com.makriq.flclash`.
 
 شاخهٔ `release/<version>` بسازید، موارد کاربرمحور Unreleased را به بخش CHANGELOG هم‌نام tag آینده منتقل، نسخه را به‌روز و بررسی‌ها را اجرا کنید. پس از PR/merge، tag بزنید و push کنید. CI امضای APK/AAB را بررسی و APK عمومی/ABI، AAB، SHA-256 و `FlClashM-android-release-metadata.json` را منتشر می‌کند. پیش‌انتشار فقط با فعال‌بودن تنظیم مربوط در برنامه دیده می‌شود.
 

@@ -190,7 +190,7 @@ Test rooms, keys and tokens are not stored in the repository.
 
 ## 📦 Release and rollback
 
-Version in `pubspec.yaml`: `MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`. Breaking changes require MAJOR, features MINOR, fixes PATCH; include upstream’s user-visible effects. Every tag’s `versionCode` must strictly increase. Tag `v<versionName>` only on a commit merged into main; release `applicationId`: `com.makriq.flclash`.
+Version in `pubspec.yaml`: `MAJOR.MINOR.PATCH[-preN]+YYYYMMDDnn`. Breaking changes require MAJOR, features MINOR, fixes PATCH; include upstream’s user-visible effects. Every tag’s `versionCode` must strictly increase. Tag `v<versionName>` on a commit merged into `dev` for a pre-release, or into `main` for a stable release; release `applicationId`: `com.makriq.flclash`.
 
 Create `release/<version>`, move user-facing Unreleased items to a CHANGELOG section matching the future tag exactly, update the version and run checks. After PR/merge, tag and push. CI verifies APK/AAB signatures and publishes universal/ABI APKs, AAB, SHA-256 and `FlClashM-android-release-metadata.json`. Prereleases appear in the app only when enabled in settings.
 
