@@ -118,7 +118,29 @@ func profileID(metadata Object) (string, error) {
 	}
 	return id, nil
 }
-func (r *Repository) Snapshot() Document { r.mu.Lock(); defer r.mu.Unlock(); return clone(r.state) }
+
+// Older Flutter versions derived the profile type from the URL and did not
+// persist a type field. Project it for both newly migrated and existing stores
+// without rewriting legacy metadata or overriding an explicit modern type.
+func projectLegacyProfileType(p *Record) {
+	if raw, ok := p.Metadata["type"]; ok && string(raw) != "null" {
+		return
+	}
+	var address string
+	if json.Unmarshal(p.Metadata["url"], &address) == nil && address != "" {
+		p.Metadata["type"] = json.RawMessage(`"url"`)
+	}
+}
+
+func (r *Repository) Snapshot() Document {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := clone(r.state)
+	for i := range out.Profiles {
+		projectLegacyProfileType(&out.Profiles[i])
+	}
+	return out
+}
 func (r *Repository) Get(id string) (Record, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -141,12 +163,17 @@ func (r *Repository) metadata(id string) (Record, error) {
 	for _, p := range r.state.Profiles {
 		key, _ := profileID(p.Metadata)
 		if key == id {
-			return clone(p), nil
+			return cloneRecord(p), nil
 		}
 	}
 	return Record{}, ErrNotFound
 }
-func cloneRecord(p Record) Record { out := clone(p); out.Source = p.Source; return out }
+func cloneRecord(p Record) Record {
+	out := clone(p)
+	out.Source = p.Source
+	projectLegacyProfileType(&out)
+	return out
+}
 func (r *Repository) persist(next Document) error {
 	existing, readErr := readStore(r.path)
 	if readErr == nil {

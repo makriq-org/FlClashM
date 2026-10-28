@@ -22,7 +22,7 @@ func (r *Repository) AuthoringSnapshot() authoring.Snapshot {
 	defer r.mu.Unlock()
 	metadata := make([]authoring.Object, 0, len(r.state.Profiles))
 	for _, record := range r.state.Profiles {
-		metadata = append(metadata, authoring.Object(clone(record.Metadata)))
+		metadata = append(metadata, authoring.Object(cloneRecord(record).Metadata))
 	}
 	return authoring.Snapshot{Revision: r.state.Revision, Profiles: metadata, Collections: authoring.Normalize(clone(r.state.Authoring))}
 }
