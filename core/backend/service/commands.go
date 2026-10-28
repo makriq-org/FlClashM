@@ -569,21 +569,27 @@ func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.
 		if expected != 0 && revision != expected {
 			return false, profiles.ErrConflict
 		}
-		var previous, fields profiles.Object
-		_ = json.Unmarshal(snapshot.Settings["appSetting"], &previous)
-		_ = json.Unmarshal(patch["appSetting"], &fields)
-		var oldOwned, newOwned []string
-		_ = json.Unmarshal(previous["ownedSettings"], &oldOwned)
-		newRaw, changed := fields["ownedSettings"]
-		_ = json.Unmarshal(newRaw, &newOwned)
-		accessChanged := changed && slices.Contains(oldOwned, compile.AccessControlSettingKey) != slices.Contains(newOwned, compile.AccessControlSettingKey)
 		err := a.profiles.UpdateSettings(patch, revision)
+		if err == nil {
+			before := accessControlOwned(snapshot.Settings["appSetting"])
+			after := accessControlOwned(a.profiles.Snapshot().Settings["appSetting"])
+			return before != after, nil
+		}
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
-			return accessChanged && err == nil, err
+			return false, err
 		}
 	}
 	return false, profiles.ErrConflict
 }
+
+func accessControlOwned(raw json.RawMessage) bool {
+	var settings struct {
+		OwnedSettings []string `json:"ownedSettings"`
+	}
+	_ = json.Unmarshal(raw, &settings)
+	return slices.Contains(settings.OwnedSettings, compile.AccessControlSettingKey)
+}
+
 func (a *App) isCurrent(id string) bool {
 	var current string
 	_ = json.Unmarshal(a.profiles.Snapshot().Settings["currentProfileId"], &current)

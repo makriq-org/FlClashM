@@ -189,13 +189,15 @@ func TestAccessOwnershipPatchReappliesRuntimeWithoutUI(t *testing.T) {
 	assertMode("acceptSelected")
 	for _, step := range []struct {
 		id    string
-		owned []string
+		patch any
 		mode  string
 	}{
-		{"take", []string{"vpn.access-control"}, "rejectSelected"},
-		{"release", []string{}, "acceptSelected"},
+		{"take", map[string]any{"ownedSettings": []string{"vpn.access-control"}}, "rejectSelected"},
+		{"release", map[string]any{"ownedSettings": []string{}}, "acceptSelected"},
+		{"take-again", map[string]any{"ownedSettings": []string{"vpn.access-control"}}, "rejectSelected"},
+		{"reset", nil, "acceptSelected"},
 	} {
-		request(t, app, step.id, "settings.patch", map[string]any{"patch": map[string]any{"appSetting": map[string]any{"ownedSettings": step.owned}}})
+		request(t, app, step.id, "settings.patch", map[string]any{"patch": map[string]any{"appSetting": step.patch}})
 		receipt := waitDomain(t, app, step.id)
 		if receipt.RuntimeOperationID == "" {
 			t.Fatalf("%s did not schedule a runtime update", step.id)
