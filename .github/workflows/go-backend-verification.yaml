@@ -25,15 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  select-runner:
-    permissions:
-      contents: read
-      actions: write
-    uses: ./.github/workflows/select-ci-runner.yaml
-
   go-host:
-    needs: select-runner
-    runs-on: ${{ needs.select-runner.outputs.medium }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read

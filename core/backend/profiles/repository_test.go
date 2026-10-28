@@ -109,6 +109,56 @@ func TestLegacyMigrationAndRoundTripPreserveSourceAndUnknownSettings(t *testing.
 		t.Fatal("snapshot mutated store")
 	}
 }
+
+func TestLegacySubscriptionTypeProjectionSurvivesReopen(t *testing.T) {
+	dir := t.TempDir()
+	r, err := Open(dir, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(`{"profiles":[{"id":"subscription","url":"https://example.test/sub","autoUpdate":true},{"id":"file","url":""},{"id":"custom","type":"custom","url":"https://example.test/custom"},{"id":"explicit-file","type":"file","url":"https://example.test/file"},{"id":"null-type","type":null,"url":"https://example.test/sub2"}],"currentProfileId":"subscription"}`)
+	if err := r.Migrate(context.Background(), legacy, func(string) (string, error) { return "proxies: []\n", nil }); err != nil {
+		t.Fatal(err)
+	}
+	// Reopen also covers stores already migrated by an earlier version.
+	r, err = Open(dir, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := r.Snapshot()
+	if got := string(snapshot.Profiles[0].Metadata["type"]); got != `"url"` {
+		t.Fatalf("subscription type = %s", got)
+	}
+	if got := string(r.AuthoringSnapshot().Profiles[0]["type"]); got != `"url"` {
+		t.Fatalf("authoring subscription type = %s", got)
+	}
+	if _, ok := snapshot.Profiles[1].Metadata["type"]; ok {
+		t.Fatal("file profile gained an explicit type")
+	}
+	if got := string(snapshot.Profiles[2].Metadata["type"]); got != `"custom"` {
+		t.Fatalf("explicit custom type changed: %s", got)
+	}
+	if got := string(snapshot.Profiles[3].Metadata["type"]); got != `"file"` {
+		t.Fatalf("explicit file type changed: %s", got)
+	}
+	if got := string(snapshot.Profiles[4].Metadata["type"]); got != `"url"` {
+		t.Fatalf("null subscription type = %s", got)
+	}
+	profile, err := r.Get("subscription")
+	if err != nil || string(profile.Metadata["type"]) != `"url"` || string(profile.Metadata["url"]) != `"https://example.test/sub"` {
+		t.Fatalf("subscription metadata: %#v, %v", profile.Metadata, err)
+	}
+	exported, err := r.ExportLegacy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got, want map[string]any
+	_ = json.Unmarshal(exported, &got)
+	_ = json.Unmarshal(legacy, &want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("projection rewrote legacy data: %s", exported)
+	}
+}
 func TestMigrationFailureAndMissingCache(t *testing.T) {
 	r := openRepository(t)
 	ctx, cancel := context.WithCancel(context.Background())
