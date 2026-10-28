@@ -39,6 +39,8 @@ flutter build apk --debug --target-platform android-arm64
 
 CI проверяет Go host/race, Dart/Flutter, Kotlin unit-тесты, сборки ARM64/armeabi-v7a и E2E на x86_64 с настоящими mihomo, validator, ByeDPI и TUN. Документация пропускает тяжёлые задания. Изменения Dart-моста UI/backend запускают E2E с настоящей Flutter-activity; ошибки instrumentation и необработанные исключения Flutter проваливают проверку. Эмулятор не заменяет реальные ARM-устройства: перед выпуском проверяйте режимы, узлы, подписки, смерть UI/`:remote`, сохранение Stop при восстановлении, смену сети и энергопотребление. Открытые замечания собраны в [#132](https://github.com/makriq-org/FlClashM/issues/132). Workflow `secret-scan` проверяет коммиты PR и push с помощью Gitleaks.
 
+На Android 10 и старее системный и смешанный TUN-стек заменяются на gVisor: привязка системного форвардера к интерфейсу там недоступна приложению. Для Android-сборки Go временно использует PID вместо pidfd: проверка pidfd в c-shared процессе может завершить приложение из-за seccomp на Android 10/11. При обновлении Go обход в `setup.dart` нужно пересмотреть и удалить после исправления в toolchain. Сертификаты Android, которые Go не умеет разобрать, пропускаются; остальные остаются доверенными для HTTPS.
+
 <a id="architecture"></a>
 
 ## 🧭 Архитектура

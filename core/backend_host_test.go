@@ -1,11 +1,49 @@
 package main
 
 import (
+	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestHostCertificatesSkipUnparseableAndroidIssuer(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	valid, err := x509.CreateCertificate(rand.Reader, template, template, public, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid := bytes.Clone(valid)
+	serial := bytes.Index(invalid, []byte{0x02, 0x01, 0x01})
+	if serial < 0 {
+		t.Fatal("serial not found")
+	}
+	invalid[serial+2] = 0x81
+	if _, err := x509.ParseCertificate(invalid); err == nil {
+		t.Fatal("expected invalid serial")
+	}
+	roots := x509.NewCertPool()
+	encode := base64.StdEncoding.EncodeToString
+	if err := addHostCertificates(roots, []string{encode(invalid), encode(valid)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(roots.Subjects()) != 1 {
+		t.Fatalf("got %d trusted certificates", len(roots.Subjects()))
+	}
+	if err := addHostCertificates(roots, []string{"not base64!"}); err == nil {
+		t.Fatal("expected malformed host data to fail")
+	}
+}
 
 func TestCachesUseLegacyTimeZoneSavedByApplicationJournal(t *testing.T) {
 	offset := func(location *time.Location) int {

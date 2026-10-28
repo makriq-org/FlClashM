@@ -25,7 +25,9 @@ test -f "$test_apk"
 adb install -r -t "$app_apk"
 adb install -r -t "$test_apk"
 adb shell cmd appops set com.makriq.flclash.dev ACTIVATE_VPN allow
-adb shell pm grant com.makriq.flclash.dev android.permission.POST_NOTIFICATIONS
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
+  adb shell pm grant com.makriq.flclash.dev android.permission.POST_NOTIFICATIONS
+fi
 adb shell dumpsys deviceidle whitelist +com.makriq.flclash.dev
 adb logcat -c
 adb shell am instrument -w -r \
@@ -36,6 +38,9 @@ if grep -Eq 'FAILURES!!!|INSTRUMENTATION_ABORTED|Process crashed|shortMsg=' \
   "$artifacts/instrumentation.txt"; then
   echo "Instrumentation reported failures or a crash" >&2
   exit 1
+fi
+if [ "${ANDROID_E2E_INSTRUMENTATION_ONLY:-0}" = 1 ]; then
+  exit 0
 fi
 
 # Run a real Flutter activity. --no-restart avoids instrumentation's package
