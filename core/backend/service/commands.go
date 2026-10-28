@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"core/backend"
+	"core/backend/compile"
 	"core/backend/profiles"
 )
 
@@ -286,9 +288,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Patch == nil {
 			return result, errors.New("settings patch is required")
 		}
-		if err := a.patchSettings(ctx, request.Patch, request.ExpectedRevision); err != nil {
+		accessChanged, err := a.patchSettingsWithAccessChange(ctx, request.Patch, request.ExpectedRevision)
+		if err != nil {
 			return result, err
 		}
+		apply = accessChanged
 		for key := range request.Patch {
 			switch key {
 			case "patchClashConfig", "vpnProps", "networkProps", "overrideDns", "scriptProps", "currentProfileId":
@@ -549,22 +553,36 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	return result, nil
 }
 func (a *App) patchSettings(ctx context.Context, patch profiles.Object, expected uint64) error {
+	_, err := a.patchSettingsWithAccessChange(ctx, patch, expected)
+	return err
+}
+
+func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.Object, expected uint64) (bool, error) {
 	a.dataMu.Lock()
 	defer a.dataMu.Unlock()
 	for range 8 {
 		if err := ctx.Err(); err != nil {
-			return err
+			return false, err
 		}
-		revision := a.profiles.Snapshot().Revision
+		snapshot := a.profiles.Snapshot()
+		revision := snapshot.Revision
 		if expected != 0 && revision != expected {
-			return profiles.ErrConflict
+			return false, profiles.ErrConflict
 		}
+		var previous, fields profiles.Object
+		_ = json.Unmarshal(snapshot.Settings["appSetting"], &previous)
+		_ = json.Unmarshal(patch["appSetting"], &fields)
+		var oldOwned, newOwned []string
+		_ = json.Unmarshal(previous["ownedSettings"], &oldOwned)
+		newRaw, changed := fields["ownedSettings"]
+		_ = json.Unmarshal(newRaw, &newOwned)
+		accessChanged := changed && slices.Contains(oldOwned, compile.AccessControlSettingKey) != slices.Contains(newOwned, compile.AccessControlSettingKey)
 		err := a.profiles.UpdateSettings(patch, revision)
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
-			return err
+			return accessChanged && err == nil, err
 		}
 	}
-	return profiles.ErrConflict
+	return false, profiles.ErrConflict
 }
 func (a *App) isCurrent(id string) bool {
 	var current string

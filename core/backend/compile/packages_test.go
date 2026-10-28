@@ -65,7 +65,7 @@ func TestOwnedAccessControlKeepsManualRules(t *testing.T) {
 	}
 	profile := &RawProfile{ID: "p", Text: "tun: {include-package: [com.example.one]}"}
 	settings := Object{
-		"appSetting": Object{"ownedSettings": []any{accessControlSettingKey}},
+		"appSetting": Object{"ownedSettings": []any{AccessControlSettingKey}},
 		"vpnProps": Object{
 			"accessControl": Object{
 				"enable":     true,

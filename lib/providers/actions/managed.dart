@@ -12,7 +12,6 @@ class ManagedSettingsAction extends _$ManagedSettingsAction {
           (state) =>
               state.copyWith(ownedSettings: {...state.ownedSettings, key}),
         );
-    _applyAccessControl(key);
   }
 
   void release(String key) {
@@ -24,18 +23,13 @@ class ManagedSettingsAction extends _$ManagedSettingsAction {
           ),
         );
     _reapply();
-    _applyAccessControl(key);
   }
 
   void releaseAll() {
-    final owned = ref.read(appSettingProvider).ownedSettings;
     ref
         .read(appSettingProvider.notifier)
         .update((state) => state.copyWith(ownedSettings: const {}));
     _reapply();
-    if (owned.contains(accessControlSettingKey)) {
-      _applyAccessControl(accessControlSettingKey);
-    }
   }
 
   void _reapply() {
@@ -47,19 +41,6 @@ class ManagedSettingsAction extends _$ManagedSettingsAction {
       ref
           .read(profileSettingsActionProvider.notifier)
           .apply(profileSettingsSourceOf(profile)),
-    );
-  }
-
-  /// Ownership of the access list changes the compiled plan, but the settings
-  /// patch only carries `ownedSettings`; compile explicitly.
-  void _applyAccessControl(String key) {
-    if (key != accessControlSettingKey) {
-      return;
-    }
-    unawaited(
-      globalState.safeRun(
-        () => ref.read(setupActionProvider.notifier).applyProfile(),
-      ),
     );
   }
 }

@@ -430,12 +430,12 @@ class _AccessViewState extends ConsumerState<AccessView>
     final accessControl = ref.watch(accessControlViewProvider);
     final editor = ref.watch(accessControlStateProvider);
     final locked = ref.watch(settingLockedProvider(accessControlSettingKey));
+    final owned = ref.watch(settingOwnedProvider(accessControlSettingKey));
     final releasable = ref.watch(
       settingReleasableProvider(accessControlSettingKey),
     );
-    final resolvingProfile =
-        system.isAndroid && declared.isLoading && !declared.hasValue;
-    final profileFailed = system.isAndroid && declared.hasError;
+    final resolvingProfile = !owned && declared.isLoading && !declared.hasValue;
+    final profileFailed = !owned && declared.hasError;
     final profileUnavailable = resolvingProfile || profileFailed;
     final visibleNames = packages
         .whereVisible(

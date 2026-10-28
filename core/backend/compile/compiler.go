@@ -17,9 +17,9 @@ import (
 	"core/backend/authoring"
 )
 
-// accessControlSettingKey mirrors the Dart owned-setting key. Taking it over
+// AccessControlSettingKey mirrors the Dart owned-setting key. Taking it over
 // makes the profile package rules inert without discarding the manual list.
-const accessControlSettingKey = "vpn.access-control"
+const AccessControlSettingKey = "vpn.access-control"
 
 type RawProfile struct {
 	SourceMissing bool   `json:"sourceMissing,omitempty"`
@@ -218,7 +218,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	diagnostics := []string{}
 	var profileAccess Object
 	if android {
-		if ownsSetting(settings, accessControlSettingKey) {
+		if ownsSetting(settings, AccessControlSettingKey) {
 			stripPackageRules(config)
 		} else {
 			var err error
