@@ -1,7 +1,8 @@
 {
   "accessControlDriftNote": "Las reglas aplicadas por la VPN de Android difieren de la configuración del perfil.",
   "accessControlVerificationUnavailableNote": "No se pudieron verificar las reglas aplicadas por la VPN. Se muestra la configuración del perfil como alternativa.",
-  "accessControlProfileManaged": "Controlado por el perfil",
+  "accessControlProfileManaged": "Gestionado por el perfil",
+  "accessControlProfileManagedTip": "Esta lista de aplicaciones viene de tu perfil y la aplica la VPN de Android. Para cambiarla, edita las reglas del perfil.",
   "rule": "Regla",
   "rules": "Reglas",
   "global": "Global",

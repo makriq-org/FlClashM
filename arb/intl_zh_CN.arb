@@ -1,5 +1,6 @@
 {
-  "accessControlProfileManaged": "由配置文件控制",
+  "accessControlProfileManaged": "由配置文件管理",
+  "accessControlProfileManagedTip": "此应用列表由配置文件指定并应用于 Android VPN。如需更改，请编辑配置文件规则。",
   "rule": "规则",
   "global": "全局",
   "direct": "直连",

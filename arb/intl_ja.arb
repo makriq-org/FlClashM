@@ -1,5 +1,6 @@
 {
-  "accessControlProfileManaged": "プロファイルによって管理されています",
+  "accessControlProfileManaged": "プロファイルが管理",
+  "accessControlProfileManagedTip": "このアプリ一覧はプロファイルで指定され、Android VPN に適用されます。変更するにはプロファイルのルールを編集してください。",
   "rule": "ルール",
   "global": "グローバル",
   "direct": "ダイレクト",

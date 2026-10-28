@@ -745,11 +745,21 @@ class AppLocalizations {
     );
   }
 
-  /// `Controlled by the profile`
+  /// `Managed by the profile`
   String get accessControlProfileManaged {
     return Intl.message(
-      'Controlled by the profile',
+      'Managed by the profile',
       name: 'accessControlProfileManaged',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This app list comes from your profile and is applied by the Android VPN. To change it, edit the profile rules.`
+  String get accessControlProfileManagedTip {
+    return Intl.message(
+      'This app list comes from your profile and is applied by the Android VPN. To change it, edit the profile rules.',
+      name: 'accessControlProfileManagedTip',
       desc: '',
       args: [],
     );

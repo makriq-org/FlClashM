@@ -1,7 +1,8 @@
 {
   "accessControlDriftNote": "Android VPN에 적용된 규칙이 프로필 설정과 다릅니다.",
   "accessControlVerificationUnavailableNote": "적용된 VPN 규칙을 확인할 수 없습니다. 대신 프로필 설정이 표시됩니다.",
-  "accessControlProfileManaged": "프로필에서 관리합니다",
+  "accessControlProfileManaged": "프로필이 관리",
+  "accessControlProfileManagedTip": "이 앱 목록은 프로필에서 지정되어 Android VPN에 적용됩니다. 변경하려면 프로필 규칙을 수정하세요.",
   "rule": "규칙",
   "rules": "규칙",
   "global": "전역",

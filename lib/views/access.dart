@@ -218,6 +218,19 @@ class _AccessViewState extends ConsumerState<AccessView>
     });
   }
 
+  void _showManagedInfo() {
+    final appLocalizations = context.appLocalizations;
+    unawaited(
+      dialogs.showMessage(
+        title: appLocalizations.accessControlProfileManaged,
+        message: TextSpan(
+          text: appLocalizations.accessControlProfileManagedTip,
+        ),
+        cancelable: false,
+      ),
+    );
+  }
+
   void _handleEnable(bool enable) {
     ref.read(accessControlStateProvider.notifier).update((state) {
       return state.copyWith(enable: enable);
@@ -375,6 +388,7 @@ class _AccessViewState extends ConsumerState<AccessView>
     required Set<String> selected,
     required bool isSearching,
     required bool locked,
+    required VoidCallback? onLockedTap,
   }) {
     return FutureBuilder(
       future: _completer.future,
@@ -400,19 +414,31 @@ class _AccessViewState extends ConsumerState<AccessView>
               itemExtent: 72,
               itemBuilder: (_, index) {
                 final package = packages[index];
+                Widget content = PackageListItem(
+                  key: Key(package.packageName),
+                  package: package,
+                  value: selected.contains(package.packageName),
+                  onChanged: (value) {
+                    _handleSelected(package.packageName);
+                  },
+                );
+                if (locked) {
+                  content = IgnorePointer(child: content);
+                  if (onLockedTap != null) {
+                    content = Semantics(
+                      button: true,
+                      label: appLocalizations.accessControlProfileManaged,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onLockedTap,
+                        child: content,
+                      ),
+                    );
+                  }
+                }
                 return Opacity(
                   opacity: locked ? 0.5 : 1,
-                  child: IgnorePointer(
-                    ignoring: locked,
-                    child: PackageListItem(
-                      key: Key(package.packageName),
-                      package: package,
-                      value: selected.contains(package.packageName),
-                      onChanged: (value) {
-                        _handleSelected(package.packageName);
-                      },
-                    ),
-                  ),
+                  child: content,
                 );
               },
             ),
@@ -623,6 +649,9 @@ class _AccessViewState extends ConsumerState<AccessView>
                         selected: valueList.toSet(),
                         isSearching: query.isNotEmpty,
                         locked: locked || !accessControl.enable,
+                        onLockedTap: _managed.managed
+                            ? _showManagedInfo
+                            : null,
                       ),
               ),
             ],

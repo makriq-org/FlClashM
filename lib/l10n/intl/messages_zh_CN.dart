@@ -234,7 +234,10 @@ class MessageLookup extends MessageLookupByLibrary {
       "选中应用将会被排除在VPN之外",
     ),
     "accessControlProfileManaged": MessageLookupByLibrary.simpleMessage(
-      "由配置文件控制",
+      "由配置文件管理",
+    ),
+    "accessControlProfileManagedTip": MessageLookupByLibrary.simpleMessage(
+      "此应用列表由配置文件指定并应用于 Android VPN。如需更改，请编辑配置文件规则。",
     ),
     "accessControlSettings": MessageLookupByLibrary.simpleMessage("访问控制设置"),
     "accessControlVerificationUnavailableNote":
