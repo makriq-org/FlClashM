@@ -16,15 +16,8 @@ on:
 permissions: {}
 
 jobs:
-  select-runner:
-    permissions:
-      contents: read
-      actions: write
-    uses: ./.github/workflows/select-ci-runner.yaml
-
   clean:
-    needs: select-runner
-    runs-on: ${{ needs.select-runner.outputs.small }}
+    runs-on: ubuntu-latest
     permissions:
       actions: write
     steps:
