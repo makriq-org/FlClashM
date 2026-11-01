@@ -1,13 +1,61 @@
+import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/views/access.dart';
+import 'package:flclashx/widgets/managed_setting.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/test_app.dart';
 
 void main() {
+  testWidgets(
+    'disabled provider-owned access asks before enabling from the footer',
+    (tester) async {
+      await tester.pumpWidget(
+        TestApp(
+          wrapInProviderScope: true,
+          overrides: [
+            currentProfileProvider.overrideWith((ref) => null),
+            appSettingProvider.overrideWithBuild(
+              (_, _) => const AppSettingProps(),
+            ),
+            profileDeclaredAccessProvider.overrideWith(
+              (ref) async => const AccessControlProps(enable: false),
+            ),
+          ],
+          child: const AccessView(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .ancestor(
+              of: find.text(currentAppLocalizations.turnOn),
+              matching: find.byType(ManagedSetting),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(currentAppLocalizations.managedByProvider),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(currentAppLocalizations.cancel).last);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AccessView)),
+      );
+      expect(
+        container.read(settingLockedProvider(accessControlSettingKey)),
+        isTrue,
+      );
+      expect(container.read(accessControlStateProvider).enable, isFalse);
+    },
+  );
+
   for (final owned in [false, true]) {
     testWidgets(
       'profile inspection failure keeps manual editor available: $owned',

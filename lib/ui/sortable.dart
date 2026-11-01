@@ -81,36 +81,6 @@ class DisclosureIndicator extends StatelessWidget {
   }
 }
 
-/// The trailing button of a row whose tap does something else, held to the
-/// [DisclosureIndicator]'s box since a desktop's compact density would shrink
-/// a bare [IconButton] and pull its glyph off the column.
-class DetailButton extends StatelessWidget {
-  const DetailButton({
-    super.key,
-    required this.glyph,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final Glyph glyph;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: kMinInteractiveDimension,
-      child: Center(
-        child: IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          icon: GlyphIcon(glyph),
-        ),
-      ),
-    );
-  }
-}
-
 /// Drags on press; with focus, a select key lifts the row and the up and down
 /// keys move it, so a remote or a keyboard can sort without a pointer.
 class SortHandle extends StatefulWidget {

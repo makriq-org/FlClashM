@@ -650,6 +650,7 @@ func handleGetTotalTraffic() string {
 }
 
 func handleResetTraffic() {
+	resetProxiedTraffic()
 	statistic.DefaultManager.ResetStatistic()
 }
 
@@ -659,9 +660,6 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 	// a plain weighted semaphore preserves the concurrency cap and the
 	// returns-immediately contract without retaining anything.
 	go func() {
-		_ = testDelaySem.Acquire(context.Background(), 1) // never errors with Background
-		defer testDelaySem.Release(1)
-
 		var params = &TestDelayParams{}
 		err := json.Unmarshal([]byte(paramsString), params)
 		if err != nil {
@@ -675,29 +673,37 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(params.Timeout))
-		defer cancel()
-
-		proxies := proxiesWithProviders()
-		proxy := proxies[params.ProxyName]
-
-		delayData := &Delay{
-			Name: params.ProxyName,
+		timeout := timeoutFromMillis(params.Timeout, 8*time.Second)
+		if timeout > time.Minute {
+			timeout = time.Minute
 		}
-
+		waiting, cancelWaiting := context.WithTimeout(context.Background(), timeout)
+		err = testDelaySem.Acquire(waiting, 1)
+		cancelWaiting()
+		if err != nil {
+			fn("")
+			return
+		}
+		defer testDelaySem.Release(1)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		runLock.Lock()
+		proxy := proxiesWithProviders()[params.ProxyName]
+		testURL := params.TestUrl
+		if testURL == "" {
+			testURL = currentTestURL
+		}
+		runLock.Unlock()
+		if testURL == "" {
+			testURL = "https://www.gstatic.com/generate_204"
+		}
+		delayData := &Delay{Name: params.ProxyName, Url: testURL, Value: -1}
 		if proxy == nil {
-			delayData.Value = -1
 			data, _ := json.Marshal(delayData)
 			fn(string(data))
 			return
 		}
-
-		testUrl := "https://www.gstatic.com/generate_204"
-
-		if params.TestUrl != "" {
-			testUrl = params.TestUrl
-		}
-		delayData.Url = testUrl
+		testUrl := testURL
 
 		delay, err := proxy.URLTest(ctx, testUrl, expectedStatus)
 		if err != nil || delay == 0 {
@@ -711,11 +717,9 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		data, _ := json.Marshal(delayData)
 		fn(string(data))
 
-		// Push delay update via message
-		sendMessage(Message{
-			Type: DelayMessage,
-			Data: delayData,
-		})
+		// Explicit tests publish only their callback: the UI owns its request
+		// generation and can discard a result after a profile switch.
+
 	}()
 }
 
@@ -749,6 +753,8 @@ func handleResetConnections() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	resolver.ResetConnection()
+	// selectMu aliases runLock in this adapter; it is already held here.
+	refreshRouteLocked(true)
 	return true
 }
 
@@ -1062,4 +1068,20 @@ func handleSetupConfig(bytes []byte) string {
 		return err.Error()
 	}
 	return ""
+}
+
+func handleGetTrafficFiltered(only bool) string {
+	if !only {
+		return handleGetTraffic()
+	}
+	up, down := proxiedTrafficNow()
+	raw, _ := json.Marshal(map[string]int64{"up": up, "down": down})
+	return string(raw)
+}
+func handleGetTotalTrafficFiltered(only bool) string {
+	if !only {
+		return handleGetTotalTraffic()
+	}
+	raw, _ := json.Marshal(map[string]int64{"up": proxiedTraffic.up.Load(), "down": proxiedTraffic.down.Load()})
+	return string(raw)
 }

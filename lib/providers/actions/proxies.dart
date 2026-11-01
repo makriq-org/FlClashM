@@ -15,8 +15,9 @@ class _DelayTestTarget {
 typedef _DelayTestBatch = ({List<Proxy> proxies, String? testUrl});
 
 class _DelayTestJob {
-  _DelayTestJob(Iterable<String> keys) : held = keys.toSet();
+  _DelayTestJob(Iterable<String> keys, this.timeout) : held = keys.toSet();
 
+  final Duration timeout;
   final Set<String> held;
   final Set<String> startedOnDispatch = {};
   bool cancelled = false;
@@ -43,6 +44,13 @@ class ProxiesAction extends _$ProxiesAction {
   @override
   void build() {
     ref.onDispose(() => _delayFlushTimer?.cancel());
+    ref.listen(currentProfileIdProvider, (_, _) => cancelDelayTests());
+    ref.listen(
+      appSettingProvider.select(
+        (state) => (state.testUrl, state.delayTestTimeout),
+      ),
+      (_, _) => cancelDelayTests(),
+    );
     ref.listen(coreStatusProvider, (_, next) {
       if (next != CoreStatus.connected) {
         cancelDelayTests();
@@ -294,6 +302,11 @@ class ProxiesAction extends _$ProxiesAction {
     }
   }
 
+  Future<void> addToLocalProxies(String name) async {
+    await backendClient.command('authoring.copyProxy', {'name': name});
+    dialogs.showNotifier(currentAppLocalizations.addedToLocalProxies(name));
+  }
+
   Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) {
     return _runDelayTests([
       (proxies: [proxy], testUrl: testUrl),
@@ -399,7 +412,15 @@ class ProxiesAction extends _$ProxiesAction {
       return;
     }
     final pending = ref.read(pendingDelayTestsProvider.notifier);
-    final job = _DelayTestJob(targets.map((target) => target.key));
+    final job = _DelayTestJob(
+      targets.map((target) => target.key),
+      Duration(
+        milliseconds: ref
+            .read(appSettingProvider)
+            .delayTestTimeout
+            .clamp(1000, 60000),
+      ),
+    );
     _delayTestJobs.add(job);
     // TaskPool.run starts a task synchronously while it has an idle slot.
     job.startedOnDispatch.addAll(
@@ -435,7 +456,11 @@ class ProxiesAction extends _$ProxiesAction {
       _scheduleDelayFlush();
     }
     try {
-      final delay = await _core.getDelay(target.testUrl, target.proxyName);
+      final delay = await _core.getDelay(
+        target.testUrl,
+        target.proxyName,
+        job.timeout,
+      );
       if (delay != null && !job.cancelled) {
         setDelay(delay);
       }

@@ -77,7 +77,7 @@ func (d *probeDialer) dial(ctx context.Context, _ string, address string) (net.C
 	local, remote := N.Pipe()
 	routed := &routedConn{Conn: local, metadata: metadata}
 	pendingProbeRoutes.Store(metadata, routed)
-	go tunnel.Tunnel.HandleTCPConn(remote, metadata)
+	go trafficTunnel.HandleTCPConn(remote, metadata)
 	d.remember(routed)
 	return routed, nil
 }

@@ -12,7 +12,6 @@ import (
 	"errors"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener/sing_tun"
@@ -22,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -31,10 +31,13 @@ type TunHandler struct {
 	listener *sing_tun.Listener
 	callback unsafe.Pointer
 
-	limit *semaphore.Weighted
+	limit  *semaphore.Weighted
+	closed atomic.Bool
 }
 
 func (t *TunHandler) close() {
+	t.closed.Store(true)
+	activeTunHandler.CompareAndSwap(t, nil)
 	// Bound the drain. handleProtect/handleResolveProcess hold this semaphore while
 	// calling into the JVM (Binder), which can wedge under system pressure; close()
 	// runs under tunLock, so an unbounded Acquire here would block stop AND the next
@@ -50,7 +53,6 @@ func (t *TunHandler) close() {
 	} else {
 		log.Warnln("TunHandler.close: drain timed out, leaking callback global ref to avoid use-after-free")
 	}
-	removeTunHook()
 	// Capture and clear the listener BEFORE closing it. On the drain-timeout path
 	// the handler is otherwise left intact, so without clearing here the next
 	// handleStopTun would call Close() a second time on the same (already closed)
@@ -73,22 +75,23 @@ func (t *TunHandler) close() {
 	// writing nil here would race and could hand a null jobject to the JVM.
 }
 
-func (t *TunHandler) handleProtect(fd int) {
+func (t *TunHandler) handleProtect(fd int) bool {
 	_ = t.limit.Acquire(context.Background(), 1)
 	defer t.limit.Release(1)
 
-	if t.listener == nil {
-		return
+	if t.closed.Load() {
+		return false
 	}
 
 	Protect(t.callback, fd)
+	return true
 }
 
 func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	_ = t.limit.Acquire(context.Background(), 1)
 	defer t.limit.Release(1)
 
-	if t.listener == nil {
+	if t.closed.Load() {
 		return ""
 	}
 	var protocol int
@@ -106,10 +109,12 @@ func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 }
 
 var (
-	tunLock    sync.Mutex
-	runTime    *time.Time
-	errBlocked = errors.New("blocked")
-	tunHandler *TunHandler
+	activeTunHandler atomic.Pointer[TunHandler]
+	installTunHooks  sync.Once
+	tunLock          sync.Mutex
+	runTime          *time.Time
+	errBlocked       = errors.New("blocked")
+	tunHandler       *TunHandler
 )
 
 func handleStopTun() {
@@ -119,11 +124,26 @@ func handleStopTun() {
 	tunUp.Store(false)
 	if tunHandler != nil {
 		tunHandler.close()
+		tunHandler = nil
 	}
 }
 
 func handleStartTun(fd int, callback unsafe.Pointer) bool {
-	handleStopTun()
+	tunLock.Lock()
+	defer tunLock.Unlock()
+	runTime = nil
+	tunUp.Store(false)
+	previous := tunHandler
+	tunHandler = nil
+	if fd != 0 {
+		tunHandler = &TunHandler{callback: callback, limit: semaphore.NewWeighted(4)}
+		// Android routes already exist: publish protection before waiting for
+		// config or draining the previous JNI callback generation.
+		initTunHook()
+	}
+	if previous != nil {
+		previous.close()
+	}
 	runLock.Lock()
 	if currentConfig == nil {
 		runLock.Unlock()
@@ -134,7 +154,10 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		if fd != 0 {
 			_ = syscall.Close(fd)
 		}
-		if callback != nil {
+		if tunHandler != nil {
+			tunHandler.close()
+			tunHandler = nil
+		} else if callback != nil {
 			releaseObject(callback)
 		}
 		return false
@@ -147,17 +170,8 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		log.Warnln("Android API %d requires gVisor TUN stack", version.Load())
 		tunCfg.Stack = constant.TunGvisor
 	}
-	tunLock.Lock()
-	defer tunLock.Unlock()
-	now := time.Now()
-	runTime = &now
 	if fd != 0 {
-		tunHandler = &TunHandler{
-			callback: callback,
-			limit:    semaphore.NewWeighted(4),
-		}
-		initTunHook()
-		tunListener, err := t.Start(fd, tunCfg)
+		tunListener, err := t.Start(fd, tunCfg, trafficTunnel)
 		if err != nil {
 			log.Errorln("handleStartTun: t.Start failed: %v", err)
 			// fd ownership: the Kotlin caller no longer closes the fd on a false
@@ -169,7 +183,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 			// failure would leak this one fd; accepted over a double-close.)
 			removeTunHook()
 			if tunHandler != nil {
-				releaseObject(tunHandler.callback)
+				tunHandler.close()
 				tunHandler = nil
 			}
 			return false
@@ -180,7 +194,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		} else {
 			removeTunHook()
 			if tunHandler != nil {
-				releaseObject(tunHandler.callback)
+				tunHandler.close()
 				tunHandler = nil
 			}
 			return false
@@ -191,6 +205,8 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	// The TUN is up. A headless tile/boot start reaches here without ever calling
 	// startListener (so isRunning stays false); tunUp lets the connections "Journal"
 	// forwarder run for this tunnel once the UI is foregrounded (see hub.go).
+	now := time.Now()
+	runTime = &now
 	tunUp.Store(true)
 	return true
 }
@@ -204,34 +220,42 @@ func handleGetRunTime() string {
 	return strconv.FormatInt(runTime.UnixMilli(), 10)
 }
 
+// Hooks remain installed: mihomo may load a hook before stop and call it later.
 func initTunHook() {
-	// Capture the handler locally so the hooks bind to THIS generation's handler.
-	// The global tunHandler is set to nil on failure paths (after removeTunHook);
-	// a dial goroutine that read the hook before removeTunHook would otherwise
-	// deref a nil global and panic the whole :remote process. handleProtect/
-	// handleResolveProcess nil-guard their own listener, so a stale-but-non-nil
-	// handler is safe. This also prevents cross-generation callback bleed.
-	h := tunHandler
-	dialer.DefaultSocketHook = func(network, address string, conn syscall.RawConn) error {
-		if platform.ShouldBlockConnection() {
-			return errBlocked
+	installTunHooks.Do(func() {
+		dialer.DefaultSocketHook = func(network, address string, conn syscall.RawConn) error {
+			if platform.ShouldBlockConnection() {
+				return errBlocked
+			}
+			return conn.Control(func(fd uintptr) {
+				for h := activeTunHandler.Load(); h != nil; {
+					if h.handleProtect(int(fd)) {
+						return
+					}
+					next := activeTunHandler.Load()
+					if next == h {
+						return
+					}
+					h = next
+				}
+			})
 		}
-		return conn.Control(func(fd uintptr) {
-			h.handleProtect(int(fd))
-		})
-	}
-	process.DefaultPackageNameResolver = func(metadata *constant.Metadata) (string, error) {
-		src, dst := metadata.RawSrcAddr, metadata.RawDstAddr
-		if src == nil || dst == nil {
-			return "", process.ErrInvalidNetwork
+		process.DefaultPackageNameResolver = func(metadata *constant.Metadata) (string, error) {
+			src, dst := metadata.RawSrcAddr, metadata.RawDstAddr
+			if src == nil || dst == nil {
+				return "", process.ErrInvalidNetwork
+			}
+			if h := activeTunHandler.Load(); h != nil {
+				return h.handleResolveProcess(src, dst), nil
+			}
+			return "", nil
 		}
-		return h.handleResolveProcess(src, dst), nil
-	}
+	})
+	activeTunHandler.Store(tunHandler)
 }
 
 func removeTunHook() {
-	dialer.DefaultSocketHook = nil
-	process.DefaultPackageNameResolver = nil
+	activeTunHandler.CompareAndSwap(tunHandler, nil)
 }
 
 func handleGetAndroidVpnOptions() string {
@@ -388,10 +412,8 @@ func updateDns(s *C.char) {
 //export resetConnections
 func resetConnections() {
 	go func() {
-		runLock.Lock()
-		defer runLock.Unlock()
-		resolver.ResetConnection()
-		closeConnections()
+		handleResetConnections()
+		handleCloseConnections()
 		log.Infoln("[Network] connections reset after network change")
 	}()
 }

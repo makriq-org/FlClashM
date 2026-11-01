@@ -176,11 +176,7 @@ class _AccessViewState extends ConsumerState<AccessView>
   }
 
   Future<void> _handleBack() async {
-    final appLocalizations = context.appLocalizations;
-    final res = await dialogs.showMessage(
-      title: appLocalizations.tip,
-      message: TextSpan(text: appLocalizations.saveChanges),
-    );
+    final res = await dialogs.showSaveChanges();
     if (res == null) {
       return;
     }
@@ -312,7 +308,10 @@ class _AccessViewState extends ConsumerState<AccessView>
             controller: _controller,
             child: ListView.builder(
               controller: _controller,
-              padding: EdgeInsets.only(bottom: BottomInsetScope.of(context)),
+              padding: EdgeInsets.only(
+                top: context.contentTopPadding,
+                bottom: context.bottomInset,
+              ),
               scrollCacheExtent: arrivalScrollCacheExtent(routeSettled),
               itemCount: packages.length,
               itemExtent: 72,
@@ -346,69 +345,6 @@ class _AccessViewState extends ConsumerState<AccessView>
         label: appLocalizations.authorize,
         onPressed: _handleGrantInstalledAppsPermission,
       ),
-    );
-  }
-
-  Widget _buildBannerBar({
-    required bool enable,
-    required AccessControlMode mode,
-    required int count,
-  }) {
-    final appLocalizations = context.appLocalizations;
-    final level = context.raisedSurfaceLevel;
-    final backgroundColor = level.colorOf(context.colorScheme);
-    if (!enable) {
-      return MaterialBanner(
-        backgroundColor: backgroundColor,
-        dividerColor: Colors.transparent,
-        leading: GlyphIcon(AppGlyphs.info, color: context.colorScheme.outline),
-        content: Text(
-          appLocalizations.accessControlDisabledDesc,
-          style: TextStyle(color: context.colorScheme.onSurfaceVariant),
-        ),
-        actions: [
-          ManagedSetting(
-            settingKey: accessControlSettingKey,
-            child: SurfaceScope(
-              level: level,
-              child: TonalButton(
-                size: TonalButtonSize.compact,
-                label: appLocalizations.turnOn,
-                onPressed: () => _handleEnable(true),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    final describe = mode == AccessControlMode.acceptSelected
-        ? appLocalizations.accessControlAllowDesc
-        : appLocalizations.accessControlNotAllowDesc;
-    final textStyle = AppTextStyle.subheadline
-        .of(context, emphasized: true)
-        .copyWith(color: context.colorScheme.onPrimary);
-    return MaterialBanner(
-      backgroundColor: backgroundColor,
-      dividerColor: Colors.transparent,
-      content: Text(describe),
-      actions: [
-        Card.filled(
-          color: context.colorScheme.primary,
-          elevation: 0,
-          shape: AppShape.md,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(appLocalizations.selected, style: textStyle),
-                const SizedBox(width: 4),
-                Flexible(child: Text('$count', style: textStyle)),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -530,15 +466,15 @@ class _AccessViewState extends ConsumerState<AccessView>
                       ref.invalidate(profileDeclaredAccessProvider),
                 ),
               )
-            : AppBarClearance(
-                child: Column(
+            : FloatingFootBar(
+                bar: _AccessStatus(
+                  accessControl: accessControl,
+                  selectedCount: valueList.length,
+                  onEnable: () => _handleEnable(true),
+                ),
+                body: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildBannerBar(
-                      enable: accessControl.enable,
-                      mode: accessControl.mode,
-                      count: valueList.length,
-                    ),
                     if (locked)
                       const ManagedSettingsHint(
                         keys: {accessControlSettingKey},
@@ -562,6 +498,73 @@ class _AccessViewState extends ConsumerState<AccessView>
                   ],
                 ),
               ),
+      ),
+    );
+  }
+}
+
+class _AccessStatus extends StatelessWidget {
+  const _AccessStatus({
+    required this.accessControl,
+    required this.selectedCount,
+    required this.onEnable,
+  });
+
+  final AccessControlProps accessControl;
+  final int selectedCount;
+  final VoidCallback onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    final colorScheme = context.colorScheme;
+    final enabled = accessControl.enable;
+    final description = enabled
+        ? switch (accessControl.mode) {
+            AccessControlMode.acceptSelected =>
+              appLocalizations.accessControlAllowDesc,
+            AccessControlMode.rejectSelected =>
+              appLocalizations.accessControlNotAllowDesc,
+          }
+        : appLocalizations.accessControlDisabledDesc;
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(16, 6, enabled ? 16 : 8, 6),
+      child: Row(
+        spacing: 12,
+        children: [
+          GlyphIcon(
+            enabled ? AppGlyphs.appsList : AppGlyphs.info,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          Expanded(
+            child: Text(
+              description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyle.footnote
+                  .of(context)
+                  .copyWith(color: colorScheme.onSurface),
+            ),
+          ),
+          if (enabled)
+            TonalChip(
+              label: appLocalizations.accessControlSelectedCount(selectedCount),
+              color: colorScheme.primary.opacity15,
+              foregroundColor: colorScheme.primary,
+            )
+          else
+            ManagedSetting(
+              settingKey: accessControlSettingKey,
+              showsLock: false,
+              onTakenOver: onEnable,
+              child: TonalButton(
+                size: TonalButtonSize.compact,
+                label: appLocalizations.turnOn,
+                onPressed: onEnable,
+              ),
+            ),
+        ],
       ),
     );
   }

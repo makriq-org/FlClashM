@@ -44,3 +44,52 @@ Remote-ресурс без сохранённых bytes возвращает о�
 Путь обновления: callback подключается host при открытии backend; API v1 и
 существующий transfer transport не меняются. Откат интеграции host удалением
 callback оставляет явную ошибку для runtime providers, сохраняя экспорт authoring.
+
+## Android adaptations from FlClashX v0.5.0-pre.6
+
+Source: `50a4067f7b4b6f7019eb11249f3ce8c9580b4071`, compared with
+`5b38c0c7dfba726b8335407d0df5e6205e2d9bfa`. Later upstream commits are excluded.
+
+- `ipQuality.get {ip,refresh?:bool}` returns `{quality,checkedAt}`. Go validates
+  the IP, queries ipinfo.io with an eight-second deadline, rejects mismatched IPs,
+  and retains at most 128 records for 72 hours in private application storage.
+  `refresh:true` bypasses the record. Flutter holds only a disposable projection;
+  cache failures do not turn a successful lookup into a failed lookup.
+- `linkSession.start {}` returns `{sessionId,url,expiresAt}`. This explicit user
+  action opens a private IPv4 LAN listener on an ephemeral port for two minutes.
+  The 256-bit capability lives in the URL and is never logged. Requests have
+  bounded headers/body/deadlines, no external assets, and a same-origin form.
+  `linkSession.get {sessionId}` reads one pending link; it never imports it.
+  `linkSession.stop {sessionId}`, timeout, backend shutdown, reset, leaving the
+  page or backgrounding the UI close the receiver. A stale UI cannot close a
+  replacement session. The TV must separately confirm through normal import.
+  This authoring service does not start VPN, alter SecurityPolicy or bypass
+  subscription import validation. No auto-discovery or permanent listener exists.
+  Transport is plaintext HTTP, intended only for a trusted private LAN. The
+  capability and submitted link are visible to an on-path observer; expiry and
+  TV confirmation do not protect their confidentiality. This protocol provides
+  bounded, explicit import authorization, not authenticated encrypted pairing.
+- `authoring.copyProxy {name}` is a receipted command. Go reads the applied
+  definition by name, reconstructs supported provider overrides, deduplicates and
+  chooses a free local name, removes external dialer references, and commits via
+  catalog CAS. Built-in transport definitions come from captured original input,
+  never from their temporary loopback adapters. Ambiguous provider rewrites fail.
+- `engine.command {method:"dns.clear",params:{}}` runs through RuntimeCoordinator;
+  it clears resolver caches/connections and advances diagnostic route freshness.
+- The Go service reconciles a lost Fallback pin only against the exact applied
+  selection, generation and catalog revision. Newer user choices win. Explicit
+  embedded transport selections are preserved. Runtime changes remain queued
+  through RuntimeCoordinator.
+
+No storage migration is required. Rollback removes these additive APIs and the
+UI mounts; the quality cache may be discarded. The old upstream pin remains the
+comparison point for unchanged exact base copies; selective tag adaptations are
+registered with reasons in the base drift allowlist.
+
+`profile.inspect` дополнительно возвращает `authentication:{enable,username,password}`,
+разобранный Go для отображения управляемой подпиской учётной записи. UI хранит
+только временную проекцию; сохранённые пользовательские credentials не меняются.
+
+Traffic accounting captures an atomically published engine namespace per
+TCP connection / UDP route. Config application publishes copied static types
+and synchronized provider handles; accounting never acquires the config lock.

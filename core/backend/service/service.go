@@ -22,28 +22,33 @@ import (
 )
 
 type Options struct {
-	Directory        string
-	LegacySettings   []byte
-	ReadLegacySource func(string) (string, error)
-	LegacyRunning    bool
-	LegacyTimeZone   string
-	LegacyUTCOffset  int
-	Compiler         *compile.Compiler
-	ValidateSource   profiles.Validator
-	Engine           backend.EngineAdapter
-	Platform         backend.PlatformAdapter
-	Nodes            backend.NodeOptions
-	HTTPClient       profiles.HTTPClient
-	DeviceHeaders    func(context.Context) (map[string]string, error)
-	UserAgent        string
-	Ticks            <-chan time.Time
-	Now              func() time.Time
+	ReadProxyDefinition func(context.Context, string) (map[string]any, error)
+	ReadProxyPins       func(context.Context) (map[string]string, error)
+	Directory           string
+	LegacySettings      []byte
+	ReadLegacySource    func(string) (string, error)
+	LegacyRunning       bool
+	LegacyTimeZone      string
+	LegacyUTCOffset     int
+	Compiler            *compile.Compiler
+	ValidateSource      profiles.Validator
+	Engine              backend.EngineAdapter
+	Platform            backend.PlatformAdapter
+	Nodes               backend.NodeOptions
+	HTTPClient          profiles.HTTPClient
+	DeviceHeaders       func(context.Context) (map[string]string, error)
+	UserAgent           string
+	Ticks               <-chan time.Time
+	Now                 func() time.Time
 
 	// ReadProviderResource resolves a runtime provider by name and kind (proxy/rule).
 	// The host must enforce the 16 MiB read limit and never interpret names as paths.
 	ReadProviderResource func(context.Context, string, string) ([]byte, error)
 }
 type App struct {
+	readProxyDefinition                 func(context.Context, string) (map[string]any, error)
+	linkSession                         linkSession
+	qualityMu                           sync.Mutex
 	readProviderResource                func(context.Context, string, string) ([]byte, error)
 	noticeMu                            sync.Mutex
 	now                                 func() time.Time
@@ -153,7 +158,11 @@ func Open(options Options) (*App, error) {
 	if zoneErr != nil {
 		zone = time.FixedZone("legacy", operations.document.LegacyUTCOffset)
 	}
+	app.readProxyDefinition = options.ReadProxyDefinition
 	app.subscriptions = &profiles.Subscriptions{Repository: repository, Client: client, DeviceHeaders: options.DeviceHeaders, UserAgent: options.UserAgent, Now: options.Now, LegacyTimeZone: zone, OnUpdated: app.profileUpdated, DecodeSource: options.Compiler.DecodeProfile}
+	if options.ReadProxyPins != nil {
+		app.workers.Go(func() { app.watchProxyPins(options.ReadProxyPins) })
+	}
 	runtimeEvents, detach := runtime.Subscribe(1)
 	app.workers.Go(func() {
 		defer detach()
@@ -474,6 +483,9 @@ func (a *App) applyCurrent(id string, connect bool) (backend.Receipt, error) {
 }
 func (a *App) Close() error {
 	a.cancel()
+	a.linkSession.close()
+	a.qualityMu.Lock()
+	a.qualityMu.Unlock()
 	a.workers.Wait()
 	err := a.runtime.Close()
 	a.eventMu.Lock()

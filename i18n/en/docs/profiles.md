@@ -495,3 +495,6 @@ Legacy short keys `type`, `sort`, `layout`, `icon`, `card` are also accepted. Fo
 | `closeconnections` | Close connections when switching nodes |
 
 </details>
+
+
+Profile QR codes are available in the profile menu. “Send from phone” opens a two-minute local session; confirm the received link on the TV. Leaving the page closes the receiver. IP quality is cached by the backend for three days; Refresh queries the source again.

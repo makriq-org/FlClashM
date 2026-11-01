@@ -37,9 +37,24 @@ extension on ProxyField {
     ProxyField.flow => 'Flow',
     ProxyField.wsPath => 'WebSocket Path',
     ProxyField.wsHost => 'WebSocket Host',
+    ProxyField.wsHeaders => l.transportHeaders('WebSocket'),
+    ProxyField.wsMaxEarlyData => 'Max Early Data',
+    ProxyField.wsEarlyDataHeaderName => 'Early Data Header',
+    ProxyField.wsHttpUpgrade => 'HTTPUpgrade',
+    ProxyField.wsHttpUpgradeFastOpen => 'HTTPUpgrade Fast Open',
+    ProxyField.httpMethod => 'HTTP Method',
+    ProxyField.httpPath => 'HTTP Path',
+    ProxyField.httpHost => 'HTTP Host',
+    ProxyField.httpHeaders => l.transportHeaders('HTTP'),
+    ProxyField.h2Host => 'HTTP/2 Host',
+    ProxyField.h2Path => 'HTTP/2 Path',
     ProxyField.grpcServiceName => 'gRPC Service Name',
     ProxyField.xhttpPath => 'XHTTP Path',
     ProxyField.xhttpHost => 'XHTTP Host',
+    ProxyField.mkcpSeed => 'mKCP Seed',
+    ProxyField.mkcpHeader => 'mKCP Header',
+    ProxyField.mekyaUrl => 'Mekya URL',
+    ProxyField.headers => l.requestHeaders,
     ProxyField.tls => 'TLS',
     ProxyField.sni || ProxyField.servername => 'SNI',
     ProxyField.alpn => 'ALPN',
@@ -50,6 +65,17 @@ extension on ProxyField {
     ProxyField.plugin => l.plugin,
     ProxyField.pluginMode => l.pluginMode,
     ProxyField.pluginHost => l.pluginHost,
+    ProxyField.pluginPath => l.pluginPath,
+    ProxyField.pluginUsername => l.pluginUsername,
+    ProxyField.pluginPassword => l.pluginPassword,
+    ProxyField.pluginVersion => l.protocolVersion,
+    ProxyField.pluginVersionHint => 'TLS Version',
+    ProxyField.pluginRestlsScript => 'Restls Script',
+    ProxyField.pluginKey => l.secretKey,
+    ProxyField.pluginCrypt => l.pluginCipher,
+    ProxyField.pluginTls => 'TLS',
+    ProxyField.pluginMux => 'Mux',
+    ProxyField.pluginSkipCertVerify => l.skipCertVerify,
     ProxyField.udpOverTcp => 'UDP over TCP',
     ProxyField.protocolParam => l.protocolParam,
     ProxyField.obfsParam => l.obfsParam,
@@ -95,9 +121,23 @@ extension on ProxyField {
     ProxyField.flow ||
     ProxyField.wsPath ||
     ProxyField.wsHost ||
+    ProxyField.wsHeaders ||
+    ProxyField.wsMaxEarlyData ||
+    ProxyField.wsEarlyDataHeaderName ||
+    ProxyField.wsHttpUpgrade ||
+    ProxyField.wsHttpUpgradeFastOpen ||
+    ProxyField.httpMethod ||
+    ProxyField.httpPath ||
+    ProxyField.httpHost ||
+    ProxyField.httpHeaders ||
+    ProxyField.h2Host ||
+    ProxyField.h2Path ||
     ProxyField.grpcServiceName ||
     ProxyField.xhttpPath ||
-    ProxyField.xhttpHost => _OptionSection.transport,
+    ProxyField.xhttpHost ||
+    ProxyField.mkcpSeed ||
+    ProxyField.mkcpHeader ||
+    ProxyField.mekyaUrl => _OptionSection.transport,
     ProxyField.tls ||
     ProxyField.sni ||
     ProxyField.servername ||
@@ -121,7 +161,12 @@ extension on ProxyField {
     ProxyField.ipv6 ||
     ProxyField.allowedIps => TextInputLimits.cidr,
     ProxyField.dns => TextInputLimits.dnsServer,
-    ProxyField.wsPath || ProxyField.xhttpPath => TextInputLimits.url,
+    ProxyField.wsPath ||
+    ProxyField.httpPath ||
+    ProxyField.h2Path ||
+    ProxyField.xhttpPath ||
+    ProxyField.mekyaUrl ||
+    ProxyField.pluginPath => TextInputLimits.url,
     _ when kind == ProxyFieldKind.number => TextInputLimits.number,
     _ => TextInputLimits.domain,
   };
@@ -129,6 +174,7 @@ extension on ProxyField {
   String? get hintText => switch (this) {
     ProxyField.up || ProxyField.down => '100 Mbps',
     ProxyField.ports => '443,8000-9000',
+    ProxyField.httpMethod => 'GET',
     _ => null,
   };
 }
@@ -252,7 +298,7 @@ class _CustomProxiesViewState extends ConsumerState<CustomProxiesView> {
         for (final proxy in previous) proxy.definition,
       ]);
     } catch (error) {
-      await dialogs.showMessage(message: TextSpan(text: compactError(error)));
+      await dialogs.showAlert(message: TextSpan(text: compactError(error)));
       return;
     }
     if (!mounted) {
@@ -451,7 +497,7 @@ class _CustomProxiesViewState extends ConsumerState<CustomProxiesView> {
                     16,
                     0,
                     16,
-                    16 + BottomInsetScope.of(context),
+                    16 + context.bottomInset,
                   ),
                   sliver: reorderable
                       ? SliverReorderableList(
@@ -786,11 +832,11 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     _shown = _shownIn(proxy);
     _untouched = {
       for (final field in proxy.emptyOptions)
-        if (proxy.valueOf(field) == null) field,
+        if (!_hasOptionValue(proxy, field)) field,
     };
     NestedFormSheet.bindSave(context, _handleSave);
     ref.listenManual(customProxyProvider, (_, proxy) {
-      _untouched.removeWhere((field) => proxy.valueOf(field) != null);
+      _untouched.removeWhere((field) => _hasOptionValue(proxy, field));
     });
     ref.listenManual(
       customProxyProvider.select((state) => state.definition),
@@ -865,7 +911,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
           ).single.definition;
     final next = _withShown(current.copyWith(definition: named), {
       for (final field in _shown)
-        if (current.valueOf(field) == null) field,
+        if (!_hasOptionValue(current, field)) field,
     });
     ref.read(customProxyProvider.notifier).value = next;
     setState(() {
@@ -874,9 +920,14 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     });
   }
 
+  static bool _hasOptionValue(CustomProxy proxy, ProxyField field) =>
+      field.kind == ProxyFieldKind.map
+      ? proxy.stringMapOf(field).isNotEmpty
+      : proxy.valueOf(field) != null;
+
   static Set<ProxyField> _shownIn(CustomProxy proxy) => {
     for (final field in proxy.options)
-      if (proxy.valueOf(field) != null || proxy.emptyOptions.contains(field))
+      if (_hasOptionValue(proxy, field) || proxy.emptyOptions.contains(field))
         field,
   };
 
@@ -884,7 +935,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       proxy.copyWith(
         emptyOptions: {
           for (final field in shown)
-            if (proxy.valueOf(field) == null && _untouched.contains(field))
+            if (!_hasOptionValue(proxy, field) && _untouched.contains(field))
               field,
         },
       );
@@ -899,10 +950,12 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       for (final field in proxy.options)
         if (_shown.contains(field) ||
             unlocked.contains(field) ||
-            proxy.valueOf(field) != null)
+            _hasOptionValue(proxy, field))
           field,
     };
-    _untouched.addAll(unlocked.where((field) => proxy.valueOf(field) == null));
+    _untouched.addAll(
+      unlocked.where((field) => !_hasOptionValue(proxy, field)),
+    );
     ref.read(customProxyProvider.notifier).value = _withShown(proxy, shown);
     setState(() {
       _shown = shown;
@@ -1050,7 +1103,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       title: title,
       leading: leading,
       onPressed: () => onChanged(!value),
-      trailing: Switch(value: value, onChanged: onChanged),
+      trailing: CommonSwitch(value: value, onChanged: onChanged),
     );
   }
 
@@ -1084,7 +1137,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
         title: title,
         value: value == true,
         leading: leading,
-        onChanged: update,
+        onChanged: (value) => _updateOption(field, value),
       ),
       ProxyFieldKind.choice => _buildPickerItem(
         title: title,
@@ -1095,8 +1148,14 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       ProxyFieldKind.list => _buildListItem(
         proxy,
         title: title,
-        key: key,
+        path: field.path,
         itemMaxLength: field.maxLength,
+        leading: leading,
+      ),
+      ProxyFieldKind.map => _buildMapItem(
+        proxy,
+        field,
+        title: title,
         leading: leading,
       ),
     };
@@ -1184,12 +1243,12 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
   Widget _buildListItem(
     CustomProxy proxy, {
     required String title,
-    required String key,
+    required List<String> path,
     required int itemMaxLength,
     Widget? leading,
   }) {
     final appLocalizations = context.appLocalizations;
-    final items = proxy.stringsOf(key);
+    final items = proxy.stringsOf(path);
     return _buildPickerItem(
       title: title,
       value: items.isEmpty
@@ -1200,9 +1259,31 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
         PagedSheetRoute<void>(
           builder: (_) => _ProxyValuesView(
             title: title,
-            field: key,
+            path: path,
             itemMaxLength: itemMaxLength,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapItem(
+    CustomProxy proxy,
+    ProxyField field, {
+    required String title,
+    Widget? leading,
+  }) {
+    final appLocalizations = context.appLocalizations;
+    final entries = proxy.stringMapOf(field);
+    return _buildPickerItem(
+      title: title,
+      value: entries.isEmpty
+          ? appLocalizations.none
+          : appLocalizations.itemsCount(entries.length),
+      leading: leading,
+      onPressed: () => Navigator.of(context).push(
+        PagedSheetRoute<void>(
+          builder: (_) => _ProxyEntriesView(title: title, field: field),
         ),
       ),
     );
@@ -1250,7 +1331,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     };
     final value = proxy.valueOf(field) ?? initial;
     _shown = {..._shown, field};
-    if (value == null) {
+    if (!_hasOptionValue(proxy, field) && initial == null) {
       _untouched.add(field);
     }
     _updateOption(field, value);
@@ -1258,7 +1339,11 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
 
   void _handleRemoveOption(ProxyField field) {
     _shown = {..._shown}..remove(field);
-    _updateOption(field, null);
+    final proxy = ref.read(customProxyProvider);
+    final value = field.kind == ProxyFieldKind.map
+        ? proxy.withEntries(field, {}).valueOf(field)
+        : null;
+    _updateOption(field, value);
   }
 
   Widget _buildOptions(CustomProxy proxy) {
@@ -1317,7 +1402,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
         _buildListItem(
           proxy,
           title: appLocalizations.peers,
-          key: 'peers',
+          path: const ['peers'],
           itemMaxLength: TextInputLimits.uri,
         ),
         _buildTextItem(
@@ -1336,7 +1421,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
         _buildListItem(
           proxy,
           title: appLocalizations.exitNodes,
-          key: 'exit-nodes',
+          path: const ['exit-nodes'],
           itemMaxLength: TextInputLimits.cidr,
         ),
       ],
@@ -1420,9 +1505,8 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
         slivers: [
           SliverCustomIssuesBanner(issues: issues),
           SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-            ).copyWith(bottom: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16)
+                .copyWith(bottom: 20 + context.bottomInset),
             sliver: SliverList.list(
               children: [
                 generateSection(
@@ -1500,23 +1584,23 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
 /// button pops it without a result.
 class _ProxyValuesView extends ConsumerWidget {
   final String title;
-  final String field;
+  final List<String> path;
   final int itemMaxLength;
 
   const _ProxyValuesView({
     required this.title,
-    required this.field,
+    required this.path,
     required this.itemMaxLength,
   });
 
   List<String> _valuesOf(WidgetRef ref) =>
-      ref.read(customProxyProvider).stringsOf(field);
+      ref.read(customProxyProvider).stringsOf(path);
 
   void _save(WidgetRef ref, List<String> values) {
     ref
         .read(customProxyProvider.notifier)
         .update(
-          (state) => state.withValue(field, values.isEmpty ? null : values),
+          (state) => state.withValueAt(path, values.isEmpty ? null : values),
         );
   }
 
@@ -1550,7 +1634,7 @@ class _ProxyValuesView extends ConsumerWidget {
       title: title,
       idOf: (value) => value,
       itemsOf: (ref) => ref.watch(
-        customProxyProvider.select((state) => state.stringsOf(field)),
+        customProxyProvider.select((state) => state.stringsOf(path)),
       ),
       itemBuilder:
           (
@@ -1574,6 +1658,108 @@ class _ProxyValuesView extends ConsumerWidget {
       onDelete: (values) => _save(ref, [
         for (final value in _valuesOf(ref))
           if (!values.contains(value)) value,
+      ]),
+      emptyLabel: context.appLocalizations.nullTip(title),
+    );
+  }
+}
+
+/// The map counterpart of [_ProxyValuesView], writing straight into the form
+/// for the same reason.
+class _ProxyEntriesView extends ConsumerWidget {
+  final String title;
+  final ProxyField field;
+
+  const _ProxyEntriesView({required this.title, required this.field});
+
+  Map<String, String> _entriesOf(WidgetRef ref) =>
+      ref.read(customProxyProvider).stringMapOf(field);
+
+  void _save(
+    WidgetRef ref,
+    Iterable<MapEntry<String, String>> entries, {
+    Map<String, String> originalKeys = const {},
+  }) {
+    ref
+        .read(customProxyProvider.notifier)
+        .update(
+          (state) => state.withEntries(
+            field,
+            Map.fromEntries(entries),
+            originalKeys: originalKeys,
+          ),
+        );
+  }
+
+  Future<void> _handleAddOrUpdate(
+    BuildContext context,
+    WidgetRef ref, [
+    MapEntry<String, String>? entry,
+  ]) async {
+    final res = await showMapEntryForm(
+      context,
+      listTitle: title,
+      entry: entry,
+      existingKeys: {
+        ..._entriesOf(ref).keys,
+        ...ref.read(customProxyProvider).ownedKeysOf(field),
+      },
+      keyMaxLength: TextInputLimits.name,
+      valueMaxLength: field.maxLength,
+      ignoreKeyCase: true,
+    );
+    if (res == null || res.isEmpty || !context.mounted) {
+      return;
+    }
+    final entries = _entriesOf(ref).entries;
+    _save(
+      ref,
+      entry == null
+          ? [...entries, ...res]
+          : [
+              for (final item in entries)
+                item.key == entry.key ? res.single : item,
+            ],
+      originalKeys: entry == null ? const {} : {res.single.key: entry.key},
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListEditorPage<MapEntry<String, String>, String>(
+      title: title,
+      idOf: (entry) => entry.key,
+      itemsOf: (ref) => ref
+          .watch(
+            customProxyProvider.select((state) => state.stringMapOf(field)),
+          )
+          .entries
+          .toList(),
+      itemBuilder:
+          (
+            context,
+            ref,
+            entry,
+            index,
+            isEditing,
+            isSelected,
+            onToggleSelected,
+          ) => SelectedDecorationListItem(
+            title: Text(entry.key),
+            subtitle: Text(entry.value),
+            isEditing: isEditing,
+            isSelected: isSelected,
+            onSelected: onToggleSelected,
+            onPressed: () => _handleAddOrUpdate(context, ref, entry),
+          ),
+      onReorder: (oldIndex, newIndex) => _save(
+        ref,
+        _entriesOf(ref).entries.toList().copyAndReorder(oldIndex, newIndex),
+      ),
+      onAdd: () => _handleAddOrUpdate(context, ref),
+      onDelete: (keys) => _save(ref, [
+        for (final entry in _entriesOf(ref).entries)
+          if (!keys.contains(entry.key)) entry,
       ]),
       emptyLabel: context.appLocalizations.nullTip(title),
     );

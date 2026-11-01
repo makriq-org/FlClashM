@@ -112,7 +112,6 @@ class _ProfilesViewState extends ConsumerState<ProfilesView> {
                   tooltip: appLocalizations.addProfile,
                 ),
           iconActions: picker ? const [] : _buildActions(state.profiles),
-          foldPrimaryAction: true,
           body: NullStatusSwitcher(
             isEmpty: state.profiles.isEmpty,
             nullStatus: NullStatus(
@@ -458,6 +457,16 @@ class ProfileItem extends ConsumerWidget {
                   _handleCopyLink(context);
                 },
               ),
+            if (isUrl)
+              CommonPopupMenuItem(
+                glyph: AppGlyphs.qrCode,
+                label: appLocalizations.qrcode,
+                onPressed: () => dialogs.showQrCode(
+                  title: profile.realLabel,
+                  data: profile.url,
+                  message: appLocalizations.shareQrcodeTip,
+                ),
+              ),
             CommonPopupMenuItem(
               glyph: AppGlyphs.export,
               label: appLocalizations.exportFile,
@@ -634,9 +643,8 @@ class _ReorderableProfilesSheetState
         padding: const EdgeInsets.only(bottom: 32),
         child: ReorderableListView.builder(
           buildDefaultDragHandles: false,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-          ).copyWith(top: context.contentTopPadding),
+          padding: const EdgeInsets.symmetric(horizontal: 16)
+              .copyWith(top: context.contentTopPadding),
           proxyDecorator: (child, index, animation) {
             return commonProxyDecorator(_buildItem(index), index, animation);
           },
