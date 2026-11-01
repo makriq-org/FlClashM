@@ -26,6 +26,43 @@ type accountingTunnel struct {
 
 var trafficTunnel constant.Tunnel = accountingTunnel{tunnel.Tunnel}
 
+// Immutable namespace, published by the engine adapter when it applies a config.
+// Provider handles expose their own synchronized proxy snapshots across refreshes.
+type trafficProxySnapshot struct {
+	types     map[string]constant.AdapterType
+	providers []provider.ProxyProvider
+}
+
+var activeTrafficProxies atomic.Pointer[trafficProxySnapshot]
+
+func publishTrafficProxies(proxies map[string]constant.Proxy, providers map[string]provider.ProxyProvider) {
+	snapshot := &trafficProxySnapshot{types: make(map[string]constant.AdapterType, len(proxies))}
+	for name, proxy := range proxies {
+		snapshot.types[name] = proxy.Type()
+	}
+	for _, p := range providers {
+		snapshot.providers = append(snapshot.providers, p)
+	}
+	activeTrafficProxies.Store(snapshot)
+}
+
+func (s *trafficProxySnapshot) isDirect(chain constant.Chain) bool {
+	name := chain.Last()
+	if s != nil {
+		for _, p := range s.providers {
+			for _, proxy := range p.Proxies() {
+				if proxy.Name() == name {
+					return proxy.Type() == constant.Direct
+				}
+			}
+		}
+		if kind, ok := s.types[name]; ok {
+			return kind == constant.Direct
+		}
+	}
+	return name == "DIRECT"
+}
+
 // The TUN listener asserts provider.Tunnel without checking and the by-name
 // dialer asserts proxydialer.Tunnel, so the wrapper must keep offering what
 // embedding constant.Tunnel alone hides.
@@ -35,7 +72,7 @@ var (
 )
 
 func (t accountingTunnel) HandleTCPConn(conn net.Conn, metadata *constant.Metadata) {
-	t.Tunnel.HandleTCPConn(&accountedConn{Conn: conn, metadata: metadata}, metadata)
+	t.Tunnel.HandleTCPConn(&accountedConn{Conn: conn, metadata: metadata, account: trafficAccount{proxies: activeTrafficProxies.Load()}}, metadata)
 }
 
 func (t accountingTunnel) HandleUDPPacket(packet constant.UDPPacket, metadata *constant.Metadata) {
@@ -76,6 +113,7 @@ const (
 )
 
 type trafficAccount struct {
+	proxies   *trafficProxySnapshot
 	mu        sync.Mutex
 	metadata  *constant.Metadata
 	udp       bool
@@ -130,7 +168,7 @@ func (a *trafficAccount) settle(tracker statistic.Tracker) {
 	info := tracker.Info()
 	a.trackerID = tracker.ID()
 	a.verified = time.Now()
-	if isDirectChain(info.Chain) {
+	if a.proxies.isDirect(info.Chain) {
 		a.route = routeDirect
 	} else {
 		a.route = routeProxied
@@ -138,16 +176,6 @@ func (a *trafficAccount) settle(tracker statistic.Tracker) {
 	}
 	a.up, a.down = 0, 0
 	onTrackerFound(tracker)
-}
-
-func isDirectChain(chain constant.Chain) bool {
-	runLock.Lock()
-	defer runLock.Unlock()
-	name := chain.Last()
-	if proxy, ok := allProxies()[name]; ok {
-		return proxy.Type() == constant.Direct
-	}
-	return name == "DIRECT"
 }
 
 func onTrackerFound(tracker statistic.Tracker) { notifyProbeRoute(tracker) }
@@ -232,7 +260,7 @@ func (t *udpRouteTable) routeFor(metadata *constant.Metadata) *trafficAccount {
 	}
 	route, ok := t.routes[key]
 	if !ok {
-		route = &udpRoute{trafficAccount: trafficAccount{metadata: metadata, udp: true}}
+		route = &udpRoute{trafficAccount: trafficAccount{metadata: metadata, udp: true, proxies: activeTrafficProxies.Load()}}
 		t.routes[key] = route
 	}
 	route.lastSeen = now

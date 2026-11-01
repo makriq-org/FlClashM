@@ -474,6 +474,7 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 		applyConfig = embeddedExecutorConfig(currentConfig)
 	}
 	executor.ApplyConfig(applyConfig, true)
+	publishTrafficProxies(parsedConfig.Proxies, parsedConfig.Providers)
 	watchResolvers()
 	close(applyFinished)
 	<-cancelFinished

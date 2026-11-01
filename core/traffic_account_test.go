@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/constant"
@@ -73,5 +74,27 @@ func TestTrafficAccountKeepsLookingForATrackerRegisteredAfterTheBurst(t *testing
 	}
 	if account.up != 0 {
 		t.Fatalf("%d bytes still waiting after the session was attributed", account.up)
+	}
+}
+
+func TestTrafficClassificationDoesNotWaitForConfigurationLock(t *testing.T) {
+	previous := activeTrafficProxies.Load()
+	t.Cleanup(func() { activeTrafficProxies.Store(previous) })
+	direct := outbound.NewDirectWithOption(outbound.DirectOption{Name: "bypass"})
+	publishTrafficProxies(map[string]constant.Proxy{"bypass": adapter.NewProxy(direct)}, nil)
+	captured := activeTrafficProxies.Load()
+	publishTrafficProxies(nil, nil)
+	runLock.Lock()
+	done := make(chan bool, 1)
+	go func() { done <- captured.isDirect(constant.Chain{"bypass"}) }()
+	select {
+	case direct := <-done:
+		runLock.Unlock()
+		if !direct {
+			t.Fatal("captured direct alias changed with replacement config")
+		}
+	case <-time.After(time.Second):
+		runLock.Unlock()
+		t.Fatal("traffic accounting waited for configuration lock")
 	}
 }

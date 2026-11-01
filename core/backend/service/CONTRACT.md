@@ -85,3 +85,7 @@ registered with reasons in the base drift allowlist.
 `profile.inspect` дополнительно возвращает `authentication:{enable,username,password}`,
 разобранный Go для отображения управляемой подпиской учётной записи. UI хранит
 только временную проекцию; сохранённые пользовательские credentials не меняются.
+
+Traffic accounting captures an atomically published engine namespace per
+TCP connection / UDP route. Config application publishes copied static types
+and synchronized provider handles; accounting never acquires the config lock.
