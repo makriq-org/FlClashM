@@ -132,7 +132,11 @@ class _ScanPageState extends ConsumerState<ScanPage>
     _effectController.stop();
     unawaited(_subscription?.cancel());
     _subscription = null;
-    await _starting;
+    try {
+      await _starting;
+    } on MobileScannerException {
+      // _start already reports the failure; closing must still release the camera.
+    }
     _holdsLastFrame = _controller.value.isRunning;
     try {
       await _controller.pause();
