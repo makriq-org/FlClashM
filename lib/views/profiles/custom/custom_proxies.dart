@@ -1664,10 +1664,20 @@ class _ProxyEntriesView extends ConsumerWidget {
   Map<String, String> _entriesOf(WidgetRef ref) =>
       ref.read(customProxyProvider).stringMapOf(field);
 
-  void _save(WidgetRef ref, Iterable<MapEntry<String, String>> entries) {
+  void _save(
+    WidgetRef ref,
+    Iterable<MapEntry<String, String>> entries, {
+    Map<String, String> originalKeys = const {},
+  }) {
     ref
         .read(customProxyProvider.notifier)
-        .update((state) => state.withEntries(field, Map.fromEntries(entries)));
+        .update(
+          (state) => state.withEntries(
+            field,
+            Map.fromEntries(entries),
+            originalKeys: originalKeys,
+          ),
+        );
   }
 
   Future<void> _handleAddOrUpdate(
@@ -1699,6 +1709,7 @@ class _ProxyEntriesView extends ConsumerWidget {
               for (final item in entries)
                 item.key == entry.key ? res.single : item,
             ],
+      originalKeys: entry == null ? const {} : {res.single.key: entry.key},
     );
   }
 

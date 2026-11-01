@@ -866,7 +866,12 @@ extension CustomProxyExt on CustomProxy {
 
   /// Keeps the keys other fields edit, and each value [entries] leaves as
   /// [stringMapOf] showed it, so a list of values survives editing the rest.
-  CustomProxy withEntries(ProxyField field, Map<String, String> entries) {
+  /// [originalKeys] maps renamed keys to their original keys in this draft.
+  CustomProxy withEntries(
+    ProxyField field,
+    Map<String, String> entries, {
+    Map<String, String> originalKeys = const {},
+  }) {
     final previous = switch (valueOf(field)) {
       final Map map => map,
       _ => const {},
@@ -879,8 +884,8 @@ extension CustomProxyExt on CustomProxy {
       for (final MapEntry(:key, :value) in previous.entries)
         if (owned.contains(key.toString().toLowerCase())) key.toString(): value,
       for (final MapEntry(:key, :value) in entries.entries)
-        key: shown[key] == value
-            ? previous[key]
+        key: shown[originalKeys[key] ?? key] == value
+            ? previous[originalKeys[key] ?? key]
             : listsValues
             ? [value]
             : value,
