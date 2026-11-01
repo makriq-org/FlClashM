@@ -96,7 +96,7 @@ class EditorPage extends ConsumerStatefulWidget {
   final bool titleEditable;
 
   /// A returned future is the save still running: until it completes the
-  /// page takes no second save and no pointer.
+  /// page blocks edits, navigation and a second save.
   final FutureOr<void> Function(
     BuildContext context,
     String title,
@@ -301,6 +301,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
     if (onSave == null || readOnly || _saving) return;
     _commitComposing();
     if (!_isDirty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
     try {
       final text = await _editor!.controller!.readText();
@@ -311,6 +312,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
   }
 
   Future<bool> _handlePop(BuildContext context) async {
+    if (_saving) return false;
     final onPop = widget.onPop;
     _commitComposing();
     if (onPop == null || !_isDirty) {
@@ -347,7 +349,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
           child: CommonScaffold(
             titleWidget: _EditorTitleField(
               controller: _titleController,
-              enabled: widget.titleEditable,
+              enabled: widget.titleEditable && !_saving,
             ),
             iconActions: [
               IconButtonData(
@@ -369,12 +371,16 @@ class _EditorPageState extends ConsumerState<EditorPage>
               CommonPopupMenuItem(
                 glyph: AppGlyphs.undo,
                 label: appLocalizations.undo,
-                onPressed: _barState.canUndo ? _undoController.undo : null,
+                onPressed: _barState.canUndo && !_saving
+                    ? _undoController.undo
+                    : null,
               ),
               CommonPopupMenuItem(
                 glyph: AppGlyphs.redo,
                 label: appLocalizations.redo,
-                onPressed: _barState.canRedo ? _undoController.redo : null,
+                onPressed: _barState.canRedo && !_saving
+                    ? _undoController.redo
+                    : null,
               ),
               CommonPopupMenuItem(
                 glyph: AppGlyphs.textSize,
@@ -415,7 +421,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
                 document: _document,
                 language: widget.language,
                 schema: widget.schema,
-                readOnly: readOnly,
+                readOnly: readOnly || _saving,
                 undoController: _undoController,
                 showsLoading: routeSettled,
                 onReady: _handleReady,
