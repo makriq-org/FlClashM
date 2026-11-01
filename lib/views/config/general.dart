@@ -479,7 +479,11 @@ class GeneralView extends ConsumerWidget {
         title: (l) => l.findProcessMode,
         managedKey: 'clash.find-process-mode',
         options: FindProcessMode.values,
-        textBuilder: (value) => value.name,
+        textBuilder: (value) => switch (value) {
+          FindProcessMode.always => currentAppLocalizations.findProcessAlways,
+          FindProcessMode.strict => currentAppLocalizations.findProcessStrict,
+          FindProcessMode.off => currentAppLocalizations.disabled,
+        },
         selector: patchClashConfigProvider.select(
           (state) => state.findProcessMode,
         ),
