@@ -300,10 +300,11 @@ class _EditorPageState extends ConsumerState<EditorPage>
     final onSave = widget.onSave;
     if (onSave == null || readOnly || _saving) return;
     _commitComposing();
-    if (!_isDirty) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
     try {
+      await _editor?.waitForPendingEdits();
+      if (!mounted || !_isDirty) return;
       final text = await _editor!.controller!.readText();
       if (mounted) await onSave(context, _titleController.text, text);
     } finally {
@@ -313,17 +314,21 @@ class _EditorPageState extends ConsumerState<EditorPage>
 
   Future<bool> _handlePop(BuildContext context) async {
     if (_saving) return false;
-    final onPop = widget.onPop;
     _commitComposing();
-    if (onPop == null || !_isDirty) {
-      return true;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _saving = true);
+    try {
+      await _editor?.waitForPendingEdits();
+      if (!mounted) return false;
+      final onPop = widget.onPop;
+      if (onPop == null || !_isDirty) return true;
+      final text = await _editor!.controller!.readText();
+      if (!mounted) return false;
+      final res = await onPop(context, _titleController.text, text);
+      return res && context.mounted;
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    final res = await onPop(
-      context,
-      _titleController.text,
-      await _editor!.controller!.readText(),
-    );
-    return res && context.mounted;
   }
 
   @override
@@ -468,6 +473,11 @@ class EditorViewState extends ConsumerState<EditorView> {
   Object? _initError;
 
   CodeForgeController? get controller => _controller;
+
+  /// A save must include any replacement started before input was locked.
+  Future<void> waitForPendingEdits() async {
+    await _findController?.waitForPendingReplacement();
+  }
 
   UndoRedoController get _undoController =>
       widget.undoController ?? (_ownedUndoController ??= UndoRedoController());

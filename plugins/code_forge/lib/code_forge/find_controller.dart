@@ -40,6 +40,7 @@ class FindController extends ChangeNotifier {
   int _searchGeneration = 0;
   ({bool scrollToMatch})? _backgroundSearch;
   bool _searching = false, _disposed = false;
+  Future<void>? _pendingReplacement;
 
   // An empty match, as `$` finds, is found at the caret again once replaced.
   int? _emptyMatchReplacedAt;
@@ -392,7 +393,31 @@ class FindController extends ChangeNotifier {
   /// Replaces all matches with the text in [replaceInputController]. A long
   /// text is rewritten off the UI isolate, and left alone if it changes
   /// meanwhile.
-  Future<void> replaceAll() async {
+  Future<void> replaceAll() {
+    final pending = _pendingReplacement;
+    if (pending != null) return pending;
+    final completion = Completer<void>();
+    // Publish before committing composition or notifying any listeners.
+    _pendingReplacement = completion.future;
+    unawaited(() async {
+      try {
+        if (!_disposed) await _replaceAll();
+        completion.complete();
+      } catch (error, stack) {
+        completion.completeError(error, stack);
+      } finally {
+        _pendingReplacement = null;
+      }
+    }());
+    return completion.future;
+  }
+
+  /// Waits for the replacement already in flight, propagating its failure.
+  /// Calls to [replaceAll] while busy share that same operation and future.
+  Future<void> waitForPendingReplacement() =>
+      _pendingReplacement ?? Future<void>.value();
+
+  Future<void> _replaceAll() async {
     _codeController.commitComposition();
     if (_matches.isEmpty) return;
     final pattern = _pattern(_lastQuery);
