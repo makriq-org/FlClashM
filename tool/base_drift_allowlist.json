@@ -2764,6 +2764,11 @@
       "path": "lib/widgets/config_item.dart",
       "bucket": "budget",
       "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/providers/generated/ip_quality.g.dart",
+      "bucket": "budget",
+      "reason": "Riverpod-регистрация и хеш сгенерированы для тонкой проекции Go API ipQuality.get; сетевой запрос и трёхдневный кэш принадлежат Go backend."
     }
   ]
 }

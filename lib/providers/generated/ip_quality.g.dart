@@ -105,7 +105,7 @@ final class IpQualityProvider
   }
 }
 
-String _$ipQualityHash() => r'cf9d456ef98e242ae1d529bf5beb139eea325a13';
+String _$ipQualityHash() => r'd9ac4db8a995286167fcc914341a73e9c79fa615';
 
 final class IpQualityFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<IpQuality>, String> {
