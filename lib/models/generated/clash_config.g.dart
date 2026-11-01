@@ -94,6 +94,7 @@ _Proxy _$ProxyFromJson(Map<String, dynamic> json) => _Proxy(
   type: json['type'] as String,
   now: json['now'] as String?,
   serverDescription: json['serverDescription'] as String?,
+  providerName: json['provider-name'] as String?,
 );
 
 Map<String, dynamic> _$ProxyToJson(_Proxy instance) => <String, dynamic>{
@@ -101,6 +102,7 @@ Map<String, dynamic> _$ProxyToJson(_Proxy instance) => <String, dynamic>{
   'type': instance.type,
   'now': instance.now,
   'serverDescription': instance.serverDescription,
+  'provider-name': instance.providerName,
 };
 
 _CustomProxy _$CustomProxyFromJson(Map<String, dynamic> json) => _CustomProxy(

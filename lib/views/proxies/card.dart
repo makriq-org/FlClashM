@@ -35,7 +35,8 @@ void selectGroupProxy(
 /// Built-ins and groups have no definition, and a custom profile's own proxies
 /// are the local proxies already.
 bool _isAddableToLocal(Proxy proxy, {required bool isCustomProfile}) {
-  return !reservedCustomProxyNames.contains(proxy.name) &&
+  return (proxy.providerName != null || !isCustomProfile) &&
+      !reservedCustomProxyNames.contains(proxy.name) &&
       GroupTypeExtension.getGroupType(proxy.type) == null;
 }
 

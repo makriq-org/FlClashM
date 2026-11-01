@@ -146,6 +146,9 @@ func proxiesWithDescriptions() map[string]interface{} {
 		if err := json.Unmarshal(data, &item); err != nil {
 			continue
 		}
+		if providerName := proxy.ProxyInfo().ProviderName; providerName != "" {
+			item["provider-name"] = providerName
+		}
 		proxyDescMu.RLock()
 		desc, hasDesc := proxyDescriptions[name]
 		proxyDescMu.RUnlock()
