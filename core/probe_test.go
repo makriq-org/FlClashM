@@ -21,14 +21,20 @@ func probeServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	return server
 }
 
+func setProbeProxies(proxies map[string]constant.Proxy) {
+	runLock.Lock()
+	defer runLock.Unlock()
+	tunnel.UpdateProxies(proxies, nil)
+}
+
 func withProbeProxies(t *testing.T, names ...string) {
 	t.Helper()
 	proxies := make(map[string]constant.Proxy, len(names))
 	for _, name := range names {
 		proxies[name] = namedProxy(name)
 	}
-	tunnel.UpdateProxies(proxies, nil)
-	t.Cleanup(func() { tunnel.UpdateProxies(nil, nil) })
+	setProbeProxies(proxies)
+	t.Cleanup(func() { setProbeProxies(nil) })
 }
 
 func TestHandleProbePinsTheNamedProxy(t *testing.T) {
@@ -274,10 +280,10 @@ func TestHandleProbeSendsTheRequestWithTheHandshake(t *testing.T) {
 		_, _ = w.Write([]byte("routed"))
 	})
 	handshake := make(chan []byte, 1)
-	tunnel.UpdateProxies(map[string]constant.Proxy{
+	setProbeProxies(map[string]constant.Proxy{
 		"DIRECT": &earlyDataProxy{Proxy: namedProxy("DIRECT"), handshake: handshake},
-	}, nil)
-	t.Cleanup(func() { tunnel.UpdateProxies(nil, nil) })
+	})
+	t.Cleanup(func() { setProbeProxies(nil) })
 	tunnel.OnRunning()
 	t.Cleanup(tunnel.OnSuspend)
 

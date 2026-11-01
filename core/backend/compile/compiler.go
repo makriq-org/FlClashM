@@ -186,7 +186,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	}
 	if !override {
 		for _, key := range []string{"ipv6", "allow-lan", "mixed-port", "find-process-mode", "tcp-concurrent", "unified-delay", "log-level", "keep-alive-interval", "external-controller"} {
-			if value, ok := config[key]; ok && validProviderHint(key, value) {
+			if value, ok := config[key]; ok && !ownsSetting(settings, "clash."+key) && validProviderHint(key, value) {
 				switch key {
 				case "mixed-port", "keep-alive-interval":
 					n, _ := number(value)
@@ -201,7 +201,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 			}
 		}
 		tun := object(config["tun"])
-		if contains([]string{"gvisor", "system", "mixed"}, strings.ToLower(text(tun["stack"]))) {
+		if !ownsSetting(settings, "clash.tun.stack") && contains([]string{"gvisor", "system", "mixed"}, strings.ToLower(text(tun["stack"]))) {
 			object(patch["tun"])["stack"] = strings.ToLower(text(tun["stack"]))
 		}
 	}
@@ -252,6 +252,14 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	if config["external-ui-url"] == nil {
 		config["external-ui-url"] = ""
 	}
+	// Subscription credentials apply only while the provider owns this setting.
+	if _, present := config["authentication"]; override || ownsSetting(settings, "clash.authentication") || !present {
+		auth := object(object(settings["networkProps"])["authentication"])
+		config["authentication"] = []any{}
+		if auth["enable"] == true && text(auth["username"]) != "" {
+			config["authentication"] = []any{text(auth["username"]) + ":" + text(auth["password"])}
+		}
+	}
 	config["secret"] = strings.TrimSpace(text(config["secret"]))
 	for _, key := range []string{"external-controller", "tcp-concurrent", "unified-delay", "log-level", "keep-alive-interval", "port", "socks-port", "redir-port", "tproxy-port", "mode", "find-process-mode", "allow-lan", "ipv6", "mixed-port", "geodata-loader", "global-ua"} {
 		config[key] = patch[key]
@@ -261,6 +269,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 		actualTun[key] = value
 	}
 	config["tun"] = actualTun
+	applyOwnedSettings(config, patch, settings)
 	for section, kind := range map[string]string{"proxy-providers": "proxies", "rule-providers": "rules"} {
 		for _, value := range object(config[section]) {
 			provider := object(value)
@@ -581,4 +590,38 @@ func selfBypass(access Object, self []string) Object {
 	}
 	access["rejectList"] = rejected
 	return access
+}
+
+// Only fields present in the compiler's patch schema may be user-owned.
+func applyOwnedSettings(config, patch, settings Object) {
+	for _, value := range list(object(settings["appSetting"])["ownedSettings"]) {
+		key := text(value)
+		if !strings.HasPrefix(key, "clash.") || key == "clash.authentication" {
+			continue
+		}
+		parts := strings.Split(strings.TrimPrefix(key, "clash."), ".")
+		source := patch
+		var found any
+		ok := true
+		for index, part := range parts {
+			found, ok = source[part]
+			if !ok {
+				break
+			}
+			if index < len(parts)-1 {
+				source = object(found)
+			}
+		}
+		if !ok {
+			continue
+		}
+		target := config
+		for _, part := range parts[:len(parts)-1] {
+			if target[part] == nil {
+				target[part] = Object{}
+			}
+			target = object(target[part])
+		}
+		target[parts[len(parts)-1]] = found
+	}
 }

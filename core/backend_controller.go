@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"github.com/metacubex/mihomo/component/resolver"
 	"io"
 	"net"
 	"net/url"
@@ -310,6 +311,10 @@ func (backendEngine) Command(ctx context.Context, command backend.EngineCommand)
 		handleCloseConnection(params.ID)
 	case "connections.reset":
 		handleResetConnections()
+	case "dns.clear":
+		resolver.ClearCache()
+		resolver.ResetConnection()
+		bumpRouteEpoch()
 	case "traffic.reset":
 		handleResetTraffic()
 	default:

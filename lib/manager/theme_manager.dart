@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/action.dart';
 import 'package:flclashx/providers/app.dart';
 import 'package:flclashx/providers/config.dart';
@@ -10,6 +11,7 @@ import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/ui/ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,30 +42,22 @@ final _appThemes = <Brightness, ({Object inputs, ThemeData theme})>{};
 
 ThemeData watchAppTheme(WidgetRef ref, Brightness brightness) {
   final locale = ref.watch(appSettingProvider.select((state) => state.locale));
-  final themeSetting = ref.watch(
-    themeSettingProvider.select(
-      (state) => (fontFamily: state.fontFamily, pureBlack: state.pureBlack),
-    ),
+  final fontFamily = ref.watch(
+    themeSettingProvider.select((state) => state.fontFamily),
   );
   final colorScheme = ref.watch(genColorSchemeProvider(brightness));
-  final plainDark = brightness == Brightness.dark && themeSetting.pureBlack
-      ? ref.watch(genColorSchemeProvider(brightness, pureBlack: false))
-      : null;
   final locales = [
     ?getLocaleForString(locale),
     ...WidgetsBinding.instance.platformDispatcher.locales,
   ];
   final inputs = (
     platform: defaultTargetPlatform,
-    themeSetting: themeSetting,
+    fontFamily: fontFamily,
     colorScheme: colorScheme,
-    plainDark: plainDark,
     locales: locales.join(','),
   );
-  if (_appThemes[brightness] case (
-    inputs: final cached,
-    :final theme,
-  ) when cached == inputs) {
+  if (_appThemes[brightness] case (inputs: final cached, :final theme)
+      when cached == inputs) {
     return theme;
   }
   final theme = ThemeData(
@@ -71,19 +65,15 @@ ThemeData watchAppTheme(WidgetRef ref, Brightness brightness) {
     pageTransitionsTheme: _pageTransitionsTheme,
     actionIconTheme: _actionIconTheme,
     colorScheme: colorScheme,
-    fontFamily: themeSetting.fontFamily,
+    fontFamily: fontFamily,
     fontFamilyFallback: appFontFamilyFallback(
       platform: defaultTargetPlatform,
       locales: locales,
-      fontFamily: themeSetting.fontFamily,
+      fontFamily: fontFamily,
     ),
     extensions: [
       if (brightness == Brightness.dark)
-        ElevatedColorScheme(
-          // Plain dark is pure black a level up, with the seed's tint that a
-          // lift from black would lose.
-          plainDark ?? colorScheme.elevated,
-        ),
+        ElevatedColorScheme(colorScheme.elevated),
     ],
   ).withAppShapes.withAppSurfaces.withAppTypography.withPointerCursor;
   _appThemes[brightness] = (inputs: inputs, theme: theme);
@@ -112,7 +102,9 @@ class ThemeManager extends ConsumerWidget {
             systemNavigationBarIconBrightness: iconBrightness,
             systemNavigationBarColor: Colors.transparent,
             systemNavigationBarDividerColor: Colors.transparent,
-            systemNavigationBarContrastEnforced: false,
+            // Pages scroll under the navigation bar. Android scrims only a
+            // three-button bar for it; the gesture handle stays clear.
+            systemNavigationBarContrastEnforced: true,
           ),
           sized: false,
           child: child,
@@ -185,7 +177,6 @@ class AppViewScope extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isMobile = ref.watch(isMobileViewProvider);
     return ViewScope(
-      size: ref.watch(viewSizeProvider),
       isMobile: isMobile,
       windowControls: windowControlsOverPage(
         isMacOS: system.isMacOS,
@@ -197,16 +188,82 @@ class AppViewScope extends ConsumerWidget {
   }
 }
 
-class _LiquidGlassSetting extends ConsumerWidget {
+class _LiquidGlassSetting extends ConsumerStatefulWidget {
   const _LiquidGlassSetting({required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(
+  ConsumerState<_LiquidGlassSetting> createState() =>
+      _LiquidGlassSettingState();
+}
+
+/// Draws no more glass than the GPU keeps up with: each sustained overload
+/// takes it a level lower until the app restarts, unless the user keeps it.
+class _LiquidGlassSettingState extends ConsumerState<_LiquidGlassSetting> {
+  static var _toldReduced = false;
+
+  final _load = FrameLoadWatch();
+  var _cap = LiquidGlassMode.ultra;
+  var _kept = false;
+  var _shown = LiquidGlassMode.none;
+
+  @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addTimingsCallback(_onTimings);
+    ref.listenManual(
+      themeSettingProvider.select((state) => state.liquidGlass),
+      (_, _) => setState(_lift),
+    );
+  }
+
+  @override
+  void dispose() {
+    SchedulerBinding.instance.removeTimingsCallback(_onTimings);
+    super.dispose();
+  }
+
+  void _lift() {
+    _cap = LiquidGlassMode.ultra;
+    _load.reset();
+  }
+
+  void _onTimings(List<FrameTiming> timings) {
+    if (_kept || _shown == LiquidGlassMode.none) {
+      return;
+    }
+    if (!_load.overloadedAfter(timings.map((t) => t.rasterDuration))) {
+      return;
+    }
+    setState(() => _cap = LiquidGlassMode.values[_shown.index - 1]);
+    if (_toldReduced) {
+      return;
+    }
+    _toldReduced = true;
+    dialogs.showNotifier(
+      currentAppLocalizations.liquidGlassReduced,
+      actionState: MessageActionState(
+        actionText: currentAppLocalizations.restore,
+        action: () {
+          if (mounted) {
+            setState(() {
+              _kept = true;
+              _lift();
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chosen = ref.watch(
       themeSettingProvider.select((state) => state.liquidGlass),
     );
+    final mode = chosen.index < _cap.index ? chosen : _cap;
+    _shown = mode;
     return LiquidGlassScope(
       enabled: mode != LiquidGlassMode.none,
       quality: mode == LiquidGlassMode.ultra
@@ -214,7 +271,7 @@ class _LiquidGlassSetting extends ConsumerWidget {
           : LiquidGlassQuality.standard,
       child: LiquidGlassHost(
         enabled: mode != LiquidGlassMode.none,
-        child: child,
+        child: widget.child,
       ),
     );
   }

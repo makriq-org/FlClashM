@@ -14,11 +14,12 @@ import (
 // Inspection prepares read-only editor information without loading an engine
 // configuration, running scripts or creating an execution capability.
 type Inspection struct {
-	Base          Object   `json:"base"`
-	Outbounds     Object   `json:"outbounds"`
-	Config        Object   `json:"config"`
-	AccessControl Object   `json:"accessControl,omitempty"`
-	Diagnostics   []string `json:"diagnostics"`
+	Authentication Object   `json:"authentication"`
+	Base           Object   `json:"base"`
+	Outbounds      Object   `json:"outbounds"`
+	Config         Object   `json:"config"`
+	AccessControl  Object   `json:"accessControl,omitempty"`
+	Diagnostics    []string `json:"diagnostics"`
 }
 
 func (c *Compiler) Inspect(ctx context.Context, source, profileID string) (Inspection, error) {
@@ -101,6 +102,15 @@ func (c *Compiler) inspectAccessControl(
 }
 
 func fillInspection(result *Inspection, source string) {
+	result.Authentication = Object{"enable": false, "username": "", "password": ""}
+	for _, entry := range list(result.Config["authentication"]) {
+		username, password, ok := strings.Cut(text(entry), ":")
+		if ok && username != "" {
+			result.Authentication = Object{"enable": true, "username": username, "password": password}
+			break
+		}
+	}
+
 	config := result.Config
 	result.Outbounds = Object{"proxies": list(config["proxies"]), "proxy-groups": list(config["proxy-groups"]), "proxy-providers": object(config["proxy-providers"])}
 	base := copyObject(config)

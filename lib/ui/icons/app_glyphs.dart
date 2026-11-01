@@ -6,6 +6,20 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 abstract final class AppGlyphs {
+  static const star = Glyph([
+    GlyphPolyline([
+      GlyphVertex(12, 3.2, 1.2),
+      GlyphVertex(14.41, 9.48, 0.6),
+      GlyphVertex(21.13, 9.83, 1.2),
+      GlyphVertex(15.9, 14.07, 0.6),
+      GlyphVertex(17.64, 20.57, 1.2),
+      GlyphVertex(12, 16.9, 0.6),
+      GlyphVertex(6.36, 20.57, 1.2),
+      GlyphVertex(8.1, 14.07, 0.6),
+      GlyphVertex(2.87, 9.83, 1.2),
+      GlyphVertex(9.59, 9.48, 0.6),
+    ], closed: true),
+  ]);
   static const dashboard = Glyph([
     GlyphBox(3.5, 3.5, 10.5, 11.5, 2),
     GlyphBox(13.5, 3.5, 20.5, 9.5, 2),
@@ -98,25 +112,6 @@ abstract final class AppGlyphs {
       GlyphVertex(12.2, 14.5),
       GlyphVertex(16.2, 14.5),
     ], role: GlyphRole.detail),
-  ]);
-
-  static const tools = Glyph([
-    GlyphBox(3, 7, 21, 20, 2.8),
-    GlyphPolyline([
-      GlyphVertex(9, 7),
-      GlyphVertex(9, 4.6, 1.4),
-      GlyphVertex(15, 4.6, 1.4),
-      GlyphVertex(15, 7),
-    ], role: GlyphRole.line),
-    GlyphPolyline([
-      GlyphVertex(3.2, 12.6),
-      GlyphVertex(9.6, 12.6),
-    ], role: GlyphRole.detail),
-    GlyphPolyline([
-      GlyphVertex(14.4, 12.6),
-      GlyphVertex(20.8, 12.6),
-    ], role: GlyphRole.detail),
-    GlyphBox(10.4, 11, 13.6, 14.4, 1, role: GlyphRole.detail),
   ]);
 
   static const target = Glyph([
@@ -448,19 +443,6 @@ abstract final class AppGlyphs {
     ], role: GlyphRole.line),
   ]);
 
-  static const checkDouble = Glyph([
-    GlyphPolyline([
-      GlyphVertex(2.9, 12.5),
-      GlyphVertex(6.7, 16.3),
-      GlyphVertex(14.45, 7.9),
-    ], role: GlyphRole.line),
-    GlyphPolyline([
-      GlyphVertex(11.8, 16.3),
-      GlyphVertex(13.2, 17.7),
-      GlyphVertex(20.95, 9.3),
-    ], role: GlyphRole.line),
-  ]);
-
   static const checkCircle = Glyph([
     GlyphCircle(12, 12, 8.8),
     GlyphPolyline([
@@ -531,9 +513,9 @@ abstract final class AppGlyphs {
   ]);
 
   static const more = Glyph([
-    GlyphCircle(12, 5.5, 1.4, role: GlyphRole.line, solid: true),
-    GlyphCircle(12, 12, 1.4, role: GlyphRole.line, solid: true),
-    GlyphCircle(12, 18.5, 1.4, role: GlyphRole.line, solid: true),
+    GlyphCircle(12, 4.2, 1.65, role: GlyphRole.line, solid: true),
+    GlyphCircle(12, 12, 1.65, role: GlyphRole.line, solid: true),
+    GlyphCircle(12, 19.8, 1.65, role: GlyphRole.line, solid: true),
   ]);
 
   static const moreCircle = Glyph([
@@ -1205,13 +1187,6 @@ abstract final class AppGlyphs {
     ], role: GlyphRole.line),
   ]);
 
-  static const password = Glyph([
-    GlyphBox(2.9, 6, 21.1, 18, 3),
-    GlyphCircle(7.4, 12, 1.4, role: GlyphRole.detail, solid: true),
-    GlyphCircle(12, 12, 1.4, role: GlyphRole.detail, solid: true),
-    GlyphCircle(16.6, 12, 1.4, role: GlyphRole.detail, solid: true),
-  ]);
-
   static const account = Glyph([
     GlyphCircle(12, 12, 8.8),
     GlyphCircle(12, 9.4, 2.8, role: GlyphRole.detail),
@@ -1278,21 +1253,6 @@ abstract final class AppGlyphs {
       GlyphVertex(18.2, 12),
       GlyphVertex(21.1, 12),
     ], role: GlyphRole.line),
-  ]);
-
-  static const star = Glyph([
-    GlyphPolyline([
-      GlyphVertex(12, 3.2, 1.2),
-      GlyphVertex(14.41, 9.48, 0.6),
-      GlyphVertex(21.13, 9.83, 1.2),
-      GlyphVertex(15.9, 14.07, 0.6),
-      GlyphVertex(17.64, 20.57, 1.2),
-      GlyphVertex(12, 16.9, 0.6),
-      GlyphVertex(6.36, 20.57, 1.2),
-      GlyphVertex(8.1, 14.07, 0.6),
-      GlyphVertex(2.87, 9.83, 1.2),
-      GlyphVertex(9.59, 9.48, 0.6),
-    ], closed: true),
   ]);
 
   static const puzzle = Glyph([
@@ -2072,4 +2032,16 @@ abstract final class AppGlyphs {
       _ => arrowBack,
     };
   }
+
+  static const clearField = Glyph([
+    GlyphCircle(12, 12, 8.8),
+    GlyphPolyline([
+      GlyphVertex(9.3, 9.3),
+      GlyphVertex(14.7, 14.7),
+    ], role: GlyphRole.detail),
+    GlyphPolyline([
+      GlyphVertex(14.7, 9.3),
+      GlyphVertex(9.3, 14.7),
+    ], role: GlyphRole.detail),
+  ]);
 }

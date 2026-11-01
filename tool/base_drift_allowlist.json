@@ -2409,6 +2409,361 @@
       "path": "core/health_forwarder_delivery_test.go",
       "bucket": "budget",
       "reason": "Host-тест проверяет фактическую доставку готового пинга через JSON/socket transport без JNI и лишних сетевых проб."
+    },
+    {
+      "path": "lib/common/dialog.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/common/ip_quality.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/common/webdav.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/manager/theme_manager.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/pages/editor.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/providers/actions/managed.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/providers/actions/proxies.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/providers/ip_quality.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/ui/button.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/card.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/color.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/context.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/dialog.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/drag_back.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/fade_box.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/frosted_surface.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/icons/app_glyphs.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/icons/glyph_painter.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/liquid_glass.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/liquid_glass_capture.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/list.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/motion.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/navigation_dock.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/popup.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/scaffold.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/scroll.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/scroll_behavior.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/search_field.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/shape.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/sheet_header.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/snap_sheet.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/sortable.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/surface.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/ui.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/view_scope.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/views/dns_queries.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/widgets/edit_view.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/widgets/managed_setting.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "core/backend/compile/owned_settings_test.go",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "core/backend/service/ip_quality.go",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "core/backend/service/ip_quality_test.go",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "core/backend/service/link_session.go",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "core/backend/service/link_session_test.go",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/common/frame_load.dart",
+      "bucket": "budget",
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+    },
+    {
+      "path": "lib/ui/foot_bar.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/goo.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/qr_code.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/switch.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "lib/ui/title_badge.dart",
+      "bucket": "budget",
+      "reason": "Выборочно перенесены применимые UI/редакторные изменения FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 с сохранением Android API форка."
+    },
+    {
+      "path": "core/backend/service/copy_proxy.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/backend/service/copy_proxy_test.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/backend/service/proxy_pins.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/backend/service/proxy_pins_test.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/backend_proxy_definition.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/outbound_claim_test.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/traffic_account.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "core/traffic_account_test.go",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/common/input_entries.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/custom_issue.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/form_page.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/form_row.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/list_editor_page.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/map_edit_view.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/rule.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/rule_preset.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/features/form/selection_sheet.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/views/profiles/custom/custom_proxies.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/views/profiles/custom/icon.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/views/profiles/custom/quick_edit.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/views/theme.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
+    },
+    {
+      "path": "lib/widgets/config_item.dart",
+      "bucket": "budget",
+      "reason": "Android-адаптация FlClashX 50a4067f7b4b6f7019eb11249f3ce8c9580b4071: Go владеет данными и runtime, Flutter отображает снимки и команды."
     }
   ]
 }

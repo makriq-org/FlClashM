@@ -24,6 +24,8 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	}
 	apply := false
 	switch method {
+	case "authoring.copyProxy":
+		return a.copyProxy(ctx, params)
 	case "provider.export", "authoring.resource.export":
 		return a.exportResource(ctx, method, params)
 	case "storage.clearCache", "storage.collect", "profile.clearCache":

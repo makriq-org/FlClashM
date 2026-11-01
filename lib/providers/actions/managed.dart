@@ -14,6 +14,31 @@ class ManagedSettingsAction extends _$ManagedSettingsAction {
         );
   }
 
+  /// Asks before the user takes [key] over from the subscription; true once
+  /// it is theirs to change.
+  Future<bool> confirmTakeOver(String key) async {
+    if (!ref.read(settingLockedProvider(key))) {
+      return true;
+    }
+    final agreed = await dialogs.showMessage(
+      title: currentAppLocalizations.managedByProvider,
+      message: TextSpan(text: currentAppLocalizations.managedByProviderTip),
+      confirmText: currentAppLocalizations.takeOver,
+    );
+    if (agreed != true || !ref.mounted) {
+      return false;
+    }
+    takeOver(key);
+    return true;
+  }
+
+  /// For a change from the tray or a hotkey, which has nowhere to ask.
+  void takeOverIfLocked(String key) {
+    if (ref.read(settingLockedProvider(key))) {
+      takeOver(key);
+    }
+  }
+
   void release(String key) {
     ref
         .read(appSettingProvider.notifier)

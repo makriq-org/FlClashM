@@ -39,7 +39,7 @@ func (a *App) Handle(raw []byte) []byte {
 	if len(request.OperationID) < 1 || len(request.OperationID) > 128 {
 		return fail("invalid_request", "operationId must contain 1..128 bytes")
 	}
-	if a.resetting.Load() && (strings.HasPrefix(request.Method, "blob.") && request.Method != "blob.read" || request.Method == "engine.command") {
+	if a.resetting.Load() && (strings.HasPrefix(request.Method, "blob.") && request.Method != "blob.read" || (request.Method == "engine.command" || request.Method == "linkSession.start")) {
 		return fail("reset_in_progress", "data reset in progress")
 	}
 	if a.ctx.Err() != nil {
@@ -50,6 +50,31 @@ func (a *App) Handle(raw []byte) []byte {
 	}
 	var err error
 	switch request.Method {
+	case "linkSession.start":
+		if err = decodeParams(request.Input, &struct{}{}); err == nil {
+			response.Result, err = a.startLinkSession()
+		}
+	case "linkSession.get", "linkSession.stop":
+		var p struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			if request.Method == "linkSession.get" {
+				response.Result, err = a.linkSession.stateID(p.SessionID)
+			} else {
+				a.linkSession.closeID(p.SessionID)
+				response.Result = true
+			}
+		}
+	case "ipQuality.get":
+		var p struct {
+			IP      string `json:"ip"`
+			Refresh bool   `json:"refresh"`
+		}
+		if err = decodeParams(request.Input, &p); err == nil {
+			response.Result, err = a.ipQuality(a.ctx, p.IP, p.Refresh)
+		}
+
 	case "authoring.snapshot":
 		response.Result = a.profiles.AuthoringSnapshot()
 	case "authoring.evaluate":
@@ -346,7 +371,7 @@ func (a *App) submit(request backend.Request) (Receipt, error) {
 		return Receipt{}, errors.New("data reset in progress")
 	}
 	switch request.Method {
-	case "provider.export", "authoring.resource.export", "storage.clearCache", "storage.collect", "profile.clearCache", "authoring.replace", "authoring.import", "authoring.resource.update", "resource.put", "resource.refresh", "profile.render", "subscription.update", "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
+	case "authoring.copyProxy", "provider.export", "authoring.resource.export", "storage.clearCache", "storage.collect", "profile.clearCache", "authoring.replace", "authoring.import", "authoring.resource.update", "resource.put", "resource.refresh", "profile.render", "subscription.update", "ui.attach", "ui.detach", "data.reset", "settings.patch", "profile.put", "profile.delete", "profile.select", "profile.reorder", "profile.validate", "profile.export", "proxy.select", "subscription.refresh", "profile.import.url", "profile.import.file", "backup.export", "backup.restore":
 	default:
 		return Receipt{}, errors.New("unsupported application command")
 	}

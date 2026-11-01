@@ -143,9 +143,8 @@ class AuthenticationItem extends ConsumerWidget {
   Widget build(BuildContext context, ref) {
     return ConfigToggleItem(
       title: (l) => l.authentication,
-      selector: networkSettingProvider.select(
-        (state) => state.authentication.enable,
-      ),
+      managedKey: 'clash.authentication',
+      selector: effectiveAuthenticationProvider.select((state) => state.enable),
       onChanged: (ref, value) =>
           ref.read(networkSettingProvider.notifier).update((state) {
             var authentication = state.authentication.copyWith(enable: value);
@@ -168,9 +167,10 @@ class AuthenticationAccountItem extends ConsumerWidget {
   Widget build(BuildContext context, ref) {
     return ConfigTextItem(
       title: (l) => l.account,
+      managedKey: 'clash.authentication',
       maxLength: TextInputLimits.userName,
-      selector: networkSettingProvider.select(
-        (state) => state.authentication.username,
+      selector: effectiveAuthenticationProvider.select(
+        (state) => state.username,
       ),
       // mihomo and the Dart proxy string both split user:pass on the first
       // colon, so a colon in the username breaks authentication.
@@ -189,9 +189,10 @@ class AuthenticationPasswordItem extends ConsumerWidget {
   Widget build(BuildContext context, ref) {
     return ConfigTextItem(
       title: (l) => l.password,
+      managedKey: 'clash.authentication',
       maxLength: TextInputLimits.password,
-      selector: networkSettingProvider.select(
-        (state) => state.authentication.password,
+      selector: effectiveAuthenticationProvider.select(
+        (state) => state.password,
       ),
       normalize: (value) => value.trim(),
       onChanged: (ref, value) => ref
@@ -441,6 +442,27 @@ class GeneralView extends ConsumerWidget {
   List<Widget> _connectionItems() {
     return [
       const TestUrlItem(),
+      ConfigTextItem(
+        title: (l) => '${l.delayTestTimeout} (ms)',
+        keyboardType: TextInputType.number,
+        validator: (value, l) {
+          final timeout = int.tryParse(value ?? '');
+          return timeout != null && timeout >= 1000 && timeout <= 60000
+              ? null
+              : '1000–60000 ms';
+        },
+        selector: appSettingProvider.select(
+          (state) => '${state.delayTestTimeout}',
+        ),
+        normalize: (value) => value.trim(),
+        onChanged: (ref, value) {
+          final timeout = int.tryParse(value);
+          if (timeout == null || timeout < 1000 || timeout > 60000) return;
+          ref
+              .read(appSettingProvider.notifier)
+              .update((state) => state.copyWith(delayTestTimeout: timeout));
+        },
+      ),
       _clashToggle(
         title: (l) => l.unifiedDelay,
         managedKey: 'clash.unified-delay',
@@ -453,13 +475,17 @@ class GeneralView extends ConsumerWidget {
         select: (state) => state.tcpConcurrent,
         update: (state, value) => state.copyWith(tcpConcurrent: value),
       ),
-      _clashToggle(
+      ConfigOptionsItem<FindProcessMode>(
         title: (l) => l.findProcessMode,
         managedKey: 'clash.find-process-mode',
-        select: (state) => state.findProcessMode == FindProcessMode.always,
-        update: (state, value) => state.copyWith(
-          findProcessMode: value ? FindProcessMode.always : FindProcessMode.off,
+        options: FindProcessMode.values,
+        textBuilder: (value) => value.name,
+        selector: patchClashConfigProvider.select(
+          (state) => state.findProcessMode,
         ),
+        onChanged: (ref, value) => ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith(findProcessMode: value)),
       ),
       _appSettingToggle(
         title: (l) => l.autoCloseConnections,
@@ -543,7 +569,7 @@ class GeneralView extends ConsumerWidget {
   Widget build(BuildContext context, ref) {
     final appLocalizations = context.appLocalizations;
     final authentication = ref.watch(
-      networkSettingProvider.select((state) => state.authentication.enable),
+      effectiveAuthenticationProvider.select((state) => state.enable),
     );
     final controllerAddress = ref.watch(
       patchClashConfigProvider.select((state) => state.externalController),

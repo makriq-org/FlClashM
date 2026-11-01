@@ -146,9 +146,8 @@ List<DashboardWidget> dashboardWidgetsNamed(Iterable<String> names) {
     for (final widget in DashboardWidget.values)
       widget.name.toLowerCase(): widget,
   };
-  return {
-    for (final name in names) ?byName[name.trim().toLowerCase()],
-  }.toList();
+  return {for (final name in names) ?byName[name.trim().toLowerCase()]}
+      .toList();
 }
 
 /// The current outbound card cannot be removed: a list without it predates it.
@@ -220,6 +219,7 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool openLogs,
     @Default(true) bool closeConnections,
     @Default(defaultTestUrl) String testUrl,
+    @Default(8000) int delayTestTimeout,
     @Default(TabAnimation.slide)
     @JsonKey(readValue: _readTabAnimation)
     TabAnimation tabAnimation,
@@ -583,4 +583,7 @@ Map<String, Object?> _withLegacyRouteMode(Map<String, Object?> json) {
 
 // Stable fork API names used by portable Android access policy tests.
 typedef AccessControl = AccessControlProps;
-extension LegacyVpnAccess on VpnProps { AccessControlProps get accessControl => accessControlProps; }
+
+extension LegacyVpnAccess on VpnProps {
+  AccessControlProps get accessControl => accessControlProps;
+}

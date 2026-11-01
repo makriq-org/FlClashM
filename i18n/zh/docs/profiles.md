@@ -495,3 +495,6 @@ flclashm-settings: autostart,autoupdate
 | `closeconnections` | 切换节点时关闭连接 |
 
 </details>
+
+
+配置菜单支持二维码。“从手机发送”开启两分钟的本地接收会话；收到链接后需在电视上确认导入。离开页面即关闭接收。后端缓存 IP 质量三天；手动刷新会重新查询。

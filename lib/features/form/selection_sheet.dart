@@ -303,7 +303,7 @@ class _SelectionSheetState<T> extends ConsumerState<SelectionSheet<T>>
             controller: _controller,
             slivers: [
               SliverToBoxAdapter(
-                child: SizedBox(height: context.contentTopPadding),
+                child: SizedBox(height: context.sectionsTopPadding),
               ),
               for (final (sectionIndex, section) in sections.indexed) ...[
                 if (section.label != null)
@@ -335,7 +335,7 @@ class _SelectionSheetState<T> extends ConsumerState<SelectionSheet<T>>
                 ),
               ],
               SliverToBoxAdapter(
-                child: SizedBox(height: 20 + BottomInsetScope.of(context)),
+                child: SizedBox(height: 20 + context.bottomInset),
               ),
             ],
           ),
