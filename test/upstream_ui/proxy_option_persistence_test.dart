@@ -75,4 +75,37 @@ void main() {
       'X-New': ['new.example'],
     });
   });
+
+  for (final (network, headers, host, hostValue) in [
+    (
+      'http',
+      ProxyField.httpHeaders,
+      ProxyField.httpHost,
+      ['a.example', 'b.example'],
+    ),
+    ('ws', ProxyField.wsHeaders, ProxyField.wsHost, 'ws.example'),
+  ]) {
+    test('removing $network header entries preserves the separate Host', () {
+      final original = CustomProxy(
+        id: 1,
+        definition: {
+          'name': 'node',
+          'type': 'vmess',
+          'network': network,
+          '$network-opts': {
+            'headers': {'hOsT': hostValue, 'X-Custom': 'remove-me'},
+          },
+        },
+      );
+      final cleared = original.withEntries(headers, {});
+      expect(cleared.valueOf(host), hostValue);
+      expect(cleared.stringMapOf(headers), isEmpty);
+      final restored = CustomProxy.fromJson(
+        jsonDecode(jsonEncode(cleared.toJson())) as Map<String, dynamic>,
+      );
+      expect(restored.valueOf(headers), {'hOsT': hostValue});
+      final noHost = original.withField(host, null).withEntries(headers, {});
+      expect(noHost.valueOf(headers), isNull);
+    });
+  }
 }

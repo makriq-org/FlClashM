@@ -832,11 +832,11 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     _shown = _shownIn(proxy);
     _untouched = {
       for (final field in proxy.emptyOptions)
-        if (proxy.valueOf(field) == null) field,
+        if (!_hasOptionValue(proxy, field)) field,
     };
     NestedFormSheet.bindSave(context, _handleSave);
     ref.listenManual(customProxyProvider, (_, proxy) {
-      _untouched.removeWhere((field) => proxy.valueOf(field) != null);
+      _untouched.removeWhere((field) => _hasOptionValue(proxy, field));
     });
     ref.listenManual(
       customProxyProvider.select((state) => state.definition),
@@ -911,7 +911,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
           ).single.definition;
     final next = _withShown(current.copyWith(definition: named), {
       for (final field in _shown)
-        if (current.valueOf(field) == null) field,
+        if (!_hasOptionValue(current, field)) field,
     });
     ref.read(customProxyProvider.notifier).value = next;
     setState(() {
@@ -920,9 +920,14 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     });
   }
 
+  static bool _hasOptionValue(CustomProxy proxy, ProxyField field) =>
+      field.kind == ProxyFieldKind.map
+      ? proxy.stringMapOf(field).isNotEmpty
+      : proxy.valueOf(field) != null;
+
   static Set<ProxyField> _shownIn(CustomProxy proxy) => {
     for (final field in proxy.options)
-      if (proxy.valueOf(field) != null || proxy.emptyOptions.contains(field))
+      if (_hasOptionValue(proxy, field) || proxy.emptyOptions.contains(field))
         field,
   };
 
@@ -930,7 +935,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       proxy.copyWith(
         emptyOptions: {
           for (final field in shown)
-            if (proxy.valueOf(field) == null && _untouched.contains(field))
+            if (!_hasOptionValue(proxy, field) && _untouched.contains(field))
               field,
         },
       );
@@ -945,10 +950,12 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
       for (final field in proxy.options)
         if (_shown.contains(field) ||
             unlocked.contains(field) ||
-            proxy.valueOf(field) != null)
+            _hasOptionValue(proxy, field))
           field,
     };
-    _untouched.addAll(unlocked.where((field) => proxy.valueOf(field) == null));
+    _untouched.addAll(
+      unlocked.where((field) => !_hasOptionValue(proxy, field)),
+    );
     ref.read(customProxyProvider.notifier).value = _withShown(proxy, shown);
     setState(() {
       _shown = shown;
@@ -1324,7 +1331,7 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
     };
     final value = proxy.valueOf(field) ?? initial;
     _shown = {..._shown, field};
-    if (value == null) {
+    if (!_hasOptionValue(proxy, field) && initial == null) {
       _untouched.add(field);
     }
     _updateOption(field, value);
@@ -1332,7 +1339,11 @@ class _EditCustomProxyViewState extends ConsumerState<_EditCustomProxyView> {
 
   void _handleRemoveOption(ProxyField field) {
     _shown = {..._shown}..remove(field);
-    _updateOption(field, null);
+    final proxy = ref.read(customProxyProvider);
+    final value = field.kind == ProxyFieldKind.map
+        ? proxy.withEntries(field, {}).valueOf(field)
+        : null;
+    _updateOption(field, value);
   }
 
   Widget _buildOptions(CustomProxy proxy) {
