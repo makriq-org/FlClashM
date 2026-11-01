@@ -65,6 +65,10 @@ Source: `50a4067f7b4b6f7019eb11249f3ce8c9580b4071`, compared with
   replacement session. The TV must separately confirm through normal import.
   This authoring service does not start VPN, alter SecurityPolicy or bypass
   subscription import validation. No auto-discovery or permanent listener exists.
+  Transport is plaintext HTTP, intended only for a trusted private LAN. The
+  capability and submitted link are visible to an on-path observer; expiry and
+  TV confirmation do not protect their confidentiality. This protocol provides
+  bounded, explicit import authorization, not authenticated encrypted pairing.
 - `authoring.copyProxy {name}` is a receipted command. Go reads the applied
   definition by name, reconstructs supported provider overrides, deduplicates and
   chooses a free local name, removes external dialer references, and commits via
