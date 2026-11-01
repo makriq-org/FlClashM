@@ -554,10 +554,15 @@ class _AccessStatus extends StatelessWidget {
               foregroundColor: colorScheme.primary,
             )
           else
-            TonalButton(
-              size: TonalButtonSize.compact,
-              label: appLocalizations.turnOn,
-              onPressed: onEnable,
+            ManagedSetting(
+              settingKey: accessControlSettingKey,
+              showsLock: false,
+              onTakenOver: onEnable,
+              child: TonalButton(
+                size: TonalButtonSize.compact,
+                label: appLocalizations.turnOn,
+                onPressed: onEnable,
+              ),
             ),
         ],
       ),
