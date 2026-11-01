@@ -2769,6 +2769,11 @@
       "path": "lib/providers/generated/ip_quality.g.dart",
       "bucket": "budget",
       "reason": "Riverpod-регистрация и хеш сгенерированы для тонкой проекции Go API ipQuality.get; сетевой запрос и трёхдневный кэш принадлежат Go backend."
+    },
+    {
+      "path": "core/network_reset_test.go",
+      "bucket": "budget",
+      "reason": "Регрессия завершения сброса соединений проверяет общий mutex runLock/selectMu и обновление поколения диагностики без повторного захвата."
     }
   ]
 }

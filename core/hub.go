@@ -753,7 +753,8 @@ func handleResetConnections() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	resolver.ResetConnection()
-	bumpRouteEpoch()
+	// selectMu aliases runLock in this adapter; it is already held here.
+	refreshRouteLocked(true)
 	return true
 }
 
