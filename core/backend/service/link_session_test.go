@@ -49,7 +49,10 @@ func TestLinkSessionListenerClosesAndOldIDCannotCloseReplacement(t *testing.T) {
 	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
 	first, err := app.startLinkSession()
 	if err != nil {
-		t.Skipf("no private LAN interface available: %v", err)
+		if err.Error() == "local network unavailable" {
+			t.Skipf("no private LAN interface available: %v", err)
+		}
+		t.Fatal("failed to start link session", err)
 	}
 	client := &http.Client{Timeout: time.Second, Transport: &http.Transport{}}
 	defer client.CloseIdleConnections()
