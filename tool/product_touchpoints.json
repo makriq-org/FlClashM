@@ -183,6 +183,30 @@
       "targets": [
         "lib/product/widgets/send_device_headers_toggle.dart"
       ]
+    },
+    {
+      "path": "lib/providers/ip_quality.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий UI отправляет команды Go; backend владеет кэшем качества IP, DNS и временным сеансом приёма ссылок.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/views/dns_queries.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий UI отправляет команды Go; backend владеет кэшем качества IP, DNS и временным сеансом приёма ссылок.",
+      "targets": [
+        "lib/product/backend/backend.dart"
+      ]
+    },
+    {
+      "path": "lib/views/profiles/add.dart",
+      "boundary": "backend-ui-client",
+      "reason": "Тонкий UI отправляет команды Go; backend владеет кэшем качества IP, DNS и временным сеансом приёма ссылок.",
+      "targets": [
+        "lib/product/pages/link_session_page.dart"
+      ]
     }
   ],
   "allowedProductUi": [
@@ -209,6 +233,10 @@
     {
       "path": "lib/product/widgets/send_device_headers_toggle.dart",
       "reason": "Форковый общий запрет отправки HWID хранится в Go отдельно от настроек отдельных подписок."
+    },
+    {
+      "path": "lib/product/pages/link_session_page.dart",
+      "reason": "Fork-only страница явного временного приёма ссылки; Go хранит токен и закрывает сеанс, UI показывает QR и ожидает подтверждения импорта."
     }
   ]
 }

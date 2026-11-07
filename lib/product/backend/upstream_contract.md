@@ -56,3 +56,9 @@ getConnectionCount, getMemoryStats, encodeShareLinks, decodeShareLinks,
 validateProxies, validateFilters. watchRoute → {"core-epoch","picks-version",picks}.
 getProxies legacy map адаптируется в {proxies,all}; getConnections legacy
 {connections:[]} — в список. DNS и routeChanged events — upstream shapes.
+
+Узлы в read-only getProxiesData дополнительно содержат optional `provider-name`.
+Go берёт его из применённого engine adapter; отсутствие поля означает узел
+основного профиля. UI использует поле только для доступности копирования:
+собственные локальные узлы custom-профиля уже сохранены, а узлы его провайдеров
+могут быть скопированы через `authoring.copyProxy`.

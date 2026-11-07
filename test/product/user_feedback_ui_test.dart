@@ -14,6 +14,7 @@ import 'package:flclashx/product/widgets/send_device_headers_toggle.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/list.dart';
+import 'package:flclashx/ui/switch.dart';
 import 'package:flclashx/views/about.dart';
 import 'package:flclashx/views/config/general.dart';
 import 'package:flclashx/views/logs.dart';
@@ -209,17 +210,20 @@ void main() {
       );
       await client.attach();
       addTearDown(client.detach);
-      await _pump(tester, Material(child: SendDeviceHeadersToggle(client: client)));
-      final toggle = find.byType(Switch);
+      await _pump(
+        tester,
+        Material(child: SendDeviceHeadersToggle(client: client)),
+      );
+      final toggle = find.byType(CommonSwitch);
       final previous = initial ?? true;
-      expect(tester.widget<Switch>(toggle).value, previous);
+      expect(tester.widget<CommonSwitch>(toggle).value, previous);
       await tester.tap(toggle);
       await tester.pump();
-      expect(tester.widget<Switch>(toggle).onChanged, isNull);
-      expect(tester.widget<Switch>(toggle).value, previous);
+      expect(tester.widget<CommonSwitch>(toggle).onChanged, isNull);
+      expect(tester.widget<CommonSwitch>(toggle).value, previous);
       pending.complete();
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(toggle).value, !previous);
+      expect(tester.widget<CommonSwitch>(toggle).value, !previous);
       expect(patches, [
         {'sendDeviceHeaders': !previous},
       ]);
@@ -227,7 +231,7 @@ void main() {
       settings['sendDeviceHeaders'] = previous;
       await client.refresh();
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(toggle).value, previous);
+      expect(tester.widget<CommonSwitch>(toggle).value, previous);
       expect(tester.takeException(), isNull);
     });
   }
@@ -255,11 +259,20 @@ void main() {
     );
     await client.attach();
     addTearDown(client.detach);
-    await _pump(tester, Material(child: SendDeviceHeadersToggle(client: client)));
-    await tester.tap(find.byType(Switch));
+    await _pump(
+      tester,
+      Material(child: SendDeviceHeadersToggle(client: client)),
+    );
+    await tester.tap(find.byType(CommonSwitch));
     await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
-    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
+    expect(
+      tester.widget<CommonSwitch>(find.byType(CommonSwitch)).value,
+      isFalse,
+    );
+    expect(
+      tester.widget<CommonSwitch>(find.byType(CommonSwitch)).onChanged,
+      isNotNull,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -319,14 +332,17 @@ void main() {
           of: find.text(labels.includePrereleaseUpdates),
           matching: find.byType(ListItem),
         );
-        final toggle = find.descendant(of: row, matching: find.byType(Switch));
+        final toggle = find.descendant(
+          of: row,
+          matching: find.byType(CommonSwitch),
+        );
         expect(toggle.hitTestable(), findsOneWidget);
         expect(find.text(labels.includePrereleaseUpdatesDesc), findsOneWidget);
         final enabled = !initiallyEnabled;
-        expect(tester.widget<Switch>(toggle).value, !enabled);
+        expect(tester.widget<CommonSwitch>(toggle).value, !enabled);
         await tester.tap(toggle);
         await tester.pumpAndSettle();
-        expect(tester.widget<Switch>(toggle).value, enabled);
+        expect(tester.widget<CommonSwitch>(toggle).value, enabled);
         await store.save(container.read(configProvider));
         await store.flush();
         final reloaded = Config.fromJson(
@@ -349,107 +365,104 @@ void main() {
     );
   }
 
-  testWidgets(
-    'Logs exports the full diagnostic ZIP',
-    (tester) async {
-      final temp = await tester.runAsync(
-        () => Directory.systemTemp.createTemp('feedback-diagnostics'),
-      );
-      final directory = temp!;
-      addTearDown(() => directory.delete(recursive: true));
-      await tester.runAsync(() async {
-        for (final (folder, name, text) in [
-          ('logs', 'ui.log', 'ui log line'),
-          ('diagnostics', 'flutter.0.log', 'flutter diagnostic line'),
-          ('native', 'android-remote.0.log', 'remote diagnostic line'),
-        ]) {
-          final file = File('${directory.path}/$folder/$name');
-          await file.parent.create(recursive: true);
-          await file.writeAsString(text);
-        }
-      });
-      final oldSupport = AppPath.supportDirectory;
-      final oldTemp = AppPath.temporaryDirectory;
-      final oldCache = AppPath.cacheDirectory;
-      final oldDownload = AppPath.downloadDirectory;
-      AppPath.supportDirectory = () async => directory;
-      AppPath.temporaryDirectory = () async => directory;
-      AppPath.cacheDirectory = () async => directory;
-      AppPath.downloadDirectory = () async => directory;
-      await appPath.rebind();
-      addTearDown(() {
-        AppPath.supportDirectory = oldSupport;
-        AppPath.temporaryDirectory = oldTemp;
-        AppPath.cacheDirectory = oldCache;
-        AppPath.downloadDirectory = oldDownload;
-      });
-      const channel = MethodChannel('com.makriq.flclash/diagnostics');
-      var snapshots = 0;
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-        call,
-      ) async {
-        expect(call.method, 'prepareSnapshot');
-        snapshots++;
-        return {
-          'directory': '${directory.path}/native',
-          'localFlushComplete': true,
-          'remoteFlushRequested': true,
-        };
-      });
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          channel,
-          null,
-        ),
-      );
-      PackageInfo.setMockInitialValues(
-        appName: 'FlClashM',
-        packageName: 'com.makriq.flclash',
-        version: '1.0.0',
-        buildNumber: '1',
-        buildSignature: '',
-      );
-      final oldPicker = FilePickerPlatform.instance;
-      final archivePicker = _ArchivePicker();
-      FilePickerPlatform.instance = archivePicker;
-      addTearDown(() => FilePickerPlatform.instance = oldPicker);
-      await _pump(tester, const LogsView());
-      final labels = tester.element(find.byType(LogsView)).appLocalizations;
-      expect(find.byType(LogsView), findsOneWidget);
-      expect(find.byTooltip(labels.exportLogs).hitTestable(), findsOneWidget);
-      await tester.tap(find.byTooltip(labels.exportLogs));
-      // Drive platform-channel completions and real archive I/O together.
-      for (
-        var attempt = 0;
-        attempt < 200 && !archivePicker.saved.isCompleted;
-        attempt++
-      ) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)),
-        );
-        await tester.pump(const Duration(milliseconds: 10));
+  testWidgets('Logs exports the full diagnostic ZIP', (tester) async {
+    final temp = await tester.runAsync(
+      () => Directory.systemTemp.createTemp('feedback-diagnostics'),
+    );
+    final directory = temp!;
+    addTearDown(() => directory.delete(recursive: true));
+    await tester.runAsync(() async {
+      for (final (folder, name, text) in [
+        ('logs', 'ui.log', 'ui log line'),
+        ('diagnostics', 'flutter.0.log', 'flutter diagnostic line'),
+        ('native', 'android-remote.0.log', 'remote diagnostic line'),
+      ]) {
+        final file = File('${directory.path}/$folder/$name');
+        await file.parent.create(recursive: true);
+        await file.writeAsString(text);
       }
-      expect(
-        archivePicker.saved.isCompleted,
-        isTrue,
-        reason: 'snapshots=$snapshots',
+    });
+    final oldSupport = AppPath.supportDirectory;
+    final oldTemp = AppPath.temporaryDirectory;
+    final oldCache = AppPath.cacheDirectory;
+    final oldDownload = AppPath.downloadDirectory;
+    AppPath.supportDirectory = () async => directory;
+    AppPath.temporaryDirectory = () async => directory;
+    AppPath.cacheDirectory = () async => directory;
+    AppPath.downloadDirectory = () async => directory;
+    await appPath.rebind();
+    addTearDown(() {
+      AppPath.supportDirectory = oldSupport;
+      AppPath.temporaryDirectory = oldTemp;
+      AppPath.cacheDirectory = oldCache;
+      AppPath.downloadDirectory = oldDownload;
+    });
+    const channel = MethodChannel('com.makriq.flclash/diagnostics');
+    var snapshots = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      expect(call.method, 'prepareSnapshot');
+      snapshots++;
+      return {
+        'directory': '${directory.path}/native',
+        'localFlushComplete': true,
+        'remoteFlushRequested': true,
+      };
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    PackageInfo.setMockInitialValues(
+      appName: 'FlClashM',
+      packageName: 'com.makriq.flclash',
+      version: '1.0.0',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+    final oldPicker = FilePickerPlatform.instance;
+    final archivePicker = _ArchivePicker();
+    FilePickerPlatform.instance = archivePicker;
+    addTearDown(() => FilePickerPlatform.instance = oldPicker);
+    await _pump(tester, const LogsView());
+    final labels = tester.element(find.byType(LogsView)).appLocalizations;
+    expect(find.byType(LogsView), findsOneWidget);
+    expect(find.byTooltip(labels.exportLogs).hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip(labels.exportLogs));
+    // Drive platform-channel completions and real archive I/O together.
+    for (
+      var attempt = 0;
+      attempt < 200 && !archivePicker.saved.isCompleted;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );
-      final saved = await archivePicker.saved.future;
-      await tester.pumpAndSettle();
-      expect(saved.$1, endsWith('.zip'));
-      expect(snapshots, 1);
-      final archive = ZipDecoder().decodeBytes(saved.$2);
-      final contents = archive.files
-          .where((file) => file.isFile)
-          .map((file) => utf8.decode(file.content as List<int>))
-          .join('\n');
-      expect(contents, contains('ui log line'));
-      expect(contents, contains('flutter diagnostic line'));
-      expect(contents, contains('remote diagnostic line'));
-      expect(contents, contains('"uiAttached": true'));
-      expect(contents, contains('"remoteFlushRequested": true'));
-      expect(find.text(labels.exportSuccess), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(
+      archivePicker.saved.isCompleted,
+      isTrue,
+      reason: 'snapshots=$snapshots',
+    );
+    final saved = await archivePicker.saved.future;
+    await tester.pumpAndSettle();
+    expect(saved.$1, endsWith('.zip'));
+    expect(snapshots, 1);
+    final archive = ZipDecoder().decodeBytes(saved.$2);
+    final contents = archive.files
+        .where((file) => file.isFile)
+        .map((file) => utf8.decode(file.content as List<int>))
+        .join('\n');
+    expect(contents, contains('ui log line'));
+    expect(contents, contains('flutter diagnostic line'));
+    expect(contents, contains('remote diagnostic line'));
+    expect(contents, contains('"uiAttached": true'));
+    expect(contents, contains('"remoteFlushRequested": true'));
+    expect(find.text(labels.exportSuccess), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

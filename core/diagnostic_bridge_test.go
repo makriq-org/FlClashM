@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -144,5 +145,36 @@ func TestProbeTimeoutCannotOverflowOrExceedItsBudget(t *testing.T) {
 	}
 	if got := timeoutFromMillis(0, time.Second); got != time.Second {
 		t.Fatalf("fallback timeout: %v", got)
+	}
+}
+
+func TestDelayQueueWaitHonorsTimeout(t *testing.T) {
+	if err := testDelaySem.Acquire(context.Background(), 50); err != nil {
+		t.Fatal(err)
+	}
+	defer testDelaySem.Release(50)
+	done := make(chan string, 1)
+	handleAsyncTestDelay(`{"proxy-name":"missing","test-url":"https://example.org","timeout":20}`, func(value string) { done <- value })
+	select {
+	case value := <-done:
+		if value != "" {
+			t.Fatal("queued test returned a synthetic proxy failure", value)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("queue wait ignored timeout")
+	}
+}
+
+func TestMissingDelayProxyKeepsRequestedURL(t *testing.T) {
+	done := make(chan string, 1)
+	handleAsyncTestDelay(`{"proxy-name":"missing","test-url":"https://example.org/check","timeout":20}`, func(value string) { done <- value })
+	select {
+	case value := <-done:
+		var result Delay
+		if err := json.Unmarshal([]byte(value), &result); err != nil || result.Url != "https://example.org/check" {
+			t.Fatal("missing node lost URL identity", value, err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing proxy did not complete")
 	}
 }

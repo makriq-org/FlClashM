@@ -8,6 +8,11 @@ import (
 )
 
 func (a *App) clearProfileArtifacts() error {
+	a.linkSession.close()
+	a.qualityMu.Lock()
+	_ = os.Remove(filepath.Join(a.directory, "ip-quality.json"))
+	_ = os.Remove(filepath.Join(a.directory, "ip-quality.json.tmp"))
+	a.qualityMu.Unlock()
 	if lists, ok := a.compiler.Lists.(interface{ Reset() }); ok {
 		lists.Reset()
 	}

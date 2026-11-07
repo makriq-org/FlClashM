@@ -32,6 +32,7 @@ _AppSettingProps _$AppSettingPropsFromJson(
   openLogs: json['openLogs'] as bool? ?? false,
   closeConnections: json['closeConnections'] as bool? ?? true,
   testUrl: json['testUrl'] as String? ?? defaultTestUrl,
+  delayTestTimeout: (json['delayTestTimeout'] as num?)?.toInt() ?? 8000,
   tabAnimation:
       $enumDecodeNullable(
         _$TabAnimationEnumMap,
@@ -113,6 +114,7 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'openLogs': instance.openLogs,
       'closeConnections': instance.closeConnections,
       'testUrl': instance.testUrl,
+      'delayTestTimeout': instance.delayTestTimeout,
       'tabAnimation': _$TabAnimationEnumMap[instance.tabAnimation]!,
       'floatingNavigationBar': instance.floatingNavigationBar,
       'autoCheckUpdate': instance.autoCheckUpdate,

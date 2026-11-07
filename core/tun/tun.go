@@ -6,10 +6,10 @@ import "C"
 import (
 	"core/state"
 	"fmt"
+	"github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing_tun"
 	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel"
 	"net"
 	"net/netip"
 )
@@ -24,7 +24,7 @@ type Props struct {
 	Dns6     string `json:"dns6"`
 }
 
-func Start(fd int, cfg LC.Tun) (listener *sing_tun.Listener, err error) {
+func Start(fd int, cfg LC.Tun, trafficTunnel constant.Tunnel) (listener *sing_tun.Listener, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorln("startTUN panic recovered: %v", r)
@@ -67,7 +67,7 @@ func Start(fd int, cfg LC.Tun) (listener *sing_tun.Listener, err error) {
 	// e38aa82a23 removed that, leaving this exported knob (used on Windows).
 	sing_tun.EnforceBindInterface = true
 
-	listener, err = sing_tun.New(options, tunnel.Tunnel)
+	listener, err = sing_tun.New(options, trafficTunnel)
 	if err != nil {
 		log.Errorln("startTUN error:", err)
 		return nil, err

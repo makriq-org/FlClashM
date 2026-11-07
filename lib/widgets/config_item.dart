@@ -17,8 +17,10 @@ typedef ConfigLabel = String Function(AppLocalizations appLocalizations);
 
 typedef ConfigWriter<T> = void Function(WidgetRef ref, T value);
 
-typedef ConfigValidator =
-    String? Function(String? value, AppLocalizations appLocalizations);
+typedef ConfigValidator = String? Function(
+  String? value,
+  AppLocalizations appLocalizations,
+);
 
 String? validateCidr(String? value, AppLocalizations appLocalizations) {
   return isCidr(value ?? '') ? null : appLocalizations.invalidCidrContent;
@@ -306,7 +308,10 @@ class ConfigListEditItem extends _ConfigItem<List<String>> {
         titleBuilder: (item) => Text(item),
       ),
       onChanged: (items) {
-        final next = List<String>.from(items as List);
+        if (items is! List) {
+          return;
+        }
+        final next = List<String>.from(items);
         if (!listEquals(next, value)) {
           onChanged(ref, next);
         }

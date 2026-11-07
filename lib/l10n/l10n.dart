@@ -4415,10 +4415,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Dimmed settings are set by your subscription. Tap one to change it yourself.`
+  /// `Dimmed settings with a closed lock are set by your subscription. Tap one to change it yourself.`
   String get managedSettingsHint {
     return Intl.message(
-      'Dimmed settings are set by your subscription. Tap one to change it yourself.',
+      'Dimmed settings with a closed lock are set by your subscription. Tap one to change it yourself.',
       name: 'managedSettingsHint',
       desc: '',
       args: [],
@@ -4715,10 +4715,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Show the blurred desktop behind the window through the sidebar`
+  /// `Background blur lets the desktop behind the window show through the sidebar.`
   String get sidebarBlurDesc {
     return Intl.message(
-      'Show the blurred desktop behind the window through the sidebar',
+      'Background blur lets the desktop behind the window show through the sidebar.',
       name: 'sidebarBlurDesc',
       desc: '',
       args: [],
@@ -6615,10 +6615,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Custom profile resources hold proxies, rule providers, filters, and icon sets.`
+  /// `Custom profile resources are the proxies, rule providers, filters, and icon sets you add yourself for custom profiles to use.`
   String get customProfileResourcesDesc {
     return Intl.message(
-      'Custom profile resources hold proxies, rule providers, filters, and icon sets.',
+      'Custom profile resources are the proxies, rule providers, filters, and icon sets you add yourself for custom profiles to use.',
       name: 'customProfileResourcesDesc',
       desc: '',
       args: [],
@@ -10119,6 +10119,352 @@ class AppLocalizations {
       name: 'allReferencedProxyProviders',
       desc: '',
       args: [],
+    );
+  }
+
+  /// `An open lock marks the settings you took over; right-click or long-press one to hand it back.`
+  String get managedSettingsOwnedHint {
+    return Intl.message(
+      'An open lock marks the settings you took over; right-click or long-press one to hand it back.',
+      name: 'managedSettingsOwnedHint',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Managed by you`
+  String get managedByYou {
+    return Intl.message(
+      'Managed by you',
+      name: 'managedByYou',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Send from phone`
+  String get sendFromPhone {
+    return Intl.message(
+      'Send from phone',
+      name: 'sendFromPhone',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Scan the code with your phone's camera and paste the link on the page that opens. Both devices need to be on the same network. If the page does not open on Android 17 or later, give the phone's browser the Nearby devices permission.`
+  String get sendFromPhoneTip {
+    return Intl.message(
+      'Scan the code with your phone\'s camera and paste the link on the page that opens. Both devices need to be on the same network. If the page does not open on Android 17 or later, give the phone\'s browser the Nearby devices permission.',
+      name: 'sendFromPhoneTip',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This device is not connected to a local network`
+  String get sendFromPhoneNoNetwork {
+    return Intl.message(
+      'This device is not connected to a local network',
+      name: 'sendFromPhoneNoNetwork',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Receiving a link from your phone needs the Nearby devices permission, which lets FlClashM reach the local network. Turn it on in the app's settings.`
+  String get sendFromPhonePermissionDenied {
+    return Intl.message(
+      'Receiving a link from your phone needs the Nearby devices permission, which lets FlClashM reach the local network. Turn it on in the app\'s settings.',
+      name: 'sendFromPhonePermissionDenied',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Send a link to FlClashM`
+  String get sendFromPhonePageTitle {
+    return Intl.message(
+      'Send a link to FlClashM',
+      name: 'sendFromPhonePageTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Subscription link or proxy share link`
+  String get sendFromPhonePageHint {
+    return Intl.message(
+      'Subscription link or proxy share link',
+      name: 'sendFromPhonePageHint',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Send`
+  String get send {
+    return Intl.message('Send', name: 'send', desc: '', args: []);
+  }
+
+  /// `Sent. Confirm the import on the other device.`
+  String get sendFromPhonePageSent {
+    return Intl.message(
+      'Sent. Confirm the import on the other device.',
+      name: 'sendFromPhonePageSent',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Import the link from your phone?`
+  String get sendFromPhoneConfirmTitle {
+    return Intl.message(
+      'Import the link from your phone?',
+      name: 'sendFromPhoneConfirmTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Scan with FlClashM on another device to import this profile.`
+  String get shareQrcodeTip {
+    return Intl.message(
+      'Scan with FlClashM on another device to import this profile.',
+      name: 'shareQrcodeTip',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This link is too long for a QR code. Use Copy link instead.`
+  String get qrcodeTooLongTip {
+    return Intl.message(
+      'This link is too long for a QR code. Use Copy link instead.',
+      name: 'qrcodeTooLongTip',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Profile {name} added`
+  String profileAddedTip(Object name) {
+    return Intl.message(
+      'Profile $name added',
+      name: 'profileAddedTip',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `{count, plural, other{{count} selected}}`
+  String accessControlSelectedCount(num count) {
+    return Intl.plural(
+      count,
+      other: '$count selected',
+      name: 'accessControlSelectedCount',
+      desc: '',
+      args: [count],
+    );
+  }
+
+  /// `Always`
+  String get findProcessAlways {
+    return Intl.message(
+      'Always',
+      name: 'findProcessAlways',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `When rules need it`
+  String get findProcessStrict {
+    return Intl.message(
+      'When rules need it',
+      name: 'findProcessStrict',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Delay test timeout`
+  String get delayTestTimeout {
+    return Intl.message(
+      'Delay test timeout',
+      name: 'delayTestTimeout',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Fork author`
+  String get forkAuthor {
+    return Intl.message('Fork author', name: 'forkAuthor', desc: '', args: []);
+  }
+
+  /// `Background blur`
+  String get backgroundBlur {
+    return Intl.message(
+      'Background blur',
+      name: 'backgroundBlur',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Liquid Glass simplified until restart: this device can't keep up.`
+  String get liquidGlassReduced {
+    return Intl.message(
+      'Liquid Glass simplified until restart: this device can\'t keep up.',
+      name: 'liquidGlassReduced',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Apply now`
+  String get applyNow {
+    return Intl.message('Apply now', name: 'applyNow', desc: '', args: []);
+  }
+
+  /// `Applied`
+  String get applied {
+    return Intl.message('Applied', name: 'applied', desc: '', args: []);
+  }
+
+  /// `Monochrome icon`
+  String get monochromeIcon {
+    return Intl.message(
+      'Monochrome icon',
+      name: 'monochromeIcon',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Plugin path`
+  String get pluginPath {
+    return Intl.message('Plugin path', name: 'pluginPath', desc: '', args: []);
+  }
+
+  /// `Plugin username`
+  String get pluginUsername {
+    return Intl.message(
+      'Plugin username',
+      name: 'pluginUsername',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Plugin password`
+  String get pluginPassword {
+    return Intl.message(
+      'Plugin password',
+      name: 'pluginPassword',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Plugin cipher`
+  String get pluginCipher {
+    return Intl.message(
+      'Plugin cipher',
+      name: 'pluginCipher',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Request headers`
+  String get requestHeaders {
+    return Intl.message(
+      'Request headers',
+      name: 'requestHeaders',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `{transport} Headers`
+  String transportHeaders(Object transport) {
+    return Intl.message(
+      '$transport Headers',
+      name: 'transportHeaders',
+      desc: '',
+      args: [transport],
+    );
+  }
+
+  /// `Clear DNS cache`
+  String get clearDnsCache {
+    return Intl.message(
+      'Clear DNS cache',
+      name: 'clearDnsCache',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `DNS cache cleared`
+  String get dnsCacheCleared {
+    return Intl.message(
+      'DNS cache cleared',
+      name: 'dnsCacheCleared',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to clear DNS cache`
+  String get clearDnsCacheFailed {
+    return Intl.message(
+      'Failed to clear DNS cache',
+      name: 'clearDnsCacheFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Select`
+  String get select {
+    return Intl.message('Select', name: 'select', desc: '', args: []);
+  }
+
+  /// `Preferred`
+  String get preferred {
+    return Intl.message('Preferred', name: 'preferred', desc: '', args: []);
+  }
+
+  /// `Add to local proxies`
+  String get addToLocalProxies {
+    return Intl.message(
+      'Add to local proxies',
+      name: 'addToLocalProxies',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Added {name} to local proxies`
+  String addedToLocalProxies(Object name) {
+    return Intl.message(
+      'Added $name to local proxies',
+      name: 'addedToLocalProxies',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `{name} is already in local proxies`
+  String alreadyInLocalProxies(Object name) {
+    return Intl.message(
+      '$name is already in local proxies',
+      name: 'alreadyInLocalProxies',
+      desc: '',
+      args: [name],
     );
   }
 }

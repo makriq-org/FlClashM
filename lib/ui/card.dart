@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'fade_box.dart';
 import 'scaffold.dart';
 import 'text.dart';
+import 'title_badge.dart';
 
 class Info {
   final String label;
@@ -70,12 +71,15 @@ class InfoHeader extends StatelessWidget {
                 ],
                 Flexible(
                   flex: 1,
-                  child: TooltipText(
-                    text: Text(
-                      info.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.cardHeaderStyle,
+                  child: TitleBadge.wrap(
+                    context,
+                    TooltipText(
+                      text: Text(
+                        info.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.cardHeaderStyle,
+                      ),
                     ),
                   ),
                 ),
@@ -214,7 +218,7 @@ class CommonCard extends StatelessWidget {
       fill: Colors.transparent,
       builder: (context, states, child) => LiquidGlass(
         style: LiquidGlassStyle.frost(background, quality),
-        corners: corners,
+        borderRadius: corners,
         pressed: states.contains(WidgetState.pressed),
         child: FrostScope(
           surface: background,

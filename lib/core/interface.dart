@@ -51,7 +51,11 @@ mixin CoreInterface {
 
   Future<RuleSetInfo> compileRuleSet(String name, {String url = ''});
 
-  Future<Delay?> asyncTestDelay(String url, String proxyName);
+  Future<Delay?> asyncTestDelay(
+    String url,
+    String proxyName, [
+    Duration? timeout,
+  ]);
 
   Future<ProbeResult?> probe(ProbeParams params);
 
@@ -572,16 +576,22 @@ abstract class CoreHandlerInterface with CoreInterface {
   }
 
   @override
-  Future<Delay?> asyncTestDelay(String url, String proxyName) async {
+  Future<Delay?> asyncTestDelay(
+    String url,
+    String proxyName, [
+    Duration? timeout,
+  ]) async {
     final delayParams = {
       'proxy-name': proxyName,
-      'timeout': delayTestTimeoutDuration.inMilliseconds,
+      'timeout': (timeout ?? delayTestTimeoutDuration).inMilliseconds,
       'test-url': url,
     };
     final data = await _invokeMethod<Map<String, dynamic>>(
       method: CoreMethod.asyncTestDelay,
       arguments: delayParams,
-      timeout: delayTestGuardDuration,
+      timeout: coreGuardFor(
+        (timeout ?? delayTestTimeoutDuration).inMilliseconds,
+      ),
     );
     return data == null ? null : Delay.fromJson(data);
   }

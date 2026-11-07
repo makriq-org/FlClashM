@@ -146,6 +146,9 @@ func proxiesWithDescriptions() map[string]interface{} {
 		if err := json.Unmarshal(data, &item); err != nil {
 			continue
 		}
+		if providerName := proxy.ProxyInfo().ProviderName; providerName != "" {
+			item["provider-name"] = providerName
+		}
 		proxyDescMu.RLock()
 		desc, hasDesc := proxyDescriptions[name]
 		proxyDescMu.RUnlock()
@@ -250,38 +253,38 @@ func updateListeners() {
 	}
 	listeners := currentConfig.Listeners
 	general := currentConfig.General
-	listener.PatchInboundListeners(listeners, tunnel.Tunnel, true)
+	listener.PatchInboundListeners(listeners, trafficTunnel, true)
 	listener.SetAllowLan(general.AllowLan)
 	inbound.SetSkipAuthPrefixes(general.SkipAuthPrefixes)
 	inbound.SetAllowedIPs(general.LanAllowedIPs)
 	inbound.SetDisAllowedIPs(general.LanDisAllowedIPs)
 	listener.SetBindAddress(general.BindAddress)
-	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
-	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
-	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
-	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)
-	listener.ReCreateMixed(general.MixedPort, tunnel.Tunnel)
-	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
-	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
-	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
+	listener.ReCreateHTTP(general.Port, trafficTunnel)
+	listener.ReCreateSocks(general.SocksPort, trafficTunnel)
+	listener.ReCreateRedir(general.RedirPort, trafficTunnel)
+	listener.ReCreateTProxy(general.TProxyPort, trafficTunnel)
+	listener.ReCreateMixed(general.MixedPort, trafficTunnel)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, trafficTunnel)
+	listener.ReCreateVmess(general.VmessConfig, trafficTunnel)
+	listener.ReCreateTuic(general.TuicServer, trafficTunnel)
 	// Desktop builds may include the `cmfa` tag, so gate TUN only on Android.
 	if runtime.GOOS != "android" {
-		listener.ReCreateTun(general.Tun, tunnel.Tunnel)
+		listener.ReCreateTun(general.Tun, trafficTunnel)
 	}
 }
 
 // stopListeners stops all active listeners
 func stopListeners() {
-	listener.ReCreateHTTP(0, tunnel.Tunnel)
-	listener.ReCreateSocks(0, tunnel.Tunnel)
-	listener.ReCreateRedir(0, tunnel.Tunnel)
-	listener.ReCreateTProxy(0, tunnel.Tunnel)
-	listener.ReCreateMixed(0, tunnel.Tunnel)
-	listener.ReCreateShadowSocks("", tunnel.Tunnel)
-	listener.ReCreateVmess("", tunnel.Tunnel)
-	listener.ReCreateTuic(LC.TuicServer{}, tunnel.Tunnel)
+	listener.ReCreateHTTP(0, trafficTunnel)
+	listener.ReCreateSocks(0, trafficTunnel)
+	listener.ReCreateRedir(0, trafficTunnel)
+	listener.ReCreateTProxy(0, trafficTunnel)
+	listener.ReCreateMixed(0, trafficTunnel)
+	listener.ReCreateShadowSocks("", trafficTunnel)
+	listener.ReCreateVmess("", trafficTunnel)
+	listener.ReCreateTuic(LC.TuicServer{}, trafficTunnel)
 	if runtime.GOOS != "android" {
-		listener.ReCreateTun(LC.Tun{}, tunnel.Tunnel)
+		listener.ReCreateTun(LC.Tun{}, trafficTunnel)
 	}
 	listener.Cleanup()
 }
@@ -474,6 +477,7 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 		applyConfig = embeddedExecutorConfig(currentConfig)
 	}
 	executor.ApplyConfig(applyConfig, true)
+	publishTrafficProxies(parsedConfig.Proxies, parsedConfig.Providers)
 	watchResolvers()
 	close(applyFinished)
 	<-cancelFinished

@@ -119,10 +119,13 @@ class _Lookup {
     }
   }
 
+  /// A query that ran past [timeout] has left [_inFlight] but its request is
+  /// still open; cancelling here ends it with the lookup.
   void _settle() {
     if (_inFlight > 0) {
       return;
     }
+    cancelToken.cancel();
     final fallback = _fallback;
     if (fallback != null) {
       _completer.complete(fallback);

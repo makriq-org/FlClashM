@@ -47,7 +47,52 @@ class Dialogs {
     String? title,
     String? confirmText,
     String? cancelText,
+    bool? dismissible,
+    bool destructive = false,
     bool cancelable = true,
+  }) {
+    return _showMessage(
+      message: message,
+      context: context,
+      title: title,
+      confirmText: confirmText,
+      cancelText: cancelText,
+      dismissible: dismissible,
+      destructive: destructive,
+      cancelable: cancelable,
+    );
+  }
+
+  /// Asked on leaving with unsaved changes: true saves, false leaves without
+  /// saving, and null, the alert dismissed, stays.
+  Future<bool?> showSaveChanges({String? title}) {
+    return showMessage(
+      title: title,
+      message: TextSpan(text: currentAppLocalizations.saveChanges),
+    );
+  }
+
+  /// A message with nothing to decide, acknowledged with a single button.
+  Future<void> showAlert({
+    required InlineSpan message,
+    String? title,
+    bool? dismissible,
+  }) {
+    return _showMessage(
+      message: message,
+      title: title,
+      dismissible: dismissible,
+      cancelable: false,
+    );
+  }
+
+  Future<bool?> _showMessage({
+    required InlineSpan message,
+    required bool cancelable,
+    BuildContext? context,
+    String? title,
+    String? confirmText,
+    String? cancelText,
     bool? dismissible,
     bool destructive = false,
   }) async {
@@ -89,6 +134,40 @@ class Dialogs {
     return showSheet(
       context: _context,
       builder: (_) => _FailureDetailsSheet(failures: failures),
+    );
+  }
+
+  Future<void> showQrCode({
+    required String title,
+    required String data,
+    String? message,
+  }) {
+    return showCommonDialog<void>(
+      child: Builder(
+        builder: (context) => CommonDialog(
+          title: title,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(context.appLocalizations.close),
+            ),
+          ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 16,
+            children: [
+              if (QrCodeView.fits(data)) ...[
+                QrCodeView(data: data),
+                if (message != null) Text(message, textAlign: TextAlign.center),
+              ] else
+                Text(
+                  context.appLocalizations.qrcodeTooLongTip,
+                  textAlign: TextAlign.center,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -203,15 +282,15 @@ class _FailureDetailsSheet extends StatelessWidget {
     return CommonScaffold(
       title: context.appLocalizations.errorDetails,
       body: SelectionArea(
-        child: ListView.separated(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-          ).copyWith(top: context.contentTopPadding, bottom: 20),
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16).copyWith(
+            top: context.sectionsTopPadding,
+            bottom: 20 + context.bottomInset,
+          ),
           itemCount: groups.length,
-          separatorBuilder: (_, _) => SizedBox(height: 24.mAp(context)),
           itemBuilder: (_, index) {
             final MapEntry(key: message, value: labels) = groups[index];
-            return generateSection(
+            final section = generateSection(
               items: [
                 for (final label in labels)
                   DecorationListItem(
@@ -226,6 +305,9 @@ class _FailureDetailsSheet extends StatelessWidget {
               ],
               footer: message,
             );
+            return index == 0
+                ? section
+                : Column(children: [const ListSectionGap(), section]);
           },
         ),
       ),

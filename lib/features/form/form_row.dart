@@ -16,7 +16,7 @@ class InfoMessageButton extends StatelessWidget {
       child: IconButton(
         tooltip: context.appLocalizations.tip,
         onPressed: () {
-          dialogs.showMessage(message: TextSpan(text: message));
+          dialogs.showAlert(message: TextSpan(text: message));
         },
         icon: GlyphIcon(
           AppGlyphs.info,
@@ -78,11 +78,10 @@ class FormRow extends StatelessWidget {
     this.onPressed,
   });
 
-  Widget _buildTitle(double maxWidth) {
-    final text = TooltipLabel(
-      title,
-      style: titleStyle,
-      maxLines: _titleMaxLines,
+  Widget _buildTitle(BuildContext context, double maxWidth) {
+    final text = TitleBadge.wrap(
+      context,
+      TooltipLabel(title, style: titleStyle, maxLines: _titleMaxLines),
     );
     if (trailing == null) {
       return Flexible(child: text);
@@ -108,7 +107,7 @@ class FormRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             spacing: _spacing,
             children: [
-              _buildTitle(constraints.maxWidth),
+              _buildTitle(context, constraints.maxWidth),
               if (trailing != null)
                 Flexible(
                   child: IconTheme(
@@ -181,9 +180,8 @@ class FormRowTextField extends StatelessWidget {
       TextDirection.rtl => -1.0,
     };
     return InputDecorationTheme(
-      data: InputDecorationTheme.of(
-        context,
-      ).copyWith(floatingLabelBehavior: FloatingLabelBehavior.never),
+      data: InputDecorationTheme.of(context)
+          .copyWith(floatingLabelBehavior: FloatingLabelBehavior.never),
       child: Transform.translate(
         offset: Offset(_caretMargin * towardEnd, 0),
         child: _buildField(context),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+
 import '../product/backend/backend.dart';
 
 import 'package:flclashx/common/common.dart';
@@ -92,16 +93,26 @@ class CoreController {
 
   FutureOr<bool> get isInit => _interface.isInit;
 
-  Future<String> validateConfig(String path) => validateConfigWithData(File(path).readAsStringSync());
-  Future<String> validateProfile(String path, [String ageSecretKey = '']) async {
+  Future<String> validateConfig(String path) =>
+      validateConfigWithData(File(path).readAsStringSync());
+  Future<String> validateProfile(
+    String path, [
+    String ageSecretKey = '',
+  ]) async {
     return _validate(await File(path).readAsBytes(), ageSecretKey);
   }
+
   Future<String> _validate(List<int> bytes, String key) async {
     final token = await backendClient.upload(Uint8List.fromList(bytes));
     try {
-      final result = await backendClient.request('profile.validate', {'token': token, 'ageSecretKey': key});
+      final result = await backendClient.request('profile.validate', {
+        'token': token,
+        'ageSecretKey': key,
+      });
       return (result as Map)['message'] as String;
-    } finally { await backendClient.discardBlob(token); }
+    } finally {
+      await backendClient.discardBlob(token);
+    }
   }
 
   Future<List<String>> validateProxies(List<Map<String, dynamic>> proxies) {
@@ -134,7 +145,8 @@ class CoreController {
     return _interface.decodeShareLinks(lines);
   }
 
-  Future<String> validateConfigWithData(String data) => _validate(utf8.encode(data), '');
+  Future<String> validateConfigWithData(String data) =>
+      _validate(utf8.encode(data), '');
 
   Future<List<Group>> getProxiesGroups({
     required ProxiesSortType sortType,
@@ -218,8 +230,12 @@ class CoreController {
     return _interface.stopListener();
   }
 
-  Future<Delay?> getDelay(String url, String proxyName) async {
-    return _interface.asyncTestDelay(url, proxyName);
+  Future<Delay?> getDelay(
+    String url,
+    String proxyName, [
+    Duration? timeout,
+  ]) async {
+    return _interface.asyncTestDelay(url, proxyName, timeout);
   }
 
   Future<ProbeResult?> probe(ProbeParams params) => _interface.probe(params);
@@ -231,9 +247,22 @@ class CoreController {
       _interface.serviceCheck(params);
 
   Future<Map<String, dynamic>> getConfig(String id) async {
-    final result = await backendClient.request('profile.inspect', {'profileId': id});
-    return Map<String,dynamic>.from((result as Map)['config'] as Map);
+    final result = await backendClient.request('profile.inspect', {
+      'profileId': id,
+    });
+    return Map<String, dynamic>.from((result as Map)['config'] as Map);
   }
+
+  Future<AuthenticationProps> getProfileAuthentication(String id) async {
+    final result = await backendClient.request('profile.inspect', {
+      'profileId': id,
+    });
+    final auth = (result as Map)['authentication'];
+    return AuthenticationProps.fromJson(
+      auth == null ? null : Map<String, dynamic>.from(auth as Map),
+    );
+  }
+
   Future<AccessControlProps?> getProfileAccessControl(String id) async {
     final result = await backendClient.request('profile.inspect', {
       'profileId': id,
@@ -241,18 +270,26 @@ class CoreController {
     final access = (result as Map)['accessControl'];
     return access == null
         ? null
-        : AccessControlProps.fromJson(
-            Map<String, dynamic>.from(access as Map),
-          );
+        : AccessControlProps.fromJson(Map<String, dynamic>.from(access as Map));
   }
 
   Future<Map<String, dynamic>> getProfileOutbounds(String id) async {
-    final result = await backendClient.request('profile.inspect', {'profileId': id});
-    return Map<String,dynamic>.from((result as Map)['outbounds'] as Map);
+    final result = await backendClient.request('profile.inspect', {
+      'profileId': id,
+    });
+    return Map<String, dynamic>.from((result as Map)['outbounds'] as Map);
   }
-  Future<({ProfileBase base,String path})> getProfileBase(String id) async {
-    final result=await backendClient.request('profile.inspect',{'profileId':id}) as Map;
-    return (base:ProfileBase.fromJson(Map<String,dynamic>.from(result['base'] as Map)),path:'');
+
+  Future<({ProfileBase base, String path})> getProfileBase(String id) async {
+    final result = await backendClient.request('profile.inspect', {
+      'profileId': id,
+    }) as Map;
+    return (
+      base: ProfileBase.fromJson(
+        Map<String, dynamic>.from(result['base'] as Map),
+      ),
+      path: '',
+    );
   }
 
   Future<Traffic> getTraffic(bool onlyStatisticsProxy) async {
@@ -274,7 +311,9 @@ class CoreController {
   Future<bool> shutdown() => _interface.shutdown();
 
   void resetTraffic() {
-    unawaited(backendClient.command('engine.command', {'method': 'traffic.reset'}));
+    unawaited(
+      backendClient.command('engine.command', {'method': 'traffic.reset'}),
+    );
   }
 
   void startLog() {
@@ -317,7 +356,9 @@ class CoreController {
   }
 
   Future<String> clearEffect(String profileId) async {
-    return backendClient.command('profile.clearCache', {'profileId': profileId}).then((_) => '');
+    return backendClient
+        .command('profile.clearCache', {'profileId': profileId})
+        .then((_) => '');
   }
 }
 

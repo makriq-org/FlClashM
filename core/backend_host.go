@@ -236,6 +236,8 @@ func openApplicationBackend(options backendHostOptions) error {
 	backendManaged.Store(true)
 	app, err := application.Open(application.Options{
 		ReadProviderResource: readBackendProviderResource,
+		ReadProxyDefinition:  readBackendProxyDefinition,
+		ReadProxyPins:        readBackendProxyPins,
 		Directory:            filepath.Join(options.Home, "backend"), LegacySettings: options.Legacy, LegacyRunning: options.LegacyRunning, LegacyTimeZone: options.TimeZone, LegacyUTCOffset: options.UTCOffset,
 		Compiler: compiler, ValidateSource: func(ctx context.Context, source string) error {
 			// Validation uses exactly the normal preparation pipeline, without
@@ -761,4 +763,31 @@ func (backendEngine) Forget(ctx context.Context) error {
 	externalProviders = map[string]cp.Provider{}
 	*state.CurrentState = state.State{}
 	return ctx.Err()
+}
+
+// Read-only engine adapter: selection persistence and apply stay in Go service.
+func readBackendProxyPins(ctx context.Context) (map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	runLock.Lock()
+	defer runLock.Unlock()
+	result := map[string]string{}
+	for name, proxy := range proxiesWithProviders() {
+		if proxy.Type() != constant.Fallback {
+			continue
+		}
+		data, err := proxy.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		var value struct {
+			Fixed string `json:"fixed"`
+		}
+		if err = json.Unmarshal(data, &value); err != nil {
+			return nil, err
+		}
+		result[name] = value.Fixed
+	}
+	return result, nil
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/pages/scan.dart';
+import 'package:flclashx/product/pages/link_session_page.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -38,6 +39,21 @@ class AddProfileView extends ConsumerWidget {
 
   Future<void> _handleAddProfileFormFile(WidgetRef ref) async {
     unawaited(ref.read(profilesActionProvider.notifier).addProfileFormFile());
+  }
+
+  Future<void> _receiveLink(WidgetRef ref) async {
+    final link = await BaseNavigator.push<String>(
+      context,
+      const LinkSessionPage(),
+    );
+    if (link == null || !context.mounted) return;
+    final agreed = await dialogs.showMessage(
+      title: context.appLocalizations.sendFromPhoneConfirmTitle,
+      message: TextSpan(text: link),
+    );
+    if (agreed == true && context.mounted) {
+      await ref.read(profilesActionProvider.notifier).addProfileFromLink(link);
+    }
   }
 
   Future<void> _toScan(WidgetRef ref) async {
@@ -103,12 +119,9 @@ class AddProfileView extends ConsumerWidget {
   Future<void> _toAddCustom(BuildContext context, WidgetRef ref) async {
     final profilesAction = ref.read(profilesActionProvider.notifier);
     final label = context.appLocalizations.unnamed;
-    final profileId=await profilesAction.addCustomProfile(label);
-    if(!context.mounted)return;
-    Widget editor() => CustomProfileView(
-      profileId: profileId,
-      isNew: true,
-    );
+    final profileId = await profilesAction.addCustomProfile(label);
+    if (!context.mounted) return;
+    Widget editor() => CustomProfileView(profileId: profileId, isNew: true);
     final navigator = Navigator.of(context);
     if (!origin.mounted || Navigator.of(origin) == navigator) {
       unawaited(BaseNavigator.pushReplacement(context, editor()));
@@ -130,6 +143,11 @@ class AddProfileView extends ConsumerWidget {
     return ListView(
       padding: EdgeInsets.only(top: context.contentTopPadding, bottom: 16),
       children: [
+        ListItem(
+          leading: const GlyphIcon(AppGlyphs.qrCode),
+          title: Text(appLocalizations.sendFromPhone),
+          onTap: () => _receiveLink(ref),
+        ),
         ListItem(
           leading: const GlyphIcon(AppGlyphs.qrCode),
           title: Text(appLocalizations.qrcode),

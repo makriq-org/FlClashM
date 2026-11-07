@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
+import 'package:flclashx/product/backend/backend.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/common/ip_quality.dart';
 import 'package:flclashx/enum/enum.dart';
@@ -16,28 +16,47 @@ Duration ipQualityFailureCooldown(Ref ref) => const Duration(minutes: 5);
 
 @Riverpod(retry: _noRetry)
 Future<IpQuality> ipQuality(Ref ref, String ip) async {
-  final cancelToken = CancelToken();
-  ref.onDispose(cancelToken.cancel);
   try {
-    final quality = await lookupIpQuality(
-      request.dio,
-      ip,
-      cancelToken: cancelToken,
+    final record = Map<String, dynamic>.from(
+      await backendClient.request('ipQuality.get', {
+        'ip': ip,
+        'refresh': ref.isRefresh,
+      }) as Map,
     );
-    ref.keepAlive();
-    return quality;
-  } on IpQualityLookupException catch (error) {
-    if (!ref.mounted) {
-      rethrow;
+    final data = Map<String, dynamic>.from(record['quality'] as Map);
+    final quality = IpQuality(
+      ip: data['ip'] as String,
+      source: IpQualitySource.values.byName(data['source'] as String),
+      type: IpType.values.byName(data['type'] as String),
+      organization: data['organization'] as String?,
+      asn: data['asn'] as int?,
+      isProxy: data['isProxy'] == true,
+      isVpn: data['isVpn'] == true,
+      isTor: data['isTor'] == true,
+      isAbuser: data['isAbuser'] == true,
+    );
+    if (ref.mounted) {
+      final expires = DateTime.parse(record['checkedAt'] as String)
+          .add(const Duration(days: 3));
+      ref.keepAlive();
+      final timer = Timer(
+        expires.difference(DateTime.now()),
+        ref.invalidateSelf,
+      );
+      ref.onDispose(timer.cancel);
     }
+    return quality;
+  } catch (error) {
+    if (!ref.mounted) rethrow;
     commonPrint.log(
-      'ip quality lookup failed for $ip: '
-      '${error.failures.map((f) => '${f.source.label} ${f.status.name}').join(', ')}',
+      'ip quality lookup failed: ${compactError(error)}',
       logLevel: LogLevel.warning,
     );
     final link = ref.keepAlive();
     final timer = Timer(ref.read(ipQualityFailureCooldownProvider), link.close);
     ref.onDispose(timer.cancel);
-    rethrow;
+    throw const IpQualityLookupException([
+      (source: IpQualitySource.ipInfo, status: IpQualitySourceStatus.failed),
+    ]);
   }
 }

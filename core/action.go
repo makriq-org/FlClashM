@@ -125,10 +125,12 @@ func handleAction(action *Action, result ActionResult) {
 		})
 		return
 	case getTrafficMethod:
-		result.success(handleGetTraffic())
+		only, _ := action.Data.(bool)
+		result.success(handleGetTrafficFiltered(only))
 		return
 	case getTotalTrafficMethod:
-		result.success(handleGetTotalTraffic())
+		only, _ := action.Data.(bool)
+		result.success(handleGetTotalTrafficFiltered(only))
 		return
 	case resetTrafficMethod:
 		handleResetTraffic()

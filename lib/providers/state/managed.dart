@@ -32,6 +32,30 @@ final profileDeclaredAccessProvider =
       return coreController.getProfileAccessControl(profileId);
     });
 
+// Disposable presentation of credentials parsed by Go, without overwriting
+// the user's saved account when the subscription temporarily owns the setting.
+final profileDeclaredAuthenticationProvider =
+    FutureProvider.autoDispose<AuthenticationProps>((ref) async {
+      final profile = ref.watch(
+        currentProfileProvider.select(
+          (profile) => (profile?.id, profile?.lastUpdateDate),
+        ),
+      );
+      return profile.$1 == null
+          ? const AuthenticationProps()
+          : coreController.getProfileAuthentication(profile.$1!);
+    });
+
+final effectiveAuthenticationProvider = Provider<AuthenticationProps>((ref) {
+  if (ref.watch(settingLockedProvider('clash.authentication'))) {
+    return ref.watch(profileDeclaredAuthenticationProvider).value ??
+        const AuthenticationProps();
+  }
+  return ref.watch(
+    networkSettingProvider.select((state) => state.authentication),
+  );
+});
+
 /// Every setting the current subscription speaks for.
 @riverpod
 Set<String> managedSettings(Ref ref) {

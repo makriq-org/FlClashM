@@ -17,17 +17,18 @@ const Animation<Offset> _noSlide = AlwaysStoppedAnimation(Offset.zero);
 /// in the hit test, so it wins the arena and keeps the drag.
 mixin DragBackRouteMixin<T> on ModalRoute<T> {
   bool _dragBackActive = false;
-
-  /// What a page hands back to its opener when a pop brings no result of its
-  /// own, as a drag back's does, so the page need not veto pops to answer.
-  ValueGetter<Object?>? pageResult;
-
-  @override
-  T? get currentResult => pageResult?.call() as T?;
+  FocusNode? _focusBeforeDragBack;
 
   /// While true the route's own transition should follow the finger linearly,
   /// through the release until the route settles.
   bool get isDragBackActive => _dragBackActive;
+
+  FocusScopeNode? get _focusScope {
+    final context = subtreeContext;
+    return context == null
+        ? null
+        : FocusScope.of(context, createDependency: false);
+  }
 
   @protected
   void didStartDragBack() {}
@@ -67,6 +68,9 @@ mixin DragBackRouteMixin<T> on ModalRoute<T> {
 
   void _startDragBack() {
     _dragBackActive = true;
+    _focusBeforeDragBack = (_focusScope?.hasFocus ?? false)
+        ? FocusManager.instance.primaryFocus
+        : null;
     didStartDragBack();
     navigator!.didStartUserGesture();
   }
@@ -135,6 +139,23 @@ mixin DragBackRouteMixin<T> on ModalRoute<T> {
     _dragBackActive = false;
     didEndDragBack();
     navigator.didStopUserGesture();
+    _refocusAfterDragBack();
+  }
+
+  // ModalRoute unfocuses a route under a user gesture and refocuses nothing.
+  void _refocusAfterDragBack() {
+    final focus = _focusBeforeDragBack;
+    _focusBeforeDragBack = null;
+    if (focus == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isCurrent &&
+          !(_focusScope?.hasFocus ?? false) &&
+          (focus.context?.mounted ?? false)) {
+        focus.requestFocus();
+      }
+    });
   }
 
   void _abortDragBack() {
@@ -143,6 +164,7 @@ mixin DragBackRouteMixin<T> on ModalRoute<T> {
       return;
     }
     _dragBackActive = false;
+    _focusBeforeDragBack = null;
     didEndDragBack();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (navigator.mounted) {
@@ -194,7 +216,9 @@ class _DragBackDetectorState extends State<_DragBackDetector> {
 
   void _handlePointerDown(PointerDownEvent event) {
     if (widget.route._canDragBack) {
-      _recognizer.addPointer(event);
+      _recognizer
+        ..towardEnd = _toLogical(1)
+        ..addPointer(event);
     }
   }
 
@@ -242,21 +266,23 @@ class _DragBackDetectorState extends State<_DragBackDetector> {
 
 // Desktop text fields select with a pan, which accepts past the pan slop.
 class _DragBackGestureRecognizer extends HorizontalDragGestureRecognizer {
-  _DragBackGestureRecognizer({super.debugOwner});
+  _DragBackGestureRecognizer({super.debugOwner}) {
+    // Alone in the arena, it would win by default and start at once.
+    onlyAcceptDragOnThreshold = true;
+  }
+
+  double towardEnd = 1;
 
   @override
   bool hasSufficientGlobalDistanceToAccept(
     PointerDeviceKind pointerDeviceKind,
     double? deviceTouchSlop,
   ) {
-    return switch (defaultTargetPlatform) {
+    final slop = switch (defaultTargetPlatform) {
       TargetPlatform.linux || TargetPlatform.macOS || TargetPlatform.windows =>
-        globalDistanceMoved.abs() >
-            computePanSlop(pointerDeviceKind, gestureSettings),
-      _ => super.hasSufficientGlobalDistanceToAccept(
-        pointerDeviceKind,
-        deviceTouchSlop,
-      ),
+        computePanSlop(pointerDeviceKind, gestureSettings),
+      _ => computeHitSlop(pointerDeviceKind, gestureSettings),
     };
+    return globalDistanceMoved * towardEnd > slop;
   }
 }
