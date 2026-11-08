@@ -946,7 +946,9 @@ class CommonScaffoldState extends State<CommonScaffold>
             ],
           );
           return TopInsetScope(
-            inset: hasKeywords ? 0 : (TopInsetScope.of(context) ?? 0),
+            // Only the keyword strip has already consumed the top clearance.
+            // Otherwise the body still runs underneath the floating header.
+            inset: hasKeywords ? 0 : context.contentTopPadding,
             child: FloatingBarScope(
               inset: overlap,
               child: overlap > 0
