@@ -205,3 +205,7 @@ https://flclashm.sourceforge.io/update/pre.json
 </details>
 
 使用 `nix develop -c make generate` 生成 Flutter/Drift/Riverpod 代码。`tool/generate_flutter.dart` 先通过 `sky_engine/_embedder.yaml` 构建真实 Flutter SDK summary，再运行 build_runner，适配 Nix 将 Flutter Dart 解析为独立 SDK 的情况，不修改共享 pub cache。执行 `build_runner clean` 后仍应使用该 wrapper。
+
+### 启动外观
+
+Go 是 `themeMode` 和 `pureBlack` 的唯一设置来源；Android 仅缓存启动投影。启动页采用固定颜色：浅色 `#EEEDEF`、深色 `#121315`、纯黑 `#000000`，不复制自定义界面颜色。无缓存时跟随系统。Launcher alias 选择显式 Activity 主题，使 API 24–30 也能在进程启动前显示正确颜色；API 31+ 通过 `SplashScreen.setSplashScreenTheme` 持久化主题。先启用新入口，再禁用旧入口。系统模式使用 day/night 资源。单色图标着色和快捷方式刷新、位置由启动器决定。更新无需清除数据。SVG 源文件为 `assets/images/brand_mark{,_light}.svg`，运行 `python tool/generate_brand_assets.py` 导出（需要 `rsvg-convert`）。Flutter 使用 SVG，Android 使用 VectorDrawable。回退提交即可恢复外观，不改变 Go 设置格式。

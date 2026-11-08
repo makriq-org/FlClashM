@@ -237,6 +237,10 @@
     {
       "path": "lib/product/pages/link_session_page.dart",
       "reason": "Fork-only страница явного временного приёма ссылки; Go хранит токен и закрывает сеанс, UI показывает QR и ожидает подтверждения импорта."
+    },
+    {
+      "path": "lib/product/bootstrap/startup_screen.dart",
+      "reason": "Ранний экран запуска FlClashM отображает прозрачный знак и отложенный индикатор до готовности Go-проекции, без управления runtime."
     }
   ]
 }

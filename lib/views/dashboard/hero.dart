@@ -157,12 +157,7 @@ class _ServiceLogo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final url = this.url;
-    final fallback = Image.asset(
-      'assets/images/icon.png',
-      width: _logoSize,
-      height: _logoSize,
-      fit: BoxFit.cover,
-    );
+    const fallback = BrandMark(size: _logoSize);
     final path = url == null
         ? null
         : ref.watch(panelLogoPathProvider(url)).value;

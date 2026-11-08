@@ -1,0 +1,4 @@
+<resources>
+    <color name="launch_background">@color/splash_background_dark</color>
+    <color name="ic_launcher_background">#121315</color>
+</resources>
