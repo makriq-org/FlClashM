@@ -53,7 +53,7 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
             android:hardwareAccelerated="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:windowSoftInputMode="adjustResize">
             <meta-data
@@ -118,35 +118,22 @@
         <!-- Public automation entry point (MacroDroid/Tasker send START/STOP/CHANGE
              intents): must stay callable by third-party apps, so no signature
              permission here. -->
-        <activity android:name=".LightLaunchActivity" android:exported="true"
-            android:launchMode="singleTop" android:hardwareAccelerated="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:windowSoftInputMode="adjustResize" android:theme="@style/StartupLight">
-            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-        </activity>
-        <activity android:name=".DarkLaunchActivity" android:exported="true"
-            android:launchMode="singleTop" android:hardwareAccelerated="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:windowSoftInputMode="adjustResize" android:theme="@style/StartupDark">
-            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-        </activity>
-        <activity android:name=".BlackLaunchActivity" android:exported="true"
-            android:launchMode="singleTop" android:hardwareAccelerated="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:windowSoftInputMode="adjustResize" android:theme="@style/StartupBlack">
-            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-        </activity>
-        <activity android:name=".SystemBlackLaunchActivity" android:exported="true"
-            android:launchMode="singleTop" android:hardwareAccelerated="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:windowSoftInputMode="adjustResize" android:theme="@style/StartupSystemBlack">
-            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
-            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-        </activity>
-        <activity-alias android:name=".LauncherSystem" android:targetActivity=".MainActivity"
+        <activity android:name=".SystemLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/LaunchTheme" />
+        <activity android:name=".LightLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupLight" />
+        <activity android:name=".DarkLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupDark" />
+        <activity android:name=".BlackLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupBlack" />
+        <activity android:name=".SystemBlackLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupSystemBlack" />
+        <activity-alias android:name=".LauncherSystem" android:targetActivity=".SystemLaunchActivity"
             android:enabled="true" android:exported="true"
             android:icon="@mipmap/ic_launcher">
             <intent-filter>

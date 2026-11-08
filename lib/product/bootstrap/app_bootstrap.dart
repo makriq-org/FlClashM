@@ -18,15 +18,18 @@ class AppBootstrap {
   static Future<void> run() async {
     WidgetsFlutterBinding.ensureInitialized();
     final appearance = await StartupAppearance.read();
-    final brightness = switch (appearance.mode) {
-      ThemeMode.light => Brightness.light,
-      ThemeMode.dark => Brightness.dark,
-      ThemeMode.system =>
-        WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    };
-    // Keep the Android starting window until vector bytes are ready, avoiding
-    // an empty Flutter frame before the mark is decoded.
-    await SvgAssetLoader(BrandMark.assetFor(brightness)).loadBytes(null);
+    // System brightness can change while the assets load. Prepare both marks
+    // before runApp so either first-frame selection is already compiled.
+    final brightnesses = [
+      if (appearance.mode != ThemeMode.dark) Brightness.light,
+      if (appearance.mode != ThemeMode.light) Brightness.dark,
+    ];
+    await Future.wait(
+      brightnesses.map(
+        (brightness) =>
+            SvgAssetLoader(BrandMark.assetFor(brightness)).loadBytes(null),
+      ),
+    );
     final content = ValueNotifier<Widget>(
       StartupScreen(appearance: appearance),
     );

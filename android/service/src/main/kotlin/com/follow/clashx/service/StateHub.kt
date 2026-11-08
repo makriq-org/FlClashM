@@ -23,6 +23,7 @@ object StateHub {
     private var requiresVpn = true
     // Empty until Go settings were projected once in this process.
     private var themeMode = ""
+    private var pureBlack = false
 
     fun publish(value: String, startedAt: Long = 0L, message: String = "") = synchronized(lock) {
         if (state == value && this.startedAt == startedAt && this.message == message) return@synchronized
@@ -43,9 +44,10 @@ object StateHub {
     }
 
     /** Go settings theme, projected so the UI process can theme its first frame. */
-    fun projectTheme(value: String) = synchronized(lock) {
-        if (themeMode == value) return@synchronized
-        themeMode = value
+    internal fun projectTheme(appearance: BackendEvents.Appearance) = synchronized(lock) {
+        if (themeMode == appearance.mode && pureBlack == appearance.pureBlack) return@synchronized
+        themeMode = appearance.mode
+        pureBlack = appearance.pureBlack
         broadcastLocked()
     }
 
@@ -67,5 +69,5 @@ object StateHub {
     private fun snapshotLocked(): String = JSONObject().put("state", state).put("startedAt", startedAt)
         .put("message", message).put("seq", sequence).put("mode", mode)
         .put("globalModeEnabled", globalModeEnabled).put("hasActiveProfile", hasActiveProfile).put("requiresVpn", requiresVpn)
-        .put("themeMode", themeMode).toString()
+        .put("themeMode", themeMode).put("pureBlack", pureBlack).toString()
 }

@@ -33,6 +33,41 @@ void main() {
     }
   });
 
+  test('system day/night resources retain black mode and icon contrast', () {
+    String color(String directory, String file, String name) {
+      final doc = XmlDocument.parse(
+        File('android/app/src/main/res/$directory/$file.xml')
+            .readAsStringSync(),
+      );
+      return doc
+          .findAllElements('color')
+          .singleWhere((e) => e.getAttribute('name') == name)
+          .innerText;
+    }
+
+    int argb(String hex) => int.parse(hex.substring(1), radix: 16) | 0xff000000;
+    for (final brightness in Brightness.values) {
+      final directory = brightness == Brightness.light
+          ? 'values'
+          : 'values-night';
+      expect(
+        argb(color(directory, 'startup', 'startup_system_background')),
+        const StartupAppearance(pureBlack: true)
+            .theme(brightness)
+            .scaffoldBackgroundColor
+            .toARGB32(),
+      );
+      final icon = color(directory, 'colors', 'ic_launcher_background');
+      expect(
+        argb(icon),
+        const StartupAppearance()
+            .theme(brightness)
+            .scaffoldBackgroundColor
+            .toARGB32(),
+      );
+    }
+  });
+
   test(
     'launcher variants have explicit native themes and one default entry',
     () {
@@ -55,6 +90,18 @@ void main() {
         for (final node in manifest.findAllElements('activity'))
           node.getAttribute('android:name'): node,
       };
+      expect(
+        activities['com.follow.clashx.MainActivity']!.getAttribute(
+          'android:launchMode',
+        ),
+        'singleTask',
+      );
+      for (final alias in aliases) {
+        final target =
+            activities[alias.getAttribute('android:targetActivity')]!;
+        expect(target.getAttribute('android:noHistory'), 'true');
+        expect(target.getAttribute('android:relinquishTaskIdentity'), 'true');
+      }
       for (final name in ['Light', 'Dark', 'Black', 'SystemBlack']) {
         final alias = aliases.singleWhere(
           (e) => e.getAttribute('android:name') == '.Launcher$name',

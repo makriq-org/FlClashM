@@ -50,7 +50,7 @@ object GlobalState {
         profileAvailable = snapshot.hasActiveProfile
         requiresVpn = snapshot.requiresVpn
         projectedMode = snapshot.mode
-        if (snapshot.themeMode.isNotEmpty()) StartupTheme.store(CommonGlobalState.application, snapshot.themeMode)
+        if (snapshot.themeMode.isNotEmpty()) StartupTheme.storeAppearance(CommonGlobalState.application, snapshot.themeMode, snapshot.pureBlack)
         runStateFlow.value = state
         withContext(Dispatchers.Main) {
             runState.value = state

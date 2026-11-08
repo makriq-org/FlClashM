@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.follow.clashx.plugins.BatteryPlugin
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.DiagnosticsPlugin
@@ -17,7 +18,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-open class MainActivity : FlutterActivity() {
+class MainActivity : FlutterActivity() {
 
     private val highRefreshRate by lazy { HighRefreshRate(this) }
 
@@ -25,9 +26,12 @@ open class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme()
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         window.setBackgroundDrawable(getDrawable(StartupTheme.drawable(this)))
-        if (Build.VERSION.SDK_INT >= 31) splashScreen.setSplashScreenTheme(StartupTheme.theme(this))
+        // Each launch target has an explicit theme. A global override could
+        // outlive a headless Go settings update and mask the new target's theme.
+        if (Build.VERSION.SDK_INT >= 31) splashScreen.setSplashScreenTheme(0)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -137,12 +141,25 @@ open class MainActivity : FlutterActivity() {
     }
 }
 
-// Explicit launch targets let Android draw the correct starting window even
-// before this process exists, including API 24–30.
-class LightLaunchActivity : MainActivity()
-class DarkLaunchActivity : MainActivity()
-class BlackLaunchActivity : MainActivity()
-class SystemBlackLaunchActivity : MainActivity()
+// Starting windows belong to these short-lived tasks. They never own a
+// FlutterEngine; all routes converge on the singleTask MainActivity.
+open class StartupLaunchActivity : android.app.Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
+        super.onCreate(savedInstanceState)
+        splash.setKeepOnScreenCondition { true }
+        if (Build.VERSION.SDK_INT >= 31) splashScreen.setSplashScreenTheme(0)
+        startActivity(Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        })
+        finish()
+    }
+}
+class SystemLaunchActivity : StartupLaunchActivity()
+class LightLaunchActivity : StartupLaunchActivity()
+class DarkLaunchActivity : StartupLaunchActivity()
+class BlackLaunchActivity : StartupLaunchActivity()
+class SystemBlackLaunchActivity : StartupLaunchActivity()
 
 /** Startup-only projection; Go remains the settings authority. */
 internal object StartupTheme {
@@ -153,9 +170,6 @@ internal object StartupTheme {
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit()
             .putString(KEY, mode).putBoolean("pureBlack", pureBlack).apply()
         apply(context)
-        if (Build.VERSION.SDK_INT >= 31 && context is android.app.Activity) {
-            context.splashScreen.setSplashScreenTheme(theme(context))
-        }
     }
 
     private fun dark(context: Context): Boolean = when (read(context)) {
@@ -186,36 +200,51 @@ internal object StartupTheme {
         else -> R.drawable.launch_background
     }
 
-    fun apply(context: Context) {
-        val selected = when {
-            read(context) !in listOf("light", "dark") -> if (black(context)) "LauncherSystemBlack" else "LauncherSystem"
-            !dark(context) -> "LauncherLight"
-            black(context) -> "LauncherBlack"
-            else -> "LauncherDark"
-        }
-        val pm = context.packageManager
-        val names = listOf("LauncherSystem", "LauncherSystemBlack", "LauncherLight", "LauncherDark", "LauncherBlack")
-        // Enable first, so there is always a reachable launcher entry.
-        for (name in listOf(selected) + names.filter { it != selected }) {
-            val component = android.content.ComponentName(context, "com.follow.clashx.$name")
-            val state = if (name == selected) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            try {
-                if (pm.getComponentEnabledSetting(component) != state) {
-                    pm.setComponentEnabledSetting(component, state, android.content.pm.PackageManager.DONT_KILL_APP)
-                }
-            } catch (error: RuntimeException) {
-                android.util.Log.w("StartupTheme", "Launcher update failed; retry on resume", error)
-                // Never disable the old entry if enabling its replacement failed.
-                break
-            }
-        }
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var retry: Runnable? = null
 
+    private fun schedule(context: Context) {
+        if (retry != null) return
+        val application = context.applicationContext
+        val task = Runnable {
+            retry = null
+            apply(application)
+        }
+        retry = task
+        handler.postDelayed(task, 2000L)
     }
 
-    fun store(context: Context, mode: String) {
-        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        if (preferences.getString(KEY, null) != mode) preferences.edit().putString(KEY, mode).apply()
+    fun apply(context: Context) {
+        val application = context.applicationContext
+        if (android.os.Looper.myLooper() != handler.looper) {
+            handler.post { apply(application) }
+            return
+        }
+        retry?.let { handler.removeCallbacks(it) }
+        retry = null
+        val selected = when {
+            read(application) !in listOf("light", "dark") -> if (black(application)) "LauncherSystemBlack" else "LauncherSystem"
+            !dark(application) -> "LauncherLight"
+            black(application) -> "LauncherBlack"
+            else -> "LauncherDark"
+        }
+        val pm = application.packageManager
+        val names = listOf("LauncherSystem", "LauncherSystemBlack", "LauncherLight", "LauncherDark", "LauncherBlack")
+        // A failed task query is not evidence that an alias is unused.
+        val activeTasks = runCatching {
+            application.getSystemService(android.app.ActivityManager::class.java).appTasks
+                .mapNotNull { checkNotNull(it.taskInfo).baseIntent.component?.className }.toSet()
+        }.getOrNull()
+        val activeAliases = activeTasks?.map { it.substringAfterLast('.') }?.toSet()
+        val pending = LauncherSwitch.apply(selected, names, activeAliases) { name, enabled ->
+            val component = android.content.ComponentName(application, "com.follow.clashx.$name")
+            val state = if (enabled) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            if (pm.getComponentEnabledSetting(component) != state) {
+                pm.setComponentEnabledSetting(component, state, android.content.pm.PackageManager.DONT_KILL_APP)
+            }
+        }
+        if (pending) schedule(application)
     }
 
     fun read(context: Context): String? = runCatching {

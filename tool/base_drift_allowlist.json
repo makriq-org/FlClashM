@@ -3019,6 +3019,16 @@
       "path": "android/app/src/main/res/drawable-anydpi/brand_black.xml",
       "bucket": "budget",
       "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/LauncherSwitch.kt",
+      "bucket": "budget",
+      "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/LauncherSwitchTest.kt",
+      "bucket": "budget",
+      "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
     }
   ]
 }
