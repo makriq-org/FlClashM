@@ -47,11 +47,10 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          final bar = find.byType(AppBar);
           final initialTop = tester.getTopLeft(first).dy;
           expect(
             initialTop,
-            greaterThanOrEqualTo(tester.getBottomLeft(bar).dy),
+            statusBar + (compact ? sheetAppBarHeight : pageToolbarHeight + 12),
           );
           await tester.tap(first);
           expect(taps, 1);

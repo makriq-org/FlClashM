@@ -947,8 +947,14 @@ class CommonScaffoldState extends State<CommonScaffold>
           );
           return TopInsetScope(
             // Only the keyword strip has already consumed the top clearance.
-            // Otherwise the body still runs underneath the floating header.
-            inset: hasKeywords ? 0 : context.contentTopPadding,
+            // MediaQuery already includes the page toolbar, so use overlap
+            // rather than adding the toolbar height again via appBarInset.
+            inset: hasKeywords
+                ? 0
+                : TopInsetScope.of(context) ??
+                      (isCompact
+                          ? sheetAppBarHeight
+                          : (FloatingBarScope.of(context) ?? overlap) + 12),
             child: FloatingBarScope(
               inset: overlap,
               child: overlap > 0
