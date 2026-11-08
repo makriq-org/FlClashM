@@ -4,14 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Current stable release tag"
+        description: "Current release tag"
         required: true
         type: string
+      notes_only:
+        description: "Update only release notes; keep existing APK metadata"
+        type: boolean
+        default: false
+      channel:
+        description: "Channel for a notes-only update"
+        type: choice
+        options: [stable, pre]
+        default: stable
 
 permissions: {}
 
 jobs:
   repair-stable-manifest:
+    if: ${{ !inputs.notes_only }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -148,4 +158,94 @@ jobs:
             sleep 5
           done
           echo "Published stable manifest did not converge." >&2
+          exit 1
+
+  refresh-release-notes:
+    if: ${{ inputs.notes_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: update-notes-${{ inputs.channel }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ inputs.tag }}
+      CHANNEL: ${{ inputs.channel }}
+    steps:
+      - name: Checkout updater public key
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read current manifest and published release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$CHANNEL" in stable|pre) ;; *) exit 1 ;; esac
+          curl -fsSL --retry 2 "https://flclashm.sourceforge.io/update/$CHANNEL.json?notes=$GITHUB_RUN_ID" -o current.json
+          curl -fsSL --retry 2 "https://flclashm.sourceforge.io/update/$CHANNEL.json.sig?notes=$GITHUB_RUN_ID" -o current.json.sig
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > release.md
+
+      - name: Replace notes and sign unchanged release metadata
+        env:
+          APP_UPDATE_SIGNING_KEY: ${{ secrets.APP_UPDATE_SIGNING_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
+          const source = readFileSync('lib/product/services/app_update_manifest.dart', 'utf8');
+          const expected = Buffer.from(source.match(/appUpdateManifestPublicKeyBase64\s*=\s*'([^']+)'/)[1], 'base64');
+          const publicKey = createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), expected]), format: 'der', type: 'spki' });
+          const original = readFileSync('current.json');
+          assert(verify(null, original, publicKey, readFileSync('current.json.sig')), 'Invalid current manifest signature');
+          const manifest = JSON.parse(original);
+          assert.equal(manifest.schemaVersion, 1);
+          assert.equal(manifest.channel, process.env.CHANNEL);
+          assert.equal(manifest.release.tagName, process.env.TAG, 'Only the current channel release may be edited');
+          const body = readFileSync('release.md', 'utf8');
+          assert(body.trim(), 'Release notes must not be empty');
+          const seed = Buffer.from((process.env.APP_UPDATE_SIGNING_KEY ?? '').trim(), 'base64');
+          assert.equal(seed.length, 32, 'Signing seed must be 32 bytes');
+          const privateKey = createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed]), format: 'der', type: 'pkcs8' });
+          assert(createPublicKey(privateKey).export({ format: 'der', type: 'spki' }).subarray(-32).equals(expected), 'Signing key does not match updater public key');
+          manifest.release.body = body;
+          const bytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
+          const signature = sign(null, bytes, privateKey);
+          assert(verify(null, bytes, publicKey, signature));
+          writeFileSync('updated.json', bytes);
+          writeFileSync('updated.json.sig', signature);
+          JS
+
+      - name: Publish only manifest and signature to SourceForge
+        env:
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_USERNAME: ${{ secrets.SOURCEFORGE_USERNAME }}
+        run: |
+          test -n "$SOURCEFORGE_SSH_KEY" && test -n "$SOURCEFORGE_USERNAME"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SOURCEFORGE_SSH_KEY" > "$HOME/.ssh/sourceforge"
+          chmod 600 "$HOME/.ssh/sourceforge"
+          ssh-keyscan -t ed25519 web.sourceforge.net > "$HOME/.ssh/known_hosts"
+          fingerprint=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk '{print $2}' | sort -u)
+          test "$fingerprint" = "SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY"
+          curl -fsSL "https://flclashm.sourceforge.io/update/$CHANNEL.json?check=$GITHUB_RUN_ID" -o latest.json
+          cmp current.json latest.json
+          ssh_options="-i $HOME/.ssh/sourceforge -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          destination="$SOURCEFORGE_USERNAME@web.sourceforge.net:/home/project-web/flclashm/htdocs/update/$CHANNEL.json"
+          rsync -av --checksum -e "ssh $ssh_options" updated.json.sig "$destination.sig"
+          rsync -av --checksum -e "ssh $ssh_options" updated.json "$destination"
+
+      - name: Verify published notes and signature
+        run: |
+          for attempt in 1 2 3 4 5; do
+            curl -fsSL "https://flclashm.sourceforge.io/update/$CHANNEL.json?notes=$GITHUB_RUN_ID&attempt=$attempt" -o published.json
+            curl -fsSL "https://flclashm.sourceforge.io/update/$CHANNEL.json.sig?notes=$GITHUB_RUN_ID&attempt=$attempt" -o published.json.sig
+            if cmp -s updated.json published.json && cmp -s updated.json.sig published.json.sig; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Published notes did not converge." >&2
           exit 1

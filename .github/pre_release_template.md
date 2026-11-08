@@ -12,4 +12,4 @@
 
 Не уверены — берите **Universal**. AAB и файлы `.sha256` — во вложениях ниже.
 
-📚 [Документация](https://github.com/REPO/blob/main/README.md) · 📄 [Все изменения](https://github.com/REPO/blob/main/CHANGELOG.md)
+📚 [Документация](https://github.com/REPO/blob/dev/README.md) · 📄 [Все изменения](https://github.com/REPO/blob/dev/CHANGELOG.md)
