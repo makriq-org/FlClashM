@@ -51,6 +51,22 @@ Map<String, dynamic> backendSettings(Config config) {
   return json;
 }
 
+/// Runtime notifications do not change settings. Invalidate on both catalog
+/// revision and backend epoch, since a replacement can reuse revision numbers.
+class FrontendConfigCache {
+  (int, int)? _revision;
+  late Config _config;
+
+  Config read(BackendClient client) {
+    final revision = (client.sourceRevision, client.catalogRevision);
+    if (_revision != revision) {
+      _config = Config.fromJson(frontendSettings(client.sourceSettings));
+      _revision = revision;
+    }
+    return _config;
+  }
+}
+
 class FrontendSettings {
   FrontendSettings({BackendClient? client}) : _client = client ?? backendClient;
   final BackendClient _client;

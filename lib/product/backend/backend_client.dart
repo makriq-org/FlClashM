@@ -103,6 +103,9 @@ class BackendClient {
   Stream<Map<String, dynamic>> get changes => _changes.stream;
   Map<String, dynamic> get snapshot => _copy(_snapshot);
   Map<String, dynamic> get runtimeView => _copy(_view);
+
+  /// Presentation clock reads must not copy the profile catalog.
+  Map<String, dynamic> get runtime => _copy(_map(_snapshot['runtime']));
   int get runtimeViewGeneration => _viewGeneration;
 
   /// Projection invalidation epoch, independent of catalog revision numbers.
@@ -592,6 +595,18 @@ class BackendClient {
 
   static Map<String, dynamic> _map(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : {};
-  static Map<String, dynamic> _copy(Map<String, dynamic> value) =>
-      _map(jsonDecode(jsonEncode(value)));
+  // Transport values are JSON trees. Clone containers directly so snapshot
+  // reads do not encode and parse the entire catalog on the UI isolate.
+  static Map<String, dynamic> _copy(Map<String, dynamic> value) => {
+    for (final entry in value.entries) entry.key: _copyValue(entry.value),
+  };
+
+  static dynamic _copyValue(dynamic value) => switch (value) {
+    Map() => {
+      for (final entry in value.entries)
+        entry.key as String: _copyValue(entry.value),
+    },
+    List() => [for (final item in value) _copyValue(item)],
+    _ => value,
+  };
 }

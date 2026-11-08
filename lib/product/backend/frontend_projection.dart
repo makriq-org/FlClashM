@@ -15,10 +15,14 @@ class FrontendProjection {
   StreamSubscription<Map<String, dynamic>>? _events;
   Future<void> _tail = Future.value();
   Timer? _ticker;
+  var _configs = FrontendConfigCache();
+  Config? _presentedConfig;
   var _hostVisibility = HostVisibilityProjection();
   final _watcher = ProjectionWatcher();
   void attach(ProviderContainer container) {
     _container = container;
+    _configs = FrontendConfigCache();
+    _presentedConfig = null;
     _hostVisibility.dispose();
     _hostVisibility = HostVisibilityProjection(
       onError: (error) => commonPrint.log('Backend visibility: $error'),
@@ -44,7 +48,7 @@ class FrontendProjection {
   void _runtime() {
     final c = _container;
     if (c == null) return;
-    final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
+    final runtime = backendClient.runtime;
     final running = runtime['appliedRunning'] == true;
     final timestamp = runtime['startedAt'];
     final started = timestamp is num
@@ -66,20 +70,20 @@ class FrontendProjection {
       final c = _container;
       if (c == null) return;
       await database.refreshFromGo(ifChanged: true);
-      final config = Config.fromJson(
-        frontendSettings(backendClient.sourceSettings),
-      );
+      final config = _configs.read(backendClient);
       frontendSettingsStore.projecting = true;
       try {
-        if (!frontendSettingsStore.pending) {
+        if (!frontendSettingsStore.pending &&
+            (_presentedConfig != config || c.read(configProvider) != config)) {
           frontendSettingsStore.project(config);
           writeConfig(c, config);
+          _presentedConfig = config;
         }
         _runtime();
       } finally {
         frontendSettingsStore.projecting = false;
       }
-      final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
+      final runtime = backendClient.runtime;
       final instance = runtime['instanceId'] as String?;
       _hostVisibility.synchronize(instance, () async {
         // A replacement service starts with presentation events disabled.

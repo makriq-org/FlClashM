@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flclashx/product/backend/backend_client.dart';
 import 'package:flclashx/product/backend/backend_errors.dart';
+import 'package:flclashx/product/backend/frontend_settings.dart';
 import 'package:flclashx/product/backend/profile_refresh.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -95,6 +96,76 @@ class ClientHost {
 }
 
 void main() {
+  test('frontend config cache reuses runtime reads and invalidates revisions and restarts', () async {
+    final host = ClientHost();
+    final client = BackendClient(
+      transport: host.call,
+      events: host.events.stream,
+    );
+    addTearDown(host.close);
+    addTearDown(client.detach);
+    await client.attach();
+    final cache = FrontendConfigCache();
+    final first = cache.read(client);
+    expect(first.currentProfileId, 'one');
+    host.running = false;
+    host.generation++;
+    host.sequence++;
+    await client.refresh();
+    expect(identical(cache.read(client), first), isTrue);
+    host.extraSettings = {'currentProfileId': 'two'};
+    host.revision++;
+    await client.refresh();
+    final second = cache.read(client);
+    expect(second.currentProfileId, 'two');
+    host.instance = 'replacement';
+    host.extraSettings = {'currentProfileId': 'three'};
+    await client.refresh();
+    expect(cache.read(client).currentProfileId, 'three');
+    expect(identical(cache.read(client), second), isFalse);
+  });
+
+  test(
+    'snapshot trees and narrow runtime reads remain defensive copies',
+    () async {
+      final host = ClientHost()
+        ..extraSettings = {
+          'nested': [
+            {
+              'enabled': true,
+              'values': [null, 1, 1.5, 'text'],
+            },
+          ],
+        };
+      final client = BackendClient(
+        transport: host.call,
+        events: host.events.stream,
+      );
+      addTearDown(host.close);
+      addTearDown(client.detach);
+      await client.attach();
+      final snapshot = client.snapshot;
+      final settings = (snapshot['catalog'] as Map)['settings'] as Map;
+      final nested = (settings['nested'] as List).first as Map;
+      expect(nested['values'], [null, 1, 1.5, 'text']);
+      (nested['values'] as List).clear();
+      (settings['nested'] as List).clear();
+      (client.runtime['observed'] as Map)['state'] = 'changed';
+      (client.runtimeView['config'] as Map)['mode'] = 'direct';
+      expect(client.runtime['observed'], {'state': 'running'});
+      expect(client.runtime, client.snapshot['runtime']);
+      expect(client.runtimeView['config'], {'mode': 'rule'});
+      expect(client.sourceSettings['nested'], [
+        {
+          'enabled': true,
+          'values': [null, 1, 1.5, 'text'],
+        },
+      ]);
+      expect(client.sourceSettings['unknown'], 9007199254740993);
+    },
+  );
+
+
   test(
     'render reads and deletes its blob without refreshing projections',
     () async {
