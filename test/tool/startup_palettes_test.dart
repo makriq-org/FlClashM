@@ -68,6 +68,45 @@ void main() {
     }
   });
 
+  test('system aliases select fixed artwork without duplicating it', () {
+    Map<String, String> aliases(String qualifier) => {
+      for (final item in XmlDocument.parse(
+        File('android/app/src/main/res/values$qualifier/brand_aliases.xml')
+            .readAsStringSync(),
+      ).findAllElements('item'))
+        item.getAttribute('name')!: item.innerText,
+    };
+    final day = aliases('');
+    final night = aliases('-night');
+    expect(day['ic_launcher_foreground'], '@drawable/brand_light');
+    expect(night['ic_launcher_foreground'], '@drawable/brand_dark');
+    expect(day['ic_launcher'], '@mipmap/launcher_light');
+    expect(night['ic_launcher'], '@mipmap/launcher_dark');
+    for (final palette in ['light', 'dark', 'black']) {
+      final icon = XmlDocument.parse(
+        File('android/app/src/main/res/mipmap-anydpi-v26/launcher_$palette.xml')
+            .readAsStringSync(),
+      );
+      final bird = palette == 'light' ? 'light' : 'dark';
+      expect(
+        icon
+            .findAllElements('foreground')
+            .single
+            .findElements('inset')
+            .single
+            .getAttribute('android:drawable'),
+        '@drawable/brand_$bird',
+      );
+      expect(
+        icon
+            .findAllElements('background')
+            .single
+            .getAttribute('android:drawable'),
+        '@color/brand_${palette}_background',
+      );
+    }
+  });
+
   test(
     'launcher variants have explicit native themes and one default entry',
     () {

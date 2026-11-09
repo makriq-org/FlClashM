@@ -2821,16 +2821,6 @@
       "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
     },
     {
-      "path": "android/app/src/main/res/drawable-anydpi/ic_launcher_foreground.xml",
-      "bucket": "budget",
-      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
-    },
-    {
-      "path": "android/app/src/main/res/drawable-night-anydpi/ic_launcher_foreground.xml",
-      "bucket": "budget",
-      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
-    },
-    {
       "path": "android/app/src/main/res/drawable-anydpi/ic_launcher_monochrome.xml",
       "bucket": "budget",
       "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
@@ -2886,17 +2876,7 @@
       "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
     },
     {
-      "path": "android/app/src/main/res/drawable/splash_black.xml",
-      "bucket": "budget",
-      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
-    },
-    {
       "path": "android/app/src/main/res/drawable/startup_systemblack.xml",
-      "bucket": "budget",
-      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
-    },
-    {
-      "path": "android/app/src/main/res/drawable/splash_systemblack.xml",
       "bucket": "budget",
       "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
     },
@@ -3016,11 +2996,6 @@
       "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
     },
     {
-      "path": "android/app/src/main/res/drawable-anydpi/brand_black.xml",
-      "bucket": "budget",
-      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
-    },
-    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/LauncherSwitch.kt",
       "bucket": "budget",
       "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
@@ -3029,6 +3004,16 @@
       "path": "android/app/src/test/kotlin/com/follow/clashx/LauncherSwitchTest.kt",
       "bucket": "budget",
       "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
+    },
+    {
+      "path": "android/app/src/main/res/values/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Системные day/night-ресурсы ссылаются на общие фиксированные палитры без копирования векторов и PNG."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Системные day/night-ресурсы ссылаются на общие фиксированные палитры без копирования векторов и PNG."
     }
   ]
 }

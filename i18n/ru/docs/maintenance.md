@@ -261,5 +261,8 @@ Launcher aliases выбирают заранее объявленные Activity
 
 Источник рисунка — `assets/images/brand_mark{,_light}.svg`, экспорт Android:
 `python tool/generate_brand_assets.py` (нужен `rsvg-convert`). Flutter рисует SVG,
-Android API 24+ — VectorDrawable. Откат оформления выполняется откатом коммита;
+Android API 24+ — VectorDrawable. Светлый и тёмный рисунки хранятся по одному;
+чёрная палитра использует тёмный рисунок с отдельным фоном. Системные
+day/night-ресурсы ссылаются на фиксированные варианты, включая PNG для API 24–25.
+Откат оформления выполняется откатом коммита;
 формат Go-настроек не меняется.
