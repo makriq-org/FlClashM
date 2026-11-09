@@ -96,19 +96,6 @@
     },
     {
       customType: 'regex',
-      description: 'Отслеживать HEAD списка стратегий ByeByeDPI',
-      managerFilePatterns: ['/^lib/product/runtime/byedpi_release\\.dart$/'],
-      matchStrings: [
-        "const byedpiStrategyPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
-      ],
-      currentValueTemplate: 'master',
-      depNameTemplate: 'ByeByeDPI strategies',
-      packageNameTemplate: 'https://github.com/romanvht/ByeByeDPI',
-      datasourceTemplate: 'git-refs',
-      versioningTemplate: 'exact',
-    },
-    {
-      customType: 'regex',
       description: 'Отслеживать релизы naiveproxy',
       managerFilePatterns: ['/^lib/product/runtime/naiveproxy_release\\.dart$/'],
       matchStrings: [
