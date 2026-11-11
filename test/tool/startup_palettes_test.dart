@@ -140,11 +140,11 @@ void main() {
     expect(handlers, hasLength(6));
     expect(
       handlers
-          .map((e) => (e.parent as XmlElement).getAttribute('android:name'))
+          .map((e) => (e.parent! as XmlElement).getAttribute('android:name'))
           .toSet(),
       {'.LinkLaunchActivity'},
     );
-    final router = handlers.first.parent as XmlElement;
+    final router = handlers.first.parent! as XmlElement;
     expect(
       router.getAttribute('android:theme'),
       '@android:style/Theme.NoDisplay',
