@@ -89,14 +89,14 @@
     },
     {
       customType: 'regex',
-      description: 'Отслеживать HEAD основной ветки OlcRTC',
+      description: 'Отслеживать HEAD ветки proofkit Ghostlane OlcRTC',
       managerFilePatterns: ['/^lib/product/runtime/olcrtc_release\\.dart$/'],
       matchStrings: [
         "const olcRtcPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
       ],
-      currentValueTemplate: 'master',
+      currentValueTemplate: 'proofkit',
       depNameTemplate: 'OlcRTC runtime',
-      packageNameTemplate: 'https://github.com/openlibrecommunity/olcrtc',
+      packageNameTemplate: 'https://github.com/ghostlane-project/olcrtc',
       datasourceTemplate: 'git-refs',
       versioningTemplate: 'exact',
     },
