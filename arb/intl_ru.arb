@@ -1,4 +1,5 @@
 {
+  "externalNodeSleeping": "Спит",
   "includeInVpn": "Включить в VPN",
   "excludeFromVpn": "Исключить из VPN",
   "whitelistModeDesc": "Через VPN идут только выбранные приложения; остальные — напрямую.",

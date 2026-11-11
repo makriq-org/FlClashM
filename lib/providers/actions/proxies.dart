@@ -5,21 +5,26 @@ class _DelayTestTarget {
     required this.proxyName,
     required this.testUrl,
     required this.key,
+    required this.stamp,
   });
 
   final String proxyName;
   final String testUrl;
   final String key;
+  final ExternalNodeStamp stamp;
 }
 
 typedef _DelayTestBatch = ({List<Proxy> proxies, String? testUrl});
 
 class _DelayTestJob {
-  _DelayTestJob(Iterable<String> keys, this.timeout) : held = keys.toSet();
+  _DelayTestJob(List<_DelayTestTarget> targets, this.timeout)
+    : held = targets.map((target) => target.key).toSet(),
+      proxyNames = {for (final target in targets) target.key: target.proxyName};
 
   final Duration timeout;
   final Set<String> held;
-  final Set<String> startedOnDispatch = {};
+  final Map<String, String> proxyNames;
+  final Set<String> started = {};
   bool cancelled = false;
 }
 
@@ -31,7 +36,7 @@ class ProxiesAction extends _$ProxiesAction {
 
   final List<_DelayTestJob> _delayTestJobs = [];
 
-  final List<Delay> _bufferedDelays = [];
+  final List<({Delay delay, ExternalNodeStamp stamp})> _bufferedDelays = [];
 
   final List<String> _bufferedStarts = [];
 
@@ -44,6 +49,39 @@ class ProxiesAction extends _$ProxiesAction {
   @override
   void build() {
     ref.onDispose(() => _delayFlushTimer?.cancel());
+    ref.listen(externalNodesProvider, (previous, next) {
+      if (previous == null) return;
+      if (previous.scope != next.scope) cancelDelayTests();
+      final changed = <String>{
+        for (final name in {...previous.nodes.keys, ...next.nodes.keys})
+          if (previous.stamp(name) != next.stamp(name)) name,
+      };
+      _invalidateNodeDelayTests(changed);
+      ref.read(delayDataSourceProvider.notifier).removeProxies(changed);
+      // Refresh awake nodes after a wake, identity change or plan resync.
+      // A selection can advance the plan generation while waking a node;
+      // reissue its measurement if that commit cancelled the earlier one.
+      final woken = [
+        for (final name in changed)
+          if (next.nodes[name]?.awake == true && !next.sleeping(name))
+            Proxy(name: name, type: 'Socks5'),
+      ];
+      if (woken.isNotEmpty) {
+        final names = woken.map((proxy) => proxy.name).toSet();
+        unawaited(
+          _runDelayTests([
+            (proxies: woken, testUrl: null),
+            for (final group in ref.read(groupsProvider))
+              (
+                proxies: group.all
+                    .where((proxy) => names.contains(proxy.name))
+                    .toList(),
+                testUrl: group.testUrl,
+              ),
+          ]),
+        );
+      }
+    });
     ref.listen(currentProfileIdProvider, (_, _) => cancelDelayTests());
     ref.listen(
       appSettingProvider.select(
@@ -56,6 +94,27 @@ class ProxiesAction extends _$ProxiesAction {
         cancelDelayTests();
       }
     });
+  }
+
+  void _invalidateNodeDelayTests(Set<String> names) {
+    if (names.isEmpty) return;
+    // Settle buffered starts/finishes before releasing this cycle's holds.
+    // Delay values are filtered against the new snapshot by the flush itself.
+    _flushDelayResults();
+    final started = <String>[];
+    final queued = <String>[];
+    for (final job in _delayTestJobs) {
+      final stale = job.held
+          .where((key) => names.contains(job.proxyNames[key]))
+          .toList();
+      for (final key in stale) {
+        job.held.remove(key);
+        (job.started.contains(key) ? started : queued).add(key);
+      }
+    }
+    ref
+        .read(pendingDelayTestsProvider.notifier)
+        .apply(finished: started, released: queued);
   }
 
   void cancelDelayTests() {
@@ -79,7 +138,11 @@ class ProxiesAction extends _$ProxiesAction {
     _delayFlushTimer?.cancel();
     _delayFlushTimer = null;
     if (_bufferedDelays.isNotEmpty) {
-      final delays = List.of(_bufferedDelays);
+      final nodes = ref.read(externalNodesProvider);
+      final delays = [
+        for (final result in _bufferedDelays)
+          if (nodes.accepts(result.delay.name, result.stamp)) result.delay,
+      ];
       _bufferedDelays.clear();
       ref.read(delayDataSourceProvider.notifier).setDelays(delays);
     }
@@ -188,8 +251,11 @@ class ProxiesAction extends _$ProxiesAction {
     );
   }
 
-  void setDelay(Delay delay) {
-    _bufferedDelays.add(delay);
+  void setDelay(Delay delay, [ExternalNodeStamp? stamp]) {
+    final nodes = ref.read(externalNodesProvider);
+    final epoch = stamp ?? nodes.stamp(delay.name);
+    if (!nodes.accepts(delay.name, epoch)) return;
+    _bufferedDelays.add((delay: delay, stamp: epoch));
     _scheduleDelayFlush();
   }
 
@@ -376,6 +442,7 @@ class ProxiesAction extends _$ProxiesAction {
     final selectedMap = ref.read(
       currentProfileProvider.select((state) => state?.selectedMap ?? {}),
     );
+    final nodes = ref.read(externalNodesProvider);
     final seen = <String>{};
     final targets = <_DelayTestTarget>[];
     for (final batch in batches) {
@@ -386,7 +453,7 @@ class ProxiesAction extends _$ProxiesAction {
           groups: groups,
           selectedMap: selectedMap,
         );
-        if (state.proxyName.isEmpty) {
+        if (state.proxyName.isEmpty || nodes.sleeping(state.proxyName)) {
           continue;
         }
         final currentTestUrl = state.testUrl.takeFirstValid([fallbackTestUrl]);
@@ -399,6 +466,7 @@ class ProxiesAction extends _$ProxiesAction {
             proxyName: state.proxyName,
             testUrl: currentTestUrl,
             key: key,
+            stamp: nodes.stamp(state.proxyName),
           ),
         );
       }
@@ -413,7 +481,7 @@ class ProxiesAction extends _$ProxiesAction {
     }
     final pending = ref.read(pendingDelayTestsProvider.notifier);
     final job = _DelayTestJob(
-      targets.map((target) => target.key),
+      targets,
       Duration(
         milliseconds: ref
             .read(appSettingProvider)
@@ -423,10 +491,10 @@ class ProxiesAction extends _$ProxiesAction {
     );
     _delayTestJobs.add(job);
     // TaskPool.run starts a task synchronously while it has an idle slot.
-    job.startedOnDispatch.addAll(
+    job.started.addAll(
       targets.take(_delayTestPool.idleSlots).map((target) => target.key),
     );
-    pending.apply(acquired: job.held, started: job.startedOnDispatch);
+    pending.apply(acquired: job.held, started: job.started);
     try {
       await Future.wait(
         targets.map(
@@ -439,19 +507,29 @@ class ProxiesAction extends _$ProxiesAction {
       final abandoned = job.held.toList();
       job.held.clear();
       pending.apply(
-        finished: abandoned.where(job.startedOnDispatch.contains),
-        released: abandoned.where(
-          (key) => !job.startedOnDispatch.contains(key),
-        ),
+        finished: abandoned.where(job.started.contains),
+        released: abandoned.where((key) => !job.started.contains(key)),
       );
     }
   }
 
   Future<void> _runDelayTest(_DelayTestJob job, _DelayTestTarget target) async {
-    if (job.cancelled) {
+    if (job.cancelled ||
+        !job.held.contains(target.key) ||
+        !ref
+            .read(externalNodesProvider)
+            .accepts(target.proxyName, target.stamp)) {
+      if (job.held.remove(target.key)) {
+        ref
+            .read(pendingDelayTestsProvider.notifier)
+            .apply(
+              finished: job.started.contains(target.key) ? [target.key] : [],
+              released: job.started.contains(target.key) ? [] : [target.key],
+            );
+      }
       return;
     }
-    if (!job.startedOnDispatch.contains(target.key)) {
+    if (job.started.add(target.key)) {
       _bufferedStarts.add(target.key);
       _scheduleDelayFlush();
     }
@@ -462,7 +540,7 @@ class ProxiesAction extends _$ProxiesAction {
         job.timeout,
       );
       if (delay != null && !job.cancelled) {
-        setDelay(delay);
+        setDelay(delay, target.stamp);
       }
     } catch (error) {
       if (error is CoreMethodException && error.isCoreUnavailable) {

@@ -1,6 +1,7 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flclashx/product/backend/external_nodes.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -342,6 +343,17 @@ class _DelayTextState extends ConsumerState<_DelayText> {
   @override
   Widget build(BuildContext context) {
     final measure = globalState.measure;
+    final selected = ref.watch(
+      realSelectedProxyStateProvider(widget.proxy.name),
+    );
+    final profileId = ref.watch(currentProfileIdProvider);
+    final sleeping = ref.watch(
+      externalNodesProvider.select(
+        (nodes) =>
+            nodes.scope?.profile == profileId &&
+            nodes.sleeping(selected.proxyName),
+      ),
+    );
     final delay = ref.watch(
       delayProvider(proxyName: widget.proxy.name, testUrl: widget.testUrl),
     );
@@ -366,7 +378,18 @@ class _DelayTextState extends ConsumerState<_DelayText> {
           height: measure.textHeight(AppTextStyle.caption2),
           child: FadeBox(
             alignment: widget.alignment,
-            child: phase != null || delay == null
+            child: sleeping
+                ? Text(
+                    context.appLocalizations.externalNodeSleeping,
+                    maxLines: 1,
+                    style: AppTextStyle.caption2
+                        .of(context)
+                        .copyWith(
+                          color: context.colorScheme.onSurfaceVariant,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                  )
+                : phase != null || delay == null
                 ? SizedBox(
                     height: measure.textHeight(AppTextStyle.caption2),
                     width: measure.textHeight(AppTextStyle.caption2),

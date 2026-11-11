@@ -979,6 +979,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "External controller secret",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("External link"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("Sleeping"),
     "externalResources": MessageLookupByLibrary.simpleMessage(
       "External resources",
     ),
