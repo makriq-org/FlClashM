@@ -9,8 +9,8 @@
   baseBranchPatterns: ['dev'],
   dependencyDashboard: true,
   dependencyDashboardApproval: false,
-  dependencyDashboardTitle: 'Обновления зависимостей',
-  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений в dev при очередном запуске, без ограничения по дням недели. Этот список справочный: подтверждать создание PR не требуется. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
+  dependencyDashboardTitle: 'build: поддерживать зависимости FlClashM в актуальном состоянии',
+  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений в dev при очередном запуске, без ограничения по дням недели. Обычные обновления объединены в один PR. Создание PR для mihomo и внешних runtime-компонентов требует подтверждения в этом списке. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
 
   automerge: false,
   prConcurrentLimit: 2,
@@ -51,16 +51,24 @@
       matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
       groupName: 'обычные зависимости и CI',
       groupSlug: 'routine-dependencies',
+      prPriority: 100,
+      prHourlyLimit: 0,
       commitMessageAction: 'обновлены',
       commitMessageExtra: '',
     },
     {
       description: 'PR встроенных runtime-компонентов требуют ручной подготовки перед слиянием',
       matchManagers: ['custom.regex'],
+      dependencyDashboardApproval: true,
       minimumReleaseAge: '0 days',
       prBodyNotes: [
         '> [!IMPORTANT]\n> Этот PR только начинает подготовку runtime-обновления. Перед слиянием нужно пересобрать бинарники, обновить SHA-256 и проверить все поддерживаемые Android ABI.',
       ],
+    },
+    {
+      description: 'Обновления mihomo требуют явного подтверждения',
+      matchPackageNames: ['github.com/metacubex/mihomo'],
+      dependencyDashboardApproval: true,
     },
   ],
 
