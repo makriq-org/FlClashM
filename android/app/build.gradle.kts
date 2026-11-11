@@ -107,7 +107,7 @@ dependencies {
     implementation(project(":service"))
     implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.appcompat:appcompat:1.8.0")
-    implementation("com.google.code.gson:gson:2.14.0")
+    implementation("com.google.code.gson:gson:2.15.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     testImplementation(kotlin("test"))
     androidTestImplementation("androidx.test:runner:1.7.0")
