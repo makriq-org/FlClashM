@@ -45,6 +45,16 @@
 
   packageRules: [
     {
+      description: 'Обычные обновления библиотек и CI объединены без mihomo и внешних runtime-компонентов',
+      matchManagers: ['!custom.regex'],
+      matchPackageNames: ['!github.com/metacubex/mihomo'],
+      matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
+      groupName: 'обычные зависимости и CI',
+      groupSlug: 'routine-dependencies',
+      commitMessageAction: 'обновлены',
+      commitMessageExtra: '',
+    },
+    {
       description: 'PR встроенных runtime-компонентов требуют ручной подготовки перед слиянием',
       matchManagers: ['custom.regex'],
       minimumReleaseAge: '0 days',
