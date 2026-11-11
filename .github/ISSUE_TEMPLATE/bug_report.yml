@@ -1,48 +1,40 @@
-name: Багрепорт / Bug report
-title: "[BUG] "
-description: Сообщите о возникшей проблем / Report the issue you are experiencing
-
+name: Ошибка
+description: Сообщить о неправильном поведении FlClashM
+title: "fix: "
 body:
   - type: markdown
     attributes:
       value: |
-        ## Прежде чем создать проблему, пожалуйста, убедитесь, что:
-        1. Вы указали четкий и краткий заголовок проблемы, чтобы другие могли быстро её найти.
-        2. Вы проверили, что похожей проблемы нет среди [существующих](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), в противном случае, обсуждайте её там.
-        3. Вы подробно описали проблему, следуя требованиям шаблона, иначе проблема будет закрыта без рассмотрения.
-        ## Before submitting the issue, please make sure of the following checklist:
-        1. Please be sure to fill in a concise and clear title for the issue so that others can quickly search
-        2. Please make sure there is no similar issue in the [existing issues](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), otherwise please discuss under the existing issue
-        3. Please describe the problem in detail according to the template specification, otherwise issue will be closed directly.
+        Проверьте, нет ли уже такой issue. Одна заявка — одна проблема.
+        Заголовок: `fix: наблюдаемая проблема`, на русском, без точки, до 72 символов.
+        Например: `fix: VPN не восстанавливается после смены сети`.
+        Не публикуйте подписки, токены, ключи, пароли и персональные данные, в том числе во вложениях.
   - type: textarea
-    id: description
+    id: actual
     attributes:
-      label: Описание проблемы / Describe the bug
-      description: Подробно и ясно опишите возникшую у вас проблему, при возможности приложите скриншоты / Describe the problem you encountered in detail and clearly, and provide screenshots
+      label: Что происходит
+      description: Опишите наблюдаемую ошибку и её влияние. При необходимости приложите скриншот.
     validations:
       required: true
   - type: textarea
+    id: steps
     attributes:
-      label: Версия / Version
-      description: Пожалуйста, укажите конкретную версию FlClashM / Please provide the specific version of FlClashM.
+      label: Как воспроизвести
+      description: Перечислите шаги. Если точный сценарий неизвестен, опишите условия появления ошибки.
+      placeholder: |
+        1. Запустить VPN с профилем…
+        2. Переключиться с Wi-Fi на мобильную сеть…
     validations:
       required: true
   - type: textarea
+    id: expected
     attributes:
-      label: Как воспроизвести / To Reproduce
-      description: Опишите шаги для воспроизведения ошибки / Steps to reproduce the behavior
-    validations:
-      required: true
-  - type: dropdown
-    attributes:
-      label: Операционная система / OS
-      options:
-        - Android
+      label: Ожидаемый результат
+      description: Как приложение должно вести себя при этих шагах?
     validations:
       required: true
   - type: textarea
+    id: diagnostics
     attributes:
-      label: Логи (не прикрепляйте файл, вставьте содержимое логов напрямую) / Log (Do not upload the log file, paste the log content directly)
-      description: Пожалуйста, предоставьте полный или соответствующий отладочный лог (для этого установите уровень логирования в меню слева ПО-> Настройки-> Уровень логирования-> Debug) / Please provide a complete or relevant Debug log (please adjust it to debug in the left menu of software-> Settings-> Log Level)
-    validations:
-      required: true
+      label: Дополнительные сведения
+      description: Необязательно. Если это помогает разбору, укажите версию приложения, ОС, устройство, ABI или команду сборки; приложите логи, скриншот или диагностический ZIP. Перед публикацией удалите секреты и персональные данные.

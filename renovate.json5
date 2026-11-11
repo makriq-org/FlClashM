@@ -10,7 +10,8 @@
   dependencyDashboard: true,
   dependencyDashboardApproval: false,
   dependencyDashboardTitle: 'build: поддерживать зависимости FlClashM в актуальном состоянии',
-  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений в dev при очередном запуске, без ограничения по дням недели. Обычные обновления объединены в один PR. Создание PR для mihomo и внешних runtime-компонентов требует подтверждения в этом списке. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
+  dependencyDashboardLabels: ['🤖 Renovate'],
+  dependencyDashboardHeader: "> [!NOTE]\n> **Служебная панель Renovate** — автоматическая сводка обновлений.\n\nОбычные обновления объединены в один PR и создаются автоматически в dev. Обновления mihomo и внешних runtime-компонентов требуют подтверждения в списке ниже; runtime-компоненты также требуют пересборки бинарников и проверки поддерживаемых Android ABI.",
 
   automerge: false,
   prConcurrentLimit: 2,
