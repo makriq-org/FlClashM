@@ -116,6 +116,21 @@ func (a *App) Presentation() Presentation {
 			}
 		}
 		for _, group := range a.presentationGroups {
+			// GLOBAL retains its selection when the mode changes. It is only
+			// the presentation root in global mode; rule mode uses the profile
+			// groups (preferring serverinfo), and direct mode has no proxy node.
+			switch value.Mode {
+			case "direct":
+				continue
+			case "global":
+				if group != "GLOBAL" {
+					continue
+				}
+			default:
+				if group == "GLOBAL" {
+					continue
+				}
+			}
 			name := actual[group]
 			if name == "" {
 				name = a.presentationSelected[group]
