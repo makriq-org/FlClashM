@@ -45,6 +45,30 @@
 
   packageRules: [
     {
+      description: 'file_picker 12 требует cross_file 0.3 и dbus 0.7 через file_picker_linux',
+      matchManagers: ['pub'],
+      matchPackageNames: ['cross_file'],
+      allowedVersions: '<0.4.0',
+    },
+    {
+      description: 'connectivity_plus 7.3.2 переходит на dbus 0.8, несовместимый с file_picker_linux 1',
+      matchManagers: ['pub'],
+      matchPackageNames: ['connectivity_plus'],
+      allowedVersions: '<7.3.2',
+    },
+    {
+      description: 'Переход desktop-пакетов на nativeapi требует совместимого обновления Rust bridge и API',
+      matchManagers: ['pub'],
+      matchPackageNames: ['hotkey_manager', 'screen_retriever'],
+      allowedVersions: '<0.3.0',
+    },
+    {
+      description: 'window_manager на nativeapi требует совместимого обновления Rust bridge и API',
+      matchManagers: ['pub'],
+      matchPackageNames: ['window_manager'],
+      allowedVersions: '<0.6.0',
+    },
+    {
       description: 'PR встроенных runtime-компонентов требуют ручной подготовки перед слиянием',
       matchManagers: ['custom.regex'],
       matchPackageNames: ['!https://github.com/romanvht/ByeByeDPI'],

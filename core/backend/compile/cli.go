@@ -164,7 +164,8 @@ func splitArguments(source string) ([]string, error) {
 	return args, nil
 }
 
-var timeoutPattern = regexp.MustCompile(`^\d+(?:\.\d+)?(?::\d+(?:\.\d+)?(?::\d+(?:\.\d+)?(?::\d+(?:\.\d+)?)?)?)?$`)
+var tcpTimeoutPattern = regexp.MustCompile(`^\d+(?:\.\d+)?(?::\d+(?:\.\d+)?)?$`)
+var tlsTimeoutPattern = regexp.MustCompile(`^\d+(?:\.\d+)?(?::\d+(?:\.\d+)?(?::\d+(?:\.\d+)?)?)?$`)
 var rangePattern = regexp.MustCompile(`^(\d+)(?:-(\d+))?$`)
 var positionPattern = regexp.MustCompile(`^-?(?:0[xX][0-9a-fA-F]+|0[0-7]+|\d+)(?::[1-9]\d*(?::\d+)?)?(?:\+[shn][shemrn]{0,2})?$`)
 var fakeTLSPattern = regexp.MustCompile(`^(?:m|msize)=\d+$`)
@@ -227,8 +228,10 @@ func validCLIValue(kind, value string) bool {
 		return intRange(value, 0, 2147483647)
 	case "uint8":
 		return intRange(value, 1, 255)
-	case "timeout":
-		return timeoutPattern.MatchString(value)
+	case "tcpTimeout":
+		return tcpTimeoutPattern.MatchString(value)
+	case "tlsTimeout":
+		return tlsTimeoutPattern.MatchString(value)
 	case "autoDetect":
 		return enumCLI(value, []string{"t", "r", "s", "n", "c", "torst", "redirect", "ssl_err", "none", "conn"}, true)
 	case "autoMode":
