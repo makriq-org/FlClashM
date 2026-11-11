@@ -97,7 +97,7 @@ dependencies:
 
 dev_dependencies:
   xml: ^6.6.1
-  analyzer: 14.5.0
+  analyzer: 14.7.0
   package_config: ^2.2.0
   flutter_test:
     sdk: flutter

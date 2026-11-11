@@ -121,7 +121,8 @@ nix develop -c make check go-check
 <details>
 <summary>OlcRTC：源码、构建与限制</summary>
 
-- 使用 `ghostlane-project/olcrtc` 的 `proofkit` 分支、v0.12.1、提交 `b2c4b17ee35bfe65330aa9141f94dac082228bb2`；构建源码时不添加本地补丁
+- 使用 `ghostlane-project/olcrtc` 的 `proofkit` 分支、v0.15.0、提交 `a6cd0ab2a362837acda10d50dfdf230af8db91d2`；构建源码时不添加本地补丁
+- v0.15.0 新增服务器密钥重载、访问日志和本地 ICE 地址选择；FlClashM 不会将这些新选项传入配置
 - v0.12.1 修复了 VK Calls 在连接和重新协商期间的 RTP payload type 冲突；依赖和配置格式保持不变
 - 新增提供者：`vkcalls` 支持 `vp8channel` 或 `videochannel`，`mtslink` 支持 `vp8channel`，`salutejazz` 和 `max` 支持 `datachannel`。`max` 必须提供 `provider-token`，访客 `vkcalls` 禁止非空令牌。新引擎通过提供者选择，因为它们需要直接 `engine-url`/`engine-token` 契约中没有的额外凭据
 - FlClashM 配置不公开 Ghostlane 新增的 UDP/direct/failover/DTLS 设置：保留 CNC、loopback SOCKS、Go 对 runtime 的独占管理和现有 Mihomo 路由

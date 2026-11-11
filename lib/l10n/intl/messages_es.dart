@@ -856,6 +856,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Clave del controlador externo",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("Enlace externo"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("En reposo"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("Muy grande"),
     "fade": MessageLookupByLibrary.simpleMessage("Fundido"),
     "failedCount": m29,
@@ -1390,6 +1391,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "optional": MessageLookupByLibrary.simpleMessage("Opcional"),
     "options": MessageLookupByLibrary.simpleMessage("Opciones"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "Autores de FlClashX",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Repositorio original",
     ),

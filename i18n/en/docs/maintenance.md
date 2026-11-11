@@ -121,7 +121,8 @@ Node versions, source commits, ABIs and SHA-256 are pinned in `lib/product/runti
 <details>
 <summary>OlcRTC: source, builds and limitations</summary>
 
-- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.12.1, commit `b2c4b17ee35bfe65330aa9141f94dac082228bb2`; sources are built without local patches
+- Uses `ghostlane-project/olcrtc`, branch `proofkit`, v0.15.0, commit `a6cd0ab2a362837acda10d50dfdf230af8db91d2`; sources are built without local patches
+- v0.15.0 adds server key reload, access logging and local ICE address selection; FlClashM does not pass the new options to profiles
 - v0.12.1 fixes VK Calls RTP payload-type conflicts during connection and renegotiation; dependencies and the config format are preserved
 - New providers: `vkcalls` with `vp8channel` or `videochannel`, `mtslink` with `vp8channel`, and `salutejazz` and `max` with `datachannel`. `max` requires `provider-token`; guest `vkcalls` rejects non-empty tokens. New engines are selected through providers: they need additional credentials absent from the direct `engine-url`/`engine-token` contract
 - New Ghostlane UDP/direct/failover/DTLS settings are not exposed in FlClashM profiles: CNC, loopback SOCKS, sole Go ownership of runtime and existing Mihomo routing are preserved

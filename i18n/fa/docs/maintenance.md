@@ -139,7 +139,8 @@ nix develop -c make check go-check
 <details>
 <summary>OlcRTC: منبع، ساخت و محدودیت‌ها</summary>
 
-- از `ghostlane-project/olcrtc`، شاخهٔ `proofkit`، نسخهٔ v0.12.1 و کامیت `b2c4b17ee35bfe65330aa9141f94dac082228bb2` استفاده می‌شود؛ منابع بدون وصلهٔ محلی ساخته می‌شوند
+- از `ghostlane-project/olcrtc`، شاخهٔ `proofkit`، نسخهٔ v0.15.0 و کامیت `a6cd0ab2a362837acda10d50dfdf230af8db91d2` استفاده می‌شود؛ منابع بدون وصلهٔ محلی ساخته می‌شوند
+- نسخهٔ v0.15.0 بارگذاری مجدد کلیدهای سرور، گزارش دسترسی و انتخاب آدرس محلی ICE را اضافه می‌کند؛ FlClashM گزینه‌های جدید را به پروفایل‌ها منتقل نمی‌کند
 - نسخهٔ v0.12.1 تداخل RTP payload type در اتصال و مذاکرهٔ مجدد VK Calls را رفع می‌کند؛ وابستگی‌ها و قالب پیکربندی حفظ شده‌اند
 - ارائه‌دهندگان جدید: `vkcalls` با `vp8channel` یا `videochannel`، `mtslink` با `vp8channel` و `salutejazz` و `max` با `datachannel`. برای `max`، فیلد `provider-token` الزامی و برای ورود مهمان `vkcalls` توکن غیرخالی ممنوع است. موتورهای جدید از طریق ارائه‌دهنده انتخاب می‌شوند، چون به اعتبارنامه‌های اضافی نیاز دارند که در قرارداد مستقیم `engine-url`/`engine-token` وجود ندارد
 - تنظیمات جدید UDP/direct/failover/DTLS در Ghostlane در پروفایل FlClashM عرضه نمی‌شوند؛ CNC، SOCKS روی loopback، مالکیت انحصاری runtime در Go و مسیریابی موجود Mihomo حفظ می‌شوند

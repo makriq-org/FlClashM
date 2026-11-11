@@ -526,7 +526,7 @@ final class ProxyGroupsProvider
   }
 }
 
-String _$proxyGroupsHash() => r'6349959a6774d2828b5b146b004101bbb96477cc';
+String _$proxyGroupsHash() => r'f942d27419c471018a33c70cdc6e93de87d2a5d0';
 
 final class ProxyGroupsFamily extends $Family
     with

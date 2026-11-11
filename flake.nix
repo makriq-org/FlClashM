@@ -22,21 +22,21 @@
         };
       };
       goPkgs = import nixpkgsGo { inherit system; };
-      editorRust = pkgs.rust-bin.stable."1.99.0".minimal.override {
+      editorRust = pkgs.rust-bin.stable."1.99.1".minimal.override {
         targets = [
           "aarch64-linux-android"
           "armv7-linux-androideabi"
           "x86_64-linux-android"
         ];
       };
-      # Native Assets calls `rustup run 1.99.0 cargo` explicitly. Make that
+      # Native Assets calls `rustup run 1.99.1 cargo` explicitly. Make that
       # version available declaratively without installing into ~/.rustup.
       editorRustupHome = pkgs.runCommand "flclashm-editor-rustup-home" { } ''
         mkdir -p "$out/toolchains"
-        ln -s ${editorRust} "$out/toolchains/1.99.0-x86_64-unknown-linux-gnu"
+        ln -s ${editorRust} "$out/toolchains/1.99.1-x86_64-unknown-linux-gnu"
         cat > "$out/settings.toml" <<'EOF'
         version = "12"
-        default_toolchain = "1.99.0-x86_64-unknown-linux-gnu"
+        default_toolchain = "1.99.1-x86_64-unknown-linux-gnu"
         profile = "minimal"
         [overrides]
         EOF

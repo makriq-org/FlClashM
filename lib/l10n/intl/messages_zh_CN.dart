@@ -720,6 +720,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "externalControllerDesc": m28,
     "externalControllerSecret": MessageLookupByLibrary.simpleMessage("外部控制器密钥"),
     "externalLink": MessageLookupByLibrary.simpleMessage("外部链接"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("休眠中"),
     "externalResources": MessageLookupByLibrary.simpleMessage("外部资源"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("超大"),
     "fade": MessageLookupByLibrary.simpleMessage("淡入"),
@@ -1164,6 +1165,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("打开面板"),
     "optional": MessageLookupByLibrary.simpleMessage("可选"),
     "options": MessageLookupByLibrary.simpleMessage("选项"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX 作者",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage("原始仓库"),
     "other": MessageLookupByLibrary.simpleMessage("其他"),
     "otherContributors": MessageLookupByLibrary.simpleMessage("其他贡献者"),

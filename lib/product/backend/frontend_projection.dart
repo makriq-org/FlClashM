@@ -8,6 +8,7 @@ import '../../enum/enum.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import 'backend.dart';
+import 'external_nodes.dart';
 import 'frontend_settings.dart';
 
 class FrontendProjection {
@@ -80,6 +81,14 @@ class FrontendProjection {
         frontendSettingsStore.projecting = false;
       }
       final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
+      c
+          .read(externalNodesProvider.notifier)
+          .project(
+            runtime: runtime,
+            profileId: config.currentProfileId,
+            appliedProfileId: backendClient.runtimeView['profileId'] as String?,
+            viewGeneration: backendClient.runtimeViewGeneration,
+          );
       final instance = runtime['instanceId'] as String?;
       _hostVisibility.synchronize(instance, () async {
         // A replacement service starts with presentation events disabled.

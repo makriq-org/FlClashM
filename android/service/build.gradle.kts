@@ -27,7 +27,7 @@ dependencies {
     implementation(project(":common"))
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.annotation:annotation-jvm:1.11.0")
-    implementation("com.google.code.gson:gson:2.14.0")
+    implementation("com.google.code.gson:gson:2.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     testImplementation(kotlin("test"))
 }
