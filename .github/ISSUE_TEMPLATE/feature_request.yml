@@ -1,39 +1,40 @@
-name: Запрос фунционала / Feature request
-title: "[Feature] "
-description: Предложите новый функционал / Propose your feature request
-
+name: Предложение функции
+description: Предложить новую возможность FlClashM
+title: "feat: "
 body:
   - type: markdown
     attributes:
       value: |
-        ## Прежде чем создавать проблему, убедитесь в следующем:
-        1. Обязательно укажите краткий и понятный заголовок, чтобы другим было проще найти вашу проблему.
-        2. Убедитесь, что похожая проблема ещё не создана в разделе [существующих проблем](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), иначе обсудите свой вопрос там.
-        3. Опишите проблему подробно и по шаблону, иначе заявка будет закрыта без рассмотрения.
-        ## Before submitting the issue, please make sure of the following checklist:
-        1. Please be sure to fill in a concise and clear title for the issue so that others can quickly search
-        2. Please make sure there is no similar issue in the [existing issues](https://github.com/makriq-org/FlClashM/issues?q=is%3Aissue), otherwise please discuss under the existing issue
-        3. Please describe the problem in detail according to the template specification, otherwise issue will be closed directly.
-
+        Проверьте, нет ли уже такого предложения. Одна заявка — одна возможность.
+        Заголовок: `feat: добавить …`, на русском, без точки, до 72 символов.
+        Например: `feat: добавить поиск по профилям`.
+        Не публикуйте подписки, токены, ключи, пароли и персональные данные, в том числе во вложениях.
   - type: textarea
-    id: description
+    id: problem
     attributes:
-      label: Описание фунции / Feature description
-      description: Четкое и краткое описание функции / A clear and concise description of what the feature is
+      label: Проблема и сценарий использования
+      description: Кому и в какой ситуации нужна функция? Что сейчас мешает решить задачу?
     validations:
       required: true
   - type: textarea
+    id: proposal
     attributes:
-      label: Сценарий использования / Use case
-      description: Пожалуйста, опишите сценарий использования вашего запроса на функцию / Please describe the use case of your feature request
+      label: Предлагаемое поведение
+      description: Опишите действия пользователя и результат. Укажите целевую платформу и границы предложения.
     validations:
       required: true
-  - type: checkboxes
-    id: os-labels
+  - type: textarea
+    id: acceptance
     attributes:
-      label: Операционная система / Target OS
-      description: Android is the only supported target OS for this product.
-      options:
-        - label: Android
+      label: Критерии готовности
+      description: По каким наблюдаемым результатам можно проверить, что задача решена?
+      placeholder: |
+        - [ ] Пользователь может…
+        - [ ] При … приложение…
     validations:
       required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы и ограничения
+      description: Необязательно. Укажите обходные пути, ограничения и связанные issue. Для новой runtime-интеграции опишите место в архитектуре, контракт, безопасность, обновление и откат.

@@ -1,0 +1,48 @@
+name: Техническая задача
+description: Оптимизация, рефакторинг, документация, сборка, инфраструктура или подготовка релиза
+title: "chore: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Проверьте дубликаты. Одна заявка — один проверяемый результат.
+        Заголовок: `тип: требуемое действие`, на русском, без точки, до 72 символов.
+        Замените `chore` в заголовке на выбранный ниже тип.
+        Например: `build: сократить время проверки Go backend в CI`.
+        Не публикуйте подписки, токены, ключи, пароли и персональные данные, в том числе во вложениях.
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Тип задачи
+      options:
+        - "perf — оптимизация без смены поведения"
+        - "refactor — переработка без смены поведения"
+        - "docs — документация"
+        - "build — сборка, зависимости, CI"
+        - "chore — инфраструктура и уборка"
+        - "release — подготовка выпуска"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Причина
+      description: Какая проблема требует этой работы? Приведите факты или ссылки на связанные issue.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Объём работ и ограничения
+      description: Что требуется изменить и какие границы нужно соблюсти? Для новой runtime-интеграции опишите место в архитектуре, контракт, безопасность, обновление и откат.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Результат и проверка
+      description: Что должно получиться и как это проверить? Для оптимизации укажите метрику.
+      placeholder: |
+        - [ ] …
+    validations:
+      required: true
