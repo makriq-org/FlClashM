@@ -120,8 +120,6 @@ flutter:
     - assets/data/
     - assets/fonts/
     - assets/images/
-    - assets/images/avatars/
-    - assets/runtimes/byedpi/android/byebyeedpi-strategies.list
     - assets/images/icons/
     - assets/images/avatar/
     - assets/images/flags/

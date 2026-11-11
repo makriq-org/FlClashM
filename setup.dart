@@ -696,9 +696,8 @@ Future<void> _syncByedpiAssets() async {
   final stamp = File(_projectPath(_byedpiStampFile));
   final expectedStamp = _buildByedpiStamp();
   final assetFilesExist = byedpiReleaseAssets.values.every(
-        (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
-      ) &&
-      File(_projectPath(byedpiStrategyListAssetPath)).existsSync();
+    (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
+  );
 
   if (assetFilesExist &&
       stamp.existsSync() &&
@@ -707,20 +706,6 @@ Future<void> _syncByedpiAssets() async {
   }
 
   final sourceDir = await _prepareByedpiSource();
-  final strategySourceDir = await _prepareByedpiStrategySource();
-  final strategyTarget = File(_projectPath(byedpiStrategyListAssetPath));
-  strategyTarget.parent.createSync(recursive: true);
-  await File(
-    _join(
-      strategySourceDir.path,
-      'app',
-      'src',
-      'main',
-      'assets',
-      'proxytest_strategies.list',
-    ),
-  ).copy(strategyTarget.path);
-
   final targetRoot = Directory(_projectPath(byedpiBundledAssetRoot));
   if (!targetRoot.existsSync()) {
     targetRoot.createSync(recursive: true);
@@ -794,38 +779,10 @@ Future<Directory> _prepareByedpiSource() async {
   return cacheDir;
 }
 
-Future<Directory> _prepareByedpiStrategySource() async {
-  final cacheDir =
-      Directory(_projectPath('.dart_tool', 'byebyeedpi-strategy-source'));
-  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
-    if (cacheDir.existsSync()) {
-      await cacheDir.delete(recursive: true);
-    }
-    await cacheDir.parent.create(recursive: true);
-    await _exec(
-      ['git', 'clone', byedpiStrategySourceRepository, cacheDir.path],
-      name: 'clone byebyeedpi strategy source',
-    );
-  }
-  await _exec(
-    ['git', 'fetch', '--depth', '1', 'origin', byedpiStrategyPinnedCommit],
-    workingDirectory: cacheDir.path,
-    name: 'fetch byebyeedpi strategy commit',
-  );
-  await _exec(
-    ['git', 'checkout', '--detach', byedpiStrategyPinnedCommit],
-    workingDirectory: cacheDir.path,
-    name: 'checkout byebyeedpi strategy commit',
-  );
-  return cacheDir;
-}
-
 String _buildByedpiStamp() {
   final lines = <String>[
     byedpiPinnedReleaseTag,
     byedpiSourceRepository,
-    byedpiStrategySourceRepository,
-    byedpiStrategyPinnedCommit,
     ...byedpiReleaseAssets.values.map(
       (asset) => '${asset.abi}:${asset.cliArch}',
     ),
