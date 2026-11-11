@@ -351,6 +351,15 @@ class DelayDataSource extends _$DelayDataSource with AutoDisposeNotifierMixin {
     }
   }
 
+  void removeProxies(Set<String> names) {
+    if (names.isEmpty) return;
+    final delayMap = _ownedDelayMap();
+    for (final values in delayMap.values) {
+      values.removeWhere((name, _) => names.contains(name));
+    }
+    value = _published = UnmodifiableMapView(delayMap);
+  }
+
   DelayMap _ownedDelayMap() {
     final owned = _owned;
     if (owned != null && identical(state, _published)) {

@@ -979,6 +979,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "External controller secret",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("External link"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("Sleeping"),
     "externalResources": MessageLookupByLibrary.simpleMessage(
       "External resources",
     ),
@@ -1583,6 +1584,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("Open panel"),
     "optional": MessageLookupByLibrary.simpleMessage("Optional"),
     "options": MessageLookupByLibrary.simpleMessage("Options"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX authors",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Original repository",
     ),

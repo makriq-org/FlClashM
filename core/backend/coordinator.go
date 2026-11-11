@@ -45,6 +45,7 @@ type Snapshot struct {
 	APIVersion        int            `json:"apiVersion"`
 	Sequence          uint64         `json:"seq"`
 	Nodes             []NodeSnapshot `json:"nodes,omitempty"`
+	NodesGeneration   uint64         `json:"nodesGeneration,omitempty"`
 	Generation        uint64         `json:"generation"`
 	AppliedGeneration uint64         `json:"appliedGeneration"`
 	DesiredRunning    bool           `json:"desiredRunning"`
@@ -76,17 +77,18 @@ type execution struct {
 // adapter methods. The command lock fences side effects, the state lock protects
 // snapshots/acceptance, and epochs fence results from non-cooperative adapters.
 type runtimeCoordinator struct {
-	policy         *platformPolicy
-	compileSlots   chan struct{}
-	eventSequence  uint64
-	nodeOptions    *NodeOptions
-	nodes          map[string]*nodeRuntime
-	nodeOrder      []string
-	nodeSnapshot   []NodeSnapshot
-	nodeCancel     context.CancelFunc
-	nodeContext    context.Context
-	nodesExecuting bool
-	keepNodesWarm  bool // UI preparation only; never persisted as a VPN intent.
+	policy          *platformPolicy
+	compileSlots    chan struct{}
+	eventSequence   uint64
+	nodeOptions     *NodeOptions
+	nodes           map[string]*nodeRuntime
+	nodeOrder       []string
+	nodesGeneration uint64
+	nodeSnapshot    []NodeSnapshot
+	nodeCancel      context.CancelFunc
+	nodeContext     context.Context
+	nodesExecuting  bool
+	keepNodesWarm   bool // UI preparation only; never persisted as a VPN intent.
 	// uiDetached fences warm commands queued by a UI session that has gone
 	// away; uiSequence orders UI attach/detach facts by API arrival.
 	uiDetached bool
@@ -234,7 +236,7 @@ func (b *Backend) Snapshot() Snapshot {
 	return c.snapshotLocked()
 }
 func (c *runtimeCoordinator) snapshotLocked() Snapshot {
-	s := Snapshot{InstanceID: c.instanceID, APIVersion: APIVersion, Sequence: c.eventSequence, Nodes: append([]NodeSnapshot(nil), c.nodeSnapshot...), Generation: c.document.Generation,
+	s := Snapshot{InstanceID: c.instanceID, APIVersion: APIVersion, Sequence: c.eventSequence, Nodes: append([]NodeSnapshot(nil), c.nodeSnapshot...), NodesGeneration: c.nodesGeneration, Generation: c.document.Generation,
 		DesiredRunning: c.document.Desired.Running, Observed: c.observed, StartedAt: c.startedAt}
 	if a := c.document.Applied; a != nil {
 		s.AppliedGeneration = a.Plan.Generation
@@ -804,6 +806,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 		} else {
 			committed := cloneDocument(c.document)
 			if plan != nil {
+				// Reused preparations and in-place selections keep their nodes,
+				// but the snapshot must refer to the newly committed generation.
+				if c.nodesDigest == plan.Digest() {
+					c.nodesGeneration = plan.Generation()
+				}
 				committed.Applied = &Applied{Plan: plan.Data(), Input: bytes.Clone(next.Desired.Input), Running: next.Desired.Running, Nodes: c.persistedNodes()}
 			}
 			committed.Pending = nil

@@ -1,4 +1,5 @@
 {
+  "externalNodeSleeping": "En reposo",
   "rule": "Regla",
   "rules": "Reglas",
   "global": "Global",
@@ -211,6 +212,7 @@
   "go": "Ir",
   "externalLink": "Enlace externo",
   "otherContributors": "Otros colaboradores",
+  "originalProjectAuthors": "Autores de FlClashX",
   "originalRepository": "Repositorio original",
   "thanks": "Gracias por la contribución",
   "gratitude": "Agradecimiento",

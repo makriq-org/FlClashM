@@ -1,4 +1,5 @@
 {
+  "externalNodeSleeping": "절전 중",
   "rule": "규칙",
   "rules": "규칙",
   "global": "전역",
@@ -211,6 +212,7 @@
   "go": "이동",
   "externalLink": "외부 링크",
   "otherContributors": "기타 기여자",
+  "originalProjectAuthors": "FlClashX 작성자",
   "originalRepository": "원본 저장소",
   "thanks": "기여에 감사드립니다",
   "gratitude": "감사",

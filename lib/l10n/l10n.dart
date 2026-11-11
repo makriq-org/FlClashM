@@ -55,6 +55,16 @@ class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
+  /// `Sleeping`
+  String get externalNodeSleeping {
+    return Intl.message(
+      'Sleeping',
+      name: 'externalNodeSleeping',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Include in VPN`
   String get includeInVpn {
     return Intl.message(
@@ -3823,6 +3833,16 @@ class AppLocalizations {
   /// `Gratitude`
   String get gratitude {
     return Intl.message('Gratitude', name: 'gratitude', desc: '', args: []);
+  }
+
+  /// `FlClashX authors`
+  String get originalProjectAuthors {
+    return Intl.message(
+      'FlClashX authors',
+      name: 'originalProjectAuthors',
+      desc: '',
+      args: [],
+    );
   }
 
   /// `Original repository`
