@@ -1,0 +1,54 @@
+diff --git a/main.c b/main.c
+index ed82d6e..646711d 100644
+--- a/main.c
++++ b/main.c
+@@ -21,6 +21,9 @@
+     #include <sys/socket.h>
+     #include <sys/resource.h>
+     #include <ifaddrs.h>
++    #if defined(__ANDROID__) && __ANDROID_API__ < 24
++    #include <dlfcn.h>
++    #endif
+     
+     #define DAEMON
+ #else
+@@ -423,12 +426,28 @@ static int get_addr_ifname(const char *name, union sockaddr_u *addr)
+     #ifndef _WIN32
+     struct ifaddrs *ifap, *ifa;
+     
+-    if (getifaddrs(&ifap) || !ifap) {
++    // Keep API 21 binaries loadable: these libc symbols first shipped in API 24.
++    // Resolve both before allocating; older Android rejects interface names only.
++    #if defined(__ANDROID__) && __ANDROID_API__ < 24
++    int (*getifaddrs_fn)(struct ifaddrs **) =
++        (int (*)(struct ifaddrs **))dlsym(RTLD_DEFAULT, "getifaddrs");
++    void (*freeifaddrs_fn)(struct ifaddrs *) =
++        (void (*)(struct ifaddrs *))dlsym(RTLD_DEFAULT, "freeifaddrs");
++    if (!getifaddrs_fn || !freeifaddrs_fn) {
++        LOG(LOG_E, "interface names require Android API 24 or newer\n");
++        return -1;
++    }
++    #else
++    int (*getifaddrs_fn)(struct ifaddrs **) = getifaddrs;
++    void (*freeifaddrs_fn)(struct ifaddrs *) = freeifaddrs;
++    #endif
++
++    if (getifaddrs_fn(&ifap) || !ifap) {
+         uniperror("getifaddrs");
+         return -1;
+     }
+     for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+-        if (strcmp(ifa->ifa_name, name)) {
++        if (!ifa->ifa_name || !ifa->ifa_addr || strcmp(ifa->ifa_name, name)) {
+             continue;
+         }
+         if (!err && prefer_family
+@@ -438,7 +457,7 @@ static int get_addr_ifname(const char *name, union sockaddr_u *addr)
+         memcpy(addr, ifa->ifa_addr, SA_SIZE(ifa->ifa_addr));
+         err = 0;
+     }
+-    freeifaddrs(ifap);
++    freeifaddrs_fn(ifap);
+     
+     if (err && prefer_family == AF_INET6) {
+         char *e = 0;
