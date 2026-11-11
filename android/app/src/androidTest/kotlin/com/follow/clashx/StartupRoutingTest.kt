@@ -110,6 +110,34 @@ class StartupRoutingTest {
         }
     }
 
+    @Test fun themeSwitchPreservesDynamicShortcuts() {
+        if (android.os.Build.VERSION.SDK_INT < 25) return
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val manager = context.getSystemService(android.content.pm.ShortcutManager::class.java)
+        val previous = StartupTheme.appearance(context)
+        val saved = manager.dynamicShortcuts
+        try {
+            instrumentation.runOnMainSync { StartupTheme.storeAppearance(context, "light", false) }
+            val light = ComponentName(context.packageName, "com.follow.clashx.LauncherLight")
+            val dark = ComponentName(context.packageName, "com.follow.clashx.LauncherDark")
+            val intent = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW)
+            assertTrue(manager.setDynamicShortcuts(listOf(
+                android.content.pm.ShortcutInfo.Builder(context, "startup-switch-test")
+                    .setShortLabel("Startup test").setActivity(light).setIntent(intent).build())))
+            instrumentation.runOnMainSync { StartupTheme.storeAppearance(context, "dark", false) }
+            val moved = manager.dynamicShortcuts.single { it.id == "startup-switch-test" }
+            assertEquals(dark, moved.activity)
+            assertEquals(intent.component, moved.intent!!.component)
+            assertEquals("Startup test", moved.shortLabel.toString())
+        } finally {
+            manager.removeDynamicShortcuts(listOf("startup-switch-test"))
+            instrumentation.runOnMainSync {
+                StartupTheme.storeAppearance(context, previous["themeMode"] as String, previous["pureBlack"] as Boolean)
+            }
+            manager.setDynamicShortcuts(saved)
+        }
+    }
+
     @Test fun externalLinksResolveToOneInvisibleRouter() {
         for (scheme in listOf("clash", "flclash", "flclashx", "flclashm", "clashmeta", "clashx")) {
             val link = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://install-config?url=test"))

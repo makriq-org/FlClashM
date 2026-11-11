@@ -264,12 +264,26 @@ internal object StartupTheme {
                 .mapNotNull { checkNotNull(it.taskInfo).baseIntent.component?.className }.toSet()
         }.getOrNull()
         val activeAliases = activeTasks?.map { it.substringAfterLast('.') }?.toSet()
+        // Android removes dynamic shortcuts when their launcher is disabled.
+        // Move them while the old entry still exists, after enabling its replacement.
+        val shortcuts = if (Build.VERSION.SDK_INT >= 25)
+            application.getSystemService(android.content.pm.ShortcutManager::class.java) else null
         val pending = LauncherSwitch.apply(selected, names, activeAliases) { name, enabled ->
             val component = android.content.ComponentName(application, "com.follow.clashx.$name")
             val state = if (enabled) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
             if (pm.getComponentEnabledSetting(component) != state) {
                 pm.setComponentEnabledSetting(component, state, android.content.pm.PackageManager.DONT_KILL_APP)
+            }
+            if (enabled && shortcuts != null) {
+                val existing = shortcuts.dynamicShortcuts
+                if (existing.any { it.activity != component }) {
+                    val moved = existing.map {
+                        androidx.core.content.pm.ShortcutInfoCompat.Builder(application, it)
+                            .setActivity(component).build().toShortcutInfo()
+                    }
+                    check(shortcuts.setDynamicShortcuts(moved)) { "Shortcut update was throttled" }
+                }
             }
         }
         if (pending) schedule(application)
