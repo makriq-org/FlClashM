@@ -851,6 +851,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Secret du contrôleur externe",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("Lien externe"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("En veille"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("Très grande"),
     "fade": MessageLookupByLibrary.simpleMessage("Fondu"),
     "failedCount": m29,

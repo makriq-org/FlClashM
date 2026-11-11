@@ -793,6 +793,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "外部コントローラーのシークレット",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("外部リンク"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("スリープ中"),
     "externalResources": MessageLookupByLibrary.simpleMessage("外部リソース"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("特大"),
     "fade": MessageLookupByLibrary.simpleMessage("フェード"),

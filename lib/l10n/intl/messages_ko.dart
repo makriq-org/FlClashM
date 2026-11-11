@@ -661,6 +661,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "외부 컨트롤러 시크릿",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("외부 링크"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("절전 중"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("매우 크게"),
     "fade": MessageLookupByLibrary.simpleMessage("페이드"),
     "failedCount": m29,

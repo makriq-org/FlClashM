@@ -70,6 +70,8 @@ API, данные и план имеют независимые версии, с
 
 Основные методы: `snapshot`, `runtime.view`, `presentation`, `runtime.*`, `operation.get/cancel`, `settings.patch`, `profile.*`, `subscription.refresh`, `proxy.select`, `backup.export/restore`, `blob.*`, `engine.command`, `ui.attach`, `data.reset`. События имеют `instanceId`/sequence; переполнение требует resync. UI подписывается до снимка и показывает применённый выбор из `runtime.view`. Медленный подписчик не блокирует VPN.
 
+`runtime.nodes` связывает `nodeId` и `name` прокси с состоянием внешнего процесса. Сон подтверждается только `state: sleeping` и `awake: false`; тайм-аут проверки не является признаком сна. `runtime.nodesGeneration` указывает поколение плана этих узлов, в том числе после повторного использования подготовки. UI сопоставляет его с `appliedGeneration`, поколением `runtime.view` и выбранным профилем. Проверки задержки пропускают спящие узлы; пробуждение обновляет замер после выхода из `starting`, а смена профиля, плана или цикла сна отбрасывает устаревшие ответы.
+
 </details>
 
 <a id="data"></a>

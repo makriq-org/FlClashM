@@ -1408,7 +1408,7 @@
     {
       "path": "lib/views/proxies/card.dart",
       "bucket": "budget",
-      "reason": "Выбор прокси передаётся одним действием Go backend; удалён вызов заменённого Dart-обновления runtime selection."
+      "reason": "Выбор прокси передаётся одним действием Go backend; удалён вызов заменённого Dart-обновления runtime selection. Сон внешнего узла отображается из Go snapshots на месте задержки без значка."
     },
     {
       "path": "android/service/src/main/kotlin/com/follow/clashx/service/InstalledAppsPermissionActivity.kt",
@@ -2448,7 +2448,7 @@
     {
       "path": "lib/providers/actions/proxies.dart",
       "bucket": "budget",
-      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM."
+      "reason": "Адаптация Android-изменений тега 50a4067f7b4b6f7019eb11249f3ce8c9580b4071 к Go backend и существующим контрактам FlClashM. Проверки пропускают спящие внешние узлы и отбрасывают результаты прежнего цикла сна."
     },
     {
       "path": "lib/providers/ip_quality.dart",

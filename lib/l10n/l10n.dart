@@ -55,6 +55,16 @@ class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
+  /// `Sleeping`
+  String get externalNodeSleeping {
+    return Intl.message(
+      'Sleeping',
+      name: 'externalNodeSleeping',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Include in VPN`
   String get includeInVpn {
     return Intl.message(

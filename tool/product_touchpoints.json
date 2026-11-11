@@ -98,7 +98,8 @@
       "targets": [
         "lib/product/backend/backend.dart",
         "lib/product/backend/frontend_settings.dart",
-        "lib/product/services/product_services.dart"
+        "lib/product/services/product_services.dart",
+        "lib/product/backend/external_nodes.dart"
       ]
     },
     {
@@ -206,6 +207,14 @@
       "reason": "Тонкий UI отправляет команды Go; backend владеет кэшем качества IP, DNS и временным сеансом приёма ссылок.",
       "targets": [
         "lib/product/pages/link_session_page.dart"
+      ]
+    },
+    {
+      "path": "lib/views/proxies/card.dart",
+      "boundary": "backend-node-presentation",
+      "reason": "Карточка показывает сон внешнего узла из Go snapshots вместо сохранённой задержки или ошибки проверки.",
+      "targets": [
+        "lib/product/backend/external_nodes.dart"
       ]
     }
   ],
