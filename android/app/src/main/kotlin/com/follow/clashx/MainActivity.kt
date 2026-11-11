@@ -141,6 +141,28 @@ class MainActivity : FlutterActivity() {
     }
 }
 
+// No window is drawn here: choose a manifest-themed target before its starting
+// window is created, including on Android versions without persisted splash themes.
+class LinkLaunchActivity : android.app.Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        startActivity(StartupIntents.forward(this, intent, StartupTheme.launchActivity(this)))
+        finish()
+    }
+}
+
+internal object StartupIntents {
+    fun forward(context: Context, source: Intent, target: Class<out android.app.Activity>): Intent =
+        Intent(source).setClass(context, target).apply {
+            // Preserve the URL, action, extras and URI grants, but do not replay
+            // caller task flags (e.g. CLEAR_TASK) when handing off to MainActivity.
+            flags = (source.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) or
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+}
+
 // Starting windows belong to these short-lived tasks. They never own a
 // FlutterEngine; all routes converge on the singleTask MainActivity.
 open class StartupLaunchActivity : android.app.Activity() {
@@ -149,9 +171,7 @@ open class StartupLaunchActivity : android.app.Activity() {
         super.onCreate(savedInstanceState)
         splash.setKeepOnScreenCondition { true }
         if (Build.VERSION.SDK_INT >= 31) splashScreen.setSplashScreenTheme(0)
-        startActivity(Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        })
+        startActivity(StartupIntents.forward(this, intent, MainActivity::class.java))
         finish()
     }
 }
@@ -186,6 +206,14 @@ internal object StartupTheme {
         !dark(context) -> R.style.StartupLight
         black(context) -> R.style.StartupBlack
         else -> R.style.StartupDark
+    }
+
+    fun launchActivity(context: Context): Class<out StartupLaunchActivity> = when (theme(context)) {
+        R.style.StartupLight -> LightLaunchActivity::class.java
+        R.style.StartupDark -> DarkLaunchActivity::class.java
+        R.style.StartupBlack -> BlackLaunchActivity::class.java
+        R.style.StartupSystemBlack -> SystemBlackLaunchActivity::class.java
+        else -> SystemLaunchActivity::class.java
     }
 
     fun appearance(context: Context): Map<String, Any> = mapOf(

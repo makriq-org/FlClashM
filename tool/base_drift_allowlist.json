@@ -98,7 +98,7 @@
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/MainActivity.kt",
       "bucket": "budget",
-      "reason": "MainActivity регистрирует тонкий мост безопасного диагностического экспорта. Мост startup_appearance хранит только режим темы и pureBlack для первого кадра; Go остаётся источником настроек."
+      "reason": "MainActivity регистрирует тонкий мост безопасного диагностического экспорта. Мост startup_appearance хранит только режим темы и pureBlack для первого кадра; Go остаётся источником настроек. Невидимый обработчик ссылок выбирает заранее объявленную палитру до первого окна и сохраняет URL при передаче в Flutter."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/Service.kt",
@@ -3014,6 +3014,11 @@
       "path": "android/app/src/main/res/values-night/brand_aliases.xml",
       "bucket": "budget",
       "reason": "Системные day/night-ресурсы ссылаются на общие фиксированные палитры без копирования векторов и PNG."
+    },
+    {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/StartupRoutingTest.kt",
+      "bucket": "budget",
+      "reason": "Проверены выбор manifest-темы по кэшу и передача исходной ссылки через стартовую Activity без изменения Android task-флагами вызывающей стороны."
     }
   ]
 }

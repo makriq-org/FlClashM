@@ -82,6 +82,20 @@ void main() {
     expect(night['ic_launcher_foreground'], '@drawable/brand_dark');
     expect(day['ic_launcher'], '@mipmap/launcher_light');
     expect(night['ic_launcher'], '@mipmap/launcher_dark');
+    expect(day['launcher_systemblack'], '@mipmap/launcher_light');
+    expect(night['launcher_systemblack'], '@mipmap/launcher_black');
+    final manifest = XmlDocument.parse(
+      File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+    );
+    expect(
+      manifest
+          .findAllElements('activity-alias')
+          .singleWhere(
+            (e) => e.getAttribute('android:name') == '.LauncherSystemBlack',
+          )
+          .getAttribute('android:icon'),
+      '@mipmap/launcher_systemblack',
+    );
     for (final palette in ['light', 'dark', 'black']) {
       final icon = XmlDocument.parse(
         File('android/app/src/main/res/mipmap-anydpi-v26/launcher_$palette.xml')
@@ -103,6 +117,51 @@ void main() {
             .single
             .getAttribute('android:drawable'),
         '@color/brand_${palette}_background',
+      );
+    }
+  });
+
+  test('external links use one invisible router before the themed launch', () {
+    final manifest = XmlDocument.parse(
+      File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+    );
+    final handlers = manifest
+        .findAllElements('intent-filter')
+        .where(
+          (filter) => filter
+              .findElements('action')
+              .any(
+                (action) =>
+                    action.getAttribute('android:name') ==
+                    'android.intent.action.VIEW',
+              ),
+        )
+        .toList();
+    expect(handlers, hasLength(6));
+    expect(
+      handlers
+          .map((e) => (e.parent as XmlElement).getAttribute('android:name'))
+          .toSet(),
+      {'.LinkLaunchActivity'},
+    );
+    final router = handlers.first.parent as XmlElement;
+    expect(
+      router.getAttribute('android:theme'),
+      '@android:style/Theme.NoDisplay',
+    );
+    expect(router.getAttribute('android:exported'), 'true');
+    expect(
+      handlers
+          .map(
+            (e) => e.findElements('data').single.getAttribute('android:scheme'),
+          )
+          .toSet(),
+      {'clash', 'flclash', 'flclashx', 'flclashm', 'clashmeta', 'clashx'},
+    );
+    for (final handler in handlers) {
+      expect(
+        handler.findElements('data').single.getAttribute('android:host'),
+        'install-config',
       );
     }
   });

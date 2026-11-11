@@ -3,4 +3,5 @@
     <item type="drawable" name="ic_launcher_foreground">@drawable/brand_light</item>
     <item type="mipmap" name="ic_launcher">@mipmap/launcher_light</item>
     <item type="mipmap" name="ic_launcher_round">@mipmap/ic_launcher</item>
+    <item type="mipmap" name="launcher_systemblack">@mipmap/launcher_light</item>
 </resources>
