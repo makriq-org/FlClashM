@@ -47,9 +47,18 @@
     {
       description: 'PR встроенных runtime-компонентов требуют ручной подготовки перед слиянием',
       matchManagers: ['custom.regex'],
+      matchPackageNames: ['!https://github.com/romanvht/ByeByeDPI'],
       minimumReleaseAge: '0 days',
       prBodyNotes: [
         '> [!IMPORTANT]\n> Этот PR только начинает подготовку runtime-обновления. Перед слиянием нужно пересобрать бинарники, обновить SHA-256 и проверить все поддерживаемые Android ABI.',
+      ],
+    },
+    {
+      description: 'Обновления встроенного списка стратегий требуют синхронизации Go-ресурса',
+      matchPackageNames: ['https://github.com/romanvht/ByeByeDPI'],
+      minimumReleaseAge: '0 days',
+      prBodyNotes: [
+        '> [!IMPORTANT]\n> Renovate обновляет только ссылку на исходный commit. Перед слиянием скопируйте app/src/main/assets/proxytest_strategies.list из этого commit в core/backend/compile/byebyeedpi-strategies.list и выполните go test ./backend/compile из core. Flutter-копию списка создавать не нужно.',
       ],
     },
   ],
@@ -91,6 +100,20 @@
       currentValueTemplate: 'main',
       depNameTemplate: 'ByeDPI runtime',
       packageNameTemplate: 'https://github.com/hufrea/byedpi',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+
+    {
+      customType: 'regex',
+      description: 'Отслеживать источник встроенного Go-списка стратегий ByeByeDPI',
+      managerFilePatterns: ['/^assets/runtimes/byedpi/android/README\\.md$/'],
+      matchStrings: [
+        'Strategy source commit: `(?<currentDigest>[0-9a-f]{40})`',
+      ],
+      currentValueTemplate: 'master',
+      depNameTemplate: 'ByeByeDPI strategies',
+      packageNameTemplate: 'https://github.com/romanvht/ByeByeDPI',
       datasourceTemplate: 'git-refs',
       versioningTemplate: 'exact',
     },
