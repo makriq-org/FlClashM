@@ -7,14 +7,14 @@ toolchain go1.27.3
 require (
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/dop251/goja v0.0.0-20261017142635-e6862644b38f
-	github.com/klauspost/compress v1.20.1
+	github.com/klauspost/compress v1.20.3
 	github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78
 	github.com/metacubex/bbolt v0.0.0-20260706163408-d4ec34ad7c48
 	github.com/metacubex/http v0.1.8
 	github.com/metacubex/mihomo v1.19.33
 	github.com/miekg/dns v1.1.73
 	go.yaml.in/yaml/v3 v3.0.6
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.25.0
 )
 
