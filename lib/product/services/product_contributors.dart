@@ -12,7 +12,7 @@ class ProductContributor {
 
 const productContributors = [
   ProductContributor(
-    avatar: 'assets/images/avatars/makriq.png',
+    avatar: 'assets/images/avatar/makriq.png',
     name: 'makriq',
     link: 'https://github.com/makriq',
   ),
