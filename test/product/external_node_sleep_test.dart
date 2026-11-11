@@ -198,6 +198,27 @@ void main() {
     },
   );
 
+  testWidgets('wake measurement waits for the listener to finish starting', (
+    tester,
+  ) async {
+    final core = _Core();
+    final c = _container(core);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: c, child: const SizedBox()),
+    );
+    _project(c);
+    c.read(proxiesActionProvider);
+    _project(c, state: 'starting', awake: true);
+    await tester.pump();
+    expect(core.calls, isEmpty);
+    _project(c, state: 'running', awake: true);
+    await tester.pump();
+    expect(core.calls, [_node.name]);
+    core.finish(0, 88);
+    await tester.pump(const Duration(seconds: 1));
+    expect(c.read(delayDataSourceProvider)[_url]?[_node.name], 88);
+  });
+
   testWidgets('wake measurement waits for a coherent committed plan', (
     tester,
   ) async {

@@ -9,13 +9,19 @@ typedef ExternalNodeScope = ({
 });
 typedef ExternalNodeStamp = (ExternalNodeScope?, ExternalNodeStatus?);
 
-/// A presentation epoch changes only when identity or sleep changes. A real
+/// A presentation epoch changes with identity, sleep or startup readiness. A real
 /// failure of an awake process must still accept its delay-test result.
 class ExternalNodeStatus {
-  ExternalNodeStatus(this.id, {required this.sleeping, required this.awake});
+  ExternalNodeStatus(
+    this.id, {
+    required this.sleeping,
+    required this.awake,
+    required this.starting,
+  });
   final String id;
   final bool sleeping;
   final bool awake;
+  final bool starting;
 }
 
 class ExternalNodes {
@@ -64,15 +70,22 @@ class ExternalNodesProjection extends Notifier<ExternalNodes> {
         final id = raw['nodeId'];
         if (name is! String || name.isEmpty || id is! String) continue;
         final awake = raw['awake'] == true;
+        final starting = raw['state'] == 'starting';
         final sleeping = raw['state'] == 'sleeping' && raw['awake'] == false;
         final old = state.scope == scope ? state.nodes[name] : null;
         nodes[name] =
             old != null &&
                 old.id == id &&
                 old.sleeping == sleeping &&
-                old.awake == awake
+                old.awake == awake &&
+                old.starting == starting
             ? old
-            : ExternalNodeStatus(id, sleeping: sleeping, awake: awake);
+            : ExternalNodeStatus(
+                id,
+                sleeping: sleeping,
+                awake: awake,
+                starting: starting,
+              );
       }
     }
     if (state.scope == scope && mapEquals(state.nodes, nodes)) return;

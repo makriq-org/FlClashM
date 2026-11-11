@@ -63,7 +63,9 @@ class ProxiesAction extends _$ProxiesAction {
       // reissue its measurement if that commit cancelled the earlier one.
       final woken = [
         for (final name in changed)
-          if (next.nodes[name]?.awake == true && !next.sleeping(name))
+          if (next.nodes[name]?.awake == true &&
+              next.nodes[name]?.starting == false &&
+              !next.sleeping(name))
             Proxy(name: name, type: 'Socks5'),
       ];
       if (woken.isNotEmpty) {
