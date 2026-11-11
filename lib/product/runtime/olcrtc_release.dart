@@ -1,4 +1,4 @@
-const olcRtcPinnedCommit = 'b2c4b17ee35bfe65330aa9141f94dac082228bb2';
+const olcRtcPinnedCommit = 'f3ad8fb7c0d0fa981423f83269526fa94077c23d';
 const olcRtcPinnedReleaseTag = 'git-$olcRtcPinnedCommit';
 const olcRtcPinnedGoVersion = 'go1.27.3';
 const olcRtcPinnedNdkVersion = '28.0.13004108';
