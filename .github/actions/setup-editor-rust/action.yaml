@@ -25,10 +25,10 @@ runs:
       env:
         RUST_TARGETS: ${{ inputs.targets }}
       run: |
-        rustup toolchain install 1.99.0 --profile minimal
+        rustup toolchain install 1.99.1 --profile minimal
         read -r -a targets <<< "$RUST_TARGETS"
-        rustup target add --toolchain 1.99.0 "${targets[@]}"
-        echo 'RUSTUP_TOOLCHAIN=1.99.0' >> "$GITHUB_ENV"
+        rustup target add --toolchain 1.99.1 "${targets[@]}"
+        echo 'RUSTUP_TOOLCHAIN=1.99.1' >> "$GITHUB_ENV"
     - name: Install editor host build dependencies
       if: runner.os == 'Linux' && inputs.install-host-deps == 'true'
       shell: bash
