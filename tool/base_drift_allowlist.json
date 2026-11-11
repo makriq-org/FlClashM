@@ -628,7 +628,7 @@
     {
       "path": "lib/views/about.dart",
       "bucket": "budget",
-      "reason": "Живой material_ui About сохраняет обновления форка, добавляет productContributors, скрывает Telegram и ссылается на фактический upstream FlClashX."
+      "reason": "Живой material_ui About сохраняет обновления форка, показывает productContributors отдельно от участников FlClashX, сохраняет благодарности, учитывает нижнюю системную панель, скрывает Telegram и ссылается на фактический upstream FlClashX."
     },
     {
       "path": "lib/views/access.dart",
