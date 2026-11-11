@@ -1,5 +1,7 @@
 package com.follow.clashx
 
+import android.app.Activity
+import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
@@ -7,16 +9,106 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** Exercise real Android Intent copies and installed manifest theme selection. */
 @RunWith(AndroidJUnit4::class)
 class StartupRoutingTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    @Test fun themedLauncherReusesActivityOpenedByLink() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val application = context.applicationContext as Application
+        val activity = AtomicReference<MainActivity>()
+        val created = AtomicInteger()
+        val destroyed = AtomicInteger()
+        val resumed = AtomicReference(CountDownLatch(1))
+        val callbacks = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(value: Activity, state: Bundle?) {
+                if (value is MainActivity) {
+                    activity.set(value)
+                    created.incrementAndGet()
+                }
+            }
+            override fun onActivityResumed(value: Activity) {
+                if (value is MainActivity) resumed.get().countDown()
+            }
+            override fun onActivityDestroyed(value: Activity) {
+                if (value is MainActivity) destroyed.incrementAndGet()
+            }
+            override fun onActivityStarted(value: Activity) {}
+            override fun onActivityPaused(value: Activity) {}
+            override fun onActivityStopped(value: Activity) {}
+            override fun onActivitySaveInstanceState(value: Activity, state: Bundle) {}
+        }
+        Service.bind()
+        val settings = Service.backend("snapshot").getJSONObject("catalog").getJSONObject("settings")
+        val previous = settings.optJSONObject("themeProps") ?: JSONObject()
+        suspend fun appearance(mode: String) {
+            Service.backendCommand("settings.patch", JSONObject().put("patch",
+                JSONObject().put("themeProps", JSONObject().put("themeMode", mode).put("pureBlack", false))))
+            instrumentation.runOnMainSync { StartupTheme.storeAppearance(context, mode, false) }
+        }
+        application.registerActivityLifecycleCallbacks(callbacks)
+        try {
+            appearance("light")
+            // Empty import URL exercises routing without fetching a subscription.
+            val uri = Uri.parse("flclashm://install-config?url=")
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
+                .putExtra("source", "startup-routing-test").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue("Link did not open MainActivity", resumed.get().await(30, TimeUnit.SECONDS))
+            withTimeout(30_000L) { while (GlobalState.flutterEngine == null) delay(100) }
+            val original = activity.get()
+            val engine = GlobalState.flutterEngine
+            val marker = Any()
+            instrumentation.runOnMainSync {
+                assertEquals(uri, original.intent.data)
+                assertEquals("startup-routing-test", original.intent.getStringExtra("source"))
+                original.window.decorView.tag = marker
+            }
+            appearance("dark")
+            instrumentation.runOnMainSync { original.moveTaskToBack(true) }
+            instrumentation.waitForIdleSync()
+            resumed.set(CountDownLatch(1))
+            // Resolve the enabled launcher through PackageManager, without
+            // RESET_TASK_IF_NEEDED or a direct call to MainActivity.
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                .setPackage(context.packageName)
+            val handlers = context.packageManager.queryIntentActivities(launcher, 0)
+            val dark = handlers.single { it.activityInfo.name.endsWith(".LauncherDark") }
+            context.startActivity(launcher.setComponent(ComponentName(context.packageName, dark.activityInfo.name))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue("Launcher did not resume MainActivity", resumed.get().await(30, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+            assertEquals("A second FlutterActivity was created", 1, created.get())
+            assertEquals("Theme switch destroyed the activity", 0, destroyed.get())
+            assertSame(original, activity.get())
+            assertSame(engine, GlobalState.flutterEngine)
+            instrumentation.runOnMainSync { assertSame(marker, original.window.decorView.tag) }
+        } finally {
+            application.unregisterActivityLifecycleCallbacks(callbacks)
+            instrumentation.runOnMainSync { activity.get()?.finish() }
+            Service.backendCommand("settings.patch", JSONObject().put("patch",
+                JSONObject().put("themeProps", previous)))
+            instrumentation.runOnMainSync {
+                StartupTheme.storeAppearance(context, previous.optString("themeMode", "system"),
+                    previous.optBoolean("pureBlack", false))
+            }
+        }
+    }
 
     @Test fun externalLinksResolveToOneInvisibleRouter() {
         for (scheme in listOf("clash", "flclash", "flclashx", "flclashm", "clashmeta", "clashx")) {
