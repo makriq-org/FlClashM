@@ -6,11 +6,11 @@
   ],
 
   timezone: 'Europe/Moscow',
-  schedule: ['before 06:00 on Monday'],
+  baseBranchPatterns: ['dev'],
   dependencyDashboard: true,
   dependencyDashboardApproval: false,
   dependencyDashboardTitle: 'Обновления зависимостей',
-  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений раз в неделю. Этот список справочный: подтверждать создание PR не требуется. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
+  dependencyDashboardHeader: 'Renovate автоматически создаёт PR обновлений в dev при очередном запуске, без ограничения по дням недели. Этот список справочный: подтверждать создание PR не требуется. Обновления встроенных runtime-компонентов требуют отдельной пересборки бинарников и проверки всех Android ABI.',
 
   automerge: false,
   prConcurrentLimit: 2,
