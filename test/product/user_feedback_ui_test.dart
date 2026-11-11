@@ -96,6 +96,11 @@ void main() {
     expect(find.textContaining('t.me/'), findsNothing);
     expect(find.text('pluralplay'), findsOneWidget);
     expect(find.text('kastov'), findsOneWidget);
+    expect(find.text('katsukibtw'), findsOneWidget);
+    expect(find.text('x_kit_'), findsNothing);
+    expect(find.text('cool_coala'), findsNothing);
+    expect(find.text('arpic'), findsNothing);
+    expect(find.text('legiz'), findsNothing);
     final assets = await AssetManifest.loadFromAssetBundle(rootBundle);
     for (final contributor in productContributors) {
       expect(find.text(contributor.name), findsOneWidget);

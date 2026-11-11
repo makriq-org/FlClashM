@@ -1661,6 +1661,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("Открыть панель"),
     "optional": MessageLookupByLibrary.simpleMessage("Необязательно"),
     "options": MessageLookupByLibrary.simpleMessage("Опции"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "Авторы FlClashX",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Оригинальный репозиторий",
     ),

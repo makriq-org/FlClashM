@@ -156,7 +156,7 @@
     {
       "path": "lib/views/about.dart",
       "boundary": "product-contributors",
-      "reason": "Живой About дополняет upstream contributors данными участников форка из единого productContributors.",
+      "reason": "Живой About показывает автора форка в отдельном разделе из единого productContributors; участники FlClashX перечислены отдельно.",
       "targets": [
         "lib/product/services/product_contributors.dart"
       ]

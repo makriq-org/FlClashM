@@ -1391,6 +1391,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "optional": MessageLookupByLibrary.simpleMessage("Opcional"),
     "options": MessageLookupByLibrary.simpleMessage("Opciones"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "Autores de FlClashX",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Repositorio original",
     ),
