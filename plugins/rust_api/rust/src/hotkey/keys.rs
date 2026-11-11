@@ -4,8 +4,7 @@ use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 const PRIMARY_MODIFIERS: Modifiers = Modifiers::SHIFT
     .union(Modifiers::CONTROL)
     .union(Modifiers::ALT)
-    .union(Modifiers::META)
-    .union(Modifiers::SUPER);
+    .union(Modifiers::META);
 
 pub fn to_hot_key(spec: &HotKeySpec) -> Result<HotKey, String> {
     let code = code_for_usage(spec.key)
@@ -195,9 +194,10 @@ mod tests {
     }
 
     #[test]
-    fn meta_becomes_super() {
+    fn meta_matches_native_hotkey() {
         let hot_key = to_hot_key(&spec(0x0007_0004, &[HotKeyModifier::Meta])).unwrap();
-        assert_eq!(hot_key.mods, Modifiers::SUPER);
+        assert_eq!(hot_key.mods, Modifiers::META);
+        assert!(hot_key.matches(Modifiers::META, Code::KeyA));
     }
 
     #[test]
