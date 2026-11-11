@@ -17,7 +17,7 @@
   prConcurrentLimit: 2,
   prHourlyLimit: 1,
   minimumReleaseAge: '7 days',
-  labels: ['task', '3 · Объём: не оценён'],
+  labels: ['1 · Обслуживание'],
 
   commitMessagePrefix: 'chore:',
   commitMessageAction: 'обновлён пакет',
