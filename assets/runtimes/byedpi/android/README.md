@@ -16,3 +16,17 @@ Its PR updates the reference only: before merging, copy the strategy file from
 that exact commit into `core/backend/compile/byebyeedpi-strategies.list` and run
 `go test ./backend/compile` from `core`. Keep the source reference and embedded
 list together in the same update; do not restore a Flutter asset copy.
+
+The Android build applies `tool/patches/byedpi-android-ifaddrs.patch` before
+compilation and links libdl. On API 21–23, interface-name lookup fails explicitly;
+literal IP addresses keep working. On API 24+, getifaddrs/freeifaddrs are resolved
+from libc at runtime. Neither symbol is a load-time requirement. The patch also
+skips interface entries without an address. The patch contents participate in
+the asset cache stamp. Updating or reverting the source pin requires reviewing
+the patch and `core/backend/compile/cli_schema.json` together.
+
+Run `bash tool/check_byedpi.sh` in the development shell to compare the policy
+with the pinned upstream option table and launch all bundled and fallback
+strategies, verifying their local SOCKS handshake. This checks CLI compatibility,
+not circumvention effectiveness on a particular provider. Android ABI builds and
+real-device network checks remain required before release.

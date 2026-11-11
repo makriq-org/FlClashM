@@ -916,6 +916,11 @@
       "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."
     },
     {
+      "path": "core/backend/compile/byedpi_runtime_test.go",
+      "bucket": "budget",
+      "reason": "Проверка контракта закреплённого ByeDPI, запретов SecurityPolicy и запуска встроенных стратегий."
+    },
+    {
       "path": "core/backend/compile/byedpi.go",
       "bucket": "budget",
       "reason": "Перенос компиляции профилей, SecurityPolicy и конфигураций внешних транспортов в независимый Go backend."

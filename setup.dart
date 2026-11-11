@@ -695,9 +695,7 @@ String _buildNaiveProxyStamp() {
 Future<void> _syncByedpiAssets() async {
   final stamp = File(_projectPath(_byedpiStampFile));
   final expectedStamp = _buildByedpiStamp();
-  final assetFilesExist = byedpiReleaseAssets.values.every(
-    (asset) => File(_projectPath(asset.bundledAssetPath)).existsSync(),
-  );
+  final assetFilesExist = await _byedpiAssetsMatchDigests();
 
   if (assetFilesExist &&
       stamp.existsSync() &&
@@ -706,6 +704,30 @@ Future<void> _syncByedpiAssets() async {
   }
 
   final sourceDir = await _prepareByedpiSource();
+  final compatibilityPatch = _projectPath(
+    'tool',
+    'patches',
+    'byedpi-android-ifaddrs.patch',
+  );
+  // The cached source may already carry this exact patch from a previous ABI build.
+  final patchCheck = await Process.run('git', [
+    'apply',
+    '--reverse',
+    '--check',
+    compatibilityPatch,
+  ], workingDirectory: sourceDir.path);
+  if (patchCheck.exitCode != 0) {
+    await _exec(
+      ['git', 'apply', '--check', compatibilityPatch],
+      workingDirectory: sourceDir.path,
+      name: 'check byedpi compatibility patch',
+    );
+    await _exec(
+      ['git', 'apply', compatibilityPatch],
+      workingDirectory: sourceDir.path,
+      name: 'patch byedpi Android compatibility',
+    );
+  }
   final targetRoot = Directory(_projectPath(byedpiBundledAssetRoot));
   if (!targetRoot.existsSync()) {
     targetRoot.createSync(recursive: true);
@@ -728,16 +750,32 @@ Future<void> _syncByedpiAssets() async {
       name: 'clean byedpi Android ${asset.abi}',
     );
     await _exec(
-      ['make', 'CC=${_join(ndkBin.path, arch.toolchain)}'],
+      ['make', 'CC=${_join(ndkBin.path, arch.toolchain)}', 'LDFLAGS=-ldl'],
       workingDirectory: sourceDir.path,
       name: 'build byedpi Android ${asset.abi}',
     );
     await File(_join(sourceDir.path, byedpiExecutableFileName))
         .copy(target.path);
+    final digest = sha256.convert(await target.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      throw StateError('byedpi ${asset.abi} digest mismatch: '
+          'expected ${asset.sha256}, got $digest');
+    }
   }
 
   stamp.parent.createSync(recursive: true);
   await stamp.writeAsString(expectedStamp, flush: true);
+}
+
+Future<bool> _byedpiAssetsMatchDigests() async {
+  for (final asset in byedpiReleaseAssets.values) {
+    final file = File(_projectPath(asset.bundledAssetPath));
+    if (!file.existsSync() ||
+        sha256.convert(await file.readAsBytes()).toString() != asset.sha256) {
+      return false;
+    }
+  }
+  return true;
 }
 
 Future<Directory> _prepareByedpiSource() async {
@@ -783,8 +821,12 @@ String _buildByedpiStamp() {
   final lines = <String>[
     byedpiPinnedReleaseTag,
     byedpiSourceRepository,
+    sha256.convert(File(_projectPath('tool', 'patches',
+        'byedpi-android-ifaddrs.patch')).readAsBytesSync()).toString(),
+    'ndk:28.0.13004108',
+    'LDFLAGS=-ldl',
     ...byedpiReleaseAssets.values.map(
-      (asset) => '${asset.abi}:${asset.cliArch}',
+      (asset) => '${asset.abi}:${asset.cliArch}:${asset.sha256}',
     ),
   ];
   return lines.join('\n');
