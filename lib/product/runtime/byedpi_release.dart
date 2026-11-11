@@ -1,4 +1,4 @@
-const byedpiPinnedCommit = 'ba532298de7b28cfe854aea83d061369d13ca290';
+const byedpiPinnedCommit = 'e2684772fbda45f2ff4fc220922a010370534216';
 const byedpiPinnedReleaseTag = 'git-$byedpiPinnedCommit';
 const byedpiSourceRepository = 'https://github.com/hufrea/byedpi.git';
 const byedpiBundledAssetRoot = 'assets/runtimes/byedpi/android';
