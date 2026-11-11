@@ -324,8 +324,11 @@ func TestNodeReserveHeadlessWakeSleepAndRecovery(t *testing.T) {
 	}
 	run(t, b, "start", "start", "")
 	events, detach := b.Subscribe(1)
-	<-events
-	detach()
+	defer detach()
+	initial := (<-events).Snapshot
+	if len(initial.Nodes) != 1 || initial.Nodes[0].Name != node.Name || initial.Nodes[0].ID != node.ID || initial.Nodes[0].State != "sleeping" || initial.Nodes[0].Awake || initial.NodesGeneration != initial.AppliedGeneration {
+		t.Fatal("sleeping snapshot lost proxy identity or plan generation", initial)
+	}
 	if err := b.ReconcileNodes(context.Background()); err != nil {
 		t.Fatal(err)
 	}

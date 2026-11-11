@@ -36,6 +36,7 @@ type NodeOptions struct {
 }
 type NodeSnapshot struct {
 	ID           string `json:"nodeId"`
+	Name         string `json:"name"`
 	State        string `json:"state"`
 	Awake        bool   `json:"awake"`
 	Verified     bool   `json:"strategyVerified,omitempty"`
@@ -88,7 +89,7 @@ func (c *runtimeCoordinator) publishNodes(epoch ...uint64) {
 	snapshots := make([]NodeSnapshot, 0, len(c.nodeOrder))
 	for _, id := range c.nodeOrder {
 		n := c.nodes[id]
-		snapshots = append(snapshots, NodeSnapshot{ID: id, State: n.observed, Awake: n.awake, Verified: n.cache.Verified, Pending: n.pending, Connectivity: n.connectivity})
+		snapshots = append(snapshots, NodeSnapshot{ID: id, Name: n.plan.Name, State: n.observed, Awake: n.awake, Verified: n.cache.Verified, Pending: n.pending, Connectivity: n.connectivity})
 	}
 	c.mu.Lock()
 	if len(epoch) > 0 && c.epoch != epoch[0] {
@@ -120,6 +121,7 @@ func (c *runtimeCoordinator) prepareNodes(ctx context.Context, plan *RuntimePlan
 	c.nodes = map[string]*nodeRuntime{}
 	c.nodeOrder = nil
 	c.mu.Lock()
+	c.nodesGeneration = plan.Generation()
 	persisted := map[string]NodePersisted{}
 	if c.document.Applied != nil {
 		var prior struct {

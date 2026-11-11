@@ -1020,6 +1020,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Секрет внешнего контроллера",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("Внешняя ссылка"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("Спит"),
     "externalResources": MessageLookupByLibrary.simpleMessage(
       "Внешние ресурсы",
     ),
