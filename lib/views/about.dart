@@ -37,20 +37,6 @@ const _upstreamContributors = [
   ),
 ];
 
-const _thanks = [
-  Person(
-    avatar: 'assets/images/avatar/x_kit_.jpg',
-    name: 'x_kit_',
-    link: 'https://github.com/this-xkit',
-  ),
-];
-
-const _gratitude = [
-  Person(avatar: 'assets/images/avatar/cool_coala.jpg', name: 'cool_coala'),
-  Person(avatar: 'assets/images/avatar/arpic.jpg', name: 'arpic'),
-  Person(avatar: 'assets/images/avatar/legiz.jpg', name: 'legiz'),
-];
-
 const _upstreamRepository = 'pluralplay/FlClashX';
 const _coreRepository = 'MetaCubeX/mihomo';
 
@@ -160,16 +146,8 @@ class AboutView extends ConsumerWidget {
             ],
           ),
           generateSection(
-            title: '${appLocalizations.otherContributors} · FlClashX',
+            title: appLocalizations.originalProjectAuthors,
             items: const [_PeopleRow(people: _upstreamContributors)],
-          ),
-          generateSection(
-            title: appLocalizations.thanks,
-            items: const [_PeopleRow(people: _thanks)],
-          ),
-          generateSection(
-            title: appLocalizations.gratitude,
-            items: const [_PeopleRow(people: _gratitude, size: 44)],
           ),
         ],
       ),
@@ -347,10 +325,9 @@ class _LinkBadge extends StatelessWidget {
 
 /// A row of avatars with names under them; a person with a link opens it.
 class _PeopleRow extends StatelessWidget {
-  const _PeopleRow({required this.people, this.size = 56});
+  const _PeopleRow({required this.people});
 
   final List<Person> people;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -359,19 +336,18 @@ class _PeopleRow extends StatelessWidget {
       title: Wrap(
         spacing: 16,
         runSpacing: 12,
-        children: [
-          for (final person in people) _Avatar(person: person, size: size),
-        ],
+        children: [for (final person in people) _Avatar(person: person)],
       ),
     );
   }
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.person, required this.size});
+  static const _size = 56.0;
+
+  const _Avatar({required this.person});
 
   final Person person;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +356,7 @@ class _Avatar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         CircleAvatar(
-          radius: size / 2,
+          radius: _size / 2,
           foregroundImage: AssetImage(person.avatar),
         ),
         const SizedBox(height: 4),

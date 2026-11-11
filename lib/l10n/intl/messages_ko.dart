@@ -1081,6 +1081,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openLogsFolder": MessageLookupByLibrary.simpleMessage("로그 폴더 열기"),
     "optional": MessageLookupByLibrary.simpleMessage("선택 사항"),
     "options": MessageLookupByLibrary.simpleMessage("옵션"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX 작성자",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage("원본 저장소"),
     "other": MessageLookupByLibrary.simpleMessage("기타"),
     "otherContributors": MessageLookupByLibrary.simpleMessage("기타 기여자"),

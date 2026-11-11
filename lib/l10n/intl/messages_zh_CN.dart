@@ -1164,6 +1164,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("打开面板"),
     "optional": MessageLookupByLibrary.simpleMessage("可选"),
     "options": MessageLookupByLibrary.simpleMessage("选项"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX 作者",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage("原始仓库"),
     "other": MessageLookupByLibrary.simpleMessage("其他"),
     "otherContributors": MessageLookupByLibrary.simpleMessage("其他贡献者"),

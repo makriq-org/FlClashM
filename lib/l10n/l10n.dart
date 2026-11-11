@@ -3825,6 +3825,16 @@ class AppLocalizations {
     return Intl.message('Gratitude', name: 'gratitude', desc: '', args: []);
   }
 
+  /// `FlClashX authors`
+  String get originalProjectAuthors {
+    return Intl.message(
+      'FlClashX authors',
+      name: 'originalProjectAuthors',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Original repository`
   String get originalRepository {
     return Intl.message(

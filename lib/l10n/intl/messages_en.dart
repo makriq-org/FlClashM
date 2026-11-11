@@ -1583,6 +1583,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("Open panel"),
     "optional": MessageLookupByLibrary.simpleMessage("Optional"),
     "options": MessageLookupByLibrary.simpleMessage("Options"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX authors",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Original repository",
     ),
