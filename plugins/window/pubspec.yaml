@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  screen_retriever: ^0.3.0
+  screen_retriever: ^0.2.0
 
 dev_dependencies:
   flutter_test:
