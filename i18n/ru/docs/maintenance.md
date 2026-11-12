@@ -220,6 +220,8 @@ https://flclashm.sourceforge.io/update/pre.json
 
 </details>
 
+В `nix develop` Gradle собирает плагин Flutter в `.dart_tool/nix-flutter-sdk/`; исходники остаются ссылками на неизменяемый SDK из Nix store.
+
 Генерация Flutter/Drift/Riverpod: `nix develop -c make generate`. Wrapper `tool/generate_flutter.dart` каждый раз строит настоящий Flutter SDK summary с `sky_engine/_embedder.yaml`, затем запускает build_runner. Это требуется Nix, где Flutter Dart разрешается в standalone SDK; общий pub cache не меняется. После `build_runner clean` снова используйте wrapper.
 
 ### Runners CI

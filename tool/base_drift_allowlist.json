@@ -13,7 +13,7 @@
     {
       "path": "android/settings.gradle.kts",
       "bucket": "budget",
-      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением."
+      "reason": "Удалены Firebase Gradle-плагины; Nix-окружение может разместить кэш сборки плагина Flutter вне неизменяемого SDK."
     },
     {
       "path": "core/go.mod",
