@@ -92,8 +92,21 @@
   },
   {
     "short": "T",
-    "long": "timeout",
-    "kind": "timeout",
+    "long": "tcp-timeout",
+    "kind": "tcpTimeout",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "process",
+    "forbidden": "process timeouts are owned by FlClashM"
+  },
+  {
+    "short": "W",
+    "long": "tls-timeout",
+    "kind": "tlsTimeout",
     "repeatable": false,
     "contexts": [
       "args",
@@ -559,7 +572,7 @@
     "forbidden": "undocumented runtime control is not supported"
   },
   {
-    "short": "W",
+    "short": "z",
     "long": "await-int",
     "kind": "text",
     "repeatable": false,
@@ -648,5 +661,18 @@
     ],
     "scope": "group",
     "forbidden": "process control flags are not runtime arguments"
+  },
+  {
+    "short": "0",
+    "long": "rst",
+    "kind": "none",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "undocumented connection control is not supported"
   }
 ]

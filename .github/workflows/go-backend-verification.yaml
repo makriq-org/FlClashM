@@ -5,6 +5,9 @@ on:
     paths:
       - 'core/**'
       - 'tool/prepare_core.sh'
+      - 'tool/check_byedpi.sh'
+      - 'test/tool/byedpi_android_compat_test.c'
+      - 'lib/product/runtime/byedpi_release.dart'
       - 'tool/patches/**'
       - '.github/workflows/go-backend-verification.yaml'
   push:
@@ -14,6 +17,9 @@ on:
     paths:
       - 'core/**'
       - 'tool/prepare_core.sh'
+      - 'tool/check_byedpi.sh'
+      - 'test/tool/byedpi_android_compat_test.c'
+      - 'lib/product/runtime/byedpi_release.dart'
       - 'tool/patches/**'
       - '.github/workflows/go-backend-verification.yaml'
   workflow_dispatch:
@@ -38,10 +44,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           cache-dependency-path: core/go.sum
       - name: Prepare reviewed core dependencies
         run: bash tool/prepare_core.sh
+      - name: Check pinned ByeDPI contract and strategies
+        env:
+          GOFLAGS: -mod=vendor
+        run: bash tool/check_byedpi.sh
       - name: Check formatting and analyze
         working-directory: core
         env:

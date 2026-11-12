@@ -1020,6 +1020,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Секрет внешнего контроллера",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("Внешняя ссылка"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("Спит"),
     "externalResources": MessageLookupByLibrary.simpleMessage(
       "Внешние ресурсы",
     ),
@@ -1660,6 +1661,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("Открыть панель"),
     "optional": MessageLookupByLibrary.simpleMessage("Необязательно"),
     "options": MessageLookupByLibrary.simpleMessage("Опции"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "Авторы FlClashX",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage(
       "Оригинальный репозиторий",
     ),

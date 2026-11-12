@@ -1,4 +1,5 @@
 {
+  "externalNodeSleeping": "休眠中",
   "rule": "规则",
   "global": "全局",
   "direct": "直连",
@@ -439,6 +440,7 @@
   "support": "支持",
   "thanks": "感谢贡献",
   "gratitude": "致谢",
+  "originalProjectAuthors": "FlClashX 作者",
   "originalRepository": "原始仓库",
   "openLogsFolder": "打开日志文件夹",
   "subscriptionExpiresSoon": "订阅即将到期",

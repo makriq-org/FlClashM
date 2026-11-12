@@ -5,26 +5,26 @@ packages:
     dependency: transitive
     description:
       name: _fe_analyzer_shared
-      sha256: "48e48f73a431eb269eec66d243a63a07ed90ef9417a74047a3b98d52338626ad"
+      sha256: "1c5591cc6f252d5f440d96ab87c03e43504be552a3fa49d7cb7563f04c51fb0a"
       url: "https://pub.dev"
     source: hosted
-    version: "109.0.0"
+    version: "111.0.0"
   analysis_server_plugin:
     dependency: transitive
     description:
       name: analysis_server_plugin
-      sha256: "9f293f95cf41cb513a9a4f322354e2fa5483125e0f18bbeca254543ac9c3dda6"
+      sha256: "1ff5b5f6bc3d4091ffbc4da2ca9a5de36b49d590332d94e502d0746e80b3d64e"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.24"
+    version: "0.3.26"
   analyzer:
     dependency: "direct dev"
     description:
       name: analyzer
-      sha256: "6d377901d198536b648172974d9d4f277910502cad92193466869cac0ff34990"
+      sha256: "6c39bd5486a310e56217bed7cb1691377959f31be4227e41750107db7e6dd55c"
       url: "https://pub.dev"
     source: hosted
-    version: "14.5.0"
+    version: "14.7.0"
   analyzer_buffer:
     dependency: transitive
     description:
@@ -37,10 +37,10 @@ packages:
     dependency: transitive
     description:
       name: analyzer_plugin
-      sha256: "2c59e6fba4971dc9ece97acd55b4f95b67a98e6ae0a55bff6f9dfc2bb59e8b1a"
+      sha256: "8929dfe59ae5ea8e012f1238e368875642370beabffd15d4048545544ae44aa8"
       url: "https://pub.dev"
     source: hosted
-    version: "0.14.18"
+    version: "0.14.20"
   android_file_picker:
     dependency: transitive
     description:

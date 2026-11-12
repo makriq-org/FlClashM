@@ -793,6 +793,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "外部コントローラーのシークレット",
     ),
     "externalLink": MessageLookupByLibrary.simpleMessage("外部リンク"),
+    "externalNodeSleeping": MessageLookupByLibrary.simpleMessage("スリープ中"),
     "externalResources": MessageLookupByLibrary.simpleMessage("外部リソース"),
     "extraLarge": MessageLookupByLibrary.simpleMessage("特大"),
     "fade": MessageLookupByLibrary.simpleMessage("フェード"),
@@ -1295,6 +1296,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "openPanel": MessageLookupByLibrary.simpleMessage("パネルを開く"),
     "optional": MessageLookupByLibrary.simpleMessage("任意"),
     "options": MessageLookupByLibrary.simpleMessage("オプション"),
+    "originalProjectAuthors": MessageLookupByLibrary.simpleMessage(
+      "FlClashX の作者",
+    ),
     "originalRepository": MessageLookupByLibrary.simpleMessage("オリジナルリポジトリ"),
     "other": MessageLookupByLibrary.simpleMessage("その他"),
     "otherContributors": MessageLookupByLibrary.simpleMessage("その他の貢献者"),
