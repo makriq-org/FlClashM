@@ -75,7 +75,9 @@
         packages = with pkgs; [
           flutter
           jdk17
-          goPkgs.go_1_27
+          # The Android overlay must target a store SDK, not an auto-downloaded
+          # toolchain beneath GOMODCACHE (where Go rejects replacements).
+          olcrtcGo
           editorRust
           rustup
           bash
