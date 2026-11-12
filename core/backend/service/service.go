@@ -61,6 +61,7 @@ type App struct {
 	presentationTitle, presentationMode string
 	presentationGroups                  []string
 	presentationSelected                map[string]string
+	presentationGlobalRule              bool
 	inspection                          backend.RuntimeInspection
 	directory                           string
 	transferMu                          sync.Mutex
