@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"core/backend/authoring"
 	"core/backend/profiles"
 )
 
@@ -65,6 +66,8 @@ func (a *App) Presentation() Presentation {
 					Groups []struct {
 						Name string `json:"name"`
 					} `json:"proxy-groups"`
+					Rules    []string            `json:"rules"`
+					SubRules map[string][]string `json:"sub-rules"`
 				} `json:"config"`
 				Selected map[string]string `json:"selected-map"`
 			}
@@ -89,6 +92,7 @@ func (a *App) Presentation() Presentation {
 				a.presentationTitle = title
 				a.presentationMode = prepared.Config.Mode
 				a.presentationSelected = prepared.Selected
+				a.presentationGlobalRule = presentationUsesGlobal(prepared.Config.Rules, prepared.Config.SubRules)
 				a.presentationGroups = nil
 				if group != "" {
 					a.presentationGroups = append(a.presentationGroups, group)
@@ -116,6 +120,20 @@ func (a *App) Presentation() Presentation {
 			}
 		}
 		for _, group := range a.presentationGroups {
+			// A retained GLOBAL selection is relevant only in global mode or
+			// when applied rules route to it. Direct mode has no proxy node.
+			switch strings.ToLower(value.Mode) {
+			case "direct":
+				continue
+			case "global":
+				if group != "GLOBAL" {
+					continue
+				}
+			default:
+				if group == "GLOBAL" && !a.presentationGlobalRule {
+					continue
+				}
+			}
 			name := actual[group]
 			if name == "" {
 				name = a.presentationSelected[group]
@@ -139,6 +157,31 @@ func (a *App) Presentation() Presentation {
 		}
 	}
 	return value
+}
+
+// presentationUsesGlobal follows rule targets and reachable sub-rules, keeping
+// unused sections and payloads containing the word GLOBAL out of the projection.
+func presentationUsesGlobal(rules []string, subRules map[string][]string) bool {
+	pending := append([]string(nil), rules...)
+	seen := map[string]bool{}
+	for len(pending) > 0 {
+		line := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		rule, err := authoring.ParseRule(line)
+		if err != nil {
+			continue
+		}
+		if authoring.Action(rule) == "SUB-RULE" {
+			name := authoring.String(rule, "subRule")
+			if !seen[name] {
+				seen[name] = true
+				pending = append(pending, subRules[name]...)
+			}
+		} else if authoring.String(rule, "ruleTarget") == "GLOBAL" {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) requiresVPN() bool {
