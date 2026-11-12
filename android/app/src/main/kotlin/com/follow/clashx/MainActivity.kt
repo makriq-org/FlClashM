@@ -230,26 +230,30 @@ internal object StartupTheme {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var retry: Runnable? = null
+    private val retryDelay = LauncherRetry()
 
     private fun schedule(context: Context) {
         if (retry != null) return
         val application = context.applicationContext
         val task = Runnable {
             retry = null
-            apply(application)
+            apply(application, retrying = true)
         }
         retry = task
-        handler.postDelayed(task, 2000L)
+        handler.postDelayed(task, retryDelay.nextDelayMillis())
     }
 
-    fun apply(context: Context) {
+    fun apply(context: Context) = apply(context, retrying = false)
+
+    private fun apply(context: Context, retrying: Boolean) {
         val application = context.applicationContext
         if (android.os.Looper.myLooper() != handler.looper) {
-            handler.post { apply(application) }
+            handler.post { apply(application, retrying) }
             return
         }
         retry?.let { handler.removeCallbacks(it) }
         retry = null
+        if (!retrying) retryDelay.reset()
         val selected = when {
             read(application) !in listOf("light", "dark") -> if (black(application)) "LauncherSystemBlack" else "LauncherSystem"
             !dark(application) -> "LauncherLight"
@@ -286,7 +290,7 @@ internal object StartupTheme {
                 }
             }
         }
-        if (pending) schedule(application)
+        if (pending) schedule(application) else retryDelay.reset()
     }
 
     fun read(context: Context): String? = runCatching {

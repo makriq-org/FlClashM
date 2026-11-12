@@ -6,6 +6,14 @@ import org.junit.Test
 class LauncherSwitchTest {
     private val names = listOf("LauncherLight", "LauncherDark")
 
+    @Test fun `repeated failures back off to one minute and user actions reset delay`() {
+        val retry = LauncherRetry()
+        assertEquals(listOf(2000L, 4000L, 8000L, 16000L, 32000L, 60000L, 60000L),
+            List(7) { retry.nextDelayMillis() })
+        retry.reset()
+        assertEquals(2000L, retry.nextDelayMillis())
+    }
+
     @Test fun `enable replacement before disabling old entry`() {
         val calls = mutableListOf<Pair<String, Boolean>>()
         assertFalse(LauncherSwitch.apply("LauncherDark", names, emptySet()) { name, value -> calls.add(name to value) })

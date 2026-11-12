@@ -1,5 +1,18 @@
 package com.follow.clashx
 
+/** Retry delay is bounded; a user action starts a fresh sequence immediately. */
+internal class LauncherRetry {
+    private var delay = 2000L
+
+    fun nextDelayMillis(): Long {
+        val current = delay
+        delay = (delay * 2).coerceAtMost(60_000L)
+        return current
+    }
+
+    fun reset() { delay = 2000L }
+}
+
 /** Platform-independent switching contract. Null task state must fail closed. */
 internal object LauncherSwitch {
     fun apply(
