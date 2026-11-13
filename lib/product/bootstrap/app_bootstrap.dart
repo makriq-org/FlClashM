@@ -8,6 +8,7 @@ import '../../application.dart';
 import '../../bootstrap.dart';
 import '../../clash/lib.dart';
 import '../../common/common.dart';
+import '../../providers/providers.dart';
 import '../../widgets/brand_mark.dart';
 import '../diagnostics/diagnostic_recorder.dart';
 import 'backend_startup.dart';
@@ -46,10 +47,13 @@ class AppBootstrap {
       },
       present: (startup) async {
         await loadStartupLocalizations();
-        content.value = BackendStartupApp(
-          startup: startup,
-          exportLogs: exportStartupLogs,
-          appearance: appearance,
+        content.value = StartupReady(
+          ready: true,
+          child: BackendStartupApp(
+            startup: startup,
+            exportLogs: exportStartupLogs,
+            appearance: appearance,
+          ),
         );
       },
       reconnect: clashLib?.reStart,
@@ -58,7 +62,13 @@ class AppBootstrap {
     StartupAppearance.bind(container!);
     content.value = UncontrolledProviderScope(
       container: container!,
-      child: const Application(),
+      child: Consumer(
+        builder: (_, ref, child) => StartupReady(
+          ready: ref.watch(viewSizeProvider.select((size) => !size.isEmpty)),
+          child: child!,
+        ),
+        child: const Application(),
+      ),
     );
   }
 }

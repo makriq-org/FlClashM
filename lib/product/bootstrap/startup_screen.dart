@@ -30,16 +30,35 @@ class StartupHost extends StatelessWidget {
       color: appearance.theme(brightness).scaffoldBackgroundColor,
       child: ValueListenableBuilder<Widget>(
         valueListenable: content,
-        builder: (_, child, _) {
-          if (child is! StartupScreen) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              unawaited(StartupAppearance.ready());
-            });
-          }
-          return child;
-        },
+        builder: (_, child, _) => child,
       ),
     );
+  }
+}
+
+/// Signals readiness after a frame containing usable UI, not an empty shell.
+class StartupReady extends StatefulWidget {
+  const StartupReady({super.key, required this.ready, required this.child});
+  final bool ready;
+  final Widget child;
+
+  @override
+  State<StartupReady> createState() => _StartupReadyState();
+}
+
+class _StartupReadyState extends State<StartupReady> {
+  bool _sent = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.ready && !_sent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.ready || _sent) return;
+        _sent = true;
+        unawaited(StartupAppearance.ready());
+      });
+    }
+    return widget.child;
   }
 }
 

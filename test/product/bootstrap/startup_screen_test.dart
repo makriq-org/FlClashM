@@ -26,7 +26,13 @@ void main() {
     );
     await tester.pumpWidget(StartupHost(content: content));
     expect(calls, isEmpty);
-    content.value = const MaterialApp(home: Text('ready'));
+    content.value = const StartupReady(ready: false, child: SizedBox.shrink());
+    await tester.pump();
+    expect(calls, isEmpty);
+    content.value = const StartupReady(
+      ready: true,
+      child: MaterialApp(home: Text('ready')),
+    );
     expect(calls, isEmpty);
     await tester.pump();
     expect(find.text('ready'), findsOneWidget);
