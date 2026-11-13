@@ -75,7 +75,9 @@
         packages = with pkgs; [
           flutter
           jdk17
-          goPkgs.go_1_27
+          # The Android overlay must target a store SDK, not an auto-downloaded
+          # toolchain beneath GOMODCACHE (where Go rejects replacements).
+          olcrtcGo
           editorRust
           rustup
           bash
@@ -113,6 +115,16 @@
 
         shellHook = ''
           if [[ -d android ]]; then
+            # Gradle writes caches and compiled plugin output beside this
+            # included build. Keep SDK sources immutable in the Nix store.
+            flutter_sdk_cache="$PWD/.dart_tool/nix-flutter-sdk/${builtins.substring 0 12 (builtins.hashString "sha256" "${pkgs.flutter}")}"
+            export FLCLASHM_FLUTTER_GRADLE_DIR="$flutter_sdk_cache/packages/flutter_tools/gradle"
+            mkdir -p "$FLCLASHM_FLUTTER_GRADLE_DIR"
+            ln -sfn ${pkgs.flutter}/bin "$flutter_sdk_cache/bin"
+            for flutter_gradle_source in ${pkgs.flutter}/packages/flutter_tools/gradle/*; do
+              ln -sfn "$flutter_gradle_source" "$FLCLASHM_FLUTTER_GRADLE_DIR/$(basename "$flutter_gradle_source")"
+            done
+            unset flutter_gradle_source flutter_sdk_cache
             local_properties=android/local.properties
             touch "$local_properties"
 

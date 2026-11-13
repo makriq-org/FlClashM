@@ -53,7 +53,7 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
             android:hardwareAccelerated="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:windowSoftInputMode="adjustResize">
             <meta-data
@@ -62,13 +62,27 @@
 
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Impeller OFF (Skia): Impeller's Vulkan backend janks animations on some
+             Pixel GPUs (Tensor) even at a forced 120 Hz, while other devices are
+             fine — the classic device-specific Impeller regression. Skia renders
+             smoothly here. Revisit if a future Flutter drops the Skia backend. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
+        <!-- NoDisplay resolves the cached palette before Android creates any
+             starting window. Only this component handles external links. -->
+        <activity android:name=".LinkLaunchActivity" android:exported="true"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true"
+            android:theme="@android:style/Theme.NoDisplay">
             <!-- One filter per scheme so scheme+host are paired explicitly
                  (clash://install-config etc.), not merged into a loose any-scheme/any-host set. -->
             <intent-filter>
@@ -107,18 +121,68 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="clashx" android:host="install-config" />
             </intent-filter>
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Impeller OFF (Skia): Impeller's Vulkan backend janks animations on some
-             Pixel GPUs (Tensor) even at a forced 120 Hz, while other devices are
-             fine — the classic device-specific Impeller regression. Skia renders
-             smoothly here. Revisit if a future Flutter drops the Skia backend. -->
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+        <activity android:name=".SystemLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/LaunchTheme" />
+        <activity android:name=".LightLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupLight" />
+        <activity android:name=".DarkLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupDark" />
+        <activity android:name=".BlackLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupBlack" />
+        <activity android:name=".SystemBlackLaunchActivity" android:exported="false"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:relinquishTaskIdentity="true" android:theme="@style/StartupSystemBlack" />
+        <activity-alias android:name=".LauncherSystem" android:targetActivity=".SystemLaunchActivity"
+            android:enabled="true" android:exported="true"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LauncherSystemBlack" android:targetActivity=".SystemBlackLaunchActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/launcher_systemblack">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LauncherLight" android:targetActivity=".LightLaunchActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/launcher_light">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LauncherDark" android:targetActivity=".DarkLaunchActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/launcher_dark">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LauncherBlack" android:targetActivity=".BlackLaunchActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/launcher_black">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Public automation entry point (MacroDroid/Tasker send START/STOP/CHANGE
              intents): must stay callable by third-party apps, so no signature

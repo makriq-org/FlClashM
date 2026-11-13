@@ -234,3 +234,7 @@ https://flclashm.sourceforge.io/update/pre.json
 </div>
 
 برای تولید کد Flutter/Drift/Riverpod از `nix develop -c make generate` استفاده کنید. `tool/generate_flutter.dart` پیش از build_runner با `sky_engine/_embedder.yaml` یک Flutter SDK summary واقعی می‌سازد. این کار مشکل resolve شدن Dart در Nix به SDK مستقل را بدون تغییر pub cache مشترک رفع می‌کند. پس از `build_runner clean` دوباره از wrapper استفاده کنید.
+
+### ظاهر شروع برنامه
+
+Go منبع اصلی `themeMode` و `pureBlack` است؛ Android فقط تصویر تنظیمات شروع را ذخیره می‌کند. رنگ‌ها ثابت‌اند: روشن `#EEEDEF`، تیره `#121315` و مشکی `#000000`. رنگ دلخواه رابط منتقل نمی‌شود. بدون کش، تم دستگاه استفاده می‌شود. نام‌های مستعار لانچر، Activity با تم مشخص را انتخاب می‌کنند تا حتی در API 24–30 پنجرهٔ نخست پیش از شروع فرایند درست باشد. Activity شروع FlutterEngine نمی‌سازد؛ AndroidX صفحهٔ شروع را به MainActivity یکتای singleTask منتقل می‌کند و relinquishTaskIdentity هویت وظیفه را واگذار می‌کند. تم سراسری قدیمی پاک می‌شود. alias وظیفهٔ فعال تا حذف وظیفه حفظ می‌شود؛ خطا و پاک‌سازی معوق هر دو ثانیه دوباره بررسی می‌شوند. ابتدا ورودی جدید فعال و سپس ورودی‌های قبلی غیرفعال می‌شوند. حالت سیستم از منابع day/night استفاده می‌کند. رنگ آیکون تک‌رنگ و زمان به‌روزرسانی و جای میان‌بر به لانچر بستگی دارد. به‌روزرسانی نیازی به پاک کردن داده‌ها ندارد. منابع SVG در `assets/images/brand_mark{,_light}.svg` هستند؛ خروجی با `python tool/generate_brand_assets.py` تولید می‌شود و به `rsvg-convert` نیاز دارد. Flutter از SVG و Android از VectorDrawable استفاده می‌کند. بازگردانی کامیت ظاهر را بدون تغییر قالب تنظیمات Go برمی‌گرداند.

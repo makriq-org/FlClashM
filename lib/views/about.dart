@@ -7,6 +7,7 @@ import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/state.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/ui/ui.dart';
+import 'package:flclashx/widgets/brand_mark.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -207,11 +208,7 @@ class _AboutHero extends ConsumerWidget {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(_logoInset),
-                child: Image.asset(
-                  'assets/images/icon.png',
-                  width: _logoSize - _logoInset * 2,
-                  height: _logoSize - _logoInset * 2,
-                ),
+                child: const BrandMark(size: _logoSize - _logoInset * 2),
               ),
             ),
           ),

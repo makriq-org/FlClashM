@@ -52,8 +52,8 @@ object BackendHost {
                 val snapshot = command("snapshot").getJSONObject("result")
                 val runtime = snapshot.getJSONObject("runtime")
                 projectRuntime(runtime)
-                StateHub.projectTheme(BackendEvents.themeMode(snapshot.optJSONObject("catalog")
-                    ?.optJSONObject("settings")?.optJSONObject("themeProps")?.optString("themeMode")))
+                val theme = snapshot.optJSONObject("catalog")?.optJSONObject("settings")?.optJSONObject("themeProps")
+                StateHub.projectTheme(BackendEvents.appearance(theme?.optString("themeMode"), theme?.optBoolean("pureBlack", false) ?: false))
                 if (view.optLong("appliedGeneration") == runtime.optLong("appliedGeneration")) {
                     StateHub.projectPresentation(view)
                     val previous = State.notificationParamsFlow.value
@@ -267,6 +267,10 @@ internal object BackendEvents {
      * the presentation. Delay results can move an auto-selecting group to
      * another node shown in the notification title; logs and requests cannot. */
     fun refreshesPresentation(type: String?): Boolean = type == "backend" || type == "delay" || type == "routeChanged"
+
+    data class Appearance(val mode: String, val pureBlack: Boolean)
+
+    fun appearance(mode: String?, pureBlack: Boolean) = Appearance(themeMode(mode), pureBlack)
 
     /** Normalized Flutter ThemeMode name from Go settings: light, dark or system. */
     fun themeMode(value: String?): String {

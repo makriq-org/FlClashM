@@ -98,6 +98,12 @@ class BackendServiceMechanismsTest {
         }
     }
 
+    @Test fun fullAppearanceProjectionPreservesBlackModeWithoutFlutter() {
+        assertEquals(BackendEvents.Appearance("dark", true), BackendEvents.appearance("ThemeMode.dark", true))
+        assertEquals(BackendEvents.Appearance("system", true), BackendEvents.appearance(null, true))
+        assertEquals(BackendEvents.Appearance("dark", false), BackendEvents.appearance("dark", false))
+    }
+
     @Test fun normalizesProjectedThemeMode() {
         assertEquals("dark", BackendEvents.themeMode("dark"))
         assertEquals("light", BackendEvents.themeMode("ThemeMode.light"))

@@ -1,4 +1,5 @@
 export 'active_polling.dart';
+export 'brand_mark.dart';
 export 'chip_title.dart';
 export 'config_item.dart';
 export 'icon.dart';
@@ -9,4 +10,5 @@ export 'managed_setting.dart';
 export 'record.dart';
 export 'record_table.dart';
 export 'subscription_info_view.dart';
+
 export 'package:flclashx/ui/ui.dart';

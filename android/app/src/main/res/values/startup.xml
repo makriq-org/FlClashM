@@ -1,0 +1,7 @@
+<resources>
+    <color name="brand_light_background">#EEEDEF</color>
+    <color name="brand_dark_background">#121315</color>
+    <color name="brand_black_background">#000000</color>
+    <color name="startup_system_background">#EEEDEF</color>
+    <bool name="startup_light_bars">true</bool>
+</resources>

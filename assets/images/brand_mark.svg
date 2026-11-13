@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Original origami silhouette, traced as seven independent facets.
+       Transparent canvas is intentional: the host supplies its page surface. -->
+  <defs>
+    <linearGradient id="wing" x1="240" y1="220" x2="430" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f3f5ff"/><stop offset=".45" stop-color="#dfe6fa"/><stop offset="1" stop-color="#5684ef"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="310" y1="160" x2="550" y2="415" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f4f6ff"/><stop offset="1" stop-color="#aebfe9"/>
+    </linearGradient>
+    <linearGradient id="body" x1="490" y1="330" x2="580" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ecf0ff"/><stop offset="1" stop-color="#4d7ff0"/>
+    </linearGradient>
+    <linearGradient id="neck" x1="710" y1="265" x2="650" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f1f4ff"/><stop offset="1" stop-color="#4d7ff0"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="765" y1="272" x2="865" y2="385" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e6edff"/><stop offset="1" stop-color="#4d7ff0"/>
+    </linearGradient>
+    <linearGradient id="tail" x1="490" y1="630" x2="320" y2="880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4d7ff0"/><stop offset="1" stop-color="#88a8ff"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path fill="url(#wing)" d="M147 177 468 317 416 550Z"/>
+    <path fill="url(#fold)" d="M289 161 540 269 586 417 487 297 315 227Z"/>
+    <path fill="url(#body)" d="M490 330 665 575 413 640Z"/>
+    <path fill="url(#neck)" d="M592 430 746 264 680 560Z"/>
+    <path fill="url(#beak)" d="M765 272 890 385 748 344Z"/>
+    <path fill="url(#tail)" d="M420 663 543 629 383 869Z"/>
+    <path fill="url(#tail)" d="M394 679 376 811 290 873Z"/>
+  </g>
+</svg>

@@ -13,7 +13,7 @@
     {
       "path": "android/settings.gradle.kts",
       "bucket": "budget",
-      "reason": "Удаление Firebase Gradle-плагинов из сборки форка является обязательным security-изменением."
+      "reason": "Удалены Firebase Gradle-плагины; Nix-окружение может разместить кэш сборки плагина Flutter вне неизменяемого SDK."
     },
     {
       "path": "core/go.mod",
@@ -98,7 +98,7 @@
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/MainActivity.kt",
       "bucket": "budget",
-      "reason": "MainActivity регистрирует тонкий мост безопасного диагностического экспорта."
+      "reason": "MainActivity регистрирует тонкий мост безопасного диагностического экспорта. Мост startup_appearance хранит только режим темы и pureBlack для первого кадра; Go остаётся источником настроек. Нативная заставка удерживается до отрисовки готового UI или восстановления; значок выбирается по разрешённой системной яркости. Невидимый обработчик ссылок выбирает заранее объявленную палитру до первого окна и сохраняет URL при передаче в Flutter."
     },
     {
       "path": "android/app/src/main/kotlin/com/follow/clashx/Service.kt",
@@ -2784,6 +2784,251 @@
       "path": "core/network_reset_test.go",
       "bucket": "budget",
       "reason": "Регрессия завершения сброса соединений проверяет общий mutex runLock/selectMu и обновление поколения диагностики без повторного захвата."
+    },
+    {
+      "path": "lib/views/dashboard/hero.dart",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/values/styles.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/styles.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/colors.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_icon.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/launch_background.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "bucket": "budget",
+      "reason": "Прозрачный знак FlClashM и фон поверхности v1 согласованы на заставке, в интерфейсе и в адаптивной иконке; важные контуры помещены в безопасную область."
+    },
+    {
+      "path": "lib/widgets/brand_mark.dart",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "lib/widgets/widgets.dart",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/ic_launcher_monochrome.xml",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-night-mdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-night-hdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-night-xhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-night-xxhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-night-xxxhdpi/ic_launcher.png",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором без увеличения растровых слоёв; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/startup_light.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_light.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/startup_dark.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_dark.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/startup_black.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/startup_systemblack.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_light.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_dark.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_black.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/values/startup.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/values/startup_styles.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/startup.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/brand_light.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/brand_dark.xml",
+      "bucket": "budget",
+      "reason": "Фиксированные палитры и launcher-компоненты согласуют первый системный кадр с темой Go-проекции без произвольных цветов и изменения runtime."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/LauncherSwitch.kt",
+      "bucket": "budget",
+      "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/follow/clashx/LauncherSwitchTest.kt",
+      "bucket": "budget",
+      "reason": "Полная проекция оформления Go и безопасное переключение launcher-компонентов сохраняют UI-задачу и не создают второго FlutterEngine; добавлены регрессии сбоев и отложенной очистки."
+    },
+    {
+      "path": "android/app/src/main/res/values/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Системные day/night-ресурсы ссылаются на общие фиксированные палитры без копирования векторов и PNG."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Системные day/night-ресурсы ссылаются на общие фиксированные палитры без копирования векторов и PNG."
+    },
+    {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/StartupRoutingTest.kt",
+      "bucket": "budget",
+      "reason": "Проверены выбор manifest-темы по кэшу и передача исходной ссылки через стартовую Activity без изменения Android task-флагами вызывающей стороны."
     }
   ]
 }

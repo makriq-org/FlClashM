@@ -246,6 +246,10 @@
     {
       "path": "lib/product/pages/link_session_page.dart",
       "reason": "Fork-only страница явного временного приёма ссылки; Go хранит токен и закрывает сеанс, UI показывает QR и ожидает подтверждения импорта."
+    },
+    {
+      "path": "lib/product/bootstrap/startup_screen.dart",
+      "reason": "Экран запуска и сигнал отрисовки готового UI удерживают нативную заставку до непустого кадра; управление runtime остаётся в Go."
     }
   ]
 }

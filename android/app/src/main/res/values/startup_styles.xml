@@ -1,0 +1,30 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="StartupLight" parent="LaunchTheme">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">true</item>
+        <item name="android:windowBackground">@drawable/startup_light</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/brand_light_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_light</item>
+    </style>
+    <style name="StartupDark" parent="LaunchTheme">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">false</item>
+        <item name="android:windowBackground">@drawable/startup_dark</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/brand_dark_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_dark</item>
+    </style>
+    <style name="StartupBlack" parent="LaunchTheme">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">false</item>
+        <item name="android:windowBackground">@drawable/startup_black</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/brand_black_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_dark</item>
+    </style>
+    <style name="StartupSystemBlack" parent="LaunchTheme">
+        <item name="android:windowLightStatusBar">@bool/startup_light_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">@bool/startup_light_bars</item>
+        <item name="android:windowBackground">@drawable/startup_systemblack</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/startup_system_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
+    </style>
+</resources>

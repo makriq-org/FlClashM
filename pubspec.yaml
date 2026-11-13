@@ -96,6 +96,7 @@ dependencies:
   drift_flutter: ^0.3.1
 
 dev_dependencies:
+  xml: ^6.6.1
   analyzer: 14.7.0
   package_config: ^2.2.0
   flutter_test:
@@ -156,10 +157,11 @@ flutter_intl:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/images/icon.png"
-  adaptive_icon_background: "#202020"
-  adaptive_icon_foreground: "assets/images/icon.png"
-  adaptive_icon_monochrome: "assets/images/icon_white.png"
+  image_path: "assets/images/brand_launcher.png"
+  adaptive_icon_background: "#EEEDEF"
+  adaptive_icon_foreground: "assets/images/brand_mark_light.png"
+  adaptive_icon_foreground_inset: 19
+  adaptive_icon_monochrome: "assets/images/brand_mark_mono.png"
 msix_config:
   display_name: FlClashM
   publisher_display_name: pluralplay

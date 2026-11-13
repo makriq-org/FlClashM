@@ -60,6 +60,7 @@ object Service {
         val requiresVpn: Boolean,
         // Go settings theme (light/dark/system); empty until :remote projected it.
         val themeMode: String = "",
+        val pureBlack: Boolean = false,
     ) {
         val isRunning get() = state == "running"
         val isStarting get() = state == "starting"
@@ -82,6 +83,7 @@ object Service {
             o.optBoolean("hasActiveProfile"),
             o.optBoolean("requiresVpn", true),
             o.optString("themeMode", ""),
+            o.optBoolean("pureBlack", false),
         )
     }.getOrNull()?.takeIf { it.state.isNotBlank() }
 

@@ -113,14 +113,14 @@ bool _checkExpectedSigner({
 }
 
 SignerInfo? tryParseApkSignerInfo(String output) {
-  // Newer build-tools print `V2 Signer: certificate ...`, older ones keep
+  // Newer build-tools print `V2` or `V3.0 Signer: certificate ...`, older ones keep
   // `Signer #1 certificate ...`. Accept both to keep the guard stable.
   final shaMatch = RegExp(
-    r'(?:Signer #\d+\s+|V\d+ Signer:\s+)certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
+    r'(?:Signer #\d+\s+|V\d+(?:\.\d+)? Signer:\s+)certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
     multiLine: true,
   ).firstMatch(output);
   final dnMatch = RegExp(
-    r'(?:Signer #\d+\s+|V\d+ Signer:\s+)certificate DN:\s*(.+)',
+    r'(?:Signer #\d+\s+|V\d+(?:\.\d+)? Signer:\s+)certificate DN:\s*(.+)',
     multiLine: true,
   ).firstMatch(output);
 
