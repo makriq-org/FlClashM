@@ -23,10 +23,13 @@ class MainActivity : FlutterActivity() {
     private val highRefreshRate by lazy { HighRefreshRate(this) }
 
     private var boundEngine: FlutterEngine? = null
+    private var startupReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppTheme()
-        installSplashScreen()
+        val startupSplash = installSplashScreen()
+        startupSplash.setKeepOnScreenCondition { !startupReady }
+        startupSplash.setOnExitAnimationListener { it.remove() }
         super.onCreate(savedInstanceState)
         window.setBackgroundDrawable(getDrawable(StartupTheme.drawable(this)))
         // Each launch target has an explicit theme. A global override could
@@ -56,6 +59,10 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.makriq.flclash/startup_appearance")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "ready" -> {
+                        startupReady = true
+                        result.success(null)
+                    }
                     "read" -> result.success(StartupTheme.appearance(this))
                     "write" -> {
                         val mode = call.argument<String>("themeMode")
@@ -254,12 +261,7 @@ internal object StartupTheme {
         retry?.let { handler.removeCallbacks(it) }
         retry = null
         if (!retrying) retryDelay.reset()
-        val selected = when {
-            read(application) !in listOf("light", "dark") -> if (black(application)) "LauncherSystemBlack" else "LauncherSystem"
-            !dark(application) -> "LauncherLight"
-            black(application) -> "LauncherBlack"
-            else -> "LauncherDark"
-        }
+        val selected = launcherPalette(dark(application), black(application))
         val pm = application.packageManager
         val names = listOf("LauncherSystem", "LauncherSystemBlack", "LauncherLight", "LauncherDark", "LauncherBlack")
         // A failed task query is not evidence that an alias is unused.
@@ -283,8 +285,17 @@ internal object StartupTheme {
                 val existing = shortcuts.dynamicShortcuts
                 if (existing.any { it.activity != component }) {
                     val moved = existing.map {
-                        androidx.core.content.pm.ShortcutInfoCompat.Builder(application, it)
-                            .setActivity(component).build().toShortcutInfo()
+                        val builder = androidx.core.content.pm.ShortcutInfoCompat.Builder(application, it)
+                            .setActivity(component)
+                        val icon = when (it.id) {
+                            "start" -> R.drawable.ic_shortcut_start
+                            "stop" -> R.drawable.ic_shortcut_stop
+                            "toggle" -> R.drawable.ic_shortcut_toggle
+                            else -> null
+                        }
+                        if (icon != null) builder.setIcon(
+                            androidx.core.graphics.drawable.IconCompat.createWithResource(application, icon))
+                        builder.build().toShortcutInfo()
                     }
                     check(shortcuts.setDynamicShortcuts(moved)) { "Shortcut update was throttled" }
                 }

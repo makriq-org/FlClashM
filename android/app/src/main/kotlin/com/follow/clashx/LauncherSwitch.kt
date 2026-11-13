@@ -34,3 +34,10 @@ internal object LauncherSwitch {
         return pending
     }
 }
+
+/** Launcher resource resolution may use a day configuration even in night mode. */
+internal fun launcherPalette(dark: Boolean, pureBlack: Boolean): String = when {
+    !dark -> "LauncherLight"
+    pureBlack -> "LauncherBlack"
+    else -> "LauncherDark"
+}

@@ -14,6 +14,13 @@ class LauncherSwitchTest {
         assertEquals(2000L, retry.nextDelayMillis())
     }
 
+    @Test fun `resolved system brightness selects a fixed launcher palette`() {
+        assertEquals("LauncherLight", launcherPalette(false, false))
+        assertEquals("LauncherLight", launcherPalette(false, true))
+        assertEquals("LauncherDark", launcherPalette(true, false))
+        assertEquals("LauncherBlack", launcherPalette(true, true))
+    }
+
     @Test fun `enable replacement before disabling old entry`() {
         val calls = mutableListOf<Pair<String, Boolean>>()
         assertFalse(LauncherSwitch.apply("LauncherDark", names, emptySet()) { name, value -> calls.add(name to value) })

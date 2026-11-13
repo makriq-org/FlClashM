@@ -9,6 +9,32 @@ import 'package:material_ui/material_ui.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('native splash releases only after replacement UI paints', (
+    tester,
+  ) async {
+    const channel = MethodChannel('com.makriq.flclash/startup_appearance');
+    final calls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          ..setMockMethodCallHandler(channel, (call) async {
+            calls.add(call.method);
+            return null;
+          });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final content = ValueNotifier<Widget>(
+      const StartupScreen(appearance: StartupAppearance()),
+    );
+    await tester.pumpWidget(StartupHost(content: content));
+    expect(calls, isEmpty);
+    content.value = const MaterialApp(home: Text('ready'));
+    expect(calls, isEmpty);
+    await tester.pump();
+    expect(find.text('ready'), findsOneWidget);
+    expect(calls, ['ready']);
+    await tester.pumpWidget(const SizedBox());
+    content.dispose();
+  });
+
   testWidgets('ready UI replaces startup immediately', (tester) async {
     final content = ValueNotifier<Widget>(
       const StartupScreen(appearance: StartupAppearance()),

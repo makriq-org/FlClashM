@@ -60,6 +60,17 @@ class StartupAppearance {
     }
   }
 
+  /// Release the native splash only after the replacement UI has painted.
+  static Future<void> ready() async {
+    try {
+      await _channel.invokeMethod<void>('ready');
+    } on PlatformException {
+      // Hosts without a native splash need no hand-off.
+    } on MissingPluginException {
+      // Desktop and tests have no Android splash.
+    }
+  }
+
   static void bind(ProviderContainer container) {
     Map<String, Object>? previous;
     var pending = Future<void>.value();

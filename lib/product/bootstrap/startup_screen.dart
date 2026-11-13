@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -28,12 +30,14 @@ class StartupHost extends StatelessWidget {
       color: appearance.theme(brightness).scaffoldBackgroundColor,
       child: ValueListenableBuilder<Widget>(
         valueListenable: content,
-        builder: (_, child, _) => AnimatedSwitcher(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          child: child,
-        ),
+        builder: (_, child, _) {
+          if (child is! StartupScreen) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              unawaited(StartupAppearance.ready());
+            });
+          }
+          return child;
+        },
       ),
     );
   }
