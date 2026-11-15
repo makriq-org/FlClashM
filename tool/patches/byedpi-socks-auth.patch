@@ -83,7 +83,7 @@ index 6ab2ec5..33382a7 100644
      int debug;
      size_t bfsize;
 diff --git a/proxy.c b/proxy.c
-index 45fc05b..9fd3768 100644
+index 45fc05b..115238b 100644
 --- a/proxy.c
 +++ b/proxy.c
 @@ -180,11 +180,16 @@ static int auth_socks5(int fd, const char *buffer, ssize_t n)
@@ -156,3 +156,7 @@ index 45fc05b..9fd3768 100644
          return 0;
      }
      if (n < S_SIZE_MIN) {
+@@ -976,1 +1010,2 @@ int on_request(struct poolhd *pool, struct eval *val, int et)
+-    if ((params.mode & MODE_SOCKS5) && *buff->data == S_VER5) {
++    if (val->flag == FLAG_S5_AUTH ||
++            ((params.mode & MODE_SOCKS5) && *buff->data == S_VER5)) {

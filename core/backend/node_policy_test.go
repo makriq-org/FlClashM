@@ -16,6 +16,7 @@ type nodeHost struct {
 	starts       int
 	nextPort     int
 	probes       int
+	lastProbe    NodeProbe
 	goodStrategy string
 	groupHealthy bool
 	network      bool
@@ -90,6 +91,7 @@ func (h *nodeHost) Probe(ctx context.Context, probe NodeProbe) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.probes++
+	h.lastProbe = probe
 	for _, launch := range h.processes {
 		if launch.Node.Port == probe.Port {
 			return launch.Strategy == h.goodStrategy, ctx.Err()
@@ -433,7 +435,7 @@ func TestAutoStrategyUsesVerifiedCacheAndFencesProbes(t *testing.T) {
 	options.Cache.Recheck = 3600
 	options.Cache.Failures = 2
 	options.Cache.Retry = 300
-	node := NodePlan{ID: "byedpi-" + strings.Repeat("b", 32), Name: "Bye", Type: "byedpi", Host: "127.0.0.1", Port: 35600, Check: NodeCheck{StartupTimeout: 1}, Files: map[string]string{}}
+	node := NodePlan{ID: "byedpi-" + strings.Repeat("b", 32), Name: "Bye", Type: "byedpi", Host: "127.0.0.1", Port: 35600, Check: NodeCheck{StartupTimeout: 1}, Files: map[string]string{}, Metadata: map[string]string{"service-auth-user": "service-user", "service-auth-password": "service-password"}}
 	raw, _ := json.Marshal(options)
 	node.Files["built-in-proxies/byedpi/"+node.ID+"/config.json"] = string(raw)
 	run(t, b, "configure", "apply", nodeInput(node))
@@ -442,10 +444,14 @@ func TestAutoStrategyUsesVerifiedCacheAndFencesProbes(t *testing.T) {
 	launch := mechanism.processes[node.ID]
 	cached := mechanism.caches[node.ID+"network-a"]
 	probes := mechanism.probes
+	lastProbe := mechanism.lastProbe
 	count := len(mechanism.processes)
 	mechanism.mu.Unlock()
 	if launch.Strategy != mechanism.goodStrategy || !cached.Verified || probes == 0 || count != 1 {
 		t.Fatal("selection/probe fence", launch.Strategy, cached, probes, count)
+	}
+	if lastProbe.ProxyType != "byedpi" || lastProbe.Username != "service-user" || lastProbe.Password != "service-password" {
+		t.Fatal("runtime probe lost service credentials", lastProbe)
 	}
 	run(t, b, "stop", "stop", "")
 	run(t, b, "restart", "start", "")

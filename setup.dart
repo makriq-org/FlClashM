@@ -732,7 +732,6 @@ Future<void> _syncByedpiAssets() async {
   }
 
   final ndkBin = _resolveNdkBinDir();
-  final artifactDigests = <String>[];
   for (final asset in byedpiReleaseAssets.values) {
     final arch = _androidArches[asset.cliArch];
     if (arch == null) {
@@ -756,14 +755,16 @@ Future<void> _syncByedpiAssets() async {
     await File(_join(sourceDir.path, byedpiExecutableFileName))
         .copy(target.path);
     final digest = sha256.convert(await target.readAsBytes()).toString();
-    artifactDigests.add('artifact:${asset.abi}:$digest');
+    if (digest != asset.sha256) {
+      throw StateError(
+        'ByeDPI ${asset.abi} digest mismatch: '
+        'expected ${asset.sha256}, got $digest',
+      );
+    }
   }
 
   stamp.parent.createSync(recursive: true);
-  await stamp.writeAsString(
-    [...expectedStamp.split('\n'), ...artifactDigests].join('\n'),
-    flush: true,
-  );
+  await stamp.writeAsString(expectedStamp, flush: true);
 }
 
 Future<bool> _byedpiAssetsMatchDigests(
@@ -775,14 +776,9 @@ Future<bool> _byedpiAssetsMatchDigests(
   if (!rows.containsAll(expectedStamp.split('\n'))) return false;
   for (final asset in byedpiReleaseAssets.values) {
     final file = File(_projectPath(asset.bundledAssetPath));
-    final line = rows.firstWhere(
-      (row) => row.startsWith('artifact:${asset.abi}:'),
-      orElse: () => '',
-    );
     if (!file.existsSync() ||
-        line.isEmpty ||
         sha256.convert(await file.readAsBytes()).toString() !=
-            line.substring('artifact:${asset.abi}:'.length)) {
+            asset.sha256) {
       return false;
     }
   }
@@ -841,7 +837,7 @@ String _buildByedpiStamp() {
     'ndk:28.0.13004108',
     'LDFLAGS=-ldl',
     ...byedpiReleaseAssets.values.map(
-      (asset) => '${asset.abi}:${asset.cliArch}',
+      (asset) => '${asset.abi}:${asset.cliArch}:${asset.sha256}',
     ),
   ];
   return lines.join('\n');

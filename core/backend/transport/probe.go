@@ -101,23 +101,50 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		}
 	}
 	socksAddress := net.JoinHostPort(request.Host, strconv.Itoa(request.Port))
-	dialer, err := proxy.SOCKS5("tcp", socksAddress, nil, &net.Dialer{})
-	if err != nil {
-		return false, err
-	}
 	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: 8 << 10, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
 	defer transport.CloseIdleConnections()
-	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
+	probeURL := *endpoint
+	if request.ProxyType == "naiveproxy" {
+		if request.Username == "" || request.Password == "" {
+			return false, errors.New("HTTP proxy probe requires service credentials")
+		}
+		proxyURL := url.URL{Scheme: "http", User: url.UserPassword(request.Username, request.Password), Host: socksAddress}
+		transport.Proxy = http.ProxyURL(&proxyURL)
+		if !strings.EqualFold(target, endpoint.Hostname()) {
+			probeURL.Host = net.JoinHostPort(target, port)
+			transport.TLSClientConfig = &tls.Config{
+				RootCAs:    p.RootCAs,
+				MinVersion: tls.VersionTLS12,
+				ServerName: endpoint.Hostname(),
+			}
+		}
+	} else {
+		var auth *proxy.Auth
+		if request.Username != "" || request.Password != "" {
+			if request.Username == "" || request.Password == "" {
+				return false, errors.New("SOCKS proxy probe requires both service credentials")
+			}
+			auth = &proxy.Auth{User: request.Username, Password: request.Password}
+		}
+		dialer, err := proxy.SOCKS5("tcp", socksAddress, auth, &net.Dialer{})
+		if err != nil {
+			return false, err
+		}
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
+		}
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	method := http.MethodHead
 	if request.RequireSuccess {
 		method = http.MethodGet
 	}
-	head, err := http.NewRequestWithContext(ctx, method, request.URL, nil)
+	head, err := http.NewRequestWithContext(ctx, method, probeURL.String(), nil)
 	if err != nil {
 		return false, err
+	}
+	if probeURL.Host != endpoint.Host {
+		head.Host = endpoint.Host
 	}
 	head.Header.Set("Connection", "close")
 	response, err := client.Do(head)

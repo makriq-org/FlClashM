@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -135,5 +136,66 @@ func TestByeDPIPinnedRuntimeStrategies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("strategy %d: %v\n%s", i, err, output.String())
 		}
+	}
+}
+
+func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
+	binary := os.Getenv("BYEDPI_TEST_BINARY")
+	if binary == "" {
+		t.Skip("run tool/check_byedpi.sh for the pinned runtime contract")
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Close()
+
+	credentials := filepath.Join(t.TempDir(), "auth.txt")
+	if err = os.WriteFile(credentials, []byte("probe-user\nprobe-pass\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	cmd := exec.CommandContext(ctx, binary, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err = cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+	}()
+
+	var conn net.Conn
+	for ctx.Err() == nil {
+		conn, err = net.DialTimeout("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 50*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("listener did not start: %v\n%s", err, output.String())
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	if _, err = conn.Write([]byte{5, 1, 2}); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, 2)
+	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{5, 2}) {
+		t.Fatalf("SOCKS5 auth method response %v: %v\n%s", response, err, output.String())
+	}
+	username, password := []byte("probe-user"), []byte("probe-pass")
+	request := append([]byte{1, byte(len(username))}, username...)
+	request = append(request, byte(len(password)))
+	request = append(request, password...)
+	if _, err = conn.Write(request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {
+		t.Fatalf("RFC 1929 response %v: %v\n%s", response, err, output.String())
 	}
 }

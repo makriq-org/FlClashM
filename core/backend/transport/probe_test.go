@@ -43,7 +43,45 @@ func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
 				if _, err = io.ReadFull(c, methods); err != nil {
 					return
 				}
-				_, _ = c.Write([]byte{5, 0})
+				method := byte(255)
+				for _, candidate := range methods {
+					if candidate == 2 {
+						method = 2
+						break
+					}
+					if candidate == 0 {
+						method = 0
+					}
+				}
+				_, _ = c.Write([]byte{5, method})
+				if method == 255 {
+					return
+				}
+				if method == 2 {
+					var authHeader [2]byte
+					if _, err = io.ReadFull(c, authHeader[:]); err != nil || authHeader[0] != 1 {
+						return
+					}
+					user := make([]byte, int(authHeader[1]))
+					if _, err = io.ReadFull(c, user); err != nil {
+						return
+					}
+					var passLength [1]byte
+					if _, err = io.ReadFull(c, passLength[:]); err != nil {
+						return
+					}
+					password := make([]byte, int(passLength[0]))
+					if _, err = io.ReadFull(c, password); err != nil {
+						return
+					}
+					authStatus := byte(1)
+					if string(user) == "service-user" && string(password) == "service-password" {
+						authStatus = 0
+					}
+					if _, err = c.Write([]byte{1, authStatus}); err != nil || authStatus != 0 {
+						return
+					}
+				}
 				request := make([]byte, 4)
 				if _, err = io.ReadFull(c, request); err != nil {
 					return
@@ -94,6 +132,73 @@ func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
 	addr := listener.Addr().(*net.TCPAddr)
 	return "127.0.0.1", addr.Port
 }
+
+func TestNaiveProbeUsesAuthenticatedHTTPProxy(t *testing.T) {
+	var seen atomic.Int32
+	listener := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead || r.URL.String() != "http://example.com/check" {
+			t.Errorf("unexpected HTTP proxy request: %s %s", r.Method, r.URL)
+		}
+		if r.Header.Get("Proxy-Authorization") != "Basic c2VydmljZS11c2VyOnNlcnZpY2UtcGFzc3dvcmQ=" {
+			t.Errorf("missing service proxy credentials: %q", r.Header.Get("Proxy-Authorization"))
+			w.WriteHeader(http.StatusProxyAuthRequired)
+			return
+		}
+		seen.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer listener.Close()
+	host, rawPort, err := net.SplitHostPort(listener.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := backend.NodeProbe{
+		Host:      host,
+		Port:      port,
+		URL:       "http://example.com/check",
+		Resolver:  "system",
+		ProxyType: "naiveproxy",
+		Username:  "service-user",
+		Password:  "service-password",
+	}
+	passed, err := (&SOCKSProbe{}).Probe(context.Background(), request)
+	if err != nil || !passed || seen.Load() != 1 {
+		t.Fatalf("authenticated HTTP proxy probe: passed=%v requests=%d err=%v", passed, seen.Load(), err)
+	}
+}
+
+func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Errorf("probe changed HTTP method: %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer origin.Close()
+	probes := make(chan string, 1)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes)
+	request := backend.NodeProbe{
+		Host:      host,
+		Port:      port,
+		URL:       "http://example.com/check",
+		Resolver:  "system",
+		ProxyType: "byedpi",
+		Username:  "service-user",
+		Password:  "service-password",
+	}
+	passed, err := (&SOCKSProbe{}).Probe(context.Background(), request)
+	if err != nil || !passed {
+		t.Fatalf("authenticated SOCKS probe: passed=%v err=%v", passed, err)
+	}
+	if target := <-probes; target != "example.com:80" {
+		t.Fatalf("SOCKS target %q", target)
+	}
+}
+
 func TestSOCKSProbeTLSDoHAndDomainFallback(t *testing.T) {
 	var originRequests atomic.Int32
 	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
