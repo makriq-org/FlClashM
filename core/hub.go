@@ -687,16 +687,6 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		if timeout > time.Minute {
 			timeout = time.Minute
 		}
-		waiting, cancelWaiting := context.WithTimeout(context.Background(), timeout)
-		err = testDelaySem.Acquire(waiting, 1)
-		cancelWaiting()
-		if err != nil {
-			fn("")
-			return
-		}
-		defer testDelaySem.Release(1)
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 		runLock.Lock()
 		proxy := proxiesWithProviders()[params.ProxyName]
 		testURL := params.TestUrl
@@ -707,23 +697,20 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		if testURL == "" {
 			testURL = "https://www.gstatic.com/generate_204"
 		}
-		delayData := &Delay{Name: params.ProxyName, Url: testURL, Value: -1}
+		delayData := &Delay{Name: params.ProxyName, Url: testURL, Value: delayFailed}
 		if proxy == nil {
 			data, _ := json.Marshal(delayData)
 			fn(string(data))
 			return
 		}
-		testUrl := testURL
 
-		delay, err := proxy.URLTest(ctx, testUrl, expectedStatus)
-		if err != nil || delay == 0 {
-			delayData.Value = -1
-			data, _ := json.Marshal(delayData)
-			fn(string(data))
+		value, tested := testDelay(context.Background(), proxy, testURL, timeout, expectedStatus)
+		if !tested {
+			// The test never got a slot, which says nothing about the proxy.
+			fn("")
 			return
 		}
-
-		delayData.Value = int32(delay)
+		delayData.Value = value
 		data, _ := json.Marshal(delayData)
 		fn(string(data))
 
