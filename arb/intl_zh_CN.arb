@@ -955,6 +955,7 @@
   "ipSourceNoType": "无法判定类型",
   "ipSourceRateLimited": "限流",
   "ipSourceIpMismatch": "出站 IP 不一致",
+  "hideIpDesc": "在仪表盘和服务检测中不显示出口 IP。",
   "hideIp": "隐藏 IP",
   "editorUnavailable": "编辑器不可用",
   "replace": "替换",

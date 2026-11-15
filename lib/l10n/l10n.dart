@@ -8373,6 +8373,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Leaves the outbound IP off the dashboard and the service checks.`
+  String get hideIpDesc {
+    return Intl.message(
+      'Leaves the outbound IP off the dashboard and the service checks.',
+      name: 'hideIpDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Hide IP`
   String get hideIp {
     return Intl.message('Hide IP', name: 'hideIp', desc: '', args: []);

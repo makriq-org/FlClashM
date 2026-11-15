@@ -3,6 +3,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -101,6 +102,8 @@ class _DashboardEditorState extends ConsumerState<DashboardEditor>
         .update(
           (state) => state.copyWith(
             dashboardWidgets: _keepingHidden(state.dashboardWidgets, shown),
+            // Editing is the user taking the cards over from the panel.
+            ownedSettings: {...state.ownedSettings, dashboardWidgetsSetting},
           ),
         );
   }

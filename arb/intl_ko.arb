@@ -758,6 +758,7 @@
   "ipSourceNoType": "유형 없음",
   "ipSourceRateLimited": "요청 제한됨",
   "ipSourceIpMismatch": "아웃바운드 IP가 다름",
+  "hideIpDesc": "대시보드와 서비스 확인에서 나가는 IP를 표시하지 않습니다.",
   "hideIp": "IP 숨기기",
   "editorUnavailable": "편집기를 사용할 수 없음",
   "replace": "바꾸기",

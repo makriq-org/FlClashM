@@ -1006,6 +1006,7 @@
   "ipSourceNoType": "No type",
   "ipSourceRateLimited": "Rate limited",
   "ipSourceIpMismatch": "Different outbound IP",
+  "hideIpDesc": "Leaves the outbound IP off the dashboard and the service checks.",
   "hideIp": "Hide IP",
   "editorUnavailable": "Editor unavailable",
   "replace": "Replace",

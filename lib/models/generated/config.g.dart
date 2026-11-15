@@ -96,6 +96,11 @@ _AppSettingProps _$AppSettingPropsFromJson(
           ?.map((e) => e as String)
           .toSet() ??
       const {},
+  panelSetSettings:
+      (json['panelSetSettings'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toSet() ??
+      const {},
 );
 
 Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
@@ -138,6 +143,7 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'tableColumnWidths': instance.tableColumnWidths,
       'subscriptionNotices': instance.subscriptionNotices,
       'ownedSettings': instance.ownedSettings.toList(),
+      'panelSetSettings': instance.panelSetSettings.toList(),
     };
 
 const _$TabAnimationEnumMap = {

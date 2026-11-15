@@ -3,11 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
 	"core/backend/profiles"
 )
+
+// providerWidgetsSetting marks the dashboard cards as the user's own, so a
+// subscription update leaves an arrangement alone unless it denies editing.
+const providerWidgetsSetting = "app.dashboardWidgets"
 
 // Modern appearance hints are persisted by Go even when no UI is attached.
 // User-owned settings remain authoritative, as in the UI projection.
@@ -51,8 +56,11 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 				set(appPatch, field, "app."+field, enabled[flag])
 			}
 		}
+		// Cards the user arranged stay put until the panel denies editing them
+		// or the user hands the settings back to the subscription.
 		widgets := providerWidgets(profiles.ProviderHeader(headers, "widgets"))
-		if len(widgets) > 0 {
+		denied := profiles.ProviderSpecial(headers, "denywidgets")
+		if len(widgets) > 0 && (denied || !owns(providerWidgetsSetting)) {
 			appPatch["dashboardWidgets"] = jsonValue(widgets)
 		}
 	}
@@ -129,6 +137,22 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 			}
 			continue
 		}
+		if key == "app.theme" {
+			mode, ok := map[string]string{"auto": "system", "light": "light", "dark": "dark"}[value]
+			if ok {
+				set(theme, "themeMode", "view.app.theme", mode)
+			}
+			continue
+		}
+		if key == "proxies.hidetimeout" {
+			switch value {
+			case "true", "yes", "1":
+				set(style, "hideTimeoutProxies", "view.proxies.hidetimeout", true)
+			case "false", "no", "0":
+				set(style, "hideTimeoutProxies", "view.proxies.hidetimeout", false)
+			}
+			continue
+		}
 		valid := false
 		for _, choice := range choices[key] {
 			valid = valid || value == choice
@@ -155,6 +179,29 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 		default:
 			set(theme, fields[key], "view."+key, value)
 		}
+	}
+	// A special flag holds its setting while the panel sends it and gives it
+	// back to the default once it stops, unless the user took it over.
+	var panelSet []string
+	_ = json.Unmarshal(app["panelSetSettings"], &panelSet)
+	panelSaid := func(key string, said bool) {
+		has := slices.Contains(panelSet, key)
+		switch {
+		case said && !owns(key):
+			appPatch[strings.TrimPrefix(key, "app.")] = jsonValue(true)
+			if !has {
+				panelSet = append(panelSet, key)
+			}
+		case !said && has:
+			panelSet = slices.DeleteFunc(panelSet, func(item string) bool { return item == key })
+			if !owns(key) {
+				appPatch[strings.TrimPrefix(key, "app.")] = jsonValue(false)
+			}
+		}
+	}
+	panelSaid("app.hideIp", profiles.ProviderSpecial(headers, "hideip"))
+	if len(panelSet) > 0 || app["panelSetSettings"] != nil {
+		appPatch["panelSetSettings"] = jsonValue(panelSet)
 	}
 	patch := profiles.Object{}
 	if len(style) > 0 {

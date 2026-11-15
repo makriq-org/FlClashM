@@ -1007,6 +1007,7 @@
   "ipSourceNoType": "Тип не определён",
   "ipSourceRateLimited": "Лимит запросов",
   "ipSourceIpMismatch": "Другой исходящий IP",
+  "hideIpDesc": "Убирает исходящий IP с главной и из проверки сервисов.",
   "hideIp": "Скрыть IP",
   "editorUnavailable": "Редактор недоступен",
   "replace": "Заменить",

@@ -35,7 +35,10 @@ class ThemeView extends StatelessWidget {
             child: _ThemeStyleItem(),
           ),
           const SizedBox(height: 16),
-          const _ThemeModeItem(),
+          const ManagedSetting(
+            settingKey: 'view.app.theme',
+            child: _ThemeModeItem(),
+          ),
           const SizedBox(height: 16),
           const ManagedSetting(
             settingKey: 'view.app.black',
@@ -66,6 +69,11 @@ class ThemeView extends StatelessWidget {
             _SidebarBlurItem(),
             SizedBox(height: 16),
           ],
+          const ManagedSetting(
+            settingKey: hideIpSetting,
+            child: _HideIpItem(),
+          ),
+          const SizedBox(height: 16),
           const _FontFamilyItem(),
           const SizedBox(height: 16),
           const _TextScaleFactorItem(),
@@ -926,6 +934,37 @@ class _SidebarBlurItem extends ConsumerWidget {
         ref
             .read(themeSettingProvider.notifier)
             .update((state) => state.copyWith(sidebarBlur: value));
+      },
+    );
+  }
+}
+
+/// `flclashx-special: hideip` keeps the outbound IP off the screens that show
+/// it; the flag is the panel's, so the row is lockable like the others.
+class _HideIpItem extends ConsumerWidget {
+  const _HideIpItem();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final hideIp = ref.watch(
+      appSettingProvider.select((state) => state.hideIp),
+    );
+    return ListItem.toggle(
+      leading: const GlyphIcon(AppGlyphs.eyeOff),
+      horizontalTitleGap: 12,
+      title: Text(
+        appLocalizations.hideIp,
+        style: AppTextStyle.subheadline
+            .of(context, emphasized: true)
+            .copyWith(color: context.colorScheme.onSurfaceVariant),
+      ),
+      subtitle: Text(appLocalizations.hideIpDesc),
+      value: hideIp,
+      onChanged: (value) {
+        ref
+            .read(appSettingProvider.notifier)
+            .update((state) => state.copyWith(hideIp: value));
       },
     );
   }
