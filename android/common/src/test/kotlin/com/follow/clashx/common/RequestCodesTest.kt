@@ -31,14 +31,31 @@ class RequestCodesTest {
     }
 
     @Test
-    fun `a success frees the launches it replaced`() {
+    fun `a replaced launch keeps its code until it answers or the activity is gone`() {
         val codes = RequestCodes(first = 10, count = 2)
         val replaced = codes.issue()!!
         val latest = codes.issue()!!
 
         assertTrue(codes.answers(latest))
+        // The replaced launch may still answer late, so its code stays taken
+        // and the answered one is handed out again instead.
+        assertEquals(latest, codes.issue())
+        assertFalse(codes.answers(replaced))
+    }
 
-        assertEquals(replaced, codes.issue())
+    @Test
+    fun `a stale answer frees its own code without answering the newer launch`() {
+        val codes = RequestCodes(first = 10, count = 2)
+        val replaced = codes.issue()!!
+        val latest = codes.issue()!!
+
+        // The stale answer settles nothing and frees only the code it belongs to.
+        assertFalse(codes.answers(replaced))
+        assertTrue(codes.answers(latest))
+        // A newer launch then takes the freed code and answers it itself.
+        val reused = codes.issue()!!
+        assertEquals(replaced, reused)
+        assertTrue(codes.answers(reused))
     }
 
     @Test
