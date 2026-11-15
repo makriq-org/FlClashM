@@ -37,6 +37,7 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
   late bool _sendDeviceHeaders;
   String? _rawText;
   bool _attempted = false;
+  bool _saving = false;
   final _fileInfoNotifier = ValueNotifier<FileInfo?>(null);
   late SetupAction _setupAction;
   Uint8List? _fileData;
@@ -120,12 +121,24 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
   }
 
   Future<void> _handleConfirm() async {
+    if (_saving) {
+      return;
+    }
     if (_issue(context.appLocalizations) != null) {
       setState(() {
         _attempted = true;
       });
       return;
     }
+    setState(() => _saving = true);
+    try {
+      await _save();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _save() async {
     final current =
         ref.read(profilesProvider).getProfile(widget.profile.id) ??
         widget.profile;
@@ -214,19 +227,28 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
       );
       return;
     }
-    if (context.mounted) {
+    if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
       Navigator.of(context).pop(data);
     }
   }
 
   Future<void> _editProfileFile() async {
+    if (_saving) {
+      return;
+    }
     final title = widget.profile.label.takeFirstValid([
       widget.profile.id.toString(),
     ]);
+    final staged = _fileData;
     final editorPage = EditorPage(
       title: title,
-      load: () async => _rawText ??=
-          await (await widget.profile.file).readAsString(),
+      load: () async {
+        if (staged != null) {
+          return CodeForgeDocument.fromUtf8(staged);
+        }
+        return _rawText ??=
+            await (await widget.profile.file).readAsString();
+      },
       onSave: (context, _, content) => _handleSaveEdit(context, content),
       onPop: (context, _, content) async {
         if (content == _rawText) {
@@ -236,11 +258,13 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
           title: title,
           message: TextSpan(text: context.appLocalizations.hasCacheChange),
         );
-        if (res == true && context.mounted) {
-          unawaited(_handleSaveEdit(context, content));
-        } else {
+        if (res == null) {
+          return false;
+        }
+        if (!res || !context.mounted) {
           return true;
         }
+        await _handleSaveEdit(context, content);
         return false;
       },
     );
@@ -259,6 +283,9 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
   }
 
   Future<void> _uploadProfileFile() async {
+    if (_saving) {
+      return;
+    }
     final platformFile = await globalState.safeRun(picker.pickerFile);
     if (platformFile == null) return;
     final fileData = await platformFile.readBytes();
@@ -280,12 +307,13 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
       title: appLocalizations.tip,
       message: TextSpan(text: appLocalizations.fileIsUpdate),
     );
-    if (res == true) {
+    if (_saving || res == null || !mounted) {
+      return;
+    }
+    if (res) {
       unawaited(_handleConfirm());
     } else {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      Navigator.of(context).pop();
     }
   }
 
@@ -356,34 +384,57 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
       policy: PageTraversalPolicy(),
       child: PageFocusScope(
         child: CommonPopScope(
-          onPop: _fileData == null
+          onPop: _fileData == null && !_saving
               ? null
               : (_) {
-                  _handleBack();
+                  if (!_saving) {
+                    _handleBack();
+                  }
                   return false;
                 },
-          child: CommonScaffold(
-            title: appLocalizations.edit,
-            confirmationAction: IconButtonData(
-              glyph: AppGlyphs.check,
-              onPressed: _handleConfirm,
-              tooltip: appLocalizations.save,
-            ),
-            body: Builder(
-              builder: (context) => ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16).copyWith(
-                  top: context.contentTopPadding,
-                  bottom: BottomInsetScope.of(context) + 16,
+          child: _ClosesThroughPopScope(
+            child: CommonScaffold(
+              title: appLocalizations.edit,
+              confirmationAction: IconButtonData(
+                glyph: AppGlyphs.check,
+                onPressed: _saving ? null : _handleConfirm,
+                tooltip: appLocalizations.save,
+              ),
+              body: Builder(
+                builder: (context) => ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16).copyWith(
+                    top: context.contentTopPadding,
+                    bottom: BottomInsetScope.of(context) + 16,
+                  ),
+                  children: [
+                    ErrorBanner(message: issue?.message),
+                    ...sections.separated(const SizedBox(height: 24)),
+                  ],
                 ),
-                children: [
-                  ErrorBanner(message: issue?.message),
-                  ...sections.separated(const SizedBox(height: 24)),
-                ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// A side sheet's close button pops its route outright, past a save in flight.
+class _ClosesThroughPopScope extends StatelessWidget {
+  const _ClosesThroughPopScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheet = SheetProvider.of(context);
+    if (sheet == null || sheet.onClose != null) {
+      return child;
+    }
+    return sheet.copyWith(
+      onClose: () => Navigator.of(context).maybePop(),
+      child: child,
     );
   }
 }

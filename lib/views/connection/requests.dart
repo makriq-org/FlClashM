@@ -49,7 +49,7 @@ class _RequestsViewState extends ConsumerState<RequestsView>
   }
 
   void updateRequestsThrottler() {
-    throttler.call(FunctionTag.requests, () {
+    throttler.call((FunctionTag.requests, this), () {
       if (!mounted) {
         return;
       }
