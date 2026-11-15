@@ -147,7 +147,7 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		case "olcrtc":
 			err = buildOlcRTC(raw, &node, username, password)
 		case "byedpi":
-			err = e.buildByeDPI(ctx, raw, &node, username, password)
+			err = e.buildByeDPI(ctx, raw, &node)
 		case "stormdns":
 			err = e.buildStormDNS(ctx, raw, &node, username, password)
 		}

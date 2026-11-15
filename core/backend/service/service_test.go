@@ -398,8 +398,13 @@ func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
 		Config map[string]any `json:"config"`
 	}
 	_ = json.Unmarshal(view, &payload)
-	if payload.Config["mixed-port"] != float64(9091) {
-		t.Fatal("switching to an unhinted profile lost the retained fallback", payload.Config)
+	if payload.Config["mixed-port"] != float64(0) {
+		t.Fatal("unhinted Android profile restored an unauthenticated listener", payload.Config)
+	}
+	var retained map[string]any
+	_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &retained)
+	if retained["mixed-port"] != float64(9091) {
+		t.Fatal("switching profiles lost the retained port fallback", retained)
 	}
 }
 func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {

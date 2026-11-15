@@ -162,7 +162,11 @@ func testNode(t *testing.T, kind string, port int) backend.NodePlan {
 	case "stormdns":
 		name = "client_config.toml"
 	}
-	return backend.NodePlan{ID: id, Type: kind, Host: "127.0.0.1", Port: port, Files: map[string]string{"built-in-proxies/" + kind + "/" + id + "/" + name: `{"args":"-d1 -s2"}`}, Metadata: map[string]string{}}
+	files := map[string]string{"built-in-proxies/" + kind + "/" + id + "/" + name: `{"args":"-d1 -s2"}`}
+	if kind == "byedpi" {
+		files["built-in-proxies/"+kind+"/"+id+"/auth.txt"] = "user\npassword\n"
+	}
+	return backend.NodePlan{ID: id, Type: kind, Host: "127.0.0.1", Port: port, Files: files, Metadata: map[string]string{}}
 }
 func waitListener(t *testing.T, port int) {
 	t.Helper()
@@ -209,8 +213,11 @@ func TestProcessLifetimeAndStopFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var args []string
-	if json.Unmarshal(raw, &args) != nil || strings.Join(args, " ") != "--ip 127.0.0.1 --port "+strconv.Itoa(port)+" -d1 -s2" {
+	if json.Unmarshal(raw, &args) != nil || strings.Join(args, " ") != "--ip 127.0.0.1 --port "+strconv.Itoa(port)+" --auth-file "+filepath.Join(directory, "auth.txt")+" -d1 -s2" {
 		t.Fatalf("argv %s", raw)
+	}
+	if auth, err := os.ReadFile(filepath.Join(directory, "auth.txt")); err != nil || string(auth) != "user\npassword\n" {
+		t.Fatalf("auth file %q, %v", auth, err)
 	}
 	if err = adapter.Stop(context.Background(), node.ID); err != nil {
 		t.Fatal(err)

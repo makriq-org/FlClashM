@@ -189,7 +189,11 @@ func TestExternalTransportCompilation(t *testing.T) {
 			}
 			node := nodes[0]
 			proxy := object(list(config["proxies"])[0])
-			if proxy["type"] != "socks5" || proxy["server"] != "127.0.0.1" || len(proxy) != 5 {
+			wantType := "socks5"
+			if tt.kind == "naiveproxy" {
+				wantType = "http"
+			}
+			if proxy["type"] != wantType || proxy["server"] != "127.0.0.1" || proxy["username"] == "" || proxy["password"] == "" {
 				t.Fatalf("unsafe engine node %#v", proxy)
 			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file
@@ -465,7 +469,7 @@ func TestStormDNSCacheChangesWithWireFormatAndMTULimits(t *testing.T) {
 	fingerprint := func() string {
 		t.Helper()
 		node := Node{ID: "stormdns-test", Port: 36200, Metadata: map[string]string{}, Files: map[string]string{}}
-		if err := compiler.buildStormDNS(context.Background(), raw, &node); err != nil {
+		if err := compiler.buildStormDNS(context.Background(), raw, &node, "test-user", "test-password"); err != nil {
 			t.Fatal(err)
 		}
 		return node.Metadata["cache-fingerprint"]
