@@ -66,6 +66,21 @@ void main() {
     expect(controller.text, 'a: 12');
   });
 
+  testWidgets('a read-only editor drops suggestions it inherited', (
+    tester,
+  ) async {
+    final controller = CodeForgeController()..text = 'a: 1';
+    controller.suggestionsNotifier.value = const [
+      CodeForgeSuggestion(label: 'alpha'),
+    ];
+
+    await pumpEditor(tester, controller, readOnly: true);
+
+    // A reused controller may still hold the popup from its last view, and
+    // Enter or Tab would take an entry this editor cannot apply.
+    expect(controller.suggestions, isNull);
+  });
+
   testWidgets('a disposed editor lets go of the controller', (tester) async {
     final controller = CodeForgeController()..text = 'a: 1';
     await pumpEditor(tester, controller, key: const ValueKey(1));

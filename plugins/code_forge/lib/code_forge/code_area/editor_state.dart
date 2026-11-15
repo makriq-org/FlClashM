@@ -209,6 +209,11 @@ class _CodeForgeState extends State<CodeForge>
       ..tabSize = widget._tabSize
       ..useSpaceAsTab = widget.useSpaceAsTab
       ..addListener(_controllerListener);
+    // A reused controller may still hold suggestions from its last view, and
+    // Enter or Tab would take one the read-only editor cannot apply.
+    if (widget.readOnly) {
+      _controller.suggestionsNotifier.value = null;
+    }
     _attachFindController();
     _attachUndoController();
   }
