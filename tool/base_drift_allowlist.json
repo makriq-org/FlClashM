@@ -2829,6 +2829,16 @@
       "path": "core/backend/compile/shortid_test.go",
       "bucket": "budget",
       "reason": "Регрессия REALITY short-id относится к Go Compiler форка, где живёт соответствующая правка."
+    },
+    {
+      "path": "core/delay.go",
+      "bucket": "budget",
+      "reason": "Задержка load-balance в форке измеряется по достижимым узлам: апстрим делал это в core/delay.go, который у нас отсутствовал."
+    },
+    {
+      "path": "core/delay_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии задержек load-balance относятся к Go Core форка, где живёт их реализация."
     }
   ]
 }
