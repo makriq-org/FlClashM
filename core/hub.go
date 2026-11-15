@@ -191,6 +191,10 @@ func handleShutdown() bool {
 	// goroutine would otherwise leak across shutdown. handleStopLog is idempotent
 	// and guarded by its own logMu (never takes runLock), so calling it here is safe.
 	handleStopLog()
+	// Turn new handshakes away before the listeners go: a handshake that lands
+	// after closeOpenInbound would register itself as accepted and be handed to
+	// the tunnel, and no later pass closes it.
+	listenersAccepting.Store(false)
 	stopListeners()
 	closeConnections()
 	closeOpenInbound()
@@ -198,7 +202,6 @@ func handleShutdown() bool {
 	runtime.GC()
 	isInit.Store(false)
 	isRunning = false
-	listenersAccepting.Store(false)
 	tunUp.Store(false)
 	currentConfig = nil
 	currentRuntimeRawConfig = map[string]any{}
