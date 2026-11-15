@@ -195,7 +195,7 @@
     "forbidden": null
   },
   {
-    "short": "J",
+    "short": "j",
     "long": "ipset",
     "kind": "inlineData",
     "repeatable": false,
@@ -481,7 +481,7 @@
     "forbidden": "the listener port is owned by FlClashM"
   },
   {
-    "short": "j",
+    "short": "J",
     "long": "auth-file",
     "kind": "text",
     "repeatable": false,
