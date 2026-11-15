@@ -130,6 +130,9 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
       });
       return;
     }
+    // The form is frozen while saving, so a field edited after the snapshot
+    // below cannot be dropped by the save that then closes the page.
+    FocusScope.of(context).unfocus();
     setState(() => _saving = true);
     try {
       await _save();
@@ -294,6 +297,9 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
     }
     setState(() {
       _fileData = fileData;
+      // The editor compares its draft with this text, so it has to describe the
+      // document now loaded, not the one opened before.
+      _rawText = utf8.decode(fileData, allowMalformed: true);
     });
     _fileInfoNotifier.value = _fileInfoNotifier.value?.copyWith(
       size: _fileData?.length ?? 0,
@@ -401,15 +407,25 @@ class _EditProfileViewState extends ConsumerState<EditProfileView> {
                 tooltip: appLocalizations.save,
               ),
               body: Builder(
-                builder: (context) => ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16).copyWith(
-                    top: context.contentTopPadding,
-                    bottom: BottomInsetScope.of(context) + 16,
+                builder: (context) => AbsorbPointer(
+                  // A field changed after the save took its snapshot would be
+                  // lost when the page closes, so the form waits it out.
+                  absorbing: _saving,
+                  child: ExcludeFocus(
+                    excluding: _saving,
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                      ).copyWith(
+                        top: context.contentTopPadding,
+                        bottom: BottomInsetScope.of(context) + 16,
+                      ),
+                      children: [
+                        ErrorBanner(message: issue?.message),
+                        ...sections.separated(const SizedBox(height: 24)),
+                      ],
+                    ),
                   ),
-                  children: [
-                    ErrorBanner(message: issue?.message),
-                    ...sections.separated(const SizedBox(height: 24)),
-                  ],
                 ),
               ),
             ),
