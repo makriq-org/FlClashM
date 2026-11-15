@@ -2819,6 +2819,16 @@
       "path": "lib/providers/state/custom_import.dart",
       "bucket": "budget",
       "reason": "Импорт custom-профиля в форке переименовывает резервный выход группы вместе с прокси, иначе собранный план ссылается на старое имя."
+    },
+    {
+      "path": "core/backend/compile/shortid.go",
+      "bucket": "budget",
+      "reason": "Правка REALITY short-id в форке живёт в Go Compiler: апстрим делал её в удалённом profile_base.go."
+    },
+    {
+      "path": "core/backend/compile/shortid_test.go",
+      "bucket": "budget",
+      "reason": "Регрессия REALITY short-id относится к Go Compiler форка, где живёт соответствующая правка."
     }
   ]
 }
