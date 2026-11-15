@@ -21,7 +21,7 @@ func required(raw Object, key string) (string, error) {
 
 // buildOlcRTC compiles the public CNC contract and validates provider-specific
 // transports and credentials before a Ghostlane process can be launched.
-func buildOlcRTC(raw Object, node *Node) error {
+func buildOlcRTC(raw Object, node *Node, serviceUser, servicePassword string) error {
 	provider, err := required(raw, "provider")
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func buildOlcRTC(raw Object, node *Node) error {
 	if value, ok := raw["provider-token"]; ok {
 		auth["token"] = value
 	}
-	native := Object{"mode": "cnc", "auth": auth, "crypto": Object{"key": key}, "net": Object{"transport": transport, "dns": dns}, "socks": Object{"host": "127.0.0.1", "port": node.Port}}
+	native := Object{"mode": "cnc", "auth": auth, "crypto": Object{"key": key}, "net": Object{"transport": transport, "dns": dns}, "socks": Object{"host": "127.0.0.1", "port": node.Port, "user": serviceUser, "pass": servicePassword}}
 	if dns == "system" {
 		object(native["net"])["dns"] = "@flclashm-system-dns@"
 		node.Metadata["depends-on-system-dns"] = "true"

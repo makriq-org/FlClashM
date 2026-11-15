@@ -646,6 +646,11 @@
       "reason": "Живые общие настройки сохраняют androidSecure, prerelease Switch, фактический уровень логов профиля и mount общего запрета отправки HWID."
     },
     {
+      "path": "lib/views/config/general/port_form.dart",
+      "bucket": "budget",
+      "reason": "Разрешено отключать смешанный порт значением 0; сброс Android-настроек оставляет его выключенным."
+    },
+    {
       "path": "lib/views/config/network.dart",
       "bucket": "budget",
       "reason": "Убран шумный отладочный лог TunStackItem; форматный дрейф откатан к апстриму."

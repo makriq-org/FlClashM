@@ -1,0 +1,158 @@
+diff --git a/conev.h b/conev.h
+index 4c5a4c8..04cd47d 100644
+--- a/conev.h
++++ b/conev.h
+@@ -51,6 +51,7 @@ typedef int (*evcb_t)(struct poolhd *, struct eval *, int);
+ 
+ #define FLAG_S4 1
+ #define FLAG_S5 2
++#define FLAG_S5_AUTH 3
+ #define FLAG_CONN 4
+ #define FLAG_HTTP 8
+ 
+diff --git a/main.c b/main.c
+index ed82d6e..dfd69fc 100644
+--- a/main.c
++++ b/main.c
+@@ -67,6 +67,7 @@ struct params params = {
+ static const char help_text[] = {
+     "    -i, --ip, <ip>            Listening IP, default 0.0.0.0\n"
+     "    -p, --port <num>          Listening port, default 1080\n"
++    "        --auth-file <path>   Require SOCKS5 username/password auth\n"
+     #ifdef DAEMON
+     "    -D, --daemon              Daemonize\n"
+     "    -w, --pidfile <filename>  Write PID to file\n"
+@@ -140,6 +141,7 @@ const struct option options[] = {
+     {"version",       0, 0, 'v'},
+     {"ip",            1, 0, 'i'},
+     {"port",          1, 0, 'p'},
++    {"auth-file",     1, 0, 'J'},
+     #ifdef __linux__
+     {"transparent",   0, 0, 'E'},
+     #endif
+@@ -823,6 +825,29 @@ int parse_args(int argc, char **argv)
+             else
+                 params.laddr.in.sin_port = htons(val);
+             break;
++
++        case 'J':;
++            FILE *auth_file = fopen(optarg, "r");
++            if (!auth_file) {
++                uniperror("open auth file");
++                invalid = 1;
++                break;
++            }
++            if (!fgets(params.auth_user, sizeof(params.auth_user), auth_file) ||
++                    !fgets(params.auth_pass, sizeof(params.auth_pass), auth_file)) {
++                invalid = 1;
++            }
++            fclose(auth_file);
++            size_t user_len = strlen(params.auth_user);
++            size_t pass_len = strlen(params.auth_pass);
++            if (user_len && params.auth_user[user_len - 1] == '\n')
++                params.auth_user[--user_len] = 0;
++            if (pass_len && params.auth_pass[pass_len - 1] == '\n')
++                params.auth_pass[--pass_len] = 0;
++            if (!user_len || !pass_len || user_len > 255 || pass_len > 255)
++                invalid = 1;
++            params.auth_enabled = !invalid;
++            break;
+             
+         case 'I':
+             if (get_addr(optarg, &params.baddr) < 0)
+@@ -1333,6 +1358,7 @@ int parse_args(int argc, char **argv)
+         params.ipv6 = 0;
+     }
+     if (!params.mode) params.mode |= (MODE_SOCKS4 | MODE_SOCKS5);
++    if (params.auth_enabled) params.mode &= ~MODE_SOCKS4;
+     return 0;
+ }
+ 
+diff --git a/params.h b/params.h
+index 6ab2ec5..33382a7 100644
+--- a/params.h
++++ b/params.h
+@@ -161,6 +161,9 @@ struct params {
+     bool udp;
+     bool delay_conn;
+     bool auto_reconnect;
++    bool auth_enabled;
++    char auth_user[256];
++    char auth_pass[256];
+     int max_open;
+     int debug;
+     size_t bfsize;
+diff --git a/proxy.c b/proxy.c
+index 45fc05b..9fd3768 100644
+--- a/proxy.c
++++ b/proxy.c
+@@ -180,11 +180,16 @@ static int auth_socks5(int fd, const char *buffer, ssize_t n)
+         return -1;
+     }
+     uint8_t c = S_AUTH_BAD;
+-    for (long i = 2; i < n; i++)
+-        if (buffer[i] == S_AUTH_NONE) {
++    for (long i = 2; i < n; i++) {
++        if (params.auth_enabled && (uint8_t)buffer[i] == 0x02) {
++            c = 0x02; // RFC 1929 username/password.
++            break;
++        }
++        if (!params.auth_enabled && (uint8_t)buffer[i] == S_AUTH_NONE) {
+             c = S_AUTH_NONE;
+             break;
+         }
++    }
+     uint8_t a[2] = { S_VER5, c };
+     if (send(fd, (char *)a, sizeof(a), 0) < 0) {
+         uniperror("send");
+@@ -193,6 +198,30 @@ static int auth_socks5(int fd, const char *buffer, ssize_t n)
+     return c != S_AUTH_BAD ? 0 : -1;
+ }
+ 
++static int auth_socks5_userpass(int fd, const char *buffer, ssize_t n)
++{
++    uint8_t response[2] = { 0x01, 0x01 };
++    if (n >= 5 && (uint8_t)buffer[0] == 0x01) {
++        size_t user_len = (uint8_t)buffer[1];
++        size_t pass_offset = 2 + user_len;
++        if (user_len > 0 && pass_offset < (size_t)n) {
++            size_t pass_len = (uint8_t)buffer[pass_offset];
++            if (pass_len > 0 && pass_offset + 1 + pass_len == (size_t)n &&
++                    user_len == strlen(params.auth_user) &&
++                    pass_len == strlen(params.auth_pass) &&
++                    !memcmp(buffer + 2, params.auth_user, user_len) &&
++                    !memcmp(buffer + pass_offset + 1, params.auth_pass, pass_len)) {
++                response[1] = 0x00;
++            }
++        }
++    }
++    if (send(fd, (char *)response, sizeof(response), 0) < 0) {
++        uniperror("send");
++        return -1;
++    }
++    return response[1] == 0 ? 0 : -1;
++}
++
+ 
+ static int resp_s5_error(int fd, int e)
+ {
+@@ -918,11 +947,17 @@ static int save_buffer(struct poolhd *pool,
+ static int handle_s5(struct poolhd *pool, struct eval *val, 
+             struct buffer *buff, ssize_t n, union sockaddr_u *dst)
+ {
++    if (val->flag == FLAG_S5_AUTH) {
++        if (auth_socks5_userpass(val->fd, buff->data, n))
++            return 1;
++        val->flag = FLAG_S5;
++        return 0;
++    }
+     if (val->flag != FLAG_S5) {
+         if (auth_socks5(val->fd, buff->data, n)) {
+-            return -1;
++            return 1;
+         }
+-        val->flag = FLAG_S5;
++        val->flag = params.auth_enabled ? FLAG_S5_AUTH : FLAG_S5;
+         return 0;
+     }
+     if (n < S_SIZE_MIN) {

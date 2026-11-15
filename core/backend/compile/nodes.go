@@ -3,7 +3,9 @@ package compile
 import (
 	"context"
 	"core/backend/netpolicy"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -133,23 +135,54 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, err
 		}
 		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, UDP: udp, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
+		username, password, err := serviceCredentials()
+		if err != nil {
+			return nil, fmt.Errorf("%s node %q: could not create service credentials", kind, name)
+		}
+		node.Metadata["service-auth-user"] = username
+		node.Metadata["service-auth-password"] = password
 		switch kind {
 		case "naiveproxy":
-			err = buildNaive(raw, &node)
+			err = buildNaive(raw, &node, username, password)
 		case "olcrtc":
-			err = buildOlcRTC(raw, &node)
+			err = buildOlcRTC(raw, &node, username, password)
 		case "byedpi":
-			err = e.buildByeDPI(ctx, raw, &node)
+			err = e.buildByeDPI(ctx, raw, &node, username, password)
 		case "stormdns":
-			err = e.buildStormDNS(ctx, raw, &node)
+			err = e.buildStormDNS(ctx, raw, &node, username, password)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
+		if kind == "byedpi" {
+			node.Files["built-in-proxies/byedpi/"+node.ID+"/auth.txt"] = username + "\n" + password + "\n"
+		}
 		nodes = append(nodes, node)
-		slot.values[slot.index] = Object{"name": name, "type": "socks5", "server": node.Host, "port": port, "udp": udp}
+		proxyType := "socks5"
+		if kind == "naiveproxy" {
+			// NaiveProxy's SOCKS listener does not support authentication; its
+			// authenticated HTTP listener does.
+			proxyType = "http"
+		}
+		proxy := Object{"name": name, "type": proxyType, "server": node.Host, "port": port, "username": username, "password": password}
+		if proxyType == "socks5" {
+			proxy["udp"] = udp
+		}
+		slot.values[slot.index] = proxy
 	}
 	return nodes, nil
+}
+
+func serviceCredentials() (string, string, error) {
+	username := make([]byte, 24)
+	password := make([]byte, 32)
+	if _, err := rand.Read(username); err != nil {
+		return "", "", err
+	}
+	if _, err := rand.Read(password); err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(username), hex.EncodeToString(password), nil
 }
 func nodeChecks(raw Object, kind, name string, config Object, testURL string) (Object, Object, error) {
 	inherited, direct, err := groupChecks(config, name)

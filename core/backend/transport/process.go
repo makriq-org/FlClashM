@@ -73,7 +73,7 @@ func (a *ProcessAdapter) Prepare(ctx context.Context, node backend.NodePlan) err
 		return err
 	}
 	prefix := "built-in-proxies/" + node.Type + "/" + node.ID + "/"
-	allowed := map[string]bool{"config.json": true, "config.yaml": true, "client_config.toml": true, "client_resolvers.template": true}
+	allowed := map[string]bool{"config.json": true, "config.yaml": true, "client_config.toml": true, "client_resolvers.template": true, "auth.txt": true}
 	for key, body := range node.Files {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -268,7 +268,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		if e != nil {
 			return e
 		}
-		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port)}, argv...)
+		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", filepath.Join(directory, "auth.txt")}, argv...)
 	default:
 		return errors.New("unsupported transport")
 	}
@@ -291,7 +291,16 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command := exec.Command(executable, arguments...)
 	command.Dir = directory
 	command.Stdin = nil
-	output := newProcessOutput(node.Type, a.Log)
+	logOutput := a.Log
+	if logOutput != nil {
+		user, password := node.Metadata["service-auth-user"], node.Metadata["service-auth-password"]
+		if user != "" && password != "" {
+			redact := strings.NewReplacer(user, "[redacted]", password, "[redacted]")
+			next := logOutput
+			logOutput = func(kind, line string) { next(kind, redact.Replace(line)) }
+		}
+	}
+	output := newProcessOutput(node.Type, logOutput)
 	command.Stdout = output
 	command.Stderr = output
 	p := &process{command: command, graceful: node.Type == "olcrtc", done: make(chan struct{})}

@@ -695,37 +695,35 @@ String _buildNaiveProxyStamp() {
 Future<void> _syncByedpiAssets() async {
   final stamp = File(_projectPath(_byedpiStampFile));
   final expectedStamp = _buildByedpiStamp();
-  final assetFilesExist = await _byedpiAssetsMatchDigests();
+  final assetFilesExist = await _byedpiAssetsMatchDigests(stamp, expectedStamp);
 
-  if (assetFilesExist &&
-      stamp.existsSync() &&
-      (await stamp.readAsString()).trim() == expectedStamp) {
+  if (assetFilesExist) {
     return;
   }
 
   final sourceDir = await _prepareByedpiSource();
-  final compatibilityPatch = _projectPath(
-    'tool',
-    'patches',
+  for (final patch in [
     'byedpi-android-ifaddrs.patch',
-  );
-  // The cached source may already carry this exact patch from a previous ABI build.
-  final patchCheck = await Process.run('git', [
-    'apply',
-    '--reverse',
-    '--check',
-    compatibilityPatch,
-  ], workingDirectory: sourceDir.path);
-  if (patchCheck.exitCode != 0) {
+    'byedpi-socks-auth.patch',
+  ]) {
+    final patchFile = _projectPath('tool', 'patches', patch);
+    // The cached source may already carry this patch from a previous ABI build.
+    final reverseCheck = await Process.run('git', [
+      'apply',
+      '--reverse',
+      '--check',
+      patchFile,
+    ], workingDirectory: sourceDir.path);
+    if (reverseCheck.exitCode == 0) continue;
     await _exec(
-      ['git', 'apply', '--check', compatibilityPatch],
+      ['git', 'apply', '--check', patchFile],
       workingDirectory: sourceDir.path,
-      name: 'check byedpi compatibility patch',
+      name: 'check $patch',
     );
     await _exec(
-      ['git', 'apply', compatibilityPatch],
+      ['git', 'apply', patchFile],
       workingDirectory: sourceDir.path,
-      name: 'patch byedpi Android compatibility',
+      name: 'apply $patch',
     );
   }
   final targetRoot = Directory(_projectPath(byedpiBundledAssetRoot));
@@ -734,6 +732,7 @@ Future<void> _syncByedpiAssets() async {
   }
 
   final ndkBin = _resolveNdkBinDir();
+  final artifactDigests = <String>[];
   for (final asset in byedpiReleaseAssets.values) {
     final arch = _androidArches[asset.cliArch];
     if (arch == null) {
@@ -757,21 +756,33 @@ Future<void> _syncByedpiAssets() async {
     await File(_join(sourceDir.path, byedpiExecutableFileName))
         .copy(target.path);
     final digest = sha256.convert(await target.readAsBytes()).toString();
-    if (digest != asset.sha256) {
-      throw StateError('byedpi ${asset.abi} digest mismatch: '
-          'expected ${asset.sha256}, got $digest');
-    }
+    artifactDigests.add('artifact:${asset.abi}:$digest');
   }
 
   stamp.parent.createSync(recursive: true);
-  await stamp.writeAsString(expectedStamp, flush: true);
+  await stamp.writeAsString(
+    [...expectedStamp.split('\n'), ...artifactDigests].join('\n'),
+    flush: true,
+  );
 }
 
-Future<bool> _byedpiAssetsMatchDigests() async {
+Future<bool> _byedpiAssetsMatchDigests(
+  File stamp,
+  String expectedStamp,
+) async {
+  if (!stamp.existsSync()) return false;
+  final rows = (await stamp.readAsLines()).toSet();
+  if (!rows.containsAll(expectedStamp.split('\n'))) return false;
   for (final asset in byedpiReleaseAssets.values) {
     final file = File(_projectPath(asset.bundledAssetPath));
+    final line = rows.firstWhere(
+      (row) => row.startsWith('artifact:${asset.abi}:'),
+      orElse: () => '',
+    );
     if (!file.existsSync() ||
-        sha256.convert(await file.readAsBytes()).toString() != asset.sha256) {
+        line.isEmpty ||
+        sha256.convert(await file.readAsBytes()).toString() !=
+            line.substring('artifact:${asset.abi}:'.length)) {
       return false;
     }
   }
@@ -821,12 +832,16 @@ String _buildByedpiStamp() {
   final lines = <String>[
     byedpiPinnedReleaseTag,
     byedpiSourceRepository,
-    sha256.convert(File(_projectPath('tool', 'patches',
-        'byedpi-android-ifaddrs.patch')).readAsBytesSync()).toString(),
+    for (final patch in [
+      'byedpi-android-ifaddrs.patch',
+      'byedpi-socks-auth.patch',
+    ])
+      sha256.convert(File(_projectPath('tool', 'patches', patch))
+          .readAsBytesSync()).toString(),
     'ndk:28.0.13004108',
     'LDFLAGS=-ldl',
     ...byedpiReleaseAssets.values.map(
-      (asset) => '${asset.abi}:${asset.cliArch}:${asset.sha256}',
+      (asset) => '${asset.abi}:${asset.cliArch}',
     ),
   ];
   return lines.join('\n');

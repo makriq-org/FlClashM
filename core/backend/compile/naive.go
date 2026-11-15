@@ -23,7 +23,7 @@ func controls(value string) bool {
 	}
 	return false
 }
-func buildNaive(raw Object, node *Node) error {
+func buildNaive(raw Object, node *Node, serviceUser, servicePassword string) error {
 	server := strings.TrimSpace(text(raw["server"]))
 	if server == "" || serverPattern.MatchString(server) {
 		return errors.New("server must be a host name or IP")
@@ -48,7 +48,8 @@ func buildNaive(raw Object, node *Node) error {
 		transport = "https"
 	}
 	proxy := url.URL{Scheme: transport, User: url.UserPassword(user, password), Host: net.JoinHostPort(server, fmt.Sprint(port))}
-	native := Object{"listen": fmt.Sprintf("socks://127.0.0.1:%d", node.Port), "proxy": proxy.String()}
+	listen := url.URL{Scheme: "http", User: url.UserPassword(serviceUser, servicePassword), Host: net.JoinHostPort("127.0.0.1", fmt.Sprint(node.Port))}
+	native := Object{"listen": listen.String(), "proxy": proxy.String()}
 	if value, ok := raw["insecure-concurrency"]; ok {
 		native["insecure-concurrency"] = value
 	}

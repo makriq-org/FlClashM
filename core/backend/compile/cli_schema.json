@@ -195,7 +195,7 @@
     "forbidden": null
   },
   {
-    "short": "j",
+    "short": "J",
     "long": "ipset",
     "kind": "inlineData",
     "repeatable": false,
@@ -479,6 +479,19 @@
     ],
     "scope": "group",
     "forbidden": "the listener port is owned by FlClashM"
+  },
+  {
+    "short": "j",
+    "long": "auth-file",
+    "kind": "text",
+    "repeatable": false,
+    "contexts": [
+      "args",
+      "strategy",
+      "fallbackArgs"
+    ],
+    "scope": "group",
+    "forbidden": "service credentials are owned by FlClashM"
   },
   {
     "short": "D",

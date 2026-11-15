@@ -83,7 +83,7 @@ class _PatchClashConfig extends _$PatchClashConfig
     with AutoDisposeNotifierMixin {
   @override
   PatchClashConfig build() {
-    return const PatchClashConfig();
+    return PatchClashConfig(mixedPort: system.isAndroid ? 0 : defaultMixedPort);
   }
 }
 
@@ -134,7 +134,8 @@ void writeConfig(dynamic ref, Config config) {
   ref.read(hotKeyActionsProvider.notifier).value = config.hotKeyActions;
   ref.read(proxiesStyleSettingProvider.notifier).value =
       config.proxiesStyleProps;
-  ref.read(patchClashConfigProvider.notifier).value = config.patchClashConfig;
+  ref.read(patchClashConfigProvider.notifier).value =
+      _patchClashConfigForPlatform(config);
   ref.read(excludeSSIDsProvider.notifier).value = config.excludeSSIDs;
 }
 
@@ -154,8 +155,16 @@ List<Override> buildConfigOverrides(Config config) {
       (_, _) => config.proxiesStyleProps,
     ),
     patchClashConfigProvider.overrideWithBuild(
-      (_, _) => config.patchClashConfig,
+      (_, _) => _patchClashConfigForPlatform(config),
     ),
     excludeSSIDsProvider.overrideWithBuild((_, _) => config.excludeSSIDs),
   ];
+}
+
+PatchClashConfig _patchClashConfigForPlatform(Config config) {
+  if (!system.isAndroid ||
+      config.appSettingProps.ownedSettings.contains('clash.mixed-port')) {
+    return config.patchClashConfig;
+  }
+  return config.patchClashConfig.copyWith(mixedPort: 0);
 }

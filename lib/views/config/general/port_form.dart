@@ -55,7 +55,7 @@ class _PortFormState extends ConsumerState<_PortForm> {
       _PortField(
         controller: _mixedPortController,
         label: (appLocalizations) => appLocalizations.mixedPort,
-        allowDisabled: false,
+        allowDisabled: true,
       ),
       _PortField(
         controller: _portController,
@@ -89,7 +89,7 @@ class _PortFormState extends ConsumerState<_PortForm> {
         .read(patchClashConfigProvider.notifier)
         .update(
           (state) => state.copyWith(
-            mixedPort: 7890,
+            mixedPort: system.isAndroid ? 0 : 7890,
             port: 0,
             socksPort: 0,
             redirPort: 0,

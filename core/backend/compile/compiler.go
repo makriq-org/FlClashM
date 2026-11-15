@@ -135,6 +135,13 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	settings := request.Settings
 	patch := defaults()
 	mergePatch(patch, object(settings["patchClashConfig"]), "")
+	android := c.Capabilities.Platform == "android"
+	// Old installations have the application default (7890) serialized beside
+	// their settings. Honor it only when the user explicitly took ownership;
+	// subscription hints below remain an explicit profile opt-in.
+	if android && !ownsSetting(settings, "clash.mixed-port") {
+		patch["mixed-port"] = 0
+	}
 	patchPolicyOrder := jsonKeyOrder(defaultPatch, "dns", "nameserver-policy")
 	if order := jsonKeyOrder(wire.Settings, "patchClashConfig", "dns", "nameserver-policy"); order != nil {
 		patchPolicyOrder = order
@@ -205,7 +212,6 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 			object(patch["tun"])["stack"] = strings.ToLower(text(tun["stack"]))
 		}
 	}
-	android := c.Capabilities.Platform == "android"
 	c.Policy.ApplyPatch(patch, metadata, c.Capabilities)
 
 	tun := object(patch["tun"])
