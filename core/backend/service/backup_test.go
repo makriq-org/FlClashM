@@ -157,6 +157,30 @@ func TestCompatibleBackupRoundTripAndUnsafeArchive(t *testing.T) {
 		t.Fatal("archive escaped its root")
 	}
 }
+func TestOverrideRestoreOfSettingsAloneKeepsProfiles(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	const source = "rules: ['MATCH,DIRECT']\n"
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "one", "label": "Pre-existing"}, "source": source, "select": true})
+	waitDomain(t, app, "add")
+	// Settings alone say nothing about the profiles, so an overriding restore
+	// must not read an absent list as "no profiles".
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	entry, _ := writer.Create("config.json")
+	_, _ = entry.Write([]byte(`{"futureSetting":{"value":"keep"}}`))
+	_ = writer.Close()
+	blob := upload(t, app, archive.Bytes())
+	request(t, app, "restore", "backup.restore", map[string]any{"token": blob.Token, "replace": true})
+	waitDomain(t, app, "restore")
+	record, err := app.ProfileSource("one")
+	if err != nil || record.Source != source {
+		t.Fatalf("settings-only restore dropped a profile: %+v %v", record, err)
+	}
+	if !bytes.Contains(app.Snapshot().Catalog.Settings["futureSetting"], []byte("keep")) {
+		t.Fatal("settings-only restore lost its settings")
+	}
+}
+
 func TestTransferRetryAndRangeGuards(t *testing.T) {
 	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
 	blob, err := app.newBlob()
