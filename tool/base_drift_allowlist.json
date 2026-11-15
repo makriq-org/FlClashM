@@ -2839,6 +2839,16 @@
       "path": "core/delay_test.go",
       "bucket": "budget",
       "reason": "Регрессии задержек load-balance относятся к Go Core форка, где живёт их реализация."
+    },
+    {
+      "path": "lib/views/dashboard/edit.dart",
+      "bucket": "budget",
+      "reason": "Редактор карточек помечает расстановку пользовательской, чтобы обновление подписки её не заменяло; данные по-прежнему в Go-снимке."
+    },
+    {
+      "path": "lib/views/proxies/setting.dart",
+      "bucket": "budget",
+      "reason": "Страница настроек прокси связывает переключатель скрытия таймаутов с ключом подписки `view.proxies.hidetimeout`."
     }
   ]
 }
