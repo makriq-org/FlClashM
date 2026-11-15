@@ -56,6 +56,11 @@
       "reason": "Тесты обёртки ядра закрепляют актуализацию runtime-снимка и отмену внутренних запросов."
     },
     {
+      "path": "core/connection_test.go",
+      "bucket": "budget",
+      "reason": "Тест закрепляет закрытие уже принятых и дозванивающихся соединений при остановке."
+    },
+    {
       "path": "core/constant.go",
       "bucket": "budget",
       "reason": "Контракт внутреннего HTTP IPC и runtime-снимка является частью API обёртки ядра."
@@ -286,6 +291,11 @@
       "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
     },
     {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/RequestCodes.kt",
+      "bucket": "budget",
+      "reason": "Коды запросов согласия VPN не дают позднему ответу диалога выдать себя за новый запрос."
+    },
+    {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
       "bucket": "budget",
       "reason": "Платформенная склейка Android и ограничение фрагментов IPC защищают общий буфер Binder при передаче больших профилей."
@@ -314,6 +324,11 @@
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
       "bucket": "budget",
       "reason": "Единая Android-политика удаляет секреты до app-private файла и logcat."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/RequestCodesTest.kt",
+      "bucket": "budget",
+      "reason": "Тест фиксирует выдачу и освобождение кодов запросов согласия VPN."
     },
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStoreTest.kt",
@@ -639,6 +654,11 @@
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
+    },
+    {
+      "path": "lib/views/config/filters.dart",
+      "bucket": "budget",
+      "reason": "Проверка фильтра повторяется, если поля изменились во время асинхронной проверки, и закрывает страницу только при актуальном результате."
     },
     {
       "path": "lib/views/config/general.dart",
