@@ -166,19 +166,24 @@ class ProfileHeadersAction extends _$ProfileHeadersAction {
   }) {
     ref.read(appSettingProvider.notifier).update((state) {
       final panelSet = state.panelSetSettings;
-      if (said && !owned.contains(key)) {
+      if (said) {
+        if (owned.contains(key)) {
+          return state;
+        }
         return set(
           state,
           on: true,
         ).copyWith(panelSetSettings: {...panelSet, key});
       }
-      if (said || !panelSet.contains(key)) {
+      if (!panelSet.contains(key) || owned.contains(key)) {
+        // While the user owns the setting the marker stays, so handing it back
+        // still resets the value the panel once set.
         return state;
       }
-      final cleared = state.copyWith(
-        panelSetSettings: {...panelSet}..remove(key),
+      return set(
+        state.copyWith(panelSetSettings: {...panelSet}..remove(key)),
+        on: false,
       );
-      return owned.contains(key) ? cleared : set(cleared, on: false);
     });
   }
 }
