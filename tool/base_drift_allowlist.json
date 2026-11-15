@@ -2804,6 +2804,21 @@
       "path": "core/network_reset_test.go",
       "bucket": "budget",
       "reason": "Регрессия завершения сброса соединений проверяет общий mutex runLock/selectMu и обновление поколения диагностики без повторного захвата."
+    },
+    {
+      "path": "lib/common/input_limits.dart",
+      "bucket": "budget",
+      "reason": "Границы ввода принадлежат форку: интервалы ограничены значениями, которые mihomo и DateTime ещё держат."
+    },
+    {
+      "path": "lib/models/profile_settings.dart",
+      "bucket": "budget",
+      "reason": "Применение настроек профиля в форке отбрасывает значения вне безопасных границ ввода, а не переносит их в runtime."
+    },
+    {
+      "path": "lib/providers/state/custom_import.dart",
+      "bucket": "budget",
+      "reason": "Импорт custom-профиля в форке переименовывает резервный выход группы вместе с прокси, иначе собранный план ссылается на старое имя."
     }
   ]
 }
