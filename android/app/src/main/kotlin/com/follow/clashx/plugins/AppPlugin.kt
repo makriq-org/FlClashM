@@ -24,6 +24,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.follow.clashx.FlClashApplication
 import com.follow.clashx.R
+import com.follow.clashx.common.RequestCodes
 import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.extensions.getBase64
 import com.follow.clashx.models.Package
@@ -91,6 +92,11 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     // Accessed only on the main thread (channel handlers + onActivityResult).
     private val vpnCallBacks = mutableListOf<(granted: Boolean) -> Unit>()
 
+    // A consent dialog outlives the activity that opened it, and its late answer
+    // used to be taken as the answer to a newer start. Every launch takes its own
+    // code, and only the code that still waits for an answer settles the queue.
+    private val vpnConsentCodes = RequestCodes(VPN_CONSENT_FIRST_CODE, VPN_CONSENT_CODE_COUNT)
+
     private val iconMap: MutableMap<String, String?> = Collections.synchronizedMap(
         object : LinkedHashMap<String, String?>(128, 0.75f, true) {
             override fun removeEldestEntry(eldest: Map.Entry<String, String?>?): Boolean = size > 200
@@ -109,8 +115,6 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             frontendChannel.invokeMethod("packagesChanged", null)
         }
     }
-
-    val VPN_PERMISSION_REQUEST_CODE = 1001
 
     val NOTIFICATION_PERMISSION_REQUEST_CODE = 1002
 
@@ -637,7 +641,15 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 // Only the first requester launches the consent dialog; the rest
                 // ride along and are resolved together in onActivityResult.
                 if (!alreadyInFlight) {
-                    activity.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
+                    val code = vpnConsentCodes.issue()
+                    if (code == null) {
+                        // Every code still waits for a dialog that never came back.
+                        // Refuse the start instead of reusing a code that would let
+                        // an older answer settle this one.
+                        resolvePendingVpnPermission(false)
+                    } else {
+                        activity.startActivityForResult(intent, code)
+                    }
                 }
                 return
             }
@@ -711,13 +723,14 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         channel.invokeMethod("exit", null)
         frontendChannel.invokeMethod("exit", null)
         detachActivity()
+        // A result for a launch this activity made can no longer arrive, so the
+        // codes it still holds must not lock the next consent out.
+        vpnConsentCodes.reset()
         resolvePendingPermissions()
     }
 
     private fun resolvePendingPermissions() {
-        val vpn = vpnCallBacks.toList()
-        vpnCallBacks.clear()
-        vpn.forEach { it(false) }
+        resolvePendingVpnPermission(false)
         val apps = installedAppsCallbacks.toList()
         installedAppsCallbacks.clear()
         apps.forEach { it() }
@@ -735,14 +748,20 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
-            val granted = resultCode == FlutterActivity.RESULT_OK
-            val pending = vpnCallBacks.toList()
-            vpnCallBacks.clear()
-            pending.forEach { it.invoke(granted) }
+        if (requestCode in vpnConsentCodes) {
+            // A launch the activity replaced can still answer late; ignoring it
+            // keeps the newer start from inheriting that answer.
+            if (!vpnConsentCodes.answers(requestCode)) return true
+            resolvePendingVpnPermission(resultCode == FlutterActivity.RESULT_OK)
             return true
         }
         return false
+    }
+
+    private fun resolvePendingVpnPermission(granted: Boolean) {
+        val pending = vpnCallBacks.toList()
+        vpnCallBacks.clear()
+        pending.forEach { it.invoke(granted) }
     }
 
     private fun onRequestPermissionsResultListener(
@@ -829,6 +848,8 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private companion object {
         const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
         const val LOCAL_NETWORK_PERMISSION_REQUEST_CODE = 1004
+        const val VPN_CONSENT_FIRST_CODE = 1100
+        const val VPN_CONSENT_CODE_COUNT = 64
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     }
 }
