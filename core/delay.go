@@ -40,7 +40,8 @@ func waitForDelaySlot(wait context.Context, timeout time.Duration) bool {
 }
 
 // testDelay measures one node. A false second value means the test never got a
-// slot, which says nothing about the node itself.
+// slot or the node went to sleep first, which says nothing about the node
+// itself.
 func testDelay(
 	wait context.Context,
 	proxy constant.Proxy,
@@ -51,10 +52,28 @@ func testDelay(
 	if _, ok := adapterAs[*outboundgroup.LoadBalance](proxy); ok {
 		return testBalancerDelay(wait, balancedNodes(proxy), url, timeout, expected)
 	}
+	return testMemberDelay(wait, proxy, url, timeout, expected, false)
+}
+
+// testMemberDelay probes one node after queueing for a slot. A balancer member
+// may go to sleep while it queues, and probing it then reaches a stopped
+// listener and records a live node as dead, so the state is read again once the
+// slot is held.
+func testMemberDelay(
+	wait context.Context,
+	proxy constant.Proxy,
+	url string,
+	timeout time.Duration,
+	expected utils.IntRanges[uint16],
+	member bool,
+) (int32, bool) {
 	if !waitForDelaySlot(wait, timeout) {
 		return 0, false
 	}
 	defer testDelaySem.Release(1)
+	if member && nodeAsleep(proxy.Name()) {
+		return 0, false
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	delay, err := proxy.URLTest(ctx, url, expected)
@@ -95,7 +114,9 @@ func testBalancerDelay(
 		goDelayTest("balancer delay test", func() {
 			var result nodeDelay
 			defer func() { results <- result }()
-			result.value, result.tested = testDelay(wait, node, url, timeout, expected)
+			result.value, result.tested = testMemberDelay(
+				wait, node, url, timeout, expected, true,
+			)
 		})
 	}
 	value, complete := delayFailed, true
@@ -154,6 +175,17 @@ func sleepingNodes() map[string]bool {
 		}
 	}
 	return names
+}
+
+// nodeAsleep reads one node's state now; a snapshot taken before queueing for a
+// slot may be out of date by the time the probe runs.
+func nodeAsleep(name string) bool {
+	for _, node := range runtimeNodes() {
+		if node.Name == name {
+			return !node.Awake || node.State == "sleeping"
+		}
+	}
+	return false
 }
 
 // runtimeNodes reads the node snapshots of the running backend; tests replace
