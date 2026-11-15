@@ -633,7 +633,7 @@
     {
       "path": "lib/views/access.dart",
       "bucket": "budget",
-      "reason": "Живой редактор доступа использует product AccessControlService только как источник состояния, пакетов и profile-managed lock."
+      "reason": "Живой редактор доступа использует product AccessControlService как источник состояния, пакетов и profile-managed lock; компоновка согласована с FlClashX: отступ от шапки с учётом TopInsetScope, поиск в шапке, массовый выбор и отдельное состояние разрешения."
     },
     {
       "path": "lib/views/application_setting.dart",
