@@ -213,7 +213,7 @@ func TestProcessLifetimeAndStopFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var args []string
-	if json.Unmarshal(raw, &args) != nil || strings.Join(args, " ") != "--ip 127.0.0.1 --port "+strconv.Itoa(port)+" --auth-file "+filepath.Join(directory, "auth.txt")+" -d1 -s2" {
+	if json.Unmarshal(raw, &args) != nil || strings.Join(args, " ") != "--ip 127.0.0.1 --port "+strconv.Itoa(port)+" --auth-file "+filepath.Join(directory, "auth.txt")+" --no-udp -d1 -s2" {
 		t.Fatalf("argv %s", raw)
 	}
 	if auth, err := os.ReadFile(filepath.Join(directory, "auth.txt")); err != nil || string(auth) != "user\npassword\n" {

@@ -196,6 +196,9 @@ func TestExternalTransportCompilation(t *testing.T) {
 			if proxy["type"] != wantType || proxy["server"] != "127.0.0.1" || proxy["username"] == "" || proxy["password"] == "" {
 				t.Fatalf("unsafe engine node %#v", proxy)
 			}
+			if node.UDP || (wantType == "socks5" && proxy["udp"] != false) || (wantType == "http" && proxy["udp"] != nil) {
+				t.Fatalf("built-in proxy unexpectedly enables UDP: node=%#v proxy=%#v", node, proxy)
+			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file
 			artifact := node.Files[key]
 			if !strings.Contains(artifact, tt.expected) {
@@ -209,6 +212,13 @@ func TestExternalTransportCompilation(t *testing.T) {
 				t.Fatal("unstable listener identity")
 			}
 		})
+	}
+}
+
+func TestExternalTransportRejectsUDP(t *testing.T) {
+	config := mustProfile(t, "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1', udp: true}]")
+	if _, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "https://example.com/check"); err == nil || !strings.Contains(err.Error(), "UDP is disabled") {
+		t.Fatalf("explicit built-in UDP was not rejected: %v", err)
 	}
 }
 

@@ -268,7 +268,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		if e != nil {
 			return e
 		}
-		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", filepath.Join(directory, "auth.txt")}, argv...)
+		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", filepath.Join(directory, "auth.txt"), "--no-udp"}, argv...)
 	default:
 		return errors.New("unsupported transport")
 	}

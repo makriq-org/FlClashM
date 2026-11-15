@@ -171,6 +171,119 @@ func TestNaiveProbeUsesAuthenticatedHTTPProxy(t *testing.T) {
 	}
 }
 
+func TestNaiveHTTPProbeUsesDoHAddressThroughAuthenticatedConnect(t *testing.T) {
+	var requests atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodConnect || r.Host != "8.8.8.8:80" {
+			t.Errorf("unexpected CONNECT target: method=%s host=%s", r.Method, r.Host)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Proxy-Authorization") != "Basic c2VydmljZS11c2VyOnNlcnZpY2UtcGFzc3dvcmQ=" {
+			t.Errorf("missing CONNECT credentials: %q", r.Header.Get("Proxy-Authorization"))
+			w.WriteHeader(http.StatusProxyAuthRequired)
+			return
+		}
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("HTTP test proxy cannot hijack the tunnel")
+			return
+		}
+		connection, rw, err := hijacker.Hijack()
+		if err != nil {
+			t.Errorf("hijack CONNECT: %v", err)
+			return
+		}
+		defer connection.Close()
+		if _, err = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err == nil {
+			err = rw.Flush()
+		}
+		if err != nil {
+			t.Errorf("establish CONNECT: %v", err)
+			return
+		}
+		request, err := http.ReadRequest(rw.Reader)
+		if err != nil {
+			t.Errorf("read tunneled request: %v", err)
+			return
+		}
+		if request.Method != http.MethodHead || request.URL.RequestURI() != "/check" || request.Host != "example.com" {
+			t.Errorf("tunnel lost the origin request: method=%s uri=%s host=%s", request.Method, request.URL.RequestURI(), request.Host)
+			return
+		}
+		requests.Add(1)
+		_, _ = rw.WriteString("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		_ = rw.Flush()
+	}))
+	defer proxy.Close()
+
+	doh := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read DoH request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		question := new(dns.Msg)
+		if err = question.Unpack(body); err != nil {
+			t.Errorf("decode DoH question: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		answer := new(dns.Msg)
+		answer.SetReply(question)
+		answer.Answer = []dns.RR{&dns.A{
+			Hdr: dns.RR_Header{Name: question.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
+			A:   net.IPv4(8, 8, 8, 8),
+		}}
+		wire, _ := answer.Pack()
+		w.Header().Set("Content-Type", "application/dns-message")
+		_, _ = w.Write(wire)
+	}))
+	defer doh.Close()
+
+	roots := x509.NewCertPool()
+	roots.AddCert(doh.Certificate())
+	dohPort := doh.Listener.Addr().(*net.TCPAddr).Port
+	proxyHost, proxyPortText, err := net.SplitHostPort(proxy.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxyPort, err := strconv.Atoi(proxyPortText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := &SOCKSProbe{
+		RootCAs: roots,
+		Direct: netpolicy.Dialer{
+			ResolveIPs: func(context.Context, string) ([]netip.Addr, error) {
+				return []netip.Addr{netip.MustParseAddr("9.9.9.9")}, nil
+			},
+			Connect: func(ctx context.Context, network, address string) (net.Conn, error) {
+				if address != net.JoinHostPort("9.9.9.9", strconv.Itoa(dohPort)) {
+					t.Errorf("DoH destination was not pinned: %s", address)
+				}
+				return (&net.Dialer{}).DialContext(ctx, network, doh.Listener.Addr().String())
+			},
+		},
+	}
+	request := backend.NodeProbe{
+		Host:      proxyHost,
+		Port:      proxyPort,
+		URL:       "http://example.com/check",
+		Resolver:  "https://example.com:" + strconv.Itoa(dohPort) + "/dns-query",
+		ProxyType: "naiveproxy",
+		Username:  "service-user",
+		Password:  "service-password",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	passed, err := probe.Probe(ctx, request)
+	if err != nil || !passed || requests.Load() != 1 {
+		t.Fatalf("HTTP DoH CONNECT probe: passed=%v requests=%d err=%v", passed, requests.Load(), err)
+	}
+}
+
 func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodHead {

@@ -368,7 +368,7 @@ class AndroidRuntimeE2eTest {
                 // Only the source parser may reject it: an argument, token or
                 // revision failure would leave the parse path unverified.
                 assertTrue("Invalid source rejected for another reason: ${rejected?.message}",
-                    rejected?.message.orEmpty().startsWith("yaml:"))
+                    rejected?.message.orEmpty().startsWith("profile.import.file: yaml:"))
                 assertEquals(largeSource, Service.backend("profile.get", JSONObject().put("profileId", "fixture")).getString("source"))
                 assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }

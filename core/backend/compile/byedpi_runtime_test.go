@@ -156,7 +156,7 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	cmd := exec.CommandContext(ctx, binary, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials)
+	cmd := exec.CommandContext(ctx, binary, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials, "--no-udp")
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
@@ -181,6 +181,21 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	unauthenticated, err := net.DialTimeout("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = unauthenticated.SetDeadline(time.Now().Add(time.Second))
+	if _, err = unauthenticated.Write([]byte{5, 1, 0}); err != nil {
+		unauthenticated.Close()
+		t.Fatal(err)
+	}
+	unauthenticatedResponse := make([]byte, 2)
+	if _, err = io.ReadFull(unauthenticated, unauthenticatedResponse); err != nil || !bytes.Equal(unauthenticatedResponse, []byte{5, 255}) {
+		unauthenticated.Close()
+		t.Fatalf("unauthenticated SOCKS5 was accepted: response=%v err=%v", unauthenticatedResponse, err)
+	}
+	_ = unauthenticated.Close()
 	if _, err = conn.Write([]byte{5, 1, 2}); err != nil {
 		t.Fatal(err)
 	}
@@ -197,5 +212,12 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	}
 	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {
 		t.Fatalf("RFC 1929 response %v: %v\n%s", response, err, output.String())
+	}
+	if _, err = conn.Write([]byte{5, 3, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	udpResponse := make([]byte, 10)
+	if _, err = io.ReadFull(conn, udpResponse); err != nil || udpResponse[0] != 5 || udpResponse[1] == 0 {
+		t.Fatalf("UDP ASSOCIATE was not rejected: response=%v err=%v", udpResponse, err)
 	}
 }

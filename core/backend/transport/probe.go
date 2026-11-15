@@ -1,10 +1,12 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net"
@@ -37,6 +39,54 @@ type SOCKSProbe struct {
 	mu      sync.Mutex
 	cache   map[string]dnsEntry
 	flights singleflight.Group
+}
+
+type bufferedProxyConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func (c *bufferedProxyConn) Read(p []byte) (int, error) {
+	return c.reader.Read(p)
+}
+
+func dialAuthenticatedHTTPConnect(ctx context.Context, proxyAddress, targetAddress, username, password string) (net.Conn, error) {
+	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddress)
+	if err != nil {
+		return nil, err
+	}
+	failed := true
+	defer func() {
+		if failed {
+			_ = connection.Close()
+		}
+	}()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := connection.SetDeadline(deadline); err != nil {
+			return nil, err
+		}
+	}
+	stopClose := context.AfterFunc(ctx, func() { _ = connection.Close() })
+	defer stopClose()
+
+	authorization := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	request := "CONNECT " + targetAddress + " HTTP/1.1\r\n" +
+		"Host: " + targetAddress + "\r\n" +
+		"Proxy-Authorization: Basic " + authorization + "\r\n" +
+		"Proxy-Connection: keep-alive\r\n\r\n"
+	if _, err := io.WriteString(connection, request); err != nil {
+		return nil, err
+	}
+	reader := bufio.NewReaderSize(connection, 4<<10)
+	response, err := http.ReadResponse(reader, &http.Request{Method: http.MethodConnect})
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New("authenticated HTTP proxy CONNECT failed: " + response.Status)
+	}
+	failed = false
+	return &bufferedProxyConn{Conn: connection, reader: reader}, nil
 }
 
 func (p *SOCKSProbe) ClearDNSCache() {
@@ -111,11 +161,19 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		proxyURL := url.URL{Scheme: "http", User: url.UserPassword(request.Username, request.Password), Host: socksAddress}
 		transport.Proxy = http.ProxyURL(&proxyURL)
 		if !strings.EqualFold(target, endpoint.Hostname()) {
-			probeURL.Host = net.JoinHostPort(target, port)
-			transport.TLSClientConfig = &tls.Config{
-				RootCAs:    p.RootCAs,
-				MinVersion: tls.VersionTLS12,
-				ServerName: endpoint.Hostname(),
+			if endpoint.Scheme == "http" {
+				targetAddress := net.JoinHostPort(target, port)
+				transport.Proxy = nil
+				transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return dialAuthenticatedHTTPConnect(ctx, socksAddress, targetAddress, request.Username, request.Password)
+				}
+			} else {
+				probeURL.Host = net.JoinHostPort(target, port)
+				transport.TLSClientConfig = &tls.Config{
+					RootCAs:    p.RootCAs,
+					MinVersion: tls.VersionTLS12,
+					ServerName: endpoint.Hostname(),
+				}
 			}
 		}
 	} else {

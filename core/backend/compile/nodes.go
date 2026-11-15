@@ -123,12 +123,9 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, errors.New("external listener port range exhausted")
 		}
 		reserved[port] = true
-		udp := kind == "byedpi"
-		if value, ok := raw["udp"]; ok {
-			udp = value == true
-		}
-		if udp && kind != "byedpi" {
-			return nil, errors.New("external transport does not support UDP")
+		udp := false
+		if raw["udp"] == true {
+			return nil, errors.New("UDP is disabled for built-in proxies")
 		}
 		check, activation, err := nodeChecks(raw, kind, name, config, testURL)
 		if err != nil {
