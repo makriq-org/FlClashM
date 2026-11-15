@@ -73,8 +73,10 @@ func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isN
 		}
 		return a.patchSettings(ctx, profiles.Object{"appSetting": jsonValue(appPatch)}, 0)
 	}
+	// Cards the user arranged stay put here too: the legacy trigger must not
+	// undo what the modern path respects.
 	widgets := providerWidgets(header("widgets"))
-	if len(widgets) > 0 {
+	if len(widgets) > 0 && (profiles.ProviderSpecial(headers, "denywidgets") || !slices.Contains(owned, providerWidgetsSetting)) {
 		appPatch["dashboardWidgets"] = jsonValue(widgets)
 	}
 	if len(appPatch) > 0 {
