@@ -46,6 +46,25 @@ void main() {
     );
   });
 
+  test('a direct download accepts only a whole final response', () {
+    final accepts = tunnelDownloadOptions.validateStatus!;
+
+    for (final statusCode in <int>[200, 204, 299]) {
+      expect(accepts(statusCode), isTrue, reason: 'HTTP $statusCode');
+    }
+    // dio treats every 2xx as a success, so a 206 has to be named here.
+    for (final statusCode in <int?>[
+      null,
+      199,
+      HttpStatus.partialContent,
+      300,
+      404,
+      500,
+    ]) {
+      expect(accepts(statusCode), isFalse, reason: 'HTTP $statusCode');
+    }
+  });
+
   group('decompressUnlabeled', () {
     test('inflates a body nothing labelled and passes a plain one through', () {
       final yaml = Uint8List.fromList(utf8.encode('proxies: []\n'));

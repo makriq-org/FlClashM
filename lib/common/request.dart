@@ -56,12 +56,7 @@ class Request {
           options: Options(
             responseType: responseType,
             headers: {...headers, ...target.headers},
-            // Nothing asks for a range, so a 206 is a cut-off copy.
-            validateStatus: (status) =>
-                status != null &&
-                status >= 200 &&
-                status < 300 &&
-                status != HttpStatus.partialContent,
+            validateStatus: tunnelDownloadOptions.validateStatus,
           ),
           cancelToken: cancelToken,
           onReceiveProgress: (received, total) {
@@ -133,6 +128,7 @@ class Request {
         url,
         targetPath,
         onReceiveProgress: onProgress,
+        options: tunnelDownloadOptions,
       );
       return;
     }
@@ -397,6 +393,16 @@ String? getFileNameForDisposition(String? disposition) {
   if (fileNameKey.isEmpty) return null;
   return parameters[fileNameKey];
 }
+
+/// Nothing asks for a range, so a 206 is a cut-off copy even on a direct
+/// download, where dio would otherwise accept it as a success.
+final Options tunnelDownloadOptions = Options(
+  validateStatus: (status) =>
+      status != null &&
+      status >= 200 &&
+      status < 300 &&
+      status != HttpStatus.partialContent,
+);
 
 Response<T> validateTunnelHttpResponse<T>(Response<T> response) {
   final statusCode = response.statusCode;
