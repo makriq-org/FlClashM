@@ -11,7 +11,7 @@ _SubscriptionInfo _$SubscriptionInfoFromJson(Map<String, dynamic> json) =>
       upload: (json['upload'] as num?)?.toInt() ?? 0,
       download: (json['download'] as num?)?.toInt() ?? 0,
       total: (json['total'] as num?)?.toInt() ?? 0,
-      expire: (json['expire'] as num?)?.toInt() ?? 0,
+      expire: json['expire'] == null ? 0 : _validExpire(json['expire'] as num),
     );
 
 Map<String, dynamic> _$SubscriptionInfoToJson(_SubscriptionInfo instance) =>
