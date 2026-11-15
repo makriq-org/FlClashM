@@ -427,6 +427,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       child: CommonScaffold(
         isLoading: isLoading,
         searchState: AppBarSearchState(onSearch: _onSearch),
+        searchInBar: true,
         searchActions: profileUnavailable ? const [] : [?selectAllAction],
         title: context.appLocalizations.appAccessControl,
         confirmationAction: hasChanges
@@ -436,68 +437,67 @@ class _AccessViewState extends ConsumerState<AccessView>
                 tooltip: context.appLocalizations.save,
               )
             : null,
+        iconActions: profileUnavailable ? const [] : [?selectAllAction],
         menuItems: profileUnavailable
             ? const []
-            : [
-                ..._buildMenuItems(
-                  context,
-                  enable: accessControl.enable,
-                  locked: locked,
-                  releasable: releasable,
-                ),
-                if (selectAllAction != null)
-                  CommonPopupMenuItem(
-                    glyph: selectAllAction.glyph,
-                    label: selectAllAction.tooltip!,
-                    onPressed: selectAllAction.onPressed,
-                  ),
-              ],
-        body: resolvingProfile
-            ? const Center(child: CommonCircleLoading.page())
-            : profileFailed
-            ? NullStatus(
-                label: appLocalizations.error,
-                illustration: NullStatusIllustration.error,
-                action: TonalButton(
-                  size: TonalButtonSize.bar,
-                  glyph: AppGlyphs.refresh,
-                  label: appLocalizations.retry,
-                  onPressed: () =>
-                      ref.invalidate(profileDeclaredAccessProvider),
-                ),
-              )
-            : FloatingFootBar(
-                bar: _AccessStatus(
-                  accessControl: accessControl,
-                  selectedCount: valueList.length,
-                  onEnable: () => _handleEnable(true),
-                ),
-                body: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (locked)
-                      const ManagedSettingsHint(
-                        keys: {accessControlSettingKey},
-                      ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: needsInstalledAppsPermission
-                          ? _buildInstalledAppsPermissionStatus()
-                          : ManagedSetting(
-                              settingKey: accessControlSettingKey,
-                              child: DisabledMask(
-                                status: !accessControl.enable,
-                                child: _buildContent(
-                                  packages: viewPackages,
-                                  selected: selectedNames,
-                                  isSearching: query.isNotEmpty,
-                                ),
+            : _buildMenuItems(
+                context,
+                enable: accessControl.enable,
+                locked: locked,
+                releasable: releasable,
+              ),
+        body: AppBarClearance(
+          // Clearance consumed the header; descendants only need the content gap.
+          child: TopInsetScope(
+            inset: 12,
+            child: resolvingProfile
+                ? const Center(child: CommonCircleLoading.page())
+                : profileFailed
+                ? NullStatus(
+                    label: appLocalizations.error,
+                    illustration: NullStatusIllustration.error,
+                    action: TonalButton(
+                      size: TonalButtonSize.bar,
+                      glyph: AppGlyphs.refresh,
+                      label: appLocalizations.retry,
+                      onPressed: () =>
+                          ref.invalidate(profileDeclaredAccessProvider),
+                    ),
+                  )
+                : needsInstalledAppsPermission
+                ? _buildInstalledAppsPermissionStatus()
+                : FloatingFootBar(
+                    bar: _AccessStatus(
+                      accessControl: accessControl,
+                      selectedCount: valueList.length,
+                      onEnable: () => _handleEnable(true),
+                    ),
+                    body: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (locked)
+                          const ManagedSettingsHint(
+                            keys: {accessControlSettingKey},
+                          ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: ManagedSetting(
+                            settingKey: accessControlSettingKey,
+                            child: DisabledMask(
+                              status: !accessControl.enable,
+                              child: _buildContent(
+                                packages: viewPackages,
+                                selected: selectedNames,
+                                isSearching: query.isNotEmpty,
                               ),
                             ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+          ),
+        ),
       ),
     );
   }
@@ -617,8 +617,10 @@ class AccessControlPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16)
-          .copyWith(top: context.contentTopPadding, bottom: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 16).copyWith(
+        top: context.contentTopPadding,
+        bottom: 32 + context.bottomInset,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
