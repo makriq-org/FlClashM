@@ -65,10 +65,14 @@ Set<String> managedSettings(Ref ref) {
   final view = ref.watch(
     currentProfileProvider.select((profile) => profile?.headers.view),
   );
+  final specials = ref.watch(
+    currentProfileProvider.select((profile) => profile?.headers.specials),
+  );
   final declaredAccess = ref.watch(profileDeclaredAccessProvider).value;
   return {
     if (switches != null) ...appSwitchSettings.values,
     ...managedViewKeysOf(view),
+    if (specials?.contains('hideip') ?? false) hideIpSetting,
     ...ref.watch(managedClashKeysProvider),
     if (declaredAccess != null) accessControlSettingKey,
   };
