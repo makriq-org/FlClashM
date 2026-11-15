@@ -110,6 +110,7 @@ func handleStartListener() bool {
 		return true
 	}
 	isRunning = true
+	listenersAccepting.Store(true)
 	if currentConfig != nil {
 		// On Android TUN is driven by a file descriptor from VpnService in
 		// handleStartTun, not by mihomo's internal TUN — keep cfg flag off.
@@ -156,10 +157,16 @@ func handleStopListener() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	isRunning = false
+	listenersAccepting.Store(false)
 	// Keep health-check forwarder running so proxy pings stay fresh in the UI
 	// while the VPN is off. It is torn down only on full shutdown.
 	stopRequestForwarder()
 	stopListeners()
+	// A closed listener only turns new connections away; those it already
+	// accepted would keep going through the proxy. Those still resolving or
+	// dialing out have no tracker yet, so they are closed from the client side.
+	closeConnections()
+	closeOpenInbound()
 	return true
 }
 
@@ -185,10 +192,13 @@ func handleShutdown() bool {
 	// and guarded by its own logMu (never takes runLock), so calling it here is safe.
 	handleStopLog()
 	stopListeners()
+	closeConnections()
+	closeOpenInbound()
 	executor.Shutdown()
 	runtime.GC()
 	isInit.Store(false)
 	isRunning = false
+	listenersAccepting.Store(false)
 	tunUp.Store(false)
 	currentConfig = nil
 	currentRuntimeRawConfig = map[string]any{}
