@@ -2849,6 +2849,41 @@
       "path": "lib/views/proxies/setting.dart",
       "bucket": "budget",
       "reason": "Страница настроек прокси связывает переключатель скрытия таймаутов с ключом подписки `view.proxies.hidetimeout`."
+    },
+    {
+      "path": "lib/common/l10n_labels.dart",
+      "bucket": "budget",
+      "reason": "Подпись пункта «Соединения» теперь называет объединённую страницу, а не только активные соединения."
+    },
+    {
+      "path": "lib/views/connection/connection_feeds.dart",
+      "bucket": "budget",
+      "reason": "Объединённая страница «Соединения» держит оба списка и переключает их меню заголовка; данные по-прежнему из Go-снимков."
+    },
+    {
+      "path": "lib/views/connection/connections.dart",
+      "bucket": "budget",
+      "reason": "Список активных соединений принимает меню заголовка от объединённой страницы; опрос и данные не менялись."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connection_stats.dart",
+      "bucket": "budget",
+      "reason": "Плитки главной берут подпись ленты из своего перечня, а не из подписи страницы."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connections_table.dart",
+      "bucket": "budget",
+      "reason": "Таблица главной различает подпись ленты и подпись страницы «Соединения»."
+    },
+    {
+      "path": "lib/views/navigation.dart",
+      "bucket": "budget",
+      "reason": "Пункт «Последние запросы» убран: обе ленты открываются одной страницей «Соединения»."
+    },
+    {
+      "path": "lib/views/views.dart",
+      "bucket": "budget",
+      "reason": "Экспорт объединённой страницы соединений."
     }
   ]
 }
