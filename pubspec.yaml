@@ -74,7 +74,7 @@ dependencies:
   # In-app zashboard panel (Android/iOS/macOS; no Windows/Linux implementation —
   # those fall back to the external browser).
   webview_flutter: ^4.14.1
-  flutter_local_notifications: ^22.3.2
+  flutter_local_notifications: ^23.0.0
   rust_api:
     path: plugins/rust_api
   material_ui: ^1.5.0
