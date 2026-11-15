@@ -1,6 +1,10 @@
 package compile
 
-import "testing"
+import (
+	"strconv"
+	"strings"
+	"testing"
+)
 
 // mihomo reads an unquoted short-id as a number, which turns 0123 into 123 and
 // makes the proxy authenticate with the wrong id.
@@ -59,4 +63,51 @@ func equalValue(got, want any) bool {
 		return true
 	}
 	return false
+}
+
+// A document well inside the size limit can still name one big anchor from
+// thousands of short-id fields, and each list field copies it. The budget has
+// to stop that before the copies are made.
+func TestRealityShortIDAliasesStayWithinBudget(t *testing.T) {
+	var builder strings.Builder
+	builder.WriteString("x-ids: &ids [")
+	for i := 0; i < 2000; i++ {
+		if i > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString("00")
+	}
+	builder.WriteString("]\nproxies:\n")
+	for i := 0; i < 2000; i++ {
+		builder.WriteString("  - {name: p")
+		builder.WriteString(strconv.Itoa(i))
+		builder.WriteString(", type: vless, server: s, port: 443, reality-opts: {public-key: pk, short-id: *ids}}\n")
+	}
+	_, err := ParseProfile(builder.String())
+	if err == nil {
+		t.Fatal("an expanding short-id alias was accepted")
+	}
+	if !strings.Contains(err.Error(), "short-id") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// A profile reusing one short-id anchor from a handful of fields stays valid.
+func TestRealityShortIDSharedAnchorStillParses(t *testing.T) {
+	var builder strings.Builder
+	builder.WriteString("x-reality: &reality {public-key: pk, short-id: 0123}\nproxies:\n")
+	for i := 0; i < 200; i++ {
+		builder.WriteString("  - {name: p")
+		builder.WriteString(strconv.Itoa(i))
+		builder.WriteString(", type: vless, server: s, port: 443, reality-opts: *reality}\n")
+	}
+	config, err := ParseProfile(builder.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range list(config["proxies"]) {
+		if got := object(object(entry)["reality-opts"])["short-id"]; got != "0123" {
+			t.Fatalf("short-id = %#v", got)
+		}
+	}
 }
