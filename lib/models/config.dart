@@ -218,6 +218,7 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool autoRun,
     @Default(false) bool openLogs,
     @Default(true) bool closeConnections,
+    @Default(RequestFeed.live) RequestFeed requestFeed,
     @Default(defaultTestUrl) String testUrl,
     @Default(8000) int delayTestTimeout,
     @Default(TabAnimation.slide)
