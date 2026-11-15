@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flclashx/common/request.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,5 +37,34 @@ void main() {
         throwsA(isA<DioException>()),
       );
     }
+  });
+
+  test('tunnel HTTP transport rejects a partial response', () {
+    expect(
+      () => validateTunnelHttpResponse(response(HttpStatus.partialContent)),
+      throwsA(isA<DioException>()),
+    );
+  });
+
+  group('decompressUnlabeled', () {
+    test('inflates a body nothing labelled and passes a plain one through', () {
+      final yaml = Uint8List.fromList(utf8.encode('proxies: []\n'));
+
+      expect(decompressUnlabeled(yaml), same(yaml));
+      expect(decompressUnlabeled(Uint8List.fromList(gzip.encode(yaml))), yaml);
+    });
+
+    test('leaves a body that claims compression but is broken', () {
+      final broken = Uint8List.fromList([0x1f, 0x8b, 0x08, 0x00]);
+
+      expect(decompressUnlabeled(broken), same(broken));
+    });
+
+    test('gives up once the output passes the limit', () {
+      final body = Uint8List.fromList(gzip.encode(Uint8List(4096)));
+
+      expect(decompressUnlabeled(body, limit: 4096), hasLength(4096));
+      expect(decompressUnlabeled(body, limit: 4095), isNull);
+    });
   });
 }
