@@ -192,11 +192,9 @@ func (a *App) customizeView(ctx context.Context, metadata profiles.Object) error
 			if !has {
 				panelSet = append(panelSet, key)
 			}
-		case !said && has:
+		case !said && has && !owns(key):
 			panelSet = slices.DeleteFunc(panelSet, func(item string) bool { return item == key })
-			if !owns(key) {
-				appPatch[strings.TrimPrefix(key, "app.")] = jsonValue(false)
-			}
+			appPatch[strings.TrimPrefix(key, "app.")] = jsonValue(false)
 		}
 	}
 	panelSaid("app.hideIp", profiles.ProviderSpecial(headers, "hideip"))

@@ -305,3 +305,54 @@ func TestHideIpFlagComesAndGoesWithThePanel(t *testing.T) {
 		t.Fatalf("hideip overrode the user's setting: %v, panel set %v", on, set)
 	}
 }
+
+// TestHideIpMarkerSurvivesUserOwnership keeps the panel's marker while the user
+// owns the setting: dropping it there would leave the value the panel set with
+// nothing to reset once the setting is handed back.
+func TestHideIpMarkerSurvivesUserOwnership(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	read := func() (bool, []string) {
+		t.Helper()
+		var settings struct {
+			HideIp   bool     `json:"hideIp"`
+			PanelSet []string `json:"panelSetSettings"`
+		}
+		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+			t.Fatal(err)
+		}
+		return settings.HideIp, settings.PanelSet
+	}
+	apply := func(special string) {
+		t.Helper()
+		if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-special": special})}, false, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	patch := func(fields map[string]any) {
+		t.Helper()
+		if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(fields)}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply("hideip")
+	if on, set := read(); !on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("hideip = %v, panel set %v", on, set)
+	}
+	// The user takes the setting and turns it off; the panel still sends the flag.
+	patch(map[string]any{"hideIp": false, "ownedSettings": []string{"app.hideIp"}})
+	apply("hideip")
+	if on, set := read(); on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("the panel overrode the user: hideip = %v, panel set %v", on, set)
+	}
+	// The panel stops sending it while the user still owns the setting.
+	apply("")
+	if on, set := read(); on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("the marker was dropped under the user: hideip = %v, panel set %v", on, set)
+	}
+	// Handing it back now clears the marker and the value the panel once set.
+	patch(map[string]any{"ownedSettings": []string{}})
+	apply("")
+	if on, set := read(); on || len(set) != 0 {
+		t.Fatalf("released setting kept the panel's value: hideip = %v, panel set %v", on, set)
+	}
+}
