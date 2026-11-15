@@ -49,14 +49,32 @@ class Request {
   }) {
     final target = downloadTarget(url);
     final cancelToken = CancelToken();
+    var oversized = false;
     return _clashDio
         .getUri<T>(
           target.uri,
           options: Options(
             responseType: responseType,
             headers: {...headers, ...target.headers},
+            // Nothing asks for a range, so a 206 is a cut-off copy.
+            validateStatus: (status) =>
+                status != null &&
+                status >= 200 &&
+                status < 300 &&
+                status != HttpStatus.partialContent,
           ),
           cancelToken: cancelToken,
+          onReceiveProgress: (received, total) {
+            if (received > maxDownloadBytes || total > maxDownloadBytes) {
+              oversized = true;
+              cancelToken.cancel();
+            }
+          },
+        )
+        .catchError(
+          (Object _) =>
+              throw MessageException(currentAppLocalizations.fileTooLarge),
+          test: (_) => oversized,
         )
         .timeout(
           timeout,
@@ -163,6 +181,14 @@ class Request {
         );
       }
       final statusCode = response['status-code'] as int?;
+      if (statusCode == HttpStatus.partialContent) {
+        // Nothing asks for a range, so a 206 is a cut-off copy.
+        throw DioException(
+          requestOptions: RequestOptions(path: url),
+          type: DioExceptionType.badResponse,
+          message: 'Tunnel download returned a partial response.',
+        );
+      }
       if (statusCode == null || statusCode < 200 || statusCode >= 300) {
         throw DioException(
           requestOptions: RequestOptions(path: url),

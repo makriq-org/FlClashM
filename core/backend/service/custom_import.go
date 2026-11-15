@@ -278,6 +278,10 @@ func (a *App) importAuthoring(ctx context.Context, params json.RawMessage) (Rece
 				}
 				data, err = func() ([]byte, error) {
 					defer response.Body.Close()
+					// No Range is requested, so a partial response is a cut-off copy.
+					if response.StatusCode == http.StatusPartialContent {
+						return nil, errors.New("provider returned a partial response")
+					}
 					if response.StatusCode < 200 || response.StatusCode >= 300 {
 						return nil, fmt.Errorf("provider HTTP status %d", response.StatusCode)
 					}

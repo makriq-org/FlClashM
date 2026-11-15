@@ -335,6 +335,33 @@ func TestResourceUpdateCASOwnedDownloadAndRead(t *testing.T) {
 		t.Fatal("late response changed URL")
 	}
 }
+func TestResourceRefreshRejectsPartialResponse(t *testing.T) {
+	var partial atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if partial.Load() {
+			w.WriteHeader(http.StatusPartialContent)
+		}
+		_, _ = io.WriteString(w, "payload: ['+.example.com']")
+	}))
+	defer server.Close()
+	app, _ := testAuthoringApp(t)
+	snapshot := authoringRequest(t, app)
+	snapshot.Collections["clashProviders"] = []authoring.Object{collectionRow(map[string]any{"id": int64(42), "label": "Domains", "url": server.URL, "contentBase64": "", "behavior": "classical", "format": "yaml"})}
+	request(t, app, "partial-declare", "authoring.replace", map[string]any{"expectedRevision": snapshot.Revision, "collections": snapshot.Collections})
+	waitDomain(t, app, "partial-declare")
+	partial.Store(true)
+	request(t, app, "partial-update", "authoring.resource.update", map[string]any{"collection": "clashProviders", "id": int64(42)})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	receipt, err := app.Await(ctx, "partial-update")
+	if err != nil || receipt.Status != "failed" {
+		t.Fatalf("partial response accepted: %#v %v", receipt, err)
+	}
+	row := authoringRequest(t, app).Collections["clashProviders"][0]
+	if authoring.String(row, "contentBase64") != "" || authoring.String(row, "content") != "" {
+		t.Fatal("partial response replaced the resource")
+	}
+}
 func TestPreviewAgeAndShareLinkImportsUsePureCodecs(t *testing.T) {
 	app, _ := testAuthoringApp(t)
 	identity, err := age.GenerateX25519Identity()
