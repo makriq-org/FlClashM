@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
@@ -16,15 +17,20 @@ type processOutput struct {
 	mu        sync.Mutex
 	partial   []byte
 	truncated bool
+	redactor  *strings.Replacer
 	dropped   int
 	lines     chan string
 	done      chan struct{}
 }
 
-func newProcessOutput(kind string, log func(string, string)) *processOutput {
+func newProcessOutput(kind string, log func(string, string), user, password string) *processOutput {
 	o := &processOutput{}
 	if log == nil {
 		return o
+	}
+	if user != "" && password != "" {
+		basic := base64.StdEncoding.EncodeToString([]byte(user + ":" + password))
+		o.redactor = strings.NewReplacer(basic, "[redacted]", user, "[redacted]", password, "[redacted]")
 	}
 	o.lines = make(chan string, outputQueueLines)
 	o.done = make(chan struct{})
@@ -57,7 +63,14 @@ func (o *processOutput) Write(data []byte) (int, error) {
 
 func (o *processOutput) flushLine() {
 	line := strings.TrimSpace(strings.ToValidUTF8(string(o.partial), ""))
-	if o.truncated {
+	if o.redactor != nil {
+		if o.truncated {
+			// The cutoff may have split a service credential.
+			line = outputTruncated
+		} else {
+			line = o.redactor.Replace(line)
+		}
+	} else if o.truncated {
 		line += outputTruncated
 	}
 	if line != "" {

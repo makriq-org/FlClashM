@@ -1,7 +1,9 @@
 package transport
 
 import (
+	"encoding/base64"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +17,7 @@ func TestOutputRetainsBoundedUTF8LinesAndExitReason(t *testing.T) {
 			t.Errorf("wrong diagnostic source: %s", kind)
 		}
 		lines = append(lines, line)
-	})
+	}, "", "")
 	for _, fragment := range []string{"first\r", "\nsec", "ond\n", strings.Repeat("界", 4000), "\nlast"} {
 		if n, err := o.Write([]byte(fragment)); err != nil || n != len(fragment) {
 			t.Fatalf("write: %d %v", n, err)
@@ -45,7 +47,7 @@ func TestSlowDiagnosticsDoNotBlockProcessOutputOrFinish(t *testing.T) {
 			<-release
 		}
 		lines = append(lines, line)
-	})
+	}, "", "")
 	_, _ = o.Write([]byte("first\n"))
 	<-entered
 	finished := make(chan struct{})
@@ -67,5 +69,23 @@ func TestSlowDiagnosticsDoNotBlockProcessOutputOrFinish(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(lines, "\n"), "diagnostic queue dropped") {
 		t.Fatal("dropped output was not reported")
+	}
+}
+
+func TestProcessOutputDropsCredentialsAndTruncatedLines(t *testing.T) {
+	const user, password = "private-username", "private-password"
+	basic := base64.StdEncoding.EncodeToString([]byte(user + ":" + password))
+	var lines []string
+	out := newProcessOutput("naiveproxy", func(_, line string) {
+		lines = append(lines, line)
+	}, user, password)
+	_, _ = out.Write([]byte("user=" + user + " pass=" + password + " Basic " + basic + "\n"))
+	prefix := strings.Repeat("x", outputLineBytes-len(outputTruncated)-2)
+	_, _ = out.Write([]byte(prefix + user + "\n"))
+	out.finish(nil)
+	<-out.done
+	want := []string{"user=[redacted] pass=[redacted] Basic [redacted]", outputTruncated, "process exited successfully"}
+	if !slices.Equal(lines, want) {
+		t.Fatal("transport output did not hide complete and truncated credentials")
 	}
 }

@@ -17,13 +17,18 @@ that exact commit into `core/backend/compile/byebyeedpi-strategies.list` and run
 `go test ./backend/compile` from `core`. Keep the source reference and embedded
 list together in the same update; do not restore a Flutter asset copy.
 
-The Android build applies `tool/patches/byedpi-android-ifaddrs.patch` before
-compilation and links libdl. On API 21–23, interface-name lookup fails explicitly;
+The Android build applies both `tool/patches/byedpi-android-ifaddrs.patch` and
+`tool/patches/byedpi-socks-auth.patch` before compilation and links libdl. The
+SOCKS5 listener can require RFC 1929 username/password authentication from a
+private credentials file. The authenticated UDP relay pairs with
+`tool/patches/mihomo-byedpi-udp-token.patch` to verify each relay packet with
+a per-session token exchanged over the authenticated SOCKS5 connection.
+On API 21–23, interface-name lookup fails explicitly;
 literal IP addresses keep working. On API 24+, getifaddrs/freeifaddrs are resolved
-from libc at runtime. Neither symbol is a load-time requirement. The patch also
-skips interface entries without an address. The patch contents participate in
-the asset cache stamp. Updating or reverting the source pin requires reviewing
-the patch and `core/backend/compile/cli_schema.json` together.
+from libc at runtime. Neither symbol is a load-time requirement. The patches and
+resulting ABI hashes participate in the asset cache stamp. Updating or reverting
+the source pin requires reviewing the patches and
+`core/backend/compile/cli_schema.json` together.
 
 Run `bash tool/check_byedpi.sh` in the development shell to compare the policy
 with the pinned upstream option table and launch all bundled and fallback

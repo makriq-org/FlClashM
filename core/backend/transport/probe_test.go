@@ -19,7 +19,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
+func testSOCKS(t *testing.T, target string, seen chan<- string, requireAuth bool) (string, int) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -43,7 +43,45 @@ func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
 				if _, err = io.ReadFull(c, methods); err != nil {
 					return
 				}
-				_, _ = c.Write([]byte{5, 0})
+				method := byte(255)
+				for _, candidate := range methods {
+					if candidate == 2 {
+						method = 2
+						break
+					}
+					if candidate == 0 && !requireAuth {
+						method = 0
+					}
+				}
+				_, _ = c.Write([]byte{5, method})
+				if method == 255 {
+					return
+				}
+				if method == 2 {
+					var authHeader [2]byte
+					if _, err = io.ReadFull(c, authHeader[:]); err != nil || authHeader[0] != 1 {
+						return
+					}
+					user := make([]byte, int(authHeader[1]))
+					if _, err = io.ReadFull(c, user); err != nil {
+						return
+					}
+					var passLength [1]byte
+					if _, err = io.ReadFull(c, passLength[:]); err != nil {
+						return
+					}
+					password := make([]byte, int(passLength[0]))
+					if _, err = io.ReadFull(c, password); err != nil {
+						return
+					}
+					authStatus := byte(1)
+					if string(user) == "service-user" && string(password) == "service-password" {
+						authStatus = 0
+					}
+					if _, err = c.Write([]byte{1, authStatus}); err != nil || authStatus != 0 {
+						return
+					}
+				}
 				request := make([]byte, 4)
 				if _, err = io.ReadFull(c, request); err != nil {
 					return
@@ -94,6 +132,59 @@ func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
 	addr := listener.Addr().(*net.TCPAddr)
 	return "127.0.0.1", addr.Port
 }
+
+func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Errorf("probe changed HTTP method: %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer origin.Close()
+	probes := make(chan string, 1)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes, true)
+	request := backend.NodeProbe{
+		ID:       "node",
+		Host:     host,
+		Port:     port,
+		URL:      "http://example.com/check",
+		Resolver: "system",
+		Username: "service-user",
+		Password: "service-password",
+	}
+	adapter := ProcessAdapter{Prober: &SOCKSProbe{}, processes: map[string]*process{
+		request.ID: {address: net.JoinHostPort(host, strconv.Itoa(port)), done: make(chan struct{})},
+	}}
+	passed, err := adapter.Probe(context.Background(), request)
+	if err != nil || !passed {
+		t.Fatalf("authenticated SOCKS probe: passed=%v err=%v", passed, err)
+	}
+	if target := <-probes; target != "example.com:80" {
+		t.Fatalf("SOCKS target %q", target)
+	}
+}
+
+func TestSOCKSProbeStopsWritingWhenLaunchExits(t *testing.T) {
+	done := make(chan struct{})
+	const address = "127.0.0.1:1080"
+	adapter := ProcessAdapter{processes: map[string]*process{"node": {address: address, done: done}}}
+	check, err := adapter.watchProcess("node", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	close(done)
+	if err := client.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	n, err := (&processConn{Conn: client, check: check}).Write([]byte{1, 1, 'u', 1, 'p'})
+	if n != 0 || err == nil || err.Error() != "external process exited" {
+		t.Fatalf("write was not fenced by the process exit: wrote %d, err %v", n, err)
+	}
+}
+
 func TestSOCKSProbeTLSDoHAndDomainFallback(t *testing.T) {
 	var originRequests atomic.Int32
 	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +225,7 @@ func TestSOCKSProbeTLSDoHAndDomainFallback(t *testing.T) {
 	roots.AddCert(origin.Certificate())
 	roots.AddCert(doh.Certificate())
 	probes := make(chan string, 8)
-	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes, false)
 	dohPort := doh.Listener.Addr().(*net.TCPAddr).Port
 	originPort := origin.Listener.Addr().(*net.TCPAddr).Port
 	prober := &SOCKSProbe{RootCAs: roots, Direct: netpolicy.Dialer{ResolveIPs: func(context.Context, string) ([]netip.Addr, error) {
@@ -193,7 +284,7 @@ func TestStrategyProbeRejectsHTTPFailuresWithoutChangingConnectivityChecks(t *te
 	roots := x509.NewCertPool()
 	roots.AddCert(origin.Certificate())
 	targets := make(chan string, 4)
-	host, port := testSOCKS(t, origin.Listener.Addr().String(), targets)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), targets, false)
 	probe := SOCKSProbe{RootCAs: roots}
 	request := backend.NodeProbe{Host: host, Port: port, URL: "https://example.com:" + strconv.Itoa(origin.Listener.Addr().(*net.TCPAddr).Port) + "/check", Resolver: "system"}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

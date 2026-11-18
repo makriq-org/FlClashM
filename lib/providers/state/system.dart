@@ -245,15 +245,13 @@ Future<VpnOptions> vpnOptions(Ref ref) async {
       ),
     ),
   );
-  final clashConfig = ref.watch(
-    patchClashConfigProvider.select(
-      (state) => (tun: state.tun, mixedPort: state.mixedPort),
-    ),
+  final tun = ref.watch(
+    patchClashConfigProvider.select((state) => state.tun),
   );
+  final mixedPort = ref.watch(effectiveMixedPortProvider);
   final vpnSetting = ref.watch(vpnSettingProvider);
   final safeMode = ref.watch(safeModeProvider);
   final routeAddress = ref.watch(vpnRouteAddressProvider.future);
-  final tun = clashConfig.tun;
   return VpnOptions(
     enable: vpnSetting.enable && !safeMode,
     stack: tun.stack.name,
@@ -261,10 +259,11 @@ Future<VpnOptions> vpnOptions(Ref ref) async {
     // mixed port is left to TUN instead of declared as the system proxy.
     systemProxy:
         vpnSetting.systemProxy &&
+        mixedPort != 0 &&
         !networkSetting.authenticated &&
         !safeMode &&
         !ref.watch(androidSecureProvider),
-    port: clashConfig.mixedPort,
+    port: mixedPort,
     ipv6: vpnSetting.ipv6,
     dnsHijacking: vpnSetting.dnsHijacking,
     accessControlProps: vpnSetting.accessControlProps.withPackages(

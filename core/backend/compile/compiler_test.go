@@ -189,8 +189,13 @@ func TestExternalTransportCompilation(t *testing.T) {
 			}
 			node := nodes[0]
 			proxy := object(list(config["proxies"])[0])
-			if proxy["type"] != "socks5" || proxy["server"] != "127.0.0.1" || len(proxy) != 5 {
-				t.Fatalf("unsafe engine node %#v", proxy)
+			user, password := text(proxy["username"]), text(proxy["password"])
+			if proxy["type"] != "socks5" || proxy["server"] != "127.0.0.1" ||
+				user == "" || password == "" || user != node.Metadata["service-auth-user"] || password != node.Metadata["service-auth-password"] {
+				t.Fatal("engine proxy does not match the authenticated loopback node")
+			}
+			if want := tt.kind == "byedpi"; node.UDP != want || proxy["udp"] != want || (proxy["flclashm-udp-token"] == true) != want {
+				t.Fatal("built-in proxy compiled with the wrong UDP settings")
 			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file
 			artifact := node.Files[key]
@@ -200,9 +205,57 @@ func TestExternalTransportCompilation(t *testing.T) {
 			if tt.kind == "stormdns" && !strings.Contains(artifact, "UPLOAD_COMPRESSION_TYPE = 1") {
 				t.Fatal("preset not rendered")
 			}
-			again, err := (&ExternalCompiler{}).Compile(context.Background(), mustProfile(t, "proxies: ["+tt.source+"]"), defaults(), "https://example.com/check")
-			if err != nil || again[0].Port != node.Port || again[0].ID != node.ID {
-				t.Fatal("unstable listener identity")
+			nextConfig := mustProfile(t, "proxies: ["+tt.source+"]")
+			again, err := (&ExternalCompiler{}).Compile(context.Background(), nextConfig, defaults(), "https://example.com/check")
+			if err != nil || len(again) != 1 || !reflect.DeepEqual(again[0], node) || !reflect.DeepEqual(nextConfig, config) {
+				t.Fatal("unchanged listener configuration did not recompile identically")
+			}
+		})
+	}
+}
+
+func TestByeDPIExplicitUDPSettings(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		udp   bool
+	}{{"true", true}, {"false", false}} {
+		config := mustProfile(t, "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1', udp: "+tc.field+"}]")
+		nodes, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		proxy := object(list(config["proxies"])[0])
+		if len(nodes) != 1 || nodes[0].UDP != tc.udp || proxy["udp"] != tc.udp || (proxy["flclashm-udp-token"] == true) != tc.udp {
+			t.Fatal("ByeDPI did not honor the configured UDP setting")
+		}
+	}
+}
+
+func TestAndroidMixedPortRequiresExplicitChoice(t *testing.T) {
+	c := Compiler{
+		Capabilities: Capabilities{Platform: "android"},
+		Validate:     func(context.Context, Object) error { return nil },
+	}
+	for _, tc := range []struct {
+		name, profile string
+		owned         []any
+		want          float64
+	}{
+		{name: "legacy default", profile: "proxies: []", want: 0},
+		{name: "profile opts in", profile: "mixed-port: 17890", want: 17890},
+		{name: "user opts in", profile: "proxies: []", owned: []any{"clash.mixed-port"}, want: 7890},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := prepared(t, c, Input{
+				Version: 1,
+				Profile: &RawProfile{ID: "p", Text: tc.profile},
+				Settings: Object{
+					"patchClashConfig": Object{"mixed-port": 7890},
+					"appSetting":       Object{"ownedSettings": tc.owned},
+				},
+			})
+			if result.Config["mixed-port"] != tc.want {
+				t.Fatalf("mixed port = %v, want %v", result.Config["mixed-port"], tc.want)
 			}
 		})
 	}
@@ -465,7 +518,7 @@ func TestStormDNSCacheChangesWithWireFormatAndMTULimits(t *testing.T) {
 	fingerprint := func() string {
 		t.Helper()
 		node := Node{ID: "stormdns-test", Port: 36200, Metadata: map[string]string{}, Files: map[string]string{}}
-		if err := compiler.buildStormDNS(context.Background(), raw, &node); err != nil {
+		if err := compiler.buildStormDNS(context.Background(), raw, &node, "test-user", "test-password"); err != nil {
 			t.Fatal(err)
 		}
 		return node.Metadata["cache-fingerprint"]

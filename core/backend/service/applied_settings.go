@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"slices"
 
 	"core/backend/compile"
 	"core/backend/profiles"
@@ -33,9 +34,24 @@ func (a *App) retainAppliedSettings(ctx context.Context) {
 	}
 	var current profiles.Object
 	_ = json.Unmarshal(catalog.Settings["patchClashConfig"], &current)
+	var appSettings struct {
+		OwnedSettings []string `json:"ownedSettings"`
+	}
+	appSettingsRaw, _ := json.Marshal(captured.Settings["appSetting"])
+	_ = json.Unmarshal(appSettingsRaw, &appSettings)
+	ownsMixedPort := slices.Contains(appSettings.OwnedSettings, "clash.mixed-port")
 	patch := profiles.Object{}
 	for _, key := range []string{"ipv6", "allow-lan", "mixed-port", "find-process-mode", "mode"} {
-		if raw := applied.Patch[key]; len(raw) > 0 && !bytes.Equal(raw, current[key]) {
+		raw := applied.Patch[key]
+		if key == "mixed-port" && a.compiler.Capabilities.Platform == "android" && !ownsMixedPort {
+			var port int
+			// Android's implicit zero is a runtime security policy, not a fallback
+			// value to retain for the next profile.
+			if json.Unmarshal(raw, &port) == nil && port == 0 {
+				continue
+			}
+		}
+		if len(raw) > 0 && !bytes.Equal(raw, current[key]) {
 			patch[key] = raw
 		}
 	}

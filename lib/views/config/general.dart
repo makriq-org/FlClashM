@@ -87,9 +87,7 @@ class PortItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, ref) {
     final appLocalizations = context.appLocalizations;
-    final mixedPort = ref.watch(
-      patchClashConfigProvider.select((state) => state.mixedPort),
-    );
+    final mixedPort = ref.watch(effectiveMixedPortProvider);
     return ManagedSetting(
       settingKey: 'clash.mixed-port',
       child: ListItem(

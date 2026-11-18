@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,7 +43,10 @@ func TestMain(m *testing.M) {
 		if len(os.Args) > 3 && os.Args[1] == "--backend-parent" {
 			executable, _ := os.Executable()
 			port, _ := strconv.Atoi(os.Args[3])
-			node := backend.NodePlan{ID: "byedpi-" + strings.Repeat("c", 32), Type: "byedpi", Host: "127.0.0.1", Port: port}
+			node := backend.NodePlan{
+				ID: "byedpi-" + strings.Repeat("c", 32), Type: "byedpi", Host: "127.0.0.1", Port: port,
+				Metadata: map[string]string{"service-auth-user": "user", "service-auth-password": "password"},
+			}
 			adapter := &ProcessAdapter{Home: os.Args[2], ABI: "host", Executables: map[string]string{"byedpi": executable}}
 			if err := adapter.Start(context.Background(), backend.NodeLaunch{Node: node, Strategy: "-d1"}); err != nil {
 				os.Exit(5)
@@ -162,7 +166,9 @@ func testNode(t *testing.T, kind string, port int) backend.NodePlan {
 	case "stormdns":
 		name = "client_config.toml"
 	}
-	return backend.NodePlan{ID: id, Type: kind, Host: "127.0.0.1", Port: port, Files: map[string]string{"built-in-proxies/" + kind + "/" + id + "/" + name: `{"args":"-d1 -s2"}`}, Metadata: map[string]string{}}
+	files := map[string]string{"built-in-proxies/" + kind + "/" + id + "/" + name: `{"args":"-d1 -s2"}`}
+	metadata := map[string]string{"service-auth-user": "user", "service-auth-password": "password"}
+	return backend.NodePlan{ID: id, Type: kind, Host: "127.0.0.1", Port: port, Files: files, Metadata: metadata}
 }
 func waitListener(t *testing.T, port int) {
 	t.Helper()
@@ -183,7 +189,7 @@ func TestProcessLifetimeAndStopFence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := &ProcessAdapter{Home: t.TempDir(), ABI: "host", Executables: map[string]string{"byedpi": executable}}
+	adapter := &ProcessAdapter{Home: filepath.Join(t.TempDir(), "path with spaces"), ABI: "host", Executables: map[string]string{"byedpi": executable}}
 	defer adapter.StopAll(context.Background())
 	port, err := adapter.AllocatePort(context.Background())
 	if err != nil {
@@ -209,8 +215,12 @@ func TestProcessLifetimeAndStopFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var args []string
-	if json.Unmarshal(raw, &args) != nil || strings.Join(args, " ") != "--ip 127.0.0.1 --port "+strconv.Itoa(port)+" -d1 -s2" {
+	want := []string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", filepath.Join(directory, "auth.txt"), "--no-udp", "-d1", "-s2"}
+	if json.Unmarshal(raw, &args) != nil || !slices.Equal(args, want) {
 		t.Fatalf("argv %s", raw)
+	}
+	if auth, err := os.ReadFile(filepath.Join(directory, "auth.txt")); err != nil || string(auth) != "user\npassword\n" {
+		t.Fatalf("auth file %q, %v", auth, err)
 	}
 	if err = adapter.Stop(context.Background(), node.ID); err != nil {
 		t.Fatal(err)
@@ -226,6 +236,16 @@ func TestProcessLifetimeAndStopFence(t *testing.T) {
 	}
 	if err = adapter.Start(context.Background(), backend.NodeLaunch{Node: node, Strategy: "--ip 0.0.0.0 -d1"}); err == nil {
 		t.Fatal("runtime host accepted forbidden listener arguments")
+	}
+	probe := node.Clone()
+	probe.ID += "-probe-" + strings.Repeat("b", 32)
+	if err = adapter.Start(context.Background(), backend.NodeLaunch{Node: probe, Strategy: "-d1", Probe: true}); err != nil {
+		t.Fatal(err)
+	}
+	waitListener(t, port)
+	probeDirectory, _ := adapter.directory(probe)
+	if auth, err := os.ReadFile(filepath.Join(probeDirectory, "auth.txt")); err != nil || string(auth) != "user\npassword\n" {
+		t.Fatal("probe did not receive its node's service credentials", err)
 	}
 }
 func TestArtifactsDNSAndCacheInvalidation(t *testing.T) {
