@@ -399,6 +399,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	}
 	access = c.Policy.AccessControl(access, c.Capabilities)
 	vpn["accessControl"] = access
+	c.Policy.ApplyVPN(vpn, metadata, c.Capabilities)
 	name := text(metadata["label"])
 	if name == "" {
 		name = profileID
