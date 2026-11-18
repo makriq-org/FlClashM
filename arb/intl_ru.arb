@@ -246,7 +246,7 @@
   "expand": "Стандартный",
   "shrink": "Сжать",
   "min": "Мин",
-  "oneline": "Линия",
+  "oneline": "Однострочный",
   "tab": "Вкладки",
   "list": "Список",
   "delay": "Задержка",
@@ -563,10 +563,6 @@
   "checkCertificateDesc": "Без проверки TLS-сертификатов подписки и резервные копии уязвимы для атаки «человек посередине».",
   "link": "Ссылка",
   "linkDesc": "Получить профиль по ссылке на подписку или на прокси",
-  "themeStyle": "Режим темы",
-  "themeStyleOriginal": "Оригинальный",
-  "themeStyleEnhanced": "Улучшенный",
-  "themeStyleDesc": "Улучшенный показывает на главной логотип сервиса, тариф, сервер и кнопку подключения вместо сетки виджетов.",
   "website": "Сайт",
   "importFromLink": "Импорт по ссылке",
   "createProfileFromUrlTip": "Создать профиль по ссылке {url}?",
@@ -1248,5 +1244,11 @@
   "preferred": "Предпочтительный",
   "addToLocalProxies": "Добавить в локальные прокси",
   "addedToLocalProxies": "«{name}» добавлен в локальные прокси",
-  "alreadyInLocalProxies": "«{name}» уже есть в локальных прокси"
+  "alreadyInLocalProxies": "«{name}» уже есть в локальных прокси",
+  "pullToTestDelay": "Потяните, чтобы проверить задержку",
+  "releaseToTestDelay": "Отпустите, чтобы проверить задержку",
+  "pullToUpdateSubscription": "Потяните, чтобы обновить подписку",
+  "releaseToUpdateSubscription": "Отпустите, чтобы обновить подписку",
+  "updatingSubscription": "Обновляю подписку…",
+  "subscriptionUpdated": "Подписка обновлена"
 }

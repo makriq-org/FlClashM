@@ -62,8 +62,15 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
     ref.listenManual(appVisibleProvider, (_, visible) {
       ref.read(coreHandlerProvider).setHostActive(visible);
     }, fireImmediately: true);
-    ref.listenManual(profileHeadersActionProvider, (_, _) {});
     ref.listenManual(profileSettingsActionProvider, (_, _) {});
+    // `flclashx-special: noglobal` leaves Global out of the modes on offer, so
+    // a profile that sends it takes the mode away while it is selected.
+    ref.listenManual(globalModeAllowedProvider, (_, allowed) {
+      if (!allowed &&
+          ref.read(patchClashConfigProvider).mode == Mode.global) {
+        ref.read(setupActionProvider.notifier).changeMode(Mode.rule);
+      }
+    }, fireImmediately: true);
     ref.listenManual(suspendProvider, (prev, next) {
       if (prev != next) {
         ref.read(setupActionProvider.notifier).syncSuspend();

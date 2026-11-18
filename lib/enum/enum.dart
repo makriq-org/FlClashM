@@ -243,7 +243,7 @@ enum ProxiesType { tab, list }
 
 enum ProxiesLayout { loose, standard, tight }
 
-enum ProxyCardType { loose, standard, compact }
+enum ProxyCardType { loose, standard, compact, oneline }
 
 enum DnsMode {
   normal,
@@ -824,10 +824,6 @@ enum RestoreStrategy { compatible, override }
 enum TabAnimation { slide, fade }
 
 enum LiquidGlassMode { none, standard, ultra }
-
-/// The home page as upstream draws it, or the fork's hero page around the
-/// service's logo, plan and server.
-enum ThemeStyle { original, enhanced }
 
 enum Language { yaml, javaScript, json }
 

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:collection/collection.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/common/service_probe.dart';
 import 'package:flclashx/features/features.dart';
@@ -20,11 +21,63 @@ import 'package:material_ui/material_ui.dart';
 import 'card.dart';
 import 'proxy_groups.dart';
 
-const _builtinOutbounds = {'DIRECT', 'REJECT', 'REJECT-DROP', 'PASS'};
+/// The country of the first flag emoji on [name], the pick of [group]: in the
+/// name itself, the panel's description of it, or the node it resolves to.
+String? serverFlagCode(Group group, String name, SelectedProxyState? leaf) =>
+    name.flagCountryCode ??
+    group.all
+        .firstWhereOrNull((proxy) => proxy.name == name)
+        ?.serverDescription
+        ?.flagCountryCode ??
+    leaf?.proxyName.flagCountryCode;
 
-bool isBuiltinOutbound(String name) => _builtinOutbounds.contains(name);
+/// The country of the exit address [info] names, for the flag beside it.
+String? exitCountryCode(IpInfo? info) {
+  final code = info?.countryCode.trim().toUpperCase();
+  return code == null || code.isEmpty ? null : code;
+}
 
-const ipMask = '*****';
+/// Looks the exit address up while the user shows it; with the address hidden
+/// no checker is asked at all.
+mixin ExitIpLookup<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  late final OutboundIpProbe _exitProbe;
+  var _following = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _exitProbe = ref.read(outboundIpProbeProvider.notifier);
+    ref.listenManual(
+      appSettingProvider.select((state) => state.hideIp),
+      (_, hideIp) => _follow(!hideIp),
+      fireImmediately: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    _follow(false);
+    super.dispose();
+  }
+
+  void _follow(bool wanted) {
+    if (wanted == _following) {
+      return;
+    }
+    _following = wanted;
+    if (wanted) {
+      _exitProbe.watch(routedOutbound);
+    } else {
+      _exitProbe.unwatch(routedOutbound);
+    }
+  }
+
+  void refreshExitIp() {
+    if (_following) {
+      _exitProbe.refresh(const [routedOutbound]);
+    }
+  }
+}
 
 const _decorationGrowth = 0.12;
 
@@ -40,23 +93,11 @@ class CurrentOutboundCard extends ConsumerStatefulWidget {
 }
 
 class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
-    with ProbeStartHold<CurrentOutboundCard> {
-  late final OutboundIpProbe _probe;
-
-  @override
-  void initState() {
-    super.initState();
-    _probe = ref.read(outboundIpProbeProvider.notifier)..watch(routedOutbound);
-  }
-
-  @override
-  void dispose() {
-    _probe.unwatch(routedOutbound);
-    super.dispose();
-  }
-
+    with
+        ProbeStartHold<CurrentOutboundCard>,
+        ExitIpLookup<CurrentOutboundCard> {
   void _refresh(String? ip) {
-    _probe.refresh(const [routedOutbound]);
+    refreshExitIp();
     if (ip != null && ref.read(ipQualityProvider(ip)).hasError) {
       ref.invalidate(ipQualityProvider(ip));
     }
@@ -73,11 +114,14 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
     );
     final isStart = ref.watch(isStartProvider);
     final suspended = isStart && ref.watch(suspendProvider);
+    final hideIp = ref.watch(
+      appSettingProvider.select((state) => state.hideIp),
+    );
     final entry = ref.watch(
       outboundIpProbeProvider.select((state) => state.entryOf(routedOutbound)),
     );
-    final ipInfo = entry.value;
-    final phase = shownPhase(entry);
+    final ipInfo = hideIp ? null : entry.value;
+    final phase = hideIp ? ProbePhase.empty : shownPhase(entry);
     final failed = phase == ProbePhase.failed && ipInfo == null;
     final qualityState = ipInfo == null
         ? null
@@ -85,6 +129,31 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
     final quality = qualityState?.value;
     final qualityLoading =
         qualityState != null && quality == null && qualityState.isLoading;
+    final serverGroup = ref
+        .watch(currentGroupsStateProvider)
+        .value
+        .panelServerGroup(
+          ref.watch(
+            currentProfileProvider.select(
+              (state) => state?.headers.serverGroup,
+            ),
+          ),
+        );
+    final picked = serverGroup == null
+        ? null
+        : ref.watch(selectedProxyNameProvider(serverGroup.name));
+    final server = serverGroup == null || picked == null || picked.isEmpty
+        ? null
+        : (
+            group: serverGroup.name,
+            name: picked,
+            flag: serverFlagCode(
+              serverGroup,
+              picked,
+              ref.watch(realSelectedProxyStateProvider(picked)),
+            ),
+          );
+    final flag = exitCountryCode(ipInfo) ?? server?.flag;
     final metrics = _OutboundMetrics.of(density);
     final appLocalizations = context.appLocalizations;
     final colorScheme = context.colorScheme;
@@ -167,11 +236,16 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
                             alignment: AlignmentDirectional.centerStart,
                             child: _ExitRow(
                               info: ipInfo,
+                              server: server,
                               failed: failed,
                               checking:
                                   phase == ProbePhase.probing || qualityLoading,
-                              onRefresh: () => _refresh(ipInfo?.ip),
+                              onRefresh: hideIp
+                                  ? null
+                                  : () => _refresh(ipInfo?.ip),
                               active: isStart,
+                              hideIp: hideIp,
+                              flag: flag,
                               metrics: metrics,
                             ),
                           ),
@@ -179,11 +253,14 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
                       else
                         _ExitRow(
                           info: ipInfo,
+                          server: server,
                           failed: failed,
                           checking:
                               phase == ProbePhase.probing || qualityLoading,
-                          onRefresh: () => _refresh(ipInfo?.ip),
+                          onRefresh: hideIp ? null : () => _refresh(ipInfo?.ip),
                           active: isStart,
+                          hideIp: hideIp,
+                          flag: flag,
                           metrics: metrics,
                         ),
                     ],
@@ -277,18 +354,24 @@ class _OutboundMetrics {
 class _ExitRow extends StatelessWidget {
   const _ExitRow({
     required this.info,
+    required this.server,
     required this.failed,
     required this.checking,
     required this.onRefresh,
     required this.active,
+    required this.hideIp,
+    required this.flag,
     required this.metrics,
   });
 
   final IpInfo? info;
+  final _PanelServer? server;
   final bool failed;
   final bool checking;
-  final VoidCallback onRefresh;
+  final VoidCallback? onRefresh;
   final bool active;
+  final bool hideIp;
+  final String? flag;
   final _OutboundMetrics metrics;
 
   @override
@@ -301,23 +384,13 @@ class _ExitRow extends StatelessWidget {
       color: active ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
     ).copyWith(letterSpacing: 0);
     final info = this.info;
-    final Widget address = info != null
-        ? Tooltip(
-            message: appLocalizations.details(appLocalizations.outboundIp),
-            child: FocusRing(
-              shape: AppShape.xs,
-              standsOff: true,
-              child: InkWell(
-                mouseCursor: clickableCursor,
-                onTap: () => showIpQualitySheet(context, ip: info.ip),
-                customBorder: AppShape.xs,
-                hoverColor: Colors.transparent,
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                child: _IpText(ip: info.ip, style: style),
-              ),
-            ),
-          )
+    final server = this.server;
+    final Widget address = hideIp
+        ? server == null
+              ? const SizedBox.shrink()
+              : _ServerName(server: server, style: style)
+        : info != null
+        ? _IpAddress(ip: info.ip, style: style)
         : failed
         ? Text(
             appLocalizations.serviceFailed,
@@ -330,7 +403,7 @@ class _ExitRow extends StatelessWidget {
       spacing: 12,
       children: [
         CountryBadge(
-          countryCode: info?.countryCode,
+          countryCode: flag,
           size: metrics.badgeSize,
           active: active,
           checking: checking,
@@ -357,18 +430,66 @@ class _ExitRow extends StatelessWidget {
   }
 }
 
-class _IpText extends ConsumerWidget {
-  const _IpText({required this.ip, required this.style});
+typedef _PanelServer = ({String group, String name, String? flag});
+
+/// The hero page's server, standing in for an address the user hid.
+class _ServerName extends StatelessWidget {
+  const _ServerName({required this.server, required this.style});
+
+  final _PanelServer server;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: context.appLocalizations.changeServer,
+      child: FocusRing(
+        shape: AppShape.xs,
+        standsOff: true,
+        child: InkWell(
+          mouseCursor: clickableCursor,
+          onTap: () => showProxiesSheet(context, groupName: server.group),
+          customBorder: AppShape.xs,
+          hoverColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: EmojiText(
+            server.name.withoutLeadingFlag,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IpAddress extends StatelessWidget {
+  const _IpAddress({required this.ip, required this.style});
 
   final String ip;
   final TextStyle style;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final hideIp = ref.watch(
-      appSettingProvider.select((state) => state.hideIp),
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    return Tooltip(
+      message: appLocalizations.details(appLocalizations.outboundIp),
+      child: FocusRing(
+        shape: AppShape.xs,
+        standsOff: true,
+        child: InkWell(
+          mouseCursor: clickableCursor,
+          onTap: () => showIpQualitySheet(context, ip: ip),
+          customBorder: AppShape.xs,
+          hoverColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: DashboardFitText(ip, style: style),
+        ),
+      ),
     );
-    return DashboardFitText(hideIp ? ipMask : ip, style: style);
   }
 }
 
@@ -386,7 +507,7 @@ Path _badgePath(double progress) => _badgeMorph.toPath(
 
 /// The exit's country on a circle that checks the exit again when tapped and
 /// grows into a turning clover while it is being checked: a turning circle
-/// would show nothing.
+/// would show nothing. Without [onRefresh] it is a plain flag.
 class CountryBadge extends StatefulWidget {
   const CountryBadge({
     super.key,
@@ -401,7 +522,7 @@ class CountryBadge extends StatefulWidget {
   final double size;
   final bool active;
   final bool checking;
-  final VoidCallback onRefresh;
+  final VoidCallback? onRefresh;
 
   @override
   State<CountryBadge> createState() => _CountryBadgeState();
@@ -472,7 +593,8 @@ class _CountryBadgeState extends State<CountryBadge>
     final foreground = widget.active
         ? colorScheme.onSurface
         : colorScheme.onSurfaceVariant;
-    final enabled = !widget.checking;
+    final onRefresh = widget.onRefresh;
+    final enabled = onRefresh != null && !widget.checking;
     final size = widget.size;
     final code = widget.countryCode;
     final tooltip = context.appLocalizations.retry;
@@ -489,6 +611,26 @@ class _CountryBadgeState extends State<CountryBadge>
           color: foreground,
           letterSpacing: 0.04 * AppTextStyle.footnote.size,
         );
+    final badge = AnimatedBuilder(
+      animation: Listenable.merge([_turns, _shape]),
+      builder: (_, child) => ShapeBadge.path(
+        path: _badgePath(_shape.value),
+        color: color,
+        size: size,
+        rotation: _turns.value * 2 * math.pi,
+        ring: _focused ? focusRingSide(colorScheme) : null,
+        background: flag,
+        child: child,
+      ),
+      child: flag != null
+          ? null
+          : code == null || code.isEmpty
+          ? GlyphIcon(AppGlyphs.proxies, size: size * 0.42, color: foreground)
+          : Text(code.toUpperCase(), maxLines: 1, style: codeStyle),
+    );
+    if (onRefresh == null) {
+      return badge;
+    }
     return Tooltip(
       message: tooltip,
       child: Semantics(
@@ -497,35 +639,12 @@ class _CountryBadgeState extends State<CountryBadge>
         label: tooltip,
         child: InkResponse(
           mouseCursor: clickableCursor,
-          onTap: enabled ? widget.onRefresh : null,
+          onTap: enabled ? onRefresh : null,
           onHover: (value) => setState(() => _hovered = value),
           onFocusChange: (value) => setState(() => _focused = value),
           overlayColor: const WidgetStatePropertyAll(Colors.transparent),
           splashFactory: NoSplash.splashFactory,
-          child: ElasticPress(
-            enabled: enabled,
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_turns, _shape]),
-              builder: (_, child) => ShapeBadge.path(
-                path: _badgePath(_shape.value),
-                color: color,
-                size: size,
-                rotation: _turns.value * 2 * math.pi,
-                ring: _focused ? focusRingSide(colorScheme) : null,
-                background: flag,
-                child: child,
-              ),
-              child: flag != null
-                  ? null
-                  : code == null || code.isEmpty
-                  ? GlyphIcon(
-                      AppGlyphs.proxies,
-                      size: size * 0.42,
-                      color: foreground,
-                    )
-                  : Text(code.toUpperCase(), maxLines: 1, style: codeStyle),
-            ),
-          ),
+          child: ElasticPress(enabled: enabled, child: badge),
         ),
       ),
     );
@@ -580,7 +699,7 @@ class _StartToggleState extends ConsumerState<_StartToggle>
     duration: _morphDuration,
     value: widget.running ? 1 : 0,
   );
-  late final Animation<double> _progress = CurvedAnimation(
+  late final CurvedAnimation _progress = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeOutBack,
     reverseCurve: Curves.easeInCubic,
@@ -609,6 +728,7 @@ class _StartToggleState extends ConsumerState<_StartToggle>
 
   @override
   void dispose() {
+    _progress.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -640,71 +760,83 @@ class _StartToggleState extends ConsumerState<_StartToggle>
         button: true,
         enabled: enabled,
         label: tooltip,
-        child: InkResponse(
-          mouseCursor: clickableCursor,
-          onTap: enabled ? _toggle : null,
-          onHover: (value) => setState(() => _hovered = value),
-          onHighlightChanged: (value) => setState(() => _pressed = value),
-          onFocusChange: (value) => setState(() => _focused = value),
-          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-          splashFactory: NoSplash.splashFactory,
-          child: ElasticPress(
-            enabled: enabled,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(end: _overlay),
-              duration: stateDuration,
-              builder: (_, overlay, child) => AnimatedBuilder(
-                animation: _progress,
-                builder: (_, child) {
-                  final progress = _progress.value;
-                  final color = Color.alphaBlend(
-                    ink.withValues(alpha: overlay),
-                    fill,
-                  );
-                  return CustomPaint(
-                    painter: _MorphPainter(
-                      progress: progress,
-                      color: glass ? null : color,
-                      shadow: enabled
-                          ? colorScheme.primary.withValues(alpha: 0.3)
-                          : Colors.transparent,
-                      ring: _focused
-                          ? focusRingSide(colorScheme, standsOff: true)
-                          : null,
-                    ),
-                    child: glass
-                        ? LiquidGlass(
-                            style: LiquidGlassStyle.tinted(colorScheme, color),
-                            clipper: _MorphClipper(progress),
-                            pressed: _pressed,
-                            child: child,
-                          )
-                        : child,
-                  );
-                },
-                child: child,
-              ),
-              child: SizedBox.square(
-                dimension: size,
-                child: Center(
-                  child: widget.suspended
-                      ? GlyphIcon(
-                          AppGlyphs.wifiOff,
-                          size: size * 0.34,
-                          color: ink,
-                          fill: 1,
-                        )
-                      : TweenAnimationBuilder<double>(
-                          tween: Tween(end: widget.running ? 1 : 0),
-                          duration: _morphDuration,
-                          curve: Curves.easeOutBack,
-                          builder: (_, progress, _) => GlyphIcon(
-                            AppGlyphs.playPause(progress),
+        child: RisingHold(
+          enabled: enabled && system.isAndroid,
+          vibration: AppVibration(
+            enabled: ref.watch(
+              appSettingProvider.select((state) => state.vibration),
+            ),
+          ),
+          onHeld: _toggle,
+          child: InkResponse(
+            mouseCursor: clickableCursor,
+            onTap: enabled ? _toggle : null,
+            onHover: (value) => setState(() => _hovered = value),
+            onHighlightChanged: (value) => setState(() => _pressed = value),
+            onFocusChange: (value) => setState(() => _focused = value),
+            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+            splashFactory: NoSplash.splashFactory,
+            child: ElasticPress(
+              enabled: enabled,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: _overlay),
+                duration: stateDuration,
+                builder: (_, overlay, child) => AnimatedBuilder(
+                  animation: _progress,
+                  builder: (_, child) {
+                    final progress = _progress.value;
+                    final color = Color.alphaBlend(
+                      ink.withValues(alpha: overlay),
+                      fill,
+                    );
+                    return CustomPaint(
+                      painter: _MorphPainter(
+                        progress: progress,
+                        color: glass ? null : color,
+                        shadow: enabled
+                            ? colorScheme.primary.withValues(alpha: 0.3)
+                            : Colors.transparent,
+                        ring: _focused
+                            ? focusRingSide(colorScheme, standsOff: true)
+                            : null,
+                      ),
+                      child: glass
+                          ? LiquidGlass(
+                              style: LiquidGlassStyle.tinted(
+                                colorScheme,
+                                color,
+                              ),
+                              clipper: _MorphClipper(progress),
+                              pressed: _pressed,
+                              child: child,
+                            )
+                          : child,
+                    );
+                  },
+                  child: child,
+                ),
+                child: SizedBox.square(
+                  dimension: size,
+                  child: Center(
+                    child: widget.suspended
+                        ? GlyphIcon(
+                            AppGlyphs.wifiOff,
                             size: size * 0.34,
                             color: ink,
                             fill: 1,
+                          )
+                        : TweenAnimationBuilder<double>(
+                            tween: Tween(end: widget.running ? 1 : 0),
+                            duration: _morphDuration,
+                            curve: Curves.easeOutBack,
+                            builder: (_, progress, _) => GlyphIcon(
+                              AppGlyphs.playPause(progress),
+                              size: size * 0.34,
+                              color: ink,
+                              fill: 1,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
             ),

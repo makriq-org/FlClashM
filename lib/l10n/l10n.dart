@@ -1955,9 +1955,9 @@ class AppLocalizations {
     return Intl.message('Min', name: 'min', desc: '', args: []);
   }
 
-  /// `Oneline`
+  /// `Single line`
   String get oneline {
-    return Intl.message('Oneline', name: 'oneline', desc: '', args: []);
+    return Intl.message('Single line', name: 'oneline', desc: '', args: []);
   }
 
   /// `Tab`
@@ -4475,41 +4475,6 @@ class AppLocalizations {
     return Intl.message(
       'Obtain a profile from a subscription link or a proxy share link',
       name: 'linkDesc',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Theme mode`
-  String get themeStyle {
-    return Intl.message('Theme mode', name: 'themeStyle', desc: '', args: []);
-  }
-
-  /// `Original`
-  String get themeStyleOriginal {
-    return Intl.message(
-      'Original',
-      name: 'themeStyleOriginal',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Enhanced`
-  String get themeStyleEnhanced {
-    return Intl.message(
-      'Enhanced',
-      name: 'themeStyleEnhanced',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Enhanced puts the service logo, plan, server and a connect button on the home page in place of the widget grid.`
-  String get themeStyleDesc {
-    return Intl.message(
-      'Enhanced puts the service logo, plan, server and a connect button on the home page in place of the widget grid.',
-      name: 'themeStyleDesc',
       desc: '',
       args: [],
     );
@@ -10495,6 +10460,66 @@ class AppLocalizations {
       name: 'alreadyInLocalProxies',
       desc: '',
       args: [name],
+    );
+  }
+
+  /// `Pull down to test the delay`
+  String get pullToTestDelay {
+    return Intl.message(
+      'Pull down to test the delay',
+      name: 'pullToTestDelay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Release to test the delay`
+  String get releaseToTestDelay {
+    return Intl.message(
+      'Release to test the delay',
+      name: 'releaseToTestDelay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pull down to update the subscription`
+  String get pullToUpdateSubscription {
+    return Intl.message(
+      'Pull down to update the subscription',
+      name: 'pullToUpdateSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Release to update the subscription`
+  String get releaseToUpdateSubscription {
+    return Intl.message(
+      'Release to update the subscription',
+      name: 'releaseToUpdateSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Updating the subscription…`
+  String get updatingSubscription {
+    return Intl.message(
+      'Updating the subscription…',
+      name: 'updatingSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Subscription updated`
+  String get subscriptionUpdated {
+    return Intl.message(
+      'Subscription updated',
+      name: 'subscriptionUpdated',
+      desc: '',
+      args: [],
     );
   }
 }

@@ -15,6 +15,9 @@ const appSwitchSettings = {
 /// Driven by `flclashx-special: hideip`.
 const hideIpSetting = 'app.hideIp';
 
+/// Driven by `flclashx-special: novibrate`.
+const vibrationSetting = 'app.vibration';
+
 /// Cards the user arranged; `flclashx-widgets` replaces them only under
 /// `denywidgets` or once the settings go back to the subscription.
 const dashboardWidgetsSetting = 'app.dashboardWidgets';
@@ -90,7 +93,6 @@ const networkPageKeys = {
 };
 
 const themePageKeys = {
-  'view.app.board',
   'view.app.theme',
   'view.app.navbar',
   'view.app.tabs',
@@ -121,7 +123,6 @@ Set<String> managedViewKeysOf(ViewRequest? view) {
     if (view.icon != null) 'view.proxies.icon',
     if (view.card != null) 'view.proxies.card',
     if (view.hideTimeout != null) 'view.proxies.hidetimeout',
-    if (view.board != null) 'view.app.board',
     if (view.themeMode != null) 'view.app.theme',
     if (view.floatingNavigationBar != null) 'view.app.navbar',
     if (view.tabAnimation != null) 'view.app.tabs',

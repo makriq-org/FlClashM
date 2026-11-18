@@ -32,6 +32,48 @@ bool globalModeAllowed(Ref ref) {
 }
 
 @riverpod
+bool systemProxyAllowed(Ref ref) {
+  return !ref.watch(
+    currentProfileProvider.select(
+      (profile) => profile?.headers.onlyTun ?? false,
+    ),
+  );
+}
+
+@riverpod
+bool simpleMode(Ref ref) {
+  return ref.watch(
+    currentProfileProvider.select(
+      (profile) => profile?.headers.simpleMode ?? false,
+    ),
+  );
+}
+
+/// Global mode shows GLOBAL instead of the server's group, so its proxies
+/// keep their group headers.
+@riverpod
+bool oneGroup(Ref ref) {
+  final global = ref.watch(
+    patchClashConfigProvider.select((state) => state.mode == Mode.global),
+  );
+  return !global &&
+      ref.watch(
+        currentProfileProvider.select(
+          (profile) => profile?.headers.oneGroup ?? false,
+        ),
+      );
+}
+
+@riverpod
+bool providerMode(Ref ref) {
+  return ref.watch(
+    currentProfileProvider.select(
+      (profile) => profile?.headers.providerMode ?? false,
+    ),
+  );
+}
+
+@riverpod
 bool androidSecure(Ref ref) {
   return system.isAndroid &&
       ref.watch(
