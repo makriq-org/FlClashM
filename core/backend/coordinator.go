@@ -1006,6 +1006,8 @@ func (c *runtimeCoordinator) rollback(e *execution, previous Document) error {
 	if err != nil {
 		return err
 	}
+	running := previous.Applied.Running && previous.Desired.Running
+	rebuilt := false
 	if compiler, ok := c.compiler.(interface{ CanRestorePlan(*RuntimePlan) bool }); ok && !compiler.CanRestorePlan(plan) {
 		plan, err = c.compile(ctx, previous.Applied.Input, e.epoch)
 		if err != nil {
@@ -1014,23 +1016,32 @@ func (c *runtimeCoordinator) rollback(e *execution, previous Document) error {
 		if plan == nil || plan.Generation() != e.epoch || !compiler.CanRestorePlan(plan) {
 			return errors.New("could not rebuild previous plan with current security policy")
 		}
-		if err = c.current(rollback); err != nil {
-			return err
-		}
-		if err = c.install(rollback, plan, previous.Applied.Running); err != nil {
-			return err
-		}
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if c.closed || c.epoch != e.epoch {
-			return nil
-		}
-		restored := cloneDocument(c.document)
-		restored.Applied.Plan = plan.Data()
-		restored.Applied.Nodes = c.persistedNodes()
-		return c.saveLocked(restored)
+		rebuilt = true
 	}
-	return c.install(rollback, plan, previous.Applied.Running)
+	if err = c.install(rollback, plan, running); err != nil {
+		c.residentDigest = ""
+		return errors.Join(err, c.cleanup())
+	}
+	if !rebuilt && running == previous.Applied.Running {
+		return nil
+	}
+	c.mu.Lock()
+	if c.closed || c.epoch != e.epoch {
+		c.mu.Unlock()
+		return errors.Join(ErrSuperseded, c.cleanup())
+	}
+	restored := cloneDocument(c.document)
+	restored.Applied.Plan = plan.Data()
+	restored.Applied.Running = running
+	restored.Applied.Nodes = c.persistedNodes()
+	err = c.saveLocked(restored)
+	c.mu.Unlock()
+	if err != nil {
+		// A rebuilt generation is usable only once its applied plan is durable.
+		c.residentDigest = ""
+		return errors.Join(err, c.cleanup())
+	}
+	return nil
 }
 
 // Close is process teardown, not user Stop: persisted desired intent survives.

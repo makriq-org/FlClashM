@@ -655,6 +655,88 @@ func TestRollbackRecompilesPlanFromPreviousSecurityPolicy(t *testing.T) {
 	}
 }
 
+func TestRollbackRespectsInterruptedStop(t *testing.T) {
+	for _, rebuild := range []bool{false, true} {
+		t.Run(fmt.Sprint(rebuild), func(t *testing.T) {
+			store := newStore(t)
+			old := openHost(t, store, newHost())
+			run(t, old, "connect", "connect", `{"profile":"old"}`)
+			if err := old.Close(); err != nil {
+				t.Fatal(err)
+			}
+			doc, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc.Generation++
+			doc.Desired.Running = false
+			doc.Pending = &Pending{OperationID: "stop", Method: "stop", Generation: doc.Generation}
+			if err := store.Save(doc); err != nil {
+				t.Fatal(err)
+			}
+			h := newHost()
+			h.fail = "engine.apply"
+			var compiler Compiler = h
+			if rebuild {
+				compiler = upgradedHostCompiler{h}
+			}
+			b, err := Open(store, compiler, hostEngine{h}, hostTransports{h}, hostPlatform{h})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			expectFailure(t, b, "recover", "recover", "")
+			doc, err = store.Load()
+			if err != nil || doc.Applied.Running || doc.Desired.Running {
+				t.Fatalf("stopped state was not persisted: %+v, %v", doc.Applied, err)
+			}
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			for _, call := range h.calls {
+				if call == "platform.start" {
+					t.Fatal("rollback restarted a VPN after a persisted Stop")
+				}
+			}
+		})
+	}
+}
+
+type failRebuiltRollbackStore struct{ Store }
+
+func (store failRebuiltRollbackStore) Save(doc Document) error {
+	if doc.Pending != nil && doc.Applied != nil && doc.Applied.Plan.Generation == doc.Generation {
+		return errors.New("injected rebuilt rollback commit failure")
+	}
+	return store.Store.Save(doc)
+}
+
+func TestUnsavedRebuiltRollbackStopsRuntime(t *testing.T) {
+	store := newStore(t)
+	old := openHost(t, store, newHost())
+	run(t, old, "connect", "connect", `{"profile":"old"}`)
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h := newHost()
+	h.fail = "engine.apply"
+	b, err := Open(failRebuiltRollbackStore{store}, upgradedHostCompiler{h}, hostEngine{h}, hostTransports{h}, hostPlatform{h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	expectFailure(t, b, "recover", "recover", "")
+	if snapshot := b.Snapshot(); snapshot.Observed.State != "degraded" {
+		t.Fatal(snapshot)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for name, running := range h.states {
+		if running {
+			t.Errorf("%s stayed running after rollback could not be saved", name)
+		}
+	}
+}
+
 func TestCleanupFailureNeverClaimsStopped(t *testing.T) {
 	h := newHost()
 	b := openHost(t, newStore(t), h)
