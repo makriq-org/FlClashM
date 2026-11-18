@@ -4,3 +4,5 @@ assets/data/*.metadb binary
 
 # Unified diffs prefix Go tab indentation with a context marker.
 tool/patches/*.patch whitespace=-space-before-tab
+# Context lines in the upstream C patch can end with spaces.
+tool/patches/byedpi-socks-auth.patch whitespace=-blank-at-eol,-space-before-tab

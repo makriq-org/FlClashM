@@ -3,6 +3,7 @@ package compile
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -156,7 +157,7 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	cmd := exec.CommandContext(ctx, binary, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials, "--no-udp")
+	cmd := exec.CommandContext(ctx, binary, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials)
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
@@ -196,7 +197,25 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 		t.Fatalf("unauthenticated SOCKS5 was accepted: response=%v err=%v", unauthenticatedResponse, err)
 	}
 	_ = unauthenticated.Close()
-	if _, err = conn.Write([]byte{5, 1, 2}); err != nil {
+	writePartial := func(part []byte) {
+		t.Helper()
+		if _, err := conn.Write(part); err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		var b [1]byte
+		if _, err := conn.Read(b[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("incomplete negotiation should wait for more data, got %v", err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writePartial([]byte{5})
+	writePartial([]byte{1})
+	if _, err = conn.Write([]byte{2}); err != nil {
 		t.Fatal(err)
 	}
 	response := make([]byte, 2)
@@ -207,7 +226,10 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	request := append([]byte{1, byte(len(username))}, username...)
 	request = append(request, byte(len(password)))
 	request = append(request, password...)
-	if _, err = conn.Write(request); err != nil {
+	writePartial(request[:2])
+	writePartial(request[2:4])
+	writePartial(request[4 : len(request)-2])
+	if _, err = conn.Write(request[len(request)-2:]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {

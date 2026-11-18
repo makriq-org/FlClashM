@@ -1,5 +1,5 @@
 diff --git a/conev.h b/conev.h
-index 4c5a4c8..04cd47d 100644
+index 4c5a4c8..e5c1bef 100644
 --- a/conev.h
 +++ b/conev.h
 @@ -51,6 +51,7 @@ typedef int (*evcb_t)(struct poolhd *, struct eval *, int);
@@ -10,11 +10,20 @@ index 4c5a4c8..04cd47d 100644
  #define FLAG_CONN 4
  #define FLAG_HTTP 8
  
+@@ -81,6 +82,8 @@ struct eval {
+     struct eval *pair;
+     struct buffer *buff, *sq_buff;
+     int flag;
++    size_t auth_read;
++    char auth_frame[513]; // VER, ULEN, UNAME, PLEN, PASSWD
+     union sockaddr_u addr;
+     char *host;
+     int host_len;
 diff --git a/main.c b/main.c
-index ed82d6e..dfd69fc 100644
+index 646711d..5122775 100644
 --- a/main.c
 +++ b/main.c
-@@ -67,6 +67,7 @@ struct params params = {
+@@ -70,6 +70,7 @@ struct params params = {
  static const char help_text[] = {
      "    -i, --ip, <ip>            Listening IP, default 0.0.0.0\n"
      "    -p, --port <num>          Listening port, default 1080\n"
@@ -22,7 +31,7 @@ index ed82d6e..dfd69fc 100644
      #ifdef DAEMON
      "    -D, --daemon              Daemonize\n"
      "    -w, --pidfile <filename>  Write PID to file\n"
-@@ -140,6 +141,7 @@ const struct option options[] = {
+@@ -143,6 +144,7 @@ const struct option options[] = {
      {"version",       0, 0, 'v'},
      {"ip",            1, 0, 'i'},
      {"port",          1, 0, 'p'},
@@ -30,7 +39,7 @@ index ed82d6e..dfd69fc 100644
      #ifdef __linux__
      {"transparent",   0, 0, 'E'},
      #endif
-@@ -823,6 +825,29 @@ int parse_args(int argc, char **argv)
+@@ -842,6 +844,29 @@ int parse_args(int argc, char **argv)
              else
                  params.laddr.in.sin_port = htons(val);
              break;
@@ -60,11 +69,14 @@ index ed82d6e..dfd69fc 100644
              
          case 'I':
              if (get_addr(optarg, &params.baddr) < 0)
-@@ -1333,6 +1358,7 @@ int parse_args(int argc, char **argv)
+@@ -1352,6 +1377,10 @@ int parse_args(int argc, char **argv)
          params.ipv6 = 0;
      }
      if (!params.mode) params.mode |= (MODE_SOCKS4 | MODE_SOCKS5);
-+    if (params.auth_enabled) params.mode &= ~MODE_SOCKS4;
++    if (params.auth_enabled) {
++        params.mode = MODE_SOCKS5;
++        params.udp = 0;
++    }
      return 0;
  }
  
@@ -83,7 +95,7 @@ index 6ab2ec5..33382a7 100644
      int debug;
      size_t bfsize;
 diff --git a/proxy.c b/proxy.c
-index 45fc05b..115238b 100644
+index 45fc05b..c853e36 100644
 --- a/proxy.c
 +++ b/proxy.c
 @@ -180,11 +180,16 @@ static int auth_socks5(int fd, const char *buffer, ssize_t n)
@@ -136,27 +148,66 @@ index 45fc05b..115238b 100644
  
  static int resp_s5_error(int fd, int e)
  {
-@@ -918,11 +947,17 @@ static int save_buffer(struct poolhd *pool,
+@@ -915,6 +944,53 @@ static int save_buffer(struct poolhd *pool,
+ }
+ 
+ 
++// Negotiation uses nonblocking sockets. Read only the current frame so
++// TCP fragmentation is harmless and following bytes stay queued.
++static int on_socks5_auth(struct eval *val)
++{
++    bool userpass = val->flag == FLAG_S5_AUTH;
++    char *frame = val->auth_frame;
++    size_t required = 2;
++    for (;;) {
++        if (val->auth_read >= required) {
++            if (required == 2) {
++                if ((uint8_t)frame[0] != (userpass ? 1 : S_VER5))
++                    return -1;
++                required += (uint8_t)frame[1] + userpass;
++                if (required > val->auth_read)
++                    continue;
++            }
++            if (userpass && required == 3 + (size_t)(uint8_t)frame[1]) {
++                required += (uint8_t)frame[required - 1];
++                if (required > val->auth_read)
++                    continue;
++            }
++            break;
++        }
++        ssize_t n = recv(val->fd, frame + val->auth_read,
++                required - val->auth_read, 0);
++        if (n < 0) {
++            int err = get_e();
++            if (err == EAGAIN || err == EWOULDBLOCK)
++                return 0;
++            if (err == EINTR)
++                continue;
++        }
++        if (n <= 0)
++            return -1;
++        val->auth_read += n;
++    }
++    int error = userpass
++        ? auth_socks5_userpass(val->fd, frame, required)
++        : auth_socks5(val->fd, frame, required);
++    memset(frame, 0, required);
++    val->auth_read = 0;
++    if (error)
++        return -1;
++    val->flag = userpass ? FLAG_S5 : FLAG_S5_AUTH;
++    return 0;
++}
++
  static int handle_s5(struct poolhd *pool, struct eval *val, 
              struct buffer *buff, ssize_t n, union sockaddr_u *dst)
  {
-+    if (val->flag == FLAG_S5_AUTH) {
-+        if (auth_socks5_userpass(val->fd, buff->data, n))
-+            return 1;
-+        val->flag = FLAG_S5;
-+        return 0;
-+    }
-     if (val->flag != FLAG_S5) {
-         if (auth_socks5(val->fd, buff->data, n)) {
--            return -1;
-+            return 1;
-         }
--        val->flag = FLAG_S5;
-+        val->flag = params.auth_enabled ? FLAG_S5_AUTH : FLAG_S5;
-         return 0;
-     }
-     if (n < S_SIZE_MIN) {
-@@ -976,1 +1010,2 @@ int on_request(struct poolhd *pool, struct eval *val, int et)
--    if ((params.mode & MODE_SOCKS5) && *buff->data == S_VER5) {
-+    if (val->flag == FLAG_S5_AUTH ||
-+            ((params.mode & MODE_SOCKS5) && *buff->data == S_VER5)) {
+@@ -959,6 +1035,8 @@ static int handle_s5(struct poolhd *pool, struct eval *val,
+ 
+ int on_request(struct poolhd *pool, struct eval *val, int et)
+ {
++    if (params.auth_enabled && val->flag != FLAG_S5)
++        return on_socks5_auth(val);
+     union sockaddr_u dst = { 0 };
+     struct buffer *buff = buff_ppop(pool, params.bfsize);
+     if (!buff) {
