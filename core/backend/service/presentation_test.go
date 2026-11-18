@@ -80,6 +80,31 @@ rules: ['MATCH,Rules']`, "select": true,
 	}
 }
 
+func TestNoGlobalDoesNotReplacePersonalMode(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	request(t, app, "set-global", "settings.patch", map[string]any{
+		"patch": map[string]any{"patchClashConfig": map[string]any{"mode": "global"}},
+	})
+	waitRuntime(t, app, waitDomain(t, app, "set-global").RuntimeOperationID)
+	request(t, app, "restricted", "profile.put", map[string]any{
+		"metadata": map[string]any{"id": "restricted", "providerHeaders": map[string]string{"flclashx-special": "noglobal"}},
+		"source":   "rules: ['MATCH,DIRECT']", "select": true,
+	})
+	waitRuntime(t, app, waitDomain(t, app, "restricted").RuntimeOperationID)
+	app.retainAppliedSettings(context.Background())
+	if got := app.Presentation(); got.Mode != "rule" || got.GlobalModeEnabled {
+		t.Fatalf("restricted presentation: %+v", got)
+	}
+	request(t, app, "unrestricted", "profile.put", map[string]any{
+		"metadata": map[string]any{"id": "unrestricted"},
+		"source":   "rules: ['MATCH,DIRECT']", "select": true,
+	})
+	waitRuntime(t, app, waitDomain(t, app, "unrestricted").RuntimeOperationID)
+	if got := app.Presentation(); got.Mode != "global" || !got.GlobalModeEnabled {
+		t.Fatalf("personal Global mode was not restored: %+v", got)
+	}
+}
+
 // TestRulePresentationDoesNotFallBackToGlobal excludes an unused saved selection.
 func TestRulePresentationDoesNotFallBackToGlobal(t *testing.T) {
 	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
