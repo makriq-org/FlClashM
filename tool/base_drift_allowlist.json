@@ -6,6 +6,21 @@
   },
   "allowedBaseDrift": [
     {
+      "path": "lib/providers/actions/system.dart",
+      "bucket": "budget",
+      "reason": "Копирование адреса прокси использует фактически применённый порт из Go."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/intranet_ip.dart",
+      "bucket": "budget",
+      "reason": "Карточка LAN использует фактический порт из Go и пропускает выключенный порт."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/network_takeover.dart",
+      "bucket": "budget",
+      "reason": "Карточка системного прокси отображает фактически применённый порт из Go."
+    },
+    {
       "path": "android/common/build.gradle.kts",
       "bucket": "budget",
       "reason": "Удаление Firebase SDK из общего Android-модуля является обязательным security-изменением форка."
@@ -2399,6 +2414,11 @@
       "path": "lib/providers/state/proxies.dart",
       "bucket": "budget",
       "reason": "В глобальном режиме GLOBAL показывается первой; порядок остальных групп профиля и фильтрация режима по правилам сохранены."
+    },
+    {
+      "path": "lib/providers/state/system.dart",
+      "bucket": "budget",
+      "reason": "Параметры отображения VPN используют смешанный порт из применённого Go-плана."
     },
     {
       "path": "core/backend/profiles/subscription_privacy_test.go",

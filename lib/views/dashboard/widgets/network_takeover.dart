@@ -71,11 +71,7 @@ class _TakeoverRow extends ConsumerWidget {
             patchClashConfigProvider.select((state) => state.tun.enable),
           );
     final on = systemProxy
-        ? appLocalizations.portValue(
-            ref.watch(
-              patchClashConfigProvider.select((state) => state.mixedPort),
-            ),
-          )
+        ? appLocalizations.portValue(ref.watch(effectiveMixedPortProvider))
         : appLocalizations.enabled;
     void change(bool value) => systemProxy
         ? ref

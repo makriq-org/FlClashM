@@ -80,6 +80,13 @@ class FrontendProjection {
       } finally {
         frontendSettingsStore.projecting = false;
       }
+      final appliedConfig = backendClient.runtimeView['config'];
+      final mixedPort = appliedConfig is Map
+          ? appliedConfig['mixed-port']
+          : null;
+      c
+          .read(appliedMixedPortProvider.notifier)
+          .project(mixedPort is int ? mixedPort : null);
       final runtime = backendClient.snapshot['runtime'] as Map? ?? {};
       c
           .read(externalNodesProvider.notifier)

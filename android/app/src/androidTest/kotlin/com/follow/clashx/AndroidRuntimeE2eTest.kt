@@ -20,7 +20,10 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.After
 import org.junit.runner.RunWith
+import java.io.DataInputStream
 import java.io.File
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.ServerSocket
@@ -159,6 +162,57 @@ class AndroidRuntimeE2eTest {
             assertEquals("$type rejected the service credentials", 0, input.read())
         }
     }
+    private fun assertByeDpiUdpRoundTrip(mixedPort: Int) {
+        val loopback = java.net.InetAddress.getByName("127.0.0.1")
+        DatagramSocket(InetSocketAddress(loopback, 0)).use { echo ->
+            echo.soTimeout = 5_000
+            val worker = Thread {
+                runCatching {
+                    val packet = DatagramPacket(ByteArray(128), 128)
+                    echo.receive(packet)
+                    echo.send(packet)
+                }
+            }.apply { isDaemon = true; start() }
+            try {
+                Socket().use { control ->
+                    control.connect(InetSocketAddress(loopback, mixedPort), 1_000)
+                    control.soTimeout = 5_000
+                    val input = DataInputStream(control.getInputStream())
+                    val output = control.getOutputStream()
+                    output.write(byteArrayOf(5, 1, 0))
+                    assertEquals(5, input.readUnsignedByte())
+                    assertEquals(0, input.readUnsignedByte())
+                    output.write(byteArrayOf(5, 3, 0, 1, 0, 0, 0, 0, 0, 0))
+                    assertEquals(5, input.readUnsignedByte())
+                    assertEquals("SOCKS5 UDP association failed", 0, input.readUnsignedByte())
+                    assertEquals(0, input.readUnsignedByte())
+                    val addressSize = when (val type = input.readUnsignedByte()) {
+                        1 -> 4
+                        3 -> input.readUnsignedByte()
+                        4 -> 16
+                        else -> error("Unexpected SOCKS5 address type $type")
+                    }
+                    input.readFully(ByteArray(addressSize))
+                    val relayPort = input.readUnsignedShort()
+                    val header = byteArrayOf(0, 0, 0, 1, 127, 0, 0, 1,
+                        (echo.localPort shr 8).toByte(), echo.localPort.toByte())
+                    val payload = "UDP via ByeDPI".toByteArray()
+                    val request = header + payload
+                    DatagramSocket(InetSocketAddress(loopback, 0)).use { client ->
+                        client.soTimeout = 5_000
+                        client.send(DatagramPacket(request, request.size, loopback, relayPort))
+                        val response = DatagramPacket(ByteArray(128), 128)
+                        client.receive(response)
+                        assertArrayEquals("ByeDPI UDP round trip", request, response.data.copyOf(response.length))
+                    }
+                }
+            } finally {
+                echo.close()
+                worker.join(5_000)
+            }
+        }
+    }
+
     private suspend fun upload(source: String): String {
         val token = Service.backend("blob.create").getString("token")
         val bytes = source.toByteArray(Charsets.UTF_8)
@@ -187,7 +241,7 @@ class AndroidRuntimeE2eTest {
           - {name: LocalNaive, type: naiveproxy, server: example.com, port: 443, username: fixture, password: fixture}
         proxy-groups:
           - {name: Select, type: select, proxies: [LocalBye, DIRECT]}
-        rules: ['MATCH,REJECT']
+        rules: ['IP-CIDR,127.0.0.1/32,LocalBye,no-resolve', 'MATCH,REJECT']
     """.trimIndent()
 
     @Test fun packagedValidatorRepeatedRequests() = runBlocking {
@@ -377,7 +431,7 @@ class AndroidRuntimeE2eTest {
             assertTrue("Remote process not found", remotePid() > 0)
             assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
             val rules = engineSnapshot().getJSONObject("config").getJSONArray("rule")
-            assertEquals("Compiled routing rules never reached the actual engine", "MATCH,REJECT", rules.getString(0))
+            assertEquals("Compiled routing rules never reached the actual engine", "MATCH,REJECT", rules.getString(rules.length() - 1))
             assertEquals("Preparation redundantly downloaded the package list", 1, packageListRequests.get())
             // Every subsequent restart/recovery must work with this URL offline.
             packageListServer?.close()
@@ -447,9 +501,20 @@ class AndroidRuntimeE2eTest {
         try {
             backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("vpnProps", JSONObject().put("enable", false))))
             assertFalse(Service.backend("presentation").getBoolean("requiresVpn"))
+            val missingPort = runCatching { backendCommand("runtime.start") }.exceptionOrNull()
+            assertTrue(missingPort?.message.orEmpty().contains("enable a proxy port or turn on VPN"))
+            // The saved value is already present. Taking ownership alone
+            // must apply it and update the running plan.
+            backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+                .put("appSetting", JSONObject().put("ownedSettings", org.json.JSONArray().put("clash.mixed-port")))))
+            backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+                .put("patchClashConfig", JSONObject().put("mode", "rule"))))
+            assertEquals(17890, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
             backendCommand("runtime.start")
             assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             assertFalse(JSONObject(Service.getAndroidVpnOptions()).getBoolean("enable"))
+            await("manually enabled mixed port") { canConnect(17890) }
+            assertByeDpiUdpRoundTrip(17890)
         } finally { backendCommand("runtime.stop"); Service.unbind() }
         Service.bind()
         backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject()

@@ -410,6 +410,11 @@ func (backendEngine) ApplyLiveSettings(ctx context.Context, _, next *backend.Run
 	if isRunning && listener.GetPorts().MixedPort != currentConfig.General.MixedPort {
 		return errors.New("mixed listener did not bind")
 	}
+	if isRunning {
+		if err := checkBackendIngress(); err != nil {
+			return err
+		}
+	}
 	return ctx.Err()
 }
 
@@ -548,8 +553,36 @@ func (backendPlatform) EndOperation(ctx context.Context, id string) error {
 }
 
 func (backendPlatform) Start(ctx context.Context, plan *backend.RuntimePlan) error {
+	runLock.Lock()
+	err := checkBackendIngress()
+	runLock.Unlock()
+	if err != nil {
+		return err
+	}
 	return platformBroker.Call(ctx, "vpn.start", map[string]uint64{"generation": plan.Generation()}, nil)
 }
+
+// Called under runLock after binding the listeners. Keep explicit inbounds and
+// tunnels eligible in proxy-only mode even when all standard ports are off.
+// The DNS and controller listeners are managed separately from runtime start.
+func checkBackendIngress() error {
+	if state.CurrentState.VpnProps.Enable {
+		return nil
+	}
+	if currentConfig == nil {
+		return errors.New("no applied engine configuration")
+	}
+	ports := listener.GetPorts()
+	if ports.Port != 0 || ports.MixedPort != 0 || ports.SocksPort != 0 ||
+		ports.RedirPort != 0 || ports.TProxyPort != 0 ||
+		ports.ShadowSocksConfig != "" || ports.VmessConfig != "" ||
+		currentConfig.General.Tun.Enable || currentConfig.General.TuicServer.Enable ||
+		len(currentConfig.Listeners) != 0 || len(currentConfig.Tunnels) != 0 {
+		return nil
+	}
+	return errors.New("enable a proxy port or turn on VPN before starting")
+}
+
 func (backendPlatform) Stop(ctx context.Context) error {
 	return platformBroker.Call(ctx, "vpn.stop", nil, nil)
 }

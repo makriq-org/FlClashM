@@ -406,6 +406,22 @@ func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
 	if retained["mixed-port"] != float64(9091) {
 		t.Fatal("switching profiles lost the retained port fallback", retained)
 	}
+	request(t, app, "own-port", "settings.patch", map[string]any{
+		"patch": map[string]any{"appSetting": map[string]any{
+			"ownedSettings": []string{"clash.mixed-port"},
+		}},
+	})
+	waitDomain(t, app, "own-port")
+	view, err = app.RuntimeView()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(view, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Config["mixed-port"] != float64(9091) {
+		t.Fatal("taking ownership alone did not enable the saved port", payload.Config)
+	}
 }
 func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	directory := t.TempDir()

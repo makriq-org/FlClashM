@@ -1,5 +1,6 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'generated/config.g.dart';
@@ -134,8 +135,7 @@ void writeConfig(dynamic ref, Config config) {
   ref.read(hotKeyActionsProvider.notifier).value = config.hotKeyActions;
   ref.read(proxiesStyleSettingProvider.notifier).value =
       config.proxiesStyleProps;
-  ref.read(patchClashConfigProvider.notifier).value =
-      _patchClashConfigForPlatform(config);
+  ref.read(patchClashConfigProvider.notifier).value = config.patchClashConfig;
   ref.read(excludeSSIDsProvider.notifier).value = config.excludeSSIDs;
 }
 
@@ -155,16 +155,33 @@ List<Override> buildConfigOverrides(Config config) {
       (_, _) => config.proxiesStyleProps,
     ),
     patchClashConfigProvider.overrideWithBuild(
-      (_, _) => _patchClashConfigForPlatform(config),
+      (_, _) => config.patchClashConfig,
     ),
     excludeSSIDsProvider.overrideWithBuild((_, _) => config.excludeSSIDs),
   ];
 }
 
-PatchClashConfig _patchClashConfigForPlatform(Config config) {
-  if (!system.isAndroid ||
-      config.appSettingProps.ownedSettings.contains('clash.mixed-port')) {
-    return config.patchClashConfig;
-  }
-  return config.patchClashConfig.copyWith(mixedPort: 0);
+final appliedMixedPortProvider = NotifierProvider<AppliedMixedPort, int?>(
+  AppliedMixedPort.new,
+);
+
+class AppliedMixedPort extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void project(int? port) => state = port;
 }
+
+final effectiveMixedPortProvider = Provider<int>((ref) {
+  final saved = ref.watch(
+    patchClashConfigProvider.select((state) => state.mixedPort),
+  );
+  if (!system.isAndroid) return saved;
+  final effective = ref.watch(appliedMixedPortProvider);
+  final owned = ref.watch(
+    appSettingProvider.select(
+      (state) => state.ownedSettings.contains('clash.mixed-port'),
+    ),
+  );
+  return effective ?? (owned ? saved : 0);
+});
