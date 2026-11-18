@@ -191,3 +191,34 @@ func TestScriptSandboxHasNoHostBindingsAndIsInterrupted(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchTargetRetargetsTerminalSourceMatch(t *testing.T) {
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	data := authoring.Empty()
+	data["rules"] = []authoring.Object{row(Object{"id": 1, "profileId": "p", "ruleAction": "DOMAIN_SUFFIX", "content": "own.test", "ruleTarget": "MATCH"})}
+	request := Input{Version: 1, Profile: &RawProfile{ID: "p", Text: "rules: ['DOMAIN,keep.test,DIRECT', 'MATCH,REJECT']", Metadata: Object{"extendType": "standard", "matchTarget": "Proxy"}}, Settings: Object{}, Authoring: data}
+	result := prepared(t, c, request)
+	if !reflect.DeepEqual(list(result.Config["rules"]), []any{"DOMAIN-SUFFIX,own.test,Proxy", "DOMAIN,keep.test,DIRECT", "MATCH,Proxy"}) {
+		t.Fatal("match target did not retarget authored placeholder and terminal MATCH", result.Config["rules"])
+	}
+	// Only the terminating MATCH moves; earlier MATCH lines stay as written.
+	request.Profile.Text = "rules: ['MATCH,DIRECT', 'MATCH,REJECT']"
+	result = prepared(t, c, request)
+	got := list(result.Config["rules"])
+	if len(got) != 3 || got[1] != "MATCH,DIRECT" || got[2] != "MATCH,Proxy" {
+		t.Fatalf("only the terminating MATCH must change: %v", got)
+	}
+	// Without an explicit target the source keeps its own terminating MATCH.
+	request.Profile.Metadata = Object{"extendType": "standard"}
+	result = prepared(t, c, request)
+	got = list(result.Config["rules"])
+	if got[len(got)-1] != "MATCH,REJECT" {
+		t.Fatalf("source terminal MATCH changed without match target: %v", got)
+	}
+	// A malformed target is refused before any runtime replacement.
+	request.Profile.Metadata = Object{"extendType": "standard", "matchTarget": "Bad,Target"}
+	raw, _ := json.Marshal(request)
+	if _, err := c.Compile(context.Background(), backend.Input(raw), 2); err == nil {
+		t.Fatal("comma in match target was accepted")
+	}
+}
