@@ -10,10 +10,21 @@ import (
 // plan sealing. It is backend policy; platform adapters only enforce its result.
 type SecurityPolicy struct{}
 
-func (SecurityPolicy) ApplyPatch(patch Object, metadata Object, capabilities Capabilities) {
+func providerHeaders(metadata Object) map[string]string {
 	raw, _ := json.Marshal(metadata["providerHeaders"])
 	headers := map[string]string{}
 	_ = json.Unmarshal(raw, &headers)
+	return headers
+}
+
+func (SecurityPolicy) ApplyVPN(vpn Object, metadata Object, capabilities Capabilities) {
+	if capabilities.Platform == "android" && profiles.ProviderSpecial(providerHeaders(metadata), "onlytun") {
+		vpn["systemProxy"] = false
+	}
+}
+
+func (SecurityPolicy) ApplyPatch(patch Object, metadata Object, capabilities Capabilities) {
+	headers := providerHeaders(metadata)
 	if profiles.ProviderSpecial(headers, "noglobal") && patch["mode"] == "global" {
 		patch["mode"] = "rule"
 	}

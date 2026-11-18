@@ -15,7 +15,11 @@ object PhysicalNetworkScope {
         NetworkCapabilities.TRANSPORT_USB,
     )
 
-    fun read(context: Context): String {
+    data class Observation(val scope: String, val handle: Long?)
+
+    fun read(context: Context): String = observe(context).scope
+
+    fun observe(context: Context): Observation {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeCapabilities = manager.activeNetwork?.let(manager::getNetworkCapabilities)
         val ordered = buildList {
@@ -28,7 +32,7 @@ object PhysicalNetworkScope {
                 !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             ) return@mapNotNull null
             val links = manager.getLinkProperties(network) ?: return@mapNotNull null
-            capabilities to links
+            Triple(capabilities, links, network.networkHandle)
         }
         // A VPN is the active network, but its capabilities also expose the
         // physical transport currently carrying it. Prefer that transport over
@@ -40,8 +44,8 @@ object PhysicalNetworkScope {
             it.first.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         } ?: preferred.firstOrNull() ?: candidates.firstOrNull {
             it.first.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        } ?: candidates.firstOrNull() ?: return "network-offline"
-        return fingerprint(selected.first, selected.second)
+        } ?: candidates.firstOrNull() ?: return Observation("network-offline", null)
+        return Observation(fingerprint(selected.first, selected.second), selected.third)
     }
 
     private fun sharesPhysicalTransport(
