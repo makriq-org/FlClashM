@@ -573,16 +573,47 @@ func (a *App) patchSettingsWithOwnershipChange(ctx context.Context, patch profil
 		}
 		err := a.profiles.UpdateSettings(patch, revision)
 		if err == nil {
+			raw, writesApp := patch["appSetting"]
+			if !writesApp {
+				return false, nil
+			}
 			before := snapshot.Settings["appSetting"]
 			after := a.profiles.Snapshot().Settings["appSetting"]
-			return settingOwned(before, compile.AccessControlSettingKey) != settingOwned(after, compile.AccessControlSettingKey) ||
-				settingOwned(before, "clash.mixed-port") != settingOwned(after, "clash.mixed-port"), nil
+			if runtimeOwnershipDiffers(before, after) {
+				return true, nil
+			}
+			// A retry may find the requested ownership already in the catalog
+			// while a prior failure left the runtime on the old configuration.
+			var fields profiles.Object
+			_ = json.Unmarshal(raw, &fields)
+			if _, writesOwnership := fields["ownedSettings"]; fields != nil && !writesOwnership {
+				return false, nil
+			}
+			_, applied, err := a.runtime.Applied()
+			if err != nil {
+				return false, err
+			}
+			if len(applied) == 0 {
+				return false, nil
+			}
+			var input struct {
+				Settings profiles.Object `json:"settings"`
+			}
+			if err := json.Unmarshal(applied, &input); err != nil {
+				return false, err
+			}
+			return runtimeOwnershipDiffers(input.Settings["appSetting"], after), nil
 		}
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
 			return false, err
 		}
 	}
 	return false, profiles.ErrConflict
+}
+
+func runtimeOwnershipDiffers(before, after json.RawMessage) bool {
+	return settingOwned(before, compile.AccessControlSettingKey) != settingOwned(after, compile.AccessControlSettingKey) ||
+		settingOwned(before, "clash.mixed-port") != settingOwned(after, "clash.mixed-port")
 }
 
 func settingOwned(raw json.RawMessage, key string) bool {

@@ -23,7 +23,7 @@ class SystemProxyQueue {
       if (_closed) {
         return;
       }
-      final applied = state.isStart && state.systemProxy
+      final applied = state.isStart && state.systemProxy && state.port > 0
           ? await _proxy.startProxy(state.port, state.bassDomain)
           : await _proxy.stopProxy();
       if (applied != true) {
