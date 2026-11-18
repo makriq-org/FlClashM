@@ -1007,7 +1007,28 @@ func (c *runtimeCoordinator) rollback(e *execution, previous Document) error {
 		return err
 	}
 	if compiler, ok := c.compiler.(interface{ CanRestorePlan(*RuntimePlan) bool }); ok && !compiler.CanRestorePlan(plan) {
-		return errors.New("previous plan must be recompiled before it can be restored")
+		plan, err = c.compile(ctx, previous.Applied.Input, e.epoch)
+		if err != nil {
+			return err
+		}
+		if plan == nil || plan.Generation() != e.epoch || !compiler.CanRestorePlan(plan) {
+			return errors.New("could not rebuild previous plan with current security policy")
+		}
+		if err = c.current(rollback); err != nil {
+			return err
+		}
+		if err = c.install(rollback, plan, previous.Applied.Running); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.closed || c.epoch != e.epoch {
+			return nil
+		}
+		restored := cloneDocument(c.document)
+		restored.Applied.Plan = plan.Data()
+		restored.Applied.Nodes = c.persistedNodes()
+		return c.saveLocked(restored)
 	}
 	return c.install(rollback, plan, previous.Applied.Running)
 }

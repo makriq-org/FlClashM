@@ -70,7 +70,7 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 	var config map[string]json.RawMessage
 	_ = json.Unmarshal(payload["config"], &config)
 	// Plans committed by the old compiler need a full rebuild after upgrade.
-	if _, ok := config["rules"]; !ok || !currentSecurityVersion(payload["securityVersion"]) {
+	if _, ok := config["rules"]; !ok || !c.canRestoreSecurity(payload["securityVersion"], payload["nodes"]) {
 		return nil, nil
 	}
 	var profileID *string
@@ -86,11 +86,32 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 func (c *Compiler) CanRestorePlan(plan *backend.RuntimePlan) bool {
 	var payload struct {
 		SecurityVersion json.RawMessage `json:"securityVersion"`
+		Nodes           json.RawMessage `json:"nodes"`
 	}
-	return json.Unmarshal(plan.Payload(), &payload) == nil && currentSecurityVersion(payload.SecurityVersion)
+	return json.Unmarshal(plan.Payload(), &payload) == nil && c.canRestoreSecurity(payload.SecurityVersion, payload.Nodes)
 }
 
-func currentSecurityVersion(raw json.RawMessage) bool {
+func (c *Compiler) canRestoreSecurity(rawVersion, rawNodes json.RawMessage) bool {
 	var version int
-	return json.Unmarshal(raw, &version) == nil && version == runtimeSecurityVersion
+	if json.Unmarshal(rawVersion, &version) != nil || version != runtimeSecurityVersion {
+		return false
+	}
+	external, ok := c.Nodes.(*ExternalCompiler)
+	if !ok {
+		return true
+	}
+	var nodes []struct {
+		ID       string            `json:"nodeId"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	if json.Unmarshal(rawNodes, &nodes) != nil {
+		return false
+	}
+	for _, node := range nodes {
+		user, password := external.serviceCredentials(node.ID)
+		if node.Metadata["service-auth-user"] != user || node.Metadata["service-auth-password"] != password {
+			return false
+		}
+	}
+	return true
 }

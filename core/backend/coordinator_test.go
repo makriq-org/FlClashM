@@ -607,6 +607,54 @@ func TestInterruptedIntentRecoversOnlyCommittedPlan(t *testing.T) {
 		})
 	}
 }
+
+type upgradedHostCompiler struct{ *host }
+
+func (c upgradedHostCompiler) Compile(ctx context.Context, input Input, generation uint64) (*RuntimePlan, error) {
+	if err := c.step(ctx, "compile"); err != nil {
+		return nil, err
+	}
+	return NewRuntimePlan(generation, struct {
+		Input           json.RawMessage `json:"input"`
+		SecurityVersion int             `json:"securityVersion"`
+	}{json.RawMessage(input), 1})
+}
+
+func (upgradedHostCompiler) CanRestorePlan(plan *RuntimePlan) bool {
+	var payload struct {
+		SecurityVersion int `json:"securityVersion"`
+	}
+	return json.Unmarshal(plan.Payload(), &payload) == nil && payload.SecurityVersion == 1
+}
+
+func TestRollbackRecompilesPlanFromPreviousSecurityPolicy(t *testing.T) {
+	store := newStore(t)
+	old := openHost(t, store, newHost())
+	const input = `{"profile":"old"}`
+	run(t, old, "first", "connect", input)
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newHost()
+	h.fail = "platform.start"
+	compiler := upgradedHostCompiler{h}
+	b, err := Open(store, compiler, hostEngine{h}, hostTransports{h}, hostPlatform{h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	expectFailure(t, b, "recover", "recover", "")
+	snapshot := b.Snapshot()
+	plan, appliedInput, err := b.Applied()
+	if err != nil || plan == nil || !compiler.CanRestorePlan(plan) || string(appliedInput) != input {
+		t.Fatal("rollback did not persist the previous input with current security policy", err)
+	}
+	if snapshot.Observed.State != "running" || snapshot.AppliedGeneration != plan.Generation() {
+		t.Fatalf("rebuilt rollback is not the running committed generation: %+v", snapshot)
+	}
+}
+
 func TestCleanupFailureNeverClaimsStopped(t *testing.T) {
 	h := newHost()
 	b := openHost(t, newStore(t), h)

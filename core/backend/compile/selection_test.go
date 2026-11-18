@@ -99,3 +99,24 @@ func TestSubscriptionBookkeepingDoesNotRecompileTheRuntime(t *testing.T) {
 		delete(old.Profile.Metadata, key)
 	}
 }
+
+func TestNodeServiceKeyReplacementInvalidatesCommittedPlan(t *testing.T) {
+	compiler := Compiler{
+		Nodes:    &ExternalCompiler{ServiceKey: [32]byte{1}},
+		Validate: func(context.Context, Object) error { return nil },
+	}
+	input, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p",
+		Text: "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1'}]"},
+	})
+	plan, err := compiler.Compile(context.Background(), input, 1)
+	if err != nil || !compiler.CanRestorePlan(plan) {
+		t.Fatal("valid plan could not be compiled or restored", err)
+	}
+	compiler.Nodes = &ExternalCompiler{ServiceKey: [32]byte{2}}
+	if compiler.CanRestorePlan(plan) {
+		t.Fatal("plan with replaced service key remained restorable")
+	}
+	if next, err := compiler.CompileSelection(context.Background(), input, input, plan, 2); err != nil || next != nil {
+		t.Fatal("selection reused plan with replaced service key", err)
+	}
+}

@@ -38,3 +38,21 @@ func TestNodeServiceKeySurvivesConcurrentOpen(t *testing.T) {
 		t.Fatal("node service key must be private")
 	}
 }
+
+func TestCorruptNodeServiceKeyIsRegenerated(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "node-service.key")
+	for _, size := range []int{0, 32, 128} {
+		if err := os.WriteFile(path, make([]byte, size), 0600); err != nil {
+			t.Fatal(err)
+		}
+		key, err := loadNodeServiceKey(directory)
+		if err != nil || key == ([32]byte{}) {
+			t.Fatal("could not replace corrupt service key", err)
+		}
+		reopened, err := loadNodeServiceKey(directory)
+		if err != nil || reopened != key {
+			t.Fatal("replacement service key was not persisted", err)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -17,14 +18,19 @@ func loadNodeServiceKey(directory string) ([32]byte, error) {
 	defer nodeServiceKeyMu.Unlock()
 	path := filepath.Join(directory, "node-service.key")
 	var key [32]byte
-	raw, err := readBounded(path, int64(len(key)))
+	file, err := os.Open(path)
 	if err == nil {
-		if len(raw) != len(key) || [32]byte(raw) == ([32]byte{}) {
-			return key, errors.New("invalid node service key")
+		raw, readErr := io.ReadAll(io.LimitReader(file, int64(len(key)+1)))
+		_ = file.Close()
+		if readErr != nil {
+			return key, readErr
 		}
-		return [32]byte(raw), nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
+		if len(raw) == len(key) && [32]byte(raw) != key {
+			return [32]byte(raw), nil
+		}
+		// A corrupt key cannot authenticate anything and can be regenerated
+		// from scratch without changing profiles or settings.
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return key, err
 	}
 
