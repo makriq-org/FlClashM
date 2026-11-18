@@ -15,6 +15,13 @@ import 'package:flutter/services.dart';
 typedef ProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 
+bool isTelevision(Iterable<String> systemFeatures) => systemFeatures.any(
+  const {
+    'android.hardware.type.television',
+    'android.software.leanback',
+  }.contains,
+);
+
 class System {
   static System? _instance;
   bool _isTV = false;
@@ -44,12 +51,7 @@ class System {
   Future<int> init() async {
     final deviceInfo = await DeviceInfoPlugin().deviceInfo;
     _isTV = switch (deviceInfo) {
-      AndroidDeviceInfo(:final systemFeatures) => systemFeatures.any(
-        const {
-          'android.hardware.type.television',
-          'android.software.leanback',
-        }.contains,
-      ),
+      AndroidDeviceInfo(:final systemFeatures) => isTelevision(systemFeatures),
       _ => false,
     };
     return switch (Platform.operatingSystem) {
