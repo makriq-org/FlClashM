@@ -122,7 +122,7 @@ object BackendHost {
             .put("legacyRunning", LegacyBackendMigration.wasRunning())
             .put("timeZone", zone.id)
             .put("utcOffset", zone.getOffset(System.currentTimeMillis()) / 1000)
-            .put("userAgent", "FlClash X/v$version core/v1.19.32 Platform/android")
+            .put("userAgent", "FlClash X/v$version core/v1.19.34 Platform/android")
             .put("certificates", certificates)
         invoke("backend.open", options)
         LegacyBackendMigration.removeReplacedRuntimeState()
