@@ -906,3 +906,33 @@ func TestAsyncNodeReadinessAndEarlyExitAreObservedAfterOneSecond(t *testing.T) {
 		})
 	}
 }
+
+func TestStandbyWakeSurvivesServiceAuthenticationUpgrade(t *testing.T) {
+	store := newStore(t)
+	node := reservePlan()
+	input := Input(nodeInput(node))
+	old, err := NewRuntimePlan(1, json.RawMessage(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := newDocument()
+	doc.Generation = 1
+	doc.Desired = Desired{Input: input, Running: true}
+	doc.Applied = &Applied{Plan: old.Data(), Input: input, Running: true,
+		Nodes: map[string]NodePersisted{node.ID: {Awake: true}}}
+	if err := store.Save(doc); err != nil {
+		t.Fatal(err)
+	}
+	b := openNodeHost(t, store, newNodeHost())
+	node.Metadata = map[string]string{"service-auth-user": "new-user", "service-auth-password": "new-password"}
+	next, err := NewRuntimePlan(2, json.RawMessage(nodeInput(node)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.coordinator.prepareNodes(context.Background(), next); err != nil {
+		t.Fatal(err)
+	}
+	if !b.coordinator.nodes[node.ID].awake {
+		t.Fatal("upgrading the credentials put an awake standby node to sleep")
+	}
+}

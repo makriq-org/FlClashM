@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -130,7 +131,15 @@ func (c *runtimeCoordinator) prepareNodes(ctx context.Context, plan *RuntimePlan
 		_ = json.Unmarshal(c.document.Applied.Plan.Payload, &prior)
 		for _, candidate := range data.Nodes {
 			for _, old := range prior.Nodes {
-				if candidate.ID == old.ID && reflect.DeepEqual(candidate, old) {
+				// An upgrade adds service credentials to the same committed
+				// input. Preserve standby state across that one-time change.
+				upgrading := old.Metadata["service-auth-user"] == "" &&
+					candidate.Metadata["service-auth-user"] != "" &&
+					bytes.Equal(c.document.Applied.Input, c.document.Desired.Input) &&
+					candidate.Type == old.Type && candidate.Port == old.Port &&
+					reflect.DeepEqual(candidate.Activation, old.Activation) &&
+					reflect.DeepEqual(candidate.Check, old.Check)
+				if candidate.ID == old.ID && (upgrading || reflect.DeepEqual(candidate, old)) {
 					persisted[candidate.ID] = c.document.Applied.Nodes[candidate.ID]
 					break
 				}
