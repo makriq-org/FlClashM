@@ -296,15 +296,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command := exec.Command(executable, arguments...)
 	command.Dir = directory
 	command.Stdin = nil
-	logOutput := a.Log
-	if logOutput != nil {
-		if user != "" && password != "" {
-			redact := strings.NewReplacer(user, "[redacted]", password, "[redacted]")
-			next := logOutput
-			logOutput = func(kind, line string) { next(kind, redact.Replace(line)) }
-		}
-	}
-	output := newProcessOutput(node.Type, logOutput)
+	output := newProcessOutput(node.Type, a.Log, user, password)
 	command.Stdout = output
 	command.Stderr = output
 	p := &process{command: command, graceful: node.Type == "olcrtc", done: make(chan struct{})}

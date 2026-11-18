@@ -43,7 +43,10 @@ func TestMain(m *testing.M) {
 		if len(os.Args) > 3 && os.Args[1] == "--backend-parent" {
 			executable, _ := os.Executable()
 			port, _ := strconv.Atoi(os.Args[3])
-			node := backend.NodePlan{ID: "byedpi-" + strings.Repeat("c", 32), Type: "byedpi", Host: "127.0.0.1", Port: port}
+			node := backend.NodePlan{
+				ID: "byedpi-" + strings.Repeat("c", 32), Type: "byedpi", Host: "127.0.0.1", Port: port,
+				Metadata: map[string]string{"service-auth-user": "user", "service-auth-password": "password"},
+			}
 			adapter := &ProcessAdapter{Home: os.Args[2], ABI: "host", Executables: map[string]string{"byedpi": executable}}
 			if err := adapter.Start(context.Background(), backend.NodeLaunch{Node: node, Strategy: "-d1"}); err != nil {
 				os.Exit(5)
