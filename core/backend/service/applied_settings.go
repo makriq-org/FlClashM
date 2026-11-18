@@ -40,8 +40,17 @@ func (a *App) retainAppliedSettings(ctx context.Context) {
 	appSettingsRaw, _ := json.Marshal(captured.Settings["appSetting"])
 	_ = json.Unmarshal(appSettingsRaw, &appSettings)
 	ownsMixedPort := slices.Contains(appSettings.OwnedSettings, "clash.mixed-port")
+	var headers map[string]string
+	if captured.Profile != nil {
+		raw, _ := json.Marshal(captured.Profile.Metadata["providerHeaders"])
+		_ = json.Unmarshal(raw, &headers)
+	}
 	patch := profiles.Object{}
 	for _, key := range []string{"ipv6", "allow-lan", "mixed-port", "find-process-mode", "mode"} {
+		if key == "mode" && profiles.ProviderSpecial(headers, "noglobal") {
+			// A temporary profile restriction must not replace the personal mode.
+			continue
+		}
 		raw := applied.Patch[key]
 		if key == "mixed-port" && a.compiler.Capabilities.Platform == "android" && !ownsMixedPort {
 			var port int

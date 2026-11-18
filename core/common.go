@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,13 +59,24 @@ func proxiesWithProviders() map[string]constant.Proxy {
 	for name, proxy := range tunnel.Proxies() {
 		allProxies[name] = proxy
 	}
-	for _, p := range tunnel.Providers() {
-		for _, proxy := range p.Proxies() {
-			name := proxy.Name()
-			allProxies[name] = proxy
+	providers := tunnel.Providers()
+	for _, name := range proxyProviderOrder(providers) {
+		for _, proxy := range providers[name].Proxies() {
+			allProxies[proxy.Name()] = proxy
 		}
 	}
 	return allProxies
+}
+
+// The reserved provider mirrors declared proxies. Walk it first, then actual
+// providers in stable order so a duplicate name never resolves by map order.
+func proxyProviderOrder(providers map[string]cp.ProxyProvider) []string {
+	names := slices.Sorted(maps.Keys(providers))
+	if i := slices.Index(names, provider.ReservedName); i > 0 {
+		copy(names[1:i+1], names[:i])
+		names[0] = provider.ReservedName
+	}
+	return names
 }
 
 func computeMinHealthCheckInterval(rawConfig *config.RawConfig) {

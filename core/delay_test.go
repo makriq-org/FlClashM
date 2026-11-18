@@ -115,6 +115,27 @@ func testBalancer(t *testing.T, proxies map[string]constant.Proxy) {
 	})
 }
 
+func TestDelayLookupPrefersSubscriptionProxyOverReservedProvider(t *testing.T) {
+	declared, subscription := namedProxy("Shared"), namedProxy("Shared")
+	makeProvider := func(name string, proxy constant.Proxy) cp.ProxyProvider {
+		t.Helper()
+		members := []constant.Proxy{proxy}
+		p, err := provider.NewCompatibleProvider(name, members, provider.NewHealthCheck(members, "", 0, 0, true, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	testBalancer(t, map[string]constant.Proxy{"Shared": declared})
+	tunnel.UpdateProxies(tunnel.Proxies(), map[string]cp.ProxyProvider{
+		provider.ReservedName: makeProvider(provider.ReservedName, declared),
+		"a-subscription":      makeProvider("a-subscription", subscription),
+	})
+	if got := proxiesWithProviders()["Shared"]; got != subscription {
+		t.Fatal("lookup resolved the declared proxy instead of the subscription's proxy")
+	}
+}
+
 // stubRuntimeNodes describes the runtime nodes the delay test reads; no backend
 // runs in a test.
 func stubRuntimeNodes(t *testing.T, nodes ...backend.NodeSnapshot) {

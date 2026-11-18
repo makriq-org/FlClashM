@@ -481,6 +481,11 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/device_identity.dart",
+      "bucket": "budget",
+      "reason": "Идентичность подписки отличает Android TV от телефона и сохраняет пользовательский контроль над отправкой HWID."
+    },
+    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Base-фасад логгера делегирует ограниченную очередь, ротацию и pre-write redaction product-слою."
@@ -514,6 +519,11 @@
       "path": "lib/common/link.dart",
       "bucket": "budget",
       "reason": "Исправление initial link и дедупликации deep-link событий принято в бюджет."
+    },
+    {
+      "path": "lib/common/package.dart",
+      "bucket": "budget",
+      "reason": "User-Agent подписки обозначает Android TV, не меняя релизную идентичность FlClashM."
     },
     {
       "path": "lib/common/path.dart",
