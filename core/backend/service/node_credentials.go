@@ -5,51 +5,32 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
+var nodeServiceKeyMu sync.Mutex
+
 func loadNodeServiceKey(directory string) ([32]byte, error) {
-	const fileName = "node-service.key"
-	path := filepath.Join(directory, fileName)
+	// One backend process owns the installation directory. Serialize opens
+	// within that process so they all use the same atomically published key.
+	nodeServiceKeyMu.Lock()
+	defer nodeServiceKeyMu.Unlock()
+	path := filepath.Join(directory, "node-service.key")
 	var key [32]byte
-	read := func() ([32]byte, error) {
-		raw, err := readBounded(path, int64(len(key)))
-		if err != nil {
-			return [32]byte{}, err
-		}
+	raw, err := readBounded(path, int64(len(key)))
+	if err == nil {
 		if len(raw) != len(key) || [32]byte(raw) == ([32]byte{}) {
-			return [32]byte{}, errors.New("invalid node service key")
+			return key, errors.New("invalid node service key")
 		}
 		return [32]byte(raw), nil
 	}
-	if existing, err := read(); !errors.Is(err, os.ErrNotExist) {
-		return existing, err
+	if !errors.Is(err, os.ErrNotExist) {
+		return key, err
 	}
 
 	rand.Read(key[:])
-	file, err := os.CreateTemp(directory, ".node-service-*")
-	if err != nil {
+	if err := writePrivateFileAtomically(path, key[:]); err != nil {
 		return [32]byte{}, err
-	}
-	defer os.Remove(file.Name())
-	if _, err = file.Write(key[:]); err != nil {
-		_ = file.Close()
-		return [32]byte{}, err
-	}
-	err = file.Sync()
-	closeErr := file.Close()
-	if err = errors.Join(err, closeErr); err != nil {
-		return [32]byte{}, err
-	}
-	// Publish the complete private file without replacing a concurrent winner.
-	if err = os.Link(file.Name(), path); errors.Is(err, os.ErrExist) {
-		return read()
-	}
-	if err != nil {
-		return [32]byte{}, err
-	}
-	if dir, err := os.Open(directory); err == nil {
-		_ = dir.Sync()
-		_ = dir.Close()
 	}
 	return key, nil
 }
