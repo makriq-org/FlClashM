@@ -153,7 +153,8 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	_ = listener.Close()
 
 	credentials := filepath.Join(t.TempDir(), "auth.txt")
-	if err = os.WriteFile(credentials, []byte("probe-user\nprobe-pass\n"), 0o600); err != nil {
+	username, password := strings.Repeat("u", 255), strings.Repeat("p", 255)
+	if err = os.WriteFile(credentials, []byte(username+"\n"+password+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -167,6 +168,9 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	defer func() {
 		cancel()
 		_ = cmd.Wait()
+		if t.Failed() {
+			t.Log(output.String())
+		}
 	}()
 
 	var conn net.Conn
@@ -177,8 +181,8 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if err != nil {
-		t.Fatalf("listener did not start: %v\n%s", err, output.String())
+	if conn == nil {
+		t.Fatalf("listener did not start: %v", errors.Join(err, ctx.Err()))
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(time.Second))
@@ -220,9 +224,8 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	}
 	response := make([]byte, 2)
 	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{5, 2}) {
-		t.Fatalf("SOCKS5 auth method response %v: %v\n%s", response, err, output.String())
+		t.Fatalf("SOCKS5 auth method response %v: %v", response, err)
 	}
-	username, password := []byte("probe-user"), []byte("probe-pass")
 	request := append([]byte{1, byte(len(username))}, username...)
 	request = append(request, byte(len(password)))
 	request = append(request, password...)
@@ -233,7 +236,7 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {
-		t.Fatalf("RFC 1929 response %v: %v\n%s", response, err, output.String())
+		t.Fatalf("RFC 1929 response %v: %v", response, err)
 	}
 	if _, err = conn.Write([]byte{5, 3, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
 		t.Fatal(err)

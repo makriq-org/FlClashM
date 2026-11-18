@@ -34,7 +34,7 @@ Built-in nodes belong in `proxies` and work with ordinary mihomo groups and rule
 
 ## 🔌 Built-in nodes
 
-Built-in nodes use TCP. UDP support in ByeDPI is disabled to protect the local SOCKS proxy. Existing profiles with `udp: true` still load and their ByeDPI nodes continue to work over TCP. Choose another node that supports UDP for traffic that requires it.
+The local proxies for built-in nodes accept TCP traffic from applications. UDP support in ByeDPI is disabled to protect the local SOCKS proxy. Existing profiles with `udp: true` still load and their ByeDPI nodes continue to work over TCP. Choose another node that supports UDP for traffic that requires it.
 
 ### NaiveProxy
 

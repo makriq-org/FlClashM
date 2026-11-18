@@ -20,7 +20,7 @@ index 4c5a4c8..e5c1bef 100644
      char *host;
      int host_len;
 diff --git a/main.c b/main.c
-index 646711d..5122775 100644
+index 646711d..739417c 100644
 --- a/main.c
 +++ b/main.c
 @@ -70,6 +70,7 @@ struct params params = {
@@ -39,7 +39,28 @@ index 646711d..5122775 100644
      #ifdef __linux__
      {"transparent",   0, 0, 'E'},
      #endif
-@@ -842,6 +844,29 @@ int parse_args(int argc, char **argv)
+@@ -748,6 +750,20 @@ void clear_params(char *line, char **argv)
+ }
+ 
+ 
++static int read_auth_line(FILE *file, char value[256])
++{
++    size_t length = 0;
++    int byte;
++    while ((byte = fgetc(file)) != EOF && byte != '\n') {
++        if (length == 255 || byte == 0)
++            return -1;
++        value[length++] = (char)byte;
++    }
++    value[length] = 0;
++    return length == 0 || ferror(file) ? -1 : 0;
++}
++
++
+ int parse_args(int argc, char **argv) 
+ {
+     int optc = sizeof(options)/sizeof(*options);
+@@ -842,6 +858,19 @@ int parse_args(int argc, char **argv)
              else
                  params.laddr.in.sin_port = htons(val);
              break;
@@ -51,25 +72,15 @@ index 646711d..5122775 100644
 +                invalid = 1;
 +                break;
 +            }
-+            if (!fgets(params.auth_user, sizeof(params.auth_user), auth_file) ||
-+                    !fgets(params.auth_pass, sizeof(params.auth_pass), auth_file)) {
-+                invalid = 1;
-+            }
++            invalid = read_auth_line(auth_file, params.auth_user) != 0 ||
++                read_auth_line(auth_file, params.auth_pass) != 0;
 +            fclose(auth_file);
-+            size_t user_len = strlen(params.auth_user);
-+            size_t pass_len = strlen(params.auth_pass);
-+            if (user_len && params.auth_user[user_len - 1] == '\n')
-+                params.auth_user[--user_len] = 0;
-+            if (pass_len && params.auth_pass[pass_len - 1] == '\n')
-+                params.auth_pass[--pass_len] = 0;
-+            if (!user_len || !pass_len || user_len > 255 || pass_len > 255)
-+                invalid = 1;
 +            params.auth_enabled = !invalid;
 +            break;
              
          case 'I':
              if (get_addr(optarg, &params.baddr) < 0)
-@@ -1352,6 +1377,10 @@ int parse_args(int argc, char **argv)
+@@ -1352,6 +1381,10 @@ int parse_args(int argc, char **argv)
          params.ipv6 = 0;
      }
      if (!params.mode) params.mode |= (MODE_SOCKS4 | MODE_SOCKS5);
