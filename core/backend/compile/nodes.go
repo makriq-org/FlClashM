@@ -155,17 +155,10 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
 		nodes = append(nodes, node)
-		proxyType := "socks5"
-		if kind == "naiveproxy" {
-			// NaiveProxy's SOCKS listener does not support authentication; its
-			// authenticated HTTP listener does.
-			proxyType = "http"
+		slot.values[slot.index] = Object{
+			"name": name, "type": "socks5", "server": node.Host, "port": port,
+			"username": username, "password": password, "udp": false,
 		}
-		proxy := Object{"name": name, "type": proxyType, "server": node.Host, "port": port, "username": username, "password": password}
-		if proxyType == "socks5" {
-			proxy["udp"] = false
-		}
-		slot.values[slot.index] = proxy
 	}
 	return nodes, nil
 }

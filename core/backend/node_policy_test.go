@@ -450,7 +450,7 @@ func TestAutoStrategyUsesVerifiedCacheAndFencesProbes(t *testing.T) {
 	if launch.Strategy != mechanism.goodStrategy || !cached.Verified || probes == 0 || count != 1 {
 		t.Fatal("selection/probe fence", launch.Strategy, cached, probes, count)
 	}
-	if lastProbe.ProxyType != "byedpi" || lastProbe.Username != "service-user" || lastProbe.Password != "service-password" {
+	if lastProbe.Username != "service-user" || lastProbe.Password != "service-password" {
 		t.Fatal("runtime probe lost service credentials", lastProbe)
 	}
 	run(t, b, "stop", "stop", "")

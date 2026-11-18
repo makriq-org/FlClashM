@@ -48,7 +48,7 @@ func buildNaive(raw Object, node *Node, serviceUser, servicePassword string) err
 		transport = "https"
 	}
 	proxy := url.URL{Scheme: transport, User: url.UserPassword(user, password), Host: net.JoinHostPort(server, fmt.Sprint(port))}
-	listen := url.URL{Scheme: "http", User: url.UserPassword(serviceUser, servicePassword), Host: net.JoinHostPort("127.0.0.1", fmt.Sprint(node.Port))}
+	listen := url.URL{Scheme: "socks", User: url.UserPassword(serviceUser, servicePassword), Host: net.JoinHostPort(node.Host, fmt.Sprint(node.Port))}
 	native := Object{"listen": listen.String(), "proxy": proxy.String()}
 	if value, ok := raw["insecure-concurrency"]; ok {
 		native["insecure-concurrency"] = value

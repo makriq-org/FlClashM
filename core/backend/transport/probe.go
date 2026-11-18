@@ -1,12 +1,10 @@
 package transport
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"io"
 	"net"
@@ -41,67 +39,12 @@ type SOCKSProbe struct {
 	flights singleflight.Group
 }
 
-type bufferedProxyConn struct {
-	net.Conn
-	reader io.Reader
-}
-
-func (c *bufferedProxyConn) Read(p []byte) (int, error) {
-	return c.reader.Read(p)
-}
-
-func dialAuthenticatedHTTPConnect(ctx context.Context, proxyAddress, targetAddress, username, password string) (net.Conn, error) {
-	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddress)
-	if err != nil {
-		return nil, err
-	}
-	failed := true
-	defer func() {
-		if failed {
-			_ = connection.Close()
-		}
-	}()
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := connection.SetDeadline(deadline); err != nil {
-			return nil, err
-		}
-	}
-	stopClose := context.AfterFunc(ctx, func() { _ = connection.Close() })
-	defer stopClose()
-
-	authorization := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-	request := "CONNECT " + targetAddress + " HTTP/1.1\r\n" +
-		"Host: " + targetAddress + "\r\n" +
-		"Proxy-Authorization: Basic " + authorization + "\r\n" +
-		"Proxy-Connection: keep-alive\r\n\r\n"
-	if _, err := io.WriteString(connection, request); err != nil {
-		return nil, err
-	}
-	reader := bufio.NewReader(&io.LimitedReader{R: connection, N: maxProbeResponseHeaderBytes})
-	// Only parse the response headers. A successful CONNECT switches to the
-	// tunnel immediately after them.
-	response, err := http.ReadResponse(reader, &http.Request{Method: http.MethodHead})
-	if err != nil {
-		return nil, err
-	}
-	_ = response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("authenticated HTTP proxy CONNECT failed: " + response.Status)
-	}
-	failed = false
-	tunnel := io.MultiReader(io.LimitReader(reader, int64(reader.Buffered())), connection)
-	return &bufferedProxyConn{Conn: connection, reader: tunnel}, nil
-}
-
 func (p *SOCKSProbe) ClearDNSCache() {
 	p.mu.Lock()
 	p.cache = nil
 	p.epoch++
 	p.mu.Unlock()
 }
-
-const maxProbeResponseHeaderBytes = 8 << 10
-
 func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -158,58 +101,30 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		}
 	}
 	socksAddress := net.JoinHostPort(request.Host, strconv.Itoa(request.Port))
-	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: maxProbeResponseHeaderBytes, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
-	defer transport.CloseIdleConnections()
-	probeURL := *endpoint
-	if request.ProxyType == "naiveproxy" {
+	var auth *proxy.Auth
+	if request.Username != "" || request.Password != "" {
 		if request.Username == "" || request.Password == "" {
-			return false, errors.New("HTTP proxy probe requires service credentials")
+			return false, errors.New("SOCKS proxy probe requires both service credentials")
 		}
-		proxyURL := url.URL{Scheme: "http", User: url.UserPassword(request.Username, request.Password), Host: socksAddress}
-		transport.Proxy = http.ProxyURL(&proxyURL)
-		if !strings.EqualFold(target, endpoint.Hostname()) {
-			if endpoint.Scheme == "http" {
-				targetAddress := net.JoinHostPort(target, port)
-				transport.Proxy = nil
-				transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
-					return dialAuthenticatedHTTPConnect(ctx, socksAddress, targetAddress, request.Username, request.Password)
-				}
-			} else {
-				probeURL.Host = net.JoinHostPort(target, port)
-				transport.TLSClientConfig = &tls.Config{
-					RootCAs:    p.RootCAs,
-					MinVersion: tls.VersionTLS12,
-					ServerName: endpoint.Hostname(),
-				}
-			}
-		}
-	} else {
-		var auth *proxy.Auth
-		if request.Username != "" || request.Password != "" {
-			if request.Username == "" || request.Password == "" {
-				return false, errors.New("SOCKS proxy probe requires both service credentials")
-			}
-			auth = &proxy.Auth{User: request.Username, Password: request.Password}
-		}
-		dialer, err := proxy.SOCKS5("tcp", socksAddress, auth, &net.Dialer{})
-		if err != nil {
-			return false, err
-		}
-		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
-		}
+		auth = &proxy.Auth{User: request.Username, Password: request.Password}
+	}
+	dialer, err := proxy.SOCKS5("tcp", socksAddress, auth, &net.Dialer{})
+	if err != nil {
+		return false, err
+	}
+	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: 8 << 10, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
+	defer transport.CloseIdleConnections()
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	method := http.MethodHead
 	if request.RequireSuccess {
 		method = http.MethodGet
 	}
-	head, err := http.NewRequestWithContext(ctx, method, probeURL.String(), nil)
+	head, err := http.NewRequestWithContext(ctx, method, request.URL, nil)
 	if err != nil {
 		return false, err
-	}
-	if probeURL.Host != endpoint.Host {
-		head.Host = endpoint.Host
 	}
 	head.Header.Set("Connection", "close")
 	response, err := client.Do(head)

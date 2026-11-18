@@ -129,7 +129,7 @@ class AndroidRuntimeE2eTest {
     private fun canConnect(port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }; true
     }.getOrDefault(false)
-    private fun byeDpiAuthenticationMethod(port: Int, method: Int): Int =
+    private fun socksAuthenticationMethod(port: Int, method: Int): Int =
         Socket().use { socket ->
             socket.connect(InetSocketAddress("127.0.0.1", port), 500)
             socket.soTimeout = 2_000
@@ -138,6 +138,27 @@ class AndroidRuntimeE2eTest {
             assertEquals(5, input.read())
             input.read()
         }
+    private suspend fun assertServiceAuthentication(node: JSONObject) {
+        val port = node.getInt("port")
+        val type = node.getString("type")
+        await("$type listener") { canConnect(port) }
+        assertEquals("$type accepted an unauthenticated client", 255, socksAuthenticationMethod(port, 0))
+        val metadata = node.getJSONObject("metadata")
+        val user = metadata.getString("service-auth-user").toByteArray()
+        val password = metadata.getString("service-auth-password").toByteArray()
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress("127.0.0.1", port), 500)
+            socket.soTimeout = 2_000
+            val output = socket.getOutputStream()
+            val input = socket.getInputStream()
+            output.write(byteArrayOf(5, 1, 2))
+            assertEquals(5, input.read())
+            assertEquals("$type did not offer username/password authentication", 2, input.read())
+            output.write(byteArrayOf(1, user.size.toByte()) + user + byteArrayOf(password.size.toByte()) + password)
+            assertEquals(1, input.read())
+            assertEquals("$type rejected the service credentials", 0, input.read())
+        }
+    }
     private suspend fun upload(source: String): String {
         val token = Service.backend("blob.create").getString("token")
         val bytes = source.toByteArray(Charsets.UTF_8)
@@ -163,6 +184,7 @@ class AndroidRuntimeE2eTest {
         dns: {enable: false}
         proxies:
           - {name: LocalBye, type: byedpi, mode: manual, strategy: '-d1 -s2', udp: true}
+          - {name: LocalNaive, type: naiveproxy, server: example.com, port: 443, username: fixture, password: fixture}
         proxy-groups:
           - {name: Select, type: select, proxies: [LocalBye, DIRECT]}
         rules: ['MATCH,REJECT']
@@ -343,13 +365,14 @@ class AndroidRuntimeE2eTest {
             val runtime = snapshot()
             assertEquals("running", runtime.getJSONObject("observed").getString("state"))
             val view = Service.backend("runtime.view")
-            val node = view.getJSONArray("nodes").getJSONObject(0)
+            val nodes = view.getJSONArray("nodes")
+            val node = nodes.getJSONObject(0)
             val port = node.getInt("port")
             assertTrue("Packaged external transport did not listen", canConnect(port))
             listeningPort = port
             assertEquals("Default mixed port is open", 0, view.getJSONObject("config").getInt("mixed-port"))
-            assertEquals("ByeDPI accepted an unauthenticated client", 255, byeDpiAuthenticationMethod(port, 0))
-            assertEquals("ByeDPI did not offer username/password authentication", 2, byeDpiAuthenticationMethod(port, 2))
+            assertServiceAuthentication(node)
+            assertServiceAuthentication(nodes.getJSONObject(1))
             assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
             assertTrue("Remote process not found", remotePid() > 0)
             assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())

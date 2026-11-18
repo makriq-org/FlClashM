@@ -56,7 +56,6 @@ type NodeProbe struct {
 	Host           string
 	Port           int
 	URL, Resolver  string
-	ProxyType      string
 	Username       string
 	Password       string
 	RequireSuccess bool

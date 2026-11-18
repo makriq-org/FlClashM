@@ -74,7 +74,6 @@ func (c *runtimeCoordinator) checkNode(ctx context.Context, node NodePlan, check
 					Port:           node.Port,
 					URL:            address,
 					Resolver:       check.Resolver,
-					ProxyType:      node.Type,
 					Username:       node.Metadata["service-auth-user"],
 					Password:       node.Metadata["service-auth-password"],
 					RequireSuccess: check.RequireSuccess,

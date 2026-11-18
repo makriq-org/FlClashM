@@ -189,16 +189,12 @@ func TestExternalTransportCompilation(t *testing.T) {
 			}
 			node := nodes[0]
 			proxy := object(list(config["proxies"])[0])
-			wantType := "socks5"
-			if tt.kind == "naiveproxy" {
-				wantType = "http"
-			}
 			user, password := text(proxy["username"]), text(proxy["password"])
-			if proxy["type"] != wantType || proxy["server"] != "127.0.0.1" ||
+			if proxy["type"] != "socks5" || proxy["server"] != "127.0.0.1" ||
 				user == "" || password == "" || user != node.Metadata["service-auth-user"] || password != node.Metadata["service-auth-password"] {
 				t.Fatal("engine proxy does not match the authenticated loopback node")
 			}
-			if node.UDP || (wantType == "socks5" && proxy["udp"] != false) || (wantType == "http" && proxy["udp"] != nil) {
+			if node.UDP || proxy["udp"] != false {
 				t.Fatalf("built-in proxy unexpectedly enables UDP: node=%#v proxy=%#v", node, proxy)
 			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file
