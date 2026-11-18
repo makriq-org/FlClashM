@@ -122,7 +122,7 @@ object BackendHost {
             .put("legacyRunning", LegacyBackendMigration.wasRunning())
             .put("timeZone", zone.id)
             .put("utcOffset", zone.getOffset(System.currentTimeMillis()) / 1000)
-            .put("userAgent", "FlClash X/v$version core/v1.19.34 Platform/android")
+            .put("userAgent", "FlClash X/v$version core/v1.19.34 Platform/${if (isTelevision()) "androidtv" else "android"}")
             .put("certificates", certificates)
         invoke("backend.open", options)
         LegacyBackendMigration.removeReplacedRuntimeState()
@@ -220,8 +220,15 @@ object BackendHost {
     private fun deviceHeaders(): JSONObject {
         val id = Settings.Secure.getString(application.contentResolver, Settings.Secure.ANDROID_ID)
             ?.takeIf { it.isNotEmpty() } ?: "${Build.BRAND}-${Build.DEVICE}-${Build.HARDWARE}-${Build.ID}"
-        return JSONObject().put("x-hwid", id).put("x-device-os", "Android")
+        return JSONObject().put("x-hwid", id).put("x-device-os", if (isTelevision()) "AndroidTV" else "Android")
             .put("x-ver-os", Build.VERSION.RELEASE).put("x-device-model", "${Build.MANUFACTURER} ${Build.MODEL}")
+    }
+
+    private fun isTelevision(): Boolean {
+        val manager = application.packageManager
+        @Suppress("DEPRECATION")
+        return manager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION) ||
+            manager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
     }
 
     private fun legacyObject(preferences: android.content.SharedPreferences, key: String): JSONObject? {
