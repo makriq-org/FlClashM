@@ -29,9 +29,26 @@ func DecodeLinks(lines []string) [][]map[string]any {
 		if err != nil {
 			proxies = []map[string]any{}
 		}
+		for _, proxy := range proxies {
+			unescapeHysteria2Password(proxy)
+		}
 		results[i] = proxies
 	}
 	return results
+}
+
+// The converter keeps a hysteria2 password as the link's escaped user info, so
+// a password holding a reserved character would come back escaped and the
+// proxy would fail to authenticate.
+func unescapeHysteria2Password(proxy map[string]any) {
+	if proxy["type"] != "hysteria2" || proxy["realm-opts"] != nil {
+		return
+	}
+	if password, ok := proxy["password"].(string); ok {
+		if unescaped, err := url.PathUnescape(password); err == nil {
+			proxy["password"] = unescaped
+		}
+	}
 }
 
 type proxyFields map[string]any
@@ -421,12 +438,24 @@ func encodeTuic(f proxyFields) string {
 	return shareURL("tuic", user, hostPort(f), query, f.str("name"))
 }
 
-// The converter reads the user info as base64 before falling back to plain
-// text, so it always carries the ":" that no base64 alphabet has.
+// The converter reads the user info as base64 before falling back to escaped
+// plain text, which it splits at its one ":". Credentials that escaping would
+// change therefore go out as base64; a pair the converter cannot read back
+// gets no link, like other mappings no link carries.
 func encodeSocks(f proxyFields, scheme string) string {
 	var user *url.Userinfo
 	if username, password := f.str("username"), f.str("password"); username != "" || password != "" {
+		if strings.Contains(username, ":") || strings.Contains(password, ":") {
+			return ""
+		}
 		user = url.UserPassword(username, password)
+		if plain := username + ":" + password; user.String() != plain {
+			encoded := base64.StdEncoding.EncodeToString([]byte(plain))
+			if strings.Contains(encoded, "/") {
+				return ""
+			}
+			user = url.User(encoded)
+		}
 	}
 	return shareURL(scheme, user, hostPort(f), url.Values{}, f.str("name"))
 }

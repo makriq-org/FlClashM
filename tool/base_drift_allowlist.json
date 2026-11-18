@@ -56,6 +56,11 @@
       "reason": "Тесты обёртки ядра закрепляют актуализацию runtime-снимка и отмену внутренних запросов."
     },
     {
+      "path": "core/connection_test.go",
+      "bucket": "budget",
+      "reason": "Тест закрепляет закрытие уже принятых и дозванивающихся соединений при остановке."
+    },
+    {
       "path": "core/constant.go",
       "bucket": "budget",
       "reason": "Контракт внутреннего HTTP IPC и runtime-снимка является частью API обёртки ядра."
@@ -286,6 +291,11 @@
       "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
     },
     {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/RequestCodes.kt",
+      "bucket": "budget",
+      "reason": "Коды запросов согласия VPN не дают позднему ответу диалога выдать себя за новый запрос."
+    },
+    {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
       "bucket": "budget",
       "reason": "Платформенная склейка Android и ограничение фрагментов IPC защищают общий буфер Binder при передаче больших профилей."
@@ -314,6 +324,11 @@
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
       "bucket": "budget",
       "reason": "Единая Android-политика удаляет секреты до app-private файла и logcat."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/RequestCodesTest.kt",
+      "bucket": "budget",
+      "reason": "Тест фиксирует выдачу и освобождение кодов запросов согласия VPN."
     },
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStoreTest.kt",
@@ -639,6 +654,11 @@
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
+    },
+    {
+      "path": "lib/views/config/filters.dart",
+      "bucket": "budget",
+      "reason": "Проверка фильтра повторяется, если поля изменились во время асинхронной проверки, и закрывает страницу только при актуальном результате."
     },
     {
       "path": "lib/views/config/general.dart",
@@ -2784,6 +2804,86 @@
       "path": "core/network_reset_test.go",
       "bucket": "budget",
       "reason": "Регрессия завершения сброса соединений проверяет общий mutex runLock/selectMu и обновление поколения диагностики без повторного захвата."
+    },
+    {
+      "path": "lib/common/input_limits.dart",
+      "bucket": "budget",
+      "reason": "Границы ввода принадлежат форку: интервалы ограничены значениями, которые mihomo и DateTime ещё держат."
+    },
+    {
+      "path": "lib/models/profile_settings.dart",
+      "bucket": "budget",
+      "reason": "Применение настроек профиля в форке отбрасывает значения вне безопасных границ ввода, а не переносит их в runtime."
+    },
+    {
+      "path": "lib/providers/state/custom_import.dart",
+      "bucket": "budget",
+      "reason": "Импорт custom-профиля в форке переименовывает резервный выход группы вместе с прокси, иначе собранный план ссылается на старое имя."
+    },
+    {
+      "path": "core/backend/compile/shortid.go",
+      "bucket": "budget",
+      "reason": "Правка REALITY short-id в форке живёт в Go Compiler: апстрим делал её в удалённом profile_base.go."
+    },
+    {
+      "path": "core/backend/compile/shortid_test.go",
+      "bucket": "budget",
+      "reason": "Регрессия REALITY short-id относится к Go Compiler форка, где живёт соответствующая правка."
+    },
+    {
+      "path": "core/delay.go",
+      "bucket": "budget",
+      "reason": "Задержка load-balance в форке измеряется по достижимым узлам: апстрим делал это в core/delay.go, который у нас отсутствовал."
+    },
+    {
+      "path": "core/delay_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии задержек load-balance относятся к Go Core форка, где живёт их реализация."
+    },
+    {
+      "path": "lib/views/dashboard/edit.dart",
+      "bucket": "budget",
+      "reason": "Редактор карточек помечает расстановку пользовательской, чтобы обновление подписки её не заменяло; данные по-прежнему в Go-снимке."
+    },
+    {
+      "path": "lib/views/proxies/setting.dart",
+      "bucket": "budget",
+      "reason": "Страница настроек прокси связывает переключатель скрытия таймаутов с ключом подписки `view.proxies.hidetimeout`."
+    },
+    {
+      "path": "lib/common/l10n_labels.dart",
+      "bucket": "budget",
+      "reason": "Подпись пункта «Соединения» теперь называет объединённую страницу, а не только активные соединения."
+    },
+    {
+      "path": "lib/views/connection/connection_feeds.dart",
+      "bucket": "budget",
+      "reason": "Объединённая страница «Соединения» держит оба списка и переключает их меню заголовка; данные по-прежнему из Go-снимков."
+    },
+    {
+      "path": "lib/views/connection/connections.dart",
+      "bucket": "budget",
+      "reason": "Список активных соединений принимает меню заголовка от объединённой страницы; опрос и данные не менялись."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connection_stats.dart",
+      "bucket": "budget",
+      "reason": "Плитки главной берут подпись ленты из своего перечня, а не из подписи страницы."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connections_table.dart",
+      "bucket": "budget",
+      "reason": "Таблица главной различает подпись ленты и подпись страницы «Соединения»."
+    },
+    {
+      "path": "lib/views/navigation.dart",
+      "bucket": "budget",
+      "reason": "Пункт «Последние запросы» убран: обе ленты открываются одной страницей «Соединения»."
+    },
+    {
+      "path": "lib/views/views.dart",
+      "bucket": "budget",
+      "reason": "Экспорт объединённой страницы соединений."
     }
   ]
 }

@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/ui/color.dart';
+import 'package:material_ui/material_ui.dart' show ThemeMode;
 
 import 'config.dart';
 import 'profile.dart';
@@ -227,10 +228,11 @@ String _decodeAnnouncement(String raw) {
 /// `key:value;...` over the look of the app. `proxies.*` keys shape the
 /// proxies page: `type` list|tab, `sort` none|delay|name, `layout`
 /// loose|standard|tight, `icon` filled|plain|hidden, `card`
-/// loose|standard|compact. `app.*` keys shape the app: `board`
-/// extended|standard, `navbar` floating|docked, `tabs` slide|fade, `glass`
-/// none|standard|ultra, `color` RRGGBB|AARRGGBB, `style`
-/// vivid|tinted|soft|monochrome, `black` true|false.
+/// loose|standard|compact|oneline, `hidetimeout` true|false. `app.*` keys
+/// shape the app: `board` extended|standard, `navbar` floating|docked,
+/// `tabs` slide|fade, `glass` none|standard|ultra, `color`
+/// RRGGBB|AARRGGBB, `style` vivid|tinted|soft|monochrome, `black`
+/// true|false, `theme` auto|light|dark.
 class ViewRequest {
   const ViewRequest({
     this.type,
@@ -238,7 +240,9 @@ class ViewRequest {
     this.layout,
     this.icon,
     this.card,
+    this.hideTimeout,
     this.board,
+    this.themeMode,
     this.floatingNavigationBar,
     this.tabAnimation,
     this.liquidGlass,
@@ -252,7 +256,9 @@ class ViewRequest {
   final ProxiesLayout? layout;
   final ProxiesIconStyle? icon;
   final ProxyCardType? card;
+  final bool? hideTimeout;
   final ThemeStyle? board;
+  final ThemeMode? themeMode;
   final bool? floatingNavigationBar;
   final TabAnimation? tabAnimation;
   final LiquidGlassMode? liquidGlass;
@@ -266,6 +272,12 @@ class ViewRequest {
   static const boardNames = {
     'extended': ThemeStyle.enhanced,
     'standard': ThemeStyle.original,
+  };
+
+  static const themeModeNames = {
+    'auto': ThemeMode.system,
+    'light': ThemeMode.light,
+    'dark': ThemeMode.dark,
   };
 
   static final _hex = RegExp(r'^[0-9A-F]{6}([0-9A-F]{2})?$');
@@ -293,7 +305,9 @@ class ViewRequest {
     ProxiesLayout? layout;
     ProxiesIconStyle? icon;
     ProxyCardType? card;
+    bool? hideTimeout;
     ThemeStyle? board;
+    ThemeMode? themeMode;
     bool? floatingNavigationBar;
     TabAnimation? tabAnimation;
     LiquidGlassMode? liquidGlass;
@@ -339,8 +353,12 @@ class ViewRequest {
                 _ => value,
               }) ??
               card;
+        case (false, 'hidetimeout'):
+          hideTimeout = _boolOf(value) ?? hideTimeout;
         case (true, 'board'):
           board = boardNames[value] ?? board;
+        case (true, 'theme'):
+          themeMode = themeModeNames[value] ?? themeMode;
         case (true, 'navbar'):
           floatingNavigationBar = switch (value) {
             'floating' => true,
@@ -365,7 +383,9 @@ class ViewRequest {
       layout: layout,
       icon: icon,
       card: card,
+      hideTimeout: hideTimeout,
       board: board,
+      themeMode: themeMode,
       floatingNavigationBar: floatingNavigationBar,
       tabAnimation: tabAnimation,
       liquidGlass: liquidGlass,
@@ -382,7 +402,9 @@ class ViewRequest {
     layout,
     icon,
     card,
+    hideTimeout,
     board,
+    themeMode,
     floatingNavigationBar,
     tabAnimation,
     liquidGlass,
@@ -395,6 +417,7 @@ class ViewRequest {
 
   bool get touchesTheme =>
       board != null ||
+      themeMode != null ||
       liquidGlass != null ||
       color != null ||
       colorStyle != null ||

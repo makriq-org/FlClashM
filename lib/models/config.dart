@@ -218,6 +218,7 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool autoRun,
     @Default(false) bool openLogs,
     @Default(true) bool closeConnections,
+    @Default(RequestFeed.live) RequestFeed requestFeed,
     @Default(defaultTestUrl) String testUrl,
     @Default(8000) int delayTestTimeout,
     @Default(TabAnimation.slide)
@@ -247,6 +248,10 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default({}) Map<String, Map<String, double>> tableColumnWidths,
     @Default({}) Map<String, int> subscriptionNotices,
     @Default({}) Set<String> ownedSettings,
+
+    /// Settings a `flclashx-special` flag turned on, so they can go back to
+    /// their default once the panel stops sending that flag.
+    @Default({}) Set<String> panelSetSettings,
   }) = _AppSettingProps;
 
   factory AppSettingProps.fromJson(Map<String, Object?> json) =>

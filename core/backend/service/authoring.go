@@ -233,6 +233,11 @@ func (a *App) resourceMutation(ctx context.Context, method string, params json.R
 			return Receipt{}, errors.New("resource transport returned no body")
 		}
 		defer response.Body.Close()
+		// No Range is requested, so a partial response is a cut-off copy that
+		// would replace the resource with almost nothing.
+		if response.StatusCode == http.StatusPartialContent {
+			return Receipt{}, errors.New("resource returned a partial response")
+		}
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			return Receipt{}, fmt.Errorf("resource HTTP status %d", response.StatusCode)
 		}

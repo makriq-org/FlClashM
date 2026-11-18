@@ -179,3 +179,180 @@ func TestInactiveProfileCustomization(t *testing.T) {
 		})
 	}
 }
+
+// TestDashboardCardsStayAsTheUserArranged covers the cards a subscription must
+// not put back: an arrangement survives an update unless the panel denies
+// editing, and giving the setting back lets the panel's list return.
+func TestDashboardCardsStayAsTheUserArranged(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	apply := func(headers map[string]string) []string {
+		t.Helper()
+		if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(headers)}, false, true); err != nil {
+			t.Fatal(err)
+		}
+		var settings struct {
+			Widgets []string `json:"dashboardWidgets"`
+		}
+		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+			t.Fatal(err)
+		}
+		return settings.Widgets
+	}
+	panels := []string{"announcement", "outboundMode"}
+	if got := apply(map[string]string{"flclashm-widgets": "announcement,outboundMode"}); !reflect.DeepEqual(got, panels) {
+		t.Fatalf("panel cards = %v, want %v", got, panels)
+	}
+	// The user edits the dashboard, which marks the cards as their own.
+	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{
+		"dashboardWidgets": []string{"outboundMode"},
+		"ownedSettings":    []string{"app.dashboardWidgets"},
+	})}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := apply(map[string]string{"flclashm-widgets": "announcement,outboundMode"}); !reflect.DeepEqual(got, []string{"outboundMode"}) {
+		t.Fatalf("an update replaced the user's cards: %v", got)
+	}
+	if got := apply(map[string]string{"flclashm-widgets": "announcement,outboundMode", "flclashm-special": "denywidgets"}); !reflect.DeepEqual(got, panels) {
+		t.Fatalf("denywidgets did not restore the panel's cards: %v", got)
+	}
+	// Handing the setting back is what lets the panel speak for the cards
+	// again without denywidgets.
+	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"ownedSettings": []string{}})}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := apply(map[string]string{"flclashm-widgets": "announcement,outboundMode"}); !reflect.DeepEqual(got, panels) {
+		t.Fatalf("released cards did not follow the panel: %v", got)
+	}
+}
+
+// TestViewHeaderTakesThemeAndHiddenTimeouts covers the two view keys that shape
+// the app theme and the proxies page, in both header prefixes.
+func TestViewHeaderTakesThemeAndHiddenTimeouts(t *testing.T) {
+	for _, prefix := range []string{"flclashm-", "flclashx-"} {
+		t.Run(prefix, func(t *testing.T) {
+			app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+			if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(map[string]string{
+				prefix + "view": "app.theme:dark;proxies.hidetimeout:true",
+			})}, false, true); err != nil {
+				t.Fatal(err)
+			}
+			var theme struct {
+				Mode string `json:"themeMode"`
+			}
+			if err := json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme); err != nil {
+				t.Fatal(err)
+			}
+			var style struct {
+				HideTimeout bool `json:"hideTimeoutProxies"`
+			}
+			if err := json.Unmarshal(app.Snapshot().Catalog.Settings["proxiesStyle"], &style); err != nil {
+				t.Fatal(err)
+			}
+			if theme.Mode != "dark" || !style.HideTimeout {
+				t.Fatalf("theme %+v, style %+v", theme, style)
+			}
+			// An invalid value leaves the saved setting alone.
+			if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(map[string]string{
+				prefix + "view": "app.theme:sunset;proxies.hidetimeout:maybe",
+			})}, false, true); err != nil {
+				t.Fatal(err)
+			}
+			_ = json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme)
+			_ = json.Unmarshal(app.Snapshot().Catalog.Settings["proxiesStyle"], &style)
+			if theme.Mode != "dark" || !style.HideTimeout {
+				t.Fatalf("an invalid value changed the settings: %+v %+v", theme, style)
+			}
+		})
+	}
+}
+
+// TestHideIpFlagComesAndGoesWithThePanel keeps the flag reversible: it is on
+// while the panel sends it and back off once it stops, unless the user took it.
+func TestHideIpFlagComesAndGoesWithThePanel(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	read := func() (bool, []string) {
+		t.Helper()
+		var settings struct {
+			HideIp   bool     `json:"hideIp"`
+			PanelSet []string `json:"panelSetSettings"`
+			Owned    []string `json:"ownedSettings"`
+		}
+		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+			t.Fatal(err)
+		}
+		return settings.HideIp, settings.PanelSet
+	}
+	apply := func(special string) {
+		t.Helper()
+		if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-special": special})}, false, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply("hideip")
+	if on, set := read(); !on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("hideip = %v, panel set %v", on, set)
+	}
+	apply("")
+	if on, set := read(); on || len(set) != 0 {
+		t.Fatalf("hideip stayed on without the flag: %v, panel set %v", on, set)
+	}
+	// A setting the user owns is never turned on or off by the panel.
+	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"ownedSettings": []string{"app.hideIp"}})}, 0); err != nil {
+		t.Fatal(err)
+	}
+	apply("hideip")
+	if on, set := read(); on || len(set) != 0 {
+		t.Fatalf("hideip overrode the user's setting: %v, panel set %v", on, set)
+	}
+}
+
+// TestHideIpMarkerSurvivesUserOwnership keeps the panel's marker while the user
+// owns the setting: dropping it there would leave the value the panel set with
+// nothing to reset once the setting is handed back.
+func TestHideIpMarkerSurvivesUserOwnership(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	read := func() (bool, []string) {
+		t.Helper()
+		var settings struct {
+			HideIp   bool     `json:"hideIp"`
+			PanelSet []string `json:"panelSetSettings"`
+		}
+		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+			t.Fatal(err)
+		}
+		return settings.HideIp, settings.PanelSet
+	}
+	apply := func(special string) {
+		t.Helper()
+		if err := app.customizeForProfile(context.Background(), profiles.Object{"providerHeaders": jsonValue(map[string]string{"flclashm-special": special})}, false, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	patch := func(fields map[string]any) {
+		t.Helper()
+		if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(fields)}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply("hideip")
+	if on, set := read(); !on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("hideip = %v, panel set %v", on, set)
+	}
+	// The user takes the setting and turns it off; the panel still sends the flag.
+	patch(map[string]any{"hideIp": false, "ownedSettings": []string{"app.hideIp"}})
+	apply("hideip")
+	if on, set := read(); on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("the panel overrode the user: hideip = %v, panel set %v", on, set)
+	}
+	// The panel stops sending it while the user still owns the setting.
+	apply("")
+	if on, set := read(); on || !reflect.DeepEqual(set, []string{"app.hideIp"}) {
+		t.Fatalf("the marker was dropped under the user: hideip = %v, panel set %v", on, set)
+	}
+	// Handing it back now clears the marker and the value the panel once set.
+	patch(map[string]any{"ownedSettings": []string{}})
+	apply("")
+	if on, set := read(); on || len(set) != 0 {
+		t.Fatalf("released setting kept the panel's value: hideip = %v, panel set %v", on, set)
+	}
+}

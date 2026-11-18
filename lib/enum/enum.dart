@@ -848,4 +848,7 @@ enum LoadingTag {
 
 enum CoreStatus { connecting, connected, disconnected }
 
+/// Which list the Connections page shows; the choice is a setting.
+enum RequestFeed { recent, live }
+
 enum UpdatingScope { core, local }

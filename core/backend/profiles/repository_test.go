@@ -451,6 +451,32 @@ func TestSubscriptionMetadataHeadersAndNoDeviceHeaders(t *testing.T) {
 		t.Fatal(received)
 	}
 }
+func TestSubscriptionIgnoresUnreachableUpdateInterval(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// A year and a day is already past what the app's own input allows.
+		w.Header().Set("profile-update-interval", "100000")
+		_, _ = w.Write([]byte("proxies: []\n"))
+	}))
+	defer server.Close()
+	repository := openRepository(t)
+	profile := create(t, repository, "one", server.URL)
+	const kept = int64(6 * time.Hour / time.Microsecond)
+	profile.Metadata["autoUpdateDuration"] = mustJSON(kept)
+	if _, err := repository.Put(context.Background(), profile.Metadata, profile.Source, profile.Revision); err != nil {
+		t.Fatal(err)
+	}
+	service := &Subscriptions{Repository: repository, Client: server.Client()}
+	updated, err := service.Update(context.Background(), "one", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored int64
+	_ = json.Unmarshal(updated.Metadata["autoUpdateDuration"], &stored)
+	if stored != kept {
+		t.Fatalf("unreachable interval replaced the schedule: %d", stored)
+	}
+}
+
 func TestLateSubscriptionResponseCannotOverwriteEditor(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

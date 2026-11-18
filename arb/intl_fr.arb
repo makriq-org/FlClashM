@@ -758,6 +758,7 @@
   "ipSourceNoType": "Aucun type",
   "ipSourceRateLimited": "Limite de débit atteinte",
   "ipSourceIpMismatch": "IP sortante différente",
+  "hideIpDesc": "Retire l’IP de sortie du tableau de bord et des vérifications de services.",
   "hideIp": "Masquer l’IP",
   "editorUnavailable": "Éditeur indisponible",
   "replace": "Remplacer",

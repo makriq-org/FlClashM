@@ -955,6 +955,7 @@
   "ipSourceNoType": "判定不可",
   "ipSourceRateLimited": "レート制限",
   "ipSourceIpMismatch": "アウトバウンド IP が不一致",
+  "hideIpDesc": "ダッシュボードとサービスチェックから送信元 IP を表示しません。",
   "hideIp": "IP を隠す",
   "editorUnavailable": "エディターを利用できません",
   "replace": "置換",

@@ -758,6 +758,7 @@
   "ipSourceNoType": "Sin tipo",
   "ipSourceRateLimited": "Límite de solicitudes",
   "ipSourceIpMismatch": "IP de salida distinta",
+  "hideIpDesc": "Quita la IP de salida del panel y de la comprobación de servicios.",
   "hideIp": "Ocultar IP",
   "editorUnavailable": "Editor no disponible",
   "replace": "Reemplazar",

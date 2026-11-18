@@ -110,6 +110,7 @@ func handleStartListener() bool {
 		return true
 	}
 	isRunning = true
+	listenersAccepting.Store(true)
 	if currentConfig != nil {
 		// On Android TUN is driven by a file descriptor from VpnService in
 		// handleStartTun, not by mihomo's internal TUN — keep cfg flag off.
@@ -156,10 +157,16 @@ func handleStopListener() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	isRunning = false
+	listenersAccepting.Store(false)
 	// Keep health-check forwarder running so proxy pings stay fresh in the UI
 	// while the VPN is off. It is torn down only on full shutdown.
 	stopRequestForwarder()
 	stopListeners()
+	// A closed listener only turns new connections away; those it already
+	// accepted would keep going through the proxy. Those still resolving or
+	// dialing out have no tracker yet, so they are closed from the client side.
+	closeConnections()
+	closeOpenInbound()
 	return true
 }
 
@@ -184,7 +191,13 @@ func handleShutdown() bool {
 	// goroutine would otherwise leak across shutdown. handleStopLog is idempotent
 	// and guarded by its own logMu (never takes runLock), so calling it here is safe.
 	handleStopLog()
+	// Turn new handshakes away before the listeners go: a handshake that lands
+	// after closeOpenInbound would register itself as accepted and be handed to
+	// the tunnel, and no later pass closes it.
+	listenersAccepting.Store(false)
 	stopListeners()
+	closeConnections()
+	closeOpenInbound()
 	executor.Shutdown()
 	runtime.GC()
 	isInit.Store(false)
@@ -677,16 +690,6 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		if timeout > time.Minute {
 			timeout = time.Minute
 		}
-		waiting, cancelWaiting := context.WithTimeout(context.Background(), timeout)
-		err = testDelaySem.Acquire(waiting, 1)
-		cancelWaiting()
-		if err != nil {
-			fn("")
-			return
-		}
-		defer testDelaySem.Release(1)
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 		runLock.Lock()
 		proxy := proxiesWithProviders()[params.ProxyName]
 		testURL := params.TestUrl
@@ -697,23 +700,20 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		if testURL == "" {
 			testURL = "https://www.gstatic.com/generate_204"
 		}
-		delayData := &Delay{Name: params.ProxyName, Url: testURL, Value: -1}
+		delayData := &Delay{Name: params.ProxyName, Url: testURL, Value: delayFailed}
 		if proxy == nil {
 			data, _ := json.Marshal(delayData)
 			fn(string(data))
 			return
 		}
-		testUrl := testURL
 
-		delay, err := proxy.URLTest(ctx, testUrl, expectedStatus)
-		if err != nil || delay == 0 {
-			delayData.Value = -1
-			data, _ := json.Marshal(delayData)
-			fn(string(data))
+		value, tested := testDelay(context.Background(), proxy, testURL, timeout, expectedStatus)
+		if !tested {
+			// The test never got a slot, which says nothing about the proxy.
+			fn("")
 			return
 		}
-
-		delayData.Value = int32(delay)
+		delayData.Value = value
 		data, _ := json.Marshal(delayData)
 		fn(string(data))
 

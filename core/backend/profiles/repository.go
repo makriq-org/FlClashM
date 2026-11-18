@@ -769,6 +769,9 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		}
 		delete(settings, "authoring")
 	}
+	// An archive that names no profile list says nothing about the rows, so an
+	// overriding restore keeps them instead of wiping the catalog.
+	_, namesProfiles := settings["profiles"]
 	var metadata []Object
 	if raw := settings["profiles"]; len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &metadata); err != nil {
@@ -782,7 +785,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		delete(settings, "profiles")
 		next.Settings = settings
 	}
-	if replace {
+	if replace && namesProfiles {
 		next.Profiles = []Record{}
 	}
 	seen := map[string]bool{}
@@ -839,7 +842,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		if err := validateAuthoring(next); err != nil {
 			return err
 		}
-	} else if replace {
+	} else if replace && namesProfiles {
 		for _, p := range r.state.Profiles {
 			id, _ := profileID(p.Metadata)
 			if !seen[id] {

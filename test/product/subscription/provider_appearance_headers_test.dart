@@ -1,6 +1,7 @@
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart' show ThemeMode;
 
 void main() {
   test(
@@ -58,5 +59,27 @@ void main() {
     expect(headers.globalModeAllowed, false);
     expect(headers.androidSecure, true);
     expect(headers.widgetEditingDenied, true);
+  });
+
+  test('view names the theme and the hidden timeouts in either prefix', () {
+    for (final prefix in ['flclashx', 'flclashm']) {
+      final headers = ProviderHeaders({
+        '$prefix-view': 'app.theme:dark;proxies.hidetimeout:true',
+      });
+      expect(headers.view!.themeMode, ThemeMode.dark);
+      expect(headers.view!.hideTimeout, true);
+      expect(headers.view!.touchesTheme, isTrue);
+    }
+    const fallback = ProviderHeaders({'flclashx-view': 'app.theme:sunset'});
+    expect(fallback.view, isNull);
+  });
+
+  test('hideip and arranged cards are part of the panel settings', () {
+    const hiding = ProviderHeaders({'flclashm-special': 'hideip'});
+    expect(hiding.specials, contains('hideip'));
+    const without = ProviderHeaders({'flclashm-special': ''});
+    expect(without.specials, isNot(contains('hideip')));
+    expect(dashboardWidgetsSetting, 'app.dashboardWidgets');
+    expect(hideIpSetting, 'app.hideIp');
   });
 }

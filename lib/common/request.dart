@@ -9,7 +9,7 @@ import 'package:dio/io.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/state.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 
 class Request {
   late final Dio dio;
@@ -49,14 +49,27 @@ class Request {
   }) {
     final target = downloadTarget(url);
     final cancelToken = CancelToken();
+    var oversized = false;
     return _clashDio
         .getUri<T>(
           target.uri,
           options: Options(
             responseType: responseType,
             headers: {...headers, ...target.headers},
+            validateStatus: tunnelDownloadOptions.validateStatus,
           ),
           cancelToken: cancelToken,
+          onReceiveProgress: (received, total) {
+            if (received > maxDownloadBytes || total > maxDownloadBytes) {
+              oversized = true;
+              cancelToken.cancel();
+            }
+          },
+        )
+        .catchError(
+          (Object _) =>
+              throw MessageException(currentAppLocalizations.fileTooLarge),
+          test: (_) => oversized,
         )
         .timeout(
           timeout,
@@ -115,6 +128,7 @@ class Request {
         url,
         targetPath,
         onReceiveProgress: onProgress,
+        options: tunnelDownloadOptions,
       );
       return;
     }
@@ -163,6 +177,14 @@ class Request {
         );
       }
       final statusCode = response['status-code'] as int?;
+      if (statusCode == HttpStatus.partialContent) {
+        // Nothing asks for a range, so a 206 is a cut-off copy.
+        throw DioException(
+          requestOptions: RequestOptions(path: url),
+          type: DioExceptionType.badResponse,
+          message: 'Tunnel download returned a partial response.',
+        );
+      }
       if (statusCode == null || statusCode < 200 || statusCode >= 300) {
         throw DioException(
           requestOptions: RequestOptions(path: url),
@@ -257,7 +279,11 @@ HostFailure hostFailureOf(Object error) {
 
 /// Some subscription servers send a gzip or zlib body without saying so in
 /// Content-Encoding, which is the only signal dart:io decompresses on.
-Uint8List decompressUnlabeled(Uint8List bytes) {
+///
+/// Null when the inflated body passes [limit]: a small compressed body can
+/// still expand far past what the app would hold.
+@visibleForTesting
+Uint8List? decompressUnlabeled(Uint8List bytes, {int limit = maxDownloadBytes}) {
   final codec = switch (bytes) {
     [0x1f, 0x8b, ...] => gzip,
     [0x78, final flags, ...] when (0x78 << 8 | flags) % 31 == 0 => zlib,
@@ -266,11 +292,59 @@ Uint8List decompressUnlabeled(Uint8List bytes) {
   if (codec == null) {
     return bytes;
   }
+  final output = _CappedSink(limit);
   try {
-    return Uint8List.fromList(codec.decode(bytes));
+    codec.decoder.startChunkedConversion(output)
+      ..add(bytes)
+      ..close();
+  } on _OutputTooLarge {
+    return null;
   } on FormatException {
     return bytes;
   }
+  final inflated = output.bytes.takeBytes();
+  // A truncated header decodes to nothing; the body itself is still the
+  // subscription, so an empty result means the guess was wrong.
+  return inflated.isEmpty && bytes.isNotEmpty ? bytes : inflated;
+}
+
+/// [decompressUnlabeled] off the UI isolate; throws when the result is too big.
+Future<Uint8List> decompressDownload(Uint8List bytes) async {
+  final codec = switch (bytes) {
+    [0x1f, 0x8b, ...] => gzip,
+    [0x78, final flags, ...] when (0x78 << 8 | flags) % 31 == 0 => zlib,
+    _ => null,
+  };
+  if (codec == null) {
+    return bytes;
+  }
+  final inflated = await compute(decompressUnlabeled, bytes);
+  if (inflated == null) {
+    throw MessageException(currentAppLocalizations.fileTooLarge);
+  }
+  return inflated;
+}
+
+final class _OutputTooLarge implements Exception {
+  const _OutputTooLarge();
+}
+
+final class _CappedSink implements Sink<List<int>> {
+  _CappedSink(this.limit);
+
+  final int limit;
+  final bytes = BytesBuilder(copy: false);
+
+  @override
+  void add(List<int> chunk) {
+    if (bytes.length + chunk.length > limit) {
+      throw const _OutputTooLarge();
+    }
+    bytes.add(chunk);
+  }
+
+  @override
+  void close() {}
 }
 
 /// dart:io turns [Uri.userInfo] into Basic credentials still percent-encoded.
@@ -320,9 +394,23 @@ String? getFileNameForDisposition(String? disposition) {
   return parameters[fileNameKey];
 }
 
+/// Nothing asks for a range, so a 206 is a cut-off copy even on a direct
+/// download, where dio would otherwise accept it as a success.
+final Options tunnelDownloadOptions = Options(
+  validateStatus: (status) =>
+      status != null &&
+      status >= 200 &&
+      status < 300 &&
+      status != HttpStatus.partialContent,
+);
+
 Response<T> validateTunnelHttpResponse<T>(Response<T> response) {
   final statusCode = response.statusCode;
-  if (statusCode != null && statusCode >= 200 && statusCode < 300) {
+  // Nothing asks for a range, so a 206 is a cut-off copy.
+  if (statusCode != null &&
+      statusCode >= 200 &&
+      statusCode < 300 &&
+      statusCode != HttpStatus.partialContent) {
     return response;
   }
   throw DioException.badResponse(

@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flclashx/common/cidr.dart';
+import 'package:flclashx/common/input_limits.dart';
 import 'package:flclashx/enum/enum.dart';
 
 import 'clash_config.dart';
@@ -66,6 +67,17 @@ PatchClashConfig syncProfileSettings(
     return value != null && value >= 0 && value <= 65535 ? value : null;
   }
 
+  /// mihomo panics its geo ticker on an interval it cannot hold in a
+  /// Duration, so a profile value outside the input's range is dropped.
+  int? geoUpdateInterval() {
+    final value = read<num>('geo-update-interval');
+    return value != null &&
+            value >= 1 &&
+            value <= TextInputLimits.maxGeoUpdateInterval
+        ? value.toInt()
+        : null;
+  }
+
   T? enumNamed<T extends Enum>(String key, List<T> values) {
     final value = read<String>(key)?.toLowerCase();
     return values.firstWhereOrNull((item) => item.name.toLowerCase() == value);
@@ -88,8 +100,7 @@ PatchClashConfig syncProfileSettings(
     keepAliveIdle: read<num>('keep-alive-idle')?.toInt() ?? next.keepAliveIdle,
     disableKeepAlive: read<bool>('disable-keep-alive') ?? next.disableKeepAlive,
     geoAutoUpdate: read<bool>('geo-auto-update') ?? next.geoAutoUpdate,
-    geoUpdateInterval:
-        read<num>('geo-update-interval')?.toInt() ?? next.geoUpdateInterval,
+    geoUpdateInterval: geoUpdateInterval() ?? next.geoUpdateInterval,
     geodataLoader:
         enumNamed('geodata-loader', GeodataLoader.values) ?? next.geodataLoader,
   );
