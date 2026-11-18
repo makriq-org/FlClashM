@@ -34,7 +34,7 @@ rules:
 
 ## 🔌 内置节点
 
-内置节点的本地代理接收应用程序的 TCP 流量。为了保护本地 SOCKS 代理，ByeDPI 已禁用 UDP。包含 `udp: true` 的现有配置仍可加载，其中的 ByeDPI 节点可继续通过 TCP 工作。需要 UDP 的流量请使用其他支持 UDP 的节点。
+仅 ByeDPI 支持 UDP，默认开启，可用 `udp: false` 关闭。NaiveProxy、OlcRTC 和 StormDNS 不支持 UDP。
 
 ### NaiveProxy
 

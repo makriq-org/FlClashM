@@ -130,14 +130,18 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, errors.New("external listener port range exhausted")
 		}
 		reserved[port] = true
-		if kind != "byedpi" && raw["udp"] == true {
+		udp := kind == "byedpi"
+		if value, explicitUDP := raw["udp"]; explicitUDP {
+			udp = value == true
+		}
+		if kind != "byedpi" && udp {
 			return nil, errors.New("external transport does not support UDP")
 		}
 		check, activation, err := nodeChecks(raw, kind, name, config, testURL)
 		if err != nil {
 			return nil, err
 		}
-		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
+		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, UDP: udp, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
 		username, password := e.serviceCredentials(node.ID)
 		node.Metadata["service-auth-user"] = username
 		node.Metadata["service-auth-password"] = password
@@ -155,10 +159,14 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
 		nodes = append(nodes, node)
-		slot.values[slot.index] = Object{
+		proxy := Object{
 			"name": name, "type": "socks5", "server": node.Host, "port": port,
-			"username": username, "password": password, "udp": false,
+			"username": username, "password": password, "udp": udp,
 		}
+		if udp {
+			proxy["flclashm-udp-token"] = true
+		}
+		slot.values[slot.index] = proxy
 	}
 	return nodes, nil
 }

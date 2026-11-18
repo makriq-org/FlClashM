@@ -194,8 +194,8 @@ func TestExternalTransportCompilation(t *testing.T) {
 				user == "" || password == "" || user != node.Metadata["service-auth-user"] || password != node.Metadata["service-auth-password"] {
 				t.Fatal("engine proxy does not match the authenticated loopback node")
 			}
-			if node.UDP || proxy["udp"] != false {
-				t.Fatalf("built-in proxy unexpectedly enables UDP: node=%#v proxy=%#v", node, proxy)
+			if want := tt.kind == "byedpi"; node.UDP != want || proxy["udp"] != want || (proxy["flclashm-udp-token"] == true) != want {
+				t.Fatal("built-in proxy compiled with the wrong UDP settings")
 			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file
 			artifact := node.Files[key]
@@ -214,14 +214,20 @@ func TestExternalTransportCompilation(t *testing.T) {
 	}
 }
 
-func TestByeDPILegacyUDPProfilesRemainUsableOverTCP(t *testing.T) {
-	config := mustProfile(t, "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1', udp: true}]")
-	nodes, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "https://example.com/check")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(nodes) != 1 || nodes[0].UDP || object(list(config["proxies"])[0])["udp"] != false {
-		t.Fatal("legacy ByeDPI configuration must compile with UDP disabled")
+func TestByeDPIExplicitUDPSettings(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		udp   bool
+	}{{"true", true}, {"false", false}} {
+		config := mustProfile(t, "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1', udp: "+tc.field+"}]")
+		nodes, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		proxy := object(list(config["proxies"])[0])
+		if len(nodes) != 1 || nodes[0].UDP != tc.udp || proxy["udp"] != tc.udp || (proxy["flclashm-udp-token"] == true) != tc.udp {
+			t.Fatal("ByeDPI did not honor the configured UDP setting")
+		}
 	}
 }
 

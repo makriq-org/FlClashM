@@ -273,7 +273,11 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		if err := writePrivate(authFile, []byte(user+"\n"+password+"\n")); err != nil {
 			return err
 		}
-		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", authFile, "--no-udp"}, argv...)
+		arguments = []string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", authFile}
+		if !node.UDP {
+			arguments = append(arguments, "--no-udp")
+		}
+		arguments = append(arguments, argv...)
 	default:
 		return errors.New("unsupported transport")
 	}

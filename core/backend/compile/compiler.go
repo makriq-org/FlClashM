@@ -21,7 +21,7 @@ import (
 // makes the profile package rules inert without discarding the manual list.
 const AccessControlSettingKey = "vpn.access-control"
 
-const runtimeSecurityVersion = 1
+const runtimeSecurityVersion = 2
 
 type RawProfile struct {
 	SourceMissing bool   `json:"sourceMissing,omitempty"`

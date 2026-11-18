@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/metacubex/mihomo/adapter/outbound"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 func byeDPITestStrategies() []string {
@@ -245,4 +249,43 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	if _, err = io.ReadFull(conn, udpResponse); err != nil || udpResponse[0] != 5 || udpResponse[1] == 0 {
 		t.Fatalf("UDP ASSOCIATE was not rejected: response=%v err=%v", udpResponse, err)
 	}
+	echo, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer echo.Close()
+	echoResult := make(chan error, 1)
+	go func() {
+		var payload [64]byte
+		n, from, err := echo.ReadFromUDP(payload[:])
+		if err == nil {
+			_, err = echo.WriteToUDP(payload[:n], from)
+		}
+		echoResult <- err
+	}()
+	proxy, err := outbound.NewSocks5(outbound.Socks5Option{Server: "127.0.0.1", Port: port,
+		UserName: username, Password: password, UDP: true, FlClashMUDPToken: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := echo.LocalAddr().(*net.UDPAddr)
+	pc, err := proxy.ListenPacketContext(ctx, &C.Metadata{DstIP: netip.MustParseAddr("127.0.0.1"), DstPort: uint16(dest.Port)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	_ = pc.SetDeadline(time.Now().Add(time.Second))
+	payload := []byte("authenticated UDP round trip")
+	if _, err := pc.WriteTo(payload, dest); err != nil {
+		t.Fatal(err)
+	}
+	var reply [128]byte
+	n, _, err := pc.ReadFrom(reply[:])
+	if err != nil || !bytes.Equal(reply[:n], payload) {
+		t.Fatalf("authenticated UDP round trip failed: %v", err)
+	}
+	if err := <-echoResult; err != nil {
+		t.Fatal(err)
+	}
+
 }
