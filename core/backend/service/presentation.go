@@ -48,13 +48,7 @@ func (a *App) Presentation() Presentation {
 	}
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
-	_, modernM := headers["flclashm-special"]
-	_, modernX := headers["flclashx-special"]
-	if modernM || modernX {
-		value.GlobalModeEnabled = !profiles.ProviderSpecial(headers, "noglobal")
-	} else {
-		value.GlobalModeEnabled = !strings.EqualFold(strings.TrimSpace(profiles.ProviderHeader(headers, "globalmode")), "false")
-	}
+	value.GlobalModeEnabled = !profiles.ProviderSpecial(headers, "noglobal")
 	if !value.GlobalModeEnabled && strings.EqualFold(value.Mode, "global") {
 		value.Mode = "rule"
 	}
