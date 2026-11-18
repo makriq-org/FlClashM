@@ -1197,5 +1197,13 @@
   "preferred": "優先",
   "addToLocalProxies": "ローカルプロキシに追加",
   "addedToLocalProxies": "{name} をローカルプロキシに追加しました",
-  "alreadyInLocalProxies": "{name} はすでにローカルプロキシにあります"
+  "alreadyInLocalProxies": "{name} はすでにローカルプロキシにあります",
+  "updateInstall": "インストール",
+  "updateVerifying": "ファイルを確認しています…",
+  "updateVerified": "ファイルを確認しました",
+  "updateHandoff": "インストーラーを開きました。インストールをキャンセルした場合、ファイルは再試行用に保持されます。",
+  "updateRequired": "この更新は必須です。現在のバージョンはサポートされていません。",
+  "updateErrorDownload": "更新をダウンロードできませんでした。",
+  "updateErrorVerify": "ダウンロードしたファイルは検証に失敗したため削除されました。",
+  "updateErrorInstall": "インストーラーを起動できませんでした。"
 }

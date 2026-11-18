@@ -1197,5 +1197,13 @@
   "preferred": "首选",
   "addToLocalProxies": "添加到本地代理",
   "addedToLocalProxies": "已将 {name} 添加到本地代理",
-  "alreadyInLocalProxies": "本地代理中已有 {name}"
+  "alreadyInLocalProxies": "本地代理中已有 {name}",
+  "updateInstall": "安装",
+  "updateVerifying": "正在校验文件…",
+  "updateVerified": "文件已校验",
+  "updateHandoff": "安装程序已打开。如果取消安装，文件会保留以便重试。",
+  "updateRequired": "此更新为必需项：当前版本已不再受支持。",
+  "updateErrorDownload": "无法下载更新。",
+  "updateErrorVerify": "下载的文件未通过校验，已删除。",
+  "updateErrorInstall": "无法启动安装程序。"
 }

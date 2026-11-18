@@ -1009,5 +1009,13 @@
   "preferred": "Preferido",
   "addToLocalProxies": "Añadir a proxies locales",
   "addedToLocalProxies": "{name} añadido a proxies locales",
-  "alreadyInLocalProxies": "{name} ya está en proxies locales"
+  "alreadyInLocalProxies": "{name} ya está en proxies locales",
+  "updateInstall": "Instalar",
+  "updateVerifying": "Verificando el archivo…",
+  "updateVerified": "Archivo verificado",
+  "updateHandoff": "El instalador está abierto. Si se cancela la instalación, el archivo se conserva para reintentarlo.",
+  "updateRequired": "Esta actualización es obligatoria: la versión actual ya no es compatible.",
+  "updateErrorDownload": "No se pudo descargar la actualización.",
+  "updateErrorVerify": "El archivo descargado no superó la verificación y se eliminó.",
+  "updateErrorInstall": "No se pudo iniciar el instalador."
 }

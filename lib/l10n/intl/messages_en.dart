@@ -2408,6 +2408,26 @@ class MessageLookup extends MessageLookupByLibrary {
     "updateAllGeoData": MessageLookupByLibrary.simpleMessage(
       "Update All Geo Files",
     ),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "The update could not be downloaded.",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "The installer could not be started.",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "The downloaded file failed verification and was removed.",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "The installer is open. If the installation is cancelled, the file stays for another try.",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("Install"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "This update is required: the current version is no longer supported.",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("File verified"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage(
+      "Verifying the file…",
+    ),
     "updated": MessageLookupByLibrary.simpleMessage("Updated"),
     "upload": MessageLookupByLibrary.simpleMessage("Upload"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("Upload bandwidth"),

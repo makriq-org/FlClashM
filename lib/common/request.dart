@@ -104,6 +104,65 @@ class Request {
     }
   }
 
+  /// Один ответ без следования редиректам и без чтения сверх [maxBytes].
+  /// Нужен подписанным документам: следующий адрес цепочки проверяет
+  /// вызывающий, а не Dio.
+  Future<Response<Uint8List>> getBoundedResponseForUrl(
+    String url, {
+    required int maxBytes,
+    Duration timeout = downloadTimeoutDuration,
+  }) async {
+    if (maxBytes <= 0) {
+      throw ArgumentError.value(maxBytes, 'maxBytes');
+    }
+    final target = downloadTarget(url);
+    final cancelToken = CancelToken();
+    var oversized = false;
+    try {
+      final response = await _clashDio
+          .getUri<Uint8List>(
+            target.uri,
+            options: Options(
+              responseType: ResponseType.bytes,
+              headers: target.headers,
+              followRedirects: false,
+              validateStatus: (_) => true,
+            ),
+            cancelToken: cancelToken,
+            onReceiveProgress: (received, total) {
+              if (received > maxBytes || total > maxBytes) {
+                oversized = true;
+                cancelToken.cancel();
+              }
+            },
+          )
+          .timeout(
+            timeout,
+            onTimeout: () {
+              cancelToken.cancel();
+              throw DioException.receiveTimeout(
+                timeout: timeout,
+                requestOptions: RequestOptions(path: url),
+              );
+            },
+          );
+      final data = response.data;
+      if (data != null && data.length > maxBytes) {
+        throw MessageException(currentAppLocalizations.fileTooLarge);
+      }
+      return response;
+    } catch (e) {
+      if (oversized) {
+        throw MessageException(currentAppLocalizations.fileTooLarge);
+      }
+      commonPrint.log(
+        'getBoundedResponseForUrl error ${compactError(e)}',
+        logLevel: LogLevel.warning,
+      );
+      rethrow;
+    }
+  }
+
   Future<Response<String>> getTextResponseForUrl(String url) async {
     try {
       return await _download<String>(url, ResponseType.plain);

@@ -1962,6 +1962,24 @@ class MessageLookup extends MessageLookupByLibrary {
     "unpinWindow": MessageLookupByLibrary.simpleMessage("固定を解除"),
     "update": MessageLookupByLibrary.simpleMessage("更新"),
     "updateAllGeoData": MessageLookupByLibrary.simpleMessage("すべての地理データを更新"),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "更新をダウンロードできませんでした。",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "インストーラーを起動できませんでした。",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "ダウンロードしたファイルは検証に失敗したため削除されました。",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "インストーラーを開きました。インストールをキャンセルした場合、ファイルは再試行用に保持されます。",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("インストール"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "この更新は必須です。現在のバージョンはサポートされていません。",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("ファイルを確認しました"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage("ファイルを確認しています…"),
     "upload": MessageLookupByLibrary.simpleMessage("アップロード"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("アップロード帯域幅"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),

@@ -1009,5 +1009,13 @@
   "preferred": "Préféré",
   "addToLocalProxies": "Ajouter aux proxys locaux",
   "addedToLocalProxies": "{name} ajouté aux proxys locaux",
-  "alreadyInLocalProxies": "{name} est déjà dans les proxys locaux"
+  "alreadyInLocalProxies": "{name} est déjà dans les proxys locaux",
+  "updateInstall": "Installer",
+  "updateVerifying": "Vérification du fichier…",
+  "updateVerified": "Fichier vérifié",
+  "updateHandoff": "L'installateur est ouvert. Si l'installation est annulée, le fichier est conservé pour une nouvelle tentative.",
+  "updateRequired": "Cette mise à jour est obligatoire : la version actuelle n'est plus prise en charge.",
+  "updateErrorDownload": "Impossible de télécharger la mise à jour.",
+  "updateErrorVerify": "Le fichier téléchargé n'a pas passé la vérification et a été supprimé.",
+  "updateErrorInstall": "Impossible de lancer l'installateur."
 }

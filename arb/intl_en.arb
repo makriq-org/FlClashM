@@ -1247,5 +1247,13 @@
   "preferred": "Preferred",
   "addToLocalProxies": "Add to local proxies",
   "addedToLocalProxies": "Added {name} to local proxies",
-  "alreadyInLocalProxies": "{name} is already in local proxies"
+  "alreadyInLocalProxies": "{name} is already in local proxies",
+  "updateInstall": "Install",
+  "updateVerifying": "Verifying the file…",
+  "updateVerified": "File verified",
+  "updateHandoff": "The installer is open. If the installation is cancelled, the file stays for another try.",
+  "updateRequired": "This update is required: the current version is no longer supported.",
+  "updateErrorDownload": "The update could not be downloaded.",
+  "updateErrorVerify": "The downloaded file failed verification and was removed.",
+  "updateErrorInstall": "The installer could not be started."
 }

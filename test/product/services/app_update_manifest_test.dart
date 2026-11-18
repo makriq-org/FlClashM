@@ -11,6 +11,7 @@ void main() {
   late List<int> manifestBytes;
   late List<int> signatureBytes;
   late String publicKeyBase64;
+  late SimpleKeyPair keyPair;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -50,7 +51,7 @@ void main() {
       }),
     );
     final algorithm = Ed25519();
-    final keyPair = await algorithm.newKeyPairFromSeed(
+    keyPair = await algorithm.newKeyPairFromSeed(
       List<int>.generate(32, (index) => index),
     );
     final publicKey = await keyPair.extractPublicKey();
@@ -204,5 +205,90 @@ void main() {
       guard.validateAndRecord(manifest(DateTime.utc(2026, 7, 14, 10))),
       throwsFormatException,
     );
+  });
+
+  group('minimum version', () {
+    Map<String, dynamic> documentWithMinimum({
+      String minVersion = '0.10.0',
+      int? minVersionCode = 2026060101,
+    }) {
+      final decoded = jsonDecode(utf8.decode(manifestBytes));
+      final document = Map<String, dynamic>.from(decoded as Map);
+      document['minVersion'] = minVersion;
+      if (minVersionCode != null) {
+        document['minVersionCode'] = minVersionCode;
+      }
+      return document;
+    }
+
+    Future<AppUpdateManifest> signedAndVerified(
+      Map<String, dynamic> document,
+    ) async {
+      final bytes = utf8.encode(jsonEncode(document));
+      final signature = (await Ed25519().sign(bytes, keyPair: keyPair))
+          .bytes;
+      return AppUpdateManifestVerifier(
+        publicKeyBase64: publicKeyBase64,
+      ).verifyAndDecode(
+        manifestBytes: bytes,
+        signatureBytes: signature,
+        expectedChannel: AppUpdateChannel.stable,
+      );
+    }
+
+    test('keeps the signed minimum while the catalog is fresh', () async {
+      final manifest = await signedAndVerified(documentWithMinimum());
+
+      expect(manifest.minimumVersion, '0.10.0');
+      expect(manifest.minimumVersionCode, 2026060101);
+      final release = manifest.toRelease(now: DateTime.utc(2026, 7, 20));
+      expect(release.minimumVersion, '0.10.0');
+      expect(release.minimumVersionCode, 2026060101);
+    });
+
+    test('drops the minimum once the catalog is stale', () async {
+      final manifest = await signedAndVerified(documentWithMinimum());
+
+      expect(manifest.isFreshAt(DateTime.utc(2026, 7, 20)), isTrue);
+      expect(manifest.isFreshAt(DateTime.utc(2027, 7, 20)), isFalse);
+      final release = manifest.toRelease(now: DateTime.utc(2027, 7, 20));
+      expect(release.minimumVersion, isNull);
+      expect(release.minimumVersionCode, isNull);
+    });
+
+    test('a catalog from the future is not fresh either', () async {
+      final manifest = await signedAndVerified(documentWithMinimum());
+
+      expect(
+        manifest.isFreshAt(DateTime.utc(2026, 7, 1)),
+        isFalse,
+      );
+    });
+
+    test('rejects a malformed minimum version', () async {
+      final algorithm = Ed25519();
+      final document = documentWithMinimum(minVersion: 'latest');
+      final bytes = utf8.encode(jsonEncode(document));
+      final signature = (await algorithm.sign(bytes, keyPair: keyPair)).bytes;
+
+      await expectLater(
+        AppUpdateManifestVerifier(
+          publicKeyBase64: publicKeyBase64,
+        ).verifyAndDecode(
+          manifestBytes: bytes,
+          signatureBytes: signature,
+          expectedChannel: AppUpdateChannel.stable,
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('serialises the minimum into the signed document', () async {
+      final manifest = await signedAndVerified(documentWithMinimum());
+      final json = manifest.toJson();
+
+      expect(json['minVersion'], '0.10.0');
+      expect(json['minVersionCode'], 2026060101);
+    });
   });
 }

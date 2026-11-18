@@ -1248,5 +1248,13 @@
   "preferred": "Предпочтительный",
   "addToLocalProxies": "Добавить в локальные прокси",
   "addedToLocalProxies": "«{name}» добавлен в локальные прокси",
-  "alreadyInLocalProxies": "«{name}» уже есть в локальных прокси"
+  "alreadyInLocalProxies": "«{name}» уже есть в локальных прокси",
+  "updateInstall": "Установить",
+  "updateVerifying": "Проверка файла…",
+  "updateVerified": "Файл проверен",
+  "updateHandoff": "Установщик открыт. Если установка отменена, файл сохранён для повтора.",
+  "updateRequired": "Обновление обязательно: текущая версия больше не поддерживается.",
+  "updateErrorDownload": "Не удалось скачать обновление.",
+  "updateErrorVerify": "Скачанный файл не прошёл проверку и удалён.",
+  "updateErrorInstall": "Не удалось запустить установщик."
 }
