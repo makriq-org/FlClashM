@@ -144,6 +144,7 @@ func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
 	probes := make(chan string, 1)
 	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes, true)
 	request := backend.NodeProbe{
+		ID:       "node",
 		Host:     host,
 		Port:     port,
 		URL:      "http://example.com/check",
@@ -151,12 +152,36 @@ func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
 		Username: "service-user",
 		Password: "service-password",
 	}
-	passed, err := (&SOCKSProbe{}).Probe(context.Background(), request)
+	adapter := ProcessAdapter{Prober: &SOCKSProbe{}, processes: map[string]*process{
+		request.ID: {address: net.JoinHostPort(host, strconv.Itoa(port)), done: make(chan struct{})},
+	}}
+	passed, err := adapter.Probe(context.Background(), request)
 	if err != nil || !passed {
 		t.Fatalf("authenticated SOCKS probe: passed=%v err=%v", passed, err)
 	}
 	if target := <-probes; target != "example.com:80" {
 		t.Fatalf("SOCKS target %q", target)
+	}
+}
+
+func TestSOCKSProbeStopsWritingWhenLaunchExits(t *testing.T) {
+	done := make(chan struct{})
+	const address = "127.0.0.1:1080"
+	adapter := ProcessAdapter{processes: map[string]*process{"node": {address: address, done: done}}}
+	check, err := adapter.watchProcess("node", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	close(done)
+	if err := client.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	n, err := (&processConn{Conn: client, check: check}).Write([]byte{1, 1, 'u', 1, 'p'})
+	if n != 0 || err == nil || err.Error() != "external process exited" {
+		t.Fatalf("write was not fenced by the process exit: wrote %d, err %v", n, err)
 	}
 }
 

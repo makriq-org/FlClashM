@@ -70,6 +70,7 @@ func (c *runtimeCoordinator) checkNode(ctx context.Context, node NodePlan, check
 				}
 				probeCtx, done := context.WithTimeout(checkCtx, timeout)
 				passed, err := c.nodeOptions.Adapter.Probe(probeCtx, NodeProbe{
+					ID:             node.ID,
 					Host:           node.Host,
 					Port:           node.Port,
 					URL:            address,

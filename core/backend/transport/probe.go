@@ -46,6 +46,10 @@ func (p *SOCKSProbe) ClearDNSCache() {
 	p.mu.Unlock()
 }
 func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool, error) {
+	return p.probe(ctx, request, nil)
+}
+
+func (p *SOCKSProbe) probe(ctx context.Context, request backend.NodeProbe, check func() error) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	if request.Host != "127.0.0.1" || request.Port < 1 || request.Port > 65535 {
@@ -108,7 +112,11 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		}
 		auth = &proxy.Auth{User: request.Username, Password: request.Password}
 	}
-	dialer, err := proxy.SOCKS5("tcp", socksAddress, auth, &net.Dialer{})
+	var forward proxy.Dialer = &net.Dialer{}
+	if check != nil {
+		forward = &processDialer{check: check}
+	}
+	dialer, err := proxy.SOCKS5("tcp", socksAddress, auth, forward)
 	if err != nil {
 		return false, err
 	}
@@ -139,6 +147,34 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 	// A valid HTTP response, including 4xx/5xx, proves connectivity in the
 	// established profile contract. Probes do not interpret application status.
 	return response.StatusCode >= 100 && response.StatusCode <= 599, nil
+}
+
+type processDialer struct {
+	net.Dialer
+	check func() error
+}
+
+func (d *processDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if err := d.check(); err != nil {
+		return nil, err
+	}
+	conn, err := d.Dialer.DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	return &processConn{Conn: conn, check: d.check}, nil
+}
+
+type processConn struct {
+	net.Conn
+	check func() error
+}
+
+func (c *processConn) Write(data []byte) (int, error) {
+	if err := c.check(); err != nil {
+		return 0, err
+	}
+	return c.Conn.Write(data)
 }
 func (p *SOCKSProbe) resolve(ctx context.Context, resolver, host string) []netip.Addr {
 	p.mu.Lock()
