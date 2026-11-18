@@ -2,8 +2,9 @@ package compile
 
 import (
 	"context"
-	"core/backend/netpolicy"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,10 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"core/backend/netpolicy"
 )
 
 //go:embed byebyeedpi-strategies.list
@@ -24,6 +28,9 @@ type ExternalCompiler struct {
 	Lists             PackageLists
 	RemoteLists       RemoteLists
 	BuiltinStrategies []string
+	// ServiceKey comes from the private backend store in production. A
+	// standalone compiler uses a process-local key.
+	ServiceKey [32]byte
 }
 
 func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, testURL string) ([]Node, error) {
@@ -123,19 +130,15 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, errors.New("external listener port range exhausted")
 		}
 		reserved[port] = true
-		udp := false
-		if raw["udp"] == true {
-			return nil, errors.New("UDP is disabled for built-in proxies")
+		if kind != "byedpi" && raw["udp"] == true {
+			return nil, errors.New("external transport does not support UDP")
 		}
 		check, activation, err := nodeChecks(raw, kind, name, config, testURL)
 		if err != nil {
 			return nil, err
 		}
-		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, UDP: udp, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
-		username, password, err := serviceCredentials()
-		if err != nil {
-			return nil, fmt.Errorf("%s node %q: could not create service credentials", kind, name)
-		}
+		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
+		username, password := e.serviceCredentials(node.ID)
 		node.Metadata["service-auth-user"] = username
 		node.Metadata["service-auth-password"] = password
 		switch kind {
@@ -163,23 +166,30 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		}
 		proxy := Object{"name": name, "type": proxyType, "server": node.Host, "port": port, "username": username, "password": password}
 		if proxyType == "socks5" {
-			proxy["udp"] = udp
+			proxy["udp"] = false
 		}
 		slot.values[slot.index] = proxy
 	}
 	return nodes, nil
 }
 
-func serviceCredentials() (string, string, error) {
-	username := make([]byte, 24)
-	password := make([]byte, 32)
-	if _, err := rand.Read(username); err != nil {
-		return "", "", err
+var processServiceKey = sync.OnceValue(func() [32]byte {
+	var key [32]byte
+	rand.Read(key[:])
+	return key
+})
+
+func (e *ExternalCompiler) serviceCredentials(nodeID string) (string, string) {
+	key := e.ServiceKey
+	if key == ([32]byte{}) {
+		key = processServiceKey()
 	}
-	if _, err := rand.Read(password); err != nil {
-		return "", "", err
+	derive := func(role string) string {
+		mac := hmac.New(sha256.New, key[:])
+		mac.Write([]byte("flclashm/node-auth/v1/" + role + "/" + nodeID))
+		return hex.EncodeToString(mac.Sum(nil))
 	}
-	return hex.EncodeToString(username), hex.EncodeToString(password), nil
+	return derive("user"), derive("password")
 }
 func nodeChecks(raw Object, kind, name string, config Object, testURL string) (Object, Object, error) {
 	inherited, direct, err := groupChecks(config, name)

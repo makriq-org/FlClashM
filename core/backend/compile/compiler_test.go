@@ -207,18 +207,53 @@ func TestExternalTransportCompilation(t *testing.T) {
 			if tt.kind == "stormdns" && !strings.Contains(artifact, "UPLOAD_COMPRESSION_TYPE = 1") {
 				t.Fatal("preset not rendered")
 			}
-			again, err := (&ExternalCompiler{}).Compile(context.Background(), mustProfile(t, "proxies: ["+tt.source+"]"), defaults(), "https://example.com/check")
-			if err != nil || again[0].Port != node.Port || again[0].ID != node.ID {
-				t.Fatal("unstable listener identity")
+			nextConfig := mustProfile(t, "proxies: ["+tt.source+"]")
+			again, err := (&ExternalCompiler{}).Compile(context.Background(), nextConfig, defaults(), "https://example.com/check")
+			if err != nil || len(again) != 1 || !reflect.DeepEqual(again[0], node) || !reflect.DeepEqual(nextConfig, config) {
+				t.Fatal("unchanged listener configuration did not recompile identically")
 			}
 		})
 	}
 }
 
-func TestExternalTransportRejectsUDP(t *testing.T) {
+func TestByeDPILegacyUDPProfilesRemainUsableOverTCP(t *testing.T) {
 	config := mustProfile(t, "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1', udp: true}]")
-	if _, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "https://example.com/check"); err == nil || !strings.Contains(err.Error(), "UDP is disabled") {
-		t.Fatalf("explicit built-in UDP was not rejected: %v", err)
+	nodes, err := (&ExternalCompiler{}).Compile(context.Background(), config, defaults(), "https://example.com/check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].UDP || object(list(config["proxies"])[0])["udp"] != false {
+		t.Fatal("legacy ByeDPI configuration must compile with UDP disabled")
+	}
+}
+
+func TestAndroidMixedPortRequiresExplicitChoice(t *testing.T) {
+	c := Compiler{
+		Capabilities: Capabilities{Platform: "android"},
+		Validate:     func(context.Context, Object) error { return nil },
+	}
+	for _, tc := range []struct {
+		name, profile string
+		owned         []any
+		want          float64
+	}{
+		{name: "legacy default", profile: "proxies: []", want: 0},
+		{name: "profile opts in", profile: "mixed-port: 17890", want: 17890},
+		{name: "user opts in", profile: "proxies: []", owned: []any{"clash.mixed-port"}, want: 7890},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := prepared(t, c, Input{
+				Version: 1,
+				Profile: &RawProfile{ID: "p", Text: tc.profile},
+				Settings: Object{
+					"patchClashConfig": Object{"mixed-port": 7890},
+					"appSetting":       Object{"ownedSettings": tc.owned},
+				},
+			})
+			if result.Config["mixed-port"] != tc.want {
+				t.Fatalf("mixed port = %v, want %v", result.Config["mixed-port"], tc.want)
+			}
+		})
 	}
 }
 

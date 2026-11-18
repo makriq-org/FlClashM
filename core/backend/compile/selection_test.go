@@ -63,6 +63,15 @@ func TestSelectionReusesValidatedPlanWithoutNetworkOrParser(t *testing.T) {
 	if reused, err := c.CompileSelection(context.Background(), after, before, legacy, 4); err != nil || reused != nil {
 		t.Fatal("legacy plan was reused")
 	}
+	_ = json.Unmarshal(plan.Payload(), &legacyPayload)
+	delete(legacyPayload, "securityVersion")
+	unsecured, _ := backend.NewRuntimePlan(1, legacyPayload)
+	if reused, err := c.CompileSelection(context.Background(), after, before, unsecured, 4); err != nil || reused != nil {
+		t.Fatal("unsecured plan was reused")
+	}
+	if c.CanRestorePlan(unsecured) || !c.CanRestorePlan(plan) {
+		t.Fatal("rollback accepted an outdated security policy or rejected the current one")
+	}
 }
 
 func TestSubscriptionBookkeepingDoesNotRecompileTheRuntime(t *testing.T) {

@@ -1166,6 +1166,16 @@
       "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."
     },
     {
+      "path": "core/backend/service/node_credentials.go",
+      "bucket": "budget",
+      "reason": "Go backend хранит закрытый ключ установки для служебной авторизации встроенных прокси."
+    },
+    {
+      "path": "core/backend/service/node_credentials_test.go",
+      "bucket": "budget",
+      "reason": "Host-тест проверяет приватность и стабильность ключа при повторных и одновременных открытиях."
+    },
+    {
       "path": "core/backend/service/operations.go",
       "bucket": "budget",
       "reason": "Прикладной Go backend владеет API, настройками, миграцией, подписками и совместимыми резервными копиями; Flutter получает проекции."

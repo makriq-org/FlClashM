@@ -70,7 +70,7 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 	var config map[string]json.RawMessage
 	_ = json.Unmarshal(payload["config"], &config)
 	// Plans committed by the old compiler need a full rebuild after upgrade.
-	if _, ok := config["rules"]; !ok {
+	if _, ok := config["rules"]; !ok || !currentSecurityVersion(payload["securityVersion"]) {
 		return nil, nil
 	}
 	var profileID *string
@@ -81,4 +81,16 @@ func (c *Compiler) CompileSelection(ctx context.Context, input, previous backend
 		return nil, err
 	}
 	return backend.NewRuntimePlan(generation, payload)
+}
+
+func (c *Compiler) CanRestorePlan(plan *backend.RuntimePlan) bool {
+	var payload struct {
+		SecurityVersion json.RawMessage `json:"securityVersion"`
+	}
+	return json.Unmarshal(plan.Payload(), &payload) == nil && currentSecurityVersion(payload.SecurityVersion)
+}
+
+func currentSecurityVersion(raw json.RawMessage) bool {
+	var version int
+	return json.Unmarshal(raw, &version) == nil && version == runtimeSecurityVersion
 }

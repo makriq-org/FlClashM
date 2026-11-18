@@ -21,6 +21,8 @@ import (
 // makes the profile package rules inert without discarding the manual list.
 const AccessControlSettingKey = "vpn.access-control"
 
+const runtimeSecurityVersion = 1
+
 type RawProfile struct {
 	SourceMissing bool   `json:"sourceMissing,omitempty"`
 	ID            string `json:"id"`
@@ -74,6 +76,7 @@ type Prepared struct {
 	Diagnostics              []string `json:"diagnostics"`
 	ProfileAccessControl     Object   `json:"profileAccessControl,omitempty"`
 	CloseConnectionsOnSelect bool     `json:"closeConnectionsOnSelect"`
+	SecurityVersion          int      `json:"securityVersion"`
 }
 type Compiler struct {
 	CompileRuleSet   RuleSetCompiler
@@ -434,7 +437,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	if value, ok := app["closeConnections"].(bool); ok {
 		closeOnSelect = value
 	}
-	return Prepared{ProfileID: profileID, Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect}, nil
+	return Prepared{ProfileID: profileID, Config: config, Selected: selected, TestURL: testURL, Nodes: nodes, CoreState: state, Patch: patch, Diagnostics: diagnostics, ProfileAccessControl: profileAccess, CloseConnectionsOnSelect: closeOnSelect, SecurityVersion: runtimeSecurityVersion}, nil
 }
 func text(value any) string { v, _ := value.(string); return v }
 func list(value any) []any {

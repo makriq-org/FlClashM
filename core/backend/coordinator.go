@@ -1006,6 +1006,9 @@ func (c *runtimeCoordinator) rollback(e *execution, previous Document) error {
 	if err != nil {
 		return err
 	}
+	if compiler, ok := c.compiler.(interface{ CanRestorePlan(*RuntimePlan) bool }); ok && !compiler.CanRestorePlan(plan) {
+		return errors.New("previous plan must be recompiled before it can be restored")
+	}
 	return c.install(rollback, plan, previous.Applied.Running)
 }
 

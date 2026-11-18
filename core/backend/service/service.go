@@ -113,6 +113,16 @@ func Open(options Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if nodes, ok := options.Compiler.Nodes.(*compile.ExternalCompiler); ok {
+		key, err := loadNodeServiceKey(options.Directory)
+		if err != nil {
+			return nil, err
+		}
+		compiler, external := *options.Compiler, *nodes
+		external.ServiceKey = key
+		compiler.Nodes = &external
+		options.Compiler = &compiler
+	}
 	repository, err := profiles.Open(options.Directory, options.ValidateSource)
 	if err != nil {
 		return nil, err
