@@ -68,7 +68,7 @@ class AndroidRuntimeE2eTest {
     private suspend fun await(label: String, condition: suspend () -> Boolean) = withTimeout(90_000L) {
         while (!condition()) delay(150)
     }
-    private suspend fun backendCommand(method: String, params: JSONObject = JSONObject()): JSONObject {
+    private suspend fun backendCommand(method: String, params: JSONObject = JSONObject()) {
         val initial = Service.backend(method, params)
         suspend fun waitForReceipt(operationId: String, receipt: JSONObject): JSONObject {
             var current = receipt
@@ -78,12 +78,12 @@ class AndroidRuntimeE2eTest {
             }
             return current
         }
-        suspend fun waitForRuntime(receipt: JSONObject): JSONObject = withTimeout(600_000L) {
+        suspend fun waitForRuntime(receipt: JSONObject): Unit = withTimeout(600_000L) {
             var operationId = receipt.getString("operationId")
             var current = receipt
             while (true) {
                 current = waitForReceipt(operationId, current)
-                if (current.optString("status") == "succeeded") return@withTimeout current
+                if (current.optString("status") == "succeeded") return@withTimeout
                 check(current.optString("errorCode") == "superseded") {
                     "$method runtime operation: ${current.optString("error", "backend operation failed")}"
                 }
@@ -107,11 +107,14 @@ class AndroidRuntimeE2eTest {
                 ) {
                     "$method runtime operation was superseded before the newer command settled"
                 }
-                return@withTimeout current
+                return@withTimeout
             }
         }
 
-        if (method.startsWith("runtime.")) return waitForRuntime(initial)
+        if (method.startsWith("runtime.")) {
+            waitForRuntime(initial)
+            return
+        }
 
         val receipt = withTimeout(600_000L) {
             val current = waitForReceipt(initial.getString("operationId"), initial)
@@ -124,11 +127,19 @@ class AndroidRuntimeE2eTest {
         if (runtimeId.isNotEmpty()) {
             waitForRuntime(Service.backend("operation.get", JSONObject().put("operationId", runtimeId)))
         }
-        return receipt
     }
     private fun canConnect(port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }; true
     }.getOrDefault(false)
+    private fun byeDpiAuthenticationMethod(port: Int, method: Int): Int =
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress("127.0.0.1", port), 500)
+            socket.soTimeout = 2_000
+            socket.getOutputStream().write(byteArrayOf(5, 1, method.toByte()))
+            val input = socket.getInputStream()
+            assertEquals(5, input.read())
+            input.read()
+        }
     private suspend fun upload(source: String): String {
         val token = Service.backend("blob.create").getString("token")
         val bytes = source.toByteArray(Charsets.UTF_8)
@@ -150,11 +161,10 @@ class AndroidRuntimeE2eTest {
         } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }
     }
     private val source = """
-        mixed-port: 17890
         ipv6: false
         dns: {enable: false}
         proxies:
-          - {name: LocalBye, type: byedpi, mode: manual, strategy: '-d1 -s2'}
+          - {name: LocalBye, type: byedpi, mode: manual, strategy: '-d1 -s2', udp: true}
         proxy-groups:
           - {name: Select, type: select, proxies: [LocalBye, DIRECT]}
         rules: ['MATCH,REJECT']
@@ -335,6 +345,9 @@ class AndroidRuntimeE2eTest {
         val node = view.getJSONArray("nodes").getJSONObject(0)
         val port = node.getInt("port")
         assertTrue("Packaged external transport did not listen", canConnect(port))
+        assertEquals("Default mixed port is open", 0, view.getJSONObject("config").getInt("mixed-port"))
+        assertEquals("ByeDPI accepted an unauthenticated client", 255, byeDpiAuthenticationMethod(port, 0))
+        assertEquals("ByeDPI did not offer username/password authentication", 2, byeDpiAuthenticationMethod(port, 2))
         assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
         assertTrue("Remote process not found", remotePid() > 0)
         assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
@@ -373,9 +386,11 @@ class AndroidRuntimeE2eTest {
                 assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             } finally { Service.backend("blob.delete", JSONObject().put("token", token)) }
             val generation = snapshot().getLong("appliedGeneration")
+            val startedAt = snapshot().getLong("startedAt")
             backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject().put("mode", "direct"))))
             assertEquals("direct", Service.backend("runtime.view").getJSONObject("config").getString("mode"))
             assertTrue(snapshot().getLong("appliedGeneration") > generation)
+            assertEquals("Changing mode restarted the VPN", startedAt, snapshot().getLong("startedAt"))
         } finally {
             backendCommand("runtime.stop")
             await("persisted external transport exit diagnostics") {
