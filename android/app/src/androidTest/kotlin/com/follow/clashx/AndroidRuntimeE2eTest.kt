@@ -78,12 +78,12 @@ class AndroidRuntimeE2eTest {
             }
             return current
         }
-        suspend fun waitForRuntime(receipt: JSONObject): Unit = withTimeout(600_000L) {
+        suspend fun waitForRuntime(receipt: JSONObject): JSONObject = withTimeout(600_000L) {
             var operationId = receipt.getString("operationId")
             var current = receipt
             while (true) {
                 current = waitForReceipt(operationId, current)
-                if (current.optString("status") == "succeeded") return@withTimeout
+                if (current.optString("status") == "succeeded") break
                 check(current.optString("errorCode") == "superseded") {
                     "$method runtime operation: ${current.optString("error", "backend operation failed")}"
                 }
@@ -107,16 +107,14 @@ class AndroidRuntimeE2eTest {
                 ) {
                     "$method runtime operation was superseded before the newer command settled"
                 }
-                return@withTimeout
+                break
             }
+            current
         }
 
-        if (method.startsWith("runtime.")) {
+        val receipt = if (method.startsWith("runtime.")) {
             waitForRuntime(initial)
-            return
-        }
-
-        val receipt = withTimeout(600_000L) {
+        } else withTimeout(600_000L) {
             val current = waitForReceipt(initial.getString("operationId"), initial)
             check(current.optString("status") == "succeeded") {
                 "$method: ${current.optString("error", "backend operation failed")}"
@@ -338,27 +336,33 @@ class AndroidRuntimeE2eTest {
                 }
             }.awaitAll()
         }
-        backendCommand("runtime.start")
-        val runtime = snapshot()
-        assertEquals("running", runtime.getJSONObject("observed").getString("state"))
-        val view = Service.backend("runtime.view")
-        val node = view.getJSONArray("nodes").getJSONObject(0)
-        val port = node.getInt("port")
-        assertTrue("Packaged external transport did not listen", canConnect(port))
-        assertEquals("Default mixed port is open", 0, view.getJSONObject("config").getInt("mixed-port"))
-        assertEquals("ByeDPI accepted an unauthenticated client", 255, byeDpiAuthenticationMethod(port, 0))
-        assertEquals("ByeDPI did not offer username/password authentication", 2, byeDpiAuthenticationMethod(port, 2))
-        assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
-        assertTrue("Remote process not found", remotePid() > 0)
-        assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
-        val rules = engineSnapshot().getJSONObject("config").getJSONArray("rule")
-        assertEquals("Compiled routing rules never reached the actual engine", "MATCH,REJECT", rules.getString(0))
-        assertEquals("Preparation redundantly downloaded the package list", 1, packageListRequests.get())
-        // Every subsequent restart/recovery must work with this URL offline.
-        packageListServer?.close()
-        fixtureState.edit().putLong("startedAt", runtime.getLong("startedAt")).putInt("port", port).commit()
-        if (scenario == "seed") { Service.unbind(); return@runBlocking }
+        var preserveSeed = false
+        var listeningPort: Int? = null
         try {
+            backendCommand("runtime.start")
+            val runtime = snapshot()
+            assertEquals("running", runtime.getJSONObject("observed").getString("state"))
+            val view = Service.backend("runtime.view")
+            val node = view.getJSONArray("nodes").getJSONObject(0)
+            val port = node.getInt("port")
+            assertTrue("Packaged external transport did not listen", canConnect(port))
+            listeningPort = port
+            assertEquals("Default mixed port is open", 0, view.getJSONObject("config").getInt("mixed-port"))
+            assertEquals("ByeDPI accepted an unauthenticated client", 255, byeDpiAuthenticationMethod(port, 0))
+            assertEquals("ByeDPI did not offer username/password authentication", 2, byeDpiAuthenticationMethod(port, 2))
+            assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
+            assertTrue("Remote process not found", remotePid() > 0)
+            assertNotEquals("Remote must outlive the UI PID", Process.myPid(), remotePid())
+            val rules = engineSnapshot().getJSONObject("config").getJSONArray("rule")
+            assertEquals("Compiled routing rules never reached the actual engine", "MATCH,REJECT", rules.getString(0))
+            assertEquals("Preparation redundantly downloaded the package list", 1, packageListRequests.get())
+            // Every subsequent restart/recovery must work with this URL offline.
+            packageListServer?.close()
+            fixtureState.edit().putLong("startedAt", runtime.getLong("startedAt")).putInt("port", port).commit()
+            if (scenario == "seed") {
+                preserveSeed = true
+                return@runBlocking
+            }
             repeat(2) {
                 backendCommand("runtime.restart")
                 assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
@@ -392,22 +396,27 @@ class AndroidRuntimeE2eTest {
             assertTrue(snapshot().getLong("appliedGeneration") > generation)
             assertEquals("Changing mode restarted the VPN", startedAt, snapshot().getLong("startedAt"))
         } finally {
-            backendCommand("runtime.stop")
-            await("persisted external transport exit diagnostics") {
-                DiagnosticLog.requestOtherProcessesFlush(context)
-                File(context.filesDir, "diagnostics").listFiles()
-                    ?.filter { it.name.startsWith("android-remote.") && it.extension == "log" }
-                    ?.any { file ->
-                        runCatching {
-                            file.readLines().any { it.contains("runtime-byedpi") && it.contains("process exited:") }
-                        }.getOrDefault(false)
-                    } == true
+            try {
+                if (!preserveSeed) {
+                    backendCommand("runtime.stop")
+                    if (listeningPort != null) await("persisted external transport exit diagnostics") {
+                        DiagnosticLog.requestOtherProcessesFlush(context)
+                        File(context.filesDir, "diagnostics").listFiles()
+                            ?.filter { it.name.startsWith("android-remote.") && it.extension == "log" }
+                            ?.any { file ->
+                                runCatching {
+                                    file.readLines().any { it.contains("runtime-byedpi") && it.contains("process exited:") }
+                                }.getOrDefault(false)
+                            } == true
+                    }
+                    backendCommand("runtime.recover")
+                    assertFalse(snapshot().getBoolean("desiredRunning"))
+                    assertEquals("stopped", snapshot().getJSONObject("observed").getString("state"))
+                    listeningPort?.let { port -> await("transport shutdown") { !canConnect(port) } }
+                }
+            } finally {
+                Service.unbind()
             }
-            backendCommand("runtime.recover")
-            assertFalse(snapshot().getBoolean("desiredRunning"))
-            assertEquals("stopped", snapshot().getJSONObject("observed").getString("state"))
-            await("transport shutdown") { !canConnect(port) }
-            Service.unbind()
         }
         // Proxy-only execution uses the same coordinator and survives without
         // a TUN or a VPN-consent decision in Flutter/Kotlin.

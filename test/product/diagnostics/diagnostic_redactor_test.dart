@@ -47,4 +47,12 @@ void main() {
     expect(result, 'password=<redacted>$diagnosticTruncationMarker');
     expect(result, isNot(contains('private phrase')));
   });
+
+  test('redacts the full auth file path with an escaped quote', () {
+    const input = r'--auth-file "/tmp/a\"private/auth.txt" status=ready';
+    expect(
+      DiagnosticRedactor.redact(input),
+      '--auth-file <redacted> status=ready',
+    );
+  });
 }
