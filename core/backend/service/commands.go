@@ -307,6 +307,13 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 						apply = true
 					}
 				}
+				// Handing a setting back or taking it over re-runs the current
+				// profile's headers, so the panel speaks only for what it holds.
+				if _, changed := fields["ownedSettings"]; changed {
+					if err := a.customizeForSelection(ctx); err != nil {
+						return result, err
+					}
+				}
 			}
 		}
 	case "profile.put":
@@ -353,6 +360,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			if err = a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(id)}, 0); err != nil {
 				return result, err
 			}
+			if err = a.customizeForSelection(ctx); err != nil {
+				return result, err
+			}
 			apply = true
 		} else {
 			if a.isCurrent(id) || a.currentUsesProfile(id) {
@@ -394,6 +404,10 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if result.RuntimeOperationID != "" {
 			return result, nil
 		}
+		// The deleted profile's headers no longer hold any setting.
+		if err := a.customizeForSelection(ctx); err != nil {
+			return result, err
+		}
 	case "profile.select":
 		var request struct {
 			ProfileID *string `json:"profileId"`
@@ -416,6 +430,12 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		if err := a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(request.ProfileID)}, 0); err != nil {
 			return result, err
+		}
+		if request.ProfileID == nil {
+			// No profile sends anything now: the user's own values come back.
+			if err := a.customizeForSelection(ctx); err != nil {
+				return result, err
+			}
 		}
 		apply = true
 	case "proxy.select":

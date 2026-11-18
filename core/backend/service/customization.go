@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -12,6 +11,8 @@ import (
 
 // Provider customization is a data policy. It runs headlessly and persists its
 // result; Flutter only renders the projected settings and display-only headers.
+// A header holds a setting only while the selected profile sends it: the user's
+// own value waits in appSetting.headerBackup meanwhile.
 func (a *App) customize(ctx context.Context, metadata profiles.Object, isNew bool) error {
 	return a.customizeForProfile(ctx, metadata, isNew, false)
 }
@@ -21,110 +22,87 @@ func (a *App) customizeForProfile(ctx context.Context, metadata profiles.Object,
 	var id string
 	_ = json.Unmarshal(metadata["id"], &id)
 	active := selecting || a.isCurrent(id)
-	if err := a.customizeLegacy(ctx, metadata, isNew, active, selecting); err != nil {
-		return err
-	}
 	if !active {
 		return nil
 	}
-	return a.customizeView(ctx, metadata)
+	return a.customizeSettings(ctx, metadata, isNew, selecting)
 }
 
-func (a *App) customizeLegacy(ctx context.Context, metadata profiles.Object, isNew, active, selecting bool) error {
-	var headers map[string]string
-	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
-	header := func(suffix string) string { return strings.TrimSpace(profiles.ProviderHeader(headers, suffix)) }
-	trigger := strings.ToLower(header("custom"))
-	// An inactive add import defers these controls until explicit selection.
-	// Replaying them must not replay import-only appearance or startup settings.
-	controlsOnly := trigger == "add" && !isNew && selecting
-	if trigger != "update" && (trigger != "add" || !isNew) && !controlsOnly {
+// customizeForSelection reapplies the current profile after a switch, a delete
+// or an ownership change, so values a previous profile's headers held are put
+// back before the next profile speaks.
+func (a *App) customizeForSelection(ctx context.Context) error {
+	var id string
+	_ = json.Unmarshal(a.profiles.Snapshot().Settings["currentProfileId"], &id)
+	if id == "" {
+		return a.customizeSettings(ctx, profiles.Object{}, false, false)
+	}
+	record, err := a.profiles.Get(id)
+	if err != nil {
 		return nil
 	}
+	return a.customizeSettings(ctx, record.Metadata, false, false)
+}
+
+func (a *App) customizeSettings(ctx context.Context, metadata profiles.Object, isNew, selecting bool) error {
+	var headers map[string]string
+	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
 	catalog := a.profiles.Snapshot()
-	patch := profiles.Object{}
-	appPatch := profiles.Object{}
-	var appSettings profiles.Object
-	_ = json.Unmarshal(catalog.Settings["appSetting"], &appSettings)
-	var owned []string
-	_ = json.Unmarshal(appSettings["ownedSettings"], &owned)
+	var app profiles.Object
+	_ = json.Unmarshal(catalog.Settings["appSetting"], &app)
 	var override bool
-	_ = json.Unmarshal(appSettings["overrideProviderSettings"], &override)
-	_, hasM := headers["flclashm-settings"]
-	_, hasX := headers["flclashx-settings"]
-	if (hasM || hasX) && !override {
+	_ = json.Unmarshal(app["overrideProviderSettings"], &override)
+
+	writer := newSettingsWriter(catalog, app)
+	header := func(suffix string) string {
+		return strings.TrimSpace(profiles.ProviderHeader(headers, suffix))
+	}
+	_, hasSettingsM := headers["flclashm-settings"]
+	_, hasSettingsX := headers["flclashx-settings"]
+	hasSettings := (hasSettingsM || hasSettingsX) && header("settings") != ""
+	_, customM := headers["flclashm-custom"]
+	_, customX := headers["flclashx-custom"]
+	hasCustom := customM || customX
+	trigger := strings.ToLower(header("custom"))
+	controlsOnly := trigger == "add" && !isNew && selecting
+	legacy := trigger == "update" || (trigger == "add" && isNew) || controlsOnly
+
+	// Which app switches the panel turns on; the rest it turns off. The
+	// legacy trigger replays only the controls it owns on a later selection.
+	if hasSettings && !override && (legacy || !hasCustom) {
 		enabled := map[string]bool{}
 		for _, value := range strings.Split(header("settings"), ",") {
 			enabled[strings.ToLower(strings.TrimSpace(value))] = true
 		}
-		for field, token := range map[string]string{"minimizeOnExit": "minimize", "autoLaunch": "autorun", "silentLaunch": "shadowstart", "autoRun": "autostart", "autoCheckUpdate": "autoupdate", "openLogs": "openlogs", "closeConnections": "closeconnections"} {
-			control := field == "openLogs" || field == "closeConnections"
-			if (!active && control) || (controlsOnly && !control) {
+		for flag, field := range appSwitchFields {
+			control := flag == "openlogs" || flag == "closeconnections"
+			if controlsOnly && !control {
 				continue
 			}
-			if !slices.Contains(owned, "app."+field) {
-				appPatch[field] = jsonValue(enabled[token])
-			}
+			writer.set("app."+field, field, enabled[flag])
 		}
 	}
-	if controlsOnly {
-		if len(appPatch) == 0 {
-			return nil
+
+	if !controlsOnly {
+		// Cards the user arranged stay put until the panel denies editing them
+		// or the user hands the settings back to the subscription.
+		denied := profiles.ProviderSpecial(headers, "denywidgets")
+		if !denied {
+			writer.releaseForcedWidgets()
 		}
-		return a.patchSettings(ctx, profiles.Object{"appSetting": jsonValue(appPatch)}, 0)
-	}
-	// Cards the user arranged stay put here too: the legacy trigger must not
-	// undo what the modern path respects.
-	widgets := providerWidgets(header("widgets"))
-	if len(widgets) > 0 && (profiles.ProviderSpecial(headers, "denywidgets") || !slices.Contains(owned, providerWidgetsSetting)) {
-		appPatch["dashboardWidgets"] = jsonValue(widgets)
-	}
-	if len(appPatch) > 0 {
-		patch["appSetting"] = jsonValue(appPatch)
-	}
-	parts := strings.Split(header("hex"), ":")
-	hexValue := strings.ReplaceAll(strings.TrimSpace(parts[0]), "#", "")
-	if len(hexValue) == 6 || len(hexValue) == 8 {
-		if len(hexValue) == 6 {
-			hexValue = "FF" + hexValue
+		if widgets := providerWidgets(header("widgets")); len(widgets) > 0 && (legacy || !hasCustom) {
+			writer.setWidgets(widgets, denied)
 		}
-		if color, err := strconv.ParseUint(hexValue, 16, 32); err == nil {
-			var current profiles.Object
-			_ = json.Unmarshal(catalog.Settings["themeProps"], &current)
-			colors := defaultProviderPrimaryColors()
-			if value, ok := current["primaryColors"]; ok {
-				_ = json.Unmarshal(value, &colors)
-			}
-			contains := false
-			for _, value := range colors {
-				contains = contains || value == color
-			}
-			if !contains {
-				colors = append(colors, color)
-			}
-			theme := profiles.Object{"primaryColor": jsonValue(color), "primaryColors": jsonValue(colors)}
-			pureBlack := false
-			for _, part := range parts[1:] {
-				pureBlack = pureBlack || strings.EqualFold(strings.TrimSpace(part), "pureblack")
-			}
-			theme["pureBlack"] = jsonValue(pureBlack)
-			if len(parts) > 1 {
-				variant := strings.TrimSpace(parts[1])
-				for _, known := range []string{"tonalSpot", "fidelity", "monochrome", "neutral", "vibrant", "expressive", "content", "rainbow", "fruitSalad"} {
-					if strings.EqualFold(variant, known) {
-						theme["schemeVariant"] = jsonValue(known)
-						break
-					}
-				}
-			}
-			patch["themeProps"] = jsonValue(theme)
+		if legacy {
+			writer.applyLegacyHex(header("hex"))
 		}
 	}
-	if len(patch) == 0 {
-		return nil
-	}
-	return a.patchSettings(ctx, patch, 0)
+
+	writer.applyView(headers)
+	writer.applySpecials(headers)
+	return writer.commit(ctx, a)
 }
+
 func (a *App) deviceHeadersEnabled(requested bool) bool {
 	if !requested {
 		return false
@@ -159,4 +137,49 @@ func providerWidgets(raw string) []string {
 		}
 	}
 	return widgets
+}
+
+// appSwitchFields maps `flclashx-settings` flags to the app setting each one
+// drives.
+var appSwitchFields = map[string]string{
+	"minimize":         "minimizeOnExit",
+	"autorun":          "autoLaunch",
+	"shadowstart":      "silentLaunch",
+	"autostart":        "autoRun",
+	"autoupdate":       "autoCheckUpdate",
+	"openlogs":         "openLogs",
+	"closeconnections": "closeConnections",
+}
+
+// legacyHexFields are the theme fields the legacy hex header sets.
+func (w *settingsWriter) applyLegacyHex(raw string) {
+	parts := strings.Split(raw, ":")
+	hexValue := strings.ReplaceAll(strings.TrimSpace(parts[0]), "#", "")
+	if len(hexValue) != 6 && len(hexValue) != 8 {
+		return
+	}
+	if len(hexValue) == 6 {
+		hexValue = "FF" + hexValue
+	}
+	color, err := strconv.ParseUint(hexValue, 16, 32)
+	if err != nil {
+		return
+	}
+	w.set("view.app.color", "primaryColor", uint64(color))
+	w.setPaletteColor(uint64(color))
+	pureBlack := false
+	for _, part := range parts[1:] {
+		pureBlack = pureBlack || strings.EqualFold(strings.TrimSpace(part), "pureblack")
+	}
+	// The legacy trigger always states blackness; the modern view key does not.
+	w.set("view.app.black", "pureBlack", pureBlack)
+	if len(parts) > 1 {
+		variant := strings.TrimSpace(parts[1])
+		for _, known := range []string{"tonalSpot", "fidelity", "monochrome", "neutral", "vibrant", "expressive", "content", "rainbow", "fruitSalad"} {
+			if strings.EqualFold(variant, known) {
+				w.set("view.app.color", "schemeVariant", known)
+				break
+			}
+		}
+	}
 }
