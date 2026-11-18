@@ -155,9 +155,8 @@ Profile? profile(Ref ref, String? profileId) {
 @riverpod
 ExtendType extendType(Ref ref, String? profileId) {
   return ref.watch(
-    profileProvider(
-      profileId,
-    ).select((state) => state?.extendType ?? ExtendType.standard),
+    profileProvider(profileId)
+        .select((state) => state?.extendType ?? ExtendType.standard),
   );
 }
 

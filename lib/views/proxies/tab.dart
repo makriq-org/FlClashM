@@ -170,9 +170,8 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
       proxiesStyleSettingProvider.select((state) => state.layout),
     );
     final isSearching = ref.watch(
-      queryProvider(
-        QueryTag.proxies,
-      ).select((query) => SearchQuery(query).isNotEmpty),
+      queryProvider(QueryTag.proxies)
+          .select((query) => SearchQuery(query).isNotEmpty),
     );
     _pruneScrollControllers(groups);
     final controller = _tabController;
@@ -324,9 +323,8 @@ class _ProxiesOneGroupViewState extends ConsumerState<ProxiesOneGroupView> {
       proxiesStyleSettingProvider.select((state) => state.layout),
     );
     final isSearching = ref.watch(
-      queryProvider(
-        QueryTag.proxies,
-      ).select((query) => SearchQuery(query).isNotEmpty),
+      queryProvider(QueryTag.proxies)
+          .select((query) => SearchQuery(query).isNotEmpty),
     );
     return NullStatusSwitcher(
       isEmpty: group == null || group.all.isEmpty,

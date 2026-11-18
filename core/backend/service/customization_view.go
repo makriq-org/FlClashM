@@ -84,14 +84,14 @@ type headerBackup struct {
 // settingsWriter collects a customization before it is persisted, remembering
 // the user's own value of every setting a header holds.
 type settingsWriter struct {
-	settings map[string]profiles.Object
-	owned    map[string]bool
-	panelSet []string
-	backup   map[string]headerBackup
-	writes   map[string]map[string]any
-	active   map[string]map[string]bool
-	keys     []string
-	touched  map[string]bool
+	settings    map[string]profiles.Object
+	owned       map[string]bool
+	panelSet    []string
+	backup      map[string]headerBackup
+	writes      map[string]map[string]any
+	active      map[string]map[string]bool
+	keys        []string
+	touched     map[string]bool
 	specialKeys map[string]bool
 	forcedKeys  map[string]bool
 }
@@ -101,11 +101,11 @@ func newSettingsWriter(catalog profiles.Document, app profiles.Object) *settings
 		settings: map[string]profiles.Object{
 			"appSetting": app,
 		},
-		owned:   map[string]bool{},
-		backup:  map[string]headerBackup{},
-		writes:  map[string]map[string]any{},
-		active:  map[string]map[string]bool{},
-		touched: map[string]bool{},
+		owned:       map[string]bool{},
+		backup:      map[string]headerBackup{},
+		writes:      map[string]map[string]any{},
+		active:      map[string]map[string]bool{},
+		touched:     map[string]bool{},
 		specialKeys: map[string]bool{},
 		forcedKeys:  map[string]bool{},
 	}

@@ -380,15 +380,15 @@ func TestHeaderSettingsLastWhileTheirProfileIsSelected(t *testing.T) {
 			Glass string `json:"liquidGlass"`
 		}
 		var style struct {
-			Hide  bool   `json:"hideTimeoutProxies"`
-			Card  string `json:"cardType"`
-			Floating bool `json:"-"`
+			Hide     bool   `json:"hideTimeoutProxies"`
+			Card     string `json:"cardType"`
+			Floating bool   `json:"-"`
 		}
 		var settings struct {
-			OpenLogs   bool     `json:"openLogs"`
-			HideIp     bool     `json:"hideIp"`
-			Vibration  bool     `json:"vibration"`
-			Widgets    []string `json:"dashboardWidgets"`
+			OpenLogs  bool     `json:"openLogs"`
+			HideIp    bool     `json:"hideIp"`
+			Vibration bool     `json:"vibration"`
+			Widgets   []string `json:"dashboardWidgets"`
 		}
 		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme); err != nil {
 			t.Fatal(err)

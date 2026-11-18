@@ -4,7 +4,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
-abstract interface class RisingVibration {
+abstract class RisingVibration {
+  bool get enabled => true;
+
   void rise(Duration duration);
 
   void stop();
@@ -14,6 +16,7 @@ abstract interface class RisingVibration {
 class AppVibration implements RisingVibration {
   const AppVibration({this.enabled = true});
 
+  @override
   final bool enabled;
 
   @override
@@ -63,7 +66,9 @@ class _RisingHoldState extends State<RisingHold> {
 
   void _complete() {
     _hold = null;
-    unawaited(HapticFeedback.heavyImpact());
+    if (widget.vibration.enabled) {
+      unawaited(HapticFeedback.heavyImpact());
+    }
     widget.onHeld();
   }
 

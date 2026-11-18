@@ -246,9 +246,8 @@ class VpnCard extends ConsumerWidget {
     void change(bool value) => _setVpn(ref, value);
     return DashboardCard(
       semanticLabel: 'VPN',
-      padding: dashboardCardPadding(
-        DashboardDensityScope.of(context),
-      ).copyWith(top: 16, bottom: 16),
+      padding: dashboardCardPadding(DashboardDensityScope.of(context))
+          .copyWith(top: 16, bottom: 16),
       onTap: () => change(!enabled),
       child: Row(
         spacing: 14,

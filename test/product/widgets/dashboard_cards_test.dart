@@ -11,29 +11,30 @@ void main() {
     expect(cards.first, DashboardWidget.currentOutbound);
   });
 
-  test('providermode lets the status card go and the server take its place', () {
-    final cards = withFixedCards([
-      DashboardWidget.profiles,
-      DashboardWidget.memoryInfo,
-    ], announcement: false, providerMode: true);
-    expect(cards, isNot(contains(DashboardWidget.currentOutbound)));
-    expect(
-      DashboardWidget.currentOutbound.removable(providerMode: true),
-      isTrue,
-    );
-    expect(
-      DashboardWidget.currentOutbound.removable(providerMode: false),
-      isFalse,
-    );
-    expect(
-      DashboardWidget.profiles.removable(providerMode: false),
-      isTrue,
-    );
-    expect(
-      DashboardWidget.announcement.removable(providerMode: true),
-      isFalse,
-    );
-  });
+  test(
+    'providermode lets the status card go and the server take its place',
+    () {
+      final cards = withFixedCards(
+        [DashboardWidget.profiles, DashboardWidget.memoryInfo],
+        announcement: false,
+        providerMode: true,
+      );
+      expect(cards, isNot(contains(DashboardWidget.currentOutbound)));
+      expect(
+        DashboardWidget.currentOutbound.removable(providerMode: true),
+        isTrue,
+      );
+      expect(
+        DashboardWidget.currentOutbound.removable(providerMode: false),
+        isFalse,
+      );
+      expect(DashboardWidget.profiles.removable(providerMode: false), isTrue);
+      expect(
+        DashboardWidget.announcement.removable(providerMode: true),
+        isFalse,
+      );
+    },
+  );
 
   test('an announcement the list never placed goes on top', () {
     final cards = withFixedCards([

@@ -193,11 +193,7 @@ class _WideDashboardState extends ConsumerState<WideDashboard> {
                       ? (card == DashboardWidget.connectionStats ? 3 : 2)
                       : card.wideSpan(columns),
                   child: RepaintBoundary(
-                    child: _WideCard(
-                      card: card,
-                      tables: tables,
-                      gap: gap,
-                    ),
+                    child: _WideCard(card: card, tables: tables, gap: gap),
                   ),
                 ),
             ],

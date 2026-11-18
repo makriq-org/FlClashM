@@ -143,9 +143,8 @@ class _PullActionState extends State<PullAction> {
                 // and the step down answer the pull instead of Android's stretch.
                 behavior: ScrollConfiguration.of(context).copyWith(
                   physics: AlwaysScrollableScrollPhysics(
-                    parent: ScrollConfiguration.of(
-                      context,
-                    ).getScrollPhysics(context),
+                    parent: ScrollConfiguration.of(context)
+                        .getScrollPhysics(context),
                   ),
                   overscroll: false,
                 ),
