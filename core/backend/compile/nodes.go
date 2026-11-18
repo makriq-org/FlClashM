@@ -154,9 +154,6 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		if err != nil {
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
-		if kind == "byedpi" {
-			node.Files["built-in-proxies/byedpi/"+node.ID+"/auth.txt"] = username + "\n" + password + "\n"
-		}
 		nodes = append(nodes, node)
 		proxyType := "socks5"
 		if kind == "naiveproxy" {

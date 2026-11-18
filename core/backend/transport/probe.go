@@ -43,7 +43,7 @@ type SOCKSProbe struct {
 
 type bufferedProxyConn struct {
 	net.Conn
-	reader *bufio.Reader
+	reader io.Reader
 }
 
 func (c *bufferedProxyConn) Read(p []byte) (int, error) {
@@ -77,16 +77,20 @@ func dialAuthenticatedHTTPConnect(ctx context.Context, proxyAddress, targetAddre
 	if _, err := io.WriteString(connection, request); err != nil {
 		return nil, err
 	}
-	reader := bufio.NewReaderSize(connection, 4<<10)
-	response, err := http.ReadResponse(reader, &http.Request{Method: http.MethodConnect})
+	reader := bufio.NewReader(&io.LimitedReader{R: connection, N: maxProbeResponseHeaderBytes})
+	// Only parse the response headers. A successful CONNECT switches to the
+	// tunnel immediately after them.
+	response, err := http.ReadResponse(reader, &http.Request{Method: http.MethodHead})
 	if err != nil {
 		return nil, err
 	}
+	_ = response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("authenticated HTTP proxy CONNECT failed: " + response.Status)
 	}
 	failed = false
-	return &bufferedProxyConn{Conn: connection, reader: reader}, nil
+	tunnel := io.MultiReader(io.LimitReader(reader, int64(reader.Buffered())), connection)
+	return &bufferedProxyConn{Conn: connection, reader: tunnel}, nil
 }
 
 func (p *SOCKSProbe) ClearDNSCache() {
@@ -95,6 +99,9 @@ func (p *SOCKSProbe) ClearDNSCache() {
 	p.epoch++
 	p.mu.Unlock()
 }
+
+const maxProbeResponseHeaderBytes = 8 << 10
+
 func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -151,7 +158,7 @@ func (p *SOCKSProbe) Probe(ctx context.Context, request backend.NodeProbe) (bool
 		}
 	}
 	socksAddress := net.JoinHostPort(request.Host, strconv.Itoa(request.Port))
-	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: 8 << 10, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
+	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: maxProbeResponseHeaderBytes, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
 	defer transport.CloseIdleConnections()
 	probeURL := *endpoint
 	if request.ProxyType == "naiveproxy" {

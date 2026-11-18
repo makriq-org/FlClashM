@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,7 +21,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
+func testSOCKS(t *testing.T, target string, seen chan<- string, requireAuth bool) (string, int) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -49,7 +51,7 @@ func testSOCKS(t *testing.T, target string, seen chan<- string) (string, int) {
 						method = 2
 						break
 					}
-					if candidate == 0 {
+					if candidate == 0 && !requireAuth {
 						method = 0
 					}
 				}
@@ -173,6 +175,7 @@ func TestNaiveProbeUsesAuthenticatedHTTPProxy(t *testing.T) {
 
 func TestNaiveHTTPProbeUsesDoHAddressThroughAuthenticatedConnect(t *testing.T) {
 	var requests atomic.Int32
+	var tunnels sync.WaitGroup
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodConnect || r.Host != "8.8.8.8:80" {
 			t.Errorf("unexpected CONNECT target: method=%s host=%s", r.Method, r.Host)
@@ -189,12 +192,15 @@ func TestNaiveHTTPProbeUsesDoHAddressThroughAuthenticatedConnect(t *testing.T) {
 			t.Error("HTTP test proxy cannot hijack the tunnel")
 			return
 		}
+		tunnels.Add(1)
+		defer tunnels.Done()
 		connection, rw, err := hijacker.Hijack()
 		if err != nil {
 			t.Errorf("hijack CONNECT: %v", err)
 			return
 		}
 		defer connection.Close()
+		_ = connection.SetDeadline(time.Now().Add(5 * time.Second))
 		if _, err = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err == nil {
 			err = rw.Flush()
 		}
@@ -215,7 +221,10 @@ func TestNaiveHTTPProbeUsesDoHAddressThroughAuthenticatedConnect(t *testing.T) {
 		_, _ = rw.WriteString("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 		_ = rw.Flush()
 	}))
-	defer proxy.Close()
+	defer func() {
+		proxy.Close()
+		tunnels.Wait()
+	}()
 
 	doh := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -293,7 +302,7 @@ func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
 	}))
 	defer origin.Close()
 	probes := make(chan string, 1)
-	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes, true)
 	request := backend.NodeProbe{
 		Host:      host,
 		Port:      port,
@@ -309,6 +318,21 @@ func TestSOCKSProbeUsesServiceCredentials(t *testing.T) {
 	}
 	if target := <-probes; target != "example.com:80" {
 		t.Fatalf("SOCKS target %q", target)
+	}
+}
+
+func TestHTTPConnectRejectsOversizedResponseHeaders(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Padding", strings.Repeat("a", maxProbeResponseHeaderBytes))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer proxy.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, err := dialAuthenticatedHTTPConnect(ctx, proxy.Listener.Addr().String(), "example.com:80", "user", "password")
+	if err == nil {
+		conn.Close()
+		t.Fatal("oversized CONNECT response headers were accepted")
 	}
 }
 
@@ -352,7 +376,7 @@ func TestSOCKSProbeTLSDoHAndDomainFallback(t *testing.T) {
 	roots.AddCert(origin.Certificate())
 	roots.AddCert(doh.Certificate())
 	probes := make(chan string, 8)
-	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), probes, false)
 	dohPort := doh.Listener.Addr().(*net.TCPAddr).Port
 	originPort := origin.Listener.Addr().(*net.TCPAddr).Port
 	prober := &SOCKSProbe{RootCAs: roots, Direct: netpolicy.Dialer{ResolveIPs: func(context.Context, string) ([]netip.Addr, error) {
@@ -411,7 +435,7 @@ func TestStrategyProbeRejectsHTTPFailuresWithoutChangingConnectivityChecks(t *te
 	roots := x509.NewCertPool()
 	roots.AddCert(origin.Certificate())
 	targets := make(chan string, 4)
-	host, port := testSOCKS(t, origin.Listener.Addr().String(), targets)
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), targets, false)
 	probe := SOCKSProbe{RootCAs: roots}
 	request := backend.NodeProbe{Host: host, Port: port, URL: "https://example.com:" + strconv.Itoa(origin.Listener.Addr().(*net.TCPAddr).Port) + "/check", Resolver: "system"}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

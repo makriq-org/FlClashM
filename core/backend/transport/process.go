@@ -73,7 +73,7 @@ func (a *ProcessAdapter) Prepare(ctx context.Context, node backend.NodePlan) err
 		return err
 	}
 	prefix := "built-in-proxies/" + node.Type + "/" + node.ID + "/"
-	allowed := map[string]bool{"config.json": true, "config.yaml": true, "client_config.toml": true, "client_resolvers.template": true, "auth.txt": true}
+	allowed := map[string]bool{"config.json": true, "config.yaml": true, "client_config.toml": true, "client_resolvers.template": true}
 	for key, body := range node.Files {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -237,6 +237,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		}
 	}
 	arguments := []string{}
+	user, password := node.Metadata["service-auth-user"], node.Metadata["service-auth-password"]
 	switch node.Type {
 	case "naiveproxy":
 		arguments = []string{filepath.Join(directory, "config.json")}
@@ -245,10 +246,6 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	case "stormdns":
 		arguments = []string{"-config", filepath.Join(directory, "client_config.toml"), "-resolvers", filepath.Join(directory, "client_resolvers.txt")}
 	case "byedpi":
-		port := node.Port
-		if launch.Port != 0 {
-			port = launch.Port
-		}
 		strategy := launch.Strategy
 		if strategy == "" {
 			var native struct {
@@ -268,7 +265,15 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		if e != nil {
 			return e
 		}
-		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", filepath.Join(directory, "auth.txt"), "--no-udp"}, argv...)
+		if user == "" || password == "" {
+			return errors.New("ByeDPI requires service credentials")
+		}
+		// Auto-selection probes start directly with their own ID and directory.
+		authFile := filepath.Join(directory, "auth.txt")
+		if err := writePrivate(authFile, []byte(user+"\n"+password+"\n")); err != nil {
+			return err
+		}
+		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", authFile, "--no-udp"}, argv...)
 	default:
 		return errors.New("unsupported transport")
 	}
@@ -293,7 +298,6 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command.Stdin = nil
 	logOutput := a.Log
 	if logOutput != nil {
-		user, password := node.Metadata["service-auth-user"], node.Metadata["service-auth-password"]
 		if user != "" && password != "" {
 			redact := strings.NewReplacer(user, "[redacted]", password, "[redacted]")
 			next := logOutput
