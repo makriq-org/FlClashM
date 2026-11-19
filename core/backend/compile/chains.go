@@ -470,7 +470,8 @@ func (b *chainBuilder) pin() ([]any, error) {
 		if includeAll && len(b.providers) > 0 {
 			next["include-all-providers"] = true
 		}
-		if len(members) == 0 && next["include-all-providers"] != true {
+		usesProviders := len(list(next["use"])) > 0 || next["include-all-providers"] == true
+		if len(members) == 0 && !usesProviders {
 			fallback := text(group["empty-fallback"])
 			if fallback == "" {
 				fallback = "COMPATIBLE"

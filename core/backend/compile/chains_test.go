@@ -249,6 +249,25 @@ rules: ['MATCH,DIRECT']`
 	}
 }
 
+func TestProxyChainPreservesProviderGroupWithoutInlineMatches(t *testing.T) {
+	const source = `proxies:
+  - {name: Exit, type: socks5, server: exit.test, port: 1080}
+proxy-providers:
+  remote: {type: http, url: 'https://example.test/nodes.yaml', path: nodes.yaml}
+proxy-groups:
+  - {name: Remote, type: select, use: [remote], include-all-proxies: true, filter: '^Remote'}
+rules: ['MATCH,Remote']`
+	c, request := chainRequest(source)
+	request.Authoring["proxyChains"] = []authoring.Object{
+		row(Object{"id": 1, "profileId": "p", "name": "Chain", "hops": []any{"Remote", "Exit"}}),
+	}
+	result := prepared(t, c, request)
+	group := configEntry(t, result, "proxy-groups", "Remote")
+	if len(list(group["proxies"])) != 0 || !reflect.DeepEqual(list(group["use"]), []any{"remote"}) {
+		t.Fatalf("the subscription group must keep only its provider: %v", group)
+	}
+}
+
 func TestDisabledProxyChainIsNotApplied(t *testing.T) {
 	c, request := chainRequest(chainProfileSource)
 	request.Authoring["proxyChains"] = []authoring.Object{row(Object{"id": 1, "profileId": "p", "name": "Two", "enabled": false, "hops": []any{"Entry", "Exit"}})}
