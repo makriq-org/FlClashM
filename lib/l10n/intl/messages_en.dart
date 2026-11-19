@@ -1572,7 +1572,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "On demand pauses the proxy on excluded Wi-Fi.",
     ),
     "oneColumn": MessageLookupByLibrary.simpleMessage("One column"),
-    "oneline": MessageLookupByLibrary.simpleMessage("Oneline"),
+    "oneline": MessageLookupByLibrary.simpleMessage("Single line"),
     "onlyIcon": MessageLookupByLibrary.simpleMessage("Icon"),
     "onlyOtherApps": MessageLookupByLibrary.simpleMessage(
       "Only third-party apps",
@@ -1779,6 +1779,12 @@ class MessageLookup extends MessageLookupByLibrary {
     "proxyType": MessageLookupByLibrary.simpleMessage("Proxy type"),
     "pruneCache": MessageLookupByLibrary.simpleMessage("Prune cache"),
     "publicKey": MessageLookupByLibrary.simpleMessage("Public key"),
+    "pullToTestDelay": MessageLookupByLibrary.simpleMessage(
+      "Pull down to test the delay",
+    ),
+    "pullToUpdateSubscription": MessageLookupByLibrary.simpleMessage(
+      "Pull down to update the subscription",
+    ),
     "pureBlack": MessageLookupByLibrary.simpleMessage("Pure black"),
     "pureBlackMode": MessageLookupByLibrary.simpleMessage("Pure black mode"),
     "qrNotFound": MessageLookupByLibrary.simpleMessage("QR code not found"),
@@ -1820,6 +1826,12 @@ class MessageLookup extends MessageLookupByLibrary {
     "releaseMemory": MessageLookupByLibrary.simpleMessage("Release memory"),
     "releaseMemoryFailed": MessageLookupByLibrary.simpleMessage(
       "Failed to release memory",
+    ),
+    "releaseToTestDelay": MessageLookupByLibrary.simpleMessage(
+      "Release to test the delay",
+    ),
+    "releaseToUpdateSubscription": MessageLookupByLibrary.simpleMessage(
+      "Release to update the subscription",
     ),
     "remaining": MessageLookupByLibrary.simpleMessage("Remaining"),
     "remainingPlural": MessageLookupByLibrary.simpleMessage("Remaining"),
@@ -2287,6 +2299,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "subscriptionUnlimited": MessageLookupByLibrary.simpleMessage(
       "Lifetime Subscription",
     ),
+    "subscriptionUpdated": MessageLookupByLibrary.simpleMessage(
+      "Subscription updated",
+    ),
     "successTitle": MessageLookupByLibrary.simpleMessage("Success"),
     "sudoPasswordTitle": MessageLookupByLibrary.simpleMessage(
       "Enter your password for sudo",
@@ -2332,12 +2347,6 @@ class MessageLookup extends MessageLookupByLibrary {
       "Set dark mode,adjust the color",
     ),
     "themeMode": MessageLookupByLibrary.simpleMessage("Appearance"),
-    "themeStyle": MessageLookupByLibrary.simpleMessage("Theme mode"),
-    "themeStyleDesc": MessageLookupByLibrary.simpleMessage(
-      "Enhanced puts the service logo, plan, server and a connect button on the home page in place of the widget grid.",
-    ),
-    "themeStyleEnhanced": MessageLookupByLibrary.simpleMessage("Enhanced"),
-    "themeStyleOriginal": MessageLookupByLibrary.simpleMessage("Original"),
     "threeColumns": MessageLookupByLibrary.simpleMessage("Three columns"),
     "tight": MessageLookupByLibrary.simpleMessage("Tight"),
     "time": MessageLookupByLibrary.simpleMessage("Time"),
@@ -2409,6 +2418,9 @@ class MessageLookup extends MessageLookupByLibrary {
       "Update All Geo Files",
     ),
     "updated": MessageLookupByLibrary.simpleMessage("Updated"),
+    "updatingSubscription": MessageLookupByLibrary.simpleMessage(
+      "Updating the subscription…",
+    ),
     "upload": MessageLookupByLibrary.simpleMessage("Upload"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("Upload bandwidth"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),

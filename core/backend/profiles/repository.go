@@ -452,6 +452,30 @@ func (r *Repository) UpdateSettings(settings Object, expected uint64) error {
 	next.Settings = mergeObjects(next.Settings, settings)
 	return r.persist(next)
 }
+
+// ReplaceHeaderSettings replaces only the objects owned by the header writer.
+// The caller must supply the revision of the snapshot used to construct them.
+func (r *Repository) ReplaceHeaderSettings(settings Object, expected uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if expected != r.state.Revision {
+		return ErrConflict
+	}
+	next := clone(r.state)
+	if next.Settings == nil {
+		next.Settings = Object{}
+	}
+	for name, raw := range settings {
+		switch name {
+		case "appSetting", "themeProps", "proxiesStyle":
+			next.Settings[name] = append(json.RawMessage(nil), raw...)
+		default:
+			return errors.New("unsupported header settings object")
+		}
+	}
+	return r.persist(next)
+}
+
 func (r *Repository) ExportLegacy() ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

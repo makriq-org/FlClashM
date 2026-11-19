@@ -173,9 +173,7 @@ class Migration {
       }
     }
 
-    config = data.configMap == null
-        ? _freshInstall(Config.realFromJson(null))
-        : Config.realFromJson(data.configMap);
+    config = Config.realFromJson(data.configMap);
     await _store.restore(data);
     if (!await _store.saveConfig(config)) {
       // An unopenable store is reported later by the corrupt-cache dialog,
@@ -192,12 +190,6 @@ class Migration {
     return config;
   }
 }
-
-/// A new install opens on the enhanced dashboard; the model keeps the
-/// standard one, which any stored config without a style was made on.
-Config _freshInstall(Config config) => config.copyWith(
-  themeProps: config.themeProps.copyWith(style: ThemeStyle.enhanced),
-);
 
 Config _resetThemeColors(Config config) => config.copyWith(
   themeProps: config.themeProps.copyWith(

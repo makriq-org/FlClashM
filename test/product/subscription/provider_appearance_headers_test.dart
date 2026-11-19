@@ -19,7 +19,6 @@ void main() {
         });
         expect(headers.view!.icon, ProxiesIconStyle.plain);
         expect(headers.view!.card, ProxyCardType.compact);
-        expect(headers.view!.board, ThemeStyle.enhanced);
         expect(headers.view!.floatingNavigationBar, false);
         expect(headers.view!.tabAnimation, TabAnimation.fade);
         expect(headers.view!.liquidGlass, LiquidGlassMode.ultra);
@@ -55,7 +54,7 @@ void main() {
     });
     expect(headers.view!.type, ProxiesType.tab);
     expect(headers.view!.icon, ProxiesIconStyle.hidden);
-    expect(headers.view!.card, ProxyCardType.compact);
+    expect(headers.view!.card, ProxyCardType.oneline);
     expect(headers.globalModeAllowed, false);
     expect(headers.androidSecure, true);
     expect(headers.widgetEditingDenied, true);
@@ -72,6 +71,35 @@ void main() {
     }
     const fallback = ProviderHeaders({'flclashx-view': 'app.theme:sunset'});
     expect(fallback.view, isNull);
+  });
+
+  test('the provider look and one group come from the specials', () {
+    const headers = ProviderHeaders({
+      'flclashm-special':
+          'providermode,nologo,noservice,onegroup,simple,novibrate,'
+          'onlytun,hideip,noglobal',
+    });
+    expect(headers.providerMode, true);
+    expect(headers.noLogo, true);
+    expect(headers.noService, true);
+    expect(headers.oneGroup, true);
+    expect(headers.simpleMode, true);
+    expect(headers.noVibration, true);
+    expect(headers.onlyTun, true);
+    expect(headers.hideIp, true);
+    expect(headers.globalModeAllowed, false);
+    const without = ProviderHeaders({'flclashm-special': ''});
+    expect(without.providerMode, false);
+    expect(without.oneGroup, false);
+  });
+
+  test('app.board no longer picks a dashboard', () {
+    const headers = ProviderHeaders({
+      'flclashx-view': 'app.board:extended;proxies.card:oneline',
+    });
+    expect(headers.view!.card, ProxyCardType.oneline);
+    const boardOnly = ProviderHeaders({'flclashx-view': 'app.board:extended'});
+    expect(boardOnly.view, isNull);
   });
 
   test('hideip and arranged cards are part of the panel settings', () {

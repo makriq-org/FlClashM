@@ -2929,6 +2929,111 @@
       "path": "lib/views/views.dart",
       "bucket": "budget",
       "reason": "Экспорт объединённой страницы соединений."
+    },
+    {
+      "path": "lib/common/app_ports.dart",
+      "bucket": "budget",
+      "reason": "Порт навигации получает флаг простого режима панели; это UI-проекция Go-снимка, без runtime-политики."
+    },
+    {
+      "path": "lib/common/migration.dart",
+      "bucket": "budget",
+      "reason": "Настройка темы расширенной главной удалена вместе с самой главной; миграция больше не выставляет стиль."
+    },
+    {
+      "path": "lib/providers/state/navigation.dart",
+      "bucket": "budget",
+      "reason": "Простой режим панели скрывает лишние разделы навигации по заголовкам выбранного профиля."
+    },
+    {
+      "path": "lib/views/dashboard/hero.dart",
+      "bucket": "budget",
+      "reason": "Расширенная главная удалена: её заменяет оформление провайдера на стандартных карточках."
+    },
+    {
+      "path": "lib/views/dashboard/provider_mode.dart",
+      "bucket": "budget",
+      "reason": "Оформление провайдера строит шапку и кнопку запуска на стандартной главной из заголовков подписки."
+    },
+    {
+      "path": "lib/views/dashboard/wide.dart",
+      "bucket": "budget",
+      "reason": "Широкая раскладка собирает карточки главной из выбранной пользователем расстановки."
+    },
+    {
+      "path": "lib/views/dashboard/widget_registry.dart",
+      "bucket": "budget",
+      "reason": "Реестр карточек учитывает оформление провайдера и хранит статусную карточку на месте."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/announcement.dart",
+      "bucket": "budget",
+      "reason": "Объявление растёт по тексту на широком окне вместо фиксированной высоты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/card.dart",
+      "bucket": "budget",
+      "reason": "Общие элементы карточек подстроены под новую широкую раскладку главной."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/core_status_button.dart",
+      "bucket": "budget",
+      "reason": "Кнопка ядра показывает сердцебиение состояния вместо цветной заливки."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/current_outbound.dart",
+      "bucket": "budget",
+      "reason": "Статусная карточка показывает сервер и страну выхода, скрывая IP без запуска проверок."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/server_location.dart",
+      "bucket": "budget",
+      "reason": "Карточка расположения сервера для оформления провайдера открывает выбор прокси."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/widgets.dart",
+      "bucket": "budget",
+      "reason": "Экспорт новой карточки расположения сервера."
+    },
+    {
+      "path": "lib/views/proxies/common.dart",
+      "bucket": "budget",
+      "reason": "Однострочная карточка прокси получает собственную высоту."
+    },
+    {
+      "path": "lib/views/proxies/proxies.dart",
+      "bucket": "budget",
+      "reason": "UX прокси: одна группа панели, свайп вниз для проверки задержек и стеклянная панель."
+    },
+    {
+      "path": "lib/views/proxies/tab.dart",
+      "bucket": "budget",
+      "reason": "Режим одной группы показывает прокси серверной группы панели без вкладок."
+    },
+    {
+      "path": "lib/widgets/pull_action.dart",
+      "bucket": "budget",
+      "reason": "Свайп вниз на Android обновляет подписку или проверяет задержки существующими командами Go."
+    },
+    {
+      "path": "lib/widgets/rising_hold.dart",
+      "bucket": "budget",
+      "reason": "Долгое удержание кнопки запуска с вибрацией, отключаемой настройкой и флагом панели."
+    },
+    {
+      "path": "lib/widgets/widgets.dart",
+      "bucket": "budget",
+      "reason": "Экспорт свайпа и удержания для главной и прокси."
+    },
+    {
+      "path": "lib/common/device_identity.dart",
+      "bucket": "budget",
+      "reason": "Android TV представляется панели как AndroidTV, чтобы правила подписки видели тип устройства."
+    },
+    {
+      "path": "lib/common/package.dart",
+      "bucket": "budget",
+      "reason": "User-Agent Android TV получает платформу androidtv с сохранением подстроки android."
     }
   ]
 }

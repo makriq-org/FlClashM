@@ -566,15 +566,6 @@ Future<MigrationData> migrateLegacyConfig({
     appSettingProps['restoreStrategy'] = appSettingProps['recoveryStrategy'];
   }
   configMap['appSettingProps'] = appSettingProps;
-  // FlClashX 0.4 kept its hero page as a flag; here it is the theme style,
-  // and one without the flag keeps the standard page over the new default.
-  final themeProps = configMap['themeProps'] as Map<String, dynamic>? ?? {};
-  if (appSettingProps['newDashboard'] == true) {
-    themeProps['style'] = ThemeStyle.enhanced.name;
-  } else {
-    themeProps['style'] ??= ThemeStyle.original.name;
-  }
-  configMap['themeProps'] = themeProps;
   configMap['proxiesStyleProps'] = configMap['proxiesStyle'];
   List rawScripts = configMap['scripts'] as List<dynamic>? ?? [];
   if (rawScripts.isEmpty) {

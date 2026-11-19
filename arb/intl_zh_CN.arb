@@ -510,10 +510,6 @@
   "checkCertificateDesc": "关闭证书校验后，订阅和备份可能遭中间人攻击。",
   "link": "链接",
   "linkDesc": "通过订阅链接或代理分享链接获取配置文件",
-  "themeStyle": "主题模式",
-  "themeStyleOriginal": "原版",
-  "themeStyleEnhanced": "增强版",
-  "themeStyleDesc": "增强版在主页显示服务标志、套餐、服务器和连接按钮，取代小部件网格。",
   "website": "网站",
   "importFromLink": "从链接导入",
   "createProfileFromUrlTip": "是否要通过 {url} 创建配置？",
@@ -1197,5 +1193,11 @@
   "preferred": "首选",
   "addToLocalProxies": "添加到本地代理",
   "addedToLocalProxies": "已将 {name} 添加到本地代理",
-  "alreadyInLocalProxies": "本地代理中已有 {name}"
+  "alreadyInLocalProxies": "本地代理中已有 {name}",
+  "pullToTestDelay": "下拉以测试延迟",
+  "releaseToTestDelay": "松开以测试延迟",
+  "pullToUpdateSubscription": "下拉以更新订阅",
+  "releaseToUpdateSubscription": "松开以更新订阅",
+  "updatingSubscription": "正在更新订阅…",
+  "subscriptionUpdated": "订阅已更新"
 }

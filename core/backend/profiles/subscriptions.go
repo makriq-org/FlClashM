@@ -275,6 +275,11 @@ func MergeProviderHeaders(previous, incoming map[string]string) map[string]strin
 	for k, v := range previous {
 		merged[k] = v
 	}
+	// These headers describe the current response, not persistent defaults.
+	for _, suffix := range []string{"view", "settings", "widgets", "special", "update", "update-pre"} {
+		delete(merged, "flclashm-"+suffix)
+		delete(merged, "flclashx-"+suffix)
+	}
 	for key := range incoming {
 		if strings.HasPrefix(key, "flclashm-") || strings.HasPrefix(key, "flclashx-") {
 			_, suffix, _ := strings.Cut(key, "-")

@@ -1286,7 +1286,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "オンデマンドは、除外した Wi-Fi に接続している間プロキシを一時停止します。",
     ),
     "oneColumn": MessageLookupByLibrary.simpleMessage("1列"),
-    "oneline": MessageLookupByLibrary.simpleMessage("オンライン"),
+    "oneline": MessageLookupByLibrary.simpleMessage("1行"),
     "onlyIcon": MessageLookupByLibrary.simpleMessage("アイコンのみ"),
     "onlyOtherApps": MessageLookupByLibrary.simpleMessage("サードパーティアプリのみ"),
     "onlyStatisticsProxy": MessageLookupByLibrary.simpleMessage(
@@ -1458,6 +1458,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "proxyType": MessageLookupByLibrary.simpleMessage("プロキシタイプ"),
     "pruneCache": MessageLookupByLibrary.simpleMessage("キャッシュを整理"),
     "publicKey": MessageLookupByLibrary.simpleMessage("公開鍵"),
+    "pullToTestDelay": MessageLookupByLibrary.simpleMessage("下に引いて遅延をテスト"),
+    "pullToUpdateSubscription": MessageLookupByLibrary.simpleMessage(
+      "下に引いてサブスクリプションを更新",
+    ),
     "pureBlack": MessageLookupByLibrary.simpleMessage("ピュアブラック"),
     "pureBlackMode": MessageLookupByLibrary.simpleMessage("ピュアブラックモード"),
     "qrcode": MessageLookupByLibrary.simpleMessage("QRコード"),
@@ -1489,6 +1493,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "releaseMemory": MessageLookupByLibrary.simpleMessage("メモリを解放"),
     "releaseMemoryFailed": MessageLookupByLibrary.simpleMessage(
       "メモリの解放に失敗しました",
+    ),
+    "releaseToTestDelay": MessageLookupByLibrary.simpleMessage("指を離すと遅延をテスト"),
+    "releaseToUpdateSubscription": MessageLookupByLibrary.simpleMessage(
+      "指を離すとサブスクリプションを更新",
     ),
     "remote": MessageLookupByLibrary.simpleMessage("リモート"),
     "remoteBackupDesc": MessageLookupByLibrary.simpleMessage(
@@ -1865,6 +1873,9 @@ class MessageLookup extends MessageLookupByLibrary {
       "サブスクリプションは今日で終了します",
     ),
     "subscriptionInfo": MessageLookupByLibrary.simpleMessage("サブスクリプション情報"),
+    "subscriptionUpdated": MessageLookupByLibrary.simpleMessage(
+      "サブスクリプションを更新しました",
+    ),
     "sudoPasswordTitle": MessageLookupByLibrary.simpleMessage("sudo のパスワードを入力"),
     "support": MessageLookupByLibrary.simpleMessage("サポート"),
     "suspended": MessageLookupByLibrary.simpleMessage("一時停止中…"),
@@ -1898,12 +1909,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "themeColor": MessageLookupByLibrary.simpleMessage("テーマカラー"),
     "themeDesc": MessageLookupByLibrary.simpleMessage("ダークモードの設定、色の調整"),
     "themeMode": MessageLookupByLibrary.simpleMessage("外観"),
-    "themeStyle": MessageLookupByLibrary.simpleMessage("テーマモード"),
-    "themeStyleDesc": MessageLookupByLibrary.simpleMessage(
-      "強化版では、ウィジェットグリッドの代わりにサービスのロゴ、プラン、サーバー、接続ボタンをホームに表示します。",
-    ),
-    "themeStyleEnhanced": MessageLookupByLibrary.simpleMessage("強化版"),
-    "themeStyleOriginal": MessageLookupByLibrary.simpleMessage("オリジナル"),
     "threeColumns": MessageLookupByLibrary.simpleMessage("3列"),
     "tight": MessageLookupByLibrary.simpleMessage("コンパクト"),
     "time": MessageLookupByLibrary.simpleMessage("時刻"),
@@ -1962,6 +1967,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "unpinWindow": MessageLookupByLibrary.simpleMessage("固定を解除"),
     "update": MessageLookupByLibrary.simpleMessage("更新"),
     "updateAllGeoData": MessageLookupByLibrary.simpleMessage("すべての地理データを更新"),
+    "updatingSubscription": MessageLookupByLibrary.simpleMessage(
+      "サブスクリプションを更新中…",
+    ),
     "upload": MessageLookupByLibrary.simpleMessage("アップロード"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("アップロード帯域幅"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),

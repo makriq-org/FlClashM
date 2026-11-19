@@ -104,10 +104,6 @@
   "profileAutoUpdateIntervalNullValidationDesc": "Veuillez saisir l’intervalle de mise à jour automatique",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Veuillez saisir un intervalle valide",
   "themeMode": "Apparence",
-  "themeStyle": "Mode du thème",
-  "themeStyleOriginal": "Original",
-  "themeStyleEnhanced": "Amélioré",
-  "themeStyleDesc": "Amélioré affiche sur l’accueil le logo du service, le forfait, le serveur et un bouton de connexion à la place de la grille de widgets.",
   "website": "Site web",
   "support": "Assistance",
   "themeColor": "Couleur du thème",
@@ -1009,5 +1005,11 @@
   "preferred": "Préféré",
   "addToLocalProxies": "Ajouter aux proxys locaux",
   "addedToLocalProxies": "{name} ajouté aux proxys locaux",
-  "alreadyInLocalProxies": "{name} est déjà dans les proxys locaux"
+  "alreadyInLocalProxies": "{name} est déjà dans les proxys locaux",
+  "pullToTestDelay": "Tirez pour tester la latence",
+  "releaseToTestDelay": "Relâchez pour tester la latence",
+  "pullToUpdateSubscription": "Tirez pour mettre à jour l’abonnement",
+  "releaseToUpdateSubscription": "Relâchez pour mettre à jour l’abonnement",
+  "updatingSubscription": "Mise à jour de l’abonnement…",
+  "subscriptionUpdated": "Abonnement mis à jour"
 }

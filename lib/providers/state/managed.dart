@@ -73,6 +73,7 @@ Set<String> managedSettings(Ref ref) {
     if (switches != null) ...appSwitchSettings.values,
     ...managedViewKeysOf(view),
     if (specials?.contains('hideip') ?? false) hideIpSetting,
+    if (specials?.contains('novibrate') ?? false) vibrationSetting,
     ...ref.watch(managedClashKeysProvider),
     if (declaredAccess != null) accessControlSettingKey,
   };

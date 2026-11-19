@@ -18,7 +18,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'card.dart';
-import 'current_outbound.dart';
 
 /// Enough to fill the tallest card several times over; the full feed is a
 /// tap away.
@@ -52,8 +51,6 @@ enum DashboardFeed {
   requests,
   dns;
 
-  /// The sheet's own names: the live feed keeps the dashboard's label rather
-  /// than the Connections page title.
   String get label => switch (this) {
     connections => currentAppLocalizations.liveConnections,
     requests => PageLabel.requests.label,
@@ -122,7 +119,7 @@ mixin ConnectionsPolling<T extends ConsumerStatefulWidget>
     }
     try {
       if (pollsConnections) {
-        final next = await _core.getConnections();
+        final next = [...await _core.getConnections()];
         if (!isCurrent()) return;
         next.sort((a, b) => b.start.compareTo(a.start));
         final tcp = next
