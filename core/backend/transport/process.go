@@ -293,9 +293,6 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command := exec.Command(executable, arguments...)
 	command.Dir = directory
 	command.Stdin = nil
-	output := newProcessOutput(node.Type, a.Log, user, password)
-	command.Stdout = output
-	command.Stderr = output
 	address := net.JoinHostPort(node.Host, strconv.Itoa(port))
 	// Detect an occupied endpoint as close as possible to the child's bind.
 	listener, err := net.Listen("tcp", address)
@@ -303,6 +300,9 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		return fmt.Errorf("external listener port %d is unavailable: %w", port, err)
 	}
 	_ = listener.Close()
+	output := newProcessOutput(node.Type, a.Log, user, password)
+	command.Stdout = output
+	command.Stderr = output
 	p := &process{command: command, address: address, graceful: node.Type == "olcrtc", done: make(chan struct{})}
 	started := make(chan error, 1)
 	pin := bindChildLifetime(command)
@@ -448,7 +448,14 @@ func (a *ProcessAdapter) Probe(ctx context.Context, probe backend.NodeProbe) (bo
 	if err != nil {
 		return false, err
 	}
-	return a.Prober.probe(ctx, probe, check)
+	passed, err := a.Prober.probe(ctx, probe, check)
+	if err != nil || !passed {
+		return false, err
+	}
+	if err := check(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // watchProcess pins readiness and protocol writes to the same launch, even

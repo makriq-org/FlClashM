@@ -425,6 +425,7 @@ class AndroidRuntimeE2eTest {
             assertTrue("Packaged external transport did not listen", canConnect(port))
             listeningPort = port
             assertEquals("Default mixed port is open", 0, view.getJSONObject("config").getInt("mixed-port"))
+            assertFalse("Implicit mixed port is listening", canConnect(17890))
             assertServiceAuthentication(node)
             assertServiceAuthentication(nodes.getJSONObject(1))
             assertTrue(Service.getAppliedAndroidVpnOptions().isNotEmpty())
@@ -507,14 +508,20 @@ class AndroidRuntimeE2eTest {
             // must apply it and update the running plan.
             backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
                 .put("appSetting", JSONObject().put("ownedSettings", org.json.JSONArray().put("clash.mixed-port")))))
+            assertEquals(17890, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
             backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
                 .put("patchClashConfig", JSONObject().put("mode", "rule"))))
-            assertEquals(17890, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
             backendCommand("runtime.start")
             assertEquals("running", snapshot().getJSONObject("observed").getString("state"))
             assertFalse(JSONObject(Service.getAndroidVpnOptions()).getBoolean("enable"))
             await("manually enabled mixed port") { canConnect(17890) }
             assertByeDpiUdpRoundTrip(17890)
+            backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+                .put("patchClashConfig", JSONObject().put("mixed-port", 0))))
+            assertEquals(0, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
+            assertFalse(snapshot().getBoolean("desiredRunning"))
+            assertFalse(snapshot().getBoolean("appliedRunning"))
+            await("last mixed port closed") { !canConnect(17890) }
         } finally { backendCommand("runtime.stop"); Service.unbind() }
         Service.bind()
         backendCommand("settings.patch", JSONObject().put("patch", JSONObject().put("patchClashConfig", JSONObject()

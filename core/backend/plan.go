@@ -151,6 +151,10 @@ type PlatformAdapter interface {
 	Observe(context.Context) (Observation, error)
 }
 
+// ErrNoIngress reports a configuration with no usable VPN or proxy input.
+// An explicit start fails, but applying it to a running runtime stops it.
+var ErrNoIngress = errors.New("enable a proxy port or turn on VPN before starting")
+
 // OperationLifetime keeps a service host alive during preparation and plan
 // replacement, before a VPN descriptor exists. It grants no execution rights.
 type OperationLifetime interface {

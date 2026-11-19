@@ -407,9 +407,6 @@ func (backendEngine) ApplyLiveSettings(ctx context.Context, _, next *backend.Run
 		}
 		currentRuntimeRawConfig["external-controller"] = *controller
 	}
-	if isRunning && listener.GetPorts().MixedPort != currentConfig.General.MixedPort {
-		return errors.New("mixed listener did not bind")
-	}
 	if isRunning {
 		if err := checkBackendIngress(); err != nil {
 			return err
@@ -566,13 +563,16 @@ func (backendPlatform) Start(ctx context.Context, plan *backend.RuntimePlan) err
 // tunnels eligible in proxy-only mode even when all standard ports are off.
 // The DNS and controller listeners are managed separately from runtime start.
 func checkBackendIngress() error {
-	if state.CurrentState.VpnProps.Enable {
-		return nil
-	}
 	if currentConfig == nil {
 		return errors.New("no applied engine configuration")
 	}
 	ports := listener.GetPorts()
+	if ports.MixedPort != currentConfig.General.MixedPort {
+		return errors.New("mixed listener did not bind")
+	}
+	if state.CurrentState.VpnProps.Enable {
+		return nil
+	}
 	if ports.Port != 0 || ports.MixedPort != 0 || ports.SocksPort != 0 ||
 		ports.RedirPort != 0 || ports.TProxyPort != 0 ||
 		ports.ShadowSocksConfig != "" || ports.VmessConfig != "" ||
@@ -580,7 +580,7 @@ func checkBackendIngress() error {
 		len(currentConfig.Listeners) != 0 || len(currentConfig.Tunnels) != 0 {
 		return nil
 	}
-	return errors.New("enable a proxy port or turn on VPN before starting")
+	return backend.ErrNoIngress
 }
 
 func (backendPlatform) Stop(ctx context.Context) error {
