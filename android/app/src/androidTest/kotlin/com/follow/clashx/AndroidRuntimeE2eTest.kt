@@ -529,6 +529,20 @@ class AndroidRuntimeE2eTest {
         assertTrue("Controller did not open", canConnect(17892))
         backendCommand("data.reset")
         await("reset closed the old controller") { !canConnect(17892) }
+
+        // The settings form can apply a port before a profile is selected.
+        val inactivePort = ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+            .put("appSetting", JSONObject().put("ownedSettings", org.json.JSONArray().put("clash.mixed-port")))
+            .put("patchClashConfig", JSONObject().put("mixed-port", inactivePort))))
+        assertFalse(snapshot().getBoolean("desiredRunning"))
+        assertFalse(snapshot().getBoolean("appliedRunning"))
+        assertEquals(inactivePort, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
+        assertFalse("Setting a mixed port opened it while stopped", canConnect(inactivePort))
+        backendCommand("settings.patch", JSONObject().put("patch", JSONObject()
+            .put("patchClashConfig", JSONObject().put("mixed-port", 0))))
+        assertEquals(0, Service.backend("runtime.view").getJSONObject("config").getInt("mixed-port"))
+        assertFalse("Disabled mixed port kept listening", canConnect(inactivePort))
         Service.unbind()
     }
     private fun remotePid(): Int {
