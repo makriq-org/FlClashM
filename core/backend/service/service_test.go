@@ -444,6 +444,61 @@ func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
 		t.Fatalf("retry did not close the mixed port: %v, %v", payload.Config, err)
 	}
 }
+
+func TestOwnershipRetrySupersedesPendingPortChange(t *testing.T) {
+	entered := make(chan struct{})
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opts.Compiler.Validate = func(ctx context.Context, config compile.Object) error {
+		if fmt.Sprint(config["mixed-port"]) == "17890" {
+			close(entered)
+			<-ctx.Done()
+		}
+		return ctx.Err()
+	}
+	app := openTestApp(t, opts)
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "p"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "add")
+	request(t, app, "take", "settings.patch", map[string]any{"patch": map[string]any{
+		"patchClashConfig": map[string]any{"mixed-port": 17890},
+		"appSetting":       map[string]any{"ownedSettings": []string{"clash.mixed-port"}},
+	}})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	take, err := app.Await(ctx, "take")
+	if err != nil || take.RuntimeOperationID == "" {
+		t.Fatalf("taking ownership did not submit a runtime operation: %+v, %v", take, err)
+	}
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("pending port compilation never started")
+	}
+
+	release := profiles.Object{"appSetting": jsonValue(map[string]any{"ownedSettings": []string{}})}
+	// Simulate an operation that persisted the setting before it was interrupted.
+	if err := app.patchSettings(ctx, release, 0); err != nil {
+		t.Fatal(err)
+	}
+	request(t, app, "release-retry", "settings.patch", map[string]any{"patch": release})
+	retry, err := app.Await(ctx, "release-retry")
+	if err != nil || retry.RuntimeOperationID == "" {
+		t.Fatalf("retry did not replace pending ownership: %+v, %v", retry, err)
+	}
+	if _, err = app.AwaitRuntime(ctx, retry.RuntimeOperationID); err != nil {
+		t.Fatal(err)
+	}
+	if obsolete, err := app.AwaitRuntime(ctx, take.RuntimeOperationID); err == nil || obsolete.ErrorCode != backend.ErrorCodeSuperseded {
+		t.Fatalf("obsolete operation was not superseded: %+v, %v", obsolete, err)
+	}
+	view, err := app.RuntimeView()
+	var applied struct {
+		Config map[string]any `json:"config"`
+	}
+	if err != nil || json.Unmarshal(view, &applied) != nil || applied.Config["mixed-port"] != float64(0) {
+		t.Fatalf("retry did not leave the port closed: %v, %v", applied.Config, err)
+	}
+}
+
 func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	directory := t.TempDir()
 	opts := options(t, directory, &testEngine{}, make(chan time.Time))

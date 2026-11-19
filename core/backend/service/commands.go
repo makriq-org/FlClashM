@@ -582,27 +582,29 @@ func (a *App) patchSettingsWithOwnershipChange(ctx context.Context, patch profil
 			if runtimeOwnershipDiffers(before, after) {
 				return true, nil
 			}
-			// A retry may find the requested ownership already in the catalog
-			// while a prior failure left the runtime on the old configuration.
+			// A retry must reconcile both the committed configuration and
+			// the input that an accepted operation can still commit.
 			var fields profiles.Object
 			_ = json.Unmarshal(raw, &fields)
 			if _, writesOwnership := fields["ownedSettings"]; fields != nil && !writesOwnership {
 				return false, nil
 			}
-			_, applied, err := a.runtime.Applied()
-			if err != nil {
-				return false, err
+			applied, pending := a.runtime.RuntimeInputs()
+			for _, raw := range []backend.Input{applied, pending} {
+				if len(raw) == 0 {
+					continue
+				}
+				var input struct {
+					Settings profiles.Object `json:"settings"`
+				}
+				if err := json.Unmarshal(raw, &input); err != nil {
+					return false, err
+				}
+				if runtimeOwnershipDiffers(input.Settings["appSetting"], after) {
+					return true, nil
+				}
 			}
-			if len(applied) == 0 {
-				return false, nil
-			}
-			var input struct {
-				Settings profiles.Object `json:"settings"`
-			}
-			if err := json.Unmarshal(applied, &input); err != nil {
-				return false, err
-			}
-			return runtimeOwnershipDiffers(input.Settings["appSetting"], after), nil
+			return false, nil
 		}
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
 			return false, err
