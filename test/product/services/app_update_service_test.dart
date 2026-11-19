@@ -1,51 +1,65 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
-import 'package:flclashx/common/common.dart';
 import 'package:flclashx/product/android/android_update_bridge.dart';
+import 'package:flclashx/product/services/app_update_http.dart';
+import 'package:flclashx/product/services/app_update_identity.dart';
+import 'package:flclashx/product/services/app_update_install_journal.dart';
 import 'package:flclashx/product/services/app_update_release.dart';
 import 'package:flclashx/product/services/app_update_service.dart';
+import 'package:flclashx/product/services/app_update_session.dart';
 import 'package:flclashx/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+class _FakeJournal implements AppUpdateInstallJournal {
+  int? prepared;
+
+  @override
+  Future<int?> readPreparedVersionCode() async => prepared;
+
+  @override
+  Future<void> recordPrepared(int versionCode) async => prepared = versionCode;
+
+  @override
+  Future<void> clear() async => prepared = null;
+}
+
+final _signer = 'a' * 64;
+
 class _FakeUpdateBridge implements AppUpdatePlatformBridge {
-  _FakeUpdateBridge({
-    required this.updateDirectoryPath,
-    this.checkResult,
-    this.promptResult,
-    this.installResult = true,
-    this.openReleasePageOnError = false,
-  });
+  _FakeUpdateBridge({required this.updateDirectoryPath});
 
-  final AppRelease? checkResult;
-  final AppUpdatePromptAction? promptResult;
-  final List<String> supportedAbis = const ['arm64-v8a'];
-  final bool installResult;
-  final bool openReleasePageOnError;
   final String updateDirectoryPath;
-
-  int checkCalls = 0;
-  int errorCalls = 0;
-  int installCalls = 0;
-  int prepareCalls = 0;
-  Error? prepareError;
-  int downloadProgressCalls = 0;
+  final journal = _FakeJournal();
+  final List<String> supportedAbis = const ['arm64-v8a'];
   final includePrereleaseArgs = <bool>[];
   final skippedTagNameArgs = <String>[];
-  String? lastInstallPath;
-  AppRelease? promptedRelease;
-  List<String>? promptedSubmits;
-  String? installErrorMessage;
-  String? installErrorReleaseUrl;
   final downloadedAssets = <String>[];
+  final installPaths = <String>[];
   final openedReleaseUrls = <String>[];
   final remoteTexts = <String, String?>{};
   final assetBytesByUrl = <String, List<int>>{};
 
+  AppRelease? checkResult;
+  AppUpdateWindowResult? windowResult;
+  bool installResult = true;
+  int checkCalls = 0;
+  int errorCalls = 0;
+  int installCalls = 0;
+  int prepareCalls = 0;
+  int pruneCalls = 0;
+  AppRelease? promptedRelease;
+  List<String>? promptedSubmits;
+  bool? promptedRequired;
+  AppUpdateSession? promptedSession;
+  Future<void> Function(AppUpdateSession session)? driveSession;
+
   @override
   String get latestReleaseUrl => 'https://example.com/releases/latest';
+
+  @override
+  AppUpdateInstallJournal get installJournal => journal;
 
   @override
   Future<AppRelease?> checkForAppUpdate({
@@ -59,34 +73,36 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
   }
 
   @override
-  Future<AppUpdatePromptAction?> promptForUpdateDownload({
+  Future<AppUpdateWindowResult?> showUpdateWindow({
     required AppRelease release,
     required List<String> submits,
+    required AppUpdateSession session,
   }) async {
     promptedRelease = release;
     promptedSubmits = submits;
-    return promptResult;
+    promptedRequired = session.requiredUpdate;
+    promptedSession = session;
+    await driveSession?.call(session);
+    return windowResult;
   }
 
   @override
-  Future<void> showUpdateCheckError() async {
-    errorCalls++;
+  Future<void> showUpdateCheckError() async => errorCalls++;
+
+  @override
+  Future<bool> openReleasePage(String url) async {
+    openedReleaseUrls.add(url);
+    return true;
   }
 
   @override
-  Future<void> showUpdateInstallError({
-    required String message,
-    required String releaseUrl,
-  }) async {
-    installErrorMessage = message;
-    installErrorReleaseUrl = releaseUrl;
-    if (openReleasePageOnError) {
-      await openReleasePage(releaseUrl);
-    }
-  }
+  Future<void> pruneInstalledUpdates() async => pruneCalls++;
 
   @override
   Future<List<String>> readSupportedAbis() async => supportedAbis;
+
+  @override
+  Future<String> getUpdateDirectoryPath() async => updateDirectoryPath;
 
   @override
   Future<String?> readRemoteText(String url) async => remoteTexts[url];
@@ -102,867 +118,234 @@ class _FakeUpdateBridge implements AppUpdatePlatformBridge {
     downloadedAssets.add(asset.browserDownloadUrl);
     final bytes = assetBytesByUrl[asset.browserDownloadUrl];
     if (bytes == null) {
-      throw StateError(
-          'Missing fake asset payload for ${asset.browserDownloadUrl}');
+      throw StateError('Missing fake asset payload.');
     }
     final file = File(targetPath);
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes, flush: true);
     onReceiveProgress?.call(bytes.length, bytes.length);
-    final actualSha256 = sha256.convert(bytes).toString();
-    if (actualSha256 != expectedSha256) {
-      throw StateError('SHA256 verification failed for fake asset.');
-    }
-    return actualSha256;
+    return expectedSha256;
   }
 
   @override
-  Future<T> showDownloadProgress<T>({
-    required AppRelease release,
-    required ReleaseAsset asset,
-    required Future<T> Function(
-      void Function(int received, int total) onReceiveProgress,
-      AppUpdateDownloadCancellation cancellation,
-    ) downloadTask,
-  }) async {
-    downloadProgressCalls++;
-    return downloadTask((received, total) {}, AppUpdateDownloadCancellation());
-  }
+  Future<AppUpdatePackageIdentity?> inspectInstalledPackage() async =>
+      installedIdentity;
 
   @override
-  Future<String> getUpdateDirectoryPath() async => updateDirectoryPath;
+  Future<AppUpdatePackageIdentity?> inspectPackage(String path) async =>
+      candidateIdentity;
 
   @override
-  Future<void> prepareInstallHandoff() async {
-    prepareCalls++;
-    final error = prepareError;
-    if (error != null) throw error;
-  }
-
-  @override
-  Future<bool> openReleasePage(String url) async {
-    openedReleaseUrls.add(url);
-    return true;
-  }
+  Future<void> prepareInstallHandoff() async => prepareCalls++;
 
   @override
   Future<bool> installPackage(String path) async {
     installCalls++;
-    lastInstallPath = path;
+    installPaths.add(path);
     return installResult;
   }
+
+  AppUpdatePackageIdentity? installedIdentity = AppUpdatePackageIdentity(
+    packageName: 'com.makriq.flclash',
+    versionCode: 2026110101,
+    signers: {_signer},
+  );
+
+  AppUpdatePackageIdentity? candidateIdentity = AppUpdatePackageIdentity(
+    packageName: 'com.makriq.flclash',
+    versionCode: 2026111801,
+    signers: {_signer},
+  );
 }
 
-class _FakeAppUpdateHttpClient implements AppUpdateHttpClient {
-  final downloadCalls = <String>[];
-  final downloadExpectedLengths = <int?>[];
-  final failedDownloadUrls = <String>{};
-  final downloadBytes = <int>[1, 2, 3, 4];
-  final downloadBytesByUrl = <String, List<int>>{};
-  final jsonLists = <String, List<dynamic>>{};
-  final textDocuments = <String, String>{};
+AppRelease _release({
+  String body = '- первое изменение\n- второе изменение',
+  int versionCode = 2026111801,
+  String? minimumVersion,
+  int? minimumVersionCode,
+}) => AppRelease(
+  tagName: 'v1.2.3',
+  body: body,
+  htmlUrl: 'https://example.com/releases/v1.2.3',
+  assets: [
+    ReleaseAsset(
+      name: 'FlClashM-android-arm64-v8a.apk',
+      browserDownloadUrl: 'https://example.com/arm64.apk',
+      size: 4,
+      versionCode: versionCode,
+      digest: 'sha256:${_digestOfFakePayload()}',
+    ),
+  ],
+  prerelease: false,
+  draft: false,
+  versionCode: versionCode,
+  minimumVersion: minimumVersion,
+  minimumVersionCode: minimumVersionCode,
+);
 
-  @override
-  Future<void> download(
-    String url,
-    String targetPath, {
-    void Function(int received, int total)? onReceiveProgress,
-    AppUpdateDownloadCancellation? cancellation,
-    int? expectedLength,
-  }) async {
-    downloadCalls.add(url);
-    downloadExpectedLengths.add(expectedLength);
-    if (failedDownloadUrls.contains(url)) {
-      throw StateError('unavailable mirror');
-    }
-    final bytes = downloadBytesByUrl[url] ?? downloadBytes;
-    File(targetPath).writeAsBytesSync(bytes);
-    onReceiveProgress?.call(bytes.length, expectedLength ?? bytes.length);
-  }
-
-  @override
-  Future<List<int>> readBytes(String url) =>
-      throw StateError('unavailable document');
-
-  @override
-  Future<List<dynamic>> readJsonList(String url) async =>
-      jsonLists[url] ?? (throw StateError('unavailable JSON'));
-
-  @override
-  Future<String?> readText(String url) async => textDocuments[url];
-}
+/// SHA-256 of the `test` payload the fake downloader writes.
+String _digestOfFakePayload() =>
+    '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
 
 void main() {
-  group('AndroidUpdateBridge', () {
-    test('tries signed manifest mirrors in order', () async {
-      final tempDir = Directory.systemTemp.createTempSync('update-mirrors-');
-      addTearDown(() => tempDir.deleteSync(recursive: true));
-      final client = _FakeAppUpdateHttpClient()
-        ..failedDownloadUrls.add('https://sourceforge.example/app.apk');
-      final bridge = AndroidUpdateBridge(httpClient: client);
-      final targetPath = '${tempDir.path}/app.apk.part';
-      final asset = ReleaseAsset(
-        name: 'FlClashM-android-arm64-v8a.apk',
-        browserDownloadUrl: 'https://sourceforge.example/app.apk',
-        downloadUrls: const [
-          'https://sourceforge.example/app.apk',
-          'https://github.example/app.apk',
-        ],
-        size: 4,
-      );
+  late Directory tempDir;
+  late _FakeUpdateBridge bridge;
 
-      await bridge.downloadReleaseAsset(
-        asset,
-        targetPath,
-        expectedSha256: sha256.convert(client.downloadBytes).toString(),
-      );
-
-      expect(client.downloadCalls, [
-        'https://sourceforge.example/app.apk',
-        'https://github.example/app.apk',
-      ]);
-      expect(client.downloadExpectedLengths, [asset.size, asset.size]);
-      expect(File(targetPath).readAsBytesSync(), client.downloadBytes);
-    });
-
-    test('tries the next mirror when SHA256 verification fails', () async {
-      final tempDir = Directory.systemTemp.createTempSync('update-mirrors-');
-      addTearDown(() => tempDir.deleteSync(recursive: true));
-      final validBytes = utf8.encode('valid APK');
-      final client = _FakeAppUpdateHttpClient()
-        ..downloadBytesByUrl['https://sourceforge.example/app.apk'] =
-            utf8.encode('invalid APK')
-        ..downloadBytesByUrl['https://github.example/app.apk'] = validBytes;
-      final bridge = AndroidUpdateBridge(httpClient: client);
-      final targetPath = '${tempDir.path}/app.apk.part';
-      final asset = ReleaseAsset(
-        name: 'FlClashM-android-arm64-v8a.apk',
-        browserDownloadUrl: 'https://sourceforge.example/app.apk',
-        downloadUrls: const [
-          'https://sourceforge.example/app.apk',
-          'https://github.example/app.apk',
-        ],
-        size: validBytes.length,
-      );
-
-      await bridge.downloadReleaseAsset(
-        asset,
-        targetPath,
-        expectedSha256: sha256.convert(validBytes).toString(),
-      );
-
-      expect(client.downloadCalls, [
-        'https://sourceforge.example/app.apk',
-        'https://github.example/app.apk',
-      ]);
-      expect(File(targetPath).readAsBytesSync(), validBytes);
-    });
-
-    test('falls back to GitHub when signed manifests are unavailable',
-        () async {
-      globalState.packageInfo = PackageInfo(
-        appName: 'FlClashM',
-        packageName: 'com.makriq.flclash',
-        version: '1.0.0',
-        buildNumber: '1',
-      );
-      final client = _FakeAppUpdateHttpClient();
-      client.jsonLists[
-          'https://api.github.com/repos/makriq-org/FlClashM/releases?per_page=20'] = [
-        {
-          'tag_name': 'v1.2.3',
-          'body': '- update',
-          'html_url': 'https://github.com/makriq-org/FlClashM/releases/v1.2.3',
-          'assets': <dynamic>[],
-          'prerelease': false,
-          'draft': false,
-        },
-      ];
-      final bridge = AndroidUpdateBridge(httpClient: client);
-
-      final release = await bridge.checkForAppUpdate(
-        includePrerelease: false,
-        skippedTagName: '',
-      );
-
-      expect(release?.tagName, 'v1.2.3');
-    });
-
-    test('uses release metadata after a visible version restart', () async {
-      globalState.packageInfo = PackageInfo(
-        appName: 'FlClashM',
-        packageName: 'com.makriq.flclash',
-        version: '0.10.8',
-        buildNumber: '2026083801',
-      );
-      const metadataUrl = 'https://github.example/v0.1.0/metadata.json';
-      final client = _FakeAppUpdateHttpClient();
-      client.jsonLists[
-          'https://api.github.com/repos/makriq-org/FlClashM/releases?per_page=20'] = [
-        {
-          'tag_name': 'v0.1.0',
-          'assets': [
-            {
-              'name': 'FlClashM-android-release-metadata.json',
-              'browser_download_url': metadataUrl,
-              'size': 1,
-            },
-            {
-              'name': 'FlClashM-android-arm64-v8a.apk',
-              'browser_download_url': 'https://github.example/v0.1.0/app.apk',
-              'size': 1,
-            },
-          ],
-          'prerelease': false,
-          'draft': false,
-        },
-        {
-          'tag_name': 'v0.10.8',
-          'assets': <dynamic>[],
-          'prerelease': false,
-          'draft': false,
-        },
-      ];
-      client.textDocuments[metadataUrl] = jsonEncode({
-        'schemaVersion': 1,
-        'applicationId': 'com.makriq.flclash',
-        'tagName': 'v0.1.0',
-        'versionCode': 2026085802,
-        'apkVersionCodes': {
-          'FlClashM-android-arm64-v8a.apk': 2026083802,
-          'FlClashM-android-x86_64.apk': 2026085802,
-        },
-      });
-      final bridge = AndroidUpdateBridge(httpClient: client);
-
-      final release = await bridge.checkForAppUpdate(
-        includePrerelease: false,
-        skippedTagName: '',
-      );
-
-      expect(release?.tagName, 'v0.1.0');
-      expect(release?.versionCode, 2026085802);
-      expect(
-        release?.assets.firstWhere((asset) => asset.isAndroidApk).versionCode,
-        2026083802,
-      );
-    });
+  setUp(() {
+    tempDir = Directory.systemTemp.createTempSync('app-update-service-');
+    bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
+    globalState.appEnv = 'stable';
+    globalState.packageInfo = PackageInfo(
+      appName: 'FlClashM',
+      packageName: 'com.makriq.flclash',
+      version: '1.0.0',
+      buildNumber: '2026110101',
+    );
   });
 
-  group('selectAndroidReleaseAsset', () {
-    AppRelease createRelease(List<ReleaseAsset> assets) => AppRelease(
-          tagName: 'v1.2.3',
-          body: '',
-          htmlUrl: 'https://example.com/releases/v1.2.3',
-          assets: assets,
-          prerelease: false,
-          draft: false,
-        );
-
-    test('prefers exact ABI APK over universal fallback', () {
-      final release = createRelease([
-        ReleaseAsset(
-          name: 'FlClashM-android-arm64-v8a.apk',
-          browserDownloadUrl: 'https://example.com/arm64.apk',
-          size: 1,
-        ),
-        ReleaseAsset(
-          name: 'FlClashM-android-arm64-v8a.apk.sha256',
-          browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
-          size: 1,
-        ),
-        ReleaseAsset(
-          name: 'FlClashM-android-universal.apk',
-          browserDownloadUrl: 'https://example.com/universal.apk',
-          size: 1,
-        ),
-        ReleaseAsset(
-          name: 'FlClashM-android-universal.apk.sha256',
-          browserDownloadUrl: 'https://example.com/universal.apk.sha256',
-          size: 1,
-        ),
-      ]);
-
-      final asset = selectAndroidReleaseAsset(
-        release,
-        supportedAbis: const ['arm64-v8a', 'armeabi-v7a'],
-      );
-
-      expect(asset, isNotNull);
-      expect(asset?.apkAsset.name, 'FlClashM-android-arm64-v8a.apk');
-      expect(asset?.abi, 'arm64-v8a');
-      expect(
-          asset?.checksumAsset?.name, 'FlClashM-android-arm64-v8a.apk.sha256');
-    });
-
-    test('uses universal APK and its sha256 when no ABI-specific APK exists',
-        () {
-      final release = createRelease([
-        ReleaseAsset(
-          name: 'FlClashM-android-armeabi-v7a.apk',
-          browserDownloadUrl: 'https://example.com/armeabi-v7a.apk',
-          size: 1,
-        ),
-        ReleaseAsset(
-          name: 'FlClashM-android-universal.apk',
-          browserDownloadUrl: 'https://example.com/universal.apk',
-          size: 1,
-        ),
-        ReleaseAsset(
-          name: 'FlClashM-android-universal.apk.sha256',
-          browserDownloadUrl: 'https://example.com/universal.apk.sha256',
-          size: 1,
-        ),
-      ]);
-
-      final asset = selectAndroidReleaseAsset(
-        release,
-        supportedAbis: const ['x86_64'],
-      );
-
-      expect(asset, isNotNull);
-      expect(asset?.apkAsset.name, 'FlClashM-android-universal.apk');
-      expect(asset?.abi, 'universal');
-      expect(
-          asset?.checksumAsset?.name, 'FlClashM-android-universal.apk.sha256');
-    });
-
-    test('returns null when release has neither matching ABI APK nor universal',
-        () {
-      final release = createRelease([
-        ReleaseAsset(
-          name: 'FlClashM-android-armeabi-v7a.apk',
-          browserDownloadUrl: 'https://example.com/armeabi-v7a.apk',
-          size: 1,
-        ),
-      ]);
-
-      final asset = selectAndroidReleaseAsset(
-        release,
-        supportedAbis: const ['x86_64'],
-      );
-
-      expect(asset, isNull);
-    });
-
-    test('never selects Android AAB as installable asset', () {
-      final release = createRelease([
-        ReleaseAsset(
-          name: 'FlClashM-android-release.aab',
-          browserDownloadUrl: 'https://example.com/release.aab',
-          size: 1,
-        ),
-      ]);
-
-      final asset = selectAndroidReleaseAsset(
-        release,
-        supportedAbis: const ['arm64-v8a'],
-      );
-
-      expect(asset, isNull);
-    });
+  tearDown(() {
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
   });
 
-  test('checks the package code of the selected ABI APK', () {
-    final release = AppRelease(
-      tagName: 'v0.1.0',
-      body: '',
-      htmlUrl: '',
-      assets: [
-        ReleaseAsset(
-          name: 'FlClashM-android-arm64-v8a.apk',
-          browserDownloadUrl: 'https://example.com/app.apk',
-          size: 1,
-          versionCode: 2026083802,
-        ),
-      ],
-      prerelease: false,
-      draft: false,
-      versionCode: 2026085802,
+  test('cleans stale downloads before an automatic check', () async {
+    final service = AppUpdateService(platform: bridge);
+
+    await service.autoCheck(
+      enabled: false,
+      includePrerelease: false,
+      skippedTagName: '',
     );
 
+    expect(bridge.pruneCalls, 1);
+    expect(bridge.checkCalls, 0);
+    expect(bridge.errorCalls, 0);
+  });
+
+  test('passes update channel and skipped tag to automatic checks', () async {
+    final service = AppUpdateService(platform: bridge);
+
+    await service.autoCheck(
+      enabled: true,
+      includePrerelease: true,
+      skippedTagName: 'v1.2.3',
+    );
+
+    expect(bridge.checkCalls, 1);
+    expect(bridge.includePrereleaseArgs, [true]);
+    expect(bridge.skippedTagNameArgs, ['v1.2.3']);
+    expect(bridge.pruneCalls, 1);
+  });
+
+  test('opens one window with the notes and a manual trigger', () async {
+    bridge.checkResult = _release();
+    final service = AppUpdateService(platform: bridge);
+    String? loadingTitle;
+
+    Future<T?> runTask<T>(Future<T> Function() task, {String? title}) async {
+      loadingTitle = title;
+      return task();
+    }
+
+    await service.manualCheck(
+      runTask: runTask,
+      includePrerelease: false,
+      skippedTagName: '',
+      loadingTitle: 'Check update',
+    );
+
+    expect(loadingTitle, 'Check update');
+    expect(bridge.promptedRelease?.tagName, 'v1.2.3');
+    expect(bridge.promptedSubmits, ['первое изменение', 'второе изменение']);
+    expect(bridge.promptedRequired, isFalse);
+    // Ручная проверка не убирает файлы: она не подтверждает обновление.
+    expect(bridge.pruneCalls, 0);
+  });
+
+  test('a required update from the signed catalog cannot be skipped',
+      () async {
+    bridge.checkResult = _release(minimumVersionCode: 2026111801);
+    final service = AppUpdateService(platform: bridge);
+
+    await service.handleCheckResult(
+      release: bridge.checkResult,
+      trigger: AppUpdateCheckTrigger.manual,
+    );
+
+    expect(bridge.promptedRequired, isTrue);
+  });
+
+  test('skipping remembers the tag, closing does not', () async {
+    bridge.checkResult = _release();
+    final skipped = <String>[];
+    final service = AppUpdateService(platform: bridge);
+
+    bridge.windowResult = AppUpdateWindowResult.later;
+    await service.handleCheckResult(
+      release: bridge.checkResult,
+      trigger: AppUpdateCheckTrigger.manual,
+      onSkipRelease: (tagName) async => skipped.add(tagName),
+    );
+    expect(skipped, isEmpty);
+
+    bridge.windowResult = AppUpdateWindowResult.skip;
+    await service.handleCheckResult(
+      release: bridge.checkResult,
+      trigger: AppUpdateCheckTrigger.manual,
+      onSkipRelease: (tagName) async => skipped.add(tagName),
+    );
+    expect(skipped, ['v1.2.3']);
+  });
+
+  test('download and install run only when the user asks for them', () async {
+    final release = _release();
+    bridge.checkResult = release;
+    bridge.assetBytesByUrl['https://example.com/arm64.apk'] = utf8.encode(
+      'test',
+    );
+    final service = AppUpdateService(platform: bridge);
+    bridge.driveSession = (session) async {
+      await session.download();
+      expect(session.phase, AppUpdatePhase.ready);
+      expect(bridge.installCalls, 0);
+      await session.install();
+    };
+
+    await service.handleCheckResult(
+      release: release,
+      trigger: AppUpdateCheckTrigger.manual,
+    );
+
+    expect(bridge.installCalls, 1);
+    expect(bridge.prepareCalls, 1);
+    expect(bridge.journal.prepared, 2026111801);
     expect(
-      isAppReleaseUpdateAvailable(
-        release,
-        installedVersionCode: 2026083801,
-        installedVersionName: '0.10.8',
-        supportedAbis: const ['arm64-v8a'],
-      ),
+      File('${tempDir.path}/FlClashM-android-arm64-v8a.apk').existsSync(),
       isTrue,
     );
-    expect(
-      isAppReleaseUpdateAvailable(
-        release,
-        installedVersionCode: 2026083802,
-        installedVersionName: '0.10.8',
-        supportedAbis: const ['arm64-v8a'],
-      ),
-      isFalse,
+  });
+
+  test('a manual check without a release reports it', () async {
+    final service = AppUpdateService(platform: bridge);
+
+    await service.handleCheckResult(
+      release: null,
+      trigger: AppUpdateCheckTrigger.manual,
     );
+
+    expect(bridge.errorCalls, 1);
+    expect(bridge.promptedRelease, isNull);
   });
 
-  group('selectLatestAppRelease', () {
-    test('uses Android version code when visible versions restart', () {
-      final previous = AppRelease(
-        tagName: 'v0.10.8-pre4',
-        body: '',
-        htmlUrl: '',
-        assets: const [],
-        prerelease: true,
-        draft: false,
-        versionCode: 2026081601,
-      );
-      final restarted = AppRelease(
-        tagName: 'v0.1.0',
-        body: '',
-        htmlUrl: '',
-        assets: const [],
-        prerelease: false,
-        draft: false,
-        versionCode: 2026081801,
-      );
+  test('an automatic check without a release stays quiet', () async {
+    final service = AppUpdateService(platform: bridge);
 
-      expect(
-        selectLatestAppRelease(
-          [previous, restarted],
-          includePrerelease: true,
-        )?.tagName,
-        'v0.1.0',
-      );
-    });
-  });
+    await service.handleCheckResult(
+      release: null,
+      trigger: AppUpdateCheckTrigger.automatic,
+    );
 
-  group('AppUpdateService', () {
-    late Directory tempDir;
-
-    setUp(() {
-      tempDir = Directory.systemTemp.createTempSync('app-update-service-');
-      globalState.appEnv = 'stable';
-    });
-
-    tearDown(() {
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
-    });
-
-    test('skips automatic checks when disabled', () async {
-      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
-      final service = AppUpdateService(platform: bridge);
-
-      await service.autoCheck(
-        enabled: false,
-        includePrerelease: false,
-        skippedTagName: '',
-      );
-
-      expect(bridge.checkCalls, 0);
-      expect(bridge.errorCalls, 0);
-    });
-
-    test('passes update channel and skipped tag to automatic checks', () async {
-      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
-      final service = AppUpdateService(platform: bridge);
-
-      await service.autoCheck(
-        enabled: true,
-        includePrerelease: true,
-        skippedTagName: 'v1.2.3',
-      );
-
-      expect(bridge.checkCalls, 1);
-      expect(bridge.includePrereleaseArgs, [true]);
-      expect(bridge.skippedTagNameArgs, ['v1.2.3']);
-    });
-
-    test('downloads verifies and installs a compatible Android APK', () async {
-      final bytes = utf8.encode('arm64-release');
-      final digest = sha256.convert(bytes).toString();
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '- first change\n- second change',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: bytes.length,
-            digest: 'sha256:$digest',
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-      )..assetBytesByUrl['https://example.com/arm64.apk'] = bytes;
-      final service = AppUpdateService(platform: bridge);
-      final runnerTitles = <String?>[];
-
-      Future<T?> runTask<T>(Future<T> Function() task, {String? title}) async {
-        runnerTitles.add(title);
-        return task();
-      }
-
-      await service.manualCheck(
-        runTask: runTask,
-        includePrerelease: false,
-        skippedTagName: '',
-        loadingTitle: 'Check update',
-      );
-
-      final installedFile = File(
-        '${tempDir.path}/FlClashM-1.2.3-android-arm64-v8a.apk',
-      );
-      expect(bridge.checkCalls, 1);
-      expect(bridge.promptedRelease?.tagName, 'v1.2.3');
-      expect(bridge.promptedSubmits, ['first change', 'second change']);
-      expect(bridge.downloadedAssets, ['https://example.com/arm64.apk']);
-      expect(bridge.downloadProgressCalls, 1);
-      expect(bridge.prepareCalls, 1);
-      expect(bridge.installCalls, 1);
-      expect(bridge.lastInstallPath, installedFile.path);
-      expect(installedFile.existsSync(), isTrue);
-      expect(runnerTitles, ['Check update']);
-      expect(bridge.installErrorMessage, isNull);
-    });
-
-    test('reuses a verified cached APK and resolves checksum from sidecar file',
-        () async {
-      final bytes = utf8.encode('cached-release');
-      final digest = sha256.convert(bytes).toString();
-      final cachedFile =
-          File('${tempDir.path}/FlClashM-1.2.3-android-arm64-v8a.apk')
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(bytes, flush: true);
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: bytes.length,
-          ),
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk.sha256',
-            browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
-            size: 80,
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-      )..remoteTexts['https://example.com/arm64.apk.sha256'] =
-          '$digest  FlClashM-1.2.3-android-arm64-v8a.apk\n';
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-      );
-
-      expect(cachedFile.existsSync(), isTrue);
-      expect(bridge.downloadedAssets, isEmpty);
-      expect(bridge.prepareCalls, 1);
-      expect(bridge.installCalls, 1);
-      expect(bridge.lastInstallPath, cachedFile.path);
-    });
-
-    test('opens the installer even when stopping the runtime fails',
-        () async {
-      final bytes = utf8.encode('cached-release');
-      final digest = sha256.convert(bytes).toString();
-      final cachedFile =
-          File('${tempDir.path}/FlClashM-1.2.3-android-arm64-v8a.apk')
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(bytes, flush: true);
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: bytes.length,
-          ),
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk.sha256',
-            browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
-            size: 80,
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-      )
-        ..remoteTexts['https://example.com/arm64.apk.sha256'] =
-            '$digest  FlClashM-1.2.3-android-arm64-v8a.apk\n'
-        ..prepareError = StateError('backend unavailable');
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-      );
-
-      expect(bridge.prepareCalls, 1);
-      expect(bridge.installCalls, 1);
-      expect(bridge.lastInstallPath, cachedFile.path);
-      expect(bridge.installErrorMessage, isNull);
-    });
-
-    test('matches checksum sidecar entries to the selected APK asset',
-        () async {
-      final bytes = utf8.encode('arm64-release');
-      final digest = sha256.convert(bytes).toString();
-      final wrongDigest =
-          sha256.convert(utf8.encode('wrong-release')).toString();
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: bytes.length,
-          ),
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk.sha256',
-            browserDownloadUrl: 'https://example.com/arm64.apk.sha256',
-            size: 160,
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-      )
-        ..assetBytesByUrl['https://example.com/arm64.apk'] = bytes
-        ..remoteTexts['https://example.com/arm64.apk.sha256'] = '''
-$wrongDigest  FlClashM-1.2.3-android-universal.apk
-$digest  FlClashM-1.2.3-android-arm64-v8a.apk
-''';
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-      );
-
-      expect(bridge.installErrorMessage, isNull);
-      expect(bridge.installCalls, 1);
-      expect(
-        bridge.lastInstallPath,
-        '${tempDir.path}/FlClashM-1.2.3-android-arm64-v8a.apk',
-      );
-    });
-
-    test('shows explicit error on manual check when no update is returned',
-        () async {
-      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
-      final service = AppUpdateService(platform: bridge);
-      String? loadingTitle;
-
-      Future<T?> runTask<T>(Future<T> Function() task, {String? title}) async {
-        loadingTitle = title;
-        return task();
-      }
-
-      await service.manualCheck(
-        runTask: runTask,
-        includePrerelease: false,
-        skippedTagName: '',
-        loadingTitle: 'Check update',
-      );
-
-      expect(bridge.checkCalls, 1);
-      expect(loadingTitle, 'Check update');
-      expect(bridge.errorCalls, 1);
-      expect(bridge.installCalls, 0);
-    });
-
-    test('reports install errors when SHA256 verification fails', () async {
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-1.2.3-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: 4,
-            digest:
-                'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-        openReleasePageOnError: true,
-      )..assetBytesByUrl['https://example.com/arm64.apk'] = [1, 2, 3, 4];
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-      );
-
-      expect(bridge.installCalls, 0);
-      expect(
-          bridge.installErrorMessage, contains('SHA256 verification failed'));
-      expect(
-        bridge.installErrorReleaseUrl,
-        'https://example.com/releases/v1.2.3',
-      );
-      expect(
-        bridge.openedReleaseUrls,
-        ['https://example.com/releases/v1.2.3'],
-      );
-    });
-
-    test('delegates package install through the platform bridge', () async {
-      final bridge = _FakeUpdateBridge(updateDirectoryPath: tempDir.path);
-      final service = AppUpdateService(platform: bridge);
-
-      final installed = await service.installPackage('/tmp/app.apk');
-
-      expect(installed, isTrue);
-      expect(bridge.installCalls, 1);
-      expect(bridge.lastInstallPath, '/tmp/app.apk');
-    });
-
-    test('reports installer handoff failures to the user', () async {
-      final bytes = utf8.encode('arm64-release');
-      final digest = sha256.convert(bytes).toString();
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: [
-          ReleaseAsset(
-            name: 'FlClashM-android-arm64-v8a.apk',
-            browserDownloadUrl: 'https://example.com/arm64.apk',
-            size: bytes.length,
-            digest: 'sha256:$digest',
-          ),
-        ],
-        prerelease: false,
-        draft: false,
-      );
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.download,
-        installResult: false,
-        openReleasePageOnError: true,
-      )..assetBytesByUrl['https://example.com/arm64.apk'] = bytes;
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-      );
-
-      expect(bridge.prepareCalls, 1);
-      expect(bridge.installCalls, 1);
-      expect(
-        bridge.installErrorMessage,
-        contains('Unable to open the Android installer'),
-      );
-      expect(
-        bridge.installErrorReleaseUrl,
-        'https://example.com/releases/v1.2.3',
-      );
-      expect(
-        bridge.openedReleaseUrls,
-        ['https://example.com/releases/v1.2.3'],
-      );
-    });
-
-    test('skips selected release without downloading', () async {
-      final release = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: 'https://example.com/releases/v1.2.3',
-        assets: const [],
-        prerelease: false,
-        draft: false,
-      );
-      final skippedTags = <String>[];
-      final bridge = _FakeUpdateBridge(
-        updateDirectoryPath: tempDir.path,
-        checkResult: release,
-        promptResult: AppUpdatePromptAction.skip,
-      );
-      final service = AppUpdateService(platform: bridge);
-
-      await service.handleCheckResult(
-        release: release,
-        trigger: AppUpdateCheckTrigger.manual,
-        onSkipRelease: (tagName) async => skippedTags.add(tagName),
-      );
-
-      expect(skippedTags, ['v1.2.3']);
-      expect(bridge.downloadedAssets, isEmpty);
-      expect(bridge.installCalls, 0);
-    });
-
-    test('selects latest pre-release only when requested', () {
-      final stable = AppRelease(
-        tagName: 'v1.2.3',
-        body: '',
-        htmlUrl: '',
-        assets: const [],
-        prerelease: false,
-        draft: false,
-      );
-      final preRelease = AppRelease(
-        tagName: 'v1.2.4-pre10',
-        body: '',
-        htmlUrl: '',
-        assets: const [],
-        prerelease: true,
-        draft: false,
-      );
-
-      expect(
-        selectLatestAppRelease(
-          [stable, preRelease],
-          includePrerelease: false,
-        )?.tagName,
-        'v1.2.3',
-      );
-      expect(
-        selectLatestAppRelease(
-          [stable, preRelease],
-          includePrerelease: true,
-        )?.tagName,
-        'v1.2.4-pre10',
-      );
-      expect(
-          utils.compareVersions('1.2.4-pre10', '1.2.4-pre4'), greaterThan(0));
-      expect(utils.compareVersions('1.2.4', '1.2.4-pre10'), greaterThan(0));
-    });
+    expect(bridge.errorCalls, 0);
   });
 }

@@ -352,6 +352,20 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
             }
 
+            "installedPackageIdentity" -> reply(result) {
+                PackageIdentity.installed(FlClashApplication.getAppContext())
+            }
+
+            "inspectPackageIdentity" -> {
+                val path = call.argument<String>("path") ?: run {
+                    result.success(null)
+                    return
+                }
+                reply(result) {
+                    PackageIdentity.archive(FlClashApplication.getAppContext(), path)
+                }
+            }
+
             "isIgnoringBatteryOptimizations" -> {
                 result.success(isIgnoringBatteryOptimizations())
             }

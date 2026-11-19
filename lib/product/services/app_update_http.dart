@@ -16,7 +16,7 @@ const appUpdateSignatureMaxBytes = 4 * 1024;
 const appUpdateFetchDeadline = Duration(seconds: 20);
 
 /// Наибольший APK, который апдейтер вообще готов скачать.
-const appUpdateMaxApkBytes = 512 * 1024 * 1024;
+const appUpdateMaxApkBytes = 256 * 1024 * 1024;
 
 /// Один ответ зеркала без следования редиректам: решение о следующем адресе
 /// принимает [fetchAppUpdateDocument], проверив его отдельно.
@@ -123,15 +123,18 @@ Future<Uint8List> fetchAppUpdateDocument(
   Duration deadline = appUpdateFetchDeadline,
 }) async {
   var current = url;
+  final elapsed = Stopwatch()..start();
   for (var hop = 0; hop <= appUpdateMaxRedirects; hop++) {
     if (!isAllowed(current)) {
       throw AppUpdateFetchException('untrusted address $current');
     }
-    final response = await client.open(
-      current,
-      maxBytes: maxBytes,
-      deadline: deadline,
-    );
+    final remaining = deadline - elapsed.elapsed;
+    if (remaining <= Duration.zero) {
+      throw TimeoutException('Update document deadline exceeded', deadline);
+    }
+    final response = await client
+        .open(current, maxBytes: maxBytes, deadline: remaining)
+        .timeout(remaining);
     if (response.isSuccess) {
       if (response.body.length > maxBytes) {
         throw const AppUpdateFetchException('document too large');

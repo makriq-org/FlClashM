@@ -63,4 +63,16 @@ class SelfUpdateInstallerTest {
             committedSelfUpdateSessionId(sessions, "missing.package"),
         )
     }
+
+    @Test
+    fun `self update needs the installed certificate`() {
+        val installed = setOf("a".repeat(64))
+        val resigned = setOf("b".repeat(64))
+
+        assertTrue(selfUpdateSignersMatch(installed, installed))
+        assertFalse(selfUpdateSignersMatch(installed, resigned))
+        assertFalse(selfUpdateSignersMatch(installed, emptySet()))
+        // An unsigned running build has nothing to compare against.
+        assertFalse(selfUpdateSignersMatch(emptySet(), installed))
+    }
 }
