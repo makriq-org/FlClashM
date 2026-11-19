@@ -3026,14 +3026,64 @@
       "reason": "Экспорт свайпа и удержания для главной и прокси."
     },
     {
-      "path": "lib/common/device_identity.dart",
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PackageIdentity.kt",
       "bucket": "budget",
-      "reason": "Android TV представляется панели как AndroidTV, чтобы правила подписки видели тип устройства."
+      "reason": "Чтение подписи и версии установленного APK и кандидата для безопасного обновления."
     },
     {
-      "path": "lib/common/package.dart",
+      "path": "core/backend/authoring/collections_test.go",
       "bucket": "budget",
-      "reason": "User-Agent Android TV получает платформу androidtv с сохранением подстроки android."
+      "reason": "Тесты коллекций проверяют область профиля и порядок авторских элементов."
+    },
+    {
+      "path": "core/backend/compile/chains.go",
+      "bucket": "budget",
+      "reason": "Цепочки прокси собираются в исходящие из авторских данных профиля."
+    },
+    {
+      "path": "core/backend/compile/chains_test.go",
+      "bucket": "budget",
+      "reason": "Тесты цепочек проверяют порядок прыжков, цели правил и отключённые цепочки."
+    },
+    {
+      "path": "lib/database/chains.dart",
+      "bucket": "budget",
+      "reason": "Хранение цепочек привязано к профилю и участвует в резервных копиях."
+    },
+    {
+      "path": "lib/features/proxy_chains/editor.dart",
+      "bucket": "budget",
+      "reason": "Редактор цепочек собирает прыжки и проверяет ввод до сохранения."
+    },
+    {
+      "path": "lib/features/proxy_chains/graph.dart",
+      "bucket": "budget",
+      "reason": "Схема цепочки показывает устройство, прыжки и выход и отмечает ошибки."
+    },
+    {
+      "path": "lib/features/proxy_chains/outbounds.dart",
+      "bucket": "budget",
+      "reason": "Список исходящих знает имена узлов и цепочек профиля."
+    },
+    {
+      "path": "lib/features/proxy_chains/proxy_chains.dart",
+      "bucket": "budget",
+      "reason": "Страница цепочек собирает секцию профиля."
+    },
+    {
+      "path": "lib/features/proxy_chains/section.dart",
+      "bucket": "budget",
+      "reason": "Секция цепочек встраивается в экран профиля и управляет их списком."
+    },
+    {
+      "path": "lib/models/models.dart",
+      "bucket": "budget",
+      "reason": "Модели экспортируют тип цепочки."
+    },
+    {
+      "path": "lib/models/proxy_chain.dart",
+      "bucket": "budget",
+      "reason": "Модель цепочки описывает прыжки, включённость и ограничения имени."
     }
   ]
 }

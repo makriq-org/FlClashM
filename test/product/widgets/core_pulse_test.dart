@@ -1,6 +1,5 @@
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/views/dashboard/widgets/core_status_button.dart';
-import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -35,12 +34,12 @@ void main() {
     await pump(tester, CoreStatus.disconnected);
     final state = tester.state(find.byType(CorePulse));
     await tester.pumpWidget(
-      TestApp(
+      const TestApp(
         child: Center(
           child: SizedBox.square(
             dimension: 24,
             child: CorePulse(
-              key: const ValueKey('connected'),
+              key: ValueKey('connected'),
               status: CoreStatus.connected,
             ),
           ),
