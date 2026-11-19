@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,21 @@ func (a *App) customizeForSelection(ctx context.Context) error {
 }
 
 func (a *App) customizeSettings(ctx context.Context, metadata profiles.Object, isNew, selecting bool) error {
+	// The writer replaces the header-owned objects as a whole, so a concurrent
+	// settings write must be re-read rather than merged into stale values.
+	for range 8 {
+		err := a.customizeSettingsOnce(ctx, metadata, isNew, selecting)
+		if !errors.Is(err, profiles.ErrConflict) {
+			return err
+		}
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return profiles.ErrConflict
+}
+
+func (a *App) customizeSettingsOnce(ctx context.Context, metadata profiles.Object, isNew, selecting bool) error {
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
 	catalog := a.profiles.Snapshot()

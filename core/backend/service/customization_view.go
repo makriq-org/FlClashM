@@ -84,6 +84,7 @@ type headerBackup struct {
 // settingsWriter collects a customization before it is persisted, remembering
 // the user's own value of every setting a header holds.
 type settingsWriter struct {
+	revision    uint64
 	settings    map[string]profiles.Object
 	owned       map[string]bool
 	panelSet    []string
@@ -98,6 +99,7 @@ type settingsWriter struct {
 
 func newSettingsWriter(catalog profiles.Document, app profiles.Object) *settingsWriter {
 	w := &settingsWriter{
+		revision: catalog.Revision,
 		settings: map[string]profiles.Object{
 			"appSetting": app,
 		},
@@ -384,7 +386,7 @@ func (w *settingsWriter) commit(ctx context.Context, app *App) error {
 	}
 	// A key the current profile no longer sends goes back to the user's own
 	// value, or to its default when no backup was kept.
-	kept := w.panelSet[:0]
+	kept := make([]string, 0, len(w.panelSet))
 	for _, key := range w.panelSet {
 		if _, written := w.writes[key]; written || w.owned[key] {
 			kept = append(kept, key)
@@ -434,7 +436,10 @@ func (w *settingsWriter) persist(ctx context.Context, app *App) error {
 	if len(patch) == 0 {
 		return nil
 	}
-	return app.patchSettings(ctx, patch, 0)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return app.profiles.ReplaceHeaderSettings(patch, w.revision)
 }
 
 func canonicalViewKey(key string) string {

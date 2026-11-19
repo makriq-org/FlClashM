@@ -57,8 +57,8 @@ func TestModernAppearancePersistsWithEitherPrefix(t *testing.T) {
 				t.Fatal(err)
 			}
 			theme = read("themeProps")
-			if theme["liquidGlass"] != "ultra" || theme["pureBlack"] != true || theme["primaryColor"] != float64(0xff123456) {
-				t.Fatal("priority, ownership or invalid value", theme)
+			if theme["liquidGlass"] != "ultra" || theme["pureBlack"] != true || theme["primaryColor"] != nil {
+				t.Fatal("invalid header must release the previous color without overriding owned settings", theme)
 			}
 		})
 	}
@@ -373,7 +373,7 @@ func TestHeaderSettingsLastWhileTheirProfileIsSelected(t *testing.T) {
 	}, 0); err != nil {
 		t.Fatal(err)
 	}
-	read := func() (string, string, bool, string, bool, bool, []string) {
+	read := func() (string, string, bool, string, bool, bool, bool, bool, []string) {
 		t.Helper()
 		var theme struct {
 			Mode  string `json:"themeMode"`
@@ -385,10 +385,11 @@ func TestHeaderSettingsLastWhileTheirProfileIsSelected(t *testing.T) {
 			Floating bool   `json:"-"`
 		}
 		var settings struct {
-			OpenLogs  bool     `json:"openLogs"`
-			HideIp    bool     `json:"hideIp"`
-			Vibration bool     `json:"vibration"`
-			Widgets   []string `json:"dashboardWidgets"`
+			OpenLogs        bool     `json:"openLogs"`
+			AutoCheckUpdate bool     `json:"autoCheckUpdate"`
+			HideIp          bool     `json:"hideIp"`
+			Vibration       bool     `json:"vibration"`
+			Widgets         []string `json:"dashboardWidgets"`
 		}
 		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["themeProps"], &theme); err != nil {
 			t.Fatal(err)
@@ -399,7 +400,7 @@ func TestHeaderSettingsLastWhileTheirProfileIsSelected(t *testing.T) {
 		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
 			t.Fatal(err)
 		}
-		return theme.Mode, theme.Glass, style.Hide, style.Card, settings.OpenLogs, settings.HideIp, settings.Widgets
+		return theme.Mode, theme.Glass, style.Hide, style.Card, settings.OpenLogs, settings.AutoCheckUpdate, settings.HideIp, settings.Vibration, settings.Widgets
 	}
 	apply := func(id string, headers map[string]string, selecting bool) {
 		t.Helper()
@@ -413,22 +414,22 @@ func TestHeaderSettingsLastWhileTheirProfileIsSelected(t *testing.T) {
 	}
 	apply("a", map[string]string{
 		"flclashx-view":     "app.theme:dark;app.glass:ultra;proxies.hidetimeout:true;proxies.card:oneline",
-		"flclashx-settings": "",
+		"flclashx-settings": "autoupdate",
 		"flclashx-widgets":  "profiles,proxyGroups",
 		"flclashx-special":  "novibrate,hideip",
 	}, true)
-	if mode, glass, hide, card, _, hideIp, widgets := read(); mode != "dark" || glass != "ultra" || !hide || card != "oneline" || !hideIp || !reflect.DeepEqual(widgets, []string{"profiles", "proxyGroups"}) {
-		t.Fatalf("the panel's headers did not apply: %q %q %v %q hideIp=%v %v", mode, glass, hide, card, hideIp, widgets)
+	if mode, glass, hide, card, openLogs, autoUpdate, hideIp, vibration, widgets := read(); mode != "dark" || glass != "ultra" || !hide || card != "oneline" || openLogs || !autoUpdate || !hideIp || vibration || !reflect.DeepEqual(widgets, []string{"profiles", "proxyGroups"}) {
+		t.Fatalf("the panel's headers did not apply: %q %q %v %q openLogs=%v autoUpdate=%v hideIp=%v vibration=%v %v", mode, glass, hide, card, openLogs, autoUpdate, hideIp, vibration, widgets)
 	}
 	// A refresh of a profile that is not selected must not touch them.
 	apply("b", map[string]string{"flclashx-view": "app.theme:light;proxies.card:compact"}, false)
-	if mode, _, _, card, _, _, _ := read(); mode != "dark" || card != "oneline" {
+	if mode, _, _, card, _, _, _, _, _ := read(); mode != "dark" || card != "oneline" {
 		t.Fatalf("a late refresh of another profile overwrote the selected one: %q %q", mode, card)
 	}
 	// Selecting a profile without such headers gives the user's values back.
 	apply("b", nil, true)
-	if mode, glass, hide, card, openLogs, hideIp, widgets := read(); mode != "light" || glass != "none" || hide || card != "standard" || !openLogs || hideIp || !reflect.DeepEqual(widgets, []string{"currentOutbound", "profiles"}) {
-		t.Fatalf("the user's own values did not return: %q %q %v %q openLogs=%v hideIp=%v %v", mode, glass, hide, card, openLogs, hideIp, widgets)
+	if mode, glass, hide, card, openLogs, autoUpdate, hideIp, vibration, widgets := read(); mode != "light" || glass != "none" || hide || card != "standard" || !openLogs || autoUpdate || hideIp || !vibration || !reflect.DeepEqual(widgets, []string{"currentOutbound", "profiles"}) {
+		t.Fatalf("the user's own values did not return: %q %q %v %q openLogs=%v autoUpdate=%v hideIp=%v vibration=%v %v", mode, glass, hide, card, openLogs, autoUpdate, hideIp, vibration, widgets)
 	}
 }
 

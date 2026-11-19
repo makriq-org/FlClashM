@@ -406,12 +406,13 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		apply = apply || uses
 		result.ProfileID = request.ProfileID
-		if result.RuntimeOperationID != "" {
-			return result, nil
-		}
-		// The deleted profile's headers no longer hold any setting.
+		// The deleted profile's headers no longer hold any setting, even when
+		// deleting it also stopped the runtime.
 		if err := a.customizeForSelection(ctx); err != nil {
 			return result, err
+		}
+		if result.RuntimeOperationID != "" {
+			return result, nil
 		}
 	case "profile.select":
 		var request struct {
