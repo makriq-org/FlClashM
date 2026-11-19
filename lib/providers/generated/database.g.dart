@@ -800,3 +800,103 @@ abstract class _$ProfileDisabledRuleIds extends $StreamNotifier<List<int>> {
     return element.handleCreate(ref, () => build(_$args));
   }
 }
+
+/// The chains a normal subscription's build adds as outbounds.
+
+@ProviderFor(ProxyChains)
+final proxyChainsProvider = ProxyChainsFamily._();
+
+/// The chains a normal subscription's build adds as outbounds.
+final class ProxyChainsProvider
+    extends $StreamNotifierProvider<ProxyChains, List<ProxyChain>> {
+  /// The chains a normal subscription's build adds as outbounds.
+  ProxyChainsProvider._({
+    required ProxyChainsFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'proxyChainsProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$proxyChainsHash();
+
+  @override
+  String toString() {
+    return r'proxyChainsProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  ProxyChains create() => ProxyChains();
+
+  @override
+  bool operator ==(Object other) {
+    return other is ProxyChainsProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$proxyChainsHash() => r'1a6768f5a045aaf308ed15cef6e39e5d6dfdb386';
+
+/// The chains a normal subscription's build adds as outbounds.
+
+final class ProxyChainsFamily extends $Family
+    with
+        $ClassFamilyOverride<
+          ProxyChains,
+          AsyncValue<List<ProxyChain>>,
+          List<ProxyChain>,
+          Stream<List<ProxyChain>>,
+          String
+        > {
+  ProxyChainsFamily._()
+    : super(
+        retry: null,
+        name: r'proxyChainsProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The chains a normal subscription's build adds as outbounds.
+
+  ProxyChainsProvider call(String profileId) =>
+      ProxyChainsProvider._(argument: profileId, from: this);
+
+  @override
+  String toString() => r'proxyChainsProvider';
+}
+
+/// The chains a normal subscription's build adds as outbounds.
+
+abstract class _$ProxyChains extends $StreamNotifier<List<ProxyChain>> {
+  late final _$args = ref.$arg as String;
+  String get profileId => _$args;
+
+  Stream<List<ProxyChain>> build(String profileId);
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<ProxyChain>>, List<ProxyChain>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<ProxyChain>>, List<ProxyChain>>,
+              AsyncValue<List<ProxyChain>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, () => build(_$args));
+  }
+}

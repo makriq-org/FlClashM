@@ -52,6 +52,15 @@ func (c *Compiler) customConfig(ctx context.Context, request Input) (Object, err
 			named[target] = true
 		}
 	}
+	for _, row := range authoring.Scoped(request.Authoring["proxyChains"], id) {
+		var enabled bool
+		if raw, exists := row["enabled"]; exists && json.Unmarshal(raw, &enabled) == nil && !enabled {
+			continue
+		}
+		for _, hop := range list(declaration(row)["hops"]) {
+			named[text(hop)] = true
+		}
+	}
 	dialers := map[string]string{}
 	for _, row := range authoring.Scoped(request.Authoring["proxyDialers"], id) {
 		dialers[authoring.ID(row["proxyId"])] = authoring.String(row, "target")
@@ -434,13 +443,16 @@ func authoredRules(config Object, request Input, script string) ([]any, error) {
 	}
 	extra := []any{}
 	target := strings.TrimSpace(text(request.Profile.Metadata["matchTarget"]))
-	if target == "" {
-		for i := len(rules) - 1; i >= 0; i-- {
-			if parsed, err := authoring.ParseRule(text(rules[i])); err == nil && authoring.Action(parsed) == "MATCH" {
-				target = authoring.String(parsed, "ruleTarget")
-				break
-			}
+	if target != "" {
+		if strings.ContainsAny(target, ",\r\n\x00") {
+			return nil, errors.New("invalid match target")
 		}
+		// The selected target replaces the source's terminating MATCH, not only
+		// the placeholder in authored rules. A bad target then fails validation
+		// and the working runtime stays in place.
+		rules = retargetTerminalMatch(rules, target)
+	} else {
+		target = lastMatchTarget(rules)
 	}
 	for _, pid := range []string{id, ""} {
 		for _, row := range authoring.Scoped(request.Authoring["rules"], pid) {
@@ -460,6 +472,30 @@ func authoredRules(config Object, request Input, script string) ([]any, error) {
 	}
 	return append(extra, rules...), nil
 }
+
+// lastMatchTarget is the target of the source's terminating MATCH rule.
+func lastMatchTarget(rules []any) string {
+	for i := len(rules) - 1; i >= 0; i-- {
+		if parsed, err := authoring.ParseRule(text(rules[i])); err == nil && authoring.Action(parsed) == "MATCH" {
+			return authoring.String(parsed, "ruleTarget")
+		}
+	}
+	return ""
+}
+
+// retargetTerminalMatch points the last MATCH rule of the source at target and
+// leaves every other rule untouched.
+func retargetTerminalMatch(rules []any, target string) []any {
+	out := append([]any(nil), rules...)
+	for i := len(out) - 1; i >= 0; i-- {
+		if parsed, err := authoring.ParseRule(text(out[i])); err == nil && authoring.Action(parsed) == "MATCH" {
+			out[i] = "MATCH," + target
+			break
+		}
+	}
+	return out
+}
+
 func toRaw(value Object) map[string]json.RawMessage {
 	out := map[string]json.RawMessage{}
 	for key, v := range value {

@@ -1,6 +1,7 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/features/form/form.dart';
+import 'package:flclashx/features/proxy_chains/proxy_chains.dart';
 import 'package:flclashx/models/clash_config.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
@@ -23,7 +24,17 @@ class _StandardContentState extends ConsumerState<StandardContent> {
   Future<void> _handleAddOrUpdate([Rule? rule]) async {
     final res = await showFormSheet<Rule>(
       context: context,
-      builder: (_) => RuleForm(rule: rule),
+      builder: (_) => RuleForm(
+        rule: rule,
+        groupTargets:
+            ref
+                .read(proxyChainGraphProvider(_profileId))
+                .value
+                ?.groupTypes
+                .keys ??
+            const [],
+        chainTargets: ref.read(proxyChainTargetsProvider(_profileId)),
+      ),
     );
     if (res == null) {
       return;
@@ -91,7 +102,12 @@ class _StandardContentState extends ConsumerState<StandardContent> {
     BaseNavigator.push(context, _EditGlobalAddedRules(_profileId));
   }
 
-  Widget _buildRuleItem(List<Rule> rules, int index, Set<dynamic> selected) {
+  Widget _buildRuleItem(
+    List<Rule> rules,
+    int index,
+    Set<dynamic> selected,
+    Set<String> knownTargets,
+  ) {
     final rule = rules[index];
     return ReorderableDelayedDragStartListener(
       key: ObjectKey(rule),
@@ -102,6 +118,7 @@ class _StandardContentState extends ConsumerState<StandardContent> {
           margin: const EdgeInsets.symmetric(horizontal: 16),
           child: RuleItem(
             hasMatch: true,
+            knownTargets: knownTargets,
             isEditing: selected.isNotEmpty,
             isSelected: selected.contains(rule.id),
             rule: rule,
@@ -123,6 +140,13 @@ class _StandardContentState extends ConsumerState<StandardContent> {
     _profileId = ProfileIdProvider.of(context)!.profileId;
     final addedRules = ref.watch(profileRulesProvider(_profileId)).value ?? [];
     final selectedRules = ref.watch(itemsProvider(_key));
+    final config = ref.watch(clashConfigProvider(_profileId)).value;
+    final knownTargets = <String>{
+      ...ref.watch(proxyChainTargetsProvider(_profileId)),
+      for (final group in config?.proxyGroups ?? const <ProxyGroup>[])
+        group.name,
+      for (final proxy in config?.proxies ?? const <Proxy>[]) proxy.name,
+    };
     return CommonPopScope(
       onPop: selectedRules.isEmpty
           ? null
@@ -175,9 +199,9 @@ class _StandardContentState extends ConsumerState<StandardContent> {
           SliverReorderableList(
             itemCount: addedRules.length,
             itemBuilder: (_, index) =>
-                _buildRuleItem(addedRules, index, selectedRules),
+                _buildRuleItem(addedRules, index, selectedRules, knownTargets),
             proxyDecorator: (child, index, animation) => commonProxyDecorator(
-              _buildRuleItem(addedRules, index, selectedRules),
+              _buildRuleItem(addedRules, index, selectedRules, knownTargets),
               index,
               animation,
             ),
@@ -218,6 +242,7 @@ class _MatchTargetItem extends ConsumerWidget {
             for (final item in groups) item.name: item.type.name,
           };
           final proxyTypes = {for (final item in proxies) item.name: item.type};
+          final chains = ref.watch(proxyChainTargetsProvider(profileId));
           return SelectionSheet<String>(
             title: appLocalizations.matchTarget,
             sections: [
@@ -229,6 +254,11 @@ class _MatchTargetItem extends ConsumerWidget {
                     if (!groupTypes.containsKey(name)) name,
                 ],
               ),
+              if (chains.isNotEmpty)
+                SelectionSection(
+                  label: appLocalizations.proxyChainsTitle,
+                  items: chains.toList(),
+                ),
               SelectionSection(
                 label: appLocalizations.ruleTarget,
                 items: groupTypes.keys.toList(),
@@ -243,9 +273,8 @@ class _MatchTargetItem extends ConsumerWidget {
             labelBuilder: (item) =>
                 item.isEmpty ? appLocalizations.followProfile : item,
             selectedOf: (ref) => ref.watch(
-              profileProvider(
-                profileId,
-              ).select((state) => state?.matchTarget ?? ''),
+              profileProvider(profileId)
+                  .select((state) => state?.matchTarget ?? ''),
             ),
             onSelected: (item) => Navigator.of(context).pop(item),
           );
@@ -267,10 +296,12 @@ class _MatchTargetItem extends ConsumerWidget {
       profileProvider(profileId).select((state) => state?.matchTarget),
     );
     final clashConfig = ref.watch(clashConfigProvider(profileId)).value;
+    final chains = ref.watch(proxyChainTargetsProvider(profileId));
     final invalid =
         matchTarget != null &&
         clashConfig != null &&
         !RuleTarget.ruleTargets.contains(matchTarget) &&
+        !chains.contains(matchTarget) &&
         !clashConfig.proxyGroups.any((item) => item.name == matchTarget) &&
         !clashConfig.proxies.any((item) => item.name == matchTarget);
     return MoreActionButton(
@@ -361,9 +392,8 @@ class _EditGlobalAddedRulesState extends ConsumerState<_EditGlobalAddedRules> {
             builder: (context) => CustomScrollView(
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                  ).copyWith(top: context.contentTopPadding),
+                  padding: const EdgeInsets.symmetric(horizontal: 16)
+                      .copyWith(top: context.contentTopPadding),
                   sliver: SliverFixedExtentList.builder(
                     itemExtent: ruleItemHeight,
                     itemBuilder: (context, index) {

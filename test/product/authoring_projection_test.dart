@@ -33,6 +33,7 @@ class AuthoringHost {
       'clashProviders',
       'customProxies',
       'proxyDialers',
+      'proxyChains',
       'iconRecords',
       'iconSets',
     ])
@@ -195,6 +196,44 @@ void main() {
     expect(recovered.id, 'opaque/профиль:01');
     await client.detach();
   });
+  test('authored proxy chains survive the projection round trip', () async {
+    final host = AuthoringHost();
+    final owner = host.profiles.single['id'] as String;
+    host.collections['proxyChains'] = [
+      {
+        'id': 7,
+        'profileId': owner,
+        'name': 'Chain',
+        'hops': ['Entry', 'Exit'],
+        'enabled': true,
+      },
+    ];
+    final client = BackendClient(
+      transport: host.invoke,
+      events: const Stream.empty(),
+    );
+    final db = Database.backend(client, executor: NativeDatabase.memory());
+    addTearDown(db.close);
+    addTearDown(client.detach);
+    await client.attach();
+    await db.refreshFromGo();
+    final chain = (await db.proxyChainsDao.query(owner).get()).single;
+    expect(chain.name, 'Chain');
+    expect(chain.hops, ['Entry', 'Exit']);
+
+    await db.proxyChainsDao.put(
+      chain.copyWith(name: 'Renamed', enabled: false),
+      owner,
+    );
+    expect((host.collections['proxyChains'] as List).single, {
+      'id': 7,
+      'profileId': owner,
+      'name': 'Renamed',
+      'hops': ['Entry', 'Exit'],
+      'enabled': false,
+    });
+  });
+
   test(
     'successful form commit reads back the authoritative Go snapshot',
     () async {
