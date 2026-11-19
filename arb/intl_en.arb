@@ -1273,4 +1273,13 @@
   "proxyChainUnreadableFilter": "The filter of {name} uses syntax this app cannot read yet",
   "proxyChainIsMatchTarget": "{name} is the MATCH target. Pick another target before turning it off or deleting it",
   "proxyChainIsRuleTarget": "{name} is the target of added rules. Point them elsewhere before turning it off or deleting it"
+,
+  "updateInstall": "Install",
+  "updateVerifying": "Verifying the file…",
+  "updateVerified": "File verified",
+  "updateHandoff": "The installer is open. If the installation is cancelled, the file stays for another try.",
+  "updateRequired": "This update is required: the current version is no longer supported.",
+  "updateErrorDownload": "The update could not be downloaded.",
+  "updateErrorVerify": "The downloaded file failed verification and was removed.",
+  "updateErrorInstall": "The installer could not be started."
 }

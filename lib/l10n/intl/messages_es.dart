@@ -2174,6 +2174,28 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("Sin nombre"),
     "unpinWindow": MessageLookupByLibrary.simpleMessage("Desfijar ventana"),
     "update": MessageLookupByLibrary.simpleMessage("Actualizar"),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "No se pudo descargar la actualización.",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "No se pudo iniciar el instalador.",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "El archivo descargado no superó la verificación y se eliminó.",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "El instalador está abierto. Si se cancela la instalación, el archivo se conserva para reintentarlo.",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("Instalar"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "Esta actualización es obligatoria: la versión actual ya no es compatible.",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage(
+      "Archivo verificado",
+    ),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage(
+      "Verificando el archivo…",
+    ),
     "updatingSubscription": MessageLookupByLibrary.simpleMessage(
       "Actualizando la suscripción…",
     ),

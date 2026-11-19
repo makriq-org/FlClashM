@@ -1792,6 +1792,20 @@ class MessageLookup extends MessageLookupByLibrary {
     "unpinWindow": MessageLookupByLibrary.simpleMessage("取消置顶"),
     "update": MessageLookupByLibrary.simpleMessage("更新"),
     "updateAllGeoData": MessageLookupByLibrary.simpleMessage("更新所有地理数据"),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage("无法下载更新。"),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage("无法启动安装程序。"),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "下载的文件未通过校验，已删除。",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "安装程序已打开。如果取消安装，文件会保留以便重试。",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("安装"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "此更新为必需项：当前版本已不再受支持。",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("文件已校验"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage("正在校验文件…"),
     "updatingSubscription": MessageLookupByLibrary.simpleMessage("正在更新订阅…"),
     "upload": MessageLookupByLibrary.simpleMessage("上传"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("上行带宽"),

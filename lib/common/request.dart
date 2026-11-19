@@ -1,7 +1,10 @@
 import 'dart:async';
+
 import '../clash/clash.dart';
+
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -104,6 +107,65 @@ class Request {
     }
   }
 
+  /// Один ответ без следования редиректам и без чтения сверх [maxBytes].
+  /// Нужен подписанным документам: следующий адрес цепочки проверяет
+  /// вызывающий, а не Dio.
+  Future<Response<Uint8List>> getBoundedResponseForUrl(
+    String url, {
+    required int maxBytes,
+    Duration timeout = downloadTimeoutDuration,
+  }) async {
+    if (maxBytes <= 0) {
+      throw ArgumentError.value(maxBytes, 'maxBytes');
+    }
+    final target = downloadTarget(url);
+    final cancelToken = CancelToken();
+    var oversized = false;
+    try {
+      final response = await _clashDio
+          .getUri<Uint8List>(
+            target.uri,
+            options: Options(
+              responseType: ResponseType.bytes,
+              headers: target.headers,
+              followRedirects: false,
+              validateStatus: (_) => true,
+            ),
+            cancelToken: cancelToken,
+            onReceiveProgress: (received, total) {
+              if (received > maxBytes || total > maxBytes) {
+                oversized = true;
+                cancelToken.cancel();
+              }
+            },
+          )
+          .timeout(
+            timeout,
+            onTimeout: () {
+              cancelToken.cancel();
+              throw DioException.receiveTimeout(
+                timeout: timeout,
+                requestOptions: RequestOptions(path: url),
+              );
+            },
+          );
+      final data = response.data;
+      if (data != null && data.length > maxBytes) {
+        throw MessageException(currentAppLocalizations.fileTooLarge);
+      }
+      return response;
+    } catch (e) {
+      if (oversized) {
+        throw MessageException(currentAppLocalizations.fileTooLarge);
+      }
+      commonPrint.log(
+        'getBoundedResponseForUrl error ${compactError(e)}',
+        logLevel: LogLevel.warning,
+      );
+      rethrow;
+    }
+  }
+
   Future<Response<String>> getTextResponseForUrl(String url) async {
     try {
       return await _download<String>(url, ResponseType.plain);
@@ -122,17 +184,46 @@ class Request {
     void Function(int received, int total)? onProgress,
     String? requestId,
     int? expectedLength,
+    CancelToken? cancelToken,
   }) async {
+    final limit = expectedLength != null && expectedLength > 0
+        ? min(expectedLength, 256 << 20)
+        : 256 << 20;
+    final target = File(targetPath);
     if (!globalState.isStart) {
-      await dio.download(
+      final token = cancelToken ?? CancelToken();
+      final response = await dio.get<ResponseBody>(
         url,
-        targetPath,
-        onReceiveProgress: onProgress,
-        options: tunnelDownloadOptions,
+        options: tunnelDownloadOptions.copyWith(
+          responseType: ResponseType.stream,
+        ),
+        cancelToken: token,
       );
+      final length = int.tryParse(
+        response.headers.value(HttpHeaders.contentLengthHeader) ?? '',
+      );
+      if (response.statusCode == HttpStatus.partialContent ||
+          (length != null && length > limit)) {
+        token.cancel();
+        throw StateError('Invalid app update download length.');
+      }
+      final output = await target.open(mode: FileMode.writeOnly);
+      try {
+        var received = 0;
+        await for (final chunk in response.data!.stream) {
+          received += chunk.length;
+          if (received > limit) {
+            token.cancel();
+            throw StateError('App update download exceeded its size limit.');
+          }
+          await output.writeFrom(chunk);
+          onProgress?.call(received, length ?? expectedLength ?? -1);
+        }
+      } finally {
+        await output.close();
+      }
       return;
     }
-    final target = File(targetPath);
     if (target.existsSync()) {
       target.deleteSync();
     }
@@ -164,7 +255,7 @@ class Request {
         'method': 'GET',
         'headers': {'User-Agent': globalState.ua},
         'timeout-millis': const Duration(minutes: 5).inMilliseconds,
-        'max-response-len': 256 << 20,
+        'max-response-len': limit,
         'target-path': targetPath,
         if (requestId != null) 'request-id': requestId,
       });
@@ -204,7 +295,6 @@ class Request {
       reportProgress();
     }
   }
-
 
   /// Null when this build is current; throws when GitHub cannot be asked.
   Future<Map<String, dynamic>?> checkForUpdate() async {
@@ -283,7 +373,10 @@ HostFailure hostFailureOf(Object error) {
 /// Null when the inflated body passes [limit]: a small compressed body can
 /// still expand far past what the app would hold.
 @visibleForTesting
-Uint8List? decompressUnlabeled(Uint8List bytes, {int limit = maxDownloadBytes}) {
+Uint8List? decompressUnlabeled(
+  Uint8List bytes, {
+  int limit = maxDownloadBytes,
+}) {
   final codec = switch (bytes) {
     [0x1f, 0x8b, ...] => gzip,
     [0x78, final flags, ...] when (0x78 << 8 | flags) % 31 == 0 => zlib,

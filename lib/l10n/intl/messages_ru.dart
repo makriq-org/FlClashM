@@ -2593,6 +2593,24 @@ class MessageLookup extends MessageLookupByLibrary {
     "updateAllGeoData": MessageLookupByLibrary.simpleMessage(
       "Обновить все геофайлы",
     ),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "Не удалось скачать обновление.",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "Не удалось запустить установщик.",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "Скачанный файл не прошёл проверку и удалён.",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "Установщик открыт. Если установка отменена, файл сохранён для повтора.",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("Установить"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "Обновление обязательно: текущая версия больше не поддерживается.",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("Файл проверен"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage("Проверка файла…"),
     "updated": MessageLookupByLibrary.simpleMessage("Обновлено"),
     "updatingSubscription": MessageLookupByLibrary.simpleMessage(
       "Обновляю подписку…",

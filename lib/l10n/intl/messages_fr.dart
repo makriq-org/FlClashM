@@ -2176,6 +2176,26 @@ class MessageLookup extends MessageLookupByLibrary {
       "Désépingler la fenêtre",
     ),
     "update": MessageLookupByLibrary.simpleMessage("Mettre à jour"),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "Impossible de télécharger la mise à jour.",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "Impossible de lancer l\'installateur.",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "Le fichier téléchargé n\'a pas passé la vérification et a été supprimé.",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "L\'installateur est ouvert. Si l\'installation est annulée, le fichier est conservé pour une nouvelle tentative.",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("Installer"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "Cette mise à jour est obligatoire : la version actuelle n\'est plus prise en charge.",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("Fichier vérifié"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage(
+      "Vérification du fichier…",
+    ),
     "updatingSubscription": MessageLookupByLibrary.simpleMessage(
       "Mise à jour de l’abonnement…",
     ),

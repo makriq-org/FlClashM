@@ -10707,6 +10707,81 @@ class AppLocalizations {
       args: [name],
     );
   }
+
+  /// `Install`
+  String get updateInstall {
+    return Intl.message('Install', name: 'updateInstall', desc: '', args: []);
+  }
+
+  /// `Verifying the file…`
+  String get updateVerifying {
+    return Intl.message(
+      'Verifying the file…',
+      name: 'updateVerifying',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `File verified`
+  String get updateVerified {
+    return Intl.message(
+      'File verified',
+      name: 'updateVerified',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The installer is open. If the installation is cancelled, the file stays for another try.`
+  String get updateHandoff {
+    return Intl.message(
+      'The installer is open. If the installation is cancelled, the file stays for another try.',
+      name: 'updateHandoff',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This update is required: the current version is no longer supported.`
+  String get updateRequired {
+    return Intl.message(
+      'This update is required: the current version is no longer supported.',
+      name: 'updateRequired',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The update could not be downloaded.`
+  String get updateErrorDownload {
+    return Intl.message(
+      'The update could not be downloaded.',
+      name: 'updateErrorDownload',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The downloaded file failed verification and was removed.`
+  String get updateErrorVerify {
+    return Intl.message(
+      'The downloaded file failed verification and was removed.',
+      name: 'updateErrorVerify',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The installer could not be started.`
+  String get updateErrorInstall {
+    return Intl.message(
+      'The installer could not be started.',
+      name: 'updateErrorInstall',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

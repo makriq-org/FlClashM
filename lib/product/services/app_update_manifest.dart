@@ -5,6 +5,18 @@ import 'package:cryptography/cryptography.dart';
 const appUpdateManifestSchemaVersion = 1;
 const appUpdateManifestPublicKeyBase64 =
     'S5W0qI3x7cXrnGhbrL4YV9JwCJSrASo+Tu2gkgKSGaw=';
+
+/// Минимальная версия приложения действует только из свежего каталога:
+/// старый подписанный каталог не может задним числом потребовать обновление.
+const appUpdateMinimumVersionFreshness = Duration(days: 90);
+
+/// Допустимое расхождение часов при проверке свежести каталога.
+const appUpdateMinimumVersionClockSkew = Duration(days: 1);
+
+/// Формат `minVersion`: версия без ведущего `v`, как в `pubspec.yaml`.
+final appUpdateMinimumVersionPattern = RegExp(
+  r'^\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?$',
+);
 const sourceForgeProjectName = 'flclashm';
 const sourceForgeProjectUrl =
     'https://sourceforge.net/projects/$sourceForgeProjectName';
@@ -36,6 +48,8 @@ class AppUpdateManifest {
     required this.body,
     required this.htmlUrl,
     required this.assets,
+    this.minimumVersion,
+    this.minimumVersionCode,
   });
 
   factory AppUpdateManifest.fromJson(
@@ -81,6 +95,18 @@ class AppUpdateManifest {
       throw const FormatException('Invalid app update release notes.');
     }
 
+    final minimumVersion = json['minVersion'];
+    if (minimumVersion != null &&
+        (minimumVersion is! String ||
+            !appUpdateMinimumVersionPattern.hasMatch(minimumVersion.trim()))) {
+      throw const FormatException('Invalid minimum app version.');
+    }
+    final minimumVersionCode = json['minVersionCode'];
+    if (minimumVersionCode != null &&
+        (minimumVersionCode is! int || minimumVersionCode <= 0)) {
+      throw const FormatException('Invalid minimum app version code.');
+    }
+
     final rawAssets = releaseJson['assets'];
     if (rawAssets is! List || rawAssets.isEmpty) {
       throw const FormatException('Missing app update assets.');
@@ -123,6 +149,8 @@ class AppUpdateManifest {
       body: body,
       htmlUrl: htmlUrl,
       assets: List.unmodifiable(assets),
+      minimumVersion: minimumVersion is String ? minimumVersion.trim() : null,
+      minimumVersionCode: minimumVersionCode as int?,
     );
   }
 
@@ -135,9 +163,31 @@ class AppUpdateManifest {
   final String htmlUrl;
   final List<AppUpdateManifestAsset> assets;
 
+  /// Подписанная минимальная версия приложения (`minVersion`), если каталог её
+  /// объявил. Действует только пока каталог свежий, см.
+  /// [appUpdateMinimumVersionFreshness].
+  final String? minimumVersion;
+
+  /// Подписанный минимальный `versionCode` Android, если объявлен. Он точнее
+  /// `minVersion`: видимые версии проекта могут начинаться заново.
+  final int? minimumVersionCode;
+
+  /// Свежий каталог — тот, что опубликован недавно и не в будущем. Только он
+  /// вправе объявить обязательное обновление.
+  bool isFreshAt(DateTime now) {
+    final published = publishedAt.toUtc();
+    final moment = now.toUtc();
+    if (published.isAfter(moment.add(appUpdateMinimumVersionClockSkew))) {
+      return false;
+    }
+    return moment.difference(published) <= appUpdateMinimumVersionFreshness;
+  }
+
   Map<String, dynamic> toJson() => {
     'schemaVersion': appUpdateManifestSchemaVersion,
     'channel': channel.wireName,
+    if (minimumVersion != null) 'minVersion': minimumVersion,
+    if (minimumVersionCode != null) 'minVersionCode': minimumVersionCode,
     'release': {
       'tagName': tagName,
       'versionName': versionName,

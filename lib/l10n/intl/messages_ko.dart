@@ -1700,6 +1700,24 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("이름 없음"),
     "unpinWindow": MessageLookupByLibrary.simpleMessage("창 고정 해제"),
     "update": MessageLookupByLibrary.simpleMessage("업데이트"),
+    "updateErrorDownload": MessageLookupByLibrary.simpleMessage(
+      "업데이트를 다운로드하지 못했습니다.",
+    ),
+    "updateErrorInstall": MessageLookupByLibrary.simpleMessage(
+      "설치 프로그램을 시작하지 못했습니다.",
+    ),
+    "updateErrorVerify": MessageLookupByLibrary.simpleMessage(
+      "다운로드한 파일이 검증을 통과하지 못해 삭제되었습니다.",
+    ),
+    "updateHandoff": MessageLookupByLibrary.simpleMessage(
+      "설치 프로그램이 열렸습니다. 설치를 취소하면 파일이 다시 시도할 수 있도록 유지됩니다.",
+    ),
+    "updateInstall": MessageLookupByLibrary.simpleMessage("설치"),
+    "updateRequired": MessageLookupByLibrary.simpleMessage(
+      "이 업데이트는 필수입니다. 현재 버전은 더 이상 지원되지 않습니다.",
+    ),
+    "updateVerified": MessageLookupByLibrary.simpleMessage("파일 확인 완료"),
+    "updateVerifying": MessageLookupByLibrary.simpleMessage("파일 확인 중…"),
     "updatingSubscription": MessageLookupByLibrary.simpleMessage("구독 업데이트 중…"),
     "upload": MessageLookupByLibrary.simpleMessage("업로드"),
     "uploadBandwidth": MessageLookupByLibrary.simpleMessage("업로드 대역폭"),

@@ -168,4 +168,51 @@ void main() {
     expect(output, contains('does not match the embedded public key'));
     expect(output, isNot(contains("Dart library 'dart:ui' is not available")));
   });
+
+  test('publishes an optional signed minimum version', () async {
+    final tempDir = Directory.systemTemp.createTempSync('update-manifest-min-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final dist = Directory('${tempDir.path}/dist')..createSync();
+    File('${dist.path}/FlClashM-android-arm64-v8a.apk')
+        .writeAsBytesSync([1, 2, 3]);
+    final notes = File('${tempDir.path}/release.md')
+      ..writeAsStringSync('- Проверка минимума\n');
+    final options = ManifestOptions.parse([
+      '--dist=${dist.path}',
+      '--out=${dist.path}/stable.json',
+      '--release-notes=${notes.path}',
+      '--tag=v0.10.5',
+      '--github-repository=makriq-org/FlClashM',
+      '--channel=stable',
+      '--published-at=2026-07-14T10:00:00.000Z',
+      '--version-code=2026073401',
+      '--min-version=0.10.0',
+      '--min-version-code=2026070101',
+    ]);
+
+    final manifest = await buildAppUpdateManifest(options);
+    final json = manifest.toJson();
+
+    expect(manifest.minimumVersion, '0.10.0');
+    expect(manifest.minimumVersionCode, 2026070101);
+    expect(json['minVersion'], '0.10.0');
+    expect(json['minVersionCode'], 2026070101);
+  });
+
+  test('rejects a malformed minimum version argument', () {
+    expect(
+      () => ManifestOptions.parse([
+        '--dist=dist',
+        '--out=dist/stable.json',
+        '--release-notes=release.md',
+        '--tag=v0.10.5',
+        '--github-repository=makriq-org/FlClashM',
+        '--channel=stable',
+        '--published-at=2026-07-14T10:00:00.000Z',
+        '--version-code=2026073401',
+        '--min-version=latest',
+      ]),
+      throwsArgumentError,
+    );
+  });
 }
