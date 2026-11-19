@@ -246,6 +246,10 @@ func sideUpdateExternalProvider(p cp.Provider, bytes []byte) error {
 // updateListeners recreates all listeners from current config
 func updateListeners() {
 	if !isRunning {
+		if backendManaged.Load() {
+			// Close any mixed listener left by an earlier preparation.
+			listener.ReCreateMixed(0, trafficTunnel)
+		}
 		return
 	}
 	if currentConfig == nil {
@@ -474,7 +478,7 @@ func setupConfigWithContext(ctx context.Context, params *SetupParams, fallback b
 	}()
 	applyConfig := currentConfig
 	if backendManaged.Load() {
-		applyConfig = embeddedExecutorConfig(currentConfig)
+		applyConfig = embeddedExecutorConfig(currentConfig, isRunning)
 	}
 	executor.ApplyConfig(applyConfig, true)
 	publishTrafficProxies(parsedConfig.Proxies, parsedConfig.Providers)

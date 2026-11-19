@@ -359,17 +359,26 @@ func validateIsolatedFile(home, path string) string {
 
 type backendEngine struct{ probe *transport.SOCKSProbe }
 
-// The app owns local web UI assets. An absent download URL is not a request
-// to fetch an empty address; retain the serving path in the original config.
-func embeddedExecutorConfig(current *config.Config) *config.Config {
-	if current.Controller == nil || current.Controller.ExternalUIURL != "" {
+// Keep the configured mixed port for Start. When the app serves local UI
+// assets, keep their path out of mihomo's download setup.
+func embeddedExecutorConfig(current *config.Config, running bool) *config.Config {
+	localUI := current.Controller != nil && current.Controller.ExternalUIURL == ""
+	stagedMixedPort := !running && current.General.MixedPort != 0
+	if !localUI && !stagedMixedPort {
 		return current
 	}
 	copyConfig := *current
-	controller := *current.Controller
-	controller.ExternalUI = ""
-	controller.ExternalUIName = ""
-	copyConfig.Controller = &controller
+	if localUI {
+		controller := *current.Controller
+		controller.ExternalUI = ""
+		controller.ExternalUIName = ""
+		copyConfig.Controller = &controller
+	}
+	if stagedMixedPort {
+		general := *current.General
+		general.MixedPort = 0
+		copyConfig.General = &general
+	}
 	return &copyConfig
 }
 

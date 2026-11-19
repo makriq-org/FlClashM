@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"testing"
+	"time"
 
+	"core/backend"
 	"core/backend/compile"
 	"github.com/metacubex/mihomo/config"
+	"github.com/metacubex/mihomo/listener"
 )
 
 func TestCompiledRulesReachMihomoLoader(t *testing.T) {
@@ -57,7 +61,7 @@ func TestRollbackOfLegacyPlanPreservesRoutingRules(t *testing.T) {
 func TestEmbeddedUIWithoutDownloadURLPreservesServingPath(t *testing.T) {
 	controller := &config.Controller{ExternalUI: "/private/zashboard", ExternalUIName: "local", ExternalController: "127.0.0.1:9090", Secret: "private"}
 	original := &config.Config{Controller: controller}
-	prepared := embeddedExecutorConfig(original)
+	prepared := embeddedExecutorConfig(original, true)
 	if prepared.Controller.ExternalUI != "" || prepared.Controller.ExternalUIName != "" {
 		t.Fatal("empty URL still triggers automatic UI download")
 	}
@@ -65,7 +69,74 @@ func TestEmbeddedUIWithoutDownloadURLPreservesServingPath(t *testing.T) {
 		t.Fatal("serving path or controller settings changed")
 	}
 	controller.ExternalUIURL = "https://example.com/ui.zip"
-	if embeddedExecutorConfig(original) != original {
+	if embeddedExecutorConfig(original, true) != original {
 		t.Fatal("explicit UI download was disabled")
 	}
+}
+
+func TestStoppedBackendStagesMixedPort(t *testing.T) {
+	reservation, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reservation.Addr().String()
+	port := reservation.Addr().(*net.TCPAddr).Port
+	_ = reservation.Close()
+
+	wasManaged := backendManaged.Swap(true)
+	t.Cleanup(func() {
+		handleShutdown()
+		backendManaged.Store(wasManaged)
+	})
+	engine := backendEngine{}
+	ctx := context.Background()
+	if err := engine.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	plan := func(generation uint64, mixedPort int) *backend.RuntimePlan {
+		t.Helper()
+		plan, err := backend.NewRuntimePlan(generation, map[string]any{
+			"config": map[string]any{
+				"mixed-port": mixedPort,
+				"tun":        map[string]bool{"enable": false},
+				"dns":        map[string]bool{"enable": false},
+			},
+			"coreState": map[string]any{},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return plan
+	}
+	assertListening := func(want bool) {
+		t.Helper()
+		conn, err := net.DialTimeout("tcp4", address, time.Second)
+		if conn != nil {
+			_ = conn.Close()
+		}
+		if listening := err == nil; listening != want {
+			t.Fatalf("mixed port listening = %t, want %t: %v", listening, want, err)
+		}
+	}
+	enabled, disabled := plan(1, port), plan(2, 0)
+	if err := engine.Apply(ctx, enabled); err != nil {
+		t.Fatal(err)
+	}
+	assertListening(false)
+	if err := engine.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertListening(true)
+	if err := engine.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertListening(false)
+
+	// A stopped engine can hold a listener bound by an earlier preparation.
+	listener.ReCreateMixed(port, trafficTunnel)
+	assertListening(true)
+	if err := engine.ApplyLiveSettings(ctx, enabled, disabled); err != nil {
+		t.Fatal(err)
+	}
+	assertListening(false)
 }
