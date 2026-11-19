@@ -139,13 +139,14 @@ AppRelease _release({
   String? digest,
   String? minimumVersion,
   int? minimumVersionCode,
+  String assetName = 'FlClashM-android-arm64-v8a.apk',
 }) => AppRelease(
   tagName: 'v1.2.3',
   body: '- первое изменение',
   htmlUrl: 'https://example.com/releases/v1.2.3',
   assets: [
     ReleaseAsset(
-      name: 'FlClashM-android-arm64-v8a.apk',
+      name: assetName,
       browserDownloadUrl: 'https://example.com/arm64.apk',
       size: size,
       versionCode: versionCode,
@@ -200,6 +201,23 @@ void main() {
     );
     expect(
       File('${tempDir.path}/FlClashM-android-arm64-v8a.apk.part').existsSync(),
+      isFalse,
+    );
+  });
+
+  test('refuses an asset name that would leave the update directory', () async {
+    final update = session(
+      release: _release(assetName: '../escape-android-arm64-v8a.apk'),
+    );
+
+    await update.download();
+
+    expect(update.phase, AppUpdatePhase.prompt);
+    expect(update.failure?.kind, AppUpdateFailureKind.download);
+    expect(update.prepared, isNull);
+    expect(installer.downloadedUrls, isEmpty);
+    expect(
+      File('${tempDir.parent.path}/escape-android-arm64-v8a.apk').existsSync(),
       isFalse,
     );
   });

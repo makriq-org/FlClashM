@@ -155,7 +155,11 @@ class AppUpdateSession extends ChangeNotifier {
       final expectedVersionCode = expectedAppUpdateVersionCode(release, asset);
       final updateDirectoryPath = await installer.getUpdateDirectoryPath();
       _ensureCurrent(generation);
-      final apkPath = path.join(updateDirectoryPath, asset.apkAsset.name);
+      final fileName = appUpdateApkFileName(asset.apkAsset.name);
+      if (fileName == null) {
+        throw StateError('Unsafe APK asset name `${asset.apkAsset.name}`.');
+      }
+      final apkPath = path.join(updateDirectoryPath, fileName);
       _apkPath = apkPath;
 
       final cached = await _reuseCached(
@@ -479,4 +483,17 @@ class AppUpdateSession extends ChangeNotifier {
 
 final class _Superseded implements Exception {
   const _Superseded();
+}
+
+/// The downloaded APK is written under the update directory, so a release
+/// asset name that names another path is refused. Signed manifests already
+/// reject separators; the unsigned GitHub fallback does not.
+String? appUpdateApkFileName(String name) {
+  if (name.isEmpty || name.length > 255) {
+    return null;
+  }
+  if (name == '.' || name == '..' || name.contains(RegExp(r'[/\\]'))) {
+    return null;
+  }
+  return name;
 }
