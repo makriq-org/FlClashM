@@ -798,6 +798,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			}
 		}
 	}
+	if next.Desired.Running && errors.Is(err, ErrNoIngress) &&
+		(e.request.Method == "apply" || e.request.Method == "recover" || e.request.Method == "warm") {
+		next.Desired.Running = false
+		err = c.install(e, plan, false)
+	}
 	if err == nil {
 		c.mu.Lock()
 		// The epoch and commit are checked under the same lock as command acceptance.
@@ -805,6 +810,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			err = ErrSuperseded
 		} else {
 			committed := cloneDocument(c.document)
+			committed.Desired.Running = next.Desired.Running
 			if plan != nil {
 				// Reused preparations and in-place selections keep their nodes,
 				// but the snapshot must refer to the newly committed generation.
