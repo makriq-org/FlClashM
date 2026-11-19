@@ -2,14 +2,20 @@ package compile
 
 import (
 	"context"
-	"core/backend/netpolicy"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"core/backend/netpolicy"
 )
 
 //go:embed byebyeedpi-strategies.list
@@ -22,6 +28,9 @@ type ExternalCompiler struct {
 	Lists             PackageLists
 	RemoteLists       RemoteLists
 	BuiltinStrategies []string
+	// ServiceKey comes from the private backend store in production. A
+	// standalone compiler uses a process-local key.
+	ServiceKey [32]byte
 }
 
 func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, testURL string) ([]Node, error) {
@@ -122,10 +131,10 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 		}
 		reserved[port] = true
 		udp := kind == "byedpi"
-		if value, ok := raw["udp"]; ok {
+		if value, explicitUDP := raw["udp"]; explicitUDP {
 			udp = value == true
 		}
-		if udp && kind != "byedpi" {
+		if kind != "byedpi" && udp {
 			return nil, errors.New("external transport does not support UDP")
 		}
 		check, activation, err := nodeChecks(raw, kind, name, config, testURL)
@@ -133,23 +142,52 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, err
 		}
 		node := Node{ID: kind + "-" + md5Text(name), Type: kind, Name: name, Host: "127.0.0.1", Port: port, UDP: udp, Files: map[string]string{}, Metadata: map[string]string{}, Check: check, Activation: activation}
+		username, password := e.serviceCredentials(node.ID)
+		node.Metadata["service-auth-user"] = username
+		node.Metadata["service-auth-password"] = password
 		switch kind {
 		case "naiveproxy":
-			err = buildNaive(raw, &node)
+			err = buildNaive(raw, &node, username, password)
 		case "olcrtc":
-			err = buildOlcRTC(raw, &node)
+			err = buildOlcRTC(raw, &node, username, password)
 		case "byedpi":
 			err = e.buildByeDPI(ctx, raw, &node)
 		case "stormdns":
-			err = e.buildStormDNS(ctx, raw, &node)
+			err = e.buildStormDNS(ctx, raw, &node, username, password)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
 		}
 		nodes = append(nodes, node)
-		slot.values[slot.index] = Object{"name": name, "type": "socks5", "server": node.Host, "port": port, "udp": udp}
+		proxy := Object{
+			"name": name, "type": "socks5", "server": node.Host, "port": port,
+			"username": username, "password": password, "udp": udp,
+		}
+		if udp {
+			proxy["flclashm-udp-token"] = true
+		}
+		slot.values[slot.index] = proxy
 	}
 	return nodes, nil
+}
+
+var processServiceKey = sync.OnceValue(func() [32]byte {
+	var key [32]byte
+	rand.Read(key[:])
+	return key
+})
+
+func (e *ExternalCompiler) serviceCredentials(nodeID string) (string, string) {
+	key := e.ServiceKey
+	if key == ([32]byte{}) {
+		key = processServiceKey()
+	}
+	derive := func(role string) string {
+		mac := hmac.New(sha256.New, key[:])
+		mac.Write([]byte("flclashm/node-auth/v1/" + role + "/" + nodeID))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
+	return derive("user"), derive("password")
 }
 func nodeChecks(raw Object, kind, name string, config Object, testURL string) (Object, Object, error) {
 	inherited, direct, err := groupChecks(config, name)

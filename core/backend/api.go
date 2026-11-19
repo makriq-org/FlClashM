@@ -112,3 +112,19 @@ func (b *Backend) Applied() (*RuntimePlan, Input, error) {
 	plan, err := RestorePlan(c.document.Applied.Plan)
 	return plan, bytes.Clone(c.document.Applied.Input), err
 }
+
+// RuntimeInputs copies both inputs under one lock so a concurrent commit
+// cannot move an accepted input between reads. An abandoned journal is not
+// pending work in this process.
+func (b *Backend) RuntimeInputs() (applied, pending Input) {
+	c := b.coordinator
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.document.Applied != nil {
+		applied = bytes.Clone(c.document.Applied.Input)
+	}
+	if active, journal := c.active, c.document.Pending; active != nil && journal != nil && active.epoch == journal.Generation {
+		pending = bytes.Clone(c.document.Desired.Input)
+	}
+	return applied, pending
+}

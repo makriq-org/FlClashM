@@ -42,9 +42,7 @@ class IntranetIpCard extends ConsumerWidget {
     final allowLan = ref.watch(
       patchClashConfigProvider.select((state) => state.allowLan),
     );
-    final port = ref.watch(
-      patchClashConfigProvider.select((state) => state.mixedPort),
-    );
+    final port = ref.watch(effectiveMixedPortProvider);
     final figure = mobile
         ? (style: AppTextStyle.title1, top: 12.0)
         : density.isCompact
@@ -69,7 +67,7 @@ class IntranetIpCard extends ConsumerWidget {
     ).copyWith(letterSpacing: 0);
     final address = localIp == null || localIp.isEmpty
         ? null
-        : allowLan
+        : allowLan && port > 0
         ? '$localIp:$port'
         : localIp;
     void change(bool value) => ref

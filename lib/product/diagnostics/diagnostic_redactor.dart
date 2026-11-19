@@ -15,11 +15,11 @@ final class DiagnosticRedactor {
     caseSensitive: false,
   );
   static final RegExp _sensitivePair = RegExp(
-    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|auth|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|username|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;}\]]+)''',
+    r'''(["']?(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|auth|auth[_-]?file|service[_-]?auth[_-]?(?:user|password)|authorization|proxy[_-]?authorization|api[_-]?key|apikey|subscription(?:[_-]?url)?|support[_-]?url|username|profile[_-]?(?:name|title)|currentProfileName|node[_-]?name)["']?\s*[:=]\s*)(?:"(?:[^"\\]|\\[\s\S])*(?:"|\\?$)|'(?:[^'\\]|\\[\s\S])*(?:'|\\?$)|[^\s,;}\]]+)''',
     caseSensitive: false,
   );
   static final RegExp _sensitiveArgument = RegExp(
-    r'''(--(?:password|passwd|token|secret|auth|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url|username)(?:=|\s+))(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s]+)''',
+    r'''(--(?:password|passwd|token|secret|auth(?:[_-]?file)?|authorization|api[_-]?key|subscription[_-]?url|support[_-]?url|username)(?:=|\s+))(?:"(?:[^"\\]|\\[\s\S])*(?:"|\\?$)|'(?:[^'\\]|\\[\s\S])*(?:'|\\?$)|[^\s]+)''',
     caseSensitive: false,
   );
   static final RegExp _profileLabel = RegExp(

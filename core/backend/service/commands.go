@@ -290,11 +290,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Patch == nil {
 			return result, errors.New("settings patch is required")
 		}
-		accessChanged, err := a.patchSettingsWithAccessChange(ctx, request.Patch, request.ExpectedRevision)
+		ownershipChanged, err := a.patchSettingsWithOwnershipChange(ctx, request.Patch, request.ExpectedRevision)
 		if err != nil {
 			return result, err
 		}
-		apply = accessChanged
+		apply = ownershipChanged
 		for key := range request.Patch {
 			switch key {
 			case "patchClashConfig", "vpnProps", "networkProps", "overrideDns", "scriptProps", "currentProfileId":
@@ -555,11 +555,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 	return result, nil
 }
 func (a *App) patchSettings(ctx context.Context, patch profiles.Object, expected uint64) error {
-	_, err := a.patchSettingsWithAccessChange(ctx, patch, expected)
+	_, err := a.patchSettingsWithOwnershipChange(ctx, patch, expected)
 	return err
 }
 
-func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.Object, expected uint64) (bool, error) {
+func (a *App) patchSettingsWithOwnershipChange(ctx context.Context, patch profiles.Object, expected uint64) (bool, error) {
 	a.dataMu.Lock()
 	defer a.dataMu.Unlock()
 	for range 8 {
@@ -573,9 +573,38 @@ func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.
 		}
 		err := a.profiles.UpdateSettings(patch, revision)
 		if err == nil {
-			before := accessControlOwned(snapshot.Settings["appSetting"])
-			after := accessControlOwned(a.profiles.Snapshot().Settings["appSetting"])
-			return before != after, nil
+			raw, writesApp := patch["appSetting"]
+			if !writesApp {
+				return false, nil
+			}
+			before := snapshot.Settings["appSetting"]
+			after := a.profiles.Snapshot().Settings["appSetting"]
+			if runtimeOwnershipDiffers(before, after) {
+				return true, nil
+			}
+			// A retry must reconcile both the committed configuration and
+			// the input that an accepted operation can still commit.
+			var fields profiles.Object
+			_ = json.Unmarshal(raw, &fields)
+			if _, writesOwnership := fields["ownedSettings"]; fields != nil && !writesOwnership {
+				return false, nil
+			}
+			applied, pending := a.runtime.RuntimeInputs()
+			for _, raw := range []backend.Input{applied, pending} {
+				if len(raw) == 0 {
+					continue
+				}
+				var input struct {
+					Settings profiles.Object `json:"settings"`
+				}
+				if err := json.Unmarshal(raw, &input); err != nil {
+					return false, err
+				}
+				if runtimeOwnershipDiffers(input.Settings["appSetting"], after) {
+					return true, nil
+				}
+			}
+			return false, nil
 		}
 		if !errors.Is(err, profiles.ErrConflict) || expected != 0 {
 			return false, err
@@ -584,12 +613,17 @@ func (a *App) patchSettingsWithAccessChange(ctx context.Context, patch profiles.
 	return false, profiles.ErrConflict
 }
 
-func accessControlOwned(raw json.RawMessage) bool {
+func runtimeOwnershipDiffers(before, after json.RawMessage) bool {
+	return settingOwned(before, compile.AccessControlSettingKey) != settingOwned(after, compile.AccessControlSettingKey) ||
+		settingOwned(before, "clash.mixed-port") != settingOwned(after, "clash.mixed-port")
+}
+
+func settingOwned(raw json.RawMessage, key string) bool {
 	var settings struct {
 		OwnedSettings []string `json:"ownedSettings"`
 	}
 	_ = json.Unmarshal(raw, &settings)
-	return slices.Contains(settings.OwnedSettings, compile.AccessControlSettingKey)
+	return slices.Contains(settings.OwnedSettings, key)
 }
 
 func (a *App) isCurrent(id string) bool {

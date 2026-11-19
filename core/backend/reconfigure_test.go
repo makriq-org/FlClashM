@@ -76,6 +76,56 @@ func (h liveHostEngine) ApplyLiveSettings(ctx context.Context, _, next *RuntimeP
 	return nil
 }
 
+type proxyOnlyHostPlatform struct{ hostPlatform }
+
+func (h proxyOnlyHostPlatform) Start(ctx context.Context, plan *RuntimePlan) error {
+	if strings.Contains(string(plan.Payload()), `"mixed-port":0`) {
+		return ErrNoIngress
+	}
+	return h.hostPlatform.Start(ctx, plan)
+}
+
+type proxyOnlyLiveEngine struct{ liveHostEngine }
+
+func (h proxyOnlyLiveEngine) ApplyLiveSettings(ctx context.Context, old, next *RuntimePlan) error {
+	if err := h.liveHostEngine.ApplyLiveSettings(ctx, old, next); err != nil {
+		return err
+	}
+	if strings.Contains(string(next.Payload()), `"mixed-port":0`) {
+		return ErrNoIngress
+	}
+	return nil
+}
+
+func TestApplyingDisabledLastProxyPortStopsRuntime(t *testing.T) {
+	const enabled = `{"config":{"mixed-port":7890},"patch":{"mixed-port":7890}}`
+	const disabled = `{"config":{"mixed-port":0},"patch":{"mixed-port":0}}`
+	for name, adapter := range map[string]func(*host) EngineAdapter{
+		"reinstall": func(h *host) EngineAdapter { return hostEngine{h} },
+		"live":      func(h *host) EngineAdapter { return proxyOnlyLiveEngine{liveHostEngine{hostEngine{h}}} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHost()
+			b, err := Open(newStore(t), h, adapter(h), hostTransports{h}, proxyOnlyHostPlatform{hostPlatform{h}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			run(t, b, "enable", "connect", enabled)
+			disabledReceipt := run(t, b, "disable", "apply", disabled)
+			if snapshot := b.Snapshot(); snapshot.DesiredRunning || snapshot.AppliedRunning ||
+				snapshot.Observed.State != "stopped" || snapshot.AppliedGeneration != disabledReceipt.Generation {
+				t.Fatal("disabling the port did not commit a stopped runtime", snapshot)
+			}
+			expectFailure(t, b, "no-ingress-start", "connect", disabled)
+			plan, _, err := b.Applied()
+			if err != nil || plan == nil || string(plan.Payload()) != disabled || b.Snapshot().AppliedRunning {
+				t.Fatal("failed start did not preserve the disabled port", err, b.Snapshot())
+			}
+		})
+	}
+}
+
 func TestLiveSettingsKeepVPNAndRebuildBakedPlatformOptions(t *testing.T) {
 	for _, systemProxy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "without-system-proxy", true: "with-system-proxy"}[systemProxy], func(t *testing.T) {

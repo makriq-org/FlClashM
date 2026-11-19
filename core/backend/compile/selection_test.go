@@ -63,6 +63,15 @@ func TestSelectionReusesValidatedPlanWithoutNetworkOrParser(t *testing.T) {
 	if reused, err := c.CompileSelection(context.Background(), after, before, legacy, 4); err != nil || reused != nil {
 		t.Fatal("legacy plan was reused")
 	}
+	_ = json.Unmarshal(plan.Payload(), &legacyPayload)
+	delete(legacyPayload, "securityVersion")
+	unsecured, _ := backend.NewRuntimePlan(1, legacyPayload)
+	if reused, err := c.CompileSelection(context.Background(), after, before, unsecured, 4); err != nil || reused != nil {
+		t.Fatal("unsecured plan was reused")
+	}
+	if c.CanRestorePlan(unsecured) || !c.CanRestorePlan(plan) {
+		t.Fatal("rollback accepted an outdated security policy or rejected the current one")
+	}
 }
 
 func TestSubscriptionBookkeepingDoesNotRecompileTheRuntime(t *testing.T) {
@@ -88,5 +97,26 @@ func TestSubscriptionBookkeepingDoesNotRecompileTheRuntime(t *testing.T) {
 			t.Fatalf("%s reused stale plan: %v", key, err)
 		}
 		delete(old.Profile.Metadata, key)
+	}
+}
+
+func TestNodeServiceKeyReplacementInvalidatesCommittedPlan(t *testing.T) {
+	compiler := Compiler{
+		Nodes:    &ExternalCompiler{ServiceKey: [32]byte{1}},
+		Validate: func(context.Context, Object) error { return nil },
+	}
+	input, _ := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p",
+		Text: "proxies: [{name: Bye, type: byedpi, mode: manual, strategy: '-d1'}]"},
+	})
+	plan, err := compiler.Compile(context.Background(), input, 1)
+	if err != nil || !compiler.CanRestorePlan(plan) {
+		t.Fatal("valid plan could not be compiled or restored", err)
+	}
+	compiler.Nodes = &ExternalCompiler{ServiceKey: [32]byte{2}}
+	if compiler.CanRestorePlan(plan) {
+		t.Fatal("plan with replaced service key remained restorable")
+	}
+	if next, err := compiler.CompileSelection(context.Background(), input, input, plan, 2); err != nil || next != nil {
+		t.Fatal("selection reused plan with replaced service key", err)
 	}
 }

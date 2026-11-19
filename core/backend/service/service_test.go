@@ -373,7 +373,8 @@ func TestDeletingActiveProfileSelectsFirstAndLastDeletionStopsVPN(t *testing.T) 
 }
 
 func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
-	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	engine := &testEngine{}
+	app := openTestApp(t, options(t, t.TempDir(), engine, make(chan time.Time)))
 	request(t, app, "hinted", "profile.put", map[string]any{"metadata": map[string]any{"id": "hinted", "providerHeaders": map[string]string{"flclashm-globalmode": "false"}}, "source": "mixed-port: 9091\nrules: ['MATCH,DIRECT']\n", "select": true})
 	waitDomain(t, app, "hinted")
 	waitCondition(t, func() bool {
@@ -398,10 +399,106 @@ func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
 		Config map[string]any `json:"config"`
 	}
 	_ = json.Unmarshal(view, &payload)
+	if payload.Config["mixed-port"] != float64(0) {
+		t.Fatal("unhinted Android profile restored an unauthenticated listener", payload.Config)
+	}
+	var retained map[string]any
+	_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &retained)
+	if retained["mixed-port"] != float64(9091) {
+		t.Fatal("switching profiles lost the retained port fallback", retained)
+	}
+	request(t, app, "own-port", "settings.patch", map[string]any{
+		"patch": map[string]any{"appSetting": map[string]any{
+			"ownedSettings": []string{"clash.mixed-port"},
+		}},
+	})
+	waitDomain(t, app, "own-port")
+	view, err = app.RuntimeView()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(view, &payload); err != nil {
+		t.Fatal(err)
+	}
 	if payload.Config["mixed-port"] != float64(9091) {
-		t.Fatal("switching to an unhinted profile lost the retained fallback", payload.Config)
+		t.Fatal("taking ownership alone did not enable the saved port", payload.Config)
+	}
+	engine.mu.Lock()
+	engine.fail = true
+	engine.mu.Unlock()
+	release := map[string]any{"patch": map[string]any{"appSetting": map[string]any{"ownedSettings": []string{}}}}
+	request(t, app, "release-port", "settings.patch", release)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	receipt, err := app.Await(ctx, "release-port")
+	if err != nil || receipt.Status != "succeeded" {
+		t.Fatalf("ownership was not stored: %+v, %v", receipt, err)
+	}
+	if result, err := app.runtime.Await(ctx, receipt.RuntimeOperationID); err == nil || result.Status != "failed" {
+		t.Fatalf("expected a runtime apply failure: %+v, %v", result, err)
+	}
+	request(t, app, "release-port-retry", "settings.patch", release)
+	waitDomain(t, app, "release-port-retry")
+	view, err = app.RuntimeView()
+	if err != nil || json.Unmarshal(view, &payload) != nil || payload.Config["mixed-port"] != float64(0) {
+		t.Fatalf("retry did not close the mixed port: %v, %v", payload.Config, err)
 	}
 }
+
+func TestOwnershipRetrySupersedesPendingPortChange(t *testing.T) {
+	entered := make(chan struct{})
+	opts := options(t, t.TempDir(), &testEngine{}, make(chan time.Time))
+	opts.Compiler.Validate = func(ctx context.Context, config compile.Object) error {
+		if fmt.Sprint(config["mixed-port"]) == "17890" {
+			close(entered)
+			<-ctx.Done()
+		}
+		return ctx.Err()
+	}
+	app := openTestApp(t, opts)
+	request(t, app, "add", "profile.put", map[string]any{"metadata": map[string]any{"id": "p"}, "source": "rules: ['MATCH,DIRECT']", "select": true})
+	waitDomain(t, app, "add")
+	request(t, app, "take", "settings.patch", map[string]any{"patch": map[string]any{
+		"patchClashConfig": map[string]any{"mixed-port": 17890},
+		"appSetting":       map[string]any{"ownedSettings": []string{"clash.mixed-port"}},
+	}})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	take, err := app.Await(ctx, "take")
+	if err != nil || take.RuntimeOperationID == "" {
+		t.Fatalf("taking ownership did not submit a runtime operation: %+v, %v", take, err)
+	}
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("pending port compilation never started")
+	}
+
+	release := profiles.Object{"appSetting": jsonValue(map[string]any{"ownedSettings": []string{}})}
+	// Simulate an operation that persisted the setting before it was interrupted.
+	if err := app.patchSettings(ctx, release, 0); err != nil {
+		t.Fatal(err)
+	}
+	request(t, app, "release-retry", "settings.patch", map[string]any{"patch": release})
+	retry, err := app.Await(ctx, "release-retry")
+	if err != nil || retry.RuntimeOperationID == "" {
+		t.Fatalf("retry did not replace pending ownership: %+v, %v", retry, err)
+	}
+	if _, err = app.AwaitRuntime(ctx, retry.RuntimeOperationID); err != nil {
+		t.Fatal(err)
+	}
+	if obsolete, err := app.AwaitRuntime(ctx, take.RuntimeOperationID); err == nil || obsolete.ErrorCode != backend.ErrorCodeSuperseded {
+		t.Fatalf("obsolete operation was not superseded: %+v, %v", obsolete, err)
+	}
+	view, err := app.RuntimeView()
+	var applied struct {
+		Config map[string]any `json:"config"`
+	}
+	if err != nil || json.Unmarshal(view, &applied) != nil || applied.Config["mixed-port"] != float64(0) {
+		t.Fatalf("retry did not leave the port closed: %v, %v", applied.Config, err)
+	}
+}
+
 func TestApplicationProfilesRuntimeAndDetachedUI(t *testing.T) {
 	directory := t.TempDir()
 	opts := options(t, directory, &testEngine{}, make(chan time.Time))

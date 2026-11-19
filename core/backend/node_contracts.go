@@ -53,9 +53,12 @@ type NodeLaunch struct {
 	Port     int // Probe listener allocated by the host, zero uses the compiled port.
 }
 type NodeProbe struct {
+	ID             string
 	Host           string
 	Port           int
 	URL, Resolver  string
+	Username       string
+	Password       string
 	RequireSuccess bool
 }
 

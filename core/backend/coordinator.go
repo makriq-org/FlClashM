@@ -798,6 +798,11 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			}
 		}
 	}
+	if next.Desired.Running && errors.Is(err, ErrNoIngress) &&
+		(e.request.Method == "apply" || e.request.Method == "recover" || e.request.Method == "warm") {
+		next.Desired.Running = false
+		err = c.install(e, plan, false)
+	}
 	if err == nil {
 		c.mu.Lock()
 		// The epoch and commit are checked under the same lock as command acceptance.
@@ -805,6 +810,7 @@ func (c *runtimeCoordinator) perform(e *execution) error {
 			err = ErrSuperseded
 		} else {
 			committed := cloneDocument(c.document)
+			committed.Desired.Running = next.Desired.Running
 			if plan != nil {
 				// Reused preparations and in-place selections keep their nodes,
 				// but the snapshot must refer to the newly committed generation.
@@ -1006,7 +1012,42 @@ func (c *runtimeCoordinator) rollback(e *execution, previous Document) error {
 	if err != nil {
 		return err
 	}
-	return c.install(rollback, plan, previous.Applied.Running)
+	running := previous.Applied.Running && previous.Desired.Running
+	rebuilt := false
+	if compiler, ok := c.compiler.(interface{ CanRestorePlan(*RuntimePlan) bool }); ok && !compiler.CanRestorePlan(plan) {
+		plan, err = c.compile(ctx, previous.Applied.Input, e.epoch)
+		if err != nil {
+			return err
+		}
+		if plan == nil || plan.Generation() != e.epoch || !compiler.CanRestorePlan(plan) {
+			return errors.New("could not rebuild previous plan with current security policy")
+		}
+		rebuilt = true
+	}
+	if err = c.install(rollback, plan, running); err != nil {
+		c.residentDigest = ""
+		return errors.Join(err, c.cleanup())
+	}
+	if !rebuilt && running == previous.Applied.Running {
+		return nil
+	}
+	c.mu.Lock()
+	if c.closed || c.epoch != e.epoch {
+		c.mu.Unlock()
+		return errors.Join(ErrSuperseded, c.cleanup())
+	}
+	restored := cloneDocument(c.document)
+	restored.Applied.Plan = plan.Data()
+	restored.Applied.Running = running
+	restored.Applied.Nodes = c.persistedNodes()
+	err = c.saveLocked(restored)
+	c.mu.Unlock()
+	if err != nil {
+		// A rebuilt generation is usable only once its applied plan is durable.
+		c.residentDigest = ""
+		return errors.Join(err, c.cleanup())
+	}
+	return nil
 }
 
 // Close is process teardown, not user Stop: persisted desired intent survives.

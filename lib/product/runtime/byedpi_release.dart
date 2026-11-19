@@ -25,16 +25,16 @@ const byedpiReleaseAssets = <String, ByedpiReleaseAsset>{
   'armeabi-v7a': ByedpiReleaseAsset(
     abi: 'armeabi-v7a',
     cliArch: 'arm',
-    sha256: 'd4a32e79603b5fc55a6c2479b567ac6ce743387b3f67e24e27c7a705b2ad3210',
+    sha256: 'a93cedec077e9f20882e1f156e3e60f6b5254eb3d17eb70dcb7f6134b91ae956',
   ),
   'arm64-v8a': ByedpiReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
-    sha256: 'a8ae867d6f35fe8e5ff72aaa6b5873aa897c6930ea9776eea886372efa47a161',
+    sha256: '1f293f0fcad6d945296a29ab87966fac9d4712a370ef5b934927e0a6d8f7c00b',
   ),
   'x86_64': ByedpiReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
-    sha256: '9ff97b6f826c2127ced0511adaf69857f029edca90d51c9fb8994964b57fb87e',
+    sha256: '04d306f13ef80d0c37f70cabc376542dd000ecbb922e465b088d570f800b78dc',
   ),
 };

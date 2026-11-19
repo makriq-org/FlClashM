@@ -14,6 +14,7 @@ else
   git -C "$byedpi_tmp" checkout --detach FETCH_HEAD
 fi
 patch --batch --fuzz=0 -d "$byedpi_tmp" -p1 < "$byedpi_root/tool/patches/byedpi-android-ifaddrs.patch"
+patch --batch --fuzz=0 -d "$byedpi_tmp" -p1 < "$byedpi_root/tool/patches/byedpi-socks-auth.patch"
 make -C "$byedpi_tmp"
 cd "$byedpi_root/core"
 BYEDPI_TEST_SOURCE="$byedpi_tmp" BYEDPI_TEST_BINARY="$byedpi_tmp/ciadpi" \

@@ -222,7 +222,7 @@ func (a *App) restoreBackup(ctx context.Context, token string, onlyProfiles, rep
 		if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 			return "", err
 		}
-		if err = atomicCacheFile(target, raw); err != nil {
+		if err = writePrivateFileAtomically(target, raw); err != nil {
 			return "", err
 		}
 	}
@@ -271,8 +271,8 @@ func preserveHostOnlySettings(restored, current profiles.Object) {
 	}
 }
 
-func atomicCacheFile(target string, data []byte) error {
-	file, err := os.CreateTemp(filepath.Dir(target), ".restore-*")
+func writePrivateFileAtomically(target string, data []byte) error {
+	file, err := os.CreateTemp(filepath.Dir(target), ".private-*")
 	if err != nil {
 		return err
 	}

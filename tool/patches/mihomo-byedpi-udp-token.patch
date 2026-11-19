@@ -1,0 +1,156 @@
+diff --git a/vendor/github.com/metacubex/mihomo/adapter/outbound/socks5.go b/vendor/github.com/metacubex/mihomo/adapter/outbound/socks5.go
+index 7f3f111..794eb19 100644
+--- a/vendor/github.com/metacubex/mihomo/adapter/outbound/socks5.go
++++ b/vendor/github.com/metacubex/mihomo/adapter/outbound/socks5.go
+@@ -2,6 +2,9 @@ package outbound
+ 
+ import (
+ 	"context"
++	"crypto/rand"
++	"crypto/subtle"
++	"encoding/hex"
+ 	"errors"
+ 	"fmt"
+ 	"io"
+@@ -10,6 +13,7 @@ import (
+ 	"strconv"
+ 
+ 	N "github.com/metacubex/mihomo/common/net"
++	"github.com/metacubex/mihomo/common/pool"
+ 	"github.com/metacubex/mihomo/component/ca"
+ 	C "github.com/metacubex/mihomo/constant"
+ 	"github.com/metacubex/mihomo/transport/socks5"
+@@ -29,18 +33,19 @@ type Socks5 struct {
+ 
+ type Socks5Option struct {
+ 	BasicOption
+-	Name           string `proxy:"name"`
+-	Server         string `proxy:"server"`
+-	Port           int    `proxy:"port"`
+-	UserName       string `proxy:"username,omitempty"`
+-	Password       string `proxy:"password,omitempty"`
+-	TLS            bool   `proxy:"tls,omitempty"`
+-	UDP            bool   `proxy:"udp,omitempty"`
+-	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
+-	NameCertVerify string `proxy:"name-cert-verify,omitempty"`
+-	Fingerprint    string `proxy:"fingerprint,omitempty"`
+-	Certificate    string `proxy:"certificate,omitempty"`
+-	PrivateKey     string `proxy:"private-key,omitempty"`
++	Name             string `proxy:"name"`
++	Server           string `proxy:"server"`
++	Port             int    `proxy:"port"`
++	UserName         string `proxy:"username,omitempty"`
++	Password         string `proxy:"password,omitempty"`
++	TLS              bool   `proxy:"tls,omitempty"`
++	UDP              bool   `proxy:"udp,omitempty"`
++	FlClashMUDPToken bool   `proxy:"flclashm-udp-token,omitempty"`
++	SkipCertVerify   bool   `proxy:"skip-cert-verify,omitempty"`
++	NameCertVerify   string `proxy:"name-cert-verify,omitempty"`
++	Fingerprint      string `proxy:"fingerprint,omitempty"`
++	Certificate      string `proxy:"certificate,omitempty"`
++	PrivateKey       string `proxy:"private-key,omitempty"`
+ }
+ 
+ // StreamConnContext implements C.ProxyAdapter
+@@ -118,8 +123,17 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
+ 		}
+ 	}
+ 
+-	udpAssocateAddr := socks5.AddrFromStdAddrPort(netip.AddrPortFrom(netip.IPv4Unspecified(), 0))
+-	bindAddr, err := ss.clientHandshakeContext(ctx, c, udpAssocateAddr, socks5.CmdUDPAssociate, user)
++	udpAssociateAddr := socks5.AddrFromStdAddrPort(netip.AddrPortFrom(netip.IPv4Unspecified(), 0))
++	var token string
++	if ss.option.FlClashMUDPToken {
++		// The embedded ByeDPI reads this token over the authenticated control
++		// connection. It is never used as a DNS name.
++		var nonce [16]byte
++		rand.Read(nonce[:])
++		token = hex.EncodeToString(nonce[:])
++		udpAssociateAddr = socks5.ParseAddr(net.JoinHostPort(token, "0"))
++	}
++	bindAddr, err := ss.clientHandshakeContext(ctx, c, udpAssociateAddr, socks5.CmdUDPAssociate, user)
+ 	if err != nil {
+ 		err = fmt.Errorf("client hanshake error: %w", err)
+ 		return
+@@ -152,7 +166,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
+ 		pc.Close()
+ 	}()
+ 
+-	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
++	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c, token: token}, ss), nil
+ }
+ 
+ // ProxyInfo implements C.ProxyAdapter
+@@ -171,6 +185,9 @@ func (ss *Socks5) clientHandshakeContext(ctx context.Context, c net.Conn, addr s
+ }
+ 
+ func NewSocks5(option Socks5Option) (*Socks5, error) {
++	if option.FlClashMUDPToken && (option.Server != "127.0.0.1" || option.UserName == "" || option.Password == "" || !option.UDP) {
++		return nil, errors.New("authenticated UDP tokens require an authenticated IPv4 loopback proxy")
++	}
+ 	var tlsConfig *tls.Config
+ 	if option.TLS {
+ 		var err error
+@@ -217,6 +234,7 @@ type socksPacketConn struct {
+ 	net.PacketConn
+ 	rAddr   net.Addr
+ 	tcpConn net.Conn
++	token   string
+ }
+ 
+ func (uc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+@@ -224,6 +242,13 @@ func (uc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+ 	if err != nil {
+ 		return
+ 	}
++	if uc.token != "" {
++		framed := pool.Get(len(uc.token) + len(packet))
++		defer pool.Put(framed)
++		copy(framed, uc.token)
++		copy(framed[len(uc.token):], packet)
++		packet = framed
++	}
+ 	_, err = uc.PacketConn.WriteTo(packet, uc.rAddr)
+ 	if err != nil {
+ 		return 0, err
+@@ -232,11 +257,25 @@ func (uc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+ }
+ 
+ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+-	n, _, e := uc.PacketConn.ReadFrom(b)
+-	if e != nil {
+-		return 0, nil, e
++	packet := b
++	if uc.token != "" {
++		packet = pool.Get(len(b) + len(uc.token) + 3 + socks5.MaxAddrLen)
++		defer pool.Put(packet)
+ 	}
+-	addr, payload, err := socks5.DecodeUDPPacket(b)
++	for {
++		n, _, err := uc.PacketConn.ReadFrom(packet)
++		if err != nil {
++			return 0, nil, err
++		}
++		if uc.token != "" && (n < len(uc.token) || subtle.ConstantTimeCompare(packet[:len(uc.token)], []byte(uc.token)) != 1) {
++			continue
++		}
++		return decodeSocksPacket(b, packet[len(uc.token):n])
++	}
++}
++
++func decodeSocksPacket(b, packet []byte) (int, net.Addr, error) {
++	addr, payload, err := socks5.DecodeUDPPacket(packet)
+ 	if err != nil {
+ 		return 0, nil, err
+ 	}
+@@ -246,9 +285,7 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+ 		return 0, nil, errors.New("parse udp addr error")
+ 	}
+ 
+-	// due to DecodeUDPPacket is mutable, record addr length
+-	copy(b, payload)
+-	return n - len(addr) - 3, udpAddr, nil
++	return copy(b, payload), udpAddr, nil
+ }
+ 
+ func (uc *socksPacketConn) Close() error {

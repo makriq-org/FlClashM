@@ -24,6 +24,7 @@ class _PortForm extends ConsumerStatefulWidget {
 
 class _PortFormState extends ConsumerState<_PortForm> {
   late final TextEditingController _mixedPortController;
+  late final int _initialMixedPort;
   late final TextEditingController _portController;
   late final TextEditingController _socksPortController;
   late final TextEditingController _redirPortController;
@@ -36,7 +37,6 @@ class _PortFormState extends ConsumerState<_PortForm> {
     final ports = ref.read(
       patchClashConfigProvider.select((state) {
         return (
-          mixed: state.mixedPort,
           http: state.port,
           socks: state.socksPort,
           redir: state.redirPort,
@@ -44,7 +44,10 @@ class _PortFormState extends ConsumerState<_PortForm> {
         );
       }),
     );
-    _mixedPortController = TextEditingController(text: ports.mixed.toString());
+    _initialMixedPort = ref.read(effectiveMixedPortProvider);
+    _mixedPortController = TextEditingController(
+      text: _initialMixedPort.toString(),
+    );
     _portController = TextEditingController(text: ports.http.toString());
     _socksPortController = TextEditingController(text: ports.socks.toString());
     _redirPortController = TextEditingController(text: ports.redir.toString());
@@ -55,7 +58,7 @@ class _PortFormState extends ConsumerState<_PortForm> {
       _PortField(
         controller: _mixedPortController,
         label: (appLocalizations) => appLocalizations.mixedPort,
-        allowDisabled: false,
+        allowDisabled: true,
       ),
       _PortField(
         controller: _portController,
@@ -85,11 +88,16 @@ class _PortFormState extends ConsumerState<_PortForm> {
     if (res != true) {
       return;
     }
+    if (system.isAndroid) {
+      ref
+          .read(managedSettingsActionProvider.notifier)
+          .takeOver('clash.mixed-port');
+    }
     ref
         .read(patchClashConfigProvider.notifier)
         .update(
           (state) => state.copyWith(
-            mixedPort: 7890,
+            mixedPort: system.isAndroid ? 0 : 7890,
             port: 0,
             socksPort: 0,
             redirPort: 0,
@@ -112,11 +120,18 @@ class _PortFormState extends ConsumerState<_PortForm> {
     if (_issues(context.appLocalizations).isNotEmpty) {
       return;
     }
+    final mixedPort = int.parse(_mixedPortController.text);
+    final changed = mixedPort != _initialMixedPort;
+    if (system.isAndroid && changed) {
+      ref
+          .read(managedSettingsActionProvider.notifier)
+          .takeOver('clash.mixed-port');
+    }
     ref
         .read(patchClashConfigProvider.notifier)
         .update(
           (state) => state.copyWith(
-            mixedPort: int.parse(_mixedPortController.text),
+            mixedPort: changed ? mixedPort : state.mixedPort,
             port: int.parse(_portController.text),
             socksPort: int.parse(_socksPortController.text),
             redirPort: int.parse(_redirPortController.text),

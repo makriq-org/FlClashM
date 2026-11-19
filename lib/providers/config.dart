@@ -1,5 +1,6 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/models/models.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'generated/config.g.dart';
@@ -83,7 +84,7 @@ class _PatchClashConfig extends _$PatchClashConfig
     with AutoDisposeNotifierMixin {
   @override
   PatchClashConfig build() {
-    return const PatchClashConfig();
+    return PatchClashConfig(mixedPort: system.isAndroid ? 0 : defaultMixedPort);
   }
 }
 
@@ -159,3 +160,28 @@ List<Override> buildConfigOverrides(Config config) {
     excludeSSIDsProvider.overrideWithBuild((_, _) => config.excludeSSIDs),
   ];
 }
+
+final appliedMixedPortProvider = NotifierProvider<AppliedMixedPort, int?>(
+  AppliedMixedPort.new,
+);
+
+class AppliedMixedPort extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void project(int? port) => state = port;
+}
+
+final effectiveMixedPortProvider = Provider<int>((ref) {
+  final saved = ref.watch(
+    patchClashConfigProvider.select((state) => state.mixedPort),
+  );
+  if (!system.isAndroid) return saved;
+  final effective = ref.watch(appliedMixedPortProvider);
+  final owned = ref.watch(
+    appSettingProvider.select(
+      (state) => state.ownedSettings.contains('clash.mixed-port'),
+    ),
+  );
+  return effective ?? (owned ? saved : 0);
+});

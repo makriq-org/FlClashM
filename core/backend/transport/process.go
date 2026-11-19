@@ -27,7 +27,9 @@ import (
 
 type process struct {
 	command  *exec.Cmd
+	address  string
 	graceful bool
+	stopping bool // Protected by ProcessAdapter.mu.
 	done     chan struct{}
 	exitErr  error // Written before closing done; readers synchronize on done.
 }
@@ -39,8 +41,7 @@ type ProcessAdapter struct {
 	ABI         string
 	Executables map[string]string
 	PhysicalDNS func(context.Context) ([]netip.Addr, error)
-	// ProbeRequest is supplied by the host's HTTP/SOCKS mechanism.
-	ProbeRequest func(context.Context, backend.NodeProbe) (bool, error)
+	Prober      *SOCKSProbe
 	// Log is a trusted host sink. The host must redact output before persistence.
 	// A bounded queue isolates process I/O and lifecycle from slow diagnostics.
 	Log       func(kind, line string)
@@ -223,20 +224,13 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	if launch.Port != 0 {
 		port = launch.Port
 	}
-	// Do not report readiness against a socket owned by another installation.
-	// The actual transport binds after this probe; namespace allocation keeps
-	// application variants apart and process observation still fences early exit.
-	listener, err := net.Listen("tcp", net.JoinHostPort(node.Host, strconv.Itoa(port)))
-	if err != nil {
-		return fmt.Errorf("external listener port %d is unavailable: %w", port, err)
-	}
-	_ = listener.Close()
 	if node.Type == "stormdns" || node.Type == "olcrtc" {
 		if err = a.renderDNS(ctx, node, directory); err != nil {
 			return err
 		}
 	}
 	arguments := []string{}
+	user, password := node.Metadata["service-auth-user"], node.Metadata["service-auth-password"]
 	switch node.Type {
 	case "naiveproxy":
 		arguments = []string{filepath.Join(directory, "config.json")}
@@ -245,10 +239,6 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	case "stormdns":
 		arguments = []string{"-config", filepath.Join(directory, "client_config.toml"), "-resolvers", filepath.Join(directory, "client_resolvers.txt")}
 	case "byedpi":
-		port := node.Port
-		if launch.Port != 0 {
-			port = launch.Port
-		}
 		strategy := launch.Strategy
 		if strategy == "" {
 			var native struct {
@@ -268,7 +258,19 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		if e != nil {
 			return e
 		}
-		arguments = append([]string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port)}, argv...)
+		if user == "" || password == "" {
+			return errors.New("ByeDPI requires service credentials")
+		}
+		// Auto-selection probes start directly with their own ID and directory.
+		authFile := filepath.Join(directory, "auth.txt")
+		if err := writePrivate(authFile, []byte(user+"\n"+password+"\n")); err != nil {
+			return err
+		}
+		arguments = []string{"--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", authFile}
+		if !node.UDP {
+			arguments = append(arguments, "--no-udp")
+		}
+		arguments = append(arguments, argv...)
 	default:
 		return errors.New("unsupported transport")
 	}
@@ -291,10 +293,17 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	command := exec.Command(executable, arguments...)
 	command.Dir = directory
 	command.Stdin = nil
-	output := newProcessOutput(node.Type, a.Log)
+	address := net.JoinHostPort(node.Host, strconv.Itoa(port))
+	// Detect an occupied endpoint as close as possible to the child's bind.
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("external listener port %d is unavailable: %w", port, err)
+	}
+	_ = listener.Close()
+	output := newProcessOutput(node.Type, a.Log, user, password)
 	command.Stdout = output
 	command.Stderr = output
-	p := &process{command: command, graceful: node.Type == "olcrtc", done: make(chan struct{})}
+	p := &process{command: command, address: address, graceful: node.Type == "olcrtc", done: make(chan struct{})}
 	started := make(chan error, 1)
 	pin := bindChildLifetime(command)
 	go func() {
@@ -336,6 +345,9 @@ func (a *ProcessAdapter) Stop(ctx context.Context, id string) error {
 	}
 	a.versions[id]++
 	p := a.processes[id]
+	if p != nil {
+		p.stopping = true
+	}
 	a.mu.Unlock()
 	if p == nil {
 		return nil
@@ -428,10 +440,47 @@ func (a *ProcessAdapter) AllocatePort(ctx context.Context) (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 func (a *ProcessAdapter) Probe(ctx context.Context, probe backend.NodeProbe) (bool, error) {
-	if a.ProbeRequest == nil {
+	if a.Prober == nil {
 		return false, errors.New("host probe mechanism is unavailable")
 	}
-	return a.ProbeRequest(ctx, probe)
+	address := net.JoinHostPort(probe.Host, strconv.Itoa(probe.Port))
+	check, err := a.watchProcess(probe.ID, address)
+	if err != nil {
+		return false, err
+	}
+	passed, err := a.Prober.probe(ctx, probe, check)
+	if err != nil || !passed {
+		return false, err
+	}
+	if err := check(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// watchProcess pins readiness and protocol writes to the same launch, even
+// when a node is restarted on the same endpoint during a probe.
+func (a *ProcessAdapter) watchProcess(id, address string) (func() error, error) {
+	a.mu.Lock()
+	expected := a.processes[id]
+	a.mu.Unlock()
+	check := func() error {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if expected == nil || expected.address != address || a.processes[id] != expected {
+			return errors.New("external process endpoint changed")
+		}
+		if expected.stopping {
+			return errors.New("external process is stopping")
+		}
+		select {
+		case <-expected.done:
+			return errors.New("external process exited")
+		default:
+			return nil
+		}
+	}
+	return check, check()
 }
 func writePrivate(name string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(name), ".backend-*")
@@ -459,7 +508,12 @@ func (a *ProcessAdapter) Listening(ctx context.Context, node backend.NodePlan) (
 	if node.Host != "127.0.0.1" || node.Port < 1 || node.Port > 65535 {
 		return false, errors.New("invalid listener endpoint")
 	}
-	connection, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(ctx, "tcp", net.JoinHostPort(node.Host, strconv.Itoa(node.Port)))
+	address := net.JoinHostPort(node.Host, strconv.Itoa(node.Port))
+	check, err := a.watchProcess(node.ID, address)
+	if err != nil {
+		return false, err
+	}
+	connection, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(ctx, "tcp", address)
 	if err != nil {
 		if ctx.Err() != nil {
 			return false, ctx.Err()
@@ -467,5 +521,8 @@ func (a *ProcessAdapter) Listening(ctx context.Context, node backend.NodePlan) (
 		return false, nil
 	}
 	_ = connection.Close()
+	if err := check(); err != nil {
+		return false, err
+	}
 	return true, nil
 }

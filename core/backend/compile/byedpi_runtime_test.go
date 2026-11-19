@@ -3,15 +3,23 @@ package compile
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/metacubex/mihomo/adapter/outbound"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 func byeDPITestStrategies() []string {
@@ -135,5 +143,211 @@ func TestByeDPIPinnedRuntimeStrategies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("strategy %d: %v\n%s", i, err, output.String())
 		}
+	}
+}
+
+func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
+	executable := os.Getenv("BYEDPI_TEST_BINARY")
+	if executable == "" {
+		t.Skip("run tool/check_byedpi.sh for the pinned runtime contract")
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Close()
+
+	credentials := filepath.Join(t.TempDir(), "auth.txt")
+	username, password := strings.Repeat("u", 255), strings.Repeat("p", 255)
+	if err = os.WriteFile(credentials, []byte(username+"\n"+password+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	cmd := exec.CommandContext(ctx, executable, "--ip", "127.0.0.1", "--port", strconv.Itoa(port), "--auth-file", credentials)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err = cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+		if t.Failed() {
+			t.Log(output.String())
+		}
+	}()
+
+	var conn net.Conn
+	for ctx.Err() == nil {
+		conn, err = net.DialTimeout("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 50*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if conn == nil {
+		t.Fatalf("listener did not start: %v", errors.Join(err, ctx.Err()))
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	unauthenticated, err := net.DialTimeout("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = unauthenticated.SetDeadline(time.Now().Add(time.Second))
+	if _, err = unauthenticated.Write([]byte{5, 1, 0}); err != nil {
+		unauthenticated.Close()
+		t.Fatal(err)
+	}
+	unauthenticatedResponse := make([]byte, 2)
+	if _, err = io.ReadFull(unauthenticated, unauthenticatedResponse); err != nil || !bytes.Equal(unauthenticatedResponse, []byte{5, 255}) {
+		unauthenticated.Close()
+		t.Fatalf("unauthenticated SOCKS5 was accepted: response=%v err=%v", unauthenticatedResponse, err)
+	}
+	_ = unauthenticated.Close()
+	writePartial := func(part []byte) {
+		t.Helper()
+		if _, err := conn.Write(part); err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		var b [1]byte
+		if _, err := conn.Read(b[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("incomplete negotiation should wait for more data, got %v", err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writePartial([]byte{5})
+	writePartial([]byte{1})
+	if _, err = conn.Write([]byte{2}); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, 2)
+	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{5, 2}) {
+		t.Fatalf("SOCKS5 auth method response %v: %v", response, err)
+	}
+	request := append([]byte{1, byte(len(username))}, username...)
+	request = append(request, byte(len(password)))
+	request = append(request, password...)
+	writePartial(request[:2])
+	writePartial(request[2:4])
+	writePartial(request[4 : len(request)-2])
+	if _, err = conn.Write(request[len(request)-2:]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {
+		t.Fatalf("RFC 1929 response %v: %v", response, err)
+	}
+	t.Run("wrong password", func(t *testing.T) {
+		rejected, err := net.DialTimeout("tcp4", conn.RemoteAddr().String(), time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rejected.Close()
+		_ = rejected.SetDeadline(time.Now().Add(time.Second))
+		if _, err := rejected.Write([]byte{5, 1, 2}); err != nil {
+			t.Fatal(err)
+		}
+		var response [2]byte
+		if _, err := io.ReadFull(rejected, response[:]); err != nil || response != [2]byte{5, 2} {
+			t.Fatalf("could not negotiate SOCKS5 authentication: %v, %v", response, err)
+		}
+		wrong := bytes.Clone(request)
+		wrong[len(wrong)-1] = 'q'
+		if _, err := rejected.Write(wrong); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.ReadFull(rejected, response[:]); err != nil || response != [2]byte{1, 1} {
+			t.Fatalf("SOCKS5 did not reject the wrong password: %v, %v", response, err)
+		}
+		if _, err := rejected.Read(response[:]); !errors.Is(err, io.EOF) {
+			t.Fatalf("SOCKS5 did not close after rejecting credentials: %v", err)
+		}
+	})
+	token := strings.Repeat("a", 32)
+	association := append([]byte{5, 3, 0, 3, byte(len(token))}, token...)
+	association = append(association, 0, 0)
+	writePartial(association[:4])
+	writePartial(association[4:12])
+	if _, err = conn.Write(association[12:]); err != nil {
+		t.Fatal(err)
+	}
+	udpResponse := make([]byte, 10)
+	if _, err = io.ReadFull(conn, udpResponse); err != nil || udpResponse[0] != 5 || udpResponse[1] != 0 {
+		t.Fatalf("fragmented UDP ASSOCIATE failed: response=%v err=%v", udpResponse, err)
+	}
+	const payloadSize = 16 * 1024
+	echo, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer echo.Close()
+	dest := echo.LocalAddr().(*net.UDPAddr)
+	t.Run("wrong UDP token", func(t *testing.T) {
+		relay := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(binary.BigEndian.Uint16(udpResponse[8:]))}
+		client, err := net.DialUDP("udp4", nil, relay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		packet, err := socks5.EncodeUDPPacket(socks5.ParseAddr(dest.String()), []byte("fixture"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Write(append([]byte(strings.Repeat("b", len(token))), packet...)); err != nil {
+			t.Fatal(err)
+		}
+		var received [32]byte
+		_ = echo.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		defer echo.SetReadDeadline(time.Time{})
+		if _, _, err := echo.ReadFromUDP(received[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("UDP relay did not discard the wrong token: %v", err)
+		}
+		if _, err := client.Write(append([]byte(token), packet...)); err != nil {
+			t.Fatal(err)
+		}
+		_ = echo.SetReadDeadline(time.Now().Add(time.Second))
+		n, _, err := echo.ReadFromUDP(received[:])
+		if err != nil || string(received[:n]) != "fixture" {
+			t.Fatalf("same UDP session did not relay a valid packet: %v", err)
+		}
+	})
+	echoResult := make(chan error, 1)
+	go func() {
+		var payload [payloadSize]byte
+		n, from, err := echo.ReadFromUDP(payload[:])
+		if err == nil {
+			_, err = echo.WriteToUDP(payload[:n], from)
+		}
+		echoResult <- err
+	}()
+	proxy, err := outbound.NewSocks5(outbound.Socks5Option{Server: "127.0.0.1", Port: port,
+		UserName: username, Password: password, UDP: true, FlClashMUDPToken: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pc, err := proxy.ListenPacketContext(ctx, &C.Metadata{DstIP: netip.MustParseAddr("127.0.0.1"), DstPort: uint16(dest.Port)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	_ = pc.SetDeadline(time.Now().Add(time.Second))
+	payload := bytes.Repeat([]byte("ab"), payloadSize/2)
+	if _, err := pc.WriteTo(payload, dest); err != nil {
+		t.Fatal(err)
+	}
+	var reply [payloadSize]byte
+	n, _, err := pc.ReadFrom(reply[:])
+	if err != nil || !bytes.Equal(reply[:n], payload) {
+		t.Fatalf("authenticated UDP round trip got %d of %d bytes: %v", n, len(payload), err)
+	}
+	if err := <-echoResult; err != nil {
+		t.Fatal(err)
 	}
 }
