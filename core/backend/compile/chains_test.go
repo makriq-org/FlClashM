@@ -3,6 +3,7 @@ package compile
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -167,6 +168,37 @@ rules: ['MATCH,DIRECT']`
 	result := prepared(t, c, request)
 	if !reflect.DeepEqual(list(configEntry(t, result, "proxy-groups", "All")["proxies"]), []any{"Exit"}) {
 		t.Fatal("mihomo-compatible lookbehind filter was not applied")
+	}
+}
+
+func TestProxyChainRespectsGroupExclusions(t *testing.T) {
+	const source = `proxies:
+  - {name: Entry, type: socks5, server: entry.test, port: 1080}
+  - {name: Blocked, type: socks5, server: blocked.test, port: 1080}
+  - {name: Allowed, type: socks5, server: allowed.test, port: 1080}
+proxy-groups:
+  - {name: BlockedGroup, type: select, proxies: [Blocked]}
+  - {name: ExitGroup, type: select, proxies: [BlockedGroup, Allowed], default-selected: BlockedGroup%s}
+rules: ['MATCH,ExitGroup']`
+	for _, test := range []struct {
+		name, options string
+	}{
+		{"excluded by name", ", exclude-filter: '^BlockedGroup$'"},
+		{"excluded by type", ", exclude-type: Selector"},
+		{"excluded from include-all group", ", include-all-proxies: true, filter: '^Allowed$', exclude-filter: '^BlockedGroup$'"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c, request := chainRequest(fmt.Sprintf(source, test.options))
+			request.Authoring["proxyChains"] = []authoring.Object{
+				row(Object{"id": 1, "profileId": "p", "name": "Chain", "hops": []any{"Entry", "ExitGroup"}}),
+			}
+			result := prepared(t, c, request)
+			chain := configEntry(t, result, "proxy-groups", "Chain")
+			if !reflect.DeepEqual(list(chain["proxies"]), []any{"Allowed · Chain"}) ||
+				chain["default-selected"] != "Allowed · Chain" {
+				t.Fatalf("chain must select only an allowed exit: %v", chain)
+			}
+		})
 	}
 }
 

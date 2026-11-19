@@ -89,7 +89,7 @@ func applyAuthoredProxyChains(config Object, chains []proxyChain) error {
 		providers:   map[string]bool{},
 		taken:       map[string]bool{},
 		chainNames:  map[string]bool{},
-		leaves:      map[string][]string{},
+		resolved:    map[string]chainGroupResolution{},
 	}
 	originalProxies := []string{}
 	for _, proxy := range list(config["proxies"]) {
@@ -213,7 +213,12 @@ type chainBuilder struct {
 	providers   map[string]bool
 	taken       map[string]bool
 	chainNames  map[string]bool
-	leaves      map[string][]string
+	resolved    map[string]chainGroupResolution
+}
+
+type chainGroupResolution struct {
+	leaves      []string
+	defaultLeaf string
 }
 
 func (b *chainBuilder) reserved(name string) bool {
@@ -251,11 +256,11 @@ func (b *chainBuilder) validateHop(name string) error {
 	if chainReservedNames[name] {
 		return fmt.Errorf("hop %s is not a chainable proxy or group", name)
 	}
-	leaves, err := b.leavesOf(name)
+	resolved, err := b.resolveHop(name, map[string]bool{})
 	if err != nil {
 		return err
 	}
-	for _, leaf := range leaves {
+	for _, leaf := range resolved.leaves {
 		if err := b.chainableLeaf(leaf); err != nil {
 			return err
 		}
@@ -280,71 +285,58 @@ func (b *chainBuilder) chainableLeaf(name string) error {
 	return nil
 }
 
-func (b *chainBuilder) leavesOf(name string) ([]string, error) {
+func (b *chainBuilder) resolveHop(name string, visiting map[string]bool) (chainGroupResolution, error) {
 	if b.proxyByName[name] != nil {
-		return []string{name}, nil
+		return chainGroupResolution{leaves: []string{name}, defaultLeaf: name}, nil
 	}
-	if b.groupByName[name] == nil {
-		return nil, fmt.Errorf("hop %s is missing", name)
+	group := b.groupByName[name]
+	if group == nil {
+		return chainGroupResolution{}, fmt.Errorf("hop %s is missing", name)
 	}
-	return b.groupLeaves(name, map[string]bool{})
-}
-
-func (b *chainBuilder) groupLeaves(name string, visiting map[string]bool) ([]string, error) {
-	if cached, ok := b.leaves[name]; ok {
+	if cached, ok := b.resolved[name]; ok {
 		return cached, nil
 	}
 	if visiting[name] {
-		return nil, fmt.Errorf("hop group %s forms a cycle", name)
+		return chainGroupResolution{}, fmt.Errorf("hop group %s forms a cycle", name)
 	}
 	visiting[name] = true
-	group := b.groupByName[name]
-	if len(list(group["use"])) > 0 {
-		return nil, fmt.Errorf("hop group %s uses providers", name)
+	defer delete(visiting, name)
+	if len(list(group["use"])) > 0 || group["include-all-providers"] == true {
+		return chainGroupResolution{}, fmt.Errorf("hop group %s uses providers", name)
 	}
-	includeAll := group["include-all"] == true
-	if includeAll && len(b.providers) > 0 || group["include-all-providers"] == true {
-		return nil, fmt.Errorf("hop group %s uses providers", name)
+	excluded, err := b.groupExclusions(group)
+	if err != nil {
+		return chainGroupResolution{}, err
 	}
-	members := append([]any(nil), list(group["proxies"])...)
-	if includeAll || group["include-all-proxies"] == true {
-		if text(group["filter"]) != "" || text(group["exclude-filter"]) != "" || text(group["exclude-type"]) != "" {
-			return nil, fmt.Errorf("hop group %s has filters", name)
-		}
-		members = append(members, b.proxyNames()...)
-	}
-	found := []string{}
+	resolved := chainGroupResolution{}
 	seen := map[string]bool{}
-	for _, member := range members {
+	selected := text(group["default-selected"])
+	// mihomo applies exclusions to the group's immediate members. A nested
+	// group excluded here must never contribute its proxies to the chain.
+	for _, member := range list(group["proxies"]) {
 		memberName := text(member)
-		if memberName == "" {
+		if memberName == "" || excluded(memberName) {
 			continue
 		}
-		var leaves []string
-		if b.proxyByName[memberName] != nil {
-			leaves = []string{memberName}
-		} else if b.groupByName[memberName] != nil {
-			var err error
-			leaves, err = b.groupLeaves(memberName, visiting)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, fmt.Errorf("hop group %s references missing member %s", name, memberName)
+		child, err := b.resolveHop(memberName, visiting)
+		if err != nil {
+			return chainGroupResolution{}, err
 		}
-		for _, leaf := range leaves {
+		if resolved.defaultLeaf == "" || memberName == selected {
+			resolved.defaultLeaf = child.defaultLeaf
+		}
+		for _, leaf := range child.leaves {
 			if !seen[leaf] {
 				seen[leaf] = true
-				found = append(found, leaf)
+				resolved.leaves = append(resolved.leaves, leaf)
 			}
 		}
 	}
-	delete(visiting, name)
-	if len(found) == 0 {
-		return nil, fmt.Errorf("hop group %s has no proxies", name)
+	if len(resolved.leaves) == 0 {
+		return chainGroupResolution{}, fmt.Errorf("hop group %s has no proxies", name)
 	}
-	b.leaves[name] = found
-	return found, nil
+	b.resolved[name] = resolved
+	return resolved, nil
 }
 
 func (b *chainBuilder) proxyNames() []any {
@@ -360,38 +352,18 @@ func (b *chainBuilder) proxyNames() []any {
 	return out
 }
 
-func (b *chainBuilder) defaultLeafOf(name string, visiting map[string]bool) string {
-	if b.proxyByName[name] != nil {
-		return name
-	}
-	group := b.groupByName[name]
-	if group == nil || visiting[name] {
-		return ""
-	}
-	visiting[name] = true
-	if pick := text(group["default-selected"]); pick != "" {
-		return b.defaultLeafOf(pick, visiting)
-	}
-	for _, member := range list(group["proxies"]) {
-		if leaf := b.defaultLeafOf(text(member), visiting); leaf != "" {
-			return leaf
-		}
-	}
-	return ""
-}
-
 func (b *chainBuilder) build(chain proxyChain) error {
 	through := chain.hops[0]
 	for index := 1; index < len(chain.hops); index++ {
 		hop := chain.hops[index]
-		leaves, err := b.leavesOf(hop)
+		resolved, err := b.resolveHop(hop, map[string]bool{})
 		if err != nil {
 			return err
 		}
 		isExit := index == len(chain.hops)-1
 		cloneOf := map[string]string{}
-		clones := make([]any, 0, len(leaves))
-		for _, leaf := range leaves {
+		clones := make([]any, 0, len(resolved.leaves))
+		for _, leaf := range resolved.leaves {
 			base := leaf + " · " + chain.name
 			if !isExit {
 				base = leaf + " · " + chain.name + " " + strconv.Itoa(index)
@@ -405,12 +377,12 @@ func (b *chainBuilder) build(chain proxyChain) error {
 			clones = append(clones, name)
 		}
 		source := b.groupByName[hop]
-		defaultLeaf := ""
+		defaultSelected := ""
 		if source != nil {
-			defaultLeaf = b.defaultLeafOf(hop, map[string]bool{})
+			defaultSelected = cloneOf[resolved.defaultLeaf]
 		}
 		if isExit {
-			group := chainGroup(chain.name, source, clones, cloneOf[defaultLeaf])
+			group := chainGroup(chain.name, source, clones, defaultSelected)
 			b.groups = append(b.groups, group)
 			continue
 		}
@@ -420,7 +392,7 @@ func (b *chainBuilder) build(chain proxyChain) error {
 			continue
 		}
 		name := b.unique(chain.name + " · " + strconv.Itoa(index))
-		group := chainGroup(name, source, clones, cloneOf[defaultLeaf])
+		group := chainGroup(name, source, clones, defaultSelected)
 		group["hidden"] = true
 		b.groups = append(b.groups, group)
 		through = name
@@ -468,15 +440,9 @@ func (b *chainBuilder) pin() ([]any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("group %s filter: %w", text(group["name"]), err)
 		}
-		excluded, err := chainPatterns(group["exclude-filter"])
+		excluded, err := b.groupExclusions(group)
 		if err != nil {
-			return nil, fmt.Errorf("group %s exclude-filter: %w", text(group["name"]), err)
-		}
-		excludedTypes := map[string]bool{}
-		for _, kind := range strings.Split(text(group["exclude-type"]), "|") {
-			if kind = strings.TrimSpace(kind); kind != "" {
-				excludedTypes[strings.ToLower(kind)] = true
-			}
+			return nil, err
 		}
 		next := Object{}
 		for key, value := range group {
@@ -487,7 +453,7 @@ func (b *chainBuilder) pin() ([]any, error) {
 		members := []any{}
 		seen := map[string]bool{}
 		add := func(name string) {
-			if name == "" || seen[name] || chainExcluded(name, b, excluded, excludedTypes) {
+			if name == "" || seen[name] || (b.proxyByName[name] != nil && excluded(name)) {
 				return
 			}
 			seen[name] = true
@@ -517,24 +483,39 @@ func (b *chainBuilder) pin() ([]any, error) {
 	return pinned, nil
 }
 
-func chainExcluded(name string, b *chainBuilder, excluded []*regexp2.Regexp, types map[string]bool) bool {
-	if b.proxyByName[name] == nil {
-		return false
+func (b *chainBuilder) groupExclusions(group Object) (func(string) bool, error) {
+	patterns, err := chainPatterns(group["exclude-filter"])
+	if err != nil {
+		return nil, fmt.Errorf("group %s exclude-filter: %w", text(group["name"]), err)
 	}
-	if chainMatches(excluded, name) {
-		return true
+	types := map[string]bool{}
+	for kind := range strings.SplitSeq(text(group["exclude-type"]), "|") {
+		if kind != "" {
+			types[strings.ToLower(kind)] = true
+		}
 	}
-	if len(types) == 0 {
-		return false
+	return func(name string) bool {
+		return chainMatches(patterns, name) || (len(types) != 0 && types[b.adapterType(name)])
+	}, nil
+}
+
+func (b *chainBuilder) adapterType(name string) string {
+	kind := text(b.proxyByName[name]["type"])
+	if group := b.groupByName[name]; group != nil {
+		kind = text(group["type"])
+	} else if chainReservedNames[name] {
+		kind = name
 	}
-	kind := strings.ToLower(strings.ReplaceAll(text(b.proxyByName[name]["type"]), "-", ""))
+	kind = strings.ToLower(strings.ReplaceAll(kind, "-", ""))
 	switch kind {
 	case "ss":
-		kind = "shadowsocks"
+		return "shadowsocks"
 	case "ssr":
-		kind = "shadowsocksr"
+		return "shadowsocksr"
+	case "select":
+		return "selector"
 	}
-	return types[strings.ToLower(strings.ReplaceAll(kind, "-", ""))]
+	return kind
 }
 
 func chainMatches(patterns []*regexp2.Regexp, name string) bool {
