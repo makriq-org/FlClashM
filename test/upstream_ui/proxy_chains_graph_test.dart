@@ -100,6 +100,34 @@ void main() {
     );
   });
 
+  test('an unreadable filter in an unrelated group does not block a chain', () {
+    final graph = ProxyChainGraph.fromRaw({
+      'proxies': [
+        {'name': 'DE', 'type': 'vless'},
+        {'name': 'NL', 'type': 'trojan'},
+      ],
+      'proxy-groups': [
+        {
+          'name': 'Auto',
+          'type': 'select',
+          'proxies': ['DE', 'NL'],
+        },
+        {
+          'name': 'Server',
+          'type': 'select',
+          'include-all-proxies': true,
+          'filter': r'\p{L}',
+        },
+      ],
+    });
+    expect(
+      graph.issuesOf([
+        _chain(1, 'Fine', ['Auto', 'NL']),
+      ]),
+      isEmpty,
+    );
+  });
+
   test('a disabled chain does not take its name', () {
     final graph = ProxyChainGraph.fromRaw(_config());
     final issues = graph.issuesOf([

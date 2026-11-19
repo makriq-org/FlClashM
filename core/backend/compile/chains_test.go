@@ -97,6 +97,77 @@ func TestProxyChainsCloneExitThroughHops(t *testing.T) {
 	if !reflect.DeepEqual(list(result.Config["rules"]), []any{"DOMAIN,keep.test,DIRECT", "MATCH,All"}) {
 		t.Fatalf("rules changed: %v", result.Config["rules"])
 	}
+
+	// Global mode must list the profile's own outbounds and the chain groups,
+	// but not the generated hop clones that exist only for dialer-proxy.
+	global := configEntry(t, result, "proxy-groups", "GLOBAL")
+	want := []any{"DIRECT", "REJECT", "Entry", "Middle", "Exit", "Auto", "All", "Two", "Three", "GroupExit", "SelectExit"}
+	if !reflect.DeepEqual(list(global["proxies"]), want) {
+		t.Fatalf("GLOBAL membership is wrong: %v", global["proxies"])
+	}
+}
+
+func TestProxyChainGeneratedNamesDoNotShadowOutbounds(t *testing.T) {
+	source := `proxies:
+  - {name: Entry, type: socks5, server: entry.test, port: 1080}
+  - {name: Exit, type: socks5, server: exit.test, port: 1080}
+  - {name: Exit · Two, type: socks5, server: other.test, port: 1080}
+proxy-groups: [{name: Other · 1, type: select, proxies: [Exit]}]
+rules: ['MATCH,DIRECT']`
+	data := authoring.Empty()
+	data["proxyChains"] = []authoring.Object{
+		row(Object{"id": 1, "profileId": "p", "name": "Two", "enabled": true, "hops": []any{"Entry", "Exit"}}),
+		row(Object{"id": 2, "profileId": "p", "name": "Other", "enabled": true, "hops": []any{"Entry", "Other · 1", "Exit"}}),
+	}
+	c := Compiler{Validate: func(context.Context, Object) error { return nil }}
+	request := Input{Version: 1, Profile: &RawProfile{ID: "p", Text: source, Metadata: Object{"extendType": "standard"}}, Settings: Object{}, Authoring: data}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.prepare(context.Background(), backend.Input(raw))
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, item := range list(result.Config["proxies"]) {
+		name := text(object(item)["name"])
+		if seen[name] {
+			t.Fatalf("duplicate proxy name %q", name)
+		}
+		seen[name] = true
+	}
+	seen = map[string]bool{}
+	for _, item := range list(result.Config["proxy-groups"]) {
+		name := text(object(item)["name"])
+		if seen[name] {
+			t.Fatalf("duplicate group name %q", name)
+		}
+		seen[name] = true
+	}
+	// The exit clone that would have taken an existing proxy's name gets a
+	// suffix instead.
+	if configEntry(t, result, "proxies", "Exit · Two 2")["dialer-proxy"] != "Entry" {
+		t.Fatal("renamed clone must keep the entry hop")
+	}
+	if got := configEntry(t, result, "proxies", "Exit · Two")["server"]; got != "other.test" {
+		t.Fatalf("the profile's own proxy was rewritten: %v", got)
+	}
+}
+
+func TestProxyChainFilterUsesEngineRegexpDialect(t *testing.T) {
+	source := `proxies:
+  - {name: Entry, type: socks5, server: entry.test, port: 1080}
+  - {name: Exit, type: socks5, server: exit.test, port: 1080}
+proxy-groups:
+  - {name: All, type: select, include-all: true, filter: '(?<=x)y|Exit'}
+rules: ['MATCH,DIRECT']`
+	c, request := chainRequest(source)
+	request.Authoring["proxyChains"] = []authoring.Object{row(Object{"id": 1, "profileId": "p", "name": "Two", "hops": []any{"Entry", "Exit"}})}
+	result := prepared(t, c, request)
+	if !reflect.DeepEqual(list(configEntry(t, result, "proxy-groups", "All")["proxies"]), []any{"Exit"}) {
+		t.Fatal("mihomo-compatible lookbehind filter was not applied")
+	}
 }
 
 func TestProxyChainCanBeMatchTargetAndRuleTarget(t *testing.T) {
@@ -167,7 +238,7 @@ func TestProxyChainErrorsKeepRuntimeUntouched(t *testing.T) {
 		{"name collision", row(Object{"id": 1, "profileId": "p", "name": "Auto", "hops": []any{"Entry", "Exit"}}), source, "collides"},
 		{"chain cycle", row(Object{"id": 1, "profileId": "p", "name": "Two", "hops": []any{"Entry", "Two"}}), source, "proxy chain"},
 		{"existing dialer", row(Object{"id": 1, "profileId": "p", "name": "Two", "hops": []any{"Entry", "Exit"}}), "proxies: [{name: Entry, type: socks5, server: entry.test, port: 1080}, {name: Exit, type: socks5, server: exit.test, port: 1080, dialer-proxy: Entry}]\nrules: ['MATCH,DIRECT']", "dialer-proxy"},
-		{"unreadable filter", row(Object{"id": 1, "profileId": "p", "name": "Two", "hops": []any{"Entry", "Exit"}}), "proxies: [{name: Entry, type: socks5, server: entry.test, port: 1080}, {name: Exit, type: socks5, server: exit.test, port: 1080}]\nproxy-groups: [{name: All, type: select, include-all: true, filter: '(?<=x)y'}]\nrules: ['MATCH,DIRECT']", "filter"},
+		{"unreadable filter", row(Object{"id": 1, "profileId": "p", "name": "Two", "hops": []any{"Entry", "Exit"}}), "proxies: [{name: Entry, type: socks5, server: entry.test, port: 1080}, {name: Exit, type: socks5, server: exit.test, port: 1080}]\nproxy-groups: [{name: All, type: select, include-all: true, filter: '('}]\nrules: ['MATCH,DIRECT']", "filter"},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

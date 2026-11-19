@@ -45,7 +45,6 @@ class ProxyChainGraph {
     required Set<String> groupNames,
     required Set<String> providers,
     required Map<String, ProxyChainIssue> hopIssues,
-    required this.unpinnable,
   }) : _groupNames = groupNames,
        _providers = providers,
        _hopIssues = hopIssues;
@@ -60,10 +59,6 @@ class ProxyChainGraph {
   final Set<String> _groupNames;
   final Set<String> _providers;
   final Map<String, ProxyChainIssue> _hopIssues;
-
-  /// An `include-all` group whose filter Dart cannot read, so the clones
-  /// cannot be kept out of it.
-  final String? unpinnable;
 
   bool has(String name) =>
       proxyTypes.containsKey(name) || _groupNames.contains(name);
@@ -98,7 +93,6 @@ class ProxyChainGraph {
 
   /// By chain id; a name goes to the first enabled chain that can take it.
   Map<int, ProxyChainIssue> issuesOf(Iterable<ProxyChain> chains) {
-    final unpinnable = this.unpinnable;
     final names = <String>{};
     final issues = <int, ProxyChainIssue>{};
     for (final chain in chains) {
@@ -111,13 +105,10 @@ class ProxyChainGraph {
         );
         continue;
       }
+      // A filter only matters for the groups a chain actually names; the
+      // backend pins every include-all group with mihomo's own regexp2 before
+      // clones exist, so an unrelated filter cannot fail the build.
       final issue =
-          (unpinnable == null
-              ? null
-              : (
-                  kind: ProxyChainIssueKind.unreadableFilter,
-                  name: unpinnable,
-                )) ??
           _hopIssueOf(chain) ??
           (_reserved(chain.name) || names.contains(chain.name)
               ? (kind: ProxyChainIssueKind.nameTaken, name: chain.name)
@@ -256,15 +247,6 @@ class _GraphBuilder {
     for (final MapEntry(key: name, value: group) in _rawGroups.entries) {
       _resolveMembers(name, group);
     }
-    String? unpinnable;
-    for (final MapEntry(key: name, value: group) in _rawGroups.entries) {
-      if (!_includesProxies(group)) {
-        continue;
-      }
-      if (_included(group) == null) {
-        unpinnable ??= name;
-      }
-    }
     final hopIssues = <String, ProxyChainIssue>{};
     for (final name in _rawGroups.keys) {
       final resolved = _resolve(name, <String>{});
@@ -297,7 +279,6 @@ class _GraphBuilder {
       groupNames: _rawGroups.keys.toSet(),
       providers: _providers,
       hopIssues: hopIssues,
-      unpinnable: unpinnable,
     );
   }
 

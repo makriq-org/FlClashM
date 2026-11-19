@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/dlclark/regexp2/v2"
 
 	"core/backend/authoring"
 )
@@ -90,28 +91,49 @@ func applyAuthoredProxyChains(config Object, chains []proxyChain) error {
 		chainNames:  map[string]bool{},
 		leaves:      map[string][]string{},
 	}
+	originalProxies := []string{}
 	for _, proxy := range list(config["proxies"]) {
 		values := copyObject(object(proxy))
 		name := text(values["name"])
 		if name != "" {
 			builder.proxies = append(builder.proxies, values)
 			builder.proxyByName[name] = values
+			originalProxies = append(originalProxies, name)
 		}
 	}
+	originalGroups := []string{}
+	hasGlobal := false
 	for _, group := range builder.groups {
 		values := object(group)
 		if name := text(values["name"]); name != "" {
 			builder.groupByName[name] = values
+			originalGroups = append(originalGroups, name)
+			hasGlobal = hasGlobal || name == "GLOBAL"
 		}
 	}
 	for name := range object(config["proxy-providers"]) {
 		builder.providers[name] = true
+	}
+	// Generated names must not shadow an existing outbound: mihomo rejects the
+	// whole config on a duplicate proxy or group name.
+	for name := range builder.proxyByName {
+		builder.taken[name] = true
+	}
+	for name := range builder.groupByName {
+		builder.taken[name] = true
+	}
+	for name := range builder.providers {
+		builder.taken[name] = true
+	}
+	for name := range chainReservedNames {
+		builder.taken[name] = true
 	}
 	for _, chain := range chains {
 		if builder.reserved(chain.name) {
 			return fmt.Errorf("proxy chain %s collides with an existing outbound", chain.name)
 		}
 		builder.chainNames[chain.name] = true
+		builder.taken[chain.name] = true
 	}
 	pinned, err := builder.pin()
 	if err != nil {
@@ -151,9 +173,36 @@ func applyAuthoredProxyChains(config Object, chains []proxyChain) error {
 			return err
 		}
 	}
+	// mihomo builds GLOBAL from every configured proxy, so the generated hop
+	// clones would appear in Global mode's list. An explicit selector keeps the
+	// subscription's outbounds and the chain groups, but not the internals.
+	if !hasGlobal {
+		builder.groups = append(builder.groups, builder.globalGroup(originalProxies, originalGroups, chains))
+	}
 	config["proxies"] = builder.proxies
 	config["proxy-groups"] = builder.groups
 	return nil
+}
+
+// globalGroup mirrors the selector mihomo would create: DIRECT and REJECT,
+// the profile's proxies, its groups and the chain groups.
+func (b *chainBuilder) globalGroup(proxies, groups []string, chains []proxyChain) Object {
+	members := []any{"DIRECT", "REJECT"}
+	for _, name := range proxies {
+		kind := strings.ToLower(text(b.proxyByName[name]["type"]))
+		// mihomo leaves PASS out of the global selector.
+		if kind == "pass" || kind == "pass-rule" {
+			continue
+		}
+		members = append(members, name)
+	}
+	for _, name := range groups {
+		members = append(members, name)
+	}
+	for _, chain := range chains {
+		members = append(members, chain.name)
+	}
+	return Object{"name": "GLOBAL", "type": "select", "proxies": members}
 }
 
 type chainBuilder struct {
@@ -468,7 +517,7 @@ func (b *chainBuilder) pin() ([]any, error) {
 	return pinned, nil
 }
 
-func chainExcluded(name string, b *chainBuilder, excluded []*regexp.Regexp, types map[string]bool) bool {
+func chainExcluded(name string, b *chainBuilder, excluded []*regexp2.Regexp, types map[string]bool) bool {
 	if b.proxyByName[name] == nil {
 		return false
 	}
@@ -488,30 +537,28 @@ func chainExcluded(name string, b *chainBuilder, excluded []*regexp.Regexp, type
 	return types[strings.ToLower(strings.ReplaceAll(kind, "-", ""))]
 }
 
-func chainMatches(patterns []*regexp.Regexp, name string) bool {
+func chainMatches(patterns []*regexp2.Regexp, name string) bool {
 	for _, pattern := range patterns {
-		if pattern.MatchString(name) {
+		// mihomo's regexp2 match errors are not membership decisions either.
+		if matched, _ := pattern.MatchString(name); matched {
 			return true
 		}
 	}
 	return false
 }
 
-// chainPatterns reads mihomo's backtick-separated filter syntax. A pattern Go
-// cannot compile fails the chain compile instead of silently changing
-// membership.
-func chainPatterns(value any) ([]*regexp.Regexp, error) {
+// chainPatterns reads mihomo's backtick-separated filter syntax with the same
+// regexp2 dialect mihomo uses, so a filter that the engine accepts is never
+// called unreadable here. An invalid pattern still fails the chain compile
+// instead of silently changing membership.
+func chainPatterns(value any) ([]*regexp2.Regexp, error) {
 	source := text(value)
 	if source == "" {
-		return []*regexp.Regexp{}, nil
+		return nil, nil
 	}
-	patterns := []*regexp.Regexp{}
+	patterns := []*regexp2.Regexp{}
 	for _, pattern := range strings.Split(source, "`") {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		compiled, err := regexp.Compile(pattern)
+		compiled, err := regexp2.Compile(pattern, regexp2.None)
 		if err != nil {
 			return nil, errors.New("unsupported regular expression")
 		}
