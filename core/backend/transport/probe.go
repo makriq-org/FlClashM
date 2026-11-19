@@ -162,6 +162,10 @@ func (d *processDialer) DialContext(ctx context.Context, network, address string
 	if err != nil {
 		return nil, err
 	}
+	if err := d.check(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return &processConn{Conn: conn, check: d.check}, nil
 }
 
