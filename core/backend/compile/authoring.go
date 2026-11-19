@@ -52,6 +52,15 @@ func (c *Compiler) customConfig(ctx context.Context, request Input) (Object, err
 			named[target] = true
 		}
 	}
+	for _, row := range authoring.Scoped(request.Authoring["proxyChains"], id) {
+		var enabled bool
+		if raw, exists := row["enabled"]; exists && json.Unmarshal(raw, &enabled) == nil && !enabled {
+			continue
+		}
+		for _, hop := range list(declaration(row)["hops"]) {
+			named[text(hop)] = true
+		}
+	}
 	dialers := map[string]string{}
 	for _, row := range authoring.Scoped(request.Authoring["proxyDialers"], id) {
 		dialers[authoring.ID(row["proxyId"])] = authoring.String(row, "target")
@@ -463,6 +472,7 @@ func authoredRules(config Object, request Input, script string) ([]any, error) {
 	}
 	return append(extra, rules...), nil
 }
+
 // lastMatchTarget is the target of the source's terminating MATCH rule.
 func lastMatchTarget(rules []any) string {
 	for i := len(rules) - 1; i >= 0; i-- {

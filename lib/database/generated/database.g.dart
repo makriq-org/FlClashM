@@ -4566,6 +4566,403 @@ class ProxyDialersCompanion extends UpdateCompanion<RawProxyDialer> {
   }
 }
 
+class $ProxyChainsTable extends ProxyChains
+    with TableInfo<$ProxyChainsTable, RawProxyChain> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProxyChainsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES profiles (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String> hops =
+      GeneratedColumn<String>(
+        'hops',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<List<String>>($ProxyChainsTable.$converterhops);
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _orderMeta = const VerificationMeta('order');
+  @override
+  late final GeneratedColumn<String> order = GeneratedColumn<String>(
+    'order',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    profileId,
+    name,
+    hops,
+    enabled,
+    order,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'proxy_chains';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RawProxyChain> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('order')) {
+      context.handle(
+        _orderMeta,
+        order.isAcceptableOrUnknown(data['order']!, _orderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RawProxyChain map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RawProxyChain(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      profileId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}profile_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      hops: $ProxyChainsTable.$converterhops.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}hops'],
+        )!,
+      ),
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      order: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}order'],
+      ),
+    );
+  }
+
+  @override
+  $ProxyChainsTable createAlias(String alias) {
+    return $ProxyChainsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<List<String>, String> $converterhops =
+      const StringListConverter();
+}
+
+class RawProxyChain extends DataClass implements Insertable<RawProxyChain> {
+  final int id;
+  final String profileId;
+  final String name;
+  final List<String> hops;
+  final bool enabled;
+  final String? order;
+  const RawProxyChain({
+    required this.id,
+    required this.profileId,
+    required this.name,
+    required this.hops,
+    required this.enabled,
+    this.order,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['profile_id'] = Variable<String>(profileId);
+    map['name'] = Variable<String>(name);
+    {
+      map['hops'] = Variable<String>(
+        $ProxyChainsTable.$converterhops.toSql(hops),
+      );
+    }
+    map['enabled'] = Variable<bool>(enabled);
+    if (!nullToAbsent || order != null) {
+      map['order'] = Variable<String>(order);
+    }
+    return map;
+  }
+
+  ProxyChainsCompanion toCompanion(bool nullToAbsent) {
+    return ProxyChainsCompanion(
+      id: Value(id),
+      profileId: Value(profileId),
+      name: Value(name),
+      hops: Value(hops),
+      enabled: Value(enabled),
+      order: order == null && nullToAbsent
+          ? const Value.absent()
+          : Value(order),
+    );
+  }
+
+  factory RawProxyChain.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RawProxyChain(
+      id: serializer.fromJson<int>(json['id']),
+      profileId: serializer.fromJson<String>(json['profileId']),
+      name: serializer.fromJson<String>(json['name']),
+      hops: serializer.fromJson<List<String>>(json['hops']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      order: serializer.fromJson<String?>(json['order']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'profileId': serializer.toJson<String>(profileId),
+      'name': serializer.toJson<String>(name),
+      'hops': serializer.toJson<List<String>>(hops),
+      'enabled': serializer.toJson<bool>(enabled),
+      'order': serializer.toJson<String?>(order),
+    };
+  }
+
+  RawProxyChain copyWith({
+    int? id,
+    String? profileId,
+    String? name,
+    List<String>? hops,
+    bool? enabled,
+    Value<String?> order = const Value.absent(),
+  }) => RawProxyChain(
+    id: id ?? this.id,
+    profileId: profileId ?? this.profileId,
+    name: name ?? this.name,
+    hops: hops ?? this.hops,
+    enabled: enabled ?? this.enabled,
+    order: order.present ? order.value : this.order,
+  );
+  RawProxyChain copyWithCompanion(ProxyChainsCompanion data) {
+    return RawProxyChain(
+      id: data.id.present ? data.id.value : this.id,
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      name: data.name.present ? data.name.value : this.name,
+      hops: data.hops.present ? data.hops.value : this.hops,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      order: data.order.present ? data.order.value : this.order,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RawProxyChain(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('name: $name, ')
+          ..write('hops: $hops, ')
+          ..write('enabled: $enabled, ')
+          ..write('order: $order')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, profileId, name, hops, enabled, order);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RawProxyChain &&
+          other.id == this.id &&
+          other.profileId == this.profileId &&
+          other.name == this.name &&
+          other.hops == this.hops &&
+          other.enabled == this.enabled &&
+          other.order == this.order);
+}
+
+class ProxyChainsCompanion extends UpdateCompanion<RawProxyChain> {
+  final Value<int> id;
+  final Value<String> profileId;
+  final Value<String> name;
+  final Value<List<String>> hops;
+  final Value<bool> enabled;
+  final Value<String?> order;
+  const ProxyChainsCompanion({
+    this.id = const Value.absent(),
+    this.profileId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.hops = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.order = const Value.absent(),
+  });
+  ProxyChainsCompanion.insert({
+    this.id = const Value.absent(),
+    required String profileId,
+    required String name,
+    required List<String> hops,
+    this.enabled = const Value.absent(),
+    this.order = const Value.absent(),
+  }) : profileId = Value(profileId),
+       name = Value(name),
+       hops = Value(hops);
+  static Insertable<RawProxyChain> custom({
+    Expression<int>? id,
+    Expression<String>? profileId,
+    Expression<String>? name,
+    Expression<String>? hops,
+    Expression<bool>? enabled,
+    Expression<String>? order,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (profileId != null) 'profile_id': profileId,
+      if (name != null) 'name': name,
+      if (hops != null) 'hops': hops,
+      if (enabled != null) 'enabled': enabled,
+      if (order != null) 'order': order,
+    });
+  }
+
+  ProxyChainsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? profileId,
+    Value<String>? name,
+    Value<List<String>>? hops,
+    Value<bool>? enabled,
+    Value<String?>? order,
+  }) {
+    return ProxyChainsCompanion(
+      id: id ?? this.id,
+      profileId: profileId ?? this.profileId,
+      name: name ?? this.name,
+      hops: hops ?? this.hops,
+      enabled: enabled ?? this.enabled,
+      order: order ?? this.order,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (hops.present) {
+      map['hops'] = Variable<String>(
+        $ProxyChainsTable.$converterhops.toSql(hops.value),
+      );
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (order.present) {
+      map['order'] = Variable<String>(order.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProxyChainsCompanion(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('name: $name, ')
+          ..write('hops: $hops, ')
+          ..write('enabled: $enabled, ')
+          ..write('order: $order')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$Database extends GeneratedDatabase {
   _$Database(QueryExecutor e) : super(e);
   $DatabaseManager get managers => $DatabaseManager(this);
@@ -4579,6 +4976,7 @@ abstract class _$Database extends GeneratedDatabase {
   late final $ClashProvidersTable clashProviders = $ClashProvidersTable(this);
   late final $CustomProxiesTable customProxies = $CustomProxiesTable(this);
   late final $ProxyDialersTable proxyDialers = $ProxyDialersTable(this);
+  late final $ProxyChainsTable proxyChains = $ProxyChainsTable(this);
   late final Index idxRuleTarget = Index(
     'idx_rule_target',
     'CREATE INDEX idx_rule_target ON rules (rule_target)',
@@ -4595,6 +4993,10 @@ abstract class _$Database extends GeneratedDatabase {
     'last_accessed_url',
     'CREATE INDEX last_accessed_url ON icon_records (last_accessed, url)',
   );
+  late final Index idxProxyChainsProfileOrder = Index(
+    'idx_proxy_chains_profile_order',
+    'CREATE INDEX idx_proxy_chains_profile_order ON proxy_chains (profile_id, "order")',
+  );
   late final ProfilesDao profilesDao = ProfilesDao(this as Database);
   late final ScriptsDao scriptsDao = ScriptsDao(this as Database);
   late final RulesDao rulesDao = RulesDao(this as Database);
@@ -4610,6 +5012,7 @@ abstract class _$Database extends GeneratedDatabase {
   late final ProxyDialersDao proxyDialersDao = ProxyDialersDao(
     this as Database,
   );
+  late final ProxyChainsDao proxyChainsDao = ProxyChainsDao(this as Database);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4625,10 +5028,12 @@ abstract class _$Database extends GeneratedDatabase {
     clashProviders,
     customProxies,
     proxyDialers,
+    proxyChains,
     idxRuleTarget,
     idxRulesProfileOrder,
     idxProxyGroupsProfileOrder,
     lastAccessedUrl,
+    idxProxyChainsProfileOrder,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4673,6 +5078,13 @@ abstract class _$Database extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('proxy_dialers', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'profiles',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('proxy_chains', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -4794,6 +5206,24 @@ final class $$ProfilesTableReferences
     ).filter((f) => f.profileId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_proxyDialersRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ProxyChainsTable, List<RawProxyChain>>
+  _proxyChainsRefsTable(_$Database db) => MultiTypedResultKey.fromTable(
+    db.proxyChains,
+    aliasName: 'profiles__id__proxy_chains__profile_id',
+  );
+
+  $$ProxyChainsTableProcessedTableManager get proxyChainsRefs {
+    final manager = $$ProxyChainsTableTableManager(
+      $_db,
+      $_db.proxyChains,
+    ).filter((f) => f.profileId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_proxyChainsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5010,6 +5440,31 @@ class $$ProfilesTableFilterComposer
           }) => $$ProxyDialersTableFilterComposer(
             $db: $db,
             $table: $db.proxyDialers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> proxyChainsRefs(
+    Expression<bool> Function($$ProxyChainsTableFilterComposer f) f,
+  ) {
+    final $$ProxyChainsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.proxyChains,
+      getReferencedColumn: (t) => t.profileId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProxyChainsTableFilterComposer(
+            $db: $db,
+            $table: $db.proxyChains,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5316,6 +5771,31 @@ class $$ProfilesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> proxyChainsRefs<T extends Object>(
+    Expression<T> Function($$ProxyChainsTableAnnotationComposer a) f,
+  ) {
+    final $$ProxyChainsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.proxyChains,
+      getReferencedColumn: (t) => t.profileId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProxyChainsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.proxyChains,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProfilesTableTableManager
@@ -5336,6 +5816,7 @@ class $$ProfilesTableTableManager
             bool disabledRulesRefs,
             bool proxyGroupsRefs,
             bool proxyDialersRefs,
+            bool proxyChainsRefs,
           })
         > {
   $$ProfilesTableTableManager(_$Database db, $ProfilesTable table)
@@ -5455,6 +5936,7 @@ class $$ProfilesTableTableManager
                 disabledRulesRefs = false,
                 proxyGroupsRefs = false,
                 proxyDialersRefs = false,
+                proxyChainsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -5463,6 +5945,7 @@ class $$ProfilesTableTableManager
                     if (disabledRulesRefs) db.disabledRules,
                     if (proxyGroupsRefs) db.proxyGroups,
                     if (proxyDialersRefs) db.proxyDialers,
+                    if (proxyChainsRefs) db.proxyChains,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -5547,6 +6030,26 @@ class $$ProfilesTableTableManager
                           referencedColumn: 'profile_id',
                           typedResults: items,
                         ),
+                      if (proxyChainsRefs)
+                        await $_getPrefetchedDataByColumns<
+                          RawProfile,
+                          $ProfilesTable,
+                          RawProxyChain,
+                          $ProxyChainsTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProfilesTableReferences
+                              ._proxyChainsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProfilesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).proxyChainsRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'profile_id',
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5572,6 +6075,7 @@ typedef $$ProfilesTableProcessedTableManager =
         bool disabledRulesRefs,
         bool proxyGroupsRefs,
         bool proxyDialersRefs,
+        bool proxyChainsRefs,
       })
     >;
 typedef $$ScriptsTableCreateCompanionBuilder = ScriptsCompanion Function({
@@ -8300,6 +8804,335 @@ typedef $$ProxyDialersTableProcessedTableManager =
       RawProxyDialer,
       PrefetchHooks Function({bool profileId, bool proxyId})
     >;
+typedef $$ProxyChainsTableCreateCompanionBuilder =
+    ProxyChainsCompanion Function({
+      Value<int> id,
+      required String profileId,
+      required String name,
+      required List<String> hops,
+      Value<bool> enabled,
+      Value<String?> order,
+    });
+typedef $$ProxyChainsTableUpdateCompanionBuilder =
+    ProxyChainsCompanion Function({
+      Value<int> id,
+      Value<String> profileId,
+      Value<String> name,
+      Value<List<String>> hops,
+      Value<bool> enabled,
+      Value<String?> order,
+    });
+
+final class $$ProxyChainsTableReferences
+    extends BaseReferences<_$Database, $ProxyChainsTable, RawProxyChain> {
+  $$ProxyChainsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ProfilesTable _profileIdTable(_$Database db) =>
+      db.profiles.createAlias('proxy_chains__profile_id__profiles__id');
+
+  $$ProfilesTableProcessedTableManager get profileId {
+    final $_column = $_itemColumn<String>('profile_id')!;
+
+    final manager = $$ProfilesTableTableManager(
+      $_db,
+      $_db.profiles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_profileIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProxyChainsTableFilterComposer
+    extends Composer<_$Database, $ProxyChainsTable> {
+  $$ProxyChainsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String> get hops =>
+      $composableBuilder(
+        column: $table.hops,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get order => $composableBuilder(
+    column: $table.order,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProfilesTableFilterComposer get profileId {
+    final $$ProfilesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableFilterComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProxyChainsTableOrderingComposer
+    extends Composer<_$Database, $ProxyChainsTable> {
+  $$ProxyChainsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hops => $composableBuilder(
+    column: $table.hops,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get order => $composableBuilder(
+    column: $table.order,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProfilesTableOrderingComposer get profileId {
+    final $$ProfilesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableOrderingComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProxyChainsTableAnnotationComposer
+    extends Composer<_$Database, $ProxyChainsTable> {
+  $$ProxyChainsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<List<String>, String> get hops =>
+      $composableBuilder(column: $table.hops, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get order =>
+      $composableBuilder(column: $table.order, builder: (column) => column);
+
+  $$ProfilesTableAnnotationComposer get profileId {
+    final $$ProfilesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProxyChainsTableTableManager
+    extends
+        RootTableManager<
+          _$Database,
+          $ProxyChainsTable,
+          RawProxyChain,
+          $$ProxyChainsTableFilterComposer,
+          $$ProxyChainsTableOrderingComposer,
+          $$ProxyChainsTableAnnotationComposer,
+          $$ProxyChainsTableCreateCompanionBuilder,
+          $$ProxyChainsTableUpdateCompanionBuilder,
+          (RawProxyChain, $$ProxyChainsTableReferences),
+          RawProxyChain,
+          PrefetchHooks Function({bool profileId})
+        > {
+  $$ProxyChainsTableTableManager(_$Database db, $ProxyChainsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProxyChainsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProxyChainsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProxyChainsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> profileId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<List<String>> hops = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<String?> order = const Value.absent(),
+              }) => ProxyChainsCompanion(
+                id: id,
+                profileId: profileId,
+                name: name,
+                hops: hops,
+                enabled: enabled,
+                order: order,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String profileId,
+                required String name,
+                required List<String> hops,
+                Value<bool> enabled = const Value.absent(),
+                Value<String?> order = const Value.absent(),
+              }) => ProxyChainsCompanion.insert(
+                id: id,
+                profileId: profileId,
+                name: name,
+                hops: hops,
+                enabled: enabled,
+                order: order,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ProxyChainsTable, RawProxyChain>(table),
+                  $$ProxyChainsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({profileId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (profileId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.profileId,
+                        referencedTable: $$ProxyChainsTableReferences
+                            ._profileIdTable(db),
+                        referencedColumn: $$ProxyChainsTableReferences
+                            ._profileIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProxyChainsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$Database,
+      $ProxyChainsTable,
+      RawProxyChain,
+      $$ProxyChainsTableFilterComposer,
+      $$ProxyChainsTableOrderingComposer,
+      $$ProxyChainsTableAnnotationComposer,
+      $$ProxyChainsTableCreateCompanionBuilder,
+      $$ProxyChainsTableUpdateCompanionBuilder,
+      (RawProxyChain, $$ProxyChainsTableReferences),
+      RawProxyChain,
+      PrefetchHooks Function({bool profileId})
+    >;
 
 class $DatabaseManager {
   final _$Database _db;
@@ -8324,6 +9157,8 @@ class $DatabaseManager {
       $$CustomProxiesTableTableManager(_db, _db.customProxies);
   $$ProxyDialersTableTableManager get proxyDialers =>
       $$ProxyDialersTableTableManager(_db, _db.proxyDialers);
+  $$ProxyChainsTableTableManager get proxyChains =>
+      $$ProxyChainsTableTableManager(_db, _db.proxyChains);
 }
 
 mixin _$ProfilesDaoMixin on DatabaseAccessor<Database> {
@@ -8450,4 +9285,19 @@ class ProxyDialersDaoManager {
       $$CustomProxiesTableTableManager(_db.attachedDatabase, _db.customProxies);
   $$ProxyDialersTableTableManager get proxyDialers =>
       $$ProxyDialersTableTableManager(_db.attachedDatabase, _db.proxyDialers);
+}
+
+mixin _$ProxyChainsDaoMixin on DatabaseAccessor<Database> {
+  $ProfilesTable get profiles => attachedDatabase.profiles;
+  $ProxyChainsTable get proxyChains => attachedDatabase.proxyChains;
+  ProxyChainsDaoManager get managers => ProxyChainsDaoManager(this);
+}
+
+class ProxyChainsDaoManager {
+  final _$ProxyChainsDaoMixin _db;
+  ProxyChainsDaoManager(this._db);
+  $$ProfilesTableTableManager get profiles =>
+      $$ProfilesTableTableManager(_db.attachedDatabase, _db.profiles);
+  $$ProxyChainsTableTableManager get proxyChains =>
+      $$ProxyChainsTableTableManager(_db.attachedDatabase, _db.proxyChains);
 }

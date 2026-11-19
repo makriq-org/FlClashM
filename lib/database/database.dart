@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
+
 import '../product/backend/backend.dart';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flclashx/common/common.dart';
@@ -12,6 +14,7 @@ import 'package:flclashx/models/models.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 part 'clash_providers.dart';
+part 'chains.dart';
 part 'converter.dart';
 part 'custom_proxies.dart';
 part 'dialers.dart';
@@ -35,6 +38,7 @@ part 'projection.dart';
     ClashProviders,
     CustomProxies,
     ProxyDialers,
+    ProxyChains,
   ],
   daos: [
     ProfilesDao,
@@ -46,24 +50,29 @@ part 'projection.dart';
     ClashProvidersDao,
     CustomProxiesDao,
     ProxyDialersDao,
+    ProxyChainsDao,
   ],
 )
 /// Ephemeral query projection. Go is the only durable authoring store.
 class Database extends _$Database {
   factory Database([QueryExecutor? executor]) {
-    if(executor!=null)return Database._(executor,null,null);
+    if (executor != null) return Database._(executor, null, null);
     return Database.backend(backendClient);
   }
-  factory Database.backend(BackendClient client,{QueryExecutor? executor}) {
-    final writes=ProjectionWrites();
-    final db=Database._((executor??NativeDatabase.memory()).interceptWith(writes),writes,client);
-    writes.database=db;
+  factory Database.backend(BackendClient client, {QueryExecutor? executor}) {
+    final writes = ProjectionWrites();
+    final db = Database._(
+      (executor ?? NativeDatabase.memory()).interceptWith(writes),
+      writes,
+      client,
+    );
+    writes.database = db;
     return db;
   }
-  Database._(super.executor,this.writes,this.client);
+  Database._(super.executor, this.writes, this.client);
   final BackendClient? client;
-  final projectionZone=Zone.current;
-  List<String> projectedProfileIds=[];
+  final projectionZone = Zone.current;
+  List<String> projectedProfileIds = [];
   final ProjectionWrites? writes;
   int authoringRevision = 0;
   bool get projecting => Zone.current[_projectionZone] == this;
@@ -142,6 +151,7 @@ class Database extends _$Database {
           t.profileId.isNotInQuery(profileIds) | t.ruleId.isNotInQuery(ruleIds),
     );
     await proxyGroups.remove((t) => t.profileId.isNotInQuery(profileIds));
+    await proxyChains.remove((t) => t.profileId.isNotInQuery(profileIds));
     await proxyDialers.remove(
       (t) =>
           t.profileId.isNotInQuery(profileIds) |

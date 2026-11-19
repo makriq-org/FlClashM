@@ -87,7 +87,7 @@ func TestAuthoringUIContractCustomInspectRenderPreviewAndCAS(t *testing.T) {
 		t.Fatal("custom source-less create failed", record, err)
 	}
 	snapshot := authoringRequest(t, app)
-	if len(snapshot.Collections) != 9 {
+	if len(snapshot.Collections) != 10 {
 		t.Fatal("missing collections", snapshot)
 	}
 	c := snapshot.Collections

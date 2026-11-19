@@ -947,7 +947,7 @@ final class ManagedSettingsProvider
   }
 }
 
-String _$managedSettingsHash() => r'41cb6989e825c4c36cdc7bf5e06c1c3365491c5a';
+String _$managedSettingsHash() => r'36852826abc38a7efa235038ba2471d2cbb02c52';
 
 @ProviderFor(settingOwned)
 final settingOwnedProvider = SettingOwnedFamily._();
