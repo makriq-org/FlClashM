@@ -1,5 +1,6 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/features/proxy_chains/proxy_chains.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -42,6 +43,7 @@ class _ExtendViewState extends ConsumerState<ExtendView> {
               SliverToBoxAdapter(child: SizedBox(height: context.appBarInset)),
               const _Title(),
               const _Content(),
+              ProxyChainsSection(profileId: widget.profileId),
             ],
           ),
         ),

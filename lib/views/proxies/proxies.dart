@@ -11,11 +11,14 @@ import 'setting.dart';
 import 'tab.dart';
 
 class ProxiesView extends ConsumerStatefulWidget {
-  const ProxiesView({super.key, this.picker = false});
+  const ProxiesView({super.key, this.picker = false, this.platform});
 
   /// Leaves the bar only its search and delay test, for picking a proxy from a
   /// sheet.
   final bool picker;
+
+  /// The host's platform when null; Android pulls the page down to test.
+  final SupportPlatform? platform;
 
   @override
   ConsumerState<ProxiesView> createState() => _ProxiesViewState();
@@ -32,6 +35,12 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   List<CommonPopupMenuItem> _buildMenuItems(BuildContext context) {
     final appLocalizations = context.appLocalizations;
     return [
+      if (_isTab && !ref.watch(oneGroupProvider))
+        CommonPopupMenuItem(
+          glyph: AppGlyphs.locate,
+          label: appLocalizations.scrollToSelected,
+          onPressed: () => _proxiesTabKey.currentState?.scrollToGroupSelected(),
+        ),
       CommonPopupMenuItem(
         glyph: AppGlyphs.sliders,
         label: appLocalizations.settings,
@@ -51,7 +60,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   }
 
   IconButtonData? _buildPrimaryAction() {
-    if (!_isTab) {
+    if (!_isTab || ref.watch(oneGroupProvider)) {
       return null;
     }
     final isDelayTesting = ref.watch(currentGroupDelayTestingProvider);
@@ -87,6 +96,27 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
   }
 
+  Widget _pullToTest(Widget body) {
+    final platform = widget.platform ?? SupportPlatform.currentPlatform;
+    if (widget.picker || platform != SupportPlatform.Android) {
+      return body;
+    }
+    final appLocalizations = context.appLocalizations;
+    return PullAction(
+      labels: (
+        pull: appLocalizations.pullToTestDelay,
+        release: appLocalizations.releaseToTestDelay,
+        running: null,
+        done: null,
+      ),
+      onPull: () async {
+        await ref.read(proxiesActionProvider.notifier).delayTestAllGroups();
+        return true;
+      },
+      child: body,
+    );
+  }
+
   void _onSearch(String value) {
     ref.read(queryProvider(QueryTag.proxies).notifier).value = value;
   }
@@ -116,6 +146,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
     final isLoading = ref.watch(loadingProvider(LoadingTag.proxies));
     final picker = widget.picker;
+    final oneGroup = ref.watch(oneGroupProvider);
     final primaryAction = _buildPrimaryAction();
     final mode = ref.watch(
       patchClashConfigProvider.select((state) => state.mode),
@@ -149,34 +180,35 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
       ],
       ?primaryAction,
     ];
-    return LiquidGlassScope(
-      enabled: false,
-      child: CommonScaffold(
-        isLoading: isLoading,
-        resizeToAvoidBottomInset: false,
-        // The picker sheet keeps the bar it had, close last.
-        primaryAction: picker ? primaryAction : null,
-        groupActions: !picker,
-        searchActions: [?primaryAction],
-        iconActions: [
-          if (!picker) ...barActions,
-          if (_isTab && !picker)
-            IconButtonData(
-              glyph: AppGlyphs.locate,
-              onPressed: () {
-                _proxiesTabKey.currentState?.scrollToGroupSelected();
+    return CommonScaffold(
+      isLoading: isLoading,
+      resizeToAvoidBottomInset: false,
+      // The picker sheet keeps the bar it had, close last.
+      primaryAction: picker ? primaryAction : null,
+      groupActions: !picker,
+      searchActions: [?primaryAction],
+      iconActions: [
+        if (!picker) ...barActions,
+        if (_isTab && !picker && !oneGroup)
+          IconButtonData(
+            glyph: AppGlyphs.locate,
+            onPressed: () {
+              _proxiesTabKey.currentState?.scrollToGroupSelected();
+            },
+            tooltip: context.appLocalizations.scrollToSelected,
+          ),
+        if (!_isTab && !picker && !oneGroup) _buildFoldAllAction(),
+      ],
+      menuItems: picker ? const [] : _buildMenuItems(context),
+      title: context.appLocalizations.proxies,
+      searchState: AppBarSearchState(onSearch: _onSearch),
+      body: _pullToTest(
+        oneGroup
+            ? const ProxiesOneGroupView()
+            : switch (proxiesType) {
+                ProxiesType.tab => _tabView,
+                ProxiesType.list => const ProxiesListView(),
               },
-              tooltip: context.appLocalizations.scrollToSelected,
-            ),
-          if (!_isTab && !picker) _buildFoldAllAction(),
-        ],
-        menuItems: picker ? const [] : _buildMenuItems(context),
-        title: context.appLocalizations.proxies,
-        searchState: AppBarSearchState(onSearch: _onSearch),
-        body: switch (proxiesType) {
-          ProxiesType.tab => _tabView,
-          ProxiesType.list => const ProxiesListView(),
-        },
       ),
     );
   }

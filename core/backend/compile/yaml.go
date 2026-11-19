@@ -47,6 +47,11 @@ func parseProfile(text string) (Object, []string, error) {
 		return nil, nil, errors.New("profile root must be a YAML map")
 	}
 	root := document.Content[0]
+	// mihomo reads an unquoted REALITY short-id as a number, so 0123 would
+	// become 123; retagging the scalar restores the id it was written with.
+	if err := retagShortIDs(&document); err != nil {
+		return nil, nil, err
+	}
 	m := materializer{stack: map[*yaml.Node]bool{}}
 	value, err := m.materialize(root, 0, false)
 	if err != nil {

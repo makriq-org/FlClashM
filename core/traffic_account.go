@@ -71,8 +71,34 @@ var (
 	_ proxydialer.Tunnel = accountingTunnel{}
 )
 
+// A connection still resolving or dialing out has no tracker yet, so
+// stopping closes these from the client's side too.
+var openInbound sync.Map
+
+// listenersAccepting mirrors isRunning for the inbound path, which must not take
+// the run lock while a handshake is being handed on.
+var listenersAccepting atomic.Bool
+
 func (t accountingTunnel) HandleTCPConn(conn net.Conn, metadata *constant.Metadata) {
-	t.Tunnel.HandleTCPConn(&accountedConn{Conn: conn, metadata: metadata, account: trafficAccount{proxies: activeTrafficProxies.Load()}}, metadata)
+	accounted := &accountedConn{Conn: conn, metadata: metadata, account: trafficAccount{proxies: activeTrafficProxies.Load()}}
+	openInbound.Store(accounted, struct{}{})
+	defer openInbound.Delete(accounted)
+	// One still in its SOCKS or HTTP handshake when the listeners stopped
+	// arrives after the sweep; registered first, it is either swept or sees
+	// the stop here. TUN connections die with the device, and Android starts
+	// the device before the listeners; probes run whether or not they do.
+	if !listenersAccepting.Load() && metadata.Type != constant.TUN && metadata.Type != constant.INNER {
+		_ = accounted.Close()
+		return
+	}
+	t.Tunnel.HandleTCPConn(accounted, metadata)
+}
+
+func closeOpenInbound() {
+	openInbound.Range(func(conn, _ any) bool {
+		_ = conn.(*accountedConn).Close()
+		return true
+	})
 }
 
 func (t accountingTunnel) HandleUDPPacket(packet constant.UDPPacket, metadata *constant.Metadata) {

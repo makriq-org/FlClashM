@@ -56,11 +56,13 @@ internal object BackendOSObserver {
         val networks = connectivity.allNetworks.mapNotNull { connectivity.getNetworkCapabilities(it) }
             .filter { it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
                 it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+        val physical = PhysicalNetworkScope.observe(context)
         emit(JSONObject().put("kind", "network").put("seq", sequence.incrementAndGet())
             .put("available", networks.isNotEmpty())
             .put("validated", networks.any { it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) })
             .put("dns", JSONArray(SystemDnsReader.read()))
-            .put("scope", PhysicalNetworkScope.read(context)))
+            .put("scope", physical.scope)
+            .put("networkHandle", physical.handle))
     }
     private fun screen() {
         val power = context.getSystemService(PowerManager::class.java)

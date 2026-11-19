@@ -57,11 +57,10 @@ class ManagedSettingsAction extends _$ManagedSettingsAction {
     _reapply();
   }
 
+  /// The backend reapplies the current profile's headers once ownership
+  /// changes; only the clash settings still need their UI-side replay.
   void _reapply() {
     final profile = ref.read(currentProfileProvider);
-    ref
-        .read(profileHeadersActionProvider.notifier)
-        .apply(profileHeaderSettingsOf(profile));
     unawaited(
       ref
           .read(profileSettingsActionProvider.notifier)

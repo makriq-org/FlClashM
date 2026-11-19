@@ -55,6 +55,7 @@ class GlobalState {
 
   String get ua => packageInfo.uaWith(
     coreVersion.isNotEmpty ? coreVersion : coreVersionDefine,
+    tv: system.isTV,
   );
 
   Future<T?> loadingRun<T>(

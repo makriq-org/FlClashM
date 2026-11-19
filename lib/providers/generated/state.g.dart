@@ -947,7 +947,7 @@ final class ManagedSettingsProvider
   }
 }
 
-String _$managedSettingsHash() => r'41cb6989e825c4c36cdc7bf5e06c1c3365491c5a';
+String _$managedSettingsHash() => r'36852826abc38a7efa235038ba2471d2cbb02c52';
 
 @ProviderFor(settingOwned)
 final settingOwnedProvider = SettingOwnedFamily._();
@@ -3196,7 +3196,7 @@ final class NavigationItemsStateProvider
 }
 
 String _$navigationItemsStateHash() =>
-    r'3c633d4f3e5f2e80b7cfd166a46397f9a207bb1e';
+    r'3d07c97563396cfcd82c5fcf6245561c8931e1eb';
 
 @ProviderFor(currentNavigationItemsState)
 final currentNavigationItemsStateProvider =
@@ -3629,6 +3629,176 @@ final class GlobalModeAllowedProvider
 }
 
 String _$globalModeAllowedHash() => r'6e60b73ef0c048c6cc93bf0013f96e7e68234f2f';
+
+@ProviderFor(systemProxyAllowed)
+final systemProxyAllowedProvider = SystemProxyAllowedProvider._();
+
+final class SystemProxyAllowedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  SystemProxyAllowedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'systemProxyAllowedProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$systemProxyAllowedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return systemProxyAllowed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$systemProxyAllowedHash() =>
+    r'f27081a9a7ae8ea983954d8d4d2a11afcdcf0d0e';
+
+@ProviderFor(simpleMode)
+final simpleModeProvider = SimpleModeProvider._();
+
+final class SimpleModeProvider extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  SimpleModeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'simpleModeProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$simpleModeHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return simpleMode(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$simpleModeHash() => r'302c783e1548bd1e847ca4ae54dd8c6a4d7fd653';
+
+/// Global mode shows GLOBAL instead of the server's group, so its proxies
+/// keep their group headers.
+
+@ProviderFor(oneGroup)
+final oneGroupProvider = OneGroupProvider._();
+
+/// Global mode shows GLOBAL instead of the server's group, so its proxies
+/// keep their group headers.
+
+final class OneGroupProvider extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Global mode shows GLOBAL instead of the server's group, so its proxies
+  /// keep their group headers.
+  OneGroupProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'oneGroupProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$oneGroupHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return oneGroup(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$oneGroupHash() => r'404d09a9446d3603bc82d76031a1d5bd3a9505dc';
+
+@ProviderFor(providerMode)
+final providerModeProvider = ProviderModeProvider._();
+
+final class ProviderModeProvider extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  ProviderModeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'providerModeProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$providerModeHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return providerMode(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$providerModeHash() => r'159f339d1640a30ac2e86a482d43cfa1fd00aa3b';
 
 @ProviderFor(androidSecure)
 final androidSecureProvider = AndroidSecureProvider._();

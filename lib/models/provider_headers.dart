@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/ui/color.dart';
+import 'package:material_ui/material_ui.dart' show ThemeMode;
 
 import 'config.dart';
 import 'profile.dart';
@@ -99,6 +100,34 @@ class ProviderHeaders {
   bool get globalModeAllowed => specials != null
       ? !specials!.contains('noglobal')
       : text('flclashx-globalmode')?.toLowerCase() != 'false';
+
+  /// `flclashx-special: onlytun` leaves TUN as the only takeover: the system
+  /// proxy is off and locked.
+  bool get onlyTun => specials?.contains('onlytun') ?? false;
+
+  /// `flclashx-special: hideip` keeps the exit address and its checks away.
+  bool get hideIp => specials?.contains('hideip') ?? false;
+
+  /// `flclashx-special: simple` hides the fine settings while the profile is
+  /// selected.
+  bool get simpleMode => specials?.contains('simple') ?? false;
+
+  bool get noVibration => specials?.contains('novibrate') ?? false;
+
+  /// `flclashx-special: onegroup` shows the proxies page as the server group's
+  /// proxies alone, without group headers or delay tests.
+  bool get oneGroup => specials?.contains('onegroup') ?? false;
+
+  /// `flclashx-special: providermode` dresses the dashboard as the provider's:
+  /// its logo and name on top, the server's location in place of the status
+  /// card and the start button at the bottom.
+  bool get providerMode => specials?.contains('providermode') ?? false;
+
+  /// `flclashx-special: nologo` leaves the logo out of [providerMode]'s top line.
+  bool get noLogo => specials?.contains('nologo') ?? false;
+
+  /// `flclashx-special: noservice` leaves that whole line out.
+  bool get noService => specials?.contains('noservice') ?? false;
 
   String? get serviceName => _plainOrBase64(text('flclashx-servicename'));
 
@@ -227,10 +256,11 @@ String _decodeAnnouncement(String raw) {
 /// `key:value;...` over the look of the app. `proxies.*` keys shape the
 /// proxies page: `type` list|tab, `sort` none|delay|name, `layout`
 /// loose|standard|tight, `icon` filled|plain|hidden, `card`
-/// loose|standard|compact. `app.*` keys shape the app: `board`
-/// extended|standard, `navbar` floating|docked, `tabs` slide|fade, `glass`
+/// loose|standard|compact|oneline, `hidetimeout` true|false. `app.*` keys
+/// shape the app: `navbar` floating|docked, `tabs` slide|fade, `glass`
 /// none|standard|ultra, `color` RRGGBB|AARRGGBB, `style`
-/// vivid|tinted|soft|monochrome, `black` true|false.
+/// vivid|tinted|soft|monochrome, `black` true|false, `theme`
+/// auto|light|dark. The old `board` key is ignored.
 class ViewRequest {
   const ViewRequest({
     this.type,
@@ -238,7 +268,8 @@ class ViewRequest {
     this.layout,
     this.icon,
     this.card,
-    this.board,
+    this.hideTimeout,
+    this.themeMode,
     this.floatingNavigationBar,
     this.tabAnimation,
     this.liquidGlass,
@@ -252,7 +283,8 @@ class ViewRequest {
   final ProxiesLayout? layout;
   final ProxiesIconStyle? icon;
   final ProxyCardType? card;
-  final ThemeStyle? board;
+  final bool? hideTimeout;
+  final ThemeMode? themeMode;
   final bool? floatingNavigationBar;
   final TabAnimation? tabAnimation;
   final LiquidGlassMode? liquidGlass;
@@ -263,9 +295,10 @@ class ViewRequest {
   static const proxiesPrefix = 'proxies.';
   static const appPrefix = 'app.';
 
-  static const boardNames = {
-    'extended': ThemeStyle.enhanced,
-    'standard': ThemeStyle.original,
+  static const themeModeNames = {
+    'auto': ThemeMode.system,
+    'light': ThemeMode.light,
+    'dark': ThemeMode.dark,
   };
 
   static final _hex = RegExp(r'^[0-9A-F]{6}([0-9A-F]{2})?$');
@@ -293,7 +326,8 @@ class ViewRequest {
     ProxiesLayout? layout;
     ProxiesIconStyle? icon;
     ProxyCardType? card;
-    ThemeStyle? board;
+    bool? hideTimeout;
+    ThemeMode? themeMode;
     bool? floatingNavigationBar;
     TabAnimation? tabAnimation;
     LiquidGlassMode? liquidGlass;
@@ -335,12 +369,14 @@ class ViewRequest {
               named(ProxyCardType.values, switch (value) {
                 'expand' => 'loose',
                 'shrink' => 'standard',
-                'min' || 'oneline' => 'compact',
+                'min' || 'oneline' => 'oneline',
                 _ => value,
               }) ??
               card;
-        case (true, 'board'):
-          board = boardNames[value] ?? board;
+        case (false, 'hidetimeout'):
+          hideTimeout = _boolOf(value) ?? hideTimeout;
+        case (true, 'theme'):
+          themeMode = themeModeNames[value] ?? themeMode;
         case (true, 'navbar'):
           floatingNavigationBar = switch (value) {
             'floating' => true,
@@ -365,7 +401,8 @@ class ViewRequest {
       layout: layout,
       icon: icon,
       card: card,
-      board: board,
+      hideTimeout: hideTimeout,
+      themeMode: themeMode,
       floatingNavigationBar: floatingNavigationBar,
       tabAnimation: tabAnimation,
       liquidGlass: liquidGlass,
@@ -382,7 +419,8 @@ class ViewRequest {
     layout,
     icon,
     card,
-    board,
+    hideTimeout,
+    themeMode,
     floatingNavigationBar,
     tabAnimation,
     liquidGlass,
@@ -394,7 +432,7 @@ class ViewRequest {
   bool get isEmpty => _fields.every((field) => field == null);
 
   bool get touchesTheme =>
-      board != null ||
+      themeMode != null ||
       liquidGlass != null ||
       color != null ||
       colorStyle != null ||

@@ -16,3 +16,24 @@ func TestSpecialHeadersAreEnforcedByBackend(t *testing.T) {
 		t.Fatal("explicit modern header must win", patch)
 	}
 }
+
+func TestOnlyTunDisablesOnlyAndroidSystemProxy(t *testing.T) {
+	for _, tc := range []struct {
+		name, platform string
+		headers        Object
+		wantProxy      bool
+	}{
+		{"Android", "android", Object{"flclashx-special": "onlytun"}, false},
+		{"desktop", "linux", Object{"flclashx-special": "onlytun"}, true},
+		{"header removed", "android", Object{"flclashx-special": "hideip"}, true},
+		{"modern prefix", "android", Object{"flclashm-special": "", "flclashx-special": "onlytun"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			vpn := Object{"enable": true, "systemProxy": true}
+			SecurityPolicy{}.ApplyVPN(vpn, Object{"providerHeaders": tc.headers}, Capabilities{Platform: tc.platform})
+			if vpn["systemProxy"] != tc.wantProxy || vpn["enable"] != true {
+				t.Fatal(vpn)
+			}
+		})
+	}
+}

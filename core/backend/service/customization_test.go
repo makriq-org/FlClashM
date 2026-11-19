@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestProviderCustomizationPersistsWithoutUI(t *testing.T) {
 	}
 	var style map[string]any
 	_ = json.Unmarshal(catalog.Settings["proxiesStyle"], &style)
-	if style["type"] != "tab" || style["iconStyle"] != "filled" || style["cardType"] != "compact" {
+	if style["type"] != "tab" || style["iconStyle"] != "filled" || style["cardType"] != "oneline" {
 		t.Fatal(style)
 	}
 	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{"overrideProviderSettings": false})}, 0); err != nil {
@@ -159,5 +160,41 @@ func TestDeferredAddSettings(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// TestLegacyCustomTriggerKeepsTheUsersCards covers the older trigger: it runs
+// before the modern one and must respect the same rule about arranged cards.
+func TestLegacyCustomTriggerKeepsTheUsersCards(t *testing.T) {
+	app := openTestApp(t, options(t, t.TempDir(), &testEngine{}, make(chan time.Time)))
+	apply := func(headers map[string]string) []string {
+		t.Helper()
+		metadata := profiles.Object{"providerHeaders": jsonValue(headers)}
+		if err := app.customizeForProfile(context.Background(), metadata, false, true); err != nil {
+			t.Fatal(err)
+		}
+		var settings struct {
+			Widgets []string `json:"dashboardWidgets"`
+		}
+		if err := json.Unmarshal(app.Snapshot().Catalog.Settings["appSetting"], &settings); err != nil {
+			t.Fatal(err)
+		}
+		return settings.Widgets
+	}
+	panels := []string{"announcement", "outboundMode"}
+	if got := apply(map[string]string{"flclashm-custom": "update", "flclashm-widgets": "announcement,outboundMode"}); !reflect.DeepEqual(got, panels) {
+		t.Fatalf("panel cards = %v, want %v", got, panels)
+	}
+	if err := app.patchSettings(context.Background(), profiles.Object{"appSetting": jsonValue(map[string]any{
+		"dashboardWidgets": []string{"outboundMode"},
+		"ownedSettings":    []string{providerWidgetsSetting},
+	})}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := apply(map[string]string{"flclashm-custom": "update", "flclashm-widgets": "announcement,outboundMode"}); !reflect.DeepEqual(got, []string{"outboundMode"}) {
+		t.Fatalf("the legacy trigger replaced the user's cards: %v", got)
+	}
+	if got := apply(map[string]string{"flclashm-custom": "update", "flclashm-widgets": "announcement,outboundMode", "flclashm-special": "denywidgets"}); !reflect.DeepEqual(got, panels) {
+		t.Fatalf("denywidgets did not restore the panel's cards: %v", got)
 	}
 }

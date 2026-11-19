@@ -71,11 +71,17 @@ func TestPlatformPolicyRetainsHeadlessScreenAndNetworkBehavior(t *testing.T) {
 		return result
 	}
 	run("connect", "connect", Input(`{"nodes":[]}`))
-	command("network1", &PlatformEvent{Sequence: 2, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi"})
-	command("same-network", &PlatformEvent{Sequence: 3, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi"})
+	command("network1", &PlatformEvent{Sequence: 2, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi", NetworkHandle: 16})
+	command("same-network", &PlatformEvent{Sequence: 3, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi", NetworkHandle: 16})
 	command("old-network", &PlatformEvent{Sequence: 1, Kind: "network", Available: true, DNS: []string{"8.8.8.8"}, Scope: "old"})
 	if count("network.reset") != 1 || count("health.probe") != 1 || count("dns.8.8.8.8") != 0 {
 		t.Fatal("network burst or obsolete observation triggered work")
+	}
+	nodes.advance(6 * time.Second)
+	command("wifi-handover", &PlatformEvent{Sequence: 4, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi", NetworkHandle: 17})
+	command("same-wifi-again", &PlatformEvent{Sequence: 5, Kind: "network", Available: true, Validated: true, DNS: []string{"1.1.1.1"}, Scope: "wifi", NetworkHandle: 17})
+	if count("network.reset") != 2 || count("health.probe") != 1 {
+		t.Fatal("Wi-Fi handover with unchanged DNS must reset once without bypassing probe throttling")
 	}
 	command("dark", &PlatformEvent{Sequence: 4, Kind: "screen", ScreenOn: false})
 	nodes.advance(121 * time.Second)

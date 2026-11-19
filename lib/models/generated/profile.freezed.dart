@@ -16,7 +16,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SubscriptionInfo {
 
- int get upload; int get download; int get total; int get expire;
+ int get upload; int get download; int get total;@JsonKey(fromJson: _validExpire) int get expire;
 /// Create a copy of SubscriptionInfo
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -54,7 +54,7 @@ abstract mixin class $SubscriptionInfoCopyWith<$Res>  {
   factory $SubscriptionInfoCopyWith(SubscriptionInfo value, $Res Function(SubscriptionInfo) _then) = _$SubscriptionInfoCopyWithImpl;
 @useResult
 $Res call({
- int upload, int download, int total, int expire
+ int upload, int download, int total,@JsonKey(fromJson: _validExpire) int expire
 });
 
 
@@ -162,7 +162,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int upload,  int download,  int total,  int expire)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int upload,  int download,  int total, @JsonKey(fromJson: _validExpire)  int expire)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SubscriptionInfo() when $default != null:
 return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
@@ -183,7 +183,7 @@ return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int upload,  int download,  int total,  int expire)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int upload,  int download,  int total, @JsonKey(fromJson: _validExpire)  int expire)  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionInfo():
 return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
@@ -203,7 +203,7 @@ return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int upload,  int download,  int total,  int expire)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int upload,  int download,  int total, @JsonKey(fromJson: _validExpire)  int expire)?  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionInfo() when $default != null:
 return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
@@ -218,13 +218,13 @@ return $default(_that.upload,_that.download,_that.total,_that.expire);case _:
 @JsonSerializable()
 
 class _SubscriptionInfo implements SubscriptionInfo {
-  const _SubscriptionInfo({this.upload = 0, this.download = 0, this.total = 0, this.expire = 0});
+  const _SubscriptionInfo({this.upload = 0, this.download = 0, this.total = 0, @JsonKey(fromJson: _validExpire) this.expire = 0});
   factory _SubscriptionInfo.fromJson(Map<String, dynamic> json) => _$SubscriptionInfoFromJson(json);
 
 @override@JsonKey() final  int upload;
 @override@JsonKey() final  int download;
 @override@JsonKey() final  int total;
-@override@JsonKey() final  int expire;
+@override@JsonKey(fromJson: _validExpire) final  int expire;
 
 /// Create a copy of SubscriptionInfo
 /// with the given fields replaced by the non-null parameter values.
@@ -261,7 +261,7 @@ abstract mixin class _$SubscriptionInfoCopyWith<$Res> implements $SubscriptionIn
   factory _$SubscriptionInfoCopyWith(_SubscriptionInfo value, $Res Function(_SubscriptionInfo) _then) = __$SubscriptionInfoCopyWithImpl;
 @override @useResult
 $Res call({
- int upload, int download, int total, int expire
+ int upload, int download, int total,@JsonKey(fromJson: _validExpire) int expire
 });
 
 

@@ -6,6 +6,7 @@ export 'config.dart';
 export 'core.dart';
 export 'ip_quality.dart';
 export 'profile.dart';
+export 'proxy_chain.dart';
 export 'managed_settings.dart';
 export 'profile_settings.dart';
 export 'provider_headers.dart';

@@ -355,6 +355,14 @@ private fun validatedSelfUpdateApk(
         Log.w(TAG, "Rejected self-update APK for package $archivePackage")
         return null
     }
+    // The installer is the last place that can compare certificates, so it
+    // repeats the check the Dart layer already made.
+    val installedSigners = PackageIdentity.installedSigners(context)
+    val archiveSigners = PackageIdentity.archiveSigners(context, apkFile.path)
+    if (!selfUpdateSignersMatch(installedSigners, archiveSigners)) {
+        Log.w(TAG, "Rejected self-update APK signed by another certificate")
+        return null
+    }
     return apkFile
 }
 

@@ -62,7 +62,6 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
     ref.listenManual(appVisibleProvider, (_, visible) {
       ref.read(coreHandlerProvider).setHostActive(visible);
     }, fireImmediately: true);
-    ref.listenManual(profileHeadersActionProvider, (_, _) {});
     ref.listenManual(profileSettingsActionProvider, (_, _) {});
     ref.listenManual(suspendProvider, (prev, next) {
       if (prev != next) {

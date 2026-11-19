@@ -31,6 +31,9 @@ _AppSettingProps _$AppSettingPropsFromJson(
   autoRun: json['autoRun'] as bool? ?? false,
   openLogs: json['openLogs'] as bool? ?? false,
   closeConnections: json['closeConnections'] as bool? ?? true,
+  requestFeed:
+      $enumDecodeNullable(_$RequestFeedEnumMap, json['requestFeed']) ??
+      RequestFeed.live,
   testUrl: json['testUrl'] as String? ?? defaultTestUrl,
   delayTestTimeout: (json['delayTestTimeout'] as num?)?.toInt() ?? 8000,
   tabAnimation:
@@ -62,6 +65,7 @@ _AppSettingProps _$AppSettingPropsFromJson(
           .toList() ??
       defaultFilters,
   hideIp: json['hideIp'] as bool? ?? false,
+  vibration: json['vibration'] as bool? ?? true,
   editorLineWrap: json['editorLineWrap'] as bool? ?? false,
   editorFontSize:
       $enumDecodeNullable(_$EditorFontSizeEnumMap, json['editorFontSize']) ??
@@ -96,6 +100,11 @@ _AppSettingProps _$AppSettingPropsFromJson(
           ?.map((e) => e as String)
           .toSet() ??
       const {},
+  panelSetSettings:
+      (json['panelSetSettings'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toSet() ??
+      const {},
 );
 
 Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
@@ -113,6 +122,7 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'autoRun': instance.autoRun,
       'openLogs': instance.openLogs,
       'closeConnections': instance.closeConnections,
+      'requestFeed': _$RequestFeedEnumMap[instance.requestFeed]!,
       'testUrl': instance.testUrl,
       'delayTestTimeout': instance.delayTestTimeout,
       'tabAnimation': _$TabAnimationEnumMap[instance.tabAnimation]!,
@@ -131,6 +141,7 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'checkCertificate': instance.checkCertificate,
       'filters': instance.filters,
       'hideIp': instance.hideIp,
+      'vibration': instance.vibration,
       'editorLineWrap': instance.editorLineWrap,
       'editorFontSize': _$EditorFontSizeEnumMap[instance.editorFontSize]!,
       'serviceOrder': instance.serviceOrder,
@@ -138,7 +149,13 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'tableColumnWidths': instance.tableColumnWidths,
       'subscriptionNotices': instance.subscriptionNotices,
       'ownedSettings': instance.ownedSettings.toList(),
+      'panelSetSettings': instance.panelSetSettings.toList(),
     };
+
+const _$RequestFeedEnumMap = {
+  RequestFeed.recent: 'recent',
+  RequestFeed.live: 'live',
+};
 
 const _$TabAnimationEnumMap = {
   TabAnimation.slide: 'slide',
@@ -372,9 +389,6 @@ _ThemeProps _$ThemePropsFromJson(Map<String, dynamic> json) => _ThemeProps(
   themeMode:
       $enumDecodeNullable(_$ThemeModeEnumMap, json['themeMode']) ??
       ThemeMode.system,
-  style:
-      $enumDecodeNullable(_$ThemeStyleEnumMap, json['style']) ??
-      ThemeStyle.original,
   colorStyle:
       $enumDecodeNullable(
         _$ColorStyleEnumMap,
@@ -400,7 +414,6 @@ Map<String, dynamic> _$ThemePropsToJson(_ThemeProps instance) =>
       'primaryColor': instance.primaryColor,
       'primaryColors': instance.primaryColors,
       'themeMode': _$ThemeModeEnumMap[instance.themeMode]!,
-      'style': _$ThemeStyleEnumMap[instance.style]!,
       'colorStyle': _$ColorStyleEnumMap[instance.colorStyle]!,
       'pureBlack': instance.pureBlack,
       'sidebarBlur': instance.sidebarBlur,
@@ -413,11 +426,6 @@ const _$ThemeModeEnumMap = {
   ThemeMode.system: 'system',
   ThemeMode.light: 'light',
   ThemeMode.dark: 'dark',
-};
-
-const _$ThemeStyleEnumMap = {
-  ThemeStyle.original: 'original',
-  ThemeStyle.enhanced: 'enhanced',
 };
 
 const _$ColorStyleEnumMap = {

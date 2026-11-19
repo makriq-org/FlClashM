@@ -533,6 +533,14 @@ Map<String, Object?>? _overwriteOfOverrideData(Object? overrideData) {
   };
 }
 
+/// A legacy profile id names a file in the backup, so it cannot leave the
+/// directory the archive staged.
+bool _isPlainFileName(String name) =>
+    name.isNotEmpty &&
+    name != '.' &&
+    name != '..' &&
+    !name.contains(RegExp(r'[/\\]'));
+
 Future<MigrationData> migrateLegacyConfig({
   required Map<String, Object?> configMap,
   required String sourcePath,
@@ -558,15 +566,6 @@ Future<MigrationData> migrateLegacyConfig({
     appSettingProps['restoreStrategy'] = appSettingProps['recoveryStrategy'];
   }
   configMap['appSettingProps'] = appSettingProps;
-  // FlClashX 0.4 kept its hero page as a flag; here it is the theme style,
-  // and one without the flag keeps the standard page over the new default.
-  final themeProps = configMap['themeProps'] as Map<String, dynamic>? ?? {};
-  if (appSettingProps['newDashboard'] == true) {
-    themeProps['style'] = ThemeStyle.enhanced.name;
-  } else {
-    themeProps['style'] ??= ThemeStyle.original.name;
-  }
-  configMap['themeProps'] = themeProps;
   configMap['proxiesStyleProps'] = configMap['proxiesStyle'];
   List rawScripts = configMap['scripts'] as List<dynamic>? ?? [];
   if (rawScripts.isEmpty) {
@@ -605,7 +604,7 @@ Future<MigrationData> migrateLegacyConfig({
   final List<Profile> profiles = [];
   for (final rawProfile in rawProfiles) {
     final rawId = rawProfile['id'] as String?;
-    if (rawId == null) {
+    if (rawId == null || !_isPlainFileName(rawId)) {
       continue;
     }
     final profileId = rawId;
@@ -657,7 +656,10 @@ Future<MigrationData> migrateLegacyConfig({
       targetPath,
       BackupEntries.profile(profileId),
     );
-    await sourceFile.safeCopy(targetFilePath);
+    // A broken legacy profile keeps its metadata with no source.
+    if (await sourceFile.exists()) {
+      await sourceFile.safeCopy(targetFilePath);
+    }
     profiles.add(Profile.fromJson(rawProfile));
   }
   final currentProfileId = configMap['currentProfileId'];

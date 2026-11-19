@@ -12,14 +12,15 @@ import (
 // PlatformEvent describes observations only. Android reports OS facts; the
 // coordinator decides whether to reset connections, probe or restart a node.
 type PlatformEvent struct {
-	Sequence  uint64   `json:"seq"`
-	Kind      string   `json:"kind"`
-	DNS       []string `json:"dns,omitempty"`
-	Scope     string   `json:"scope,omitempty"`
-	Available bool     `json:"available"`
-	Validated bool     `json:"validated"`
-	ScreenOn  bool     `json:"screenOn"`
-	Dozing    bool     `json:"dozing"`
+	Sequence      uint64   `json:"seq"`
+	Kind          string   `json:"kind"`
+	DNS           []string `json:"dns,omitempty"`
+	Scope         string   `json:"scope,omitempty"`
+	NetworkHandle int64    `json:"networkHandle,omitempty"`
+	Available     bool     `json:"available"`
+	Validated     bool     `json:"validated"`
+	ScreenOn      bool     `json:"screenOn"`
+	Dozing        bool     `json:"dozing"`
 }
 type PlatformEffects interface {
 	SystemDNS(context.Context, []string) error
@@ -314,7 +315,8 @@ func (c *runtimeCoordinator) platformCommand(ctx context.Context, command Engine
 		c.mu.Unlock()
 		return nil
 	}
-	needReset := event.Kind == "network" && event.Available && (network.Sequence == 0 || event.Scope != network.Scope || !network.Available || (!network.Validated && event.Validated) || !reflect.DeepEqual(network.DNS, event.DNS))
+	networkChanged := event.Scope != network.Scope || event.NetworkHandle != network.NetworkHandle || !reflect.DeepEqual(network.DNS, event.DNS)
+	needReset := event.Kind == "network" && event.Available && (network.Sequence == 0 || networkChanged || !network.Available || (!network.Validated && event.Validated))
 	reset := running && needReset && (p.lastReset.IsZero() || now.Sub(p.lastReset) >= 5*time.Second)
 	probe := false
 	release := false
@@ -379,7 +381,7 @@ func (c *runtimeCoordinator) platformCommand(ctx context.Context, command Engine
 			return err
 		}
 	}
-	if running && event.Kind == "network" && network.Sequence != 0 && (event.Scope != network.Scope || !reflect.DeepEqual(event.DNS, network.DNS)) && c.nodeOptions != nil {
+	if running && event.Kind == "network" && network.Sequence != 0 && networkChanged && c.nodeOptions != nil {
 		for _, id := range c.nodeOrder {
 			n := c.nodes[id]
 			if !n.awake {

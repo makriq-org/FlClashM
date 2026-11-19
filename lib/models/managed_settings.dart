@@ -12,6 +12,16 @@ const appSwitchSettings = {
   'closeconnections': 'app.closeConnections',
 };
 
+/// Driven by `flclashx-special: hideip`.
+const hideIpSetting = 'app.hideIp';
+
+/// Driven by `flclashx-special: novibrate`.
+const vibrationSetting = 'app.vibration';
+
+/// Cards the user arranged; `flclashx-widgets` replaces them only under
+/// `denywidgets` or once the settings go back to the subscription.
+const dashboardWidgetsSetting = 'app.dashboardWidgets';
+
 /// The config keys a subscription takes over and the user may take back.
 const managedClashKeys = {
   'mixed-port',
@@ -83,12 +93,13 @@ const networkPageKeys = {
 };
 
 const themePageKeys = {
-  'view.app.board',
+  'view.app.theme',
   'view.app.navbar',
   'view.app.tabs',
   'view.app.glass',
   'view.app.color',
   'view.app.black',
+  hideIpSetting,
 };
 
 const proxiesPageKeys = {
@@ -97,6 +108,7 @@ const proxiesPageKeys = {
   'view.proxies.layout',
   'view.proxies.icon',
   'view.proxies.card',
+  'view.proxies.hidetimeout',
 };
 
 /// The settings a `flclashx-view` header speaks for, by what it names.
@@ -110,7 +122,8 @@ Set<String> managedViewKeysOf(ViewRequest? view) {
     if (view.layout != null) 'view.proxies.layout',
     if (view.icon != null) 'view.proxies.icon',
     if (view.card != null) 'view.proxies.card',
-    if (view.board != null) 'view.app.board',
+    if (view.hideTimeout != null) 'view.proxies.hidetimeout',
+    if (view.themeMode != null) 'view.app.theme',
     if (view.floatingNavigationBar != null) 'view.app.navbar',
     if (view.tabAnimation != null) 'view.app.tabs',
     if (view.liquidGlass != null) 'view.app.glass',

@@ -149,12 +149,13 @@ func TestProbeTimeoutCannotOverflowOrExceedItsBudget(t *testing.T) {
 }
 
 func TestDelayQueueWaitHonorsTimeout(t *testing.T) {
+	withProbeProxies(t, "node-a")
 	if err := testDelaySem.Acquire(context.Background(), 50); err != nil {
 		t.Fatal(err)
 	}
 	defer testDelaySem.Release(50)
 	done := make(chan string, 1)
-	handleAsyncTestDelay(`{"proxy-name":"missing","test-url":"https://example.org","timeout":20}`, func(value string) { done <- value })
+	handleAsyncTestDelay(`{"proxy-name":"node-a","test-url":"https://example.org","timeout":20}`, func(value string) { done <- value })
 	select {
 	case value := <-done:
 		if value != "" {

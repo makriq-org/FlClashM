@@ -707,6 +707,42 @@ class _MeasureSizeRenderObject extends RenderProxyBox {
   }
 }
 
+/// Reports [child]'s size after each layout that changes it, a frame late.
+class MeasureSize extends SingleChildRenderObjectWidget {
+  final ValueChanged<Size> onChanged;
+
+  const MeasureSize({super.key, required this.onChanged, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return RenderMeasureSize(onChanged);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderMeasureSize renderObject,
+  ) {
+    renderObject.onChanged = onChanged;
+  }
+}
+
+class RenderMeasureSize extends RenderProxyBox {
+  RenderMeasureSize(this.onChanged);
+
+  ValueChanged<Size> onChanged;
+  Size? _oldSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (_oldSize == size) return;
+    _oldSize = size;
+    final newSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onChanged(newSize));
+  }
+}
+
 /// Tells a list following its end when the reader scrolls off the end and
 /// back onto it; the list's [FollowEndScrollPhysics] keeps it there.
 class ScrollToEndBox extends StatefulWidget {

@@ -93,62 +93,9 @@ final class ManagedSettingsActionProvider
 }
 
 String _$managedSettingsActionHash() =>
-    r'276a17ac316848bd3b1f6762c1bb8136f401eca0';
+    r'45cefac6627a5cb97e11539459332267a31f5492';
 
 abstract class _$ManagedSettingsAction extends $Notifier<void> {
-  void build();
-  @$mustCallSuper
-  @override
-  WhenComplete runBuild() {
-    final ref = this.ref as $Ref<void, void>;
-    final element =
-        ref.element
-            as $ClassProviderElement<
-              AnyNotifier<void, void>,
-              void,
-              Object?,
-              Object?
-            >;
-    return element.handleCreate(ref, build);
-  }
-}
-
-@ProviderFor(ProfileHeadersAction)
-final profileHeadersActionProvider = ProfileHeadersActionProvider._();
-
-final class ProfileHeadersActionProvider
-    extends $NotifierProvider<ProfileHeadersAction, void> {
-  ProfileHeadersActionProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'profileHeadersActionProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$profileHeadersActionHash();
-
-  @$internal
-  @override
-  ProfileHeadersAction create() => ProfileHeadersAction();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(void value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<void>(value),
-    );
-  }
-}
-
-String _$profileHeadersActionHash() =>
-    r'33e7fa6e7c664f79ec1e3c9031d005d78304faa2';
-
-abstract class _$ProfileHeadersAction extends $Notifier<void> {
   void build();
   @$mustCallSuper
   @override
@@ -571,7 +518,7 @@ final class ProxiesActionProvider
   }
 }
 
-String _$proxiesActionHash() => r'49cfef7cd93efe2754edc206b96cc8c7dbb5fd0b';
+String _$proxiesActionHash() => r'26baa238caa934fd6f285cfe309882fb8920a462';
 
 abstract class _$ProxiesAction extends $Notifier<void> {
   void build();
@@ -623,7 +570,7 @@ final class ProfilesActionProvider
   }
 }
 
-String _$profilesActionHash() => r'425a88f7058a4cf1f80a3c0a270117c26432e854';
+String _$profilesActionHash() => r'b2452d7addda4c2e7cabf1477beb02348b96819f';
 
 abstract class _$ProfilesAction extends $Notifier<void> {
   void build();

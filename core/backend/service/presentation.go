@@ -48,7 +48,10 @@ func (a *App) Presentation() Presentation {
 	}
 	var headers map[string]string
 	_ = json.Unmarshal(metadata["providerHeaders"], &headers)
-	value.GlobalModeEnabled = !strings.EqualFold(strings.TrimSpace(profiles.ProviderHeader(headers, "globalmode")), "false")
+	value.GlobalModeEnabled = !profiles.ProviderSpecial(headers, "noglobal")
+	if !value.GlobalModeEnabled && strings.EqualFold(value.Mode, "global") {
+		value.Mode = "rule"
+	}
 	a.presentationMu.Lock()
 	defer a.presentationMu.Unlock()
 	if a.presentationGeneration != value.AppliedGeneration {

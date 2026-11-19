@@ -1,7 +1,6 @@
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
-import 'package:flclashx/views/dashboard/layout.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,8 +80,6 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
     if (text == null) {
       return const SizedBox.shrink();
     }
-    final density = DashboardDensityScope.of(context);
-    final mobile = !density.isDesktop;
     final colorScheme = context.colorScheme;
     final appLocalizations = context.appLocalizations;
     final style = AppTextStyle.subheadline
@@ -92,18 +89,14 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
       semanticLabel: appLocalizations.announcement,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: mobile ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisSize: MainAxisSize.min,
         children: [
           DashboardCardHeader(
             glyph: AppGlyphs.info,
             title: appLocalizations.announcement,
           ),
           const SizedBox(height: 8),
-          Text.rich(
-            _spanOf(text, style, colorScheme.primary),
-            maxLines: mobile ? null : 3,
-            overflow: mobile ? null : TextOverflow.ellipsis,
-          ),
+          Text.rich(_spanOf(text, style, colorScheme.primary)),
         ],
       ),
     );

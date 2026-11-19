@@ -290,6 +290,7 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		if request.Patch == nil {
 			return result, errors.New("settings patch is required")
 		}
+		closeBefore := appCloseConnections(a.profiles.Snapshot().Settings["appSetting"])
 		ownershipChanged, err := a.patchSettingsWithOwnershipChange(ctx, request.Patch, request.ExpectedRevision)
 		if err != nil {
 			return result, err
@@ -304,6 +305,17 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 				_ = json.Unmarshal(request.Patch[key], &fields)
 				for _, field := range []string{"overrideNetworkSettings", "testUrl", "closeConnections"} {
 					if _, changed := fields[field]; changed {
+						apply = true
+					}
+				}
+				// Handing a setting back or taking it over re-runs the current
+				// profile's headers, so the panel speaks only for what it holds.
+				if _, changed := fields["ownedSettings"]; changed {
+					if err := a.customizeForSelection(ctx); err != nil {
+						return result, err
+					}
+					// A value the headers put back may drive the runtime.
+					if appCloseConnections(a.profiles.Snapshot().Settings["appSetting"]) != closeBefore {
 						apply = true
 					}
 				}
@@ -353,6 +365,9 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 			if err = a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(id)}, 0); err != nil {
 				return result, err
 			}
+			if err = a.customizeForSelection(ctx); err != nil {
+				return result, err
+			}
 			apply = true
 		} else {
 			if a.isCurrent(id) || a.currentUsesProfile(id) {
@@ -391,6 +406,11 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		apply = apply || uses
 		result.ProfileID = request.ProfileID
+		// The deleted profile's headers no longer hold any setting, even when
+		// deleting it also stopped the runtime.
+		if err := a.customizeForSelection(ctx); err != nil {
+			return result, err
+		}
 		if result.RuntimeOperationID != "" {
 			return result, nil
 		}
@@ -416,6 +436,12 @@ func (a *App) perform(ctx context.Context, method string, params json.RawMessage
 		}
 		if err := a.patchSettings(ctx, profiles.Object{"currentProfileId": jsonValue(request.ProfileID)}, 0); err != nil {
 			return result, err
+		}
+		if request.ProfileID == nil {
+			// No profile sends anything now: the user's own values come back.
+			if err := a.customizeForSelection(ctx); err != nil {
+				return result, err
+			}
 		}
 		apply = true
 	case "proxy.select":
@@ -632,6 +658,16 @@ func (a *App) isCurrent(id string) bool {
 	return id != "" && id == current
 }
 func jsonValue(value any) json.RawMessage { raw, _ := json.Marshal(value); return raw }
+
+// appCloseConnections reads the switch that makes a settings change need the
+// runtime.
+func appCloseConnections(raw json.RawMessage) bool {
+	var settings struct {
+		CloseConnections bool `json:"closeConnections"`
+	}
+	_ = json.Unmarshal(raw, &settings)
+	return settings.CloseConnections
+}
 func defaultProfileMetadata(metadata profiles.Object) {
 	defaults := map[string]any{"url": "", "autoUpdate": true, "autoUpdateDuration": int64(24 * time.Hour / time.Microsecond), "selectedMap": map[string]any{}, "unfoldSet": []any{}, "providerHeaders": map[string]any{}, "overrideData": map[string]any{"enable": false}}
 	for key, value := range defaults {

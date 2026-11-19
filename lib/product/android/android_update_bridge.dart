@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
@@ -13,63 +15,21 @@ import '../../state.dart';
 import '../../ui/context.dart';
 import '../../widgets/dialog.dart';
 import '../backend/backend.dart';
+import '../services/app_update_http.dart';
+import '../services/app_update_identity.dart';
+import '../services/app_update_install_journal.dart';
 import '../services/app_update_manifest.dart';
 import '../services/app_update_manifest_release.dart';
 import '../services/app_update_manifest_rollback.dart';
+import '../services/app_update_mirrors.dart';
 import '../services/app_update_release.dart';
+import '../services/app_update_session.dart';
+import 'android_package_inspector.dart';
 import 'android_package_installer.dart';
 
-abstract interface class AppUpdateHttpClient {
-  Future<List<int>> readBytes(String url);
-
-  Future<List<dynamic>> readJsonList(String url);
-
-  Future<String?> readText(String url);
-
-  Future<void> download(
-    String url,
-    String targetPath, {
-    void Function(int received, int total)? onReceiveProgress,
-    AppUpdateDownloadCancellation? cancellation,
-    int? expectedLength,
-  });
-}
-
-/// Отмена загрузки обновления. Прячет `CancelToken` от вызывающих слоёв,
-/// чтобы Dio не протекал в сервис обновлений и его тесты.
-class AppUpdateDownloadCancellation {
-  bool _cancelled = false;
-  final _listeners = <void Function()>[];
-
-  bool get isCancelled => _cancelled;
-
-  void cancel() {
-    if (_cancelled) return;
-    _cancelled = true;
-    for (final listener in List.of(_listeners)) {
-      listener();
-    }
-  }
-
-  void Function() addListener(void Function() listener) {
-    if (_cancelled) {
-      listener();
-      return () {};
-    }
-    _listeners.add(listener);
-    return () => _listeners.remove(listener);
-  }
-}
-
-/// Бросается вместо ошибки загрузки, когда пользователь сам нажал «Отмена»:
-/// такой сценарий не должен показывать окно с ошибкой установки.
-class AppUpdateDownloadCancelledException implements Exception {
-  const AppUpdateDownloadCancelledException();
-
-  @override
-  String toString() => 'App update download was cancelled by the user.';
-}
-
+/// HTTP-слой апдейтера. Подписанные документы читаются одним запросом за шаг:
+/// редиректы разбирает `fetchAppUpdateDocument`, поэтому каждый адрес цепочки
+/// проверяется отдельно.
 class DioAppUpdateHttpClient implements AppUpdateHttpClient {
   const DioAppUpdateHttpClient();
 
@@ -83,13 +43,25 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
   }
 
   @override
-  Future<List<int>> readBytes(String url) async {
-    final response = await request.getFileResponseForUrl(url);
-    final data = response.data;
-    if (response.statusCode != 200 || data == null) {
-      throw StateError('Unable to read `$url`.');
-    }
-    return data;
+  Future<AppUpdateHttpResponse> open(
+    Uri url, {
+    required int maxBytes,
+    required Duration deadline,
+  }) async {
+    final response = await request.getBoundedResponseForUrl(
+      url.toString(),
+      maxBytes: maxBytes,
+      timeout: deadline,
+    );
+    final statusCode = response.statusCode ?? 0;
+    final location = response.headers.value(HttpHeaders.locationHeader);
+    return AppUpdateHttpResponse(
+      statusCode: statusCode,
+      location: location == null ? null : Uri.tryParse(location),
+      body: statusCode == HttpStatus.ok
+          ? response.data ?? Uint8List(0)
+          : Uint8List(0),
+    );
   }
 
   @override
@@ -123,9 +95,14 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
       throw const AppUpdateDownloadCancelledException();
     }
     final requestId = 'app-update-download#${utils.id}';
-    final removeCancellationListener = cancellation?.addListener(
-      () => unawaited(_cancelTunnelRequest(requestId)),
-    );
+    final cancelToken = CancelToken();
+    final throughTunnel = globalState.isStart;
+    final removeCancellationListener = cancellation?.addListener(() {
+      cancelToken.cancel();
+      if (throughTunnel) {
+        unawaited(_cancelTunnelRequest(requestId));
+      }
+    });
     try {
       await request.downloadFileForUrl(
         url,
@@ -133,7 +110,13 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
         onProgress: onReceiveProgress,
         requestId: requestId,
         expectedLength: expectedLength,
+        cancelToken: cancelToken,
       );
+    } catch (_) {
+      if (cancellation?.isCancelled ?? false) {
+        throw const AppUpdateDownloadCancelledException();
+      }
+      rethrow;
     } finally {
       removeCancellationListener?.call();
     }
@@ -143,58 +126,36 @@ class DioAppUpdateHttpClient implements AppUpdateHttpClient {
   }
 }
 
-abstract interface class AppUpdatePlatformBridge {
+/// Итог окна обновления: пропуск версии запоминается, «позже» и закрытие —
+/// просто отказ от установки сейчас.
+enum AppUpdateWindowResult { later, skip }
+
+abstract interface class AppUpdatePlatformBridge implements AppUpdateInstaller {
   String get latestReleaseUrl;
+
+  AppUpdateInstallJournal get installJournal;
 
   Future<AppRelease?> checkForAppUpdate({
     required bool includePrerelease,
     required String skippedTagName,
   });
 
-  Future<AppUpdatePromptAction?> promptForUpdateDownload({
+  /// Показывает окно обновления и ведёт его по [session]. Загрузка и установка
+  /// запускаются только действиями пользователя внутри окна.
+  Future<AppUpdateWindowResult?> showUpdateWindow({
     required AppRelease release,
     required List<String> submits,
+    required AppUpdateSession session,
   });
 
   Future<void> showUpdateCheckError();
 
-  Future<void> showUpdateInstallError({
-    required String message,
-    required String releaseUrl,
-  });
-
-  Future<List<String>> readSupportedAbis();
-
-  Future<String?> readRemoteText(String url);
-
-  Future<String> downloadReleaseAsset(
-    ReleaseAsset asset,
-    String targetPath, {
-    required String expectedSha256,
-    void Function(int received, int total)? onReceiveProgress,
-    AppUpdateDownloadCancellation? cancellation,
-  });
-
-  Future<T> showDownloadProgress<T>({
-    required AppRelease release,
-    required ReleaseAsset asset,
-    required Future<T> Function(
-      void Function(int received, int total) onReceiveProgress,
-      AppUpdateDownloadCancellation cancellation,
-    )
-    downloadTask,
-  });
-
-  Future<String> getUpdateDirectoryPath();
-
-  Future<void> prepareInstallHandoff();
-
   Future<bool> openReleasePage(String url);
 
-  Future<bool> installPackage(String path);
+  /// Удаляет скачанные APK, когда установленная сборка подтверждает успешное
+  /// обновление. До подтверждения файлы остаются для повтора.
+  Future<void> pruneInstalledUpdates();
 }
-
-enum AppUpdatePromptAction { download, later, skip }
 
 class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   const AndroidUpdateBridge({
@@ -203,12 +164,24 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
         const SharedPreferencesAppUpdateManifestRollbackGuard(),
     this.httpClient = const DioAppUpdateHttpClient(),
     this.packageInstaller = const MethodChannelAndroidPackageInstaller(),
+    this.packageInspector = const MethodChannelAndroidPackageInspector(),
+    this.mirrorSource = const ProfileAppUpdateMirrors(),
+    this.installJournal = const SharedPreferencesAppUpdateInstallJournal(),
+    this.now = _utcNow,
   });
 
   final AppUpdateManifestVerifier manifestVerifier;
   final AppUpdateManifestRollbackGuard rollbackGuard;
   final AppUpdateHttpClient httpClient;
   final AndroidPackageInstaller packageInstaller;
+  final AndroidPackageInspector packageInspector;
+  final AppUpdateMirrorSource mirrorSource;
+
+  @override
+  final AppUpdateInstallJournal installJournal;
+
+  /// Часы для проверки свежести каталога: тесты подставляют своё время.
+  final DateTime Function() now;
 
   @override
   String get latestReleaseUrl => '$sourceForgeProjectUrl/files/releases/';
@@ -218,66 +191,142 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     required bool includePrerelease,
     required String skippedTagName,
   }) async {
-    final sourceForge = await _readSourceForgeReleases(
+    final mirrors = mirrorSource.read();
+    final signed = await _readSignedCatalogs(
       includePrerelease: includePrerelease,
+      mirrors: mirrors,
     );
     final availableReleases = <AppRelease>[
-      ...sourceForge.releases,
-      if (!sourceForge.complete)
+      ...signed.releases,
+      if (!signed.complete)
         ...await _readGitHubReleases(includePrerelease: includePrerelease),
     ];
-    final release = selectLatestAppRelease(
-      availableReleases,
-      includePrerelease: includePrerelease,
-    );
-    if (release == null || release.tagName == skippedTagName.trim()) {
+
+    // Ответ снят для прежнего профиля: его решение не переносится на новый.
+    if (!mirrorSource.read().sameDecisionContextAs(mirrors)) {
+      commonPrint.log(
+        'Discarded an app update answer that belongs to a previous profile.',
+      );
       return null;
     }
 
     final installedVersionCode = int.tryParse(
       globalState.packageInfo.buildNumber,
     );
-    final hasUpdate = isAppReleaseUpdateAvailable(
-      release,
-      installedVersionCode: installedVersionCode,
-      installedVersionName: globalState.packageInfo.version,
-      supportedAbis: await readSupportedAbis(),
+    final installedVersionName = globalState.packageInfo.version;
+    final supportedAbis = await readSupportedAbis();
+    if (!mirrorSource.read().sameDecisionContextAs(mirrors)) {
+      return null;
+    }
+    final eligible = availableReleases.where(
+      (release) =>
+          selectAndroidReleaseAsset(release, supportedAbis: supportedAbis) !=
+              null &&
+          isAppReleaseUpdateAvailable(
+            release,
+            installedVersionCode: installedVersionCode,
+            installedVersionName: installedVersionName,
+            supportedAbis: supportedAbis,
+          ),
     );
-    return hasUpdate ? release : null;
+    final required = selectLatestAppRelease(
+      eligible.where(
+        (release) => isAppUpdateRequired(
+          release,
+          installedVersionCode: installedVersionCode,
+          installedVersionName: installedVersionName,
+        ),
+      ),
+      includePrerelease: includePrerelease,
+    );
+    if (required != null) {
+      return required;
+    }
+    final optional = selectLatestAppRelease(
+      eligible,
+      includePrerelease: includePrerelease,
+    );
+    return optional?.tagName == skippedTagName.trim() ? null : optional;
   }
 
-  Future<({List<AppRelease> releases, bool complete})>
-  _readSourceForgeReleases({required bool includePrerelease}) async {
+  /// Официальный каталог и зеркало профиля проверяются одинаково: подпись
+  /// ключом FlClashM, канал и защита от понижения. Зеркало — только транспорт.
+  Future<({List<AppRelease> releases, bool complete})> _readSignedCatalogs({
+    required bool includePrerelease,
+    required AppUpdateMirrorSnapshot mirrors,
+  }) async {
     final channels = <AppUpdateChannel>[
       AppUpdateChannel.stable,
       if (includePrerelease) AppUpdateChannel.prerelease,
     ];
     final releases = <AppRelease>[];
     var complete = true;
+    final moment = now();
     for (final channel in channels) {
+      AppUpdateManifest? latest;
+      final sources = <(String, Uri)>[
+        ('official', Uri.parse(appUpdateManifestUrl(channel))),
+        if (mirrors.manifestFor(channel) case final mirror?)
+          ('profile mirror', mirror),
+      ];
+      for (final (label, url) in sources) {
+        try {
+          final manifest = await _readSignedManifest(url, channel: channel);
+          if (latest == null ||
+              manifest.versionCode > latest.versionCode ||
+              (manifest.versionCode == latest.versionCode &&
+                  manifest.publishedAt.isAfter(latest.publishedAt))) {
+            latest = manifest;
+          }
+        } catch (error) {
+          commonPrint.log(
+            'Failed to read the signed ${channel.wireName} app update '
+            'catalog from the $label source: $error',
+          );
+        }
+      }
+      if (!mirrorSource.read().sameDecisionContextAs(mirrors)) {
+        return (releases: <AppRelease>[], complete: true);
+      }
+      if (latest == null) {
+        complete = false;
+        continue;
+      }
       try {
-        final manifestBytes = await httpClient.readBytes(
-          appUpdateManifestUrl(channel),
-        );
-        final signatureBytes = await httpClient.readBytes(
-          appUpdateManifestSignatureUrl(channel),
-        );
-        final manifest = await manifestVerifier.verifyAndDecode(
-          manifestBytes: manifestBytes,
-          signatureBytes: signatureBytes,
-          expectedChannel: channel,
-        );
-        await rollbackGuard.validateAndRecord(manifest);
-        releases.add(manifest.toRelease());
+        await rollbackGuard.validateAndRecord(latest);
+        releases.add(latest.toRelease(now: moment));
       } catch (error) {
         complete = false;
         commonPrint.log(
-          'Failed to read signed ${channel.wireName} app update manifest: '
-          '$error',
+          'Rejected ${channel.wireName} app update catalog: $error',
         );
       }
     }
     return (releases: releases, complete: complete);
+  }
+
+  Future<AppUpdateManifest> _readSignedManifest(
+    Uri manifestUrl, {
+    required AppUpdateChannel channel,
+  }) async {
+    final manifestBytes = await fetchAppUpdateDocument(
+      httpClient,
+      manifestUrl,
+      maxBytes: appUpdateManifestMaxBytes,
+    );
+    final signatureBytes = await fetchAppUpdateDocument(
+      httpClient,
+      appUpdateSignatureUriOf(manifestUrl),
+      maxBytes: appUpdateSignatureMaxBytes,
+    );
+    if (signatureBytes.length != 64) {
+      throw const FormatException('Invalid app update signature size.');
+    }
+    return manifestVerifier.verifyAndDecode(
+      manifestBytes: manifestBytes,
+      signatureBytes: signatureBytes,
+      expectedChannel: channel,
+    );
   }
 
   Future<List<AppRelease>> _readGitHubReleases({
@@ -340,33 +389,33 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
 
   @visibleForTesting
   @override
-  Future<AppUpdatePromptAction?> promptForUpdateDownload({
+  Future<AppUpdateWindowResult?> showUpdateWindow({
     required AppRelease release,
     required List<String> submits,
+    required AppUpdateSession session,
   }) async {
-    final model = ValueNotifier<_UpdateDialogModel>(
-      const _UpdateDialogModel.prompt(),
-    );
-    final action = Completer<AppUpdatePromptAction?>();
-    var closed = false;
+    final result = Completer<AppUpdateWindowResult?>();
     NavigatorState? navigator;
+    var closed = false;
 
     final dialogFuture = globalState.showCommonDialog<void>(
+      dismissible: false,
       child: Builder(
         builder: (context) {
           navigator ??= Navigator.of(context);
           return _AppUpdateDialog(
             release: release,
             submits: submits,
-            model: model,
-            onAction: (value) {
-              if (action.isCompleted) {
+            session: session,
+            onOpenReleasePage: () => openReleasePage(
+              release.htmlUrl.isNotEmpty ? release.htmlUrl : latestReleaseUrl,
+            ),
+            onClose: (value) {
+              if (result.isCompleted) {
                 return;
               }
-              action.complete(value);
-              // На загрузку окно не закрываем — оно превращается
-              // в прогресс, чтобы поток читался как одно действие.
-              if (value != AppUpdatePromptAction.download && !closed) {
+              result.complete(value);
+              if (!closed && (navigator?.canPop() ?? false)) {
                 navigator?.pop();
               }
             },
@@ -378,24 +427,13 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     unawaited(
       dialogFuture.whenComplete(() {
         closed = true;
-        if (!action.isCompleted) {
-          action.complete(null);
+        if (!result.isCompleted) {
+          result.complete(null);
         }
       }),
     );
 
-    final result = await action.future;
-    if (result == AppUpdatePromptAction.download && !closed) {
-      _activeUpdateDialog = _ActiveUpdateDialog(
-        release: release,
-        model: model,
-        navigator: navigator,
-        closed: dialogFuture,
-      );
-    } else {
-      model.dispose();
-    }
-    return result;
+    return result.future;
   }
 
   @visibleForTesting
@@ -403,22 +441,6 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   Future<void> showUpdateCheckError() async {
     // Отчёт без выбора: окно с «Отменой» тут ничего не спрашивает.
     globalState.showNotifier(appLocalizations.checkUpdateError);
-  }
-
-  @visibleForTesting
-  @override
-  Future<void> showUpdateInstallError({
-    required String message,
-    required String releaseUrl,
-  }) async {
-    final shouldOpenReleasePage = await globalState.showMessage(
-      title: appLocalizations.update,
-      message: TextSpan(text: message),
-      confirmText: appLocalizations.goDownload,
-    );
-    if (shouldOpenReleasePage ?? false) {
-      await openReleasePage(releaseUrl);
-    }
   }
 
   @override
@@ -443,6 +465,11 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     void Function(int received, int total)? onReceiveProgress,
     AppUpdateDownloadCancellation? cancellation,
   }) async {
+    if (asset.size > appUpdateMaxApkBytes) {
+      throw StateError(
+        'APK `${asset.name}` is larger than the updater accepts.',
+      );
+    }
     Object? lastError;
     for (final url in asset.downloadUrls) {
       final target = File(targetPath);
@@ -457,6 +484,10 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
           cancellation: cancellation,
           expectedLength: asset.size,
         );
+        // Размер из подписанного каталога — вторая граница после хеша.
+        if (asset.size > 0 && target.lengthSync() != asset.size) {
+          throw StateError('Unexpected APK size from mirror `$url`.');
+        }
         final actualSha256 = await computeFileSha256(target);
         if (actualSha256 != expectedSha256) {
           throw StateError('SHA256 verification failed for mirror `$url`.');
@@ -477,91 +508,6 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     throw StateError('All app update mirrors failed: $lastError');
   }
 
-  @visibleForTesting
-  @override
-  Future<T> showDownloadProgress<T>({
-    required AppRelease release,
-    required ReleaseAsset asset,
-    required Future<T> Function(
-      void Function(int received, int total) onReceiveProgress,
-      AppUpdateDownloadCancellation cancellation,
-    )
-    downloadTask,
-  }) async {
-    final cancellation = AppUpdateDownloadCancellation();
-    // Окно с описанием версии остаётся на экране и превращается в прогресс.
-    // Отдельный диалог открываем только если превращать нечего.
-    final active = _activeUpdateDialog;
-    _activeUpdateDialog = null;
-    final reuse = active != null && active.release.tagName == release.tagName;
-
-    final model = reuse
-        ? active.model
-        : ValueNotifier<_UpdateDialogModel>(const _UpdateDialogModel.prompt());
-    var navigator = reuse ? active.navigator : null;
-    var closed = false;
-
-    void publish(_DownloadProgress value) {
-      model.value = _UpdateDialogModel.downloading(
-        asset: asset,
-        progress: value,
-        onCancel: cancellation.cancel,
-      );
-    }
-
-    publish(const _DownloadProgress(received: 0, total: 0));
-
-    final Future<void> dialogFuture;
-    if (reuse) {
-      dialogFuture = active.closed;
-    } else {
-      dialogFuture = globalState.showCommonDialog<void>(
-        dismissible: false,
-        child: Builder(
-          builder: (context) {
-            navigator ??= Navigator.of(context);
-            return _AppUpdateDialog(
-              release: release,
-              submits: const [],
-              model: model,
-              onAction: (_) {},
-            );
-          },
-        ),
-      );
-    }
-    unawaited(dialogFuture.whenComplete(() => closed = true));
-
-    void closeDialog() {
-      if (!closed && (navigator?.canPop() ?? false)) {
-        navigator?.pop();
-      }
-    }
-
-    try {
-      await Future<void>.delayed(Duration.zero);
-      final stopwatch = Stopwatch()..start();
-      final result = await downloadTask((received, total) {
-        publish(
-          _DownloadProgress(
-            received: received,
-            total: total,
-            elapsed: stopwatch.elapsed,
-          ),
-        );
-      }, cancellation);
-      closeDialog();
-      await dialogFuture;
-      return result;
-    } catch (_) {
-      closeDialog();
-      await dialogFuture;
-      rethrow;
-    } finally {
-      model.dispose();
-    }
-  }
-
   @override
   Future<String> getUpdateDirectoryPath() async {
     final homeDir = await appPath.homeDirPath;
@@ -569,6 +515,14 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
     await directory.create(recursive: true);
     return directory.path;
   }
+
+  @override
+  Future<AppUpdatePackageIdentity?> inspectInstalledPackage() async =>
+      packageInspector.inspectInstalled();
+
+  @override
+  Future<AppUpdatePackageIdentity?> inspectPackage(String path) async =>
+      packageInspector.inspectApk(path);
 
   @override
   Future<void> prepareInstallHandoff() async {
@@ -586,181 +540,209 @@ class AndroidUpdateBridge implements AppUpdatePlatformBridge {
   @override
   Future<bool> installPackage(String path) async =>
       packageInstaller.install(path);
+
+  @override
+  Future<void> pruneInstalledUpdates() async {
+    final preparedVersionCode = await installJournal.readPreparedVersionCode();
+    final installedVersionCode = int.tryParse(
+      globalState.packageInfo.buildNumber,
+    );
+    if (!isPreparedAppUpdateInstalled(
+      preparedVersionCode: preparedVersionCode,
+      installedVersionCode: installedVersionCode,
+    )) {
+      return;
+    }
+    final directory = Directory(await getUpdateDirectoryPath());
+    if (directory.existsSync()) {
+      for (final entity in directory.listSync(followLinks: false)) {
+        try {
+          entity.deleteSync(recursive: true);
+        } on FileSystemException catch (error) {
+          commonPrint.log('Failed to delete stale app update: $error');
+        }
+      }
+    }
+    await installJournal.clear();
+  }
 }
 
-/// Состояние окна апдейтера: одно и то же окно сначала описывает версию,
-/// затем превращается в прогресс загрузки.
-class _UpdateDialogModel {
-  const _UpdateDialogModel.prompt()
-    : asset = null,
-      progress = null,
-      onCancel = null;
+DateTime _utcNow() => DateTime.now().toUtc();
 
-  const _UpdateDialogModel.downloading({
-    required ReleaseAsset this.asset,
-    required _DownloadProgress this.progress,
-    required VoidCallback this.onCancel,
-  });
-
-  final ReleaseAsset? asset;
-  final _DownloadProgress? progress;
-  final VoidCallback? onCancel;
-
-  bool get isDownloading => asset != null;
-}
-
-/// Ссылка на уже открытое окно апдейтера, чтобы фаза загрузки не открывала
-/// второе окно поверх первого.
-class _ActiveUpdateDialog {
-  const _ActiveUpdateDialog({
-    required this.release,
-    required this.model,
-    required this.navigator,
-    required this.closed,
-  });
-
-  final AppRelease release;
-  final ValueNotifier<_UpdateDialogModel> model;
-  final NavigatorState? navigator;
-  final Future<void> closed;
-}
-
-// null здесь значимо: «открытого окна апдейтера нет», поэтому не late.
-// ignore: use_late_for_private_fields_and_variables
-_ActiveUpdateDialog? _activeUpdateDialog;
-
+/// Окно обновления: описание версии, загрузка/проверка, явная кнопка
+/// «Установить» и повтор после сбоя. Установщик не открывается сам.
 class _AppUpdateDialog extends StatelessWidget {
   const _AppUpdateDialog({
     required this.release,
     required this.submits,
-    required this.model,
-    required this.onAction,
+    required this.session,
+    required this.onOpenReleasePage,
+    required this.onClose,
   });
 
   final AppRelease release;
   final List<String> submits;
-  final ValueNotifier<_UpdateDialogModel> model;
-  final ValueChanged<AppUpdatePromptAction> onAction;
+  final AppUpdateSession session;
+  final VoidCallback onOpenReleasePage;
+  final ValueChanged<AppUpdateWindowResult> onClose;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<_UpdateDialogModel>(
-        valueListenable: model,
-        builder: (context, value, _) => CommonDialog(
-          title: value.isDownloading
-              ? '${appLocalizations.downloadUpdate} ${release.tagName}'
-              : '${appLocalizations.discoverNewVersion} ${release.tagName}',
-          overrideScroll: value.isDownloading,
-          actions: [
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: value.isDownloading
-                  ? _cancelAction(value)
-                  : _promptActions(),
-            ),
-          ],
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: session,
+    builder: (context, _) {
+      final phase = session.phase;
+      return PopScope(
+        canPop: !session.isBusy,
+        child: CommonDialog(
+          title: phase == AppUpdatePhase.prompt
+              ? '${appLocalizations.discoverNewVersion} ${release.tagName}'
+              : '${appLocalizations.downloadUpdate} ${release.tagName}',
+          overrideScroll: phase != AppUpdatePhase.prompt,
+          actions: _actions(context, phase),
           child: AnimatedSize(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
-              child: value.isDownloading
-                  ? _downloadBody(context, value)
-                  : _promptBody(context),
+              child: _body(context, phase),
             ),
           ),
         ),
       );
+    },
+  );
 
-  Widget _promptActions() =>
-      // Главное действие занимает всю ширину, второстепенные делят строку
-      // поровну: в узком диалоге ряд из трёх кнопок разной длины даёт
-      // слишком мелкие цели для нажатия.
-      Column(
+  List<Widget> _actions(BuildContext context, AppUpdatePhase phase) {
+    final close = OutlinedButton(
+      onPressed: () => onClose(AppUpdateWindowResult.later),
+      child: Text(appLocalizations.close),
+    );
+    if (session.isBusy) {
+      if (phase == AppUpdatePhase.installing) {
+        return const [];
+      }
+      return [
+        OutlinedButton(
+          onPressed: session.cancel,
+          child: Text(appLocalizations.cancel),
+        ),
+      ];
+    }
+    switch (phase) {
+      case AppUpdatePhase.prompt:
+        return [
+          if (session.failure != null) ...[
+            close,
+            FilledButton(
+              onPressed: session.retry,
+              child: Text(appLocalizations.retry),
+            ),
+          ] else ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: session.download,
+                child: Text(appLocalizations.goDownload),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => onClose(AppUpdateWindowResult.later),
+                child: Text(appLocalizations.later),
+              ),
+            ),
+            if (!session.requiredUpdate) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => onClose(AppUpdateWindowResult.skip),
+                  child: Text(appLocalizations.skipVersion),
+                ),
+              ),
+            ],
+          ],
+        ];
+      case AppUpdatePhase.ready:
+        return [
+          close,
+          FilledButton(
+            onPressed: session.canInstall ? session.install : null,
+            child: Text(appLocalizations.updateInstall),
+          ),
+        ];
+      case AppUpdatePhase.downloading:
+      case AppUpdatePhase.verifying:
+      case AppUpdatePhase.installing:
+        return const [];
+    }
+  }
+
+  Widget _body(BuildContext context, AppUpdatePhase phase) => switch (phase) {
+    AppUpdatePhase.prompt => _promptBody(context),
+    AppUpdatePhase.downloading => _downloadBody(context),
+    AppUpdatePhase.verifying => _verifyingBody(context),
+    AppUpdatePhase.installing => _installingBody(context),
+    AppUpdatePhase.ready => _readyBody(context),
+  };
+
+  Widget _promptBody(BuildContext context) {
+    final failure = session.failure;
+    return SelectionArea(
+      key: const ValueKey('prompt'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => onAction(AppUpdatePromptAction.download),
-              child: Text(appLocalizations.goDownload),
+          if (session.requiredUpdate) ...[
+            Text(
+              appLocalizations.updateRequired,
+              style: _updateBodyStyle(context)
+                  .copyWith(color: Theme.of(context).colorScheme.error),
             ),
-          ),
-          const SizedBox(height: 8),
-          // Столбик, а не ряд: подписи в разных языках имеют разную длину,
-          // и делёж строки пополам ломает выравнивание.
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => onAction(AppUpdatePromptAction.later),
-              child: Text(appLocalizations.later),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => onAction(AppUpdatePromptAction.skip),
-              child: Text(appLocalizations.skipVersion),
-            ),
-          ),
-        ],
-      );
-
-  Widget _cancelAction(_UpdateDialogModel value) => SizedBox(
-    width: double.infinity,
-    // Окно закрывает сам поток загрузки, когда задача упадёт с отменой:
-    // иначе кнопка сняла бы маршрут раньше и pop ушёл бы не туда.
-    child: OutlinedButton(
-      onPressed: value.onCancel,
-      child: Text(appLocalizations.cancel),
-    ),
-  );
-
-  Widget _promptBody(BuildContext context) => SelectionArea(
-    key: const ValueKey('prompt'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (release.prerelease) ...[
-          _preReleaseChip(context),
-          const SizedBox(height: 16),
-        ],
-        for (final submit in submits)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Icon(
-                    Icons.check,
-                    size: 16,
-                    color: context.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 16),
+          ],
+          if (release.prerelease) ...[
+            _preReleaseChip(context),
+            const SizedBox(height: 16),
+          ],
+          for (final submit in submits)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.check,
+                      size: 16,
+                      color: context.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(submit, style: _updateBodyStyle(context))),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(submit, style: _updateBodyStyle(context)),
+                  ),
+                ],
+              ),
             ),
-          ),
-      ],
-    ),
-  );
+          if (failure != null) _failureBlock(context, failure),
+        ],
+      ),
+    );
+  }
 
-  Widget _downloadBody(BuildContext context, _UpdateDialogModel value) {
+  Widget _downloadBody(BuildContext context) {
     final bodyStyle = _updateBodyStyle(context);
     final mutedStyle = bodyStyle.copyWith(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
-    final asset = value.asset!;
-    final progress = value.progress!;
-    final fraction = progress.fraction;
+    final total = session.total;
+    final fraction = total > 0 ? session.received / total : null;
     return Column(
       key: const ValueKey('download'),
       mainAxisSize: MainAxisSize.min,
@@ -780,7 +762,7 @@ class _AppUpdateDialog extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                asset.androidAbi ?? asset.name,
+                session.asset?.apkAsset.name ?? release.tagName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: mutedStyle,
@@ -803,12 +785,190 @@ class _AppUpdateDialog extends StatelessWidget {
                   : '${(fraction * 100).clamp(0, 100).toStringAsFixed(0)}%',
               style: bodyStyle,
             ),
-            Text(progress.sizeText, style: mutedStyle),
+            Text(_sizeText(session.received, total), style: mutedStyle),
           ],
         ),
-        Text(progress.speedText, style: mutedStyle),
+        Text(_speedText(session.received, session.elapsed), style: mutedStyle),
       ],
     );
+  }
+
+  Widget _verifyingBody(BuildContext context) => Column(
+    key: const ValueKey('verifying'),
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const LinearProgressIndicator(minHeight: 6),
+      const SizedBox(height: 12),
+      Text(appLocalizations.updateVerifying, style: _updateBodyStyle(context)),
+    ],
+  );
+
+  Widget _installingBody(BuildContext context) => Column(
+    key: const ValueKey('installing'),
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const LinearProgressIndicator(minHeight: 6),
+      const SizedBox(height: 12),
+      Text(appLocalizations.preparing, style: _updateBodyStyle(context)),
+    ],
+  );
+
+  Widget _readyBody(BuildContext context) {
+    final bodyStyle = _updateBodyStyle(context);
+    final mutedStyle = bodyStyle.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final prepared = session.prepared;
+    final identity = prepared?.identity;
+    return Column(
+      key: const ValueKey('ready'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.verified_outlined,
+              size: 16,
+              color: context.colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(appLocalizations.updateVerified, style: bodyStyle),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (prepared != null)
+          _verifiedRow(
+            context,
+            'SHA-256',
+            _shortDigest(prepared.sha256),
+            mutedStyle,
+          ),
+        if (identity != null) ...[
+          _verifiedRow(context, 'Package', identity.packageName, mutedStyle),
+          _verifiedRow(
+            context,
+            'Signer',
+            _shortDigest(identity.signerFingerprint),
+            mutedStyle,
+          ),
+          _verifiedRow(
+            context,
+            'versionCode',
+            '${identity.versionCode}',
+            mutedStyle,
+          ),
+        ],
+        if (session.handedOff) ...[
+          const SizedBox(height: 12),
+          Text(appLocalizations.updateHandoff, style: mutedStyle),
+        ],
+        if (session.failure case final failure?)
+          _failureBlock(context, failure),
+      ],
+    );
+  }
+
+  Widget _verifiedRow(
+    BuildContext context,
+    String label,
+    String value,
+    TextStyle style,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 88, child: Text(label, style: style)),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _failureBlock(BuildContext context, AppUpdateFailure failure) {
+    final bodyStyle = _updateBodyStyle(context);
+    final mutedStyle = bodyStyle.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final detail = failure.detail;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            switch (failure.kind) {
+              AppUpdateFailureKind.download =>
+                appLocalizations.updateErrorDownload,
+              AppUpdateFailureKind.verify => appLocalizations.updateErrorVerify,
+              AppUpdateFailureKind.install =>
+                appLocalizations.updateErrorInstall,
+            },
+            style: bodyStyle.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+          if (detail != null && detail.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(detail, style: mutedStyle),
+          ],
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: onOpenReleasePage,
+            child: Text(appLocalizations.goDownload),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _shortDigest(String digest) =>
+      digest.length <= 16 ? digest : '${digest.substring(0, 16)}…';
+
+  static String _sizeText(int received, int total) {
+    if (total <= 0) {
+      return _formatBytes(received);
+    }
+    return '${_formatBytes(received)} / ${_formatBytes(total)}';
+  }
+
+  /// Средняя скорость за всю загрузку: она спокойнее мгновенной и не дёргает
+  /// подпись на каждом кадре. Нижняя граница знаменателя гасит большие числа
+  /// на старте.
+  static String _speedText(int received, Duration elapsed) {
+    final milliseconds = elapsed.inMilliseconds < 200
+        ? 200
+        : elapsed.inMilliseconds;
+    final bytesPerSecond = received <= 0
+        ? 0
+        : (received / (milliseconds / 1000)).round();
+    return '${_formatBytes(bytesPerSecond)}/s';
+  }
+
+  static String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    if (unitIndex == 0) {
+      return '${value.toStringAsFixed(0)} ${units[unitIndex]}';
+    }
+    return '${value.toStringAsFixed(1)} ${units[unitIndex]}';
   }
 }
 
@@ -829,57 +989,3 @@ Widget _preReleaseChip(BuildContext context) => Chip(
   labelStyle: Theme.of(context).textTheme.bodyMedium,
   label: Text(appLocalizations.preReleaseLabel),
 );
-
-class _DownloadProgress {
-  const _DownloadProgress({
-    required this.received,
-    required this.total,
-    this.elapsed = Duration.zero,
-  });
-
-  final int received;
-  final int total;
-  final Duration elapsed;
-
-  /// Средняя скорость за всю загрузку: она заметно спокойнее мгновенной
-  /// и не дёргает подпись на каждом кадре. Значение есть с первого кадра —
-  /// подпись, появляющаяся не сразу, читается как рывок вёрстки. Нижняя
-  /// граница знаменателя гасит бессмысленно большие числа на старте.
-  String get speedText {
-    final milliseconds = elapsed.inMilliseconds < 200
-        ? 200
-        : elapsed.inMilliseconds;
-    final bytesPerSecond = received <= 0
-        ? 0
-        : (received / (milliseconds / 1000)).round();
-    return '${_formatBytes(bytesPerSecond)}/s';
-  }
-
-  double? get fraction {
-    if (total <= 0) {
-      return null;
-    }
-    return received / total;
-  }
-
-  String get sizeText {
-    if (total <= 0) {
-      return _formatBytes(received);
-    }
-    return '${_formatBytes(received)} / ${_formatBytes(total)}';
-  }
-
-  static String _formatBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    if (unitIndex == 0) {
-      return '${value.toStringAsFixed(0)} ${units[unitIndex]}';
-    }
-    return '${value.toStringAsFixed(1)} ${units[unitIndex]}';
-  }
-}

@@ -131,6 +131,8 @@ Future<AppUpdateManifest> buildAppUpdateManifest(
     body: releaseNotes.readAsStringSync(),
     htmlUrl: '$sourceForgeProjectUrl/files/releases/${options.tagName}/',
     assets: assets,
+    minimumVersion: options.minimumVersion,
+    minimumVersionCode: options.minimumVersionCode,
   );
 }
 
@@ -211,6 +213,8 @@ class ManifestOptions {
     required this.channel,
     required this.publishedAt,
     this.versionCode,
+    this.minimumVersion,
+    this.minimumVersionCode,
   });
 
   factory ManifestOptions.parse(List<String> args) {
@@ -262,6 +266,20 @@ class ManifestOptions {
     if (rawVersionCode != null && (versionCode == null || versionCode <= 0)) {
       throw ArgumentError('--version-code must be a positive integer.');
     }
+    final rawMinimumVersion = values['min-version'];
+    final minimumVersion = rawMinimumVersion?.trim();
+    if (minimumVersion != null &&
+        !appUpdateMinimumVersionPattern.hasMatch(minimumVersion)) {
+      throw ArgumentError('--min-version must look like 1.2.3.');
+    }
+    final rawMinimumVersionCode = values['min-version-code'];
+    final minimumVersionCode = rawMinimumVersionCode == null
+        ? null
+        : int.tryParse(rawMinimumVersionCode);
+    if (rawMinimumVersionCode != null &&
+        (minimumVersionCode == null || minimumVersionCode <= 0)) {
+      throw ArgumentError('--min-version-code must be a positive integer.');
+    }
 
     return ManifestOptions(
       distPath: requiredValue('dist'),
@@ -272,6 +290,8 @@ class ManifestOptions {
       channel: channel,
       publishedAt: publishedAt,
       versionCode: versionCode,
+      minimumVersion: minimumVersion,
+      minimumVersionCode: minimumVersionCode,
     );
   }
 
@@ -283,4 +303,9 @@ class ManifestOptions {
   final AppUpdateChannel channel;
   final DateTime publishedAt;
   final int? versionCode;
+
+  /// Обязательный минимум для уже выпущенных сборок; попадает в подписанный
+  /// каталог и действует только пока каталог свежий.
+  final String? minimumVersion;
+  final int? minimumVersionCode;
 }

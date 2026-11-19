@@ -109,6 +109,7 @@ extension BackendProjection on Database {
         for (final table in <TableInfo>[
           disabledRules,
           proxyDialers,
+          proxyChains,
           proxyGroups,
           rules,
           clashProviders,
@@ -141,6 +142,13 @@ extension BackendProjection on Database {
               collections,
               'disabledRules',
             ).map((v) => DisabledRule.fromJson(v).toCompanion()),
+          );
+          b.insertAll(
+            proxyChains,
+            _rows(collections, 'proxyChains')
+                .map((v) => ProxyChain.fromJson(v))
+                .nonNulls
+                .map((v) => v.toCompanion(v.profileId!)),
           );
           b.insertAll(
             proxyGroups,
@@ -226,6 +234,10 @@ extension BackendProjection on Database {
       'proxyGroups': await rows(
         proxyGroups,
         (v) => (v as RawProxyGroup).toProxyGroup().toJson(),
+      ),
+      'proxyChains': await rows(
+        proxyChains,
+        (v) => (v as RawProxyChain).toProxyChain().toJson(),
       ),
       'clashProviders': await rows(
         clashProviders,

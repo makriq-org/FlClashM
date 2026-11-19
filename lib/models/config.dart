@@ -218,6 +218,7 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(false) bool autoRun,
     @Default(false) bool openLogs,
     @Default(true) bool closeConnections,
+    @Default(RequestFeed.live) RequestFeed requestFeed,
     @Default(defaultTestUrl) String testUrl,
     @Default(8000) int delayTestTimeout,
     @Default(TabAnimation.slide)
@@ -240,6 +241,7 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default(true) bool checkCertificate,
     @Default(defaultFilters) List<Filter> filters,
     @Default(false) bool hideIp,
+    @Default(true) bool vibration,
     @Default(false) bool editorLineWrap,
     @Default(EditorFontSize.standard) EditorFontSize editorFontSize,
     @Default([]) List<String> serviceOrder,
@@ -247,6 +249,10 @@ abstract class AppSettingProps with _$AppSettingProps {
     @Default({}) Map<String, Map<String, double>> tableColumnWidths,
     @Default({}) Map<String, int> subscriptionNotices,
     @Default({}) Set<String> ownedSettings,
+
+    /// Settings a `flclashx-special` flag turned on, so they can go back to
+    /// their default once the panel stops sending that flag.
+    @Default({}) Set<String> panelSetSettings,
   }) = _AppSettingProps;
 
   factory AppSettingProps.fromJson(Map<String, Object?> json) =>
@@ -413,6 +419,7 @@ ProxyCardType proxyCardTypeSafeFromJson(Object? cardType) {
     'loose' || 'expand' => ProxyCardType.loose,
     'standard' || 'shrink' => ProxyCardType.standard,
     'compact' || 'min' => ProxyCardType.compact,
+    'oneline' => ProxyCardType.oneline,
     _ => ProxyCardType.standard,
   };
 }
@@ -475,7 +482,6 @@ abstract class ThemeProps with _$ThemeProps {
     int? primaryColor,
     @Default(defaultPrimaryColors) List<int> primaryColors,
     @Default(ThemeMode.system) ThemeMode themeMode,
-    @Default(ThemeStyle.original) ThemeStyle style,
     @Default(ColorStyle.vivid)
     @JsonKey(readValue: _readColorStyle)
     ColorStyle colorStyle,

@@ -75,6 +75,8 @@ class AppRelease {
     required this.prerelease,
     required this.draft,
     this.versionCode,
+    this.minimumVersion,
+    this.minimumVersionCode,
   });
 
   factory AppRelease.fromJson(Map<String, dynamic> json) {
@@ -108,6 +110,13 @@ class AppRelease {
 
   /// Android installation order from a signed manifest or release metadata.
   final int? versionCode;
+
+  /// Минимальная версия из подписанного свежего каталога. Неподписанный
+  /// запасной источник её не задаёт, поэтому навязать обновление он не может.
+  final String? minimumVersion;
+
+  /// Минимальный Android `versionCode` из того же подписанного каталога.
+  final int? minimumVersionCode;
 
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -198,6 +207,32 @@ bool isAppReleaseUpdateAvailable(
   }
   return utils.compareVersions(release.version, installedVersionName) > 0;
 }
+
+/// Обновление обязательно, когда подписанный свежий каталог объявил минимум
+/// выше установленной версии. `versionCode` точнее видимой версии: нумерация
+/// проекта может начинаться заново.
+bool isAppUpdateRequired(
+  AppRelease release, {
+  required int? installedVersionCode,
+  required String installedVersionName,
+}) {
+  final minimumVersionCode = release.minimumVersionCode;
+  if (minimumVersionCode != null && installedVersionCode != null) {
+    return installedVersionCode < minimumVersionCode;
+  }
+  final minimumVersion = release.minimumVersion;
+  if (minimumVersion == null) {
+    return false;
+  }
+  return utils.compareVersions(installedVersionName, minimumVersion) < 0;
+}
+
+/// `versionCode`, который обязан оказаться внутри выбранного APK. Сначала
+/// фактический код APK из каталога, затем общий код выпуска.
+int? expectedAppUpdateVersionCode(
+  AppRelease release,
+  AndroidReleaseAsset asset,
+) => asset.apkAsset.versionCode ?? release.versionCode;
 
 class AndroidReleaseAsset {
   const AndroidReleaseAsset({

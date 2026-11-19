@@ -20,7 +20,7 @@ type Snapshot struct {
 	Collections Collections `json:"collections"`
 }
 
-var Names = []string{"scripts", "rules", "disabledRules", "proxyGroups", "clashProviders", "customProxies", "proxyDialers", "iconRecords", "iconSets"}
+var Names = []string{"scripts", "rules", "disabledRules", "proxyGroups", "clashProviders", "customProxies", "proxyDialers", "proxyChains", "iconRecords", "iconSets"}
 
 func Empty() Collections {
 	out := Collections{}
@@ -112,7 +112,7 @@ func PruneProfile(c Collections, profileID string) {
 			removedRules[ID(row["id"])] = true
 		}
 	}
-	for _, key := range []string{"rules", "disabledRules", "proxyGroups", "proxyDialers"} {
+	for _, key := range []string{"rules", "disabledRules", "proxyGroups", "proxyDialers", "proxyChains"} {
 		out := []Object{}
 		for _, row := range c[key] {
 			if String(row, "profileId") == profileID || key == "disabledRules" && removedRules[ID(row["ruleId"])] {
@@ -179,7 +179,7 @@ func Validate(c Collections, profiles map[string]Object) error {
 				if json.Unmarshal(raw, &pid) != nil || pid == "" || profiles[pid] == nil {
 					return fmt.Errorf("%s profileId must reference an existing string id", key)
 				}
-			} else if key == "proxyGroups" || key == "disabledRules" || key == "proxyDialers" {
+			} else if key == "proxyGroups" || key == "disabledRules" || key == "proxyDialers" || key == "proxyChains" {
 				return fmt.Errorf("%s requires profileId", key)
 			}
 			for field, raw := range row {
@@ -252,8 +252,54 @@ func Validate(c Collections, profiles map[string]Object) error {
 		}
 		groups[pid][name] = row
 	}
+	chainNames := map[string]map[string]bool{}
+	for _, row := range c["proxyChains"] {
+		pid, name := String(row, "profileId"), String(row, "name")
+		if chainNames[pid] == nil {
+			chainNames[pid] = map[string]bool{}
+		}
+		if !validName(name) || Builtins[name] || name == "GLOBAL" || proxies[name] || groups[pid][name] != nil || chainNames[pid][name] {
+			return errors.New("proxy chain name is empty, reserved or duplicated")
+		}
+		chainNames[pid][name] = true
+	}
 	validTarget := func(pid, name string) bool {
 		return Builtins[name] || name == "GLOBAL" || proxies[name] || groups[pid][name] != nil
+	}
+	validRuleTarget := func(pid, name string) bool {
+		return validTarget(pid, name) || chainNames[pid][name]
+	}
+	for _, row := range c["proxyChains"] {
+		pid := String(row, "profileId")
+		if raw, exists := row["enabled"]; exists {
+			var enabled bool
+			if json.Unmarshal(raw, &enabled) != nil {
+				return errors.New("proxy chain enabled must be a boolean")
+			}
+		}
+		var hops []string
+		if raw := row["hops"]; len(raw) == 0 || string(raw) == "null" || json.Unmarshal(raw, &hops) != nil {
+			return errors.New("proxy chain hops must contain names")
+		}
+		if len(hops) < 2 || len(hops) > 3 {
+			return errors.New("proxy chain requires two or three hops")
+		}
+		seen := map[string]bool{}
+		for _, hop := range hops {
+			if !validName(hop) {
+				return errors.New("proxy chain hop is empty")
+			}
+			if seen[hop] {
+				return errors.New("proxy chain repeats a hop")
+			}
+			seen[hop] = true
+			if Builtins[hop] || hop == "GLOBAL" || hop == "MATCH" || chainNames[pid][hop] {
+				return fmt.Errorf("proxy chain hop %s is not a chainable proxy or group", hop)
+			}
+			if String(profiles[pid], "type") == "custom" && !validTarget(pid, hop) {
+				return fmt.Errorf("proxy chain hop references missing proxy %s", hop)
+			}
+		}
 	}
 	edges := map[string]map[string][]string{}
 	for pid, named := range groups {
@@ -334,7 +380,7 @@ func Validate(c Collections, profiles map[string]Object) error {
 		}
 		pid := String(row, "profileId")
 		if pid != "" && String(profiles[pid], "type") == "custom" {
-			if target := String(row, "ruleTarget"); target != "" && !validTarget(pid, target) {
+			if target := String(row, "ruleTarget"); target != "" && !validRuleTarget(pid, target) {
 				return fmt.Errorf("rule references missing target %s", target)
 			}
 			if provider := String(row, "ruleProvider"); provider != "" && !ruleProviders[provider] {

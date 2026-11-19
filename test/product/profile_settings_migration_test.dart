@@ -96,6 +96,50 @@ void main() {
     },
   );
 
+  for (final entry in <(Object, int)>[
+    (24, 24),
+    (1, 1),
+    // A dropped value leaves the app default, not the stored one.
+    (0, 24),
+    (-5, 24),
+    (1000000, 24),
+    ('24', 24),
+  ]) {
+    final interval = entry.$1;
+    final kept = entry.$2;
+    test('profile geo-update-interval $interval becomes $kept', () {
+      final next = syncProfileSettings(
+        const PatchClashConfig(geoUpdateInterval: 1),
+        {'geo-update-interval': interval},
+        ['geo-update-interval'],
+      );
+      expect(next.geoUpdateInterval, kept);
+    });
+  }
+
+  test('legacy migration keeps a profile only when its id is a file name', () async {
+    final directory = await Directory.systemTemp.createTemp('legacy-profile-');
+    addTearDown(() => directory.delete(recursive: true));
+    final source = Directory('${directory.path}/source')..createSync();
+    Directory('${directory.path}/outside').createSync();
+    File('${directory.path}/outside/secret.yaml').writeAsStringSync('secret: 1');
+    final migrated = await migrateLegacyConfig(
+      configMap: {
+        'profiles': [
+          {'id': '../outside/secret', 'autoUpdateDuration': 0},
+          {'id': 'missing', 'autoUpdateDuration': 0},
+        ],
+      },
+      sourcePath: source.path,
+      targetPath: '${directory.path}/target',
+    );
+    expect(migrated.profiles.map((profile) => profile.id), ['missing']);
+    expect(
+      Directory('${directory.path}/target/profiles').existsSync(),
+      isFalse,
+    );
+  });
+
   for (final selected in <Object?>['legacy-id', 17, null]) {
     test(
       'legacy migration preserves only string profile selection $selected',

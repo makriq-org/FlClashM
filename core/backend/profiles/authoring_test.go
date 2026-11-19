@@ -26,6 +26,7 @@ func authoringFixture() authoring.Collections {
 	c["disabledRules"] = []authoring.Object{authoringRow(map[string]any{"profileId": "custom:9007199254740993", "ruleId": 4})}
 	c["scripts"] = []authoring.Object{authoringRow(map[string]any{"id": 5, "label": "script", "content": "function main(c){return c}", "future": true})}
 	c["clashProviders"] = []authoring.Object{authoringRow(map[string]any{"id": 6, "label": "Rules", "contentBase64": "cGF5bG9hZDogW10K", "format": "yaml", "behavior": "classical"})}
+	c["proxyChains"] = []authoring.Object{authoringRow(map[string]any{"id": 7, "profileId": "custom:9007199254740993", "name": "Chain", "enabled": true, "hops": []string{"Server", "Proxy"}})}
 	return c
 }
 func TestAuthoringCASReopenBackupResetAndLegacyPreservation(t *testing.T) {
@@ -141,7 +142,7 @@ func TestAuthoringRejectsInvalidReferencesAndCascades(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := r.AuthoringSnapshot().Collections
-	if len(c["proxyGroups"])+len(c["proxyDialers"])+len(c["disabledRules"]) != 0 || len(c["rules"]) != 1 || len(c["customProxies"]) != 1 {
+	if len(c["proxyGroups"])+len(c["proxyDialers"])+len(c["disabledRules"])+len(c["proxyChains"]) != 0 || len(c["rules"]) != 1 || len(c["customProxies"]) != 1 {
 		t.Fatal("incorrect cascade", c)
 	}
 }

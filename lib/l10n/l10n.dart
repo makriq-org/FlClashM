@@ -1955,9 +1955,9 @@ class AppLocalizations {
     return Intl.message('Min', name: 'min', desc: '', args: []);
   }
 
-  /// `Oneline`
+  /// `Single line`
   String get oneline {
-    return Intl.message('Oneline', name: 'oneline', desc: '', args: []);
+    return Intl.message('Single line', name: 'oneline', desc: '', args: []);
   }
 
   /// `Tab`
@@ -4475,41 +4475,6 @@ class AppLocalizations {
     return Intl.message(
       'Obtain a profile from a subscription link or a proxy share link',
       name: 'linkDesc',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Theme mode`
-  String get themeStyle {
-    return Intl.message('Theme mode', name: 'themeStyle', desc: '', args: []);
-  }
-
-  /// `Original`
-  String get themeStyleOriginal {
-    return Intl.message(
-      'Original',
-      name: 'themeStyleOriginal',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Enhanced`
-  String get themeStyleEnhanced {
-    return Intl.message(
-      'Enhanced',
-      name: 'themeStyleEnhanced',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Enhanced puts the service logo, plan, server and a connect button on the home page in place of the widget grid.`
-  String get themeStyleDesc {
-    return Intl.message(
-      'Enhanced puts the service logo, plan, server and a connect button on the home page in place of the widget grid.',
-      name: 'themeStyleDesc',
       desc: '',
       args: [],
     );
@@ -8373,6 +8338,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Leaves the outbound IP off the dashboard and the service checks.`
+  String get hideIpDesc {
+    return Intl.message(
+      'Leaves the outbound IP off the dashboard and the service checks.',
+      name: 'hideIpDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Hide IP`
   String get hideIp {
     return Intl.message('Hide IP', name: 'hideIp', desc: '', args: []);
@@ -10485,6 +10460,326 @@ class AppLocalizations {
       name: 'alreadyInLocalProxies',
       desc: '',
       args: [name],
+    );
+  }
+
+  /// `Pull down to test the delay`
+  String get pullToTestDelay {
+    return Intl.message(
+      'Pull down to test the delay',
+      name: 'pullToTestDelay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Release to test the delay`
+  String get releaseToTestDelay {
+    return Intl.message(
+      'Release to test the delay',
+      name: 'releaseToTestDelay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pull down to update the subscription`
+  String get pullToUpdateSubscription {
+    return Intl.message(
+      'Pull down to update the subscription',
+      name: 'pullToUpdateSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Release to update the subscription`
+  String get releaseToUpdateSubscription {
+    return Intl.message(
+      'Release to update the subscription',
+      name: 'releaseToUpdateSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Updating the subscription…`
+  String get updatingSubscription {
+    return Intl.message(
+      'Updating the subscription…',
+      name: 'updatingSubscription',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Subscription updated`
+  String get subscriptionUpdated {
+    return Intl.message(
+      'Subscription updated',
+      name: 'subscriptionUpdated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Proxy chains`
+  String get proxyChainsTitle {
+    return Intl.message(
+      'Proxy chains',
+      name: 'proxyChainsTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Beta`
+  String get beta {
+    return Intl.message('Beta', name: 'beta', desc: '', args: []);
+  }
+
+  /// `Add a chain`
+  String get addProxyChain {
+    return Intl.message(
+      'Add a chain',
+      name: 'addProxyChain',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `New chain`
+  String get newProxyChain {
+    return Intl.message('New chain', name: 'newProxyChain', desc: '', args: []);
+  }
+
+  /// `Chain`
+  String get proxyChain {
+    return Intl.message('Chain', name: 'proxyChain', desc: '', args: []);
+  }
+
+  /// `Traffic passes the hops in order, and sites see only the exit. Chains are kept in the profile and included in backups.`
+  String get proxyChainsDesc {
+    return Intl.message(
+      'Traffic passes the hops in order, and sites see only the exit. Chains are kept in the profile and included in backups.',
+      name: 'proxyChainsDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Entry`
+  String get proxyChainEntry {
+    return Intl.message('Entry', name: 'proxyChainEntry', desc: '', args: []);
+  }
+
+  /// `Middle`
+  String get proxyChainMiddle {
+    return Intl.message('Middle', name: 'proxyChainMiddle', desc: '', args: []);
+  }
+
+  /// `Exit`
+  String get proxyChainExit {
+    return Intl.message('Exit', name: 'proxyChainExit', desc: '', args: []);
+  }
+
+  /// `Device`
+  String get proxyChainDevice {
+    return Intl.message('Device', name: 'proxyChainDevice', desc: '', args: []);
+  }
+
+  /// `Internet`
+  String get proxyChainInternet {
+    return Intl.message(
+      'Internet',
+      name: 'proxyChainInternet',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Add a hop`
+  String get addProxyChainHop {
+    return Intl.message(
+      'Add a hop',
+      name: 'addProxyChainHop',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The device connects to the entry, and traffic leaves for the internet from the exit.`
+  String get proxyChainHopsDesc {
+    return Intl.message(
+      'The device connects to the entry, and traffic leaves for the internet from the exit.',
+      name: 'proxyChainHopsDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `{name} is not in this profile`
+  String proxyChainMissingHop(Object name) {
+    return Intl.message(
+      '$name is not in this profile',
+      name: 'proxyChainMissingHop',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `{name} takes its nodes from a provider, which chains do not support yet`
+  String proxyChainProviderHop(Object name) {
+    return Intl.message(
+      '$name takes its nodes from a provider, which chains do not support yet',
+      name: 'proxyChainProviderHop',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `The same hop is picked twice`
+  String get proxyChainRepeatedHop {
+    return Intl.message(
+      'The same hop is picked twice',
+      name: 'proxyChainRepeatedHop',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `{name} is already a name in this profile`
+  String proxyChainNameTaken(Object name) {
+    return Intl.message(
+      '$name is already a name in this profile',
+      name: 'proxyChainNameTaken',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `Give the chain a name and pick every hop`
+  String get proxyChainIncomplete {
+    return Intl.message(
+      'Give the chain a name and pick every hop',
+      name: 'proxyChainIncomplete',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `{name} has proxies that cannot dial through another hop, such as direct`
+  String proxyChainUnchainableHop(Object name) {
+    return Intl.message(
+      '$name has proxies that cannot dial through another hop, such as direct',
+      name: 'proxyChainUnchainableHop',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `The filter of {name} uses syntax this app cannot read yet`
+  String proxyChainUnreadableFilter(Object name) {
+    return Intl.message(
+      'The filter of $name uses syntax this app cannot read yet',
+      name: 'proxyChainUnreadableFilter',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `{name} is the MATCH target. Pick another target before turning it off or deleting it`
+  String proxyChainIsMatchTarget(Object name) {
+    return Intl.message(
+      '$name is the MATCH target. Pick another target before turning it off or deleting it',
+      name: 'proxyChainIsMatchTarget',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `{name} is the target of added rules. Point them elsewhere before turning it off or deleting it`
+  String proxyChainIsRuleTarget(Object name) {
+    return Intl.message(
+      '$name is the target of added rules. Point them elsewhere before turning it off or deleting it',
+      name: 'proxyChainIsRuleTarget',
+      desc: '',
+      args: [name],
+    );
+  }
+
+  /// `Install`
+  String get updateInstall {
+    return Intl.message('Install', name: 'updateInstall', desc: '', args: []);
+  }
+
+  /// `Verifying the file…`
+  String get updateVerifying {
+    return Intl.message(
+      'Verifying the file…',
+      name: 'updateVerifying',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `File verified`
+  String get updateVerified {
+    return Intl.message(
+      'File verified',
+      name: 'updateVerified',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The installer is open. If the installation is cancelled, the file stays for another try.`
+  String get updateHandoff {
+    return Intl.message(
+      'The installer is open. If the installation is cancelled, the file stays for another try.',
+      name: 'updateHandoff',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `This update is required: the current version is no longer supported.`
+  String get updateRequired {
+    return Intl.message(
+      'This update is required: the current version is no longer supported.',
+      name: 'updateRequired',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The update could not be downloaded.`
+  String get updateErrorDownload {
+    return Intl.message(
+      'The update could not be downloaded.',
+      name: 'updateErrorDownload',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The downloaded file failed verification and was removed.`
+  String get updateErrorVerify {
+    return Intl.message(
+      'The downloaded file failed verification and was removed.',
+      name: 'updateErrorVerify',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The installer could not be started.`
+  String get updateErrorInstall {
+    return Intl.message(
+      'The installer could not be started.',
+      name: 'updateErrorInstall',
+      desc: '',
+      args: [],
     );
   }
 }

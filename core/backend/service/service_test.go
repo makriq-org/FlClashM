@@ -383,12 +383,13 @@ func TestResolvedProviderSettingsRemainFallbackWithoutFlutter(t *testing.T) {
 		return patch["mixed-port"] == float64(9091)
 	})
 	request(t, app, "global-disabled", "settings.patch", map[string]any{"patch": map[string]any{"patchClashConfig": map[string]any{"mode": "global"}}})
-	waitDomain(t, app, "global-disabled")
-	waitCondition(t, func() bool {
-		var patch map[string]any
-		_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &patch)
-		return patch["mode"] == "rule"
-	})
+	waitRuntime(t, app, waitDomain(t, app, "global-disabled").RuntimeOperationID)
+	app.retainAppliedSettings(context.Background())
+	var personal map[string]any
+	_ = json.Unmarshal(app.Snapshot().Catalog.Settings["patchClashConfig"], &personal)
+	if got := app.Presentation(); personal["mode"] != "global" || got.Mode != "rule" || got.GlobalModeEnabled {
+		t.Fatalf("profile restriction must be temporary: personal=%v presentation=%+v", personal, got)
+	}
 	request(t, app, "plain", "profile.put", map[string]any{"metadata": map[string]any{"id": "plain"}, "source": "rules: ['MATCH,DIRECT']\n", "select": true})
 	waitDomain(t, app, "plain")
 	view, err := app.RuntimeView()

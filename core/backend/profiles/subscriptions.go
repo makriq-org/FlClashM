@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"mime"
 	"net"
 	"net/http"
@@ -19,6 +18,10 @@ import (
 
 	"core/backend"
 )
+
+// maxUpdateIntervalHours bounds a panel's update interval the way the app's
+// own input does: past a year it is a schedule nothing would ever honour.
+const maxUpdateIntervalHours = 24 * 366
 
 // HTTPClient is injected by the host: Android uses the engine's tunnel-aware
 // HTTP transport; tests use local servers. Subscriptions do not depend on UI IO.
@@ -153,7 +156,9 @@ func (s *Subscriptions) update(ctx context.Context, id string, newMetadata Objec
 	_ = json.Unmarshal(metadata["providerHeaders"], &previous)
 	merged := MergeProviderHeaders(previous, incoming)
 	metadata["providerHeaders"] = mustJSON(merged)
-	if interval, err := strconv.ParseInt(incoming["profile-update-interval"], 10, 64); err == nil && interval > 0 && interval <= math.MaxInt64/int64(time.Hour/time.Microsecond) {
+	// A panel's interval no clock can reach is dropped rather than stored as a
+	// schedule the app would never honour.
+	if interval, err := strconv.ParseInt(incoming["profile-update-interval"], 10, 64); err == nil && interval > 0 && interval <= maxUpdateIntervalHours {
 		metadata["autoUpdateDuration"] = mustJSON(interval * int64(time.Hour/time.Microsecond))
 	}
 	domain := ProviderHeader(incoming, "newdomain")
@@ -269,6 +274,11 @@ func MergeProviderHeaders(previous, incoming map[string]string) map[string]strin
 	merged := map[string]string{}
 	for k, v := range previous {
 		merged[k] = v
+	}
+	// These headers describe the current response, not persistent defaults.
+	for _, suffix := range []string{"view", "settings", "widgets", "special", "update", "update-pre"} {
+		delete(merged, "flclashm-"+suffix)
+		delete(merged, "flclashx-"+suffix)
 	}
 	for key := range incoming {
 		if strings.HasPrefix(key, "flclashm-") || strings.HasPrefix(key, "flclashx-") {

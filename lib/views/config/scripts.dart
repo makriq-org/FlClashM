@@ -196,7 +196,7 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
   }
 
   Future<void> _handleEditorSave(
-    BuildContext _,
+    BuildContext editorContext,
     String title,
     String content, {
     Script? script,
@@ -224,13 +224,14 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
         await (script?.copyWith(label: label) ?? Script.create(label: label))
             .save(content);
     _scriptsAction.putScript(newScript);
-    if (mounted) {
-      Navigator.of(context).pop();
+    if (editorContext.mounted &&
+        ModalRoute.of(editorContext)?.isCurrent == true) {
+      Navigator.of(editorContext).pop();
     }
   }
 
   Future<bool> _handleEditorPop(
-    BuildContext _,
+    BuildContext editorContext,
     String title,
     String content,
     String raw, {
@@ -246,11 +247,10 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
     if (res == null) {
       return false;
     }
-    if (res && mounted) {
-      unawaited(_handleEditorSave(context, title, content, script: script));
-    } else {
+    if (!res || !mounted || !editorContext.mounted) {
       return true;
     }
+    await _handleEditorSave(editorContext, title, content, script: script);
     return false;
   }
 

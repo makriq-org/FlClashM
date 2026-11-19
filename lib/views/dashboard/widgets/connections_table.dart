@@ -18,7 +18,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'card.dart';
-import 'current_outbound.dart';
 
 /// Enough to fill the tallest card several times over; the full feed is a
 /// tap away.
@@ -52,10 +51,10 @@ enum DashboardFeed {
   requests,
   dns;
 
-  PageLabel get page => switch (this) {
-    connections => PageLabel.connections,
-    requests => PageLabel.requests,
-    dns => PageLabel.dns,
+  String get label => switch (this) {
+    connections => currentAppLocalizations.liveConnections,
+    requests => PageLabel.requests.label,
+    dns => PageLabel.dns.label,
   };
 }
 
@@ -120,7 +119,7 @@ mixin ConnectionsPolling<T extends ConsumerStatefulWidget>
     }
     try {
       if (pollsConnections) {
-        final next = await _core.getConnections();
+        final next = [...await _core.getConnections()];
         if (!isCurrent()) return;
         next.sort((a, b) => b.start.compareTo(a.start));
         final tcp = next
@@ -306,10 +305,10 @@ class _ConnectionsTableCardState extends ConsumerState<ConnectionsTableCard>
           outer: headerHeight / 2,
           inner: 8,
           background: DashboardColors.of(context).tone,
-          semanticLabel: feed.page.label,
+          semanticLabel: feed.label,
           onTap: () => _select(feed),
           builder: (foreground) => _FeedSegment(
-            label: feed.page.label,
+            label: feed.label,
             count: count,
             height: headerHeight,
             foreground: foreground,

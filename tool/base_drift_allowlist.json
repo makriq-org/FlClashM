@@ -71,6 +71,11 @@
       "reason": "Тесты обёртки ядра закрепляют актуализацию runtime-снимка и отмену внутренних запросов."
     },
     {
+      "path": "core/connection_test.go",
+      "bucket": "budget",
+      "reason": "Тест закрепляет закрытие уже принятых и дозванивающихся соединений при остановке."
+    },
+    {
       "path": "core/constant.go",
       "bucket": "budget",
       "reason": "Контракт внутреннего HTTP IPC и runtime-снимка является частью API обёртки ядра."
@@ -301,6 +306,11 @@
       "reason": "Служебная Android-склейка runtime package и action names относится к platform-слою."
     },
     {
+      "path": "android/common/src/main/kotlin/com/follow/clashx/common/RequestCodes.kt",
+      "bucket": "budget",
+      "reason": "Коды запросов согласия VPN не дают позднему ответу диалога выдать себя за новый запрос."
+    },
+    {
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/Ext.kt",
       "bucket": "budget",
       "reason": "Платформенная склейка Android и ограничение фрагментов IPC защищают общий буфер Binder при передаче больших профилей."
@@ -329,6 +339,11 @@
       "path": "android/common/src/main/kotlin/com/follow/clashx/common/diagnostics/DiagnosticRedactor.kt",
       "bucket": "budget",
       "reason": "Единая Android-политика удаляет секреты до app-private файла и logcat."
+    },
+    {
+      "path": "android/common/src/test/kotlin/com/follow/clashx/common/RequestCodesTest.kt",
+      "bucket": "budget",
+      "reason": "Тест фиксирует выдачу и освобождение кодов запросов согласия VPN."
     },
     {
       "path": "android/common/src/test/kotlin/com/follow/clashx/common/diagnostics/DiagnosticFileStoreTest.kt",
@@ -466,6 +481,11 @@
       "reason": "Идентичность форка: имя приложения, packageName, socket path и repository релизного канала."
     },
     {
+      "path": "lib/common/device_identity.dart",
+      "bucket": "budget",
+      "reason": "Идентичность подписки отличает Android TV от телефона и сохраняет пользовательский контроль над отправкой HWID."
+    },
+    {
       "path": "lib/common/file_logger.dart",
       "bucket": "budget",
       "reason": "Base-фасад логгера делегирует ограниченную очередь, ротацию и pre-write redaction product-слою."
@@ -499,6 +519,11 @@
       "path": "lib/common/link.dart",
       "bucket": "budget",
       "reason": "Исправление initial link и дедупликации deep-link событий принято в бюджет."
+    },
+    {
+      "path": "lib/common/package.dart",
+      "bucket": "budget",
+      "reason": "User-Agent подписки обозначает Android TV, не меняя релизную идентичность FlClashM."
     },
     {
       "path": "lib/common/path.dart",
@@ -654,6 +679,11 @@
       "path": "lib/views/application_setting.dart",
       "bucket": "budget",
       "reason": "Живой экран настроек держит только форковый переключатель prerelease-обновлений рядом с апстримными Android-пунктами."
+    },
+    {
+      "path": "lib/views/config/filters.dart",
+      "bucket": "budget",
+      "reason": "Проверка фильтра повторяется, если поля изменились во время асинхронной проверки, и закрывает страницу только при актуальном результате."
     },
     {
       "path": "lib/views/config/general.dart",
@@ -2819,6 +2849,241 @@
       "path": "core/network_reset_test.go",
       "bucket": "budget",
       "reason": "Регрессия завершения сброса соединений проверяет общий mutex runLock/selectMu и обновление поколения диагностики без повторного захвата."
+    },
+    {
+      "path": "lib/common/input_limits.dart",
+      "bucket": "budget",
+      "reason": "Границы ввода принадлежат форку: интервалы ограничены значениями, которые mihomo и DateTime ещё держат."
+    },
+    {
+      "path": "lib/models/profile_settings.dart",
+      "bucket": "budget",
+      "reason": "Применение настроек профиля в форке отбрасывает значения вне безопасных границ ввода, а не переносит их в runtime."
+    },
+    {
+      "path": "lib/providers/state/custom_import.dart",
+      "bucket": "budget",
+      "reason": "Импорт custom-профиля в форке переименовывает резервный выход группы вместе с прокси, иначе собранный план ссылается на старое имя."
+    },
+    {
+      "path": "core/backend/compile/shortid.go",
+      "bucket": "budget",
+      "reason": "Правка REALITY short-id в форке живёт в Go Compiler: апстрим делал её в удалённом profile_base.go."
+    },
+    {
+      "path": "core/backend/compile/shortid_test.go",
+      "bucket": "budget",
+      "reason": "Регрессия REALITY short-id относится к Go Compiler форка, где живёт соответствующая правка."
+    },
+    {
+      "path": "core/delay.go",
+      "bucket": "budget",
+      "reason": "Задержка load-balance в форке измеряется по достижимым узлам: апстрим делал это в core/delay.go, который у нас отсутствовал."
+    },
+    {
+      "path": "core/delay_test.go",
+      "bucket": "budget",
+      "reason": "Регрессии задержек load-balance относятся к Go Core форка, где живёт их реализация."
+    },
+    {
+      "path": "lib/views/dashboard/edit.dart",
+      "bucket": "budget",
+      "reason": "Редактор карточек помечает расстановку пользовательской, чтобы обновление подписки её не заменяло; данные по-прежнему в Go-снимке."
+    },
+    {
+      "path": "lib/views/proxies/setting.dart",
+      "bucket": "budget",
+      "reason": "Страница настроек прокси связывает переключатель скрытия таймаутов с ключом подписки `view.proxies.hidetimeout`."
+    },
+    {
+      "path": "lib/common/l10n_labels.dart",
+      "bucket": "budget",
+      "reason": "Подпись пункта «Соединения» теперь называет объединённую страницу, а не только активные соединения."
+    },
+    {
+      "path": "lib/views/connection/connection_feeds.dart",
+      "bucket": "budget",
+      "reason": "Объединённая страница «Соединения» держит оба списка и переключает их меню заголовка; данные по-прежнему из Go-снимков."
+    },
+    {
+      "path": "lib/views/connection/connections.dart",
+      "bucket": "budget",
+      "reason": "Список активных соединений принимает меню заголовка от объединённой страницы; опрос и данные не менялись."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connection_stats.dart",
+      "bucket": "budget",
+      "reason": "Плитки главной берут подпись ленты из своего перечня, а не из подписи страницы."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/connections_table.dart",
+      "bucket": "budget",
+      "reason": "Таблица главной различает подпись ленты и подпись страницы «Соединения»."
+    },
+    {
+      "path": "lib/views/navigation.dart",
+      "bucket": "budget",
+      "reason": "Пункт «Последние запросы» убран: обе ленты открываются одной страницей «Соединения»."
+    },
+    {
+      "path": "lib/views/views.dart",
+      "bucket": "budget",
+      "reason": "Экспорт объединённой страницы соединений."
+    },
+    {
+      "path": "lib/common/app_ports.dart",
+      "bucket": "budget",
+      "reason": "Порт навигации получает флаг простого режима панели; это UI-проекция Go-снимка, без runtime-политики."
+    },
+    {
+      "path": "lib/common/migration.dart",
+      "bucket": "budget",
+      "reason": "Настройка темы расширенной главной удалена вместе с самой главной; миграция больше не выставляет стиль."
+    },
+    {
+      "path": "lib/providers/state/navigation.dart",
+      "bucket": "budget",
+      "reason": "Простой режим панели скрывает лишние разделы навигации по заголовкам выбранного профиля."
+    },
+    {
+      "path": "lib/views/dashboard/hero.dart",
+      "bucket": "budget",
+      "reason": "Расширенная главная удалена: её заменяет оформление провайдера на стандартных карточках."
+    },
+    {
+      "path": "lib/views/dashboard/provider_mode.dart",
+      "bucket": "budget",
+      "reason": "Оформление провайдера строит шапку и кнопку запуска на стандартной главной из заголовков подписки."
+    },
+    {
+      "path": "lib/views/dashboard/wide.dart",
+      "bucket": "budget",
+      "reason": "Широкая раскладка собирает карточки главной из выбранной пользователем расстановки."
+    },
+    {
+      "path": "lib/views/dashboard/widget_registry.dart",
+      "bucket": "budget",
+      "reason": "Реестр карточек учитывает оформление провайдера и хранит статусную карточку на месте."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/announcement.dart",
+      "bucket": "budget",
+      "reason": "Объявление растёт по тексту на широком окне вместо фиксированной высоты."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/card.dart",
+      "bucket": "budget",
+      "reason": "Общие элементы карточек подстроены под новую широкую раскладку главной."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/core_status_button.dart",
+      "bucket": "budget",
+      "reason": "Кнопка ядра показывает сердцебиение состояния вместо цветной заливки."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/current_outbound.dart",
+      "bucket": "budget",
+      "reason": "Статусная карточка показывает сервер и страну выхода, скрывая IP без запуска проверок."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/server_location.dart",
+      "bucket": "budget",
+      "reason": "Карточка расположения сервера для оформления провайдера открывает выбор прокси."
+    },
+    {
+      "path": "lib/views/dashboard/widgets/widgets.dart",
+      "bucket": "budget",
+      "reason": "Экспорт новой карточки расположения сервера."
+    },
+    {
+      "path": "lib/views/proxies/common.dart",
+      "bucket": "budget",
+      "reason": "Однострочная карточка прокси получает собственную высоту."
+    },
+    {
+      "path": "lib/views/proxies/proxies.dart",
+      "bucket": "budget",
+      "reason": "UX прокси: одна группа панели, свайп вниз для проверки задержек и стеклянная панель."
+    },
+    {
+      "path": "lib/views/proxies/tab.dart",
+      "bucket": "budget",
+      "reason": "Режим одной группы показывает прокси серверной группы панели без вкладок."
+    },
+    {
+      "path": "lib/widgets/pull_action.dart",
+      "bucket": "budget",
+      "reason": "Свайп вниз на Android обновляет подписку или проверяет задержки существующими командами Go."
+    },
+    {
+      "path": "lib/widgets/rising_hold.dart",
+      "bucket": "budget",
+      "reason": "Долгое удержание кнопки запуска с вибрацией, отключаемой настройкой и флагом панели."
+    },
+    {
+      "path": "lib/widgets/widgets.dart",
+      "bucket": "budget",
+      "reason": "Экспорт свайпа и удержания для главной и прокси."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/plugins/PackageIdentity.kt",
+      "bucket": "budget",
+      "reason": "Чтение подписи и версии установленного APK и кандидата для безопасного обновления."
+    },
+    {
+      "path": "core/backend/authoring/collections_test.go",
+      "bucket": "budget",
+      "reason": "Тесты коллекций проверяют область профиля и порядок авторских элементов."
+    },
+    {
+      "path": "core/backend/compile/chains.go",
+      "bucket": "budget",
+      "reason": "Цепочки прокси собираются в исходящие из авторских данных профиля."
+    },
+    {
+      "path": "core/backend/compile/chains_test.go",
+      "bucket": "budget",
+      "reason": "Тесты цепочек проверяют порядок прыжков, цели правил и отключённые цепочки."
+    },
+    {
+      "path": "lib/database/chains.dart",
+      "bucket": "budget",
+      "reason": "Хранение цепочек привязано к профилю и участвует в резервных копиях."
+    },
+    {
+      "path": "lib/features/proxy_chains/editor.dart",
+      "bucket": "budget",
+      "reason": "Редактор цепочек собирает прыжки и проверяет ввод до сохранения."
+    },
+    {
+      "path": "lib/features/proxy_chains/graph.dart",
+      "bucket": "budget",
+      "reason": "Схема цепочки показывает устройство, прыжки и выход и отмечает ошибки."
+    },
+    {
+      "path": "lib/features/proxy_chains/outbounds.dart",
+      "bucket": "budget",
+      "reason": "Список исходящих знает имена узлов и цепочек профиля."
+    },
+    {
+      "path": "lib/features/proxy_chains/proxy_chains.dart",
+      "bucket": "budget",
+      "reason": "Страница цепочек собирает секцию профиля."
+    },
+    {
+      "path": "lib/features/proxy_chains/section.dart",
+      "bucket": "budget",
+      "reason": "Секция цепочек встраивается в экран профиля и управляет их списком."
+    },
+    {
+      "path": "lib/models/models.dart",
+      "bucket": "budget",
+      "reason": "Модели экспортируют тип цепочки."
+    },
+    {
+      "path": "lib/models/proxy_chain.dart",
+      "bucket": "budget",
+      "reason": "Модель цепочки описывает прыжки, включённость и ограничения имени."
     }
   ]
 }

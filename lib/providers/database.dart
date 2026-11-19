@@ -273,10 +273,8 @@ class Profiles extends _$Profiles {
           }),
         );
       } catch (e, s) {
-        if (applied case (
-          final previous,
-          final next,
-        ) when identical(state, next)) {
+        if (applied case (final previous, final next)
+            when identical(state, next)) {
           state = previous;
         }
         Error.throwWithStackTrace(e, s);
@@ -291,7 +289,10 @@ class Profiles extends _$Profiles {
     );
   }
 
-  void updateProfile(String profileId, Profile Function(Profile profile) builder) {
+  void updateProfile(
+    String profileId,
+    Profile Function(Profile profile) builder,
+  ) {
     final index = state.indexWhere((element) => element.id == profileId);
     if (index == -1) return;
     final newProfile = builder(state[index]);
@@ -1047,5 +1048,64 @@ class ProfileDisabledRuleIds extends _$ProfileDisabledRuleIds
       next.insert(0, ruleId);
     }
     optimistic(next, () => database.rulesDao.putDisabled(profileId, ruleId));
+  }
+}
+
+/// The chains a normal subscription's build adds as outbounds.
+@riverpod
+class ProxyChains extends _$ProxyChains
+    with AsyncNotifierMixin, OptimisticMixin {
+  @override
+  Stream<List<ProxyChain>> build(String profileId) {
+    final query = database.proxyChainsDao.query(profileId);
+    return settled(query.watch(), query.get);
+  }
+
+  @override
+  List<ProxyChain> get value => state.value ?? [];
+
+  @override
+  bool updateShouldNotify(
+    AsyncValue<List<ProxyChain>> previous,
+    AsyncValue<List<ProxyChain>> next,
+  ) {
+    return !const ListEquality<ProxyChain>().equals(previous.value, next.value);
+  }
+
+  Future<void> put(ProxyChain chain) async {
+    final previous = value.where((item) => item.id == chain.id).firstOrNull;
+    final next = List<ProxyChain>.from(value);
+    final index = next.indexWhere((item) => item.id == chain.id);
+    if (index == -1) {
+      next.add(chain);
+    } else {
+      next[index] = chain;
+    }
+    await optimisticAsync(next, () async {
+      await database.transaction(() async {
+        await database.proxyChainsDao.put(chain, profileId);
+        if (previous == null || previous.name == chain.name) {
+          return;
+        }
+        await database.rulesDao.renameRuleTarget(
+          profileId,
+          oldName: previous.name,
+          newName: chain.name,
+        );
+        final profile = await database.profilesDao.get(profileId);
+        if (profile?.matchTarget == previous.name) {
+          await database.profilesDao.putAll([
+            profile!.copyWith(matchTarget: chain.name).toCompanion(),
+          ]);
+        }
+      });
+    });
+  }
+
+  Future<void> remove(ProxyChain chain) async {
+    await optimisticAsync(
+      value.where((item) => item.id != chain.id).toList(),
+      () => database.proxyChainsDao.remove(chain),
+    );
   }
 }

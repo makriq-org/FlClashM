@@ -194,6 +194,15 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 			return Prepared{}, err
 		}
 	}
+	if request.Profile != nil {
+		chains, chainErr := authoredProxyChains(request.Authoring, profileID)
+		if chainErr != nil {
+			return Prepared{}, chainErr
+		}
+		if chainErr = applyAuthoredProxyChains(config, chains); chainErr != nil {
+			return Prepared{}, chainErr
+		}
+	}
 	if !override {
 		for _, key := range []string{"ipv6", "allow-lan", "mixed-port", "find-process-mode", "tcp-concurrent", "unified-delay", "log-level", "keep-alive-interval", "external-controller"} {
 			if value, ok := config[key]; ok && !ownsSetting(settings, "clash."+key) && validProviderHint(key, value) {
@@ -399,6 +408,7 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	}
 	access = c.Policy.AccessControl(access, c.Capabilities)
 	vpn["accessControl"] = access
+	c.Policy.ApplyVPN(vpn, metadata, c.Capabilities)
 	name := text(metadata["label"])
 	if name == "" {
 		name = profileID

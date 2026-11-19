@@ -3,6 +3,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
+import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/providers.dart';
 import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/widgets/widgets.dart';
@@ -101,6 +102,8 @@ class _DashboardEditorState extends ConsumerState<DashboardEditor>
         .update(
           (state) => state.copyWith(
             dashboardWidgets: _keepingHidden(state.dashboardWidgets, shown),
+            // Editing is the user taking the cards over from the panel.
+            ownedSettings: {...state.ownedSettings, dashboardWidgetsSetting},
           ),
         );
   }
@@ -159,9 +162,10 @@ class _DashboardEditorState extends ConsumerState<DashboardEditor>
   Widget build(BuildContext context) {
     final cards = _cards;
     final shown = _shown;
+    final providerMode = ref.watch(providerModeProvider);
     final addable = [
       for (final card in DashboardWidget.values)
-        if (card.removable &&
+        if (card.removable(providerMode: providerMode) &&
             card.platforms.contains(widget.platform) &&
             !shown.contains(card))
           card,
@@ -204,7 +208,9 @@ class _DashboardEditorState extends ConsumerState<DashboardEditor>
                       index: index,
                       dragsAtOnce: dragsAtOnce,
                       sway: sway,
-                      onRemove: card.removable ? () => _remove(card) : null,
+                      onRemove: card.removable(providerMode: providerMode)
+                          ? () => _remove(card)
+                          : null,
                     ),
                   ),
                 );

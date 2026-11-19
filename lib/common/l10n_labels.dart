@@ -15,7 +15,7 @@ extension PageLabelL10n on PageLabel {
       PageLabel.logs => appLocalizations.logs,
       PageLabel.requests => appLocalizations.recentRequests,
       PageLabel.resources => appLocalizations.resources,
-      PageLabel.connections => appLocalizations.liveConnections,
+      PageLabel.connections => appLocalizations.connections,
       PageLabel.dns => appLocalizations.dnsQueries,
     };
   }
@@ -62,6 +62,7 @@ extension ProxyCardTypeL10n on ProxyCardType {
       ProxyCardType.loose => appLocalizations.loose,
       ProxyCardType.standard => appLocalizations.standard,
       ProxyCardType.compact => appLocalizations.compact,
+      ProxyCardType.oneline => appLocalizations.oneline,
     };
   }
 }

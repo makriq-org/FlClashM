@@ -44,7 +44,7 @@ class ProxiesAction extends _$ProxiesAction {
 
   Timer? _delayFlushTimer;
 
-  final Map<String, String> _pendingSelectedRollback = {};
+  final Map<(String?, String), String> _pendingSelectedRollback = {};
 
   @override
   void build() {
@@ -164,17 +164,23 @@ class ProxiesAction extends _$ProxiesAction {
   }
 
   void changeProxyDebounce(String groupName, String proxyName) {
+    final profileId = ref.read(currentProfileIdProvider);
     _pendingSelectedRollback.putIfAbsent(
-      groupName,
+      (profileId, groupName),
       () => _currentSelectedName(groupName),
     );
     ref
         .read(profilesActionProvider.notifier)
         .updateCurrentSelectedMap(groupName, proxyName);
-    debouncer.call((FunctionTag.changeProxy, groupName), (
+    debouncer.call((FunctionTag.changeProxy, profileId, groupName), (
       String groupName,
       String proxyName,
     ) async {
+      // A switch away applies the profile with this pick already stored.
+      if (profileId != ref.read(currentProfileIdProvider)) {
+        _pendingSelectedRollback.remove((profileId, groupName));
+        return;
+      }
       await changeProxy(groupName: groupName, proxyName: proxyName);
       updateGroupsDebounce();
     }, args: [groupName, proxyName]);
@@ -266,8 +272,9 @@ class ProxiesAction extends _$ProxiesAction {
     required String proxyName,
   }) async {
     final profilesAction = ref.read(profilesActionProvider.notifier);
+    final profileId = ref.read(currentProfileIdProvider);
     final rollbackName =
-        _pendingSelectedRollback.remove(groupName) ??
+        _pendingSelectedRollback.remove((profileId, groupName)) ??
         _currentSelectedName(groupName);
     profilesAction.updateCurrentSelectedMap(groupName, proxyName);
     final ChangeProxyResult result;
@@ -283,7 +290,18 @@ class ProxiesAction extends _$ProxiesAction {
         'changeProxy($groupName -> $proxyName) failed: $error',
         logLevel: coreFailureLogLevel(error),
       );
-      profilesAction.updateCurrentSelectedMap(groupName, rollbackName);
+      // The pick may have been debounced under another profile; roll back
+      // there instead of into whichever profile is current now.
+      if (profileId != null) {
+        ref
+            .read(profilesProvider.notifier)
+            .updateProfile(
+              profileId,
+              (profile) => profile.copyWith(
+                selectedMap: {...profile.selectedMap, groupName: rollbackName},
+              ),
+            );
+      }
       dialogs.showNotifier(
         currentAppLocalizations.changeProxyFailedTip,
         level: MessageLevel.error,

@@ -452,6 +452,30 @@ func (r *Repository) UpdateSettings(settings Object, expected uint64) error {
 	next.Settings = mergeObjects(next.Settings, settings)
 	return r.persist(next)
 }
+
+// ReplaceHeaderSettings replaces only the objects owned by the header writer.
+// The caller must supply the revision of the snapshot used to construct them.
+func (r *Repository) ReplaceHeaderSettings(settings Object, expected uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if expected != r.state.Revision {
+		return ErrConflict
+	}
+	next := clone(r.state)
+	if next.Settings == nil {
+		next.Settings = Object{}
+	}
+	for name, raw := range settings {
+		switch name {
+		case "appSetting", "themeProps", "proxiesStyle":
+			next.Settings[name] = append(json.RawMessage(nil), raw...)
+		default:
+			return errors.New("unsupported header settings object")
+		}
+	}
+	return r.persist(next)
+}
+
 func (r *Repository) ExportLegacy() ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -769,6 +793,9 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		}
 		delete(settings, "authoring")
 	}
+	// An archive that names no profile list says nothing about the rows, so an
+	// overriding restore keeps them instead of wiping the catalog.
+	_, namesProfiles := settings["profiles"]
 	var metadata []Object
 	if raw := settings["profiles"]; len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &metadata); err != nil {
@@ -782,7 +809,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		delete(settings, "profiles")
 		next.Settings = settings
 	}
-	if replace {
+	if replace && namesProfiles {
 		next.Profiles = []Record{}
 	}
 	seen := map[string]bool{}
@@ -839,7 +866,7 @@ func (r *Repository) Restore(ctx context.Context, rawSettings []byte, readSource
 		if err := validateAuthoring(next); err != nil {
 			return err
 		}
-	} else if replace {
+	} else if replace && namesProfiles {
 		for _, p := range r.state.Profiles {
 			id, _ := profileID(p.Metadata)
 			if !seen[id] {
