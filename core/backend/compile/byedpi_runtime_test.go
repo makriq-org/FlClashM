@@ -242,13 +242,18 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	if _, err = io.ReadFull(conn, response); err != nil || !bytes.Equal(response, []byte{1, 0}) {
 		t.Fatalf("RFC 1929 response %v: %v", response, err)
 	}
-	if _, err = conn.Write([]byte{5, 3, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+	association := append([]byte{5, 3, 0, 3, 32}, strings.Repeat("a", 32)...)
+	association = append(association, 0, 0)
+	writePartial(association[:4])
+	writePartial(association[4:12])
+	if _, err = conn.Write(association[12:]); err != nil {
 		t.Fatal(err)
 	}
 	udpResponse := make([]byte, 10)
-	if _, err = io.ReadFull(conn, udpResponse); err != nil || udpResponse[0] != 5 || udpResponse[1] == 0 {
-		t.Fatalf("UDP ASSOCIATE was not rejected: response=%v err=%v", udpResponse, err)
+	if _, err = io.ReadFull(conn, udpResponse); err != nil || udpResponse[0] != 5 || udpResponse[1] != 0 {
+		t.Fatalf("fragmented UDP ASSOCIATE failed: response=%v err=%v", udpResponse, err)
 	}
+	const payloadSize = 16 * 1024
 	echo, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -256,7 +261,7 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	defer echo.Close()
 	echoResult := make(chan error, 1)
 	go func() {
-		var payload [64]byte
+		var payload [payloadSize]byte
 		n, from, err := echo.ReadFromUDP(payload[:])
 		if err == nil {
 			_, err = echo.WriteToUDP(payload[:n], from)
@@ -275,17 +280,16 @@ func TestByeDPIPinnedRuntimeSOCKSAuthentication(t *testing.T) {
 	}
 	defer pc.Close()
 	_ = pc.SetDeadline(time.Now().Add(time.Second))
-	payload := []byte("authenticated UDP round trip")
+	payload := bytes.Repeat([]byte("ab"), payloadSize/2)
 	if _, err := pc.WriteTo(payload, dest); err != nil {
 		t.Fatal(err)
 	}
-	var reply [128]byte
+	var reply [payloadSize]byte
 	n, _, err := pc.ReadFrom(reply[:])
 	if err != nil || !bytes.Equal(reply[:n], payload) {
-		t.Fatalf("authenticated UDP round trip failed: %v", err)
+		t.Fatalf("authenticated UDP round trip got %d of %d bytes: %v", n, len(payload), err)
 	}
 	if err := <-echoResult; err != nil {
 		t.Fatal(err)
 	}
-
 }
