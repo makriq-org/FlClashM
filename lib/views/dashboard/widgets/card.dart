@@ -134,7 +134,15 @@ class DashboardCardHeader extends StatelessWidget {
             style: style,
           ),
         ),
-        ...leading,
+        for (final item in leading)
+          Flexible(
+            fit: FlexFit.loose,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: item,
+            ),
+          ),
       ],
     );
     return SizedBox(
