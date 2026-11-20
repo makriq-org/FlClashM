@@ -261,6 +261,36 @@ func TestAndroidMixedPortRequiresExplicitChoice(t *testing.T) {
 	}
 }
 
+func TestAndroidAccessControlModeDefaultsFromList(t *testing.T) {
+	c := Compiler{
+		Capabilities: Capabilities{Platform: "android"},
+		Validate:     func(context.Context, Object) error { return nil },
+	}
+	for _, tc := range []struct {
+		name   string
+		access Object
+		want   string
+	}{
+		{name: "reject list", access: Object{"enable": true, "rejectList": []any{"com.example.app"}}, want: "rejectSelected"},
+		{name: "accept list", access: Object{"enable": true, "acceptList": []any{"com.example.app"}}, want: "acceptSelected"},
+		{name: "no list", access: Object{"enable": true}, want: "rejectSelected"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := prepared(t, c, Input{
+				Version: 1,
+				Profile: &RawProfile{ID: "p", Text: "proxies: []"},
+				Settings: Object{
+					"vpnProps": Object{"accessControl": tc.access},
+				},
+			})
+			access := object(object(result.CoreState["vpn-props"])["accessControl"])
+			if access["mode"] != tc.want {
+				t.Fatalf("mode = %v, want %s", access["mode"], tc.want)
+			}
+		})
+	}
+}
+
 // TestGhostlaneProviders checks the provider/transport matrix and MAX credentials.
 func TestGhostlaneProviders(t *testing.T) {
 	for _, tc := range []struct{ provider, transport, room, token string }{

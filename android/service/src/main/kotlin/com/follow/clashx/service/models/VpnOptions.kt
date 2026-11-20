@@ -50,6 +50,15 @@ fun VpnOptions.gsonSanitized(): VpnOptions = copy(
 
 @Suppress("SENSELESS_COMPARISON")
 private fun AccessControlProps.gsonSanitized(): AccessControlProps = copy(
+    mode = if (mode == null) {
+        if (!acceptList.isNullOrEmpty() && rejectList.isNullOrEmpty()) {
+            AccessControlMode.acceptSelected
+        } else {
+            AccessControlMode.rejectSelected
+        }
+    } else {
+        mode
+    },
     acceptList = if (acceptList == null) emptyList() else acceptList,
     rejectList = if (rejectList == null) emptyList() else rejectList,
 )
