@@ -406,6 +406,15 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	if profileAccess != nil {
 		access = profileAccess
 	}
+	// Settings written before the mode field existed carry only a list; the
+	// list that is present decides how the Android host should read it.
+	if android && text(access["mode"]) == "" {
+		if len(list(access["acceptList"])) > 0 && len(list(access["rejectList"])) == 0 {
+			access["mode"] = "acceptSelected"
+		} else {
+			access["mode"] = "rejectSelected"
+		}
+	}
 	access = c.Policy.AccessControl(access, c.Capabilities)
 	vpn["accessControl"] = access
 	c.Policy.ApplyVPN(vpn, metadata, c.Capabilities)
