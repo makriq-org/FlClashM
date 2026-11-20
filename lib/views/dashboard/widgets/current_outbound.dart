@@ -426,12 +426,7 @@ class _ExitRow extends StatelessWidget {
     } else if (active) {
       address = SkeletonText(width: 140, style: style);
     } else {
-      address = Text(
-        appLocalizations.notRunning,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-      );
+      address = DashboardFitText(appLocalizations.notRunning, style: style);
     }
     return Row(
       spacing: 12,
