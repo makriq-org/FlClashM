@@ -1829,6 +1829,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VPN 通过 VpnService 自动路由系统所有流量。",
     ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "未授予 VPN 访问权限。请启动 VPN 并允许连接请求。",
+    ),
     "vpnSystemProxyDesc": MessageLookupByLibrary.simpleMessage(
       "为VpnService附加HTTP代理",
     ),

@@ -1231,5 +1231,6 @@
   "updateRequired": "此更新为必需项：当前版本已不再受支持。",
   "updateErrorDownload": "无法下载更新。",
   "updateErrorVerify": "下载的文件未通过校验，已删除。",
-  "updateErrorInstall": "无法启动安装程序。"
+  "updateErrorInstall": "无法启动安装程序。",
+  "vpnPermissionDenied": "未授予 VPN 访问权限。请启动 VPN 并允许连接请求。"
 }

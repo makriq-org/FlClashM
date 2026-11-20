@@ -1044,5 +1044,6 @@
   "updateRequired": "Cette mise à jour est obligatoire : la version actuelle n'est plus prise en charge.",
   "updateErrorDownload": "Impossible de télécharger la mise à jour.",
   "updateErrorVerify": "Le fichier téléchargé n'a pas passé la vérification et a été supprimé.",
-  "updateErrorInstall": "Impossible de lancer l'installateur."
+  "updateErrorInstall": "Impossible de lancer l'installateur.",
+  "vpnPermissionDenied": "L'accès au VPN n'a pas été accordé. Lancez le VPN et autorisez la demande de connexion."
 }

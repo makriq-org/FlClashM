@@ -2643,6 +2643,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VPN автоматически направляет весь системный трафик через VpnService.",
     ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "Доступ к VPN не выдан. Запустите VPN и разрешите подключение.",
+    ),
     "vpnSystemProxyDesc": MessageLookupByLibrary.simpleMessage(
       "Использовать HTTP-прокси через VPN",
     ),

@@ -1044,5 +1044,6 @@
   "updateRequired": "이 업데이트는 필수입니다. 현재 버전은 더 이상 지원되지 않습니다.",
   "updateErrorDownload": "업데이트를 다운로드하지 못했습니다.",
   "updateErrorVerify": "다운로드한 파일이 검증을 통과하지 못해 삭제되었습니다.",
-  "updateErrorInstall": "설치 프로그램을 시작하지 못했습니다."
+  "updateErrorInstall": "설치 프로그램을 시작하지 못했습니다.",
+  "vpnPermissionDenied": "VPN 액세스가 허용되지 않았습니다. VPN을 시작하고 연결 요청을 허용하세요."
 }

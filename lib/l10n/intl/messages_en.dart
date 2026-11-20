@@ -2516,6 +2516,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VPN routes all system traffic through VpnService automatically.",
     ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "VPN access was not granted. Start the VPN and allow the connection request.",
+    ),
     "vpnSystemProxyDesc": MessageLookupByLibrary.simpleMessage(
       "Attach HTTP proxy to VpnService",
     ),
