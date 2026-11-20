@@ -131,16 +131,21 @@ func (c *routedConn) Close() error {
 // A probe that got its answer before the accounting tunnel looked its
 // tracker up still finds it here, as long as the connection is open.
 func (c *routedConn) resolve() *probeRoute {
-	c.mu.Lock()
-	route := c.route
-	c.mu.Unlock()
-	if route != nil || c.metadata == nil {
-		return route
-	}
-	if tracker := findTracker(func(info *statistic.TrackerInfo) bool {
-		return info.Metadata == c.metadata
-	}); tracker != nil {
-		notifyProbeRoute(tracker)
+	for attempt := range 20 {
+		c.mu.Lock()
+		route := c.route
+		c.mu.Unlock()
+		if route != nil || c.metadata == nil {
+			return route
+		}
+		if tracker := findTracker(func(info *statistic.TrackerInfo) bool {
+			return info.Metadata == c.metadata
+		}); tracker != nil {
+			notifyProbeRoute(tracker)
+		}
+		if attempt < 19 {
+			time.Sleep(time.Millisecond)
+		}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -155,6 +160,9 @@ func (c *routedConn) settle(route *probeRoute) {
 
 func notifyProbeRoute(tracker statistic.Tracker) {
 	info := tracker.Info()
+	if len(info.Chain) == 0 {
+		return
+	}
 	pending, ok := pendingProbeRoutes.LoadAndDelete(info.Metadata)
 	if !ok {
 		return
