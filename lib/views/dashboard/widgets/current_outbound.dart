@@ -13,6 +13,7 @@ import 'package:flclashx/ui/icons/icons.dart';
 import 'package:flclashx/views/dashboard/layout.dart';
 import 'package:flclashx/views/dashboard/probe_start_hold.dart';
 import 'package:flclashx/views/dashboard/style.dart';
+import 'package:flclashx/views/profiles/add.dart';
 import 'package:flclashx/widgets/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_new_shapes/material_new_shapes.dart';
@@ -49,8 +50,13 @@ mixin ExitIpLookup<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     _exitProbe = ref.read(outboundIpProbeProvider.notifier);
     ref.listenManual(
       appSettingProvider.select((state) => state.hideIp),
-      (_, hideIp) => _follow(!hideIp),
+      (_, _) => _sync(),
       fireImmediately: true,
+    );
+    ref.listenManual(isStartProvider, (_, _) => _sync());
+    ref.listenManual(
+      profilesProvider.select((state) => state.isNotEmpty),
+      (_, _) => _sync(),
     );
   }
 
@@ -58,6 +64,15 @@ mixin ExitIpLookup<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   void dispose() {
     _follow(false);
     super.dispose();
+  }
+
+  /// A stopped core reports the host's own address, not an exit.
+  void _sync() {
+    _follow(
+      ref.read(isStartProvider) &&
+          !ref.read(appSettingProvider).hideIp &&
+          ref.read(profilesProvider).isNotEmpty,
+    );
   }
 
   void _follow(bool wanted) {
@@ -120,15 +135,20 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
     final entry = ref.watch(
       outboundIpProbeProvider.select((state) => state.entryOf(routedOutbound)),
     );
+    final probing = hasProfile && isStart && !hideIp;
     final ipInfo = hideIp ? null : entry.value;
-    final phase = hideIp ? ProbePhase.empty : shownPhase(entry);
-    final failed = phase == ProbePhase.failed && ipInfo == null;
+    final phase = probing ? shownPhase(entry) : ProbePhase.empty;
+    final failed = probing && phase == ProbePhase.failed && ipInfo == null;
     final qualityState = ipInfo == null
         ? null
         : ref.watch(ipQualityProvider(ipInfo.ip));
     final quality = qualityState?.value;
     final qualityLoading =
-        qualityState != null && quality == null && qualityState.isLoading;
+        probing &&
+        qualityState != null &&
+        quality == null &&
+        qualityState.isLoading;
+    final refresh = probing ? () => _refresh(ipInfo?.ip) : null;
     final serverGroup = ref
         .watch(currentGroupsStateProvider)
         .value
@@ -238,11 +258,10 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
                               info: ipInfo,
                               server: server,
                               failed: failed,
+                              hasProfile: hasProfile,
                               checking:
                                   phase == ProbePhase.probing || qualityLoading,
-                              onRefresh: hideIp
-                                  ? null
-                                  : () => _refresh(ipInfo?.ip),
+                              onRefresh: refresh,
                               active: isStart,
                               hideIp: hideIp,
                               flag: flag,
@@ -255,9 +274,10 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
                           info: ipInfo,
                           server: server,
                           failed: failed,
+                          hasProfile: hasProfile,
                           checking:
                               phase == ProbePhase.probing || qualityLoading,
-                          onRefresh: hideIp ? null : () => _refresh(ipInfo?.ip),
+                          onRefresh: refresh,
                           active: isStart,
                           hideIp: hideIp,
                           flag: flag,
@@ -356,6 +376,7 @@ class _ExitRow extends StatelessWidget {
     required this.info,
     required this.server,
     required this.failed,
+    required this.hasProfile,
     required this.checking,
     required this.onRefresh,
     required this.active,
@@ -367,6 +388,7 @@ class _ExitRow extends StatelessWidget {
   final IpInfo? info;
   final _PanelServer? server;
   final bool failed;
+  final bool hasProfile;
   final bool checking;
   final VoidCallback? onRefresh;
   final bool active;
@@ -385,20 +407,27 @@ class _ExitRow extends StatelessWidget {
     ).copyWith(letterSpacing: 0);
     final info = this.info;
     final server = this.server;
-    final Widget address = hideIp
-        ? server == null
-              ? const SizedBox.shrink()
-              : _ServerName(server: server, style: style)
-        : info != null
-        ? _IpAddress(ip: info.ip, style: style)
-        : failed
-        ? Text(
-            appLocalizations.serviceFailed,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style.copyWith(color: colorScheme.error),
-          )
-        : SkeletonText(width: 140, style: style);
+    final Widget address;
+    if (!hasProfile) {
+      address = _AddProfile(style: style);
+    } else if (hideIp) {
+      address = server == null
+          ? const SizedBox.shrink()
+          : _ServerName(server: server, style: style);
+    } else if (info != null) {
+      address = _IpAddress(ip: info.ip, style: style);
+    } else if (failed) {
+      address = Text(
+        appLocalizations.serviceFailed,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style.copyWith(color: colorScheme.error),
+      );
+    } else if (active) {
+      address = SkeletonText(width: 140, style: style);
+    } else {
+      address = DashboardFitText(appLocalizations.notRunning, style: style);
+    }
     return Row(
       spacing: 12,
       children: [
@@ -459,6 +488,35 @@ class _ServerName extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: style,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// First run: the card offers the missing profile instead of a failed check.
+class _AddProfile extends StatelessWidget {
+  const _AddProfile({required this.style});
+
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusRing(
+      shape: AppShape.xs,
+      standsOff: true,
+      child: InkWell(
+        mouseCursor: clickableCursor,
+        onTap: () => showAddProfilePage(context),
+        customBorder: AppShape.xs,
+        hoverColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Text(
+          context.appLocalizations.addProfile,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style.copyWith(color: context.colorScheme.primary),
         ),
       ),
     );

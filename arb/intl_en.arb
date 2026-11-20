@@ -1281,5 +1281,6 @@
   "updateRequired": "This update is required: the current version is no longer supported.",
   "updateErrorDownload": "The update could not be downloaded.",
   "updateErrorVerify": "The downloaded file failed verification and was removed.",
-  "updateErrorInstall": "The installer could not be started."
+  "updateErrorInstall": "The installer could not be started.",
+  "vpnPermissionDenied": "VPN access was not granted. Start the VPN and allow the connection request."
 }

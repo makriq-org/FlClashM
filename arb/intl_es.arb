@@ -1044,5 +1044,6 @@
   "updateRequired": "Esta actualización es obligatoria: la versión actual ya no es compatible.",
   "updateErrorDownload": "No se pudo descargar la actualización.",
   "updateErrorVerify": "El archivo descargado no superó la verificación y se eliminó.",
-  "updateErrorInstall": "No se pudo iniciar el instalador."
+  "updateErrorInstall": "No se pudo iniciar el instalador.",
+  "vpnPermissionDenied": "No se concedió acceso a la VPN. Inicia la VPN y permite la solicitud de conexión."
 }
