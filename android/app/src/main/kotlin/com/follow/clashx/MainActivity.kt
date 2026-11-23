@@ -2,12 +2,14 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.appcompat.app.AppCompatDelegate
+import androidx.lifecycle.lifecycleScope
 import com.follow.clashx.plugins.BatteryPlugin
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.DiagnosticsPlugin
@@ -16,6 +18,7 @@ import com.follow.clashx.plugins.TilePlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.launch
 
 class MainActivity : FlutterActivity() {
 
@@ -24,13 +27,27 @@ class MainActivity : FlutterActivity() {
     private var boundEngine: FlutterEngine? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applyAppTheme()
+        val appearance = StartupAppearance.read(this)
         super.onCreate(savedInstanceState)
+        applyStartupAppearance(appearance)
+        lifecycleScope.launch {
+            StartupAppearance.changes.collect { projected ->
+                if (projected != null) applyStartupAppearance(projected)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         highRefreshRate.pin()
+        val appearance = StartupAppearance.read(this)
+        applyStartupAppearance(appearance)
+        StartupLauncher.apply(this, appearance.launcher)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyStartupAppearance(StartupAppearance.read(this))
     }
 
     override fun onPause() {
@@ -40,6 +57,16 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.makriq.flclash/startup_appearance")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "read") {
+                    val appearance = StartupAppearance.read(this)
+                    result.success(mapOf("themeMode" to appearance.mode, "pureBlack" to appearance.pureBlack))
+                } else {
+                    result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.makriq.flclash/device_id")
             .setMethodCallHandler { call, result ->
@@ -105,31 +132,13 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
-    // Theme the first frame before Flutter renders. The value is a startup-only
-    // cache of the Go settings projection; legacy preferences are not read.
-    private fun applyAppTheme() {
-        AppCompatDelegate.setDefaultNightMode(StartupTheme.nightMode(StartupTheme.read(this)))
-    }
-}
+    private var nextSplashTheme: Int? = null
 
-/** Startup-only cache of the Go settings theme, written in this process from
- * the StateHub projection. Go stays the source of truth. */
-internal object StartupTheme {
-    private const val PREFERENCES = "flclashm_startup_theme"
-    private const val KEY = "themeMode"
-
-    fun store(context: Context, mode: String) {
-        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        if (preferences.getString(KEY, null) != mode) preferences.edit().putString(KEY, mode).apply()
-    }
-
-    fun read(context: Context): String? = runCatching {
-        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getString(KEY, null)
-    }.getOrNull()
-
-    fun nightMode(mode: String?): Int = when (mode) {
-        "light" -> AppCompatDelegate.MODE_NIGHT_NO
-        "dark" -> AppCompatDelegate.MODE_NIGHT_YES
-        else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+    private fun applyStartupAppearance(appearance: StartupAppearance) {
+        window.setBackgroundDrawable(ColorDrawable(getColor(appearance.background(resources.configuration))))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && nextSplashTheme != appearance.splashTheme) {
+            splashScreen.setSplashScreenTheme(appearance.splashTheme)
+            nextSplashTheme = appearance.splashTheme
+        }
     }
 }

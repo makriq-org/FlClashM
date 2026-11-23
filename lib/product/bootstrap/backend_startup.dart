@@ -10,6 +10,7 @@ import '../../l10n/l10n.dart';
 import '../../state.dart';
 import '../backend/backend.dart';
 import '../diagnostics/product_diagnostic_exporter.dart';
+import 'startup_appearance.dart';
 
 /// Startup that keeps the UI reachable when the backend cannot be opened: a
 /// recovery screen offers retry and log export while attempts continue in the
@@ -94,11 +95,10 @@ class BackendStartup {
 
 /// Shows the recovery screen in the device language; the user's language
 /// setting lives in the backend that could not be reached.
-Future<void> presentBackendStartup(BackendStartup startup) async {
+Future<void> loadStartupLocalizations() async {
   await AppLocalizations.load(
     WidgetsBinding.instance.platformDispatcher.locale,
   );
-  runApp(BackendStartupApp(startup: startup, exportLogs: exportStartupLogs));
 }
 
 /// Exports the local diagnostic archive without the backend.
@@ -131,10 +131,12 @@ class BackendStartupApp extends StatelessWidget {
     super.key,
     required this.startup,
     required this.exportLogs,
+    this.appearance = const StartupAppearance(),
   });
 
   final BackendStartup startup;
   final Future<bool> Function() exportLogs;
+  final StartupAppearance appearance;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -146,8 +148,16 @@ class BackendStartupApp extends StatelessWidget {
       GlobalWidgetsLocalizations.delegate,
     ],
     supportedLocales: AppLocalizations.delegate.supportedLocales,
-    theme: ThemeData(useMaterial3: true),
-    darkTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
+    theme: ThemeData(
+      useMaterial3: true,
+      scaffoldBackgroundColor: appearance.background(Brightness.light),
+    ),
+    darkTheme: ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: appearance.background(Brightness.dark),
+    ),
+    themeMode: ThemeMode.values.byName(appearance.mode.name),
     home: _BackendStartupPage(startup: startup, exportLogs: exportLogs),
   );
 }
