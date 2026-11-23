@@ -258,13 +258,19 @@ Future<void> _buildAndroidCore({
     }
 
     final outFile = _join(abiDir.path, 'libclash.so');
+    final stormDnsSha256 = stormDnsReleaseAssets[arch.abi]!.sha256;
+    final linkerFlags = [
+      '-w -s',
+      '-X github.com/metacubex/mihomo/constant.Version=$coreVersion',
+      '-X core/backend/compile.stormDNSBinarySHA256=$stormDnsSha256',
+    ].join(' ');
     await _withAndroidGoOverlay((overlay) => _exec(
       [
         'go',
         'build',
         '-overlay=$overlay',
         '-mod=vendor',
-        '-ldflags=-w -s -X github.com/metacubex/mihomo/constant.Version=$coreVersion',
+        '-ldflags=$linkerFlags',
         '-tags=with_gvisor,cmfa',
         '-buildmode=c-shared',
         '-o',
