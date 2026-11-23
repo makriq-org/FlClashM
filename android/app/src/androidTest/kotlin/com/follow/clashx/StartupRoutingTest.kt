@@ -13,6 +13,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.service.quicksettings.TileService.ACTION_QS_TILE_PREFERENCES
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
@@ -57,12 +58,12 @@ class StartupRoutingTest {
         assertEquals(R.style.StartupSystemBlack, StartupAppearance("system", true).splashTheme)
     }
 
-    @Test fun supportedLinksOpenMainActivityDirectly() {
+    @Test fun supportedLinksEnterThroughThemedLauncherActivity() {
         for (scheme in listOf("clash", "flclash", "flclashx", "flclashm", "clashmeta", "clashx")) {
             val link = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://install-config?url=test"))
                 .addCategory(Intent.CATEGORY_BROWSABLE).setPackage(context.packageName)
             val handlers = context.packageManager.queryIntentActivities(link, 0)
-            assertEquals(scheme, MainActivity::class.java.name, handlers.single().activityInfo.name)
+            assertEquals(scheme, LauncherActivity::class.java.name, handlers.single().activityInfo.name)
             link.data = Uri.parse("$scheme://unexpected-host")
             assertTrue(context.packageManager.queryIntentActivities(link, 0).isEmpty())
         }
@@ -74,8 +75,15 @@ class StartupRoutingTest {
 
     @Test fun themedLauncherReusesActivityOpenedByLink() = assertLauncherSwitchKeepsActivity(
         Intent(Intent.ACTION_VIEW, Uri.parse("flclashm://install-config?url="))
-            .setPackage(context.packageName).putExtra("source", "startup-routing-test"),
+            .addCategory(Intent.CATEGORY_BROWSABLE).setPackage(context.packageName),
     )
+
+    @Test fun themedLauncherReusesActivityOpenedByTilePreferences() {
+        val intent = Intent(ACTION_QS_TILE_PREFERENCES).setPackage(context.packageName)
+        val launcher = LauncherActivity::class.java.name
+        assertEquals(launcher, context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name)
+        assertLauncherSwitchKeepsActivity(intent.setComponent(ComponentName(context, launcher)))
+    }
 
     private fun assertLauncherSwitchKeepsActivity(initialIntent: Intent) = runBlocking {
         val application = context.applicationContext as Application
@@ -125,8 +133,8 @@ class StartupRoutingTest {
             val main = ComponentName(context, MainActivity::class.java)
             instrumentation.runOnMainSync {
                 assertEquals(main, original.intent.component)
+                assertEquals(initialIntent.action, original.intent.action)
                 assertEquals(initialIntent.data, original.intent.data)
-                assertEquals(initialIntent.getStringExtra("source"), original.intent.getStringExtra("source"))
                 original.window.decorView.tag = marker
             }
             val tasks = context.getSystemService(ActivityManager::class.java).appTasks

@@ -1,7 +1,9 @@
 package com.follow.clashx
 
+import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Build
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -28,6 +30,13 @@ internal data class StartupAppearance(val mode: String, val pureBlack: Boolean) 
         else -> if (pureBlack) R.style.StartupSystemBlack else 0
     }
 
+    fun applySplashTheme(activity: Activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && appliedSplashTheme != splashTheme) {
+            activity.splashScreen.setSplashScreenTheme(splashTheme)
+            appliedSplashTheme = splashTheme
+        }
+    }
+
     val launcher: LauncherEntry get() = when (mode) {
         "light" -> LauncherEntry.Light
         "dark" -> if (pureBlack) LauncherEntry.Black else LauncherEntry.Dark
@@ -38,6 +47,7 @@ internal data class StartupAppearance(val mode: String, val pureBlack: Boolean) 
         private const val PREFERENCES = "flclashm_startup_theme"
         private const val MODE = "themeMode"
         private const val BLACK = "pureBlack"
+        private var appliedSplashTheme: Int? = null
         private val projected = MutableStateFlow<StartupAppearance?>(null)
         val changes = projected.asStateFlow()
 
