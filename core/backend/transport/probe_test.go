@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -309,5 +310,28 @@ func TestStrategyProbeRejectsHTTPFailuresWithoutChangingConnectivityChecks(t *te
 	status.Store(204)
 	if ok, err := probe.Probe(ctx, request); err != nil || !ok {
 		t.Fatal("working strategy rejected", ok, err)
+	}
+}
+
+func TestStrategyProbeAcceptsRealWorldResponseHeaders(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", strings.Repeat("a", 12000))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer origin.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(origin.Certificate())
+	host, port := testSOCKS(t, origin.Listener.Addr().String(), make(chan string, 1), false)
+	probe := SOCKSProbe{RootCAs: roots}
+	request := backend.NodeProbe{
+		Host: host, Port: port,
+		URL:            "https://example.com:" + strconv.Itoa(origin.Listener.Addr().(*net.TCPAddr).Port) + "/check",
+		Resolver:       "system",
+		RequireSuccess: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if ok, err := probe.Probe(ctx, request); err != nil || !ok {
+		t.Fatalf("realistic response headers rejected: ok=%v err=%v", ok, err)
 	}
 }

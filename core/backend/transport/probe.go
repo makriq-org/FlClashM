@@ -23,6 +23,11 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// Probes must tolerate ordinary real-world response headers: a YouTube page
+// emits more than 8 KiB of security and reporting headers. The bound stays
+// small enough to keep a single probe cheap.
+const probeResponseHeaderLimit = 64 << 10
+
 type dnsEntry struct {
 	addresses []netip.Addr
 	expires   time.Time
@@ -120,7 +125,7 @@ func (p *SOCKSProbe) probe(ctx context.Context, request backend.NodeProbe, check
 	if err != nil {
 		return false, err
 	}
-	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: 8 << 10, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
+	transport := &http.Transport{DisableKeepAlives: true, MaxResponseHeaderBytes: probeResponseHeaderLimit, TLSClientConfig: &tls.Config{RootCAs: p.RootCAs, MinVersion: tls.VersionTLS12}}
 	defer transport.CloseIdleConnections()
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		return dialer.(proxy.ContextDialer).DialContext(ctx, network, net.JoinHostPort(target, port))
