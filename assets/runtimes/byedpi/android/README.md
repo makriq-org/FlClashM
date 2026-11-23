@@ -9,7 +9,7 @@ Flutter does not bundle or download another copy.
 The list was copied from `romanvht/ByeByeDPI` under GPL-3.0, from
 `app/src/main/assets/proxytest_strategies.list`.
 
-Strategy source commit: `96a3c1ff555043d915af814aa4f0e9a572c89aba`
+Strategy source commit: `ee87264e3bab779d3c23e41e11c45d5f8189faec`
 
 Renovate tracks the source repository's `master` branch through this commit.
 Its PR updates the reference only: before merging, copy the strategy file from

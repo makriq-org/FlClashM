@@ -120,3 +120,53 @@ func TestNodeServiceKeyReplacementInvalidatesCommittedPlan(t *testing.T) {
 		t.Fatal("selection reused plan with replaced service key", err)
 	}
 }
+
+func TestStormDNSBinaryUpdateInvalidatesCommittedPlanAndMTUCache(t *testing.T) {
+	originalSHA := stormDNSBinarySHA256
+	t.Cleanup(func() { stormDNSBinarySHA256 = originalSHA })
+	compiler := Compiler{
+		Nodes:    &ExternalCompiler{},
+		Validate: func(context.Context, Object) error { return nil },
+	}
+	input, err := json.Marshal(Input{Version: 1, Profile: &RawProfile{ID: "p",
+		Text: "proxies: [{name: Storm, type: stormdns, domains: [tunnel.example.com], encryption: xor, encryption-key: test, resolvers: [8.8.8.8], activation: always}]",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compile := func(generation uint64) (*backend.RuntimePlan, Prepared) {
+		t.Helper()
+		plan, err := compiler.Compile(context.Background(), input, generation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var prepared Prepared
+		if err := json.Unmarshal(plan.Payload(), &prepared); err != nil || len(prepared.Nodes) != 1 {
+			t.Fatal("expected one compiled StormDNS node", err)
+		}
+		return plan, prepared
+	}
+	previous, previousPrepared := compile(1)
+	if !compiler.CanRestorePlan(previous) {
+		t.Fatal("current StormDNS plan is not restorable")
+	}
+	stormDNSBinarySHA256 = "updated-binary"
+	if compiler.CanRestorePlan(previous) {
+		t.Fatal("rollback reused a StormDNS plan compiled for a different binary")
+	}
+	if plan, err := compiler.CompileSelection(context.Background(), input, input, previous, 2); plan != nil || err != nil {
+		t.Fatal("selection reused a StormDNS plan compiled for a different binary", err)
+	}
+	current, currentPrepared := compile(2)
+	if !compiler.CanRestorePlan(current) {
+		t.Fatal("rebuilt StormDNS plan is not restorable")
+	}
+	if previousPrepared.Nodes[0].Metadata["cache-fingerprint"] == currentPrepared.Nodes[0].Metadata["cache-fingerprint"] {
+		t.Fatal("binary update reused the previous MTU cache")
+	}
+	delete(currentPrepared.Nodes[0].Metadata, "stormdns-binary-sha256")
+	legacy, err := backend.NewRuntimePlan(1, currentPrepared)
+	if err != nil || compiler.CanRestorePlan(legacy) {
+		t.Fatal("plan without a StormDNS binary identity remained restorable", err)
+	}
+}

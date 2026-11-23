@@ -102,6 +102,7 @@ func (c *Compiler) canRestoreSecurity(rawVersion, rawNodes json.RawMessage) bool
 	}
 	var nodes []struct {
 		ID       string            `json:"nodeId"`
+		Type     string            `json:"type"`
 		Metadata map[string]string `json:"metadata"`
 	}
 	if json.Unmarshal(rawNodes, &nodes) != nil {
@@ -110,6 +111,9 @@ func (c *Compiler) canRestoreSecurity(rawVersion, rawNodes json.RawMessage) bool
 	for _, node := range nodes {
 		user, password := external.serviceCredentials(node.ID)
 		if node.Metadata["service-auth-user"] != user || node.Metadata["service-auth-password"] != password {
+			return false
+		}
+		if node.Type == "stormdns" && node.Metadata["stormdns-binary-sha256"] != stormDNSBinarySHA256 {
 			return false
 		}
 	}
