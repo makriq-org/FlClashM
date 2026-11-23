@@ -109,11 +109,10 @@ func (d *probeDialer) route() *probeRoute {
 	if last == nil {
 		return nil
 	}
-	return last.resolve()
+	return last.resolve(20)
 }
 
-// The tunnel registers the tracker, which settles the route, before it relays
-// the first byte back, so the request never has to wait for the route.
+// Traffic accounting can record the route as it observes the tracked connection.
 type routedConn struct {
 	net.Conn
 	metadata *constant.Metadata
@@ -123,15 +122,18 @@ type routedConn struct {
 }
 
 func (c *routedConn) Close() error {
-	c.resolve()
+	c.resolve(1)
 	pendingProbeRoutes.CompareAndDelete(c.metadata, c)
 	return c.Conn.Close()
 }
 
 // A probe that got its answer before the accounting tunnel looked its
 // tracker up still finds it here, as long as the connection is open.
-func (c *routedConn) resolve() *probeRoute {
-	for attempt := range 20 {
+func (c *routedConn) resolve(attempts int) *probeRoute {
+	for attempt := range attempts {
+		if attempt > 0 {
+			time.Sleep(time.Millisecond)
+		}
 		c.mu.Lock()
 		route := c.route
 		c.mu.Unlock()
@@ -142,9 +144,6 @@ func (c *routedConn) resolve() *probeRoute {
 			return info.Metadata == c.metadata
 		}); tracker != nil {
 			notifyProbeRoute(tracker)
-		}
-		if attempt < 19 {
-			time.Sleep(time.Millisecond)
 		}
 	}
 	c.mu.Lock()
