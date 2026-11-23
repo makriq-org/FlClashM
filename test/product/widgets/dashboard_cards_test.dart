@@ -1,8 +1,42 @@
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/views/dashboard/widget_registry.dart';
+import 'package:flclashx/views/dashboard/widgets/card.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/test_app.dart';
+
 void main() {
+  testWidgets('header fits the title beside an empty or short badge', (
+    tester,
+  ) async {
+    const title = 'Proxy groups';
+    for (final width in [0.0, 20.0]) {
+      await tester.pumpWidget(
+        TestApp(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 220,
+              child: DashboardCardHeader(
+                title: title,
+                leading: [SizedBox(width: width, height: 16)],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
+      expect(
+        paragraph.didExceedMaxLines,
+        isFalse,
+        reason: 'Badge width: $width',
+      );
+    }
+  });
+
   test('the standard page keeps the status card on top', () {
     final cards = withFixedCards([
       DashboardWidget.profiles,

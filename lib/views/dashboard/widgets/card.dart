@@ -123,28 +123,38 @@ class DashboardCardHeader extends StatelessWidget {
           color: colorScheme.onSurfaceVariant,
         ),
     ];
-    final start = Row(
-      spacing: 8,
-      children: [
-        Flexible(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
-          ),
-        ),
-        for (final item in leading)
-          Flexible(
-            fit: FlexFit.loose,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: AlignmentDirectional.centerStart,
-              child: item,
-            ),
-          ),
-      ],
+    final label = Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
     );
+    const leadingSpacing = 8.0;
+    final start = leading.isEmpty
+        ? label
+        : LayoutBuilder(
+            builder: (context, constraints) => Row(
+              spacing: leadingSpacing,
+              children: [
+                Flexible(child: label),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth:
+                        math.max(0, constraints.maxWidth - leadingSpacing) / 2,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: leadingSpacing,
+                      children: leading,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
     return SizedBox(
       height: (mobile ? 26 : height) * scale,
       child: Row(
