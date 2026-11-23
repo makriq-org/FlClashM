@@ -136,7 +136,7 @@ class _CurrentOutboundCardState extends ConsumerState<CurrentOutboundCard>
       outboundIpProbeProvider.select((state) => state.entryOf(routedOutbound)),
     );
     final probing = hasProfile && isStart && !hideIp;
-    final ipInfo = hideIp ? null : entry.value;
+    final ipInfo = probing ? entry.value : null;
     final phase = probing ? shownPhase(entry) : ProbePhase.empty;
     final failed = probing && phase == ProbePhase.failed && ipInfo == null;
     final qualityState = ipInfo == null
