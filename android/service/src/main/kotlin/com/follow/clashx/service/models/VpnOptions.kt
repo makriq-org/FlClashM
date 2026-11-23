@@ -6,7 +6,8 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class AccessControlProps(
-    val mode: AccessControlMode = AccessControlMode.rejectSelected,
+    // Keep this required so Gson leaves omitted modes to gsonSanitized().
+    val mode: AccessControlMode,
     val acceptList: List<String> = emptyList(),
     val rejectList: List<String> = emptyList(),
 ) : Parcelable
@@ -35,9 +36,8 @@ data class VpnOptions(
     val excludePackage: List<String>? = null,
 ) : Parcelable
 
-// Gson instantiates via Unsafe (no default-arg constructor call), so any field the
-// JSON omits lands as null even in a non-null Kotlin type; every non-null field
-// consumed downstream must be repaired here.
+// Gson can set fields to null even when Kotlin declares them non-null.
+// Repair them before passing the options to Kotlin callers.
 @Suppress("SENSELESS_COMPARISON")
 fun VpnOptions.gsonSanitized(): VpnOptions = copy(
     ipv4Address = if (ipv4Address == null) DEFAULT_IPV4_ADDRESS else ipv4Address,

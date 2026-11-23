@@ -8,6 +8,21 @@ import org.junit.Test
 
 class VpnOptionsTest {
     @Test
+    fun `an accept list without a mode stays an accept list`() {
+        val options = Gson()
+            .fromJson(
+                """{"accessControl":{"acceptList":["com.example"]}}""",
+                VpnOptions::class.java,
+            )
+            .gsonSanitized()
+
+        val access = options.accessControl!!
+        assertEquals(AccessControlMode.acceptSelected, access.mode)
+        assertEquals(listOf("com.example"), access.acceptList)
+        assertTrue(access.rejectList.isEmpty())
+    }
+
+    @Test
     fun `missing access control fields fall back to defaults`() {
         val options = Gson()
             .fromJson(
