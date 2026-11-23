@@ -44,6 +44,9 @@ void main() {
           (_) => const GroupsState(value: []),
         ),
         appSettingProvider.overrideWithBuild((_, _) => const AppSettingProps()),
+        runTimeProvider.overrideWithBuild(
+          (_, _) => DateTime.now().millisecondsSinceEpoch,
+        ),
         outboundIpProbeProvider.overrideWith(_CachedExitProbe.new),
         ipQualityProvider(_ip).overrideWith(
           (_) async => const IpQuality(
@@ -55,8 +58,6 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final runTime = container.read(runTimeProvider.notifier);
-    runTime.value = DateTime.now().millisecondsSinceEpoch;
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -69,7 +70,7 @@ void main() {
 
     expect(find.text(_ip), findsOneWidget);
 
-    runTime.value = null;
+    container.read(runTimeProvider.notifier).value = null;
     await tester.pumpAndSettle();
 
     expect(find.text(_ip), findsNothing);
