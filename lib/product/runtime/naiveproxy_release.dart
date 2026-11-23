@@ -1,4 +1,4 @@
-const naiveProxyPinnedReleaseTag = 'v154.0.8037.49-4';
+const naiveProxyPinnedReleaseTag = 'v154.0.8037.49-5';
 const naiveProxyBundledAssetRoot = 'assets/runtimes/naiveproxy/android';
 const naiveProxyRuntimeArtifactConfigPath = 'naiveproxy/config.json';
 const naiveProxyRuntimeDirectoryName = 'naiveproxy';
@@ -30,20 +30,20 @@ class NaiveProxyReleaseAsset {
 const naiveProxyReleaseAssets = <String, NaiveProxyReleaseAsset>{
   'armeabi-v7a': NaiveProxyReleaseAsset(
     abi: 'armeabi-v7a',
-    apkName: 'naiveproxy-plugin-v154.0.8037.49-4-armeabi-v7a.apk',
+    apkName: 'naiveproxy-plugin-v154.0.8037.49-5-armeabi-v7a.apk',
     apkSha256:
-        '175e0edcccf65c9e69ff9b2b3185b86474008d14c5ed7507bbb63a4bf3765797',
+        '9acbf08afea2d35aad492d5312444b6aecd5fafa41f29d794d4821549f330da5',
   ),
   'arm64-v8a': NaiveProxyReleaseAsset(
     abi: 'arm64-v8a',
-    apkName: 'naiveproxy-plugin-v154.0.8037.49-4-arm64-v8a.apk',
+    apkName: 'naiveproxy-plugin-v154.0.8037.49-5-arm64-v8a.apk',
     apkSha256:
-        '53d2ffd05fa13a8af22225bd738e5f59c7a499b369917c633a30c19c84f1f117',
+        '3a532e6894d87c1fca5c527d3598892627829c76cb5b75ed831555f384841bd0',
   ),
   'x86_64': NaiveProxyReleaseAsset(
     abi: 'x86_64',
-    apkName: 'naiveproxy-plugin-v154.0.8037.49-4-x86_64.apk',
+    apkName: 'naiveproxy-plugin-v154.0.8037.49-5-x86_64.apk',
     apkSha256:
-        'afc8a46604e1af7675bc6aa9ae22dee8fcd8c731d7daade17e7361db5daffb71',
+        'af3e8070e882f0008b6511394ae4d3737ece508e9b34abee94cb2f59ddb5e940',
   ),
 };

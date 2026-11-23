@@ -1,4 +1,4 @@
-git-ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc
+git-a9a8e92a51f08c3030d7a1656cafd3bf07c9903b
 https://github.com/nullroute1970/StormDNS.git
 go1.27.2
 ndk-28.0.13004108

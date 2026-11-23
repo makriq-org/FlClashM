@@ -131,7 +131,7 @@ nix develop -c make check go-check
 <details>
 <summary>OlcRTC: источник, сборка и ограничения</summary>
 
-- Используется `ghostlane-project/olcrtc`, ветка `proofkit`, версия v0.15.0, коммит `a6cd0ab2a362837acda10d50dfdf230af8db91d2`; исходники собираются без локальных патчей
+- Используется `ghostlane-project/olcrtc`, ветка `proofkit`, версия v0.15.1, коммит `2a5153529b0496fe8b42929c56f8cb2e7d36c917`; исходники собираются без локальных патчей
 - В v0.15.0 добавлены серверные перезагрузка ключей, журнал доступа и выбор ICE-адреса; новые параметры в профили FlClashM не передаются
 - В v0.12.1 исправлен конфликт RTP payload types VK Calls при подключении и повторном согласовании; зависимости и формат конфига сохранены
 - Новые провайдеры: `vkcalls` с `vp8channel` или `videochannel`, `mtslink` с `vp8channel`, `salutejazz` и `max` с `datachannel`; для `max` обязателен `provider-token`, а для гостевого входа `vkcalls` непустой токен запрещён. Новые движки выбираются через провайдер: им нужны дополнительные credentials, которых нет в контракте прямого `engine-url`/`engine-token`

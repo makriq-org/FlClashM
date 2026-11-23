@@ -1,4 +1,4 @@
-const olcRtcPinnedCommit = 'a6cd0ab2a362837acda10d50dfdf230af8db91d2';
+const olcRtcPinnedCommit = '2a5153529b0496fe8b42929c56f8cb2e7d36c917';
 const olcRtcPinnedReleaseTag = 'git-$olcRtcPinnedCommit';
 const olcRtcPinnedGoVersion = 'go1.27.3';
 const olcRtcPinnedNdkVersion = '28.0.13004108';
@@ -36,18 +36,18 @@ const olcRtcReleaseAssets = <String, OlcRtcReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: '938ac42ead0af64533f6129aea15af57c8a2d272c935c176fec8507b96e65aa9',
+    sha256: 'c5422c3ced7f29efede8e655dd75a8ceb35517409762e50f62fde0888d20e17e',
   ),
   'arm64-v8a': OlcRtcReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: '8388973017cedd6039b0d2e22156eacb2a909e62802a5983af01ae6eafa9a8f5',
+    sha256: 'd77b6fe9710bdd920c6399283e24495b2f994cf269b27f1e39eaeb84d167d47c',
   ),
   'x86_64': OlcRtcReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '57136c15d8755b71b1129e21fb15b0cc93a206b850b4bfa6c530d6461fd6b535',
+    sha256: 'c3763e36faa7cdd27f89e0f82e281242696a5f3d458ff486558abae93800097e',
   ),
 };

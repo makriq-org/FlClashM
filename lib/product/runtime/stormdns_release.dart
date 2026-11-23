@@ -1,4 +1,4 @@
-const stormDnsPinnedCommit = 'ca2eb481fddd4a80d26b3a1a7c714b5aecacecfc';
+const stormDnsPinnedCommit = 'a9a8e92a51f08c3030d7a1656cafd3bf07c9903b';
 const stormDnsPinnedReleaseTag = 'git-$stormDnsPinnedCommit';
 const stormDnsPinnedGoVersion = 'go1.27.2';
 const stormDnsPinnedNdkVersion = '28.0.13004108';
@@ -57,18 +57,18 @@ const stormDnsReleaseAssets = <String, StormDnsReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: '64d0073dc5a6d5eca1230611cdeec0141638eb2bd7dba762c40ddb06dcd17bd7',
+    sha256: '00d6a9ce4252f5f8364344c99352780339271332869875a0b845137cd31fdfa3',
   ),
   'arm64-v8a': StormDnsReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: 'b330ef9c4dc175ae1ec5cdff4dced413639102f0a0705d47ea5907ec08b5bf62',
+    sha256: 'aa552f8dd559bb6e7194680e9fc798bc827ad4e3660c6cef8a873c3aff7be2fc',
   ),
   'x86_64': StormDnsReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '32ad47d5709f16dd58cd267926346c066eb1e5ae319c34d6957a68dfbc6564e3',
+    sha256: '76848368161b2aade8101bf0f284027b85b88ac9f983ce695d69cdc93bf1eab9',
   ),
 };
