@@ -1,6 +1,7 @@
 package com.follow.clashx
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
@@ -49,7 +50,7 @@ class StartupRoutingTest {
                     appearance.background(configuration))
                 val component = appearance.launcher.component(context)
                 val info = context.packageManager.getActivityInfo(component, PackageManager.MATCH_DISABLED_COMPONENTS)
-                assertEquals(MainActivity::class.java.name, info.targetActivity)
+                assertEquals(LauncherActivity::class.java.name, info.targetActivity)
             }
         }
         assertEquals(0, StartupAppearance("system", false).splashTheme)
@@ -67,7 +68,16 @@ class StartupRoutingTest {
         }
     }
 
-    @Test fun themedLauncherReusesActivityOpenedByLink() = runBlocking {
+    @Test fun themeSwitchKeepsLauncherActivityOpen() = assertLauncherSwitchKeepsActivity(
+        launcherIntent().setComponent(LauncherEntry.Light.component(context)),
+    )
+
+    @Test fun themedLauncherReusesActivityOpenedByLink() = assertLauncherSwitchKeepsActivity(
+        Intent(Intent.ACTION_VIEW, Uri.parse("flclashm://install-config?url="))
+            .setPackage(context.packageName).putExtra("source", "startup-routing-test"),
+    )
+
+    private fun assertLauncherSwitchKeepsActivity(initialIntent: Intent) = runBlocking {
         val application = context.applicationContext as Application
         val activity = AtomicReference<MainActivity>()
         val created = AtomicInteger()
@@ -94,40 +104,50 @@ class StartupRoutingTest {
         Service.bind()
         val settings = Service.backend("snapshot").getJSONObject("catalog").getJSONObject("settings")
         val previous = settings.optJSONObject("themeProps") ?: JSONObject()
-        suspend fun setAppearance(mode: String) {
+        suspend fun setAppearance(mode: String, entry: LauncherEntry) {
             Service.backendCommand("settings.patch", JSONObject().put("patch",
                 JSONObject().put("themeProps", JSONObject().put("themeMode", mode).put("pureBlack", false))))
             withTimeout(15_000) {
-                while (StartupAppearance.read(context).mode != mode) delay(50)
+                while (context.packageManager.queryIntentActivities(launcherIntent(), 0)
+                        .singleOrNull()?.activityInfo?.name != entry.component(context).className) delay(50)
             }
         }
         application.registerActivityLifecycleCallbacks(callbacks)
         try {
-            setAppearance("light")
-            val uri = Uri.parse("flclashm://install-config?url=")
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
-                .putExtra("source", "startup-routing-test").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            assertTrue("Link did not open MainActivity", resumed.get().await(30, TimeUnit.SECONDS))
+            setAppearance("light", LauncherEntry.Light)
+            context.startActivity(initialIntent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+            assertTrue("MainActivity did not open", resumed.get().await(30, TimeUnit.SECONDS))
             val original = activity.get()
             val engine = GlobalState.flutterEngine
             assertNotNull(engine)
             val marker = Any()
+            val main = ComponentName(context, MainActivity::class.java)
             instrumentation.runOnMainSync {
-                assertEquals(uri, original.intent.data)
-                assertEquals("startup-routing-test", original.intent.getStringExtra("source"))
+                assertEquals(main, original.intent.component)
+                assertEquals(initialIntent.data, original.intent.data)
+                assertEquals(initialIntent.getStringExtra("source"), original.intent.getStringExtra("source"))
                 original.window.decorView.tag = marker
+            }
+            val tasks = context.getSystemService(ActivityManager::class.java).appTasks
+            val appTask = tasks.mapNotNull { it.taskInfo }.single { it.persistentId == original.taskId }
+            assertEquals("The UI task must be independent of the launcher alias", main, appTask.baseIntent.component)
+
+            // Change theme while the screen opened by the old alias is still visible.
+            // The old alias must disappear without finishing that task.
+            setAppearance("dark", LauncherEntry.Dark)
+            instrumentation.waitForIdleSync()
+            assertEquals("Theme switch destroyed the activity", 0, destroyed.get())
+            assertSame(engine, GlobalState.flutterEngine)
+            instrumentation.runOnMainSync {
+                assertFalse("The open screen is finishing", original.isFinishing)
+                assertSame(marker, original.window.decorView.tag)
                 original.moveTaskToBack(true)
             }
-            setAppearance("dark")
-            val launcher = launcherIntent()
-            val dark = LauncherEntry.Dark.component(context)
-            withTimeout(10_000) {
-                while (context.packageManager.queryIntentActivities(launcher, 0)
-                        .none { it.activityInfo.name == dark.className }) delay(50)
-            }
+            instrumentation.waitForIdleSync()
             resumed.set(CountDownLatch(1))
-            context.startActivity(launcher.setComponent(dark).addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+            context.startActivity(launcherIntent().setComponent(LauncherEntry.Dark.component(context))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
             assertTrue("Launcher did not resume MainActivity", resumed.get().await(30, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             assertEquals("A second FlutterActivity was created", 1, created.get())

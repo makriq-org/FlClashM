@@ -107,10 +107,18 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Every icon opens the same task and resolves the splash independently. -->
+        <!-- The launcher aliases finish in a separate task. MainActivity keeps a
+             stable ComponentName when an alias is disabled after a theme change. -->
+        <activity
+            android:name=".LauncherActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
         <activity-alias
             android:name=".LauncherSystem"
-            android:targetActivity=".MainActivity"
+            android:targetActivity=".LauncherActivity"
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher">
@@ -123,7 +131,7 @@
 
         <activity-alias
             android:name=".LauncherSystemBlack"
-            android:targetActivity=".MainActivity"
+            android:targetActivity=".LauncherActivity"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/launcher_systemblack">
@@ -136,7 +144,7 @@
 
         <activity-alias
             android:name=".LauncherLight"
-            android:targetActivity=".MainActivity"
+            android:targetActivity=".LauncherActivity"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/launcher_light">
@@ -149,7 +157,7 @@
 
         <activity-alias
             android:name=".LauncherDark"
-            android:targetActivity=".MainActivity"
+            android:targetActivity=".LauncherActivity"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/launcher_dark">
@@ -162,7 +170,7 @@
 
         <activity-alias
             android:name=".LauncherBlack"
-            android:targetActivity=".MainActivity"
+            android:targetActivity=".LauncherActivity"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/launcher_black">

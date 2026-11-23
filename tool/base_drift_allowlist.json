@@ -3051,6 +3051,11 @@
       "reason": "Начальное оформление Android использует локальную проекцию параметров Go."
     },
     {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/LauncherActivity.kt",
+      "bucket": "budget",
+      "reason": "Постоянная задача Flutter сохраняется при отключении предыдущего значка лаунчера."
+    },
+    {
       "path": "android/app/src/main/kotlin/com/follow/clashx/StartupLauncher.kt",
       "bucket": "budget",
       "reason": "Хост Android переключает значки и привязывает быстрые действия к выбранной точке входа."

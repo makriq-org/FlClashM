@@ -15,7 +15,7 @@ internal enum class LauncherEntry {
     fun component(context: Context) = ComponentName(context, "com.follow.clashx.Launcher$name")
 }
 
-/** Changes presentation only. Each alias continues to launch MainActivity. */
+/** Changes presentation only. Each alias routes through LauncherActivity. */
 internal object StartupLauncher {
     fun apply(context: Context, selected: LauncherEntry) {
         val pm = context.packageManager
