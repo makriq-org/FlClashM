@@ -24,6 +24,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.follow.clashx.FlClashApplication
 import com.follow.clashx.R
+import com.follow.clashx.StartupLauncher
 import com.follow.clashx.common.RequestCodes
 import com.follow.clashx.extensions.getActionIntent
 import com.follow.clashx.extensions.getBase64
@@ -141,20 +142,24 @@ class AppPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     private fun initShortcuts(toggle: String, start: String, stop: String) {
         val ctx = FlClashApplication.getAppContext()
+        val launcher = StartupLauncher.componentForShortcuts(ctx)
 
         val toggleShortcut = ShortcutInfoCompat.Builder(ctx, "toggle")
+            .setActivity(launcher)
             .setShortLabel(toggle)
             .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_toggle))
             .setRank(2)
             .setIntent(ctx.getActionIntent("CHANGE"))
             .build()
         val startShortcut = ShortcutInfoCompat.Builder(ctx, "start")
+            .setActivity(launcher)
             .setShortLabel(start)
             .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_start))
             .setRank(0)
             .setIntent(ctx.getActionIntent("START"))
             .build()
         val stopShortcut = ShortcutInfoCompat.Builder(ctx, "stop")
+            .setActivity(launcher)
             .setShortLabel(stop)
             .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_stop))
             .setRank(1)

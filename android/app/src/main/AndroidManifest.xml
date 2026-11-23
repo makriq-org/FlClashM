@@ -53,7 +53,7 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
             android:hardwareAccelerated="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:windowSoftInputMode="adjustResize">
             <meta-data
@@ -61,11 +61,20 @@
                 android:resource="@style/NormalTheme" />
 
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- The launcher aliases finish in a separate task. MainActivity keeps a
+             stable ComponentName when an alias is disabled after a theme change. -->
+        <activity
+            android:name=".LauncherActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
@@ -107,10 +116,71 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="clashx" android:host="install-config" />
             </intent-filter>
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
+        <activity-alias
+            android:name=".LauncherSystem"
+            android:targetActivity=".LauncherActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherSystemBlack"
+            android:targetActivity=".LauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/launcher_systemblack">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherLight"
+            android:targetActivity=".LauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/launcher_light">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherDark"
+            android:targetActivity=".LauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/launcher_dark">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherBlack"
+            android:targetActivity=".LauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/launcher_black">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Impeller OFF (Skia): Impeller's Vulkan backend janks animations on some
              Pixel GPUs (Tensor) even at a forced 120 Hz, while other devices are

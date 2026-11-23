@@ -52,8 +52,11 @@ object BackendHost {
                 val snapshot = command("snapshot").getJSONObject("result")
                 val runtime = snapshot.getJSONObject("runtime")
                 projectRuntime(runtime)
-                StateHub.projectTheme(BackendEvents.themeMode(snapshot.optJSONObject("catalog")
-                    ?.optJSONObject("settings")?.optJSONObject("themeProps")?.optString("themeMode")))
+                val theme = snapshot.optJSONObject("catalog")?.optJSONObject("settings")?.optJSONObject("themeProps")
+                StateHub.projectTheme(
+                    BackendEvents.themeMode(theme?.optString("themeMode")),
+                    theme?.optBoolean("pureBlack") == true,
+                )
                 if (view.optLong("appliedGeneration") == runtime.optLong("appliedGeneration")) {
                     StateHub.projectPresentation(view)
                     val previous = State.notificationParamsFlow.value

@@ -1,0 +1,3 @@
+<resources>
+    <bool name="startup_disable_preview">false</bool>
+</resources>

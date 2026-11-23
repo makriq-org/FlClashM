@@ -2,12 +2,16 @@ package com.follow.clashx
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.appcompat.app.AppCompatDelegate
+import android.view.Gravity
+import androidx.lifecycle.lifecycleScope
 import com.follow.clashx.plugins.BatteryPlugin
 import com.follow.clashx.plugins.AppPlugin
 import com.follow.clashx.plugins.DiagnosticsPlugin
@@ -16,21 +20,44 @@ import com.follow.clashx.plugins.TilePlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class MainActivity : FlutterActivity() {
 
     private val highRefreshRate by lazy { HighRefreshRate(this) }
 
     private var boundEngine: FlutterEngine? = null
+    private var flutterUiDisplayed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applyAppTheme()
+        val appearance = StartupAppearance.read(this)
         super.onCreate(savedInstanceState)
+        applyStartupAppearance(appearance)
+        lifecycleScope.launch {
+            StartupAppearance.changes.collect { projected ->
+                if (projected != null) applyStartupAppearance(projected)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         highRefreshRate.pin()
+        val appearance = StartupAppearance.read(this)
+        applyStartupAppearance(appearance)
+        StartupLauncher.apply(this, appearance.launcher)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyStartupAppearance(StartupAppearance.read(this))
+    }
+
+    override fun onFlutterUiDisplayed() {
+        super.onFlutterUiDisplayed()
+        flutterUiDisplayed = true
+        updateWindowBackground(StartupAppearance.read(this))
     }
 
     override fun onPause() {
@@ -40,6 +67,16 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.makriq.flclash/startup_appearance")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "read") {
+                    val appearance = StartupAppearance.read(this)
+                    result.success(mapOf("themeMode" to appearance.mode, "pureBlack" to appearance.pureBlack))
+                } else {
+                    result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.makriq.flclash/device_id")
             .setMethodCallHandler { call, result ->
@@ -105,31 +142,24 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
-    // Theme the first frame before Flutter renders. The value is a startup-only
-    // cache of the Go settings projection; legacy preferences are not read.
-    private fun applyAppTheme() {
-        AppCompatDelegate.setDefaultNightMode(StartupTheme.nightMode(StartupTheme.read(this)))
-    }
-}
-
-/** Startup-only cache of the Go settings theme, written in this process from
- * the StateHub projection. Go stays the source of truth. */
-internal object StartupTheme {
-    private const val PREFERENCES = "flclashm_startup_theme"
-    private const val KEY = "themeMode"
-
-    fun store(context: Context, mode: String) {
-        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        if (preferences.getString(KEY, null) != mode) preferences.edit().putString(KEY, mode).apply()
+    private fun applyStartupAppearance(appearance: StartupAppearance) {
+        updateWindowBackground(appearance)
+        appearance.applySplashTheme(this)
     }
 
-    fun read(context: Context): String? = runCatching {
-        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getString(KEY, null)
-    }.getOrNull()
-
-    fun nightMode(mode: String?): Int = when (mode) {
-        "light" -> AppCompatDelegate.MODE_NIGHT_NO
-        "dark" -> AppCompatDelegate.MODE_NIGHT_YES
-        else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+    private fun updateWindowBackground(appearance: StartupAppearance) {
+        val background = appearance.background(resources.configuration)
+        val color = ColorDrawable(getColor(background))
+        if (flutterUiDisplayed || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.setBackgroundDrawable(color)
+            return
+        }
+        val mark = if (background == R.color.brand_light_background) R.drawable.brand_light else R.drawable.brand_dark
+        val size = (168 * resources.displayMetrics.density).roundToInt()
+        val launch = LayerDrawable(arrayOf(color, requireNotNull(getDrawable(mark)))).apply {
+            setLayerSize(1, size, size)
+            setLayerGravity(1, Gravity.CENTER)
+        }
+        window.setBackgroundDrawable(launch)
     }
 }

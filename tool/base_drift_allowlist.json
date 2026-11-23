@@ -3026,6 +3026,196 @@
       "reason": "Долгое удержание кнопки запуска с вибрацией, отключаемой настройкой и флагом панели."
     },
     {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/styles.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/values/styles.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/androidTest/kotlin/com/follow/clashx/StartupRoutingTest.kt",
+      "bucket": "budget",
+      "reason": "Сквозные проверки палитры запуска, открытия ссылок и быстрых действий Android."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/StartupAppearance.kt",
+      "bucket": "budget",
+      "reason": "Начальное оформление Android использует локальную проекцию параметров Go."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/LauncherActivity.kt",
+      "bucket": "budget",
+      "reason": "Постоянная задача Flutter сохраняется при отключении предыдущего значка лаунчера."
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/follow/clashx/StartupLauncher.kt",
+      "bucket": "budget",
+      "reason": "Хост Android переключает значки и привязывает быстрые действия к выбранной точке входа."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/brand_dark.xml",
+      "bucket": "budget",
+      "reason": "Векторный знак FlClashM для заставки, значка и виджетов Android."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/brand_light.xml",
+      "bucket": "budget",
+      "reason": "Векторный знак FlClashM для заставки, значка и виджетов Android."
+    },
+    {
+      "path": "android/app/src/main/res/drawable-anydpi/ic_launcher_monochrome.xml",
+      "bucket": "budget",
+      "reason": "Векторный знак FlClashM для заставки, значка и виджетов Android."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_dark.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_icon.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/drawable/splash_light.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_black.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_dark.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/launcher_light.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_black.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_dark.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/launcher_light.png",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/values-night/startup.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/values-v31/startup.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/values/brand_aliases.xml",
+      "bucket": "budget",
+      "reason": "Палитры адаптивного значка FlClashM и резервные размеры для старых Android."
+    },
+    {
+      "path": "android/app/src/main/res/values/startup.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "android/app/src/main/res/values/startup_styles.xml",
+      "bucket": "budget",
+      "reason": "Нативная заставка Android использует светлую, тёмную и чёрную палитры FlClashM."
+    },
+    {
+      "path": "lib/widgets/brand_mark.dart",
+      "bucket": "budget",
+      "reason": "Знак FlClashM рисуется вектором; светлая и тёмная палитры сохраняют контраст на поверхности темы."
+    },
+    {
       "path": "lib/widgets/widgets.dart",
       "bucket": "budget",
       "reason": "Экспорт свайпа и удержания для главной и прокси."
