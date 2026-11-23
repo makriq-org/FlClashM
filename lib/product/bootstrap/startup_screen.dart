@@ -62,9 +62,8 @@ class StartupScreen extends StatelessWidget {
                 ? Brightness.light
                 : Brightness.dark,
           ),
-          child: const Scaffold(
-            body: SafeArea(child: Center(child: BrandMark(size: 168))),
-          ),
+          // Match the Android splash, which centers its mark across the full window.
+          child: const Scaffold(body: Center(child: BrandMark(size: 168))),
         );
       },
     ),

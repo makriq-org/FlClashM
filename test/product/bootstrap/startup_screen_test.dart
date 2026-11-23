@@ -9,6 +9,22 @@ import 'package:material_ui/material_ui.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('startup mark stays centered with unequal system insets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 84, bottom: 12);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+
+    await tester.pumpWidget(
+      const StartupScreen(appearance: StartupAppearance()),
+    );
+    expect(tester.getCenter(find.byType(BrandMark)), const Offset(180, 400));
+  });
+
   testWidgets('ready UI replaces startup immediately', (tester) async {
     final content = ValueNotifier<Widget>(
       const StartupScreen(appearance: StartupAppearance()),
