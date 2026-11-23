@@ -10782,6 +10782,16 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  /// `VPN access was not granted. Start the VPN and allow the connection request.`
+  String get vpnPermissionDenied {
+    return Intl.message(
+      'VPN access was not granted. Start the VPN and allow the connection request.',
+      name: 'vpnPermissionDenied',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -2054,6 +2054,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VPN は VpnService でシステムの全トラフィックを自動的にルーティングします。",
     ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "VPN へのアクセスが許可されませんでした。VPN を開始し、接続リクエストを許可してください。",
+    ),
     "vpnSystemProxyDesc": MessageLookupByLibrary.simpleMessage(
       "HTTPプロキシをVpnServiceに接続",
     ),

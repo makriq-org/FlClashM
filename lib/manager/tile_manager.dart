@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flclashx/common/app_localizations.dart';
+import 'package:flclashx/common/exception.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/plugins/app.dart';
 import 'package:flclashx/plugins/tile.dart';
@@ -30,9 +31,17 @@ class _TileContainerState extends ConsumerState<TileManager> with TileListener {
     if (isStart && ref.read(coreStatusProvider) == CoreStatus.connected) {
       return;
     }
-    unawaited(ref.read(setupActionProvider.notifier).setRunning(true));
+    unawaited(_start());
     unawaited(app?.tip(currentAppLocalizations.startVpn));
     super.onStart();
+  }
+
+  Future<void> _start() async {
+    try {
+      await ref.read(setupActionProvider.notifier).setRunning(true);
+    } on MessageException catch (error) {
+      unawaited(app?.tip(error.message));
+    }
   }
 
   @override

@@ -25,7 +25,7 @@ class SetupAction extends _$SetupAction {
   Future<bool> setRunning(bool running, {bool initialize = false}) async {
     if (running &&
         !await (clashLib?.requestVpnPermission() ?? Future.value(false))) {
-      throw StateError('VPN permission was not granted');
+      throw MessageException(currentAppLocalizations.vpnPermissionDenied);
     }
     await frontendSettingsStore.flush();
     await backendClient.command(running ? 'runtime.start' : 'runtime.stop');

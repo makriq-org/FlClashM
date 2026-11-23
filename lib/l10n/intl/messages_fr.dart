@@ -573,7 +573,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "colorStyle": MessageLookupByLibrary.simpleMessage("Style de couleur"),
     "columns": MessageLookupByLibrary.simpleMessage("Colonnes"),
     "compact": MessageLookupByLibrary.simpleMessage("Compact"),
-    "oneline": MessageLookupByLibrary.simpleMessage("Sur une ligne"),
     "compatible": MessageLookupByLibrary.simpleMessage("Mode de compatibilité"),
     "confirm": MessageLookupByLibrary.simpleMessage("Confirmer"),
     "confirmClearAllData": MessageLookupByLibrary.simpleMessage(
@@ -1407,6 +1406,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "onDemandDesc": MessageLookupByLibrary.simpleMessage(
       "À la demande met le proxy en pause sur les Wi-Fi exclus.",
     ),
+    "oneline": MessageLookupByLibrary.simpleMessage("Sur une ligne"),
     "onlyStatisticsProxy": MessageLookupByLibrary.simpleMessage(
       "Ne compter que le trafic proxy",
     ),
@@ -2222,6 +2222,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "Le VPN fait passer automatiquement tout le trafic du système par VpnService.",
+    ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "L\'accès au VPN n\'a pas été accordé. Lancez le VPN et autorisez la demande de connexion.",
     ),
     "webDAVConfiguration": MessageLookupByLibrary.simpleMessage(
       "Configuration WebDAV",

@@ -441,7 +441,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "colorStyle": MessageLookupByLibrary.simpleMessage("색상 스타일"),
     "columns": MessageLookupByLibrary.simpleMessage("열"),
     "compact": MessageLookupByLibrary.simpleMessage("간결하게"),
-    "oneline": MessageLookupByLibrary.simpleMessage("한 줄"),
     "compatible": MessageLookupByLibrary.simpleMessage("호환 모드"),
     "confirm": MessageLookupByLibrary.simpleMessage("확인"),
     "confirmClearAllData": MessageLookupByLibrary.simpleMessage(
@@ -1103,6 +1102,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "onDemandDesc": MessageLookupByLibrary.simpleMessage(
       "필요 시 실행은 제외된 Wi-Fi에서 프록시를 일시 중지합니다.",
     ),
+    "oneline": MessageLookupByLibrary.simpleMessage("한 줄"),
     "onlyStatisticsProxy": MessageLookupByLibrary.simpleMessage("프록시 트래픽만 집계"),
     "openLogsFolder": MessageLookupByLibrary.simpleMessage("로그 폴더 열기"),
     "optional": MessageLookupByLibrary.simpleMessage("선택 사항"),
@@ -1738,6 +1738,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VPN은 VpnService를 통해 모든 시스템 트래픽을 자동으로 라우팅합니다.",
+    ),
+    "vpnPermissionDenied": MessageLookupByLibrary.simpleMessage(
+      "VPN 액세스가 허용되지 않았습니다. VPN을 시작하고 연결 요청을 허용하세요.",
     ),
     "webDAVConfiguration": MessageLookupByLibrary.simpleMessage("WebDAV 구성"),
     "website": MessageLookupByLibrary.simpleMessage("웹사이트"),
