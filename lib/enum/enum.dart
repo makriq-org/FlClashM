@@ -209,6 +209,9 @@ enum TunStack { gvisor, system, mixed, mips }
 
 enum AccessControlMode { acceptSelected, rejectSelected }
 
+/// Android-only `tun.app-isolation`: the in-TUN check of who owns a flow.
+enum AppIsolationMode { off, balanced, strict }
+
 enum AccessSortType { none, name, time }
 
 enum ProfileType { file, url, custom }

@@ -21,7 +21,7 @@ import (
 // makes the profile package rules inert without discarding the manual list.
 const AccessControlSettingKey = "vpn.access-control"
 
-const runtimeSecurityVersion = 2
+const runtimeSecurityVersion = 3
 
 type RawProfile struct {
 	SourceMissing bool   `json:"sourceMissing,omitempty"`
@@ -225,6 +225,11 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 		}
 	}
 	c.Policy.ApplyPatch(patch, metadata, c.Capabilities)
+	diagnostics := []string{}
+	appIsolation, isolationErr := c.resolveAppIsolation(config, patch, settings, override)
+	if isolationErr != nil {
+		return Prepared{}, isolationErr
+	}
 
 	tun := object(patch["tun"])
 	if text(object(settings["networkProps"])["routeMode"]) == "bypassPrivate" {
@@ -233,7 +238,6 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 	routes, _ := tun["route-address"].([]any)
 	tun["auto-route"] = len(routes) == 0
 	patch["tun"] = tun
-	diagnostics := []string{}
 	var profileAccess Object
 	if android {
 		if ownsSetting(settings, AccessControlSettingKey) {
@@ -427,6 +431,9 @@ func (c *Compiler) prepare(ctx context.Context, input backend.Input) (Prepared, 
 		bypass = defaultBypassDomains()
 	}
 	state := Object{"vpn-props": vpn, "current-profile-name": name, "bypass-domain": bypass}
+	if android {
+		state["app-isolation"] = appIsolation
+	}
 	if profileAccess != nil {
 		profileAccess = c.Policy.AccessControl(profileAccess, c.Capabilities)
 		actual := object(config["tun"])

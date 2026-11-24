@@ -1045,5 +1045,21 @@
   "updateErrorDownload": "Impossible de télécharger la mise à jour.",
   "updateErrorVerify": "Le fichier téléchargé n'a pas passé la vérification et a été supprimé.",
   "updateErrorInstall": "Impossible de lancer l'installateur.",
-  "vpnPermissionDenied": "L'accès au VPN n'a pas été accordé. Lancez le VPN et autorisez la demande de connexion."
+  "vpnPermissionDenied": "L'accès au VPN n'a pas été accordé. Lancez le VPN et autorisez la demande de connexion.",
+  "appIsolation": "Isolation des applications",
+  "appIsolationDesc": "Vérifie le propriétaire de chaque flux entrant dans le tunnel VPN, en plus du routage par application d'Android.",
+  "appIsolationOff": "Désactivée",
+  "appIsolationBalanced": "Équilibrée",
+  "appIsolationStrict": "Stricte",
+  "appIsolationOffDesc": "Seul le routage VPN par application d'Android s'applique.",
+  "appIsolationBalancedDesc": "Bloque les applications exclues et le TCP sans propriétaire provenant de l'adresse du tunnel. UDP, ICMP et les appareils partagés continuent de fonctionner.",
+  "appIsolationStrictDesc": "Bloque aussi l'UDP, l'ICMP et le trafic partagé sans propriétaire. Peut perturber les appels, le ping et le partage du VPN.",
+  "appIsolationApplied": "Appliquée",
+  "appIsolationSourceProfile": "depuis l'abonnement",
+  "appIsolationSourceUser": "depuis vos réglages",
+  "appIsolationSourceDefault": "par défaut",
+  "appIsolationInactive": "Prend effet au démarrage du VPN.",
+  "appIsolationLimited": "L'identification du propriétaire est limitée sur cette version d'Android ; certains flux ne peuvent pas être vérifiés.",
+  "appIsolationUnavailable": "Impossible d'appliquer l'isolation : les propriétaires de connexion sont indisponibles.",
+  "appIsolationDegraded": "Certaines identifications ont échoué ; les flux dont le propriétaire reste inconnu suivent les règles du mode choisi."
 }

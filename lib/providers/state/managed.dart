@@ -56,6 +56,21 @@ final effectiveAuthenticationProvider = Provider<AuthenticationProps>((ref) {
   );
 });
 
+/// The isolation mode the current profile declares. The row shows this value
+/// while the subscription owns the setting, so taking it over cannot silently
+/// replace the applied mode with an unrelated local default.
+@Riverpod(keepAlive: true)
+class ProfileAppIsolation extends _$ProfileAppIsolation {
+  @override
+  AppIsolationMode? build() => null;
+
+  void set(AppIsolationMode? mode) {
+    if (state != mode) {
+      state = mode;
+    }
+  }
+}
+
 /// Every setting the current subscription speaks for.
 @riverpod
 Set<String> managedSettings(Ref ref) {
@@ -69,7 +84,7 @@ Set<String> managedSettings(Ref ref) {
     currentProfileProvider.select((profile) => profile?.headers.specials),
   );
   final declaredAccess = ref.watch(profileDeclaredAccessProvider).value;
-  return {
+  final keys = <String>{
     if (switches != null) ...appSwitchSettings.values,
     ...managedViewKeysOf(view),
     if (specials?.contains('hideip') ?? false) hideIpSetting,
@@ -77,6 +92,12 @@ Set<String> managedSettings(Ref ref) {
     ...ref.watch(managedClashKeysProvider),
     if (declaredAccess != null) accessControlSettingKey,
   };
+  // The row only exists in the Android network section; a desktop profile that
+  // carries the key must not produce a hint about a setting it cannot show.
+  if (!system.isAndroid) {
+    keys.remove('clash.tun.app-isolation');
+  }
+  return keys;
 }
 
 @riverpod

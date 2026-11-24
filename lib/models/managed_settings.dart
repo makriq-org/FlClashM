@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import '../enum/enum.dart';
+
 import 'clash_config.dart';
 import 'provider_headers.dart';
 
@@ -52,6 +56,7 @@ const managedClashKeys = {
   'tun.stack',
   'tun.route-address',
   'tun.route-exclude-address',
+  'tun.app-isolation',
 };
 
 String clashSettingKey(String yamlKey) => 'clash.$yamlKey';
@@ -83,6 +88,7 @@ const generalPageKeys = {
 
 const networkPageKeys = {
   'clash.tun.stack',
+  'clash.tun.app-isolation',
   'clash.interface-name',
   'clash.disable-keep-alive',
   'clash.keep-alive-idle',
@@ -206,8 +212,88 @@ PatchClashConfig keepOwnedSettings(
           routeExcludeAddress: current.tun.routeExcludeAddress,
         ),
       ),
+      'clash.tun.app-isolation' => next.copyWith(
+        tun: next.tun.copyWith(appIsolation: current.tun.appIsolation),
+      ),
       _ => next,
     };
   }
   return next;
+}
+
+
+/// The isolation mode a profile declares, if it names a valid one.
+AppIsolationMode? profileAppIsolationMode(Map<String, dynamic> config) {
+  final tun = config['tun'];
+  final value = tun is Map ? tun['app-isolation'] : null;
+  if (value is! String) {
+    return null;
+  }
+  return AppIsolationMode.values.asNameMap()[value.trim().toLowerCase()];
+}
+
+/// One parsed `appIsolation` block from the live Go VPN options. The row and
+/// its status line share it so both name the mode the guard actually uses.
+class AppliedAppIsolation {
+  const AppliedAppIsolation({
+    required this.mode,
+    required this.source,
+    required this.status,
+    required this.detail,
+  });
+
+  final AppIsolationMode? mode;
+  final String source;
+  final String status;
+  final String detail;
+
+  static AppliedAppIsolation? parse(String raw) {
+    try {
+      final options = jsonDecode(raw) as Map<String, dynamic>;
+      final value = options['appIsolation'];
+      if (value is! Map) {
+        return null;
+      }
+      final mode = value['mode'];
+      return AppliedAppIsolation(
+        mode: mode is String
+            ? AppIsolationMode.values.asNameMap()[mode]
+            : null,
+        source: value['source'] is String
+            ? value['source'] as String
+            : 'default',
+        status: value['status'] is String ? value['status'] as String : '',
+        detail: value['detail'] is String ? value['detail'] as String : '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+
+/// Row value for app isolation. The profile's effective mode wins only while
+/// the subscription actually owns it; otherwise the local setting is shown.
+AppIsolationMode effectiveAppIsolationMode({
+  required bool locked,
+  required AppliedAppIsolation? applied,
+  required AppIsolationMode local,
+}) {
+  if (locked && applied?.source == 'profile' && applied?.mode != null) {
+    return applied!.mode!;
+  }
+  return local;
+}
+
+
+/// The mode a takeover must write locally. The applied profile mode is the
+/// source of truth even if ownership has already flipped by callback time.
+AppIsolationMode takeoverAppIsolationMode({
+  required AppliedAppIsolation? applied,
+  required AppIsolationMode displayed,
+}) {
+  if (applied?.source == 'profile' && applied?.mode != null) {
+    return applied!.mode!;
+  }
+  return displayed;
 }

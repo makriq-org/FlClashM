@@ -9,6 +9,7 @@ patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mieru-terminal-timeout-reg
 patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-embedded-command-gate.patch"
 patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-android-system-dns-lock.patch"
 patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-byedpi-udp-token.patch"
+patch --batch --fuzz=0 -p1 < "$task_root/tool/patches/mihomo-tun-app-guard.patch"
 
 # Test on the build host before cross-compiling the Android library.
 env -u GOOS -u GOARCH -u GOARM -u CC -u CFLAGS CGO_ENABLED=0 \

@@ -641,6 +641,7 @@ func (a *App) patchSettingsWithOwnershipChange(ctx context.Context, patch profil
 
 func runtimeOwnershipDiffers(before, after json.RawMessage) bool {
 	return settingOwned(before, compile.AccessControlSettingKey) != settingOwned(after, compile.AccessControlSettingKey) ||
+		settingOwned(before, compile.AppIsolationSettingKey) != settingOwned(after, compile.AppIsolationSettingKey) ||
 		settingOwned(before, "clash.mixed-port") != settingOwned(after, "clash.mixed-port")
 }
 

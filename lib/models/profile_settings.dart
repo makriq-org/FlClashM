@@ -49,6 +49,7 @@ PatchClashConfig syncProfileSettings(
       excludePackage: defaults.tun.excludePackage,
       routeAddress: defaults.tun.routeAddress,
       routeExcludeAddress: defaults.tun.routeExcludeAddress,
+      appIsolation: defaults.tun.appIsolation,
     ),
   );
   T? read<T>(String key) {
@@ -79,7 +80,7 @@ PatchClashConfig syncProfileSettings(
   }
 
   T? enumNamed<T extends Enum>(String key, List<T> values) {
-    final value = read<String>(key)?.toLowerCase();
+    final value = read<String>(key)?.trim().toLowerCase();
     return values.firstWhereOrNull((item) => item.name.toLowerCase() == value);
   }
 
@@ -172,6 +173,9 @@ PatchClashConfig syncProfileSettings(
       routeExcludeAddress:
           strings('tun.route-exclude-address', isCidr) ??
           next.tun.routeExcludeAddress,
+      appIsolation:
+          enumNamed('tun.app-isolation', AppIsolationMode.values) ??
+          next.tun.appIsolation,
     ),
   );
   return next;

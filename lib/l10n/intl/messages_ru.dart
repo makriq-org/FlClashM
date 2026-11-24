@@ -425,6 +425,44 @@ class MessageLookup extends MessageLookupByLibrary {
     "appIconDesign": MessageLookupByLibrary.simpleMessage(
       "Дизайн значка приложения",
     ),
+    "appIsolation": MessageLookupByLibrary.simpleMessage("Изоляция приложений"),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("Применено"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("Базовая"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "Блокирует исключённые приложения и TCP без известного владельца с адреса туннеля. UDP, ICMP и подключённые по точке доступа устройства работают.",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "Часть запросов владельца завершилась ошибкой; к потокам с неизвестным владельцем применяются правила выбранного режима.",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Дополнительно проверяет владельца каждого потока, поступающего в VPN-туннель, помимо системного разграничения доступа Android.",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "Вступает в силу при запуске VPN.",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "На этой версии Android определение владельца ограничено; часть потоков нельзя проверить.",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("Отключена"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Действует только системное разграничение доступа Android.",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage(
+      "по умолчанию",
+    ),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "из подписки",
+    ),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage(
+      "из ваших настроек",
+    ),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("Строгая"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "Дополнительно блокирует UDP, ICMP и трафик подключённых устройств без известного владельца. Может нарушить звонки, ping и раздачу VPN.",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "Изоляцию приложений нельзя применить: определение владельцев соединений недоступно.",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage(
       "Нет локальных прокси",
     ),

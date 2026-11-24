@@ -45,6 +45,7 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
         source.type == ProfileType.custom ||
         source.extendType == ExtendType.script) {
       ref.read(managedClashKeysProvider.notifier).set(const {});
+      ref.read(profileAppIsolationProvider.notifier).set(null);
       return;
     }
     final ProfileBase base;
@@ -64,5 +65,8 @@ class ProfileSettingsAction extends _$ProfileSettingsAction {
     ref
         .read(managedClashKeysProvider.notifier)
         .set(managedClashKeysOf(base.present));
+    ref
+        .read(profileAppIsolationProvider.notifier)
+        .set(profileAppIsolationMode(base.config));
   }
 }

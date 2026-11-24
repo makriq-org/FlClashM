@@ -394,6 +394,46 @@ class MessageLookup extends MessageLookupByLibrary {
     "appIconDesign": MessageLookupByLibrary.simpleMessage(
       "Diseño del icono de la app",
     ),
+    "appIsolation": MessageLookupByLibrary.simpleMessage(
+      "Aislamiento de aplicaciones",
+    ),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("Aplicado"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("Equilibrado"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "Bloquea las aplicaciones excluidas y el TCP sin propietario desde la dirección del túnel. UDP, ICMP y los dispositivos compartidos siguen funcionando.",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "Algunas consultas de propietario fallaron; los flujos cuyo propietario sigue siendo desconocido siguen las reglas del modo elegido.",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Comprueba quién es el propietario de cada flujo que entra en el túnel VPN, además del enrutado por aplicación de Android.",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "Se aplica al iniciar la VPN.",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "La consulta de propietario está limitada en esta versión de Android; algunos flujos no se pueden comprobar.",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("Desactivado"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Solo se aplica el enrutado VPN por aplicación de Android.",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage(
+      "por defecto",
+    ),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "de la suscripción",
+    ),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage(
+      "de tus ajustes",
+    ),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("Estricto"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "También bloquea UDP, ICMP y tráfico compartido sin propietario. Puede afectar a llamadas, ping y al uso compartido del VPN.",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "No se puede aplicar el aislamiento: los propietarios de conexión no están disponibles.",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage(
       "No hay proxies locales",
     ),

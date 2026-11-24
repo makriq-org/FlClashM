@@ -5,6 +5,7 @@ package main
 import "C"
 import (
 	"context"
+	"core/isolation"
 	"core/platform"
 	"core/state"
 	t "core/tun"
@@ -16,8 +17,10 @@ import (
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener/sing_tun"
 	"github.com/metacubex/mihomo/log"
+	M "github.com/metacubex/sing/common/metadata"
 	"golang.org/x/sync/semaphore"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -108,6 +111,93 @@ func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	return ResolveProcess(t.callback, protocol, source.String(), target.String(), uid)
 }
 
+// tunOwnerResolver attributes one flow through the same JNI callback the
+// process-aware rules use, but returns the UID and every shared package instead
+// of a display name.
+type tunOwnerResolver struct{ handler *TunHandler }
+
+func (r tunOwnerResolver) Resolve(protocol string, source, destination netip.AddrPort) (isolation.Owner, error) {
+	handler := r.handler
+	if handler == nil {
+		return isolation.Owner{}, errors.New("tun owner resolver is not running")
+	}
+	return handler.resolveOwner(protocol, source, destination)
+}
+
+func (t *TunHandler) resolveOwner(protocol string, source, destination netip.AddrPort) (isolation.Owner, error) {
+	_ = t.limit.Acquire(context.Background(), 1)
+	defer t.limit.Release(1)
+	if t.closed.Load() {
+		return isolation.Owner{}, errors.New("tun is stopping")
+	}
+	ipProtocol := 0
+	switch protocol {
+	case "tcp":
+		ipProtocol = syscall.IPPROTO_TCP
+	case "udp":
+		ipProtocol = syscall.IPPROTO_UDP
+	default:
+		// ICMP has no per-socket Android API; the guard treats it as unknown.
+		return isolation.Owner{}, nil
+	}
+	uid := -1
+	if version.Load() < 29 {
+		uid = platform.QuerySocketUidFromProcFs(socketAddr(protocol, source), socketAddr(protocol, destination))
+	}
+	raw := ResolveOwner(t.callback, ipProtocol, source.String(), destination.String(), uid)
+	if raw == "" {
+		return isolation.Owner{}, errors.New("connection owner lookup is unavailable")
+	}
+	return parseOwnerAnswer(raw)
+}
+
+func socketAddr(protocol string, address netip.AddrPort) net.Addr {
+	ip := net.IP(address.Addr().AsSlice())
+	if protocol == "tcp" {
+		return &net.TCPAddr{IP: ip, Port: int(address.Port())}
+	}
+	return &net.UDPAddr{IP: ip, Port: int(address.Port())}
+}
+
+func isolationCapability() string {
+	callbacksMu.RLock()
+	available := globalCallbacks.resolveOwnerFunc != nil
+	callbacksMu.RUnlock()
+	if !available {
+		return "none"
+	}
+	if version.Load() < 29 {
+		return "procfs"
+	}
+	return "full"
+}
+
+// installIsolationGuard creates the policy for a new tunnel before the first
+// packet is read. A failed start clears it again.
+func installIsolationGuard(handler *TunHandler) {
+	// Hold runLock across publication: a settings commit in between would see
+	// no guard, refresh nothing, and leave this guard with a stale policy.
+	runLock.Lock()
+	guard := isolation.NewGuard(isolationPolicy(), tunOwnerResolver{handler: handler})
+	guard.SetCapability(isolationCapability())
+	activeIsolationGuard.Store(guard)
+	runLock.Unlock()
+}
+
+func clearIsolationGuard() {
+	activeIsolationGuard.Store(nil)
+}
+
+// checkIsolation is the single mihomo hook entry point. It reads the atomic
+// guard so stopping a tunnel cannot race the packet path.
+func checkIsolation(protocol string, source, destination M.Socksaddr) bool {
+	guard := activeIsolationGuard.Load()
+	if guard == nil {
+		return true
+	}
+	return guard.Check(protocol, source.AddrPort(), destination.AddrPort())
+}
+
 var (
 	activeTunHandler atomic.Pointer[TunHandler]
 	installTunHooks  sync.Once
@@ -122,10 +212,14 @@ func handleStopTun() {
 	defer tunLock.Unlock()
 	runTime = nil
 	tunUp.Store(false)
+	// Close the listener before dropping the guard: in-flight packets then still
+	// see the policy instead of an unguarded window, and the guard's resolver is
+	// valid until the handler has drained.
 	if tunHandler != nil {
 		tunHandler.close()
 		tunHandler = nil
 	}
+	clearIsolationGuard()
 }
 
 func handleStartTun(fd int, callback unsafe.Pointer) bool {
@@ -144,6 +238,10 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	if previous != nil {
 		previous.close()
 	}
+	if fd == 0 {
+		// No tunnel is being created; nothing may keep enforcing a policy.
+		clearIsolationGuard()
+	}
 	runLock.Lock()
 	if currentConfig == nil {
 		runLock.Unlock()
@@ -160,6 +258,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		} else if callback != nil {
 			releaseObject(callback)
 		}
+		clearIsolationGuard()
 		return false
 	}
 	tunCfg := currentConfig.General.Tun
@@ -171,6 +270,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		tunCfg.Stack = constant.TunGvisor
 	}
 	if fd != 0 {
+		installIsolationGuard(tunHandler)
 		tunListener, err := t.Start(fd, tunCfg, trafficTunnel)
 		if err != nil {
 			log.Errorln("handleStartTun: t.Start failed: %v", err)
@@ -182,6 +282,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 			// number sing-tun may have already closed/reused. (A rare pre-wrap sing-tun
 			// failure would leak this one fd; accepted over a double-close.)
 			removeTunHook()
+			clearIsolationGuard()
 			if tunHandler != nil {
 				tunHandler.close()
 				tunHandler = nil
@@ -193,6 +294,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 			tunHandler.listener = tunListener
 		} else {
 			removeTunHook()
+			clearIsolationGuard()
 			if tunHandler != nil {
 				tunHandler.close()
 				tunHandler = nil
@@ -223,6 +325,7 @@ func handleGetRunTime() string {
 // Hooks remain installed: mihomo may load a hook before stop and call it later.
 func initTunHook() {
 	installTunHooks.Do(func() {
+		sing_tun.ConnectionGuard = checkIsolation
 		dialer.DefaultSocketHook = func(network, address string, conn syscall.RawConn) error {
 			if platform.ShouldBlockConnection() {
 				return errBlocked
@@ -273,6 +376,7 @@ func handleGetAndroidVpnOptions() string {
 		Enable:           state.CurrentState.VpnProps.Enable,
 		Port:             mixedPort,
 		Ipv4Address:      state.DefaultIpv4Address,
+		Ipv6:             state.CurrentState.VpnProps.Ipv6,
 		Ipv6Address:      state.GetIpv6Address(),
 		AccessControl:    state.CurrentState.VpnProps.AccessControl,
 		SystemProxy:      systemProxy,
@@ -282,6 +386,7 @@ func handleGetAndroidVpnOptions() string {
 		DnsServerAddress: state.GetDnsServerAddress(),
 		IncludePackage:   currentConfig.General.Tun.IncludePackage,
 		ExcludePackage:   currentConfig.General.Tun.ExcludePackage,
+		AppIsolation:     isolationOptions(isolationCapability()),
 	}
 	data, err := json.Marshal(options)
 	if err != nil {

@@ -1283,5 +1283,21 @@
   "updateErrorDownload": "Не удалось скачать обновление.",
   "updateErrorVerify": "Скачанный файл не прошёл проверку и удалён.",
   "updateErrorInstall": "Не удалось запустить установщик.",
-  "vpnPermissionDenied": "Доступ к VPN не выдан. Запустите VPN и разрешите подключение."
+  "vpnPermissionDenied": "Доступ к VPN не выдан. Запустите VPN и разрешите подключение.",
+  "appIsolation": "Изоляция приложений",
+  "appIsolationDesc": "Дополнительно проверяет владельца каждого потока, поступающего в VPN-туннель, помимо системного разграничения доступа Android.",
+  "appIsolationOff": "Отключена",
+  "appIsolationBalanced": "Базовая",
+  "appIsolationStrict": "Строгая",
+  "appIsolationOffDesc": "Действует только системное разграничение доступа Android.",
+  "appIsolationBalancedDesc": "Блокирует исключённые приложения и TCP без известного владельца с адреса туннеля. UDP, ICMP и подключённые по точке доступа устройства работают.",
+  "appIsolationStrictDesc": "Дополнительно блокирует UDP, ICMP и трафик подключённых устройств без известного владельца. Может нарушить звонки, ping и раздачу VPN.",
+  "appIsolationApplied": "Применено",
+  "appIsolationSourceProfile": "из подписки",
+  "appIsolationSourceUser": "из ваших настроек",
+  "appIsolationSourceDefault": "по умолчанию",
+  "appIsolationInactive": "Вступает в силу при запуске VPN.",
+  "appIsolationLimited": "На этой версии Android определение владельца ограничено; часть потоков нельзя проверить.",
+  "appIsolationUnavailable": "Изоляцию приложений нельзя применить: определение владельцев соединений недоступно.",
+  "appIsolationDegraded": "Часть запросов владельца завершилась ошибкой; к потокам с неизвестным владельцем применяются правила выбранного режима."
 }

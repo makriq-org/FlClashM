@@ -903,6 +903,73 @@ abstract class _$ManagedClashKeys extends $Notifier<Set<String>> {
   }
 }
 
+/// The isolation mode the current profile declares. The row shows this value
+/// while the subscription owns the setting, so taking it over cannot silently
+/// replace the applied mode with an unrelated local default.
+
+@ProviderFor(ProfileAppIsolation)
+final profileAppIsolationProvider = ProfileAppIsolationProvider._();
+
+/// The isolation mode the current profile declares. The row shows this value
+/// while the subscription owns the setting, so taking it over cannot silently
+/// replace the applied mode with an unrelated local default.
+final class ProfileAppIsolationProvider
+    extends $NotifierProvider<ProfileAppIsolation, AppIsolationMode?> {
+  /// The isolation mode the current profile declares. The row shows this value
+  /// while the subscription owns the setting, so taking it over cannot silently
+  /// replace the applied mode with an unrelated local default.
+  ProfileAppIsolationProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'profileAppIsolationProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$profileAppIsolationHash();
+
+  @$internal
+  @override
+  ProfileAppIsolation create() => ProfileAppIsolation();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AppIsolationMode? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AppIsolationMode?>(value),
+    );
+  }
+}
+
+String _$profileAppIsolationHash() =>
+    r'a02813bf4523c83afdc00bfa23d92374e61bd9d6';
+
+/// The isolation mode the current profile declares. The row shows this value
+/// while the subscription owns the setting, so taking it over cannot silently
+/// replace the applied mode with an unrelated local default.
+
+abstract class _$ProfileAppIsolation extends $Notifier<AppIsolationMode?> {
+  AppIsolationMode? build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AppIsolationMode?, AppIsolationMode?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AppIsolationMode?, AppIsolationMode?>,
+              AppIsolationMode?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Every setting the current subscription speaks for.
 
 @ProviderFor(managedSettings)

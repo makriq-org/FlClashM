@@ -1232,5 +1232,21 @@
   "updateErrorDownload": "更新をダウンロードできませんでした。",
   "updateErrorVerify": "ダウンロードしたファイルは検証に失敗したため削除されました。",
   "updateErrorInstall": "インストーラーを起動できませんでした。",
-  "vpnPermissionDenied": "VPN へのアクセスが許可されませんでした。VPN を開始し、接続リクエストを許可してください。"
+  "vpnPermissionDenied": "VPN へのアクセスが許可されませんでした。VPN を開始し、接続リクエストを許可してください。",
+  "appIsolation": "アプリ分離",
+  "appIsolationDesc": "Android のアプリ別ルーティングに加えて、VPN トンネルに入る各フローの所有者を確認します。",
+  "appIsolationOff": "オフ",
+  "appIsolationBalanced": "バランス",
+  "appIsolationStrict": "厳格",
+  "appIsolationOffDesc": "Android のアプリ別 VPN ルーティングのみを使用します。",
+  "appIsolationBalancedDesc": "除外アプリと、トンネルアドレスからの所有者不明の TCP を遮断します。UDP、ICMP、テザリング端末は影響を受けません。",
+  "appIsolationStrictDesc": "所有者不明の UDP、ICMP、テザリング通信も遮断します。通話、ping、VPN ホットスポット共有が妨げられる場合があります。",
+  "appIsolationApplied": "適用中",
+  "appIsolationSourceProfile": "サブスクリプションから",
+  "appIsolationSourceUser": "自分の設定から",
+  "appIsolationSourceDefault": "既定",
+  "appIsolationInactive": "VPN の起動時に有効になります。",
+  "appIsolationLimited": "この Android バージョンでは所有者の照会が制限され、一部のフローを確認できません。",
+  "appIsolationUnavailable": "アプリ分離を適用できません: 接続の所有者を取得できません。",
+  "appIsolationDegraded": "所有者の照会に失敗しました。所有者が不明なままの通信には、選択したモードの規則が適用されます。"
 }

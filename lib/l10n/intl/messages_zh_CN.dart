@@ -331,6 +331,36 @@ class MessageLookup extends MessageLookupByLibrary {
     "appAccessControl": MessageLookupByLibrary.simpleMessage("应用访问控制"),
     "appDesc": MessageLookupByLibrary.simpleMessage("处理应用相关设置"),
     "appIconDesign": MessageLookupByLibrary.simpleMessage("应用图标设计"),
+    "appIsolation": MessageLookupByLibrary.simpleMessage("应用隔离"),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("已应用"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("均衡"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "阻止被排除的应用以及来自隧道地址且所有者未知的 TCP。UDP、ICMP 和热点共享设备不受影响。",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "部分所有者查询失败；所有者仍未知的流量按所选模式的规则处理。",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "除 Android 的分应用路由外，再检查进入 VPN 隧道的每个连接的所有者。",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage("VPN 启动后生效。"),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "此 Android 版本的所有者查询受限，部分连接无法检查。",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("关闭"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "仅使用 Android 的分应用 VPN 路由。",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage("默认"),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage("来自订阅"),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage("来自你的设置"),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("严格"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "同时阻止所有者未知的 UDP、ICMP 和热点共享流量。可能影响通话、ping 和 VPN 热点共享。",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "无法应用应用隔离：连接所有者信息不可用。",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage("暂无本地代理"),
     "appendSystemDns": MessageLookupByLibrary.simpleMessage("追加系统DNS"),
     "application": MessageLookupByLibrary.simpleMessage("应用程序设置"),

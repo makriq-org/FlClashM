@@ -316,6 +316,13 @@ _Tun _$TunFromJson(Map<String, dynamic> json) => _Tun(
           ?.map((e) => e as String)
           .toList() ??
       const [],
+  appIsolation:
+      $enumDecodeNullable(
+        _$AppIsolationModeEnumMap,
+        json['app-isolation'],
+        unknownValue: AppIsolationMode.balanced,
+      ) ??
+      AppIsolationMode.balanced,
 );
 
 Map<String, dynamic> _$TunToJson(_Tun instance) => <String, dynamic>{
@@ -328,6 +335,7 @@ Map<String, dynamic> _$TunToJson(_Tun instance) => <String, dynamic>{
   'route-exclude-address': instance.routeExcludeAddress,
   'include-package': instance.includePackage,
   'exclude-package': instance.excludePackage,
+  'app-isolation': _$AppIsolationModeEnumMap[instance.appIsolation]!,
 };
 
 const _$TunStackEnumMap = {
@@ -335,6 +343,12 @@ const _$TunStackEnumMap = {
   TunStack.system: 'system',
   TunStack.mixed: 'mixed',
   TunStack.mips: 'mips',
+};
+
+const _$AppIsolationModeEnumMap = {
+  AppIsolationMode.off: 'off',
+  AppIsolationMode.balanced: 'balanced',
+  AppIsolationMode.strict: 'strict',
 };
 
 _FallbackFilter _$FallbackFilterFromJson(

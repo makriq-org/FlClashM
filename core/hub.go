@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -936,9 +937,28 @@ func handleGetMemory(fn func(value string)) {
 func handleSetState(params string) {
 	runLock.Lock()
 	defer runLock.Unlock()
+	// Decoding writes through the live AccessControl pointer, so keep an
+	// isolated copy to restore if the payload fails halfway.
+	previousVpnProps := state.CurrentState.VpnProps
+	if access := previousVpnProps.AccessControl; access != nil {
+		restore := *access
+		restore.AcceptList = slices.Clone(access.AcceptList)
+		restore.RejectList = slices.Clone(access.RejectList)
+		previousVpnProps.AccessControl = &restore
+	}
+	// The plan is the complete state: a field it omits (an older plan has no
+	// app isolation) must fall back to its default instead of keeping a value
+	// from the previous profile.
+	previousIsolation := state.CurrentState.AppIsolation
+	state.CurrentState.AppIsolation = state.AppIsolationOptions{}
 	if err := json.Unmarshal([]byte(params), state.CurrentState); err != nil {
 		log.Warnln("[State] unmarshal failed: %v", err)
+		// A malformed payload must not disable the access control the running
+		// guard enforces, nor weaken the isolation policy that is still active.
+		state.CurrentState.VpnProps = previousVpnProps
+		state.CurrentState.AppIsolation = previousIsolation
 	}
+	refreshIsolationPolicy()
 }
 
 func handleGetConfig(path string) (*config.RawConfig, error) {

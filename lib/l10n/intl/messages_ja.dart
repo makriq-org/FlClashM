@@ -344,6 +344,40 @@ class MessageLookup extends MessageLookupByLibrary {
     "appAccessControl": MessageLookupByLibrary.simpleMessage("アプリアクセス制御"),
     "appDesc": MessageLookupByLibrary.simpleMessage("アプリ関連設定の処理"),
     "appIconDesign": MessageLookupByLibrary.simpleMessage("アプリアイコンのデザイン"),
+    "appIsolation": MessageLookupByLibrary.simpleMessage("アプリ分離"),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("適用中"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("バランス"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "除外アプリと、トンネルアドレスからの所有者不明の TCP を遮断します。UDP、ICMP、テザリング端末は影響を受けません。",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "所有者の照会に失敗しました。所有者が不明なままの通信には、選択したモードの規則が適用されます。",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Android のアプリ別ルーティングに加えて、VPN トンネルに入る各フローの所有者を確認します。",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "VPN の起動時に有効になります。",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "この Android バージョンでは所有者の照会が制限され、一部のフローを確認できません。",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("オフ"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Android のアプリ別 VPN ルーティングのみを使用します。",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage("既定"),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "サブスクリプションから",
+    ),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage("自分の設定から"),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("厳格"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "所有者不明の UDP、ICMP、テザリング通信も遮断します。通話、ping、VPN ホットスポット共有が妨げられる場合があります。",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "アプリ分離を適用できません: 接続の所有者を取得できません。",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage("ローカルプロキシがありません"),
     "appendSystemDns": MessageLookupByLibrary.simpleMessage("システムDNSを追加"),
     "application": MessageLookupByLibrary.simpleMessage("アプリケーション設定"),

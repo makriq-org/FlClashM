@@ -3279,6 +3279,46 @@
       "path": "lib/models/proxy_chain.dart",
       "bucket": "budget",
       "reason": "Модель цепочки описывает прыжки, включённость и ограничения имени."
+    },
+    {
+      "path": "android/service/src/main/kotlin/com/follow/clashx/service/ConnectionOwnerResolver.kt",
+      "bucket": "budget",
+      "reason": "Резолвер владельца соединения нужен внутренней проверке изоляции приложений в TUN."
+    },
+    {
+      "path": "core/backend/compile/isolation.go",
+      "bucket": "budget",
+      "reason": "Компилятор выбирает режим tun.app-isolation и передаёт его Android-хосту через CoreState."
+    },
+    {
+      "path": "core/backend/compile/isolation_test.go",
+      "bucket": "budget",
+      "reason": "Тесты компиляции проверяют допустимые значения, приоритеты и перехват настройки подпиской."
+    },
+    {
+      "path": "core/isolation/isolation.go",
+      "bucket": "budget",
+      "reason": "Политика изоляции приложений внутри TUN живёт в Go-бэкенде и не зависит от движка."
+    },
+    {
+      "path": "core/isolation/isolation_test.go",
+      "bucket": "budget",
+      "reason": "Тесты политики покрывают режимы, неизвестных владельцев, общие UID и системные исключения."
+    },
+    {
+      "path": "core/isolation_runtime.go",
+      "bucket": "budget",
+      "reason": "Связка CoreState с активной политикой изоляции принадлежит Go-бэкенду."
+    },
+    {
+      "path": "core/backend/service/app_isolation_test.go",
+      "bucket": "budget",
+      "reason": "Тест сервиса проверяет применение режима tun.app-isolation, перехват и возврат управления подписке."
+    },
+    {
+      "path": "core/isolation_runtime_test.go",
+      "bucket": "budget",
+      "reason": "Тесты состояния изоляции проверяют режимы, источник и диагностику недоступности."
     }
   ]
 }

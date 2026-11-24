@@ -320,6 +320,38 @@ class MessageLookup extends MessageLookupByLibrary {
     "app": MessageLookupByLibrary.simpleMessage("앱"),
     "appAccessControl": MessageLookupByLibrary.simpleMessage("앱 접근 제어"),
     "appIconDesign": MessageLookupByLibrary.simpleMessage("앱 아이콘 디자인"),
+    "appIsolation": MessageLookupByLibrary.simpleMessage("앱 격리"),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("적용됨"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("균형"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "제외된 앱과 터널 주소에서 온 소유자 불명 TCP를 차단합니다. UDP, ICMP, 테더링 기기는 계속 작동합니다.",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "일부 소유자 조회가 실패했습니다. 소유자를 알 수 없는 흐름에는 선택한 모드의 규칙이 적용됩니다.",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Android의 앱별 라우팅에 더해 VPN 터널로 들어오는 각 흐름의 소유자를 확인합니다.",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "VPN을 시작하면 적용됩니다.",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "이 Android 버전에서는 소유자 조회가 제한되어 일부 흐름을 확인할 수 없습니다.",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("끄기"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Android의 앱별 VPN 라우팅만 적용됩니다.",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage("기본값"),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage("구독에서"),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage("내 설정에서"),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("엄격"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "소유자 불명 UDP, ICMP, 테더링 트래픽도 차단합니다. 통화, ping, VPN 핫스팟 공유가 중단될 수 있습니다.",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "앱 격리를 적용할 수 없습니다: 연결 소유자를 확인할 수 없습니다.",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage("로컬 프록시 없음"),
     "appendSystemDns": MessageLookupByLibrary.simpleMessage("시스템 DNS 추가"),
     "applied": MessageLookupByLibrary.simpleMessage("적용했습니다"),

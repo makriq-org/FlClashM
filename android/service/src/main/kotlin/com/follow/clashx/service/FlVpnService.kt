@@ -10,7 +10,9 @@ import android.os.PowerManager
 import com.follow.clashx.common.GlobalState
 import com.follow.clashx.core.Core
 import com.follow.clashx.service.models.VpnOptions
+import com.follow.clashx.service.models.gsonSanitized
 import com.follow.clashx.service.models.toCIDR
+import com.google.gson.Gson
 import com.follow.clashx.service.modules.NotificationModule
 import com.follow.clashx.service.modules.promoteServiceForeground
 import kotlinx.coroutines.runBlocking
@@ -211,9 +213,11 @@ class FlVpnService : VpnService(), BackendForegroundResource {
                 acquireWakeLock()
                 fdHandedToCore = true
 
+                val ownerResolver = ConnectionOwnerResolver(this)
                 val started = com.follow.clashx.core.Core.startTun(
                     fd = fd,
                     protect = { fdToProtect -> protect(fdToProtect) },
+                    connectionOwner = ownerResolver::resolve,
                     resolverProcess = { protocol, source, target, uid ->
                         val resolvedUid = if (uid > 0) uid else {
                             // getConnectionOwnerUid is API 29+; on older devices the call
@@ -238,7 +242,19 @@ class FlVpnService : VpnService(), BackendForegroundResource {
                 // tun. onDestroy releases it via CAS so a delayed teardown of THIS
                 // instance can't close a tunnel a newer instance has since brought up.
                 State.tunOwner.set(this)
-                State.publishAppliedVpnOptions(options)
+                // Publish exactly the options Builder received; only the
+                // guard's status is newer than that snapshot. Re-reading all
+                // fields could advertise routes or package rules the VPN did
+                // not apply if the plan changed in between.
+                val isolationStatus = runCatching {
+                    val raw = Core.getAndroidVpnOptions()
+                    if (raw.isEmpty()) null
+                    else Gson().fromJson(raw, VpnOptions::class.java)?.gsonSanitized()?.appIsolation
+                }.getOrNull()
+                State.publishAppliedVpnOptions(
+                    if (isolationStatus != null) options.copy(appIsolation = isolationStatus)
+                    else options,
+                )
                 State.runTime = android.os.SystemClock.uptimeMillis()
             } catch (e: Exception) {
                 State.clearAppliedVpnOptions()

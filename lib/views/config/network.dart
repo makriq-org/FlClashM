@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:flclashx/clash/clash.dart';
 import 'package:flclashx/common/common.dart';
 import 'package:flclashx/enum/enum.dart';
 import 'package:flclashx/features/form/form.dart';
+import 'package:flclashx/l10n/l10n.dart';
 import 'package:flclashx/models/models.dart';
 import 'package:flclashx/providers/config.dart';
 import 'package:flclashx/providers/providers.dart';
@@ -188,6 +190,146 @@ class DNSHijackingItem extends ConsumerWidget {
     );
   }
 }
+
+String _appIsolationLabel(AppLocalizations l, AppIsolationMode mode) =>
+    switch (mode) {
+      AppIsolationMode.off => l.appIsolationOff,
+      AppIsolationMode.balanced => l.appIsolationBalanced,
+      AppIsolationMode.strict => l.appIsolationStrict,
+    };
+
+const appIsolationSettingKey = 'clash.tun.app-isolation';
+
+/// The live `appIsolation` block from Go, shared by the row and its status.
+final appliedAppIsolationProvider =
+    FutureProvider.autoDispose<AppliedAppIsolation?>((ref) async {
+      // Re-read when the VPN starts, the saved mode changes or a profile
+      // switch changes which settings the subscription owns.
+      ref.watch(isStartProvider);
+      ref.watch(managedSettingsProvider);
+      ref.watch(
+        currentProfileProvider.select((profile) => profile?.lastUpdateDate),
+      );
+      final locked = ref.watch(settingLockedProvider(appIsolationSettingKey));
+      final declared = ref.watch(profileAppIsolationProvider);
+      final local = ref.watch(
+        patchClashConfigProvider.select((state) => state.tun.appIsolation),
+      );
+      final expected = locked ? (declared ?? local) : local;
+      Future<AppliedAppIsolation?> read() async {
+        final raw =
+            await (clashLib?.readAndroidVpnOptions() ?? Future.value(''));
+        return AppliedAppIsolation.parse(raw);
+      }
+
+      var applied = await read();
+      // The settings commit and the plan apply reach Go asynchronously. Poll
+      // briefly so the status line names the new mode, not the previous one.
+      for (var attempt = 0; attempt < 16 && applied?.mode != expected; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        applied = await read();
+      }
+      return applied;
+    });
+
+/// The value the row shows. While the subscription owns the mode, Go's
+/// effective mode is authoritative; otherwise the local setting is.
+final appIsolationViewProvider = Provider<AppIsolationMode>((ref) {
+  return effectiveAppIsolationMode(
+    locked: ref.watch(settingLockedProvider(appIsolationSettingKey)),
+    applied: ref.watch(appliedAppIsolationProvider).value,
+    local: ref.watch(
+      patchClashConfigProvider.select((state) => state.tun.appIsolation),
+    ),
+  );
+});
+
+class AppIsolationItem extends ConsumerWidget {
+  const AppIsolationItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    // Capture the value before takeover: writing ownedSettings first would
+    // make the provider read the local default instead of the applied mode.
+    final displayed = ref.watch(appIsolationViewProvider);
+    return ManagedSetting(
+      settingKey: appIsolationSettingKey,
+      onTakenOver: () {
+        final mode = takeoverAppIsolationMode(
+          applied: ref.read(appliedAppIsolationProvider).value,
+          displayed: displayed,
+        );
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith.tun(appIsolation: mode));
+      },
+      child: ConfigOptionsItem<AppIsolationMode>(
+        title: (l) => l.appIsolation,
+        options: AppIsolationMode.values,
+        textBuilder: (mode) => _appIsolationLabel(appLocalizations, mode),
+        selector: appIsolationViewProvider,
+        onChanged: _tunWriter(
+          (state, value) => state.copyWith.tun(appIsolation: value),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows the mode the guard actually uses and warns when it cannot be applied
+/// in full. Both the mode and the status come from Go.
+class AppIsolationStatus extends ConsumerWidget {
+  const AppIsolationStatus({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(appliedAppIsolationProvider).value;
+    if (status == null) {
+      return const SizedBox.shrink();
+    }
+    final appLocalizations = context.appLocalizations;
+    final warning =
+        status.status == 'unavailable' ||
+        status.status == 'degraded' ||
+        status.status == 'limited';
+    final lines = <String>[
+      if (status.status != 'inactive')
+        '${appLocalizations.appIsolationApplied}: '
+            '${_appIsolationLabel(appLocalizations, status.mode ?? AppIsolationMode.balanced)} '
+            '(${_sourceLabel(appLocalizations, status.source)})',
+      if (status.status == 'limited') appLocalizations.appIsolationLimited,
+      if (status.status == 'degraded')
+        [
+          appLocalizations.appIsolationDegraded,
+          if (status.detail.isNotEmpty) status.detail,
+        ].join(' '),
+      if (status.status == 'unavailable')
+        [
+          appLocalizations.appIsolationUnavailable,
+          if (status.detail.isNotEmpty) status.detail,
+        ].join(' '),
+      if (status.status == 'inactive') appLocalizations.appIsolationInactive,
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Text(
+        lines.join('\n'),
+        style: warning
+            ? context.listCaptionStyle.copyWith(
+                color: context.colorScheme.error,
+              )
+            : context.listCaptionStyle,
+      ),
+    );
+  }
+}
+
+String _sourceLabel(AppLocalizations l, String source) => switch (source) {
+  'profile' => l.appIsolationSourceProfile,
+  'user' => l.appIsolationSourceUser,
+  _ => l.appIsolationSourceDefault,
+};
 
 class TunStackItem extends ConsumerWidget {
   const TunStackItem({super.key});
@@ -569,6 +711,17 @@ class VpnSections extends ConsumerWidget {
             appLocalizations.ipv6InboundDesc,
           ].join('\n'),
         ),
+        generateSection(
+          title: appLocalizations.appIsolation,
+          items: const [AppIsolationItem()],
+          footer: [
+            appLocalizations.appIsolationDesc,
+            '${appLocalizations.appIsolationOff}: ${appLocalizations.appIsolationOffDesc}',
+            '${appLocalizations.appIsolationBalanced}: ${appLocalizations.appIsolationBalancedDesc}',
+            '${appLocalizations.appIsolationStrict}: ${appLocalizations.appIsolationStrictDesc}',
+          ].join('\n'),
+        ),
+        const AppIsolationStatus(),
       ],
     );
   }
