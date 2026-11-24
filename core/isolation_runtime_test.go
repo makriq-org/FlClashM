@@ -137,3 +137,28 @@ func TestParseOwnerAnswer(t *testing.T) {
 		t.Fatal("answer without a package list was accepted")
 	}
 }
+
+func TestMalformedStateKeepsTheActiveAccessPolicy(t *testing.T) {
+	withState(t, state.AppIsolationOptions{Mode: "strict"}, &state.AccessControl{
+		Enable:     true,
+		Mode:       "rejectSelected",
+		RejectList: []string{"com.example.blocked"},
+	})
+	guard := isolation.NewGuard(isolationPolicy(), nil)
+	activeIsolationGuard.Store(guard)
+
+	// This payload would first disable access control and then fail on the
+	// non-string isolation mode.
+	handleSetState(`{"vpn-props":{"accessControl":{"enable":false}},"app-isolation":{"mode":123}}`)
+
+	policy := isolationPolicy()
+	if !policy.Access.Enabled || len(policy.Access.Reject) != 1 {
+		t.Fatalf("access policy was weakened: %#v", policy.Access)
+	}
+	if policy.Mode != isolation.Strict {
+		t.Fatalf("mode = %q", policy.Mode)
+	}
+	if guard.Stats().Mode != isolation.Strict {
+		t.Fatalf("guard mode = %q", guard.Stats().Mode)
+	}
+}
