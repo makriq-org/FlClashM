@@ -98,17 +98,31 @@ func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRun
 			node.failures = 0
 			return err
 		}
-		healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
-		if ctx.Err() != nil {
-			return ctx.Err()
+		// Ручной выбор спящего узла должен разбудить его сразу, не дожидаясь
+		// отказа группы: иначе выбранный прокси остаётся без слушателя.
+		selected, selErr := c.nodeOptions.Inspection.Selected(ctx, activation.ContainingGroups)
+		selectedNow := false
+		if selErr == nil {
+			for _, group := range activation.ContainingGroups {
+				if selected[group] == node.plan.Name {
+					selectedNow = true
+					break
+				}
+			}
 		}
-		if err == nil && healthy {
-			node.failures = 0
-			return nil
-		}
-		node.failures++
-		if node.failures < activation.Wake.Failures {
-			return nil
+		if !selectedNow {
+			healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if err == nil && healthy {
+				node.failures = 0
+				return nil
+			}
+			node.failures++
+			if node.failures < activation.Wake.Failures {
+				return nil
+			}
 		}
 		return c.nodeOperation(ctx, node.plan.ID, "node.wake", func(operation context.Context) error {
 			wakeErr := c.launchNode(operation, node)

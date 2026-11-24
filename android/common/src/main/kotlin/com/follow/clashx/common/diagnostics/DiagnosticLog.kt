@@ -81,7 +81,7 @@ object DiagnosticLog {
 
     fun runtimeNode(type: String, line: String) {
         val source = when (type.lowercase()) {
-            "naiveproxy", "byedpi", "olcrtc", "stormdns" -> "runtime-${type.lowercase()}"
+            "naiveproxy", "byedpi", "olcrtc", "stormdns", "qwdtt" -> "runtime-${type.lowercase()}"
             else -> "runtime-other"
         }
         record(source, Log.DEBUG, "FlClashM-runtime", line)

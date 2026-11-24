@@ -241,7 +241,7 @@ func (a *App) Handle(raw []byte) []byte {
 			response.Result = err == nil
 		}
 	case "capabilities":
-		response.Result = map[string]any{"apiVersion": backend.APIVersion, "storageVersion": dataVersion, "platform": a.compiler.Capabilities.Platform, "transports": []string{"naiveproxy", "olcrtc", "byedpi", "stormdns"}}
+		response.Result = map[string]any{"apiVersion": backend.APIVersion, "storageVersion": dataVersion, "platform": a.compiler.Capabilities.Platform, "transports": []string{"naiveproxy", "olcrtc", "byedpi", "stormdns", "qwdtt"}}
 	case "runtime.view":
 		response.Result, err = a.RuntimeView()
 	default:

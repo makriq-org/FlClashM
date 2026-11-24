@@ -544,7 +544,7 @@ func currentScript(settings Object) string {
 	return ""
 }
 func isExternal(kind string) bool {
-	return contains([]string{"naiveproxy", "byedpi", "olcrtc", "stormdns"}, strings.ToLower(strings.TrimSpace(kind)))
+	return contains([]string{"naiveproxy", "byedpi", "olcrtc", "stormdns", "qwdtt"}, strings.ToLower(strings.TrimSpace(kind)))
 }
 func splitValues(value string) any {
 	values := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ';' || r == ' ' })

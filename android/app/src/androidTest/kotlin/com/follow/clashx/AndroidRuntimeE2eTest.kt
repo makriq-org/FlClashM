@@ -364,7 +364,7 @@ class AndroidRuntimeE2eTest {
             it in listOf("x86_64", "arm64-v8a", "armeabi-v7a")
         })
         assertNull("CI must grant ACTIVATE_VPN", VpnService.prepare(context))
-        for (type in listOf("naiveproxy", "olcrtc", "byedpi", "stormdns")) {
+        for (type in listOf("naiveproxy", "olcrtc", "byedpi", "stormdns", "qwdtt")) {
             val file = File(context.applicationInfo.nativeLibraryDir, "libflclashm_$type.so")
             assertTrue("Missing packaged $type", file.isFile)
             val magic = file.inputStream().use { input -> ByteArray(4).also { input.read(it) } }

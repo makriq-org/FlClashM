@@ -176,6 +176,7 @@ func TestExternalTransportCompilation(t *testing.T) {
 		{"byedpi", `{name: Bye, type: byedpi, mode: manual, strategy: '-d1 -s2'}`, "config.json", `-d1 -s2`},
 		{"olcrtc", `{name: Olc, type: olcrtc, provider: jitsi, room: room, encryption-key: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', dns-server: system, transport: datachannel, activation: always}`, "config.yaml", `@flclashm-system-dns@`},
 		{"stormdns", `{name: Storm, type: stormdns, domains: ['V.EXAMPLE.COM.', 'example.com'], encryption: chacha20, encryption-key: key, activation: always, preset: bulk, arq: {initial-rto: 600ms, max-rto: 3s}}`, "client_config.toml", `ARQ_INITIAL_RTO_SECONDS = 0.6`},
+		{"qwdtt", `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1, h2], tunnel: raw-ip, workers: 11, obfs: video, udp: true, turn-transport: tcp, turn-servers: ['192.0.2.10', '192.0.2.20:443'], turn-port: 3478, dns-server: system, activation: always}`, "config.json", `"captcha-mode":"native"`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.kind, func(t *testing.T) {
@@ -194,7 +195,7 @@ func TestExternalTransportCompilation(t *testing.T) {
 				user == "" || password == "" || user != node.Metadata["service-auth-user"] || password != node.Metadata["service-auth-password"] {
 				t.Fatal("engine proxy does not match the authenticated loopback node")
 			}
-			if want := tt.kind == "byedpi"; node.UDP != want || proxy["udp"] != want || (proxy["flclashm-udp-token"] == true) != want {
+			if want := tt.kind == "byedpi" || tt.kind == "qwdtt"; node.UDP != want || proxy["udp"] != want || (proxy["flclashm-udp-token"] == true) != want {
 				t.Fatal("built-in proxy compiled with the wrong UDP settings")
 			}
 			key := "built-in-proxies/" + tt.kind + "/" + node.ID + "/" + tt.file

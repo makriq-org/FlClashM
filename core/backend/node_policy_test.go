@@ -381,6 +381,35 @@ func TestNodeReserveHeadlessWakeSleepAndRecovery(t *testing.T) {
 		t.Fatal("idle reserve not sleeping", b.Snapshot())
 	}
 }
+func TestSelectedSleepingReserveWakesImmediately(t *testing.T) {
+	store := newStore(t)
+	mechanism := newNodeHost()
+	mechanism.groupHealthy = false
+	b := openNodeHost(t, store, mechanism)
+	node := reservePlan()
+	run(t, b, "configure", "apply", nodeInput(node))
+	run(t, b, "start", "start", "")
+	if snapshot := b.Snapshot(); len(snapshot.Nodes) != 1 || snapshot.Nodes[0].Awake {
+		t.Fatal("reserve must start asleep", snapshot)
+	}
+	mechanism.mu.Lock()
+	mechanism.selected["Reserve"] = node.Name
+	mechanism.mu.Unlock()
+	if err := b.ReconcileNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := b.Snapshot()
+	if len(snapshot.Nodes) != 1 || !snapshot.Nodes[0].Awake || snapshot.Nodes[0].State != "running" {
+		t.Fatal("selected sleeping reserve did not wake immediately", snapshot)
+	}
+	mechanism.mu.Lock()
+	running := len(mechanism.processes)
+	mechanism.mu.Unlock()
+	if running != 1 {
+		t.Fatal("selected reserve has no running process", running)
+	}
+}
+
 func TestNodeWakeCancelledByStop(t *testing.T) {
 	mechanism := newNodeHost()
 	b := openNodeHost(t, newStore(t), mechanism)

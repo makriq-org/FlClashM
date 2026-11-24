@@ -61,8 +61,8 @@ index 7f3f111..794eb19 100644
 +	udpAssociateAddr := socks5.AddrFromStdAddrPort(netip.AddrPortFrom(netip.IPv4Unspecified(), 0))
 +	var token string
 +	if ss.option.FlClashMUDPToken {
-+		// The embedded ByeDPI reads this token over the authenticated control
-+		// connection. It is never used as a DNS name.
++		// The embedded external transport reads this token over the authenticated
++		// control connection. It is never used as a DNS name.
 +		var nonce [16]byte
 +		rand.Read(nonce[:])
 +		token = hex.EncodeToString(nonce[:])

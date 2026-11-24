@@ -104,6 +104,19 @@
     },
     {
       customType: 'regex',
+      description: 'Отслеживать HEAD основной ветки qWDTT',
+      managerFilePatterns: ['/^lib/product/runtime/qwdtt_release\\.dart$/'],
+      matchStrings: [
+        "const qwdttPinnedCommit = '(?<currentDigest>[0-9a-f]{40})';",
+      ],
+      currentValueTemplate: 'master',
+      depNameTemplate: 'qWDTT runtime',
+      packageNameTemplate: 'https://github.com/makriq-org/qwdtt',
+      datasourceTemplate: 'git-refs',
+      versioningTemplate: 'exact',
+    },
+    {
+      customType: 'regex',
       description: 'Отслеживать HEAD ветки proofkit Ghostlane OlcRTC',
       managerFilePatterns: ['/^lib/product/runtime/olcrtc_release\\.dart$/'],
       matchStrings: [

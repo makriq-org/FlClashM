@@ -34,7 +34,7 @@ rules:
 
 ## 🔌 Встроенные узлы
 
-UDP поддерживает только ByeDPI; у него UDP включён по умолчанию и отключается через `udp: false`. NaiveProxy, OlcRTC и StormDNS работают без UDP.
+UDP поддерживают ByeDPI и qWDTT; у обоих UDP включён по умолчанию и отключается через `udp: false`. NaiveProxy, OlcRTC и StormDNS работают без UDP.
 
 ### NaiveProxy
 
@@ -289,11 +289,72 @@ proxy-groups:
 
 </details>
 
+### qWDTT
+
+```yaml
+proxies:
+  - name: "VK TURN"
+    type: qwdtt
+    server: vpn.example.com
+    port: 56003
+    password: "password"
+    vk-hashes: ["CALL_HASH_1", "CALL_HASH_2"]
+    tunnel: raw-ip
+    workers: 9
+    obfs: audio
+    udp: true
+    turn-transport: udp
+    turn-servers: ["192.0.2.10", "192.0.2.20:443"]
+    turn-port: 3478
+    dns-server: system
+    activation:
+      mode: auto
+      wake:
+        urls: ["https://www.gstatic.com/generate_204"]
+        interval: 30s
+        failures: 2
+        retry-after: 5m
+      sleep:
+        idle: 15m
+    connectivity-check:
+      urls: ["https://www.gstatic.com/generate_204"]
+      required: false
+      timeout: 5s
+      startup-timeout: 120s
+      retry-interval: 1s
+      requests: 1
+      concurrency: 1
+      min-success-ratio: 1
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://www.gstatic.com/generate_204"
+    proxies: ["DIRECT", "VK TURN"]
+```
+
+| Параметр | По умолчанию | Допустимые значения |
+|----------|--------------|---------------------|
+| `server`, `port` | обязательны | IP или домен; порт 1…65535 |
+| `password` | обязателен | непустая строка, пароль подключения |
+| `vk-hashes` | обязательны | 1…6 уникальных хешей VK-звонков |
+| `tunnel` | `wireguard` | `wireguard` (DTLS), `wireguard-direct` (без DTLS), `raw-ip` |
+| `workers` | `9` | 1…27 × число хешей; группы по 9, последняя может быть неполной |
+| `obfs` | `audio` | `audio`, `video` |
+| `udp` | `true` | TCP и UDP работают во всех режимах туннеля |
+| `turn-transport` | `udp` | `udp`, `tcp` |
+| `turn-servers` | адреса VK | список `host` или `host:port` |
+| `turn-port` | порт VK | 1…65535 |
+| `dns-server` | `system` | `system` или `host:port` |
+
+Порт TURN выбирается так: порт из `turn-servers` → `turn-port` → порт из ответа VK. Явно заданный `dns-server` не заменяется DNS оператора. `system` означает DNS, выданный сервером qWDTT: он достижим внутри туннеля, в отличие от физического DNS телефона.
+
+Авторизация VK полностью автоматическая: основной путь VK Calls, при ошибке — legacy. Капча решается только нативно, без WebView и без действий пользователя; если подключиться нельзя, узел переходит в недоступность. Недоступность одного хеша не останавливает узел: группа переключается на следующий хеш. Пароли, локальные порты и служебные учётные данные SOCKS5 задаются FlClashM, а не профилем.
+
 <a id="activation"></a>
 
 ## 😴 Спящий резерв
 
-OlcRTC и StormDNS по умолчанию используют `activation: auto`: запускаются при ручном выборе или отказе наблюдаемой группы. Узел должен напрямую входить в группу. Без выбора и соединений он засыпает после `sleep.idle`; `0s` запрещает сон до перезапуска VPN. Для запуска вместе с профилем задайте `activation: always`.
+OlcRTC, StormDNS и qWDTT по умолчанию используют `activation: auto`: запускаются при ручном выборе или отказе наблюдаемой группы. Узел должен напрямую входить в группу. Без выбора и соединений он засыпает после `sleep.idle`; `0s` запрещает сон до перезапуска VPN. Для запуска вместе с профилем задайте `activation: always`.
 
 `activation` и `connectivity-check` задаются внутри конкретного узла в `proxies`. Для `activation: auto` обязательны прямая содержащая группа и wake-URL (явный либо унаследованный из проверки узла, группы или настроек приложения); без них профиль отклоняется. Длительности этих двух блоков должны быть кратны секунде (`1s`, `1m`); `500ms` не допускается.
 

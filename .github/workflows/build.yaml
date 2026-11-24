@@ -154,6 +154,7 @@ jobs:
             assets/runtimes/naiveproxy
             assets/runtimes/olcrtc
             assets/runtimes/stormdns
+            assets/runtimes/qwdtt
           overwrite: true
 
       - name: Upload Android core artifacts

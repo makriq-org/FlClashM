@@ -12,7 +12,7 @@
 
 </div>
 
-Клиент mihomo на базе [FlClashX](https://github.com/pluralplay/FlClashX). Запускает ByeDPI, OlcRTC, StormDNS и NaiveProxy прямо из профиля; поддерживает подписки, раздельное туннелирование, плитку VPN и проверяемые обновления APK.
+Клиент mihomo на базе [FlClashX](https://github.com/pluralplay/FlClashX). Запускает ByeDPI, OlcRTC, StormDNS, qWDTT и NaiveProxy прямо из профиля; поддерживает подписки, раздельное туннелирование, плитку VPN и проверяемые обновления APK.
 
 > [!NOTE]
 > Проект активно развивается; некоторые функции ещё дорабатываются.
@@ -50,6 +50,6 @@
 
 ## 🙏 Благодарности и лицензия
 
-Спасибо авторам [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+Спасибо авторам [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy), [qWDTT](https://github.com/makriq-org/qwdtt).
 
 Приложение — [GPL-3.0](LICENSE). Сторонние ядра и бинарники сохраняют собственные лицензии. История выпусков — [CHANGELOG](CHANGELOG.md).
