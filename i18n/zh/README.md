@@ -12,7 +12,7 @@
 
 </div>
 
-基于 [FlClashX](https://github.com/pluralplay/FlClashX) 的 mihomo 客户端，可直接从配置启动 ByeDPI、OlcRTC、StormDNS 和 NaiveProxy，支持订阅、应用分流、VPN 快捷开关和经过验证的 APK 更新。
+基于 [FlClashX](https://github.com/pluralplay/FlClashX) 的 mihomo 客户端，可直接从配置启动 ByeDPI、OlcRTC、StormDNS、qWDTT 和 NaiveProxy，支持订阅、应用分流、VPN 快捷开关和经过验证的 APK 更新。
 
 > [!NOTE]
 > 项目仍在积极开发，部分功能尚在完善。
@@ -50,6 +50,6 @@
 
 ## 🙏 致谢与许可
 
-感谢以下项目的作者： [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+感谢以下项目的作者： [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy), [qWDTT](https://github.com/makriq-org/qwdtt).
 
 应用采用 [GPL-3.0](../../LICENSE)。第三方内核与二进制保留各自许可。版本历史见 [CHANGELOG](../../CHANGELOG.md)。
