@@ -5,19 +5,23 @@ package main
 import "C"
 import (
 	"context"
+	"core/isolation"
 	"core/platform"
 	"core/state"
 	t "core/tun"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener/sing_tun"
 	"github.com/metacubex/mihomo/log"
+	M "github.com/metacubex/sing/common/metadata"
 	"golang.org/x/sync/semaphore"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -108,6 +112,110 @@ func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	return ResolveProcess(t.callback, protocol, source.String(), target.String(), uid)
 }
 
+// ownerAnswer is the JSON contract of the Android connection-owner callback.
+type ownerAnswer struct {
+	UID      int      `json:"uid"`
+	Packages []string `json:"packages"`
+	Unknown  bool     `json:"unknown"`
+	Error    string   `json:"error"`
+}
+
+// tunOwnerResolver attributes one flow through the same JNI callback the
+// process-aware rules use, but returns the UID and every shared package instead
+// of a display name.
+type tunOwnerResolver struct{ handler *TunHandler }
+
+func (r tunOwnerResolver) Resolve(protocol string, source, destination netip.AddrPort) (isolation.Owner, error) {
+	handler := r.handler
+	if handler == nil {
+		return isolation.Owner{}, errors.New("tun owner resolver is not running")
+	}
+	return handler.resolveOwner(protocol, source, destination)
+}
+
+func (t *TunHandler) resolveOwner(protocol string, source, destination netip.AddrPort) (isolation.Owner, error) {
+	_ = t.limit.Acquire(context.Background(), 1)
+	defer t.limit.Release(1)
+	if t.closed.Load() {
+		return isolation.Owner{}, errors.New("tun is stopping")
+	}
+	ipProtocol := 0
+	switch protocol {
+	case "tcp":
+		ipProtocol = syscall.IPPROTO_TCP
+	case "udp":
+		ipProtocol = syscall.IPPROTO_UDP
+	default:
+		// ICMP has no per-socket Android API; the guard treats it as unknown.
+		return isolation.Owner{}, nil
+	}
+	uid := -1
+	if version.Load() < 29 {
+		uid = platform.QuerySocketUidFromProcFs(socketAddr(protocol, source), socketAddr(protocol, destination))
+	}
+	raw := ResolveOwner(t.callback, ipProtocol, source.String(), destination.String(), uid)
+	if raw == "" {
+		return isolation.Owner{}, errors.New("connection owner lookup is unavailable")
+	}
+	var answer ownerAnswer
+	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
+		return isolation.Owner{}, fmt.Errorf("connection owner answer: %w", err)
+	}
+	if answer.Error != "" {
+		return isolation.Owner{}, errors.New(answer.Error)
+	}
+	if answer.Unknown || answer.UID < 0 {
+		return isolation.Owner{Known: false}, nil
+	}
+	return isolation.Owner{Known: true, UID: answer.UID, Packages: answer.Packages}, nil
+}
+
+func socketAddr(protocol string, address netip.AddrPort) net.Addr {
+	ip := net.IP(address.Addr().AsSlice())
+	if protocol == "tcp" {
+		return &net.TCPAddr{IP: ip, Port: int(address.Port())}
+	}
+	return &net.UDPAddr{IP: ip, Port: int(address.Port())}
+}
+
+func isolationCapability() string {
+	callbacksMu.RLock()
+	available := globalCallbacks.resolveOwnerFunc != nil
+	callbacksMu.RUnlock()
+	if !available {
+		return "none"
+	}
+	if version.Load() < 29 {
+		return "procfs"
+	}
+	return "full"
+}
+
+// installIsolationGuard creates the policy for a new tunnel before the first
+// packet is read. A failed start clears it again.
+func installIsolationGuard(handler *TunHandler) {
+	runLock.Lock()
+	policy := isolationPolicy()
+	runLock.Unlock()
+	guard := isolation.NewGuard(policy, tunOwnerResolver{handler: handler})
+	guard.SetCapability(isolationCapability())
+	activeIsolationGuard.Store(guard)
+}
+
+func clearIsolationGuard() {
+	activeIsolationGuard.Store(nil)
+}
+
+// checkIsolation is the single mihomo hook entry point. It reads the atomic
+// guard so stopping a tunnel cannot race the packet path.
+func checkIsolation(protocol string, source, destination M.Socksaddr) bool {
+	guard := activeIsolationGuard.Load()
+	if guard == nil {
+		return true
+	}
+	return guard.Check(protocol, source.AddrPort(), destination.AddrPort())
+}
+
 var (
 	activeTunHandler atomic.Pointer[TunHandler]
 	installTunHooks  sync.Once
@@ -122,6 +230,7 @@ func handleStopTun() {
 	defer tunLock.Unlock()
 	runTime = nil
 	tunUp.Store(false)
+	clearIsolationGuard()
 	if tunHandler != nil {
 		tunHandler.close()
 		tunHandler = nil
@@ -171,6 +280,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		tunCfg.Stack = constant.TunGvisor
 	}
 	if fd != 0 {
+		installIsolationGuard(tunHandler)
 		tunListener, err := t.Start(fd, tunCfg, trafficTunnel)
 		if err != nil {
 			log.Errorln("handleStartTun: t.Start failed: %v", err)
@@ -182,6 +292,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 			// number sing-tun may have already closed/reused. (A rare pre-wrap sing-tun
 			// failure would leak this one fd; accepted over a double-close.)
 			removeTunHook()
+			clearIsolationGuard()
 			if tunHandler != nil {
 				tunHandler.close()
 				tunHandler = nil
@@ -193,6 +304,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 			tunHandler.listener = tunListener
 		} else {
 			removeTunHook()
+			clearIsolationGuard()
 			if tunHandler != nil {
 				tunHandler.close()
 				tunHandler = nil
@@ -223,6 +335,7 @@ func handleGetRunTime() string {
 // Hooks remain installed: mihomo may load a hook before stop and call it later.
 func initTunHook() {
 	installTunHooks.Do(func() {
+		sing_tun.ConnectionGuard = checkIsolation
 		dialer.DefaultSocketHook = func(network, address string, conn syscall.RawConn) error {
 			if platform.ShouldBlockConnection() {
 				return errBlocked
@@ -282,6 +395,7 @@ func handleGetAndroidVpnOptions() string {
 		DnsServerAddress: state.GetDnsServerAddress(),
 		IncludePackage:   currentConfig.General.Tun.IncludePackage,
 		ExcludePackage:   currentConfig.General.Tun.ExcludePackage,
+		AppIsolation:     isolationOptions(isolationCapability()),
 	}
 	data, err := json.Marshal(options)
 	if err != nil {

@@ -11,6 +11,8 @@ typedef void (*protect_func)(void *tun_interface, int fd);
 
 typedef const char* (*resolve_process_func)(void *tun_interface, int protocol, const char *source, const char *target, int uid);
 
+typedef const char* (*resolve_owner_func)(void *tun_interface, int protocol, const char *source, const char *target, int uid);
+
 typedef void (*invoke_callback_func)(void *callback, const char *data);
 
 typedef void (*event_listener_func)(void *listener, const char *data);
@@ -22,6 +24,13 @@ static void protect(protect_func fn, void *tun_interface, int fd) {
 }
 
 static const char* resolve_process(resolve_process_func fn, void *tun_interface, int protocol, const char *source, const char *target, int uid) {
+    if (fn) {
+        return fn(tun_interface, protocol, source, target, uid);
+    }
+    return NULL;
+}
+
+static const char* resolve_owner(resolve_owner_func fn, void *tun_interface, int protocol, const char *source, const char *target, int uid) {
     if (fn) {
         return fn(tun_interface, protocol, source, target, uid);
     }
@@ -58,6 +67,7 @@ var (
 		releaseObjectFunc  C.release_object_func
 		protectFunc        C.protect_func
 		resolveProcessFunc C.resolve_process_func
+		resolveOwnerFunc   C.resolve_owner_func
 		invokeCallbackFunc C.invoke_callback_func
 		eventListenerFunc  C.event_listener_func
 	}
@@ -87,6 +97,27 @@ func ResolveProcess(callback unsafe.Pointer, protocol int, source, target string
 	t := C.CString(target)
 	defer C.free(unsafe.Pointer(t))
 	res := C.resolve_process(fn, callback, C.int(protocol), s, t, C.int(uid))
+	if res == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(res))
+	return C.GoString(res)
+}
+
+// ResolveOwner asks Android for the socket owner as structured JSON: a known
+// uid with every shared package, an explicit unknown answer, or an API error.
+func ResolveOwner(callback unsafe.Pointer, protocol int, source, target string, uid int) string {
+	callbacksMu.RLock()
+	fn := globalCallbacks.resolveOwnerFunc
+	callbacksMu.RUnlock()
+	if fn == nil {
+		return ""
+	}
+	s := C.CString(source)
+	defer C.free(unsafe.Pointer(s))
+	t := C.CString(target)
+	defer C.free(unsafe.Pointer(t))
+	res := C.resolve_owner(fn, callback, C.int(protocol), s, t, C.int(uid))
 	if res == nil {
 		return ""
 	}
@@ -144,6 +175,7 @@ func registerCallbacks(
 	eventListenerFunc C.event_listener_func,
 	markSocketFunc C.protect_func,
 	resolveProcessFunc C.resolve_process_func,
+	resolveOwnerFunc C.resolve_owner_func,
 	releaseObjectFunc C.release_object_func,
 ) {
 	callbacksMu.Lock()
@@ -151,6 +183,7 @@ func registerCallbacks(
 	globalCallbacks.eventListenerFunc = eventListenerFunc
 	globalCallbacks.protectFunc = markSocketFunc
 	globalCallbacks.resolveProcessFunc = resolveProcessFunc
+	globalCallbacks.resolveOwnerFunc = resolveOwnerFunc
 	globalCallbacks.releaseObjectFunc = releaseObjectFunc
 	callbacksMu.Unlock()
 	startDiagnosticLog()

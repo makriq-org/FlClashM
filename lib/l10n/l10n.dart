@@ -10792,6 +10792,161 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  /// `App isolation`
+  String get appIsolation {
+    return Intl.message(
+      'App isolation',
+      name: 'appIsolation',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Checks who owns each flow entering the VPN tunnel, in addition to Android's per-app routing.`
+  String get appIsolationDesc {
+    return Intl.message(
+      'Checks who owns each flow entering the VPN tunnel, in addition to Android\'s per-app routing.',
+      name: 'appIsolationDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Off`
+  String get appIsolationOff {
+    return Intl.message('Off', name: 'appIsolationOff', desc: '', args: []);
+  }
+
+  /// `Balanced`
+  String get appIsolationBalanced {
+    return Intl.message(
+      'Balanced',
+      name: 'appIsolationBalanced',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Strict`
+  String get appIsolationStrict {
+    return Intl.message(
+      'Strict',
+      name: 'appIsolationStrict',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Only Android's per-app VPN routing applies.`
+  String get appIsolationOffDesc {
+    return Intl.message(
+      'Only Android\'s per-app VPN routing applies.',
+      name: 'appIsolationOffDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Blocks excluded apps and unattributed TCP from the tunnel address. UDP, ICMP and tethered devices keep working.`
+  String get appIsolationBalancedDesc {
+    return Intl.message(
+      'Blocks excluded apps and unattributed TCP from the tunnel address. UDP, ICMP and tethered devices keep working.',
+      name: 'appIsolationBalancedDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Also blocks unattributed UDP, ICMP and tethered traffic. Can break calls, ping and VPN hotspot sharing.`
+  String get appIsolationStrictDesc {
+    return Intl.message(
+      'Also blocks unattributed UDP, ICMP and tethered traffic. Can break calls, ping and VPN hotspot sharing.',
+      name: 'appIsolationStrictDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Applied`
+  String get appIsolationApplied {
+    return Intl.message(
+      'Applied',
+      name: 'appIsolationApplied',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `from the subscription`
+  String get appIsolationSourceProfile {
+    return Intl.message(
+      'from the subscription',
+      name: 'appIsolationSourceProfile',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `from your settings`
+  String get appIsolationSourceUser {
+    return Intl.message(
+      'from your settings',
+      name: 'appIsolationSourceUser',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `by default`
+  String get appIsolationSourceDefault {
+    return Intl.message(
+      'by default',
+      name: 'appIsolationSourceDefault',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Takes effect when the VPN starts.`
+  String get appIsolationInactive {
+    return Intl.message(
+      'Takes effect when the VPN starts.',
+      name: 'appIsolationInactive',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Owner lookup is limited on this Android version; some flows cannot be checked.`
+  String get appIsolationLimited {
+    return Intl.message(
+      'Owner lookup is limited on this Android version; some flows cannot be checked.',
+      name: 'appIsolationLimited',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `App isolation cannot be applied because connection owners are unavailable.`
+  String get appIsolationUnavailable {
+    return Intl.message(
+      'App isolation cannot be applied because connection owners are unavailable.',
+      name: 'appIsolationUnavailable',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Some owner lookups failed; protection rejects traffic whose owner is unknown.`
+  String get appIsolationDegraded {
+    return Intl.message(
+      'Some owner lookups failed; protection rejects traffic whose owner is unknown.',
+      name: 'appIsolationDegraded',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

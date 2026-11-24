@@ -179,6 +179,9 @@ class ClashLib  {
 
   Future<String> getAppliedAndroidVpnOptions()=>readAppliedVpnOptions();
   Future<String> readAppliedVpnOptions() async => await _channel.invokeMethod<String>('getAppliedAndroidVpnOptions') ?? '';
+  /// The compiled VPN options as Go sees them now, including the guard's own
+  /// status; unlike the applied snapshot it also exists while the VPN is off.
+  Future<String> readAndroidVpnOptions() async => await _channel.invokeMethod<String>('getAndroidVpnOptions') ?? '';
   Future<dynamic> invokeAction(String method, Object? data) async {
     if (!await preload()) throw StateError('Android backend unavailable');
     final raw = await _channel.invokeMethod<String>('invokeAction', jsonEncode({

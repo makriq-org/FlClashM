@@ -1045,5 +1045,21 @@
   "updateErrorDownload": "No se pudo descargar la actualización.",
   "updateErrorVerify": "El archivo descargado no superó la verificación y se eliminó.",
   "updateErrorInstall": "No se pudo iniciar el instalador.",
-  "vpnPermissionDenied": "No se concedió acceso a la VPN. Inicia la VPN y permite la solicitud de conexión."
+  "vpnPermissionDenied": "No se concedió acceso a la VPN. Inicia la VPN y permite la solicitud de conexión.",
+  "appIsolation": "Aislamiento de aplicaciones",
+  "appIsolationDesc": "Comprueba quién es el propietario de cada flujo que entra en el túnel VPN, además del enrutado por aplicación de Android.",
+  "appIsolationOff": "Desactivado",
+  "appIsolationBalanced": "Equilibrado",
+  "appIsolationStrict": "Estricto",
+  "appIsolationOffDesc": "Solo se aplica el enrutado VPN por aplicación de Android.",
+  "appIsolationBalancedDesc": "Bloquea las aplicaciones excluidas y el TCP sin propietario desde la dirección del túnel. UDP, ICMP y los dispositivos compartidos siguen funcionando.",
+  "appIsolationStrictDesc": "También bloquea UDP, ICMP y tráfico compartido sin propietario. Puede afectar a llamadas, ping y al uso compartido del VPN.",
+  "appIsolationApplied": "Aplicado",
+  "appIsolationSourceProfile": "de la suscripción",
+  "appIsolationSourceUser": "de tus ajustes",
+  "appIsolationSourceDefault": "por defecto",
+  "appIsolationInactive": "Se aplica al iniciar la VPN.",
+  "appIsolationLimited": "La consulta de propietario está limitada en esta versión de Android; algunos flujos no se pueden comprobar.",
+  "appIsolationUnavailable": "No se puede aplicar el aislamiento: los propietarios de conexión no están disponibles.",
+  "appIsolationDegraded": "Algunas consultas de propietario fallaron; la protección rechaza el tráfico de propietario desconocido."
 }

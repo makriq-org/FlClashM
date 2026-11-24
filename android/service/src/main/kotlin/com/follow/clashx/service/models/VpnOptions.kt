@@ -15,6 +15,16 @@ data class AccessControlProps(
 private const val DEFAULT_IPV4_ADDRESS = "172.19.0.1/30"
 private const val DEFAULT_IPV6_ADDRESS = "fdfe:dcba:9876::1/126"
 
+/** Effective in-TUN app isolation plus how the running guard applies it. */
+@Parcelize
+data class AppIsolationOptions(
+    val mode: String = "balanced",
+    val source: String = "default",
+    val status: String = "",
+    val detail: String = "",
+    val capability: String = "",
+) : Parcelable
+
 @Parcelize
 data class VpnOptions(
     val enable: Boolean = true,
@@ -34,6 +44,7 @@ data class VpnOptions(
     val ipv6: Boolean = false,
     val includePackage: List<String>? = null,
     val excludePackage: List<String>? = null,
+    val appIsolation: AppIsolationOptions? = null,
 ) : Parcelable
 
 // Gson can set fields to null even when Kotlin declares them non-null.
@@ -46,6 +57,16 @@ fun VpnOptions.gsonSanitized(): VpnOptions = copy(
     routeAddress = if (routeAddress == null) emptyList() else routeAddress,
     bypassDomain = if (bypassDomain == null) emptyList() else bypassDomain,
     accessControl = accessControl?.gsonSanitized(),
+    appIsolation = appIsolation?.gsonSanitized(),
+)
+
+@Suppress("SENSELESS_COMPARISON")
+private fun AppIsolationOptions.gsonSanitized(): AppIsolationOptions = copy(
+    mode = if (mode == null || mode.isEmpty()) "balanced" else mode,
+    source = if (source == null || source.isEmpty()) "default" else source,
+    status = if (status == null) "" else status,
+    detail = if (detail == null) "" else detail,
+    capability = if (capability == null) "" else capability,
 )
 
 @Suppress("SENSELESS_COMPARISON")

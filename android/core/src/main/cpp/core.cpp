@@ -10,6 +10,7 @@
 
 static jmethodID m_tun_interface_protect;
 static jmethodID m_tun_interface_resolve_process;
+static jmethodID m_tun_interface_resolve_owner;
 static jmethodID m_invoke_interface_on_result;
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,33 @@ call_tun_interface_resolve_process_impl(void *tun_interface, int protocol,
     }
     const char *result = get_string(packageName);
     if (packageName) env->DeleteLocalRef(packageName);
+    return result;
+}
+
+static const char *
+call_tun_interface_resolve_owner_impl(void *tun_interface, int protocol,
+                                      const char *source,
+                                      const char *target,
+                                      const int uid) {
+    ATTACH_JNI();
+    if (env == nullptr) return strdup("");
+    const auto jSource = new_string(source);
+    const auto jTarget = new_string(target);
+    const auto owner = reinterpret_cast<jstring>(env->CallObjectMethod(
+            static_cast<jobject>(tun_interface),
+            m_tun_interface_resolve_owner,
+            protocol,
+            jSource,
+            jTarget,
+            uid));
+    if (jSource) env->DeleteLocalRef(jSource);
+    if (jTarget) env->DeleteLocalRef(jTarget);
+    if (jni_catch_exception(env) || owner == nullptr) {
+        if (owner) env->DeleteLocalRef(owner);
+        return strdup("");
+    }
+    const char *result = get_string(owner);
+    if (owner) env->DeleteLocalRef(owner);
     return result;
 }
 
@@ -195,6 +223,10 @@ JNI_OnLoad(JavaVM *vm, void *) {
             c_tun_interface,
             "resolverProcess",
             "(ILjava/lang/String;Ljava/lang/String;I)Ljava/lang/String;");
+    m_tun_interface_resolve_owner = find_method(
+            c_tun_interface,
+            "connectionOwner",
+            "(ILjava/lang/String;Ljava/lang/String;I)Ljava/lang/String;");
 
     const auto c_invoke_interface = find_class("com/follow/clashx/core/InvokeInterface");
     if (c_invoke_interface == nullptr) return JNI_ERR;
@@ -204,12 +236,14 @@ JNI_OnLoad(JavaVM *vm, void *) {
             "(Ljava/lang/String;)V");
 
     if (m_tun_interface_protect == nullptr || m_tun_interface_resolve_process == nullptr ||
+        m_tun_interface_resolve_owner == nullptr ||
         m_invoke_interface_on_result == nullptr) return JNI_ERR;
 
     registerCallbacks(&invoke_callback_impl,
                       &event_listener_impl,
                       &call_tun_interface_protect_impl,
                       &call_tun_interface_resolve_process_impl,
+                      &call_tun_interface_resolve_owner_impl,
                       &release_jni_object_impl);
 
     return JNI_VERSION_1_6;

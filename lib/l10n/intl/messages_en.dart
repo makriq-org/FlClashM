@@ -414,6 +414,44 @@ class MessageLookup extends MessageLookupByLibrary {
       "Processing app related settings",
     ),
     "appIconDesign": MessageLookupByLibrary.simpleMessage("App icon design"),
+    "appIsolation": MessageLookupByLibrary.simpleMessage("App isolation"),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("Applied"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("Balanced"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "Blocks excluded apps and unattributed TCP from the tunnel address. UDP, ICMP and tethered devices keep working.",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "Some owner lookups failed; protection rejects traffic whose owner is unknown.",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Checks who owns each flow entering the VPN tunnel, in addition to Android\'s per-app routing.",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "Takes effect when the VPN starts.",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "Owner lookup is limited on this Android version; some flows cannot be checked.",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("Off"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Only Android\'s per-app VPN routing applies.",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage(
+      "by default",
+    ),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "from the subscription",
+    ),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage(
+      "from your settings",
+    ),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("Strict"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "Also blocks unattributed UDP, ICMP and tethered traffic. Can break calls, ping and VPN hotspot sharing.",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "App isolation cannot be applied because connection owners are unavailable.",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage("No local proxies"),
     "appendSystemDns": MessageLookupByLibrary.simpleMessage(
       "Append system DNS",

@@ -1232,5 +1232,21 @@
   "updateErrorDownload": "无法下载更新。",
   "updateErrorVerify": "下载的文件未通过校验，已删除。",
   "updateErrorInstall": "无法启动安装程序。",
-  "vpnPermissionDenied": "未授予 VPN 访问权限。请启动 VPN 并允许连接请求。"
+  "vpnPermissionDenied": "未授予 VPN 访问权限。请启动 VPN 并允许连接请求。",
+  "appIsolation": "应用隔离",
+  "appIsolationDesc": "除 Android 的分应用路由外，再检查进入 VPN 隧道的每个连接的所有者。",
+  "appIsolationOff": "关闭",
+  "appIsolationBalanced": "均衡",
+  "appIsolationStrict": "严格",
+  "appIsolationOffDesc": "仅使用 Android 的分应用 VPN 路由。",
+  "appIsolationBalancedDesc": "阻止被排除的应用以及来自隧道地址且所有者未知的 TCP。UDP、ICMP 和热点共享设备不受影响。",
+  "appIsolationStrictDesc": "同时阻止所有者未知的 UDP、ICMP 和热点共享流量。可能影响通话、ping 和 VPN 热点共享。",
+  "appIsolationApplied": "已应用",
+  "appIsolationSourceProfile": "来自订阅",
+  "appIsolationSourceUser": "来自你的设置",
+  "appIsolationSourceDefault": "默认",
+  "appIsolationInactive": "VPN 启动后生效。",
+  "appIsolationLimited": "此 Android 版本的所有者查询受限，部分连接无法检查。",
+  "appIsolationUnavailable": "无法应用应用隔离：连接所有者信息不可用。",
+  "appIsolationDegraded": "部分所有者查询失败；所有者未知时保护会拒绝流量。"
 }

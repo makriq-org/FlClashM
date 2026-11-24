@@ -12,6 +12,7 @@ data object Core {
         fd: Int,
         protect: (Int) -> Boolean,
         resolverProcess: (protocol: Int, source: InetSocketAddress, target: InetSocketAddress, uid: Int) -> String,
+        connectionOwner: (protocol: Int, source: InetSocketAddress, target: InetSocketAddress, uid: Int) -> String,
     ): Boolean {
         val cb = object : TunInterface {
             override fun protect(fd: Int) {
@@ -20,6 +21,15 @@ data object Core {
 
             override fun resolverProcess(protocol: Int, source: String, target: String, uid: Int): String {
                 return resolverProcess(
+                    protocol,
+                    parseInetSocketAddress(source),
+                    parseInetSocketAddress(target),
+                    uid,
+                )
+            }
+
+            override fun connectionOwner(protocol: Int, source: String, target: String, uid: Int): String {
+                return connectionOwner(
                     protocol,
                     parseInetSocketAddress(source),
                     parseInetSocketAddress(target),

@@ -31,6 +31,8 @@ typedef void (*protect_func)(void *tun_interface, int fd);
 
 typedef const char* (*resolve_process_func)(void *tun_interface, int protocol, const char *source, const char *target, int uid);
 
+typedef const char* (*resolve_owner_func)(void *tun_interface, int protocol, const char *source, const char *target, int uid);
+
 typedef void (*invoke_callback_func)(void *callback, const char *data);
 
 typedef void (*event_listener_func)(void *listener, const char *data);
@@ -42,6 +44,13 @@ static void protect(protect_func fn, void *tun_interface, int fd) {
 }
 
 static const char* resolve_process(resolve_process_func fn, void *tun_interface, int protocol, const char *source, const char *target, int uid) {
+    if (fn) {
+        return fn(tun_interface, protocol, source, target, uid);
+    }
+    return NULL;
+}
+
+static const char* resolve_owner(resolve_owner_func fn, void *tun_interface, int protocol, const char *source, const char *target, int uid) {
     if (fn) {
         return fn(tun_interface, protocol, source, target, uid);
     }
@@ -135,7 +144,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern void registerCallbacks(invoke_callback_func invokeCallbackFunc, event_listener_func eventListenerFunc, protect_func markSocketFunc, resolve_process_func resolveProcessFunc, release_object_func releaseObjectFunc);
+extern void registerCallbacks(invoke_callback_func invokeCallbackFunc, event_listener_func eventListenerFunc, protect_func markSocketFunc, resolve_process_func resolveProcessFunc, resolve_owner_func resolveOwnerFunc, release_object_func releaseObjectFunc);
 extern void setEventListener(void* listener);
 extern char* getTraffic(void);
 extern char* getTotalTraffic(void);

@@ -52,6 +52,7 @@ const managedClashKeys = {
   'tun.stack',
   'tun.route-address',
   'tun.route-exclude-address',
+  'tun.app-isolation',
 };
 
 String clashSettingKey(String yamlKey) => 'clash.$yamlKey';
@@ -83,6 +84,7 @@ const generalPageKeys = {
 
 const networkPageKeys = {
   'clash.tun.stack',
+  'clash.tun.app-isolation',
   'clash.interface-name',
   'clash.disable-keep-alive',
   'clash.keep-alive-idle',
@@ -205,6 +207,9 @@ PatchClashConfig keepOwnedSettings(
         tun: next.tun.copyWith(
           routeExcludeAddress: current.tun.routeExcludeAddress,
         ),
+      ),
+      'clash.tun.app-isolation' => next.copyWith(
+        tun: next.tun.copyWith(appIsolation: current.tun.appIsolation),
       ),
       _ => next,
     };

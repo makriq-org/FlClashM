@@ -1,0 +1,72 @@
+--- a/vendor/github.com/metacubex/mihomo/listener/sing_tun/dns.go
++++ b/vendor/github.com/metacubex/mihomo/listener/sing_tun/dns.go
+@@ -28,6 +28,9 @@
+ }
+ 
+ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
++	if !allowConnection(network.NetworkTCP, metadata.Source, metadata.Destination) {
++		return errConnectionRejected
++	}
+ 	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
+ 		log.Debugln("[DNS] hijack tcp:%s", metadata.Destination.String())
+ 		return resolver.RelayDnsConn(ctx, conn, resolver.DefaultDnsReadTimeout)
+@@ -36,6 +39,10 @@
+ }
+ 
+ func (h *ListenerHandler) NewPacket(ctx context.Context, key netip.AddrPort, buffer *buf.Buffer, metadata M.Metadata, init func(natConn network.PacketConn) network.PacketWriter) {
++	if !allowConnection(network.NetworkUDP, metadata.Source, metadata.Destination) {
++		buffer.Release()
++		return
++	}
+ 	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
+ 		log.Debugln("[DNS] hijack udp:%s from %s", metadata.Destination.String(), metadata.Source.String())
+ 		writer := init(nil)
+@@ -51,6 +58,10 @@
+ }
+ 
+ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
++	if !allowConnection(network.NetworkUDP, metadata.Source, metadata.Destination) {
++		_ = conn.Close()
++		return errConnectionRejected
++	}
+ 	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
+ 		log.Debugln("[DNS] hijack udp:%s from %s", metadata.Destination.String(), metadata.Source.String())
+ 		defer func() { _ = conn.Close() }()
+--- a/vendor/github.com/metacubex/mihomo/listener/sing_tun/prepare.go
++++ b/vendor/github.com/metacubex/mihomo/listener/sing_tun/prepare.go
+@@ -16,6 +16,9 @@
+ )
+ 
+ func (h *ListenerHandler) PrepareConnection(network string, source M.Socksaddr, destination M.Socksaddr, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
++	if !allowConnection(network, source, destination) {
++		return nil, tun.ErrDrop
++	}
+ 	switch network {
+ 	case N.NetworkICMP: // our fork only send those type to PrepareConnection now
+ 		if h.DisableICMPForwarding || h.skipPingForwardingByAddr(destination.Addr) { // skip if ICMP handling is disabled or other condition
+diff --git a/vendor/github.com/metacubex/mihomo/listener/sing_tun/guard.go b/vendor/github.com/metacubex/mihomo/listener/sing_tun/guard.go
+new file mode 100644
+--- /dev/null
++++ b/vendor/github.com/metacubex/mihomo/listener/sing_tun/guard.go
+@@ -0,0 +1,21 @@
++package sing_tun
++
++import (
++	"errors"
++
++	M "github.com/metacubex/sing/common/metadata"
++)
++
++// ConnectionGuard is installed by an embedding application to enforce its own
++// per-flow TUN policy. It runs before DNS hijack, ICMP forwarding and rule
++// routing, and must not block: the packet path calls it synchronously.
++// A nil guard allows every flow.
++var ConnectionGuard func(network string, source, destination M.Socksaddr) bool
++
++// errConnectionRejected closes a guarded flow without entering the tunnel.
++var errConnectionRejected = errors.New("tun connection rejected by the app isolation policy")
++
++func allowConnection(network string, source, destination M.Socksaddr) bool {
++	guard := ConnectionGuard
++	return guard == nil || guard(network, source, destination)
++}

@@ -49,6 +49,7 @@ PatchClashConfig syncProfileSettings(
       excludePackage: defaults.tun.excludePackage,
       routeAddress: defaults.tun.routeAddress,
       routeExcludeAddress: defaults.tun.routeExcludeAddress,
+      appIsolation: defaults.tun.appIsolation,
     ),
   );
   T? read<T>(String key) {
@@ -172,6 +173,9 @@ PatchClashConfig syncProfileSettings(
       routeExcludeAddress:
           strings('tun.route-exclude-address', isCidr) ??
           next.tun.routeExcludeAddress,
+      appIsolation:
+          enumNamed('tun.app-isolation', AppIsolationMode.values) ??
+          next.tun.appIsolation,
     ),
   );
   return next;

@@ -396,6 +396,46 @@ class MessageLookup extends MessageLookupByLibrary {
     "appIconDesign": MessageLookupByLibrary.simpleMessage(
       "Conception de l’icône de l’app",
     ),
+    "appIsolation": MessageLookupByLibrary.simpleMessage(
+      "Isolation des applications",
+    ),
+    "appIsolationApplied": MessageLookupByLibrary.simpleMessage("Appliquée"),
+    "appIsolationBalanced": MessageLookupByLibrary.simpleMessage("Équilibrée"),
+    "appIsolationBalancedDesc": MessageLookupByLibrary.simpleMessage(
+      "Bloque les applications exclues et le TCP sans propriétaire provenant de l\'adresse du tunnel. UDP, ICMP et les appareils partagés continuent de fonctionner.",
+    ),
+    "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
+      "Certaines identifications ont échoué ; la protection rejette le trafic dont le propriétaire est inconnu.",
+    ),
+    "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
+      "Vérifie le propriétaire de chaque flux entrant dans le tunnel VPN, en plus du routage par application d\'Android.",
+    ),
+    "appIsolationInactive": MessageLookupByLibrary.simpleMessage(
+      "Prend effet au démarrage du VPN.",
+    ),
+    "appIsolationLimited": MessageLookupByLibrary.simpleMessage(
+      "L\'identification du propriétaire est limitée sur cette version d\'Android ; certains flux ne peuvent pas être vérifiés.",
+    ),
+    "appIsolationOff": MessageLookupByLibrary.simpleMessage("Désactivée"),
+    "appIsolationOffDesc": MessageLookupByLibrary.simpleMessage(
+      "Seul le routage VPN par application d\'Android s\'applique.",
+    ),
+    "appIsolationSourceDefault": MessageLookupByLibrary.simpleMessage(
+      "par défaut",
+    ),
+    "appIsolationSourceProfile": MessageLookupByLibrary.simpleMessage(
+      "depuis l\'abonnement",
+    ),
+    "appIsolationSourceUser": MessageLookupByLibrary.simpleMessage(
+      "depuis vos réglages",
+    ),
+    "appIsolationStrict": MessageLookupByLibrary.simpleMessage("Stricte"),
+    "appIsolationStrictDesc": MessageLookupByLibrary.simpleMessage(
+      "Bloque aussi l\'UDP, l\'ICMP et le trafic partagé sans propriétaire. Peut perturber les appels, le ping et le partage du VPN.",
+    ),
+    "appIsolationUnavailable": MessageLookupByLibrary.simpleMessage(
+      "Impossible d\'appliquer l\'isolation : les propriétaires de connexion sont indisponibles.",
+    ),
     "appProxiesEmpty": MessageLookupByLibrary.simpleMessage(
       "Aucun proxy local",
     ),

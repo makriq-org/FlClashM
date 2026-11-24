@@ -936,9 +936,14 @@ func handleGetMemory(fn func(value string)) {
 func handleSetState(params string) {
 	runLock.Lock()
 	defer runLock.Unlock()
+	// The plan is the complete state: a field it omits (an older plan has no
+	// app isolation) must fall back to its default instead of keeping a value
+	// from the previous profile.
+	state.CurrentState.AppIsolation = state.AppIsolationOptions{}
 	if err := json.Unmarshal([]byte(params), state.CurrentState); err != nil {
 		log.Warnln("[State] unmarshal failed: %v", err)
 	}
+	refreshIsolationPolicy()
 }
 
 func handleGetConfig(path string) (*config.RawConfig, error) {

@@ -1282,5 +1282,21 @@
   "updateErrorDownload": "The update could not be downloaded.",
   "updateErrorVerify": "The downloaded file failed verification and was removed.",
   "updateErrorInstall": "The installer could not be started.",
-  "vpnPermissionDenied": "VPN access was not granted. Start the VPN and allow the connection request."
+  "vpnPermissionDenied": "VPN access was not granted. Start the VPN and allow the connection request.",
+  "appIsolation": "App isolation",
+  "appIsolationDesc": "Checks who owns each flow entering the VPN tunnel, in addition to Android's per-app routing.",
+  "appIsolationOff": "Off",
+  "appIsolationBalanced": "Balanced",
+  "appIsolationStrict": "Strict",
+  "appIsolationOffDesc": "Only Android's per-app VPN routing applies.",
+  "appIsolationBalancedDesc": "Blocks excluded apps and unattributed TCP from the tunnel address. UDP, ICMP and tethered devices keep working.",
+  "appIsolationStrictDesc": "Also blocks unattributed UDP, ICMP and tethered traffic. Can break calls, ping and VPN hotspot sharing.",
+  "appIsolationApplied": "Applied",
+  "appIsolationSourceProfile": "from the subscription",
+  "appIsolationSourceUser": "from your settings",
+  "appIsolationSourceDefault": "by default",
+  "appIsolationInactive": "Takes effect when the VPN starts.",
+  "appIsolationLimited": "Owner lookup is limited on this Android version; some flows cannot be checked.",
+  "appIsolationUnavailable": "App isolation cannot be applied because connection owners are unavailable.",
+  "appIsolationDegraded": "Some owner lookups failed; protection rejects traffic whose owner is unknown."
 }
