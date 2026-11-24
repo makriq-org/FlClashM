@@ -242,15 +242,19 @@ class FlVpnService : VpnService(), BackendForegroundResource {
                 // tun. onDestroy releases it via CAS so a delayed teardown of THIS
                 // instance can't close a tunnel a newer instance has since brought up.
                 State.tunOwner.set(this)
-                // Re-read after start so the published snapshot carries the
-                // guard's real status (applied/limited/degraded), not the
-                // pre-start "inactive" value used to build the VPN.
-                val applied = runCatching {
+                // Publish exactly the options Builder received; only the
+                // guard's status is newer than that snapshot. Re-reading all
+                // fields could advertise routes or package rules the VPN did
+                // not apply if the plan changed in between.
+                val isolationStatus = runCatching {
                     val raw = Core.getAndroidVpnOptions()
                     if (raw.isEmpty()) null
-                    else Gson().fromJson(raw, VpnOptions::class.java)?.gsonSanitized()
+                    else Gson().fromJson(raw, VpnOptions::class.java)?.gsonSanitized()?.appIsolation
                 }.getOrNull()
-                State.publishAppliedVpnOptions(applied ?: options)
+                State.publishAppliedVpnOptions(
+                    if (isolationStatus != null) options.copy(appIsolation = isolationStatus)
+                    else options,
+                )
                 State.runTime = android.os.SystemClock.uptimeMillis()
             } catch (e: Exception) {
                 State.clearAppliedVpnOptions()

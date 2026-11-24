@@ -1248,5 +1248,5 @@
   "appIsolationInactive": "VPN 启动后生效。",
   "appIsolationLimited": "此 Android 版本的所有者查询受限，部分连接无法检查。",
   "appIsolationUnavailable": "无法应用应用隔离：连接所有者信息不可用。",
-  "appIsolationDegraded": "部分所有者查询失败；所有者未知时保护会拒绝流量。"
+  "appIsolationDegraded": "部分所有者查询失败；所有者仍未知的流量按所选模式的规则处理。"
 }

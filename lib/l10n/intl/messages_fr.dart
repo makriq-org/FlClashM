@@ -405,7 +405,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Bloque les applications exclues et le TCP sans propriétaire provenant de l\'adresse du tunnel. UDP, ICMP et les appareils partagés continuent de fonctionner.",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "Certaines identifications ont échoué ; la protection rejette le trafic dont le propriétaire est inconnu.",
+      "Certaines identifications ont échoué ; les flux dont le propriétaire reste inconnu suivent les règles du mode choisi.",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "Vérifie le propriétaire de chaque flux entrant dans le tunnel VPN, en plus du routage par application d\'Android.",

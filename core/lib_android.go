@@ -175,12 +175,13 @@ func isolationCapability() string {
 // installIsolationGuard creates the policy for a new tunnel before the first
 // packet is read. A failed start clears it again.
 func installIsolationGuard(handler *TunHandler) {
+	// Hold runLock across publication: a settings commit in between would see
+	// no guard, refresh nothing, and leave this guard with a stale policy.
 	runLock.Lock()
-	policy := isolationPolicy()
-	runLock.Unlock()
-	guard := isolation.NewGuard(policy, tunOwnerResolver{handler: handler})
+	guard := isolation.NewGuard(isolationPolicy(), tunOwnerResolver{handler: handler})
 	guard.SetCapability(isolationCapability())
 	activeIsolationGuard.Store(guard)
+	runLock.Unlock()
 }
 
 func clearIsolationGuard() {

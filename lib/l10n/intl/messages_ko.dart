@@ -327,7 +327,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "제외된 앱과 터널 주소에서 온 소유자 불명 TCP를 차단합니다. UDP, ICMP, 테더링 기기는 계속 작동합니다.",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "일부 소유자 조회가 실패했습니다. 소유자를 알 수 없는 트래픽은 거부됩니다.",
+      "일부 소유자 조회가 실패했습니다. 소유자를 알 수 없는 흐름에는 선택한 모드의 규칙이 적용됩니다.",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "Android의 앱별 라우팅에 더해 VPN 터널로 들어오는 각 흐름의 소유자를 확인합니다.",

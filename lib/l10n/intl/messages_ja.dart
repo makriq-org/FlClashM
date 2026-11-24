@@ -351,7 +351,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "除外アプリと、トンネルアドレスからの所有者不明の TCP を遮断します。UDP、ICMP、テザリング端末は影響を受けません。",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "所有者の照会に失敗しました。所有者不明の通信は拒否されます。",
+      "所有者の照会に失敗しました。所有者が不明なままの通信には、選択したモードの規則が適用されます。",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "Android のアプリ別ルーティングに加えて、VPN トンネルに入る各フローの所有者を確認します。",

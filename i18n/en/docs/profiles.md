@@ -428,10 +428,10 @@ tun:
 | Value | Behavior |
 |---|---|
 | `off` | Only Android's per-app routing applies. |
-| `balanced` (default) | Rejects known apps the policy excludes, and unattributable TCP arriving from the tunnel's own address. UDP, ICMP and VPN-hotspot clients keep working. |
+| `balanced` (default) | Rejects known apps the policy excludes, and unattributable TCP arriving from the tunnel's own address. UDP and ICMP flows without an identifiable owner, and VPN-hotspot clients, keep working; known excluded apps are still rejected. |
 | `strict` | Also rejects unattributable TCP, UDP and ICMP from any source. May break calls, ping and VPN hotspot sharing. |
 
-Precedence: the profile value applies until you take the setting over in the app (the same lock as other `tun.*` keys) or enable overriding network settings. Without a profile value the local setting is used; without either the default is `balanced`. Unknown values fail the profile with a diagnostic instead of silently disabling protection. The profile text is never rewritten.
+Precedence: the profile value applies until you take the setting over in the app (the same lock as other `tun.*` keys) or enable overriding network settings. Without a profile value the local setting is used; without either the default is `balanced`. An unknown profile value fails the profile with a diagnostic when that value applies. If you own the setting or network overrides are enabled, the profile value is ignored without a diagnostic. The profile text is never rewritten.
 
 The check runs before DNS hijacking and rule routing, so it does not depend on the mode (rule/global/direct), `find-process-mode`, rules or scripts, and works with the system, mixed and gVisor TUN stacks. Ownership comes from Android's connection-owner API (Android 10+) or `/proc/net` on older releases; shared UIDs use every package of the UID. A few system services (netd/DNS, NetworkStack, telephony, VPN, tethering, mDNS) are exempt because blocking them breaks the OS. The settings page shows the applied mode and its source, and reports when owner lookup is limited or fails.
 

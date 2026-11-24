@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"sync/atomic"
 
 	"core/isolation"
@@ -28,11 +29,14 @@ func isolationPolicy() isolation.Policy {
 	}
 	policy := isolation.Policy{Mode: mode, TunAddr: isolationTunAddresses()}
 	if access := state.CurrentState.VpnProps.AccessControl; access != nil && access.Enable {
+		// state.CurrentState is decoded in place, so the guard must not share
+		// backing arrays with it: a later settings commit could overwrite a list
+		// while a TUN thread reads the published policy.
 		policy.Access = isolation.Access{
 			Enabled:    true,
 			AcceptMode: access.Mode == "acceptSelected",
-			Accept:     access.AcceptList,
-			Reject:     access.RejectList,
+			Accept:     slices.Clone(access.AcceptList),
+			Reject:     slices.Clone(access.RejectList),
 		}
 	}
 	return policy

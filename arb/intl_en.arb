@@ -1298,5 +1298,5 @@
   "appIsolationInactive": "Takes effect when the VPN starts.",
   "appIsolationLimited": "Owner lookup is limited on this Android version; some flows cannot be checked.",
   "appIsolationUnavailable": "App isolation cannot be applied because connection owners are unavailable.",
-  "appIsolationDegraded": "Some owner lookups failed; protection rejects traffic whose owner is unknown."
+  "appIsolationDegraded": "Some owner lookups failed; flows whose owner stays unknown follow the selected mode's rules."
 }

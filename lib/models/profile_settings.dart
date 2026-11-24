@@ -80,7 +80,7 @@ PatchClashConfig syncProfileSettings(
   }
 
   T? enumNamed<T extends Enum>(String key, List<T> values) {
-    final value = read<String>(key)?.toLowerCase();
+    final value = read<String>(key)?.trim().toLowerCase();
     return values.firstWhereOrNull((item) => item.name.toLowerCase() == value);
   }
 

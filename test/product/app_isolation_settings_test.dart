@@ -13,6 +13,15 @@ void main() {
     );
     expect(next.tun.appIsolation, AppIsolationMode.strict);
 
+    next = syncProfileSettings(
+      const PatchClashConfig(),
+      {
+        'tun': {'app-isolation': ' Strict '},
+      },
+      ['tun.app-isolation'],
+    );
+    expect(next.tun.appIsolation, AppIsolationMode.strict);
+
     next = syncProfileSettings(next, {}, const []);
     expect(next.tun.appIsolation, AppIsolationMode.balanced);
   });

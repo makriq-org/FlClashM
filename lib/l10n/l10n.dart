@@ -10938,10 +10938,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Some owner lookups failed; protection rejects traffic whose owner is unknown.`
+  /// `Some owner lookups failed; flows whose owner stays unknown follow the selected mode's rules.`
   String get appIsolationDegraded {
     return Intl.message(
-      'Some owner lookups failed; protection rejects traffic whose owner is unknown.',
+      'Some owner lookups failed; flows whose owner stays unknown follow the selected mode\'s rules.',
       name: 'appIsolationDegraded',
       desc: '',
       args: [],

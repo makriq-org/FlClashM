@@ -1248,5 +1248,5 @@
   "appIsolationInactive": "VPN の起動時に有効になります。",
   "appIsolationLimited": "この Android バージョンでは所有者の照会が制限され、一部のフローを確認できません。",
   "appIsolationUnavailable": "アプリ分離を適用できません: 接続の所有者を取得できません。",
-  "appIsolationDegraded": "所有者の照会に失敗しました。所有者不明の通信は拒否されます。"
+  "appIsolationDegraded": "所有者の照会に失敗しました。所有者が不明なままの通信には、選択したモードの規則が適用されます。"
 }

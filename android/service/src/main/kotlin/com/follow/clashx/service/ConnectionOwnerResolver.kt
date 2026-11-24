@@ -34,8 +34,16 @@ internal class ConnectionOwnerResolver(context: Context) {
                 answer.addProperty("unknown", true)
                 return answer.toString()
             }
+            // An app UID whose packages cannot be read is not a package-less
+            // system service: report it as unknown so the guard never treats an
+            // empty list as "not in the reject list".
+            val packages = packagesFor(uid)
+            if (packages == null) {
+                answer.addProperty("unknown", true)
+                return answer.toString()
+            }
             answer.addProperty("uid", uid)
-            answer.add("packages", JsonArray().apply { packagesFor(uid).forEach { add(it) } })
+            answer.add("packages", JsonArray().apply { packages.forEach { add(it) } })
         } catch (error: Throwable) {
             answer.addProperty("error", "${error.javaClass.simpleName}: ${error.message ?: ""}")
         }
@@ -51,7 +59,8 @@ internal class ConnectionOwnerResolver(context: Context) {
         return connectivity.getConnectionOwnerUid(protocol, source, target)
     }
 
-    private fun packagesFor(uid: Int): List<String> {
+    /** Returns null when an app UID's packages cannot be read. */
+    private fun packagesFor(uid: Int): List<String>? {
         // Root/system daemons own sockets but no package; the guard exempts the
         // system UIDs it knows and applies the app policy to the rest.
         if (uid <= 0) return emptyList()
@@ -59,8 +68,9 @@ internal class ConnectionOwnerResolver(context: Context) {
         val now = System.currentTimeMillis()
         packageCache[uid]?.let { if (now < it.expiresAt) return it.names }
         val names = runCatching {
-            appContext.packageManager.getPackagesForUid(uid)?.toList().orEmpty()
-        }.getOrDefault(emptyList())
+            appContext.packageManager.getPackagesForUid(uid)?.toList()
+        }.getOrNull()
+        if (names.isNullOrEmpty()) return null
         if (packageCache.size >= MAX_CACHED_UIDS) packageCache.clear()
         // Install and uninstall change a UID's package set. Keep the cache no
         // longer than the guard's own UDP decision lifetime so a changed set

@@ -1061,5 +1061,5 @@
   "appIsolationInactive": "Se aplica al iniciar la VPN.",
   "appIsolationLimited": "La consulta de propietario está limitada en esta versión de Android; algunos flujos no se pueden comprobar.",
   "appIsolationUnavailable": "No se puede aplicar el aislamiento: los propietarios de conexión no están disponibles.",
-  "appIsolationDegraded": "Algunas consultas de propietario fallaron; la protección rechaza el tráfico de propietario desconocido."
+  "appIsolationDegraded": "Algunas consultas de propietario fallaron; los flujos cuyo propietario sigue siendo desconocido siguen las reglas del modo elegido."
 }

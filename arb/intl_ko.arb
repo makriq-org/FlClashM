@@ -1061,5 +1061,5 @@
   "appIsolationInactive": "VPN을 시작하면 적용됩니다.",
   "appIsolationLimited": "이 Android 버전에서는 소유자 조회가 제한되어 일부 흐름을 확인할 수 없습니다.",
   "appIsolationUnavailable": "앱 격리를 적용할 수 없습니다: 연결 소유자를 확인할 수 없습니다.",
-  "appIsolationDegraded": "일부 소유자 조회가 실패했습니다. 소유자를 알 수 없는 트래픽은 거부됩니다."
+  "appIsolationDegraded": "일부 소유자 조회가 실패했습니다. 소유자를 알 수 없는 흐름에는 선택한 모드의 규칙이 적용됩니다."
 }

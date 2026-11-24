@@ -338,7 +338,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "阻止被排除的应用以及来自隧道地址且所有者未知的 TCP。UDP、ICMP 和热点共享设备不受影响。",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "部分所有者查询失败；所有者未知时保护会拒绝流量。",
+      "部分所有者查询失败；所有者仍未知的流量按所选模式的规则处理。",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "除 Android 的分应用路由外，再检查进入 VPN 隧道的每个连接的所有者。",

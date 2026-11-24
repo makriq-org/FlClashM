@@ -403,7 +403,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Bloquea las aplicaciones excluidas y el TCP sin propietario desde la dirección del túnel. UDP, ICMP y los dispositivos compartidos siguen funcionando.",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "Algunas consultas de propietario fallaron; la protección rechaza el tráfico de propietario desconocido.",
+      "Algunas consultas de propietario fallaron; los flujos cuyo propietario sigue siendo desconocido siguen las reglas del modo elegido.",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "Comprueba quién es el propietario de cada flujo que entra en el túnel VPN, además del enrutado por aplicación de Android.",

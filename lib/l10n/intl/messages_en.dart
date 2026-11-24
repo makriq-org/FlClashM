@@ -421,7 +421,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Blocks excluded apps and unattributed TCP from the tunnel address. UDP, ICMP and tethered devices keep working.",
     ),
     "appIsolationDegraded": MessageLookupByLibrary.simpleMessage(
-      "Some owner lookups failed; protection rejects traffic whose owner is unknown.",
+      "Some owner lookups failed; flows whose owner stays unknown follow the selected mode\'s rules.",
     ),
     "appIsolationDesc": MessageLookupByLibrary.simpleMessage(
       "Checks who owns each flow entering the VPN tunnel, in addition to Android\'s per-app routing.",

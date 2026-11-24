@@ -1061,5 +1061,5 @@
   "appIsolationInactive": "Prend effet au démarrage du VPN.",
   "appIsolationLimited": "L'identification du propriétaire est limitée sur cette version d'Android ; certains flux ne peuvent pas être vérifiés.",
   "appIsolationUnavailable": "Impossible d'appliquer l'isolation : les propriétaires de connexion sont indisponibles.",
-  "appIsolationDegraded": "Certaines identifications ont échoué ; la protection rejette le trafic dont le propriétaire est inconnu."
+  "appIsolationDegraded": "Certaines identifications ont échoué ; les flux dont le propriétaire reste inconnu suivent les règles du mode choisi."
 }
