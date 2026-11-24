@@ -167,6 +167,9 @@ func qwdttTurnAddress(value string) (string, string, error) {
 	host, port, err := net.SplitHostPort(value)
 	if err != nil {
 		host, port = value, ""
+		if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+			host = value[1 : len(value)-1]
+		}
 	}
 	host = strings.TrimSpace(host)
 	if host == "" || strings.ContainsAny(host, "[]/") {

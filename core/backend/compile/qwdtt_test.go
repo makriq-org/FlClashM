@@ -49,7 +49,7 @@ func TestQwdttDefaults(t *testing.T) {
 }
 
 func TestQwdttExplicitFields(t *testing.T) {
-	native, _, err := compileQwdtt(t, `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1, h2, h3], tunnel: wireguard-direct, workers: 27, obfs: video, udp: false, turn-transport: tcp, turn-servers: ['192.0.2.10', '192.0.2.20:443'], turn-port: 3478, dns-server: '1.1.1.1:5353', activation: always}`)
+	native, _, err := compileQwdtt(t, `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1, h2, h3], tunnel: wireguard-direct, workers: 27, obfs: video, udp: false, turn-transport: tcp, turn-servers: ['192.0.2.10', '192.0.2.20:443', '[2001:db8::1]', '[2001:db8::2]:443'], turn-port: 3478, dns-server: '1.1.1.1:5353', activation: always}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestQwdttExplicitFields(t *testing.T) {
 		t.Fatal("udp token must be disabled together with UDP")
 	}
 	servers := list(native["turn-servers"])
-	if len(servers) != 2 || text(servers[1]) != "192.0.2.20:443" {
+	if len(servers) != 4 || text(servers[1]) != "192.0.2.20:443" || text(servers[2]) != "[2001:db8::1]" {
 		t.Fatalf("turn-servers: %v", native["turn-servers"])
 	}
 }
