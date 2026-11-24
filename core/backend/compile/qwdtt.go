@@ -149,9 +149,13 @@ func qwdttHashes(value any) ([]string, error) {
 	hashes := make([]string, 0, len(entries))
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		hash := strings.TrimSpace(text(entry))
-		if hash == "" || controls(hash) {
-			return nil, errors.New("vk-hashes entries must be nonempty single-line strings")
+		rawHash := text(entry)
+		hash := strings.TrimSpace(rawHash)
+		// qWDTT разбирает список через запятую, точку с запятой и пробел.
+		// Такие символы внутри значения молча превратили бы один хеш в
+		// несколько, поэтому отклоняем их до компиляции.
+		if hash == "" || hash != rawHash || controls(hash) || strings.ContainsAny(hash, ",; ") {
+			return nil, errors.New("vk-hashes entries must be nonempty single-line strings without separators or spaces")
 		}
 		if seen[hash] {
 			return nil, errors.New("vk-hashes entries must be unique")
