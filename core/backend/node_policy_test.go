@@ -392,6 +392,14 @@ func TestSelectedSleepingReserveWakesImmediately(t *testing.T) {
 	if snapshot := b.Snapshot(); len(snapshot.Nodes) != 1 || snapshot.Nodes[0].Awake {
 		t.Fatal("reserve must start asleep", snapshot)
 	}
+	// Первый reconcile задаёт nextCheck; выбор после него не должен ждать
+	// истечения Wake.Interval.
+	if err := b.ReconcileNodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot := b.Snapshot(); snapshot.Nodes[0].Awake {
+		t.Fatal("unselected reserve woke on periodic check", snapshot)
+	}
 	mechanism.mu.Lock()
 	mechanism.selected["Reserve"] = node.Name
 	mechanism.mu.Unlock()

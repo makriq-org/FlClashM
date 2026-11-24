@@ -73,10 +73,17 @@ func (b *Backend) ReconcileNodes(ctx context.Context) error {
 				node.pending = false
 			}
 		}
-		if activation := node.plan.Activation; activation != nil && activation.Mode == "auto" && !c.now().Before(node.nextCheck) {
-			node.nextCheck = c.now().Add(time.Duration(activation.Wake.Interval) * time.Second)
-			if err := c.reconcileReserve(ctx, node, generation); err != nil && ctx.Err() != nil {
-				return ctx.Err()
+		if activation := node.plan.Activation; activation != nil && activation.Mode == "auto" {
+			// Ручной выбор не должен ждать очередного Wake.Interval: проверяем
+			// его до временного гейта и сбрасываем гейт для выбранного узла.
+			if !node.awake && c.reserveSelected(ctx, node, activation) {
+				node.nextCheck = time.Time{}
+			}
+			if !c.now().Before(node.nextCheck) {
+				node.nextCheck = c.now().Add(time.Duration(activation.Wake.Interval) * time.Second)
+				if err := c.reconcileReserve(ctx, node, generation); err != nil && ctx.Err() != nil {
+					return ctx.Err()
+				}
 			}
 		}
 	}
@@ -86,6 +93,22 @@ func (b *Backend) ReconcileNodes(ctx context.Context) error {
 	c.publishNodes(generation)
 	return nil
 }
+
+// reserveSelected сообщает, выбран ли узел в одной из содержащих его групп.
+// Ошибка наблюдения не считается выбором: узел остаётся в обычном резерве.
+func (c *runtimeCoordinator) reserveSelected(ctx context.Context, node *nodeRuntime, activation *NodeActivation) bool {
+	selected, err := c.nodeOptions.Inspection.Selected(ctx, activation.ContainingGroups)
+	if err != nil {
+		return false
+	}
+	for _, group := range activation.ContainingGroups {
+		if selected[group] == node.plan.Name {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRuntime, generation uint64) error {
 	activation := node.plan.Activation
 	now := c.now()
@@ -100,17 +123,7 @@ func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRun
 		}
 		// Ручной выбор спящего узла должен разбудить его сразу, не дожидаясь
 		// отказа группы: иначе выбранный прокси остаётся без слушателя.
-		selected, selErr := c.nodeOptions.Inspection.Selected(ctx, activation.ContainingGroups)
-		selectedNow := false
-		if selErr == nil {
-			for _, group := range activation.ContainingGroups {
-				if selected[group] == node.plan.Name {
-					selectedNow = true
-					break
-				}
-			}
-		}
-		if !selectedNow {
+		if !c.reserveSelected(ctx, node, activation) {
 			healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
 			if ctx.Err() != nil {
 				return ctx.Err()
