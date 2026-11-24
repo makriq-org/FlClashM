@@ -136,6 +136,16 @@ func TestParseOwnerAnswer(t *testing.T) {
 	if _, err = parseOwnerAnswer(`{"uid":0}`); err == nil {
 		t.Fatal("answer without a package list was accepted")
 	}
+	// A missing or null uid must not collapse into UID 0 and its exemption.
+	for _, answer := range []string{`{"packages":[]}`, `{"uid":null,"packages":[]}`} {
+		if _, err = parseOwnerAnswer(answer); err == nil {
+			t.Fatalf("answer %s without a uid was accepted", answer)
+		}
+	}
+	owner, err = parseOwnerAnswer(`{"uid":0,"packages":[]}`)
+	if err != nil || !owner.Known || owner.UID != 0 {
+		t.Fatalf("explicit root = %#v, err = %v", owner, err)
+	}
 }
 
 func TestMalformedStateKeepsTheActiveAccessPolicy(t *testing.T) {

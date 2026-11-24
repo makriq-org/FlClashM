@@ -114,7 +114,7 @@ func isolationOptions(capability string) *state.AppIsolationOptions {
 
 // ownerAnswer is the JSON contract of the Android connection-owner callback.
 type ownerAnswer struct {
-	UID      int      `json:"uid"`
+	UID      *int     `json:"uid"`
 	Packages []string `json:"packages"`
 	Unknown  bool     `json:"unknown"`
 	Error    string   `json:"error"`
@@ -131,7 +131,15 @@ func parseOwnerAnswer(raw string) (isolation.Owner, error) {
 	if answer.Error != "" {
 		return isolation.Owner{}, errors.New(answer.Error)
 	}
-	if answer.Unknown || answer.UID < 0 {
+	if answer.Unknown {
+		return isolation.Owner{Known: false}, nil
+	}
+	// A missing or null uid is not root: it is a broken answer, and treating it
+	// as UID 0 would let the system exemption pass the flow.
+	if answer.UID == nil {
+		return isolation.Owner{}, errors.New("connection owner answer has no uid")
+	}
+	if *answer.UID < 0 {
 		return isolation.Owner{Known: false}, nil
 	}
 	// A resolved owner always carries its package list (possibly empty for a
@@ -139,5 +147,5 @@ func parseOwnerAnswer(raw string) (isolation.Owner, error) {
 	if answer.Packages == nil {
 		return isolation.Owner{}, errors.New("connection owner answer has no package list")
 	}
-	return isolation.Owner{Known: true, UID: answer.UID, Packages: answer.Packages}, nil
+	return isolation.Owner{Known: true, UID: *answer.UID, Packages: answer.Packages}, nil
 }
