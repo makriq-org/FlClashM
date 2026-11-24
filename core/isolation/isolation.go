@@ -202,6 +202,9 @@ func (g *Guard) Update(policy Policy) {
 	// from one snapshot, or an old decision could be stored under a new
 	// generation and survive the cache reset below.
 	g.current.Store(&policySnapshot{policy: policy, generation: generation})
+	// A new policy starts a new diagnostic epoch: an old transient failure must
+	// not keep the UI degraded forever.
+	g.clearFailure()
 	g.mu.Lock()
 	g.cache = map[key]entry{}
 	g.mu.Unlock()
@@ -291,6 +294,7 @@ func (g *Guard) owner(protocol string, source, destination netip.AddrPort) (Owne
 		g.fail(err)
 		return Owner{}, false
 	}
+	g.clearFailure()
 	return owner, true
 }
 
@@ -301,6 +305,13 @@ func (g *Guard) fail(err error) {
 	g.failures.Add(1)
 	message := err.Error()
 	g.lastErr.Store(&message)
+}
+
+// clearFailure records a successful attribution, so a transient error does not
+// keep the settings page in the degraded state for the tunnel's lifetime.
+func (g *Guard) clearFailure() {
+	g.failures.Store(0)
+	g.lastErr.Store(nil)
 }
 
 // Stats is a point-in-time diagnostic snapshot.

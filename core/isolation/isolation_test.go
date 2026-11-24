@@ -228,3 +228,85 @@ func TestPolicyUpdateInvalidatesAnInFlightUDPDecision(t *testing.T) {
 		t.Fatal("an old-generation allow survived the policy update")
 	}
 }
+
+func TestQUICFlowsFollowTheUDPPolicy(t *testing.T) {
+	source := netip.MustParseAddrPort("172.19.0.1:5555")
+	quic := netip.MustParseAddrPort("203.0.113.9:443")
+	// An unattributable QUIC flow is UDP: balanced keeps it for calls/sharing,
+	// strict rejects it like any other unknown UDP flow.
+	if !NewGuard(tunPolicy(Balanced, Access{Enabled: true}), &fakeResolver{}).Check("udp", source, quic) {
+		t.Fatal("balanced denied unattributable QUIC")
+	}
+	if NewGuard(tunPolicy(Strict, Access{Enabled: true}), &fakeResolver{}).Check("udp", source, quic) {
+		t.Fatal("strict allowed unattributable QUIC")
+	}
+	// A known excluded app is denied for QUIC through the same access policy.
+	resolver := &fakeResolver{owners: map[string]Owner{
+		"udp " + source.String() + " " + quic.String(): {
+			Known: true, UID: 10123, Packages: []string{"com.example.blocked"},
+		},
+	}}
+	guard := NewGuard(tunPolicy(Balanced, Access{Enabled: true, Reject: []string{"com.example.blocked"}}), resolver)
+	if guard.Check("udp", source, quic) {
+		t.Fatal("balanced allowed excluded app QUIC")
+	}
+}
+
+func TestDNSPacketsUseTheUDPPolicy(t *testing.T) {
+	source := netip.MustParseAddrPort("172.19.0.1:5353")
+	dns := netip.MustParseAddrPort("172.19.0.2:53")
+	if !NewGuard(tunPolicy(Balanced, Access{Enabled: true}), &fakeResolver{}).Check("udp", source, dns) {
+		t.Fatal("balanced denied unattributable DNS")
+	}
+	if NewGuard(tunPolicy(Strict, Access{Enabled: true}), &fakeResolver{}).Check("udp", source, dns) {
+		t.Fatal("strict allowed unattributable DNS")
+	}
+	// netd's resolver is a system service and must survive strict mode.
+	resolver := &fakeResolver{owners: map[string]Owner{
+		"udp " + source.String() + " " + dns.String(): {Known: true, UID: 1051},
+	}}
+	if !NewGuard(tunPolicy(Strict, Access{Enabled: true}), resolver).Check("udp", source, dns) {
+		t.Fatal("strict denied the system DNS resolver")
+	}
+}
+
+func TestSharedUIDInAcceptModeNeedsAnyListedPackage(t *testing.T) {
+	source := netip.MustParseAddrPort("172.19.0.1:4100")
+	resolver := &fakeResolver{owners: map[string]Owner{
+		"tcp " + source.String() + " " + remote.String(): {
+			Known: true, UID: 10124, Packages: []string{"com.not.listed", "com.allowed"},
+		},
+	}}
+	guard := NewGuard(tunPolicy(Balanced, Access{
+		Enabled: true, AcceptMode: true, Accept: []string{"com.allowed"},
+	}), resolver)
+	if !guard.Check("tcp", source, remote) {
+		t.Fatal("shared UID with one accepted package was denied")
+	}
+}
+
+func TestTransientFailureDoesNotStayDegraded(t *testing.T) {
+	key := "tcp 172.19.0.1:1234 1.1.1.1:443"
+	resolver := &fakeResolver{
+		owners: map[string]Owner{key: {Known: true, UID: 10123, Packages: []string{"com.allowed"}}},
+		errs:   map[string]error{key: errors.New("SecurityException")},
+	}
+	guard := NewGuard(tunPolicy(Balanced, Access{Enabled: true}), resolver)
+	source := netip.MustParseAddrPort("172.19.0.1:1234")
+	if guard.Check("tcp", source, remote) {
+		t.Fatal("a failed lookup was allowed from the tunnel address")
+	}
+	if stats := guard.Stats(); stats.Failures != 1 {
+		t.Fatalf("first failure was not recorded: %#v", stats)
+	}
+	// The first flow was resolved with an error; a later success clears it.
+	resolver.mu.Lock()
+	delete(resolver.errs, key)
+	resolver.mu.Unlock()
+	if !guard.Check("tcp", source, remote) {
+		t.Fatal("known owner denied after the lookup recovered")
+	}
+	if stats := guard.Stats(); stats.Failures != 0 || stats.LastError != "" {
+		t.Fatalf("stats = %#v", stats)
+	}
+}

@@ -210,12 +210,26 @@ final appliedAppIsolationProvider =
       ref.watch(
         currentProfileProvider.select((profile) => profile?.lastUpdateDate),
       );
-      ref.watch(
+      final locked = ref.watch(settingLockedProvider(appIsolationSettingKey));
+      final declared = ref.watch(profileAppIsolationProvider);
+      final local = ref.watch(
         patchClashConfigProvider.select((state) => state.tun.appIsolation),
       );
-      final raw =
-          await (clashLib?.readAndroidVpnOptions() ?? Future.value(''));
-      return AppliedAppIsolation.parse(raw);
+      final expected = locked ? (declared ?? local) : local;
+      Future<AppliedAppIsolation?> read() async {
+        final raw =
+            await (clashLib?.readAndroidVpnOptions() ?? Future.value(''));
+        return AppliedAppIsolation.parse(raw);
+      }
+
+      var applied = await read();
+      // The settings commit and the plan apply reach Go asynchronously. Poll
+      // briefly so the status line names the new mode, not the previous one.
+      for (var attempt = 0; attempt < 16 && applied?.mode != expected; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        applied = await read();
+      }
+      return applied;
     });
 
 /// The value the row shows. While the subscription owns the mode, Go's
@@ -236,11 +250,16 @@ class AppIsolationItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
+    // Capture the value before takeover: writing ownedSettings first would
+    // make the provider read the local default instead of the applied mode.
+    final displayed = ref.watch(appIsolationViewProvider);
     return ManagedSetting(
       settingKey: appIsolationSettingKey,
-      // Taking the setting over must keep the mode that is actually applied.
       onTakenOver: () {
-        final mode = ref.read(appIsolationViewProvider);
+        final mode = takeoverAppIsolationMode(
+          applied: ref.read(appliedAppIsolationProvider).value,
+          displayed: displayed,
+        );
         ref
             .read(patchClashConfigProvider.notifier)
             .update((state) => state.copyWith.tun(appIsolation: mode));

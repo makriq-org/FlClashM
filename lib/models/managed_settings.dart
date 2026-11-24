@@ -222,6 +222,16 @@ PatchClashConfig keepOwnedSettings(
 }
 
 
+/// The isolation mode a profile declares, if it names a valid one.
+AppIsolationMode? profileAppIsolationMode(Map<String, dynamic> config) {
+  final tun = config['tun'];
+  final value = tun is Map ? tun['app-isolation'] : null;
+  if (value is! String) {
+    return null;
+  }
+  return AppIsolationMode.values.asNameMap()[value.trim().toLowerCase()];
+}
+
 /// One parsed `appIsolation` block from the live Go VPN options. The row and
 /// its status line share it so both name the mode the guard actually uses.
 class AppliedAppIsolation {
@@ -273,4 +283,17 @@ AppIsolationMode effectiveAppIsolationMode({
     return applied!.mode!;
   }
   return local;
+}
+
+
+/// The mode a takeover must write locally. The applied profile mode is the
+/// source of truth even if ownership has already flipped by callback time.
+AppIsolationMode takeoverAppIsolationMode({
+  required AppliedAppIsolation? applied,
+  required AppIsolationMode displayed,
+}) {
+  if (applied?.source == 'profile' && applied?.mode != null) {
+    return applied!.mode!;
+  }
+  return displayed;
 }

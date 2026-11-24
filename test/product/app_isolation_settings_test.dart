@@ -101,6 +101,58 @@ void main() {
     );
   });
 
+  test('profile isolation parsing trims and rejects invalid values', () {
+    expect(
+      profileAppIsolationMode({
+        'tun': {'app-isolation': ' Strict '},
+      }),
+      AppIsolationMode.strict,
+    );
+    expect(
+      profileAppIsolationMode({
+        'tun': {'app-isolation': 'nope'},
+      }),
+      isNull,
+    );
+    expect(profileAppIsolationMode({'tun': {}}), isNull);
+    expect(profileAppIsolationMode(const {}), isNull);
+  });
+
+  test('takeover keeps a profile-owned mode and otherwise the row value', () {
+    const applied = AppliedAppIsolation(
+      mode: AppIsolationMode.strict,
+      source: 'profile',
+      status: 'applied',
+      detail: '',
+    );
+    expect(
+      takeoverAppIsolationMode(
+        applied: applied,
+        displayed: AppIsolationMode.balanced,
+      ),
+      AppIsolationMode.strict,
+    );
+    expect(
+      takeoverAppIsolationMode(
+        applied: const AppliedAppIsolation(
+          mode: AppIsolationMode.strict,
+          source: 'user',
+          status: 'applied',
+          detail: '',
+        ),
+        displayed: AppIsolationMode.off,
+      ),
+      AppIsolationMode.off,
+    );
+    expect(
+      takeoverAppIsolationMode(
+        applied: null,
+        displayed: AppIsolationMode.off,
+      ),
+      AppIsolationMode.off,
+    );
+  });
+
   test('the setting is an owned clash key for the network page', () {
     expect(managedClashKeysOf(['tun.app-isolation']), {
       'clash.tun.app-isolation',

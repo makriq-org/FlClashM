@@ -27,6 +27,7 @@ type AndroidVpnOptions struct {
 	BypassDomain     []string             `json:"bypassDomain"`
 	RouteAddress     []netip.Prefix       `json:"routeAddress"`
 	Ipv4Address      string               `json:"ipv4Address"`
+	Ipv6             bool                 `json:"ipv6"`
 	Ipv6Address      string               `json:"ipv6Address"`
 	DnsServerAddress string               `json:"dnsServerAddress"`
 	IncludePackage   []string             `json:"includePackage"`
