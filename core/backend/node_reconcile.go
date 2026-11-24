@@ -76,12 +76,13 @@ func (b *Backend) ReconcileNodes(ctx context.Context) error {
 		if activation := node.plan.Activation; activation != nil && activation.Mode == "auto" {
 			// Ручной выбор не должен ждать очередного Wake.Interval: проверяем
 			// его до временного гейта и сбрасываем гейт для выбранного узла.
-			if !node.awake && c.reserveSelected(ctx, node, activation) {
+			selected := !node.awake && c.reserveSelected(ctx, node, activation)
+			if selected {
 				node.nextCheck = time.Time{}
 			}
 			if !c.now().Before(node.nextCheck) {
 				node.nextCheck = c.now().Add(time.Duration(activation.Wake.Interval) * time.Second)
-				if err := c.reconcileReserve(ctx, node, generation); err != nil && ctx.Err() != nil {
+				if err := c.reconcileReserve(ctx, node, generation, selected); err != nil && ctx.Err() != nil {
 					return ctx.Err()
 				}
 			}
@@ -109,7 +110,7 @@ func (c *runtimeCoordinator) reserveSelected(ctx context.Context, node *nodeRunt
 	return false
 }
 
-func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRuntime, generation uint64) error {
+func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRuntime, generation uint64, selectedNow bool) error {
 	activation := node.plan.Activation
 	now := c.now()
 	if now.Before(node.retryUntil) {
@@ -123,7 +124,7 @@ func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRun
 		}
 		// Ручной выбор спящего узла должен разбудить его сразу, не дожидаясь
 		// отказа группы: иначе выбранный прокси остаётся без слушателя.
-		if !c.reserveSelected(ctx, node, activation) {
+		if !selectedNow && !c.reserveSelected(ctx, node, activation) {
 			healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -281,6 +282,11 @@ func (c *runtimeCoordinator) nextNodeDelay() time.Duration {
 			remaining := node.nextCheck.Sub(now)
 			if remaining < 0 {
 				remaining = 0
+			}
+			// Выбор может измениться через mihomo API без команды backend.
+			// Спим не дольше секунды, чтобы заметить его до Wake.Interval.
+			if !node.awake && remaining > time.Second {
+				remaining = time.Second
 			}
 			if remaining < delay {
 				delay = remaining

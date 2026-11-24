@@ -400,6 +400,9 @@ func TestSelectedSleepingReserveWakesImmediately(t *testing.T) {
 	if snapshot := b.Snapshot(); snapshot.Nodes[0].Awake {
 		t.Fatal("unselected reserve woke on periodic check", snapshot)
 	}
+	if delay := b.coordinator.nextNodeDelay(); delay > time.Second {
+		t.Fatalf("sleeping auto node delays selection detection by %v", delay)
+	}
 	mechanism.mu.Lock()
 	mechanism.selected["Reserve"] = node.Name
 	mechanism.mu.Unlock()

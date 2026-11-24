@@ -29,8 +29,8 @@ func buildQwdtt(raw Object, node *Node, serviceUser, servicePassword string) err
 		return err
 	}
 	password := text(raw["password"])
-	if strings.TrimSpace(password) == "" || controls(password) {
-		return errors.New("password must be a nonempty single-line string")
+	if strings.TrimSpace(password) == "" || controls(password) || strings.Contains(password, "|") || password != strings.TrimSpace(password) {
+		return errors.New("password must be a nonempty single-line string without | or edge spaces")
 	}
 
 	hashes, err := qwdttHashes(raw["vk-hashes"])
@@ -99,6 +99,10 @@ func buildQwdtt(raw Object, node *Node, serviceUser, servicePassword string) err
 		number, _ := strconv.Atoi(portText)
 		if err != nil || host == "" || number < 1 || number > 65535 || strings.ContainsAny(host, "/@?# ") || controls(host) || strings.IndexByte(host, 92) >= 0 {
 			return errors.New("dns-server must be host:port or system")
+		}
+		address, parseErr := netip.ParseAddr(strings.Trim(host, "[]"))
+		if parseErr != nil || address.Zone() != "" {
+			return errors.New("dns-server host must be an IP address")
 		}
 	}
 

@@ -1,5 +1,5 @@
-const qwdttPinnedCommit = 'ba5281273b43250ca5b756e31f73232bd9702f38';
-const qwdttPinnedReleaseTag = 'flclashm-qwdtt-1';
+const qwdttPinnedCommit = '4695bbebf00e9d4bc5cf16117dc4db236ae50158';
+const qwdttPinnedReleaseTag = 'git-$qwdttPinnedCommit';
 const qwdttPinnedGoVersion = 'go1.27.3';
 const qwdttPinnedNdkVersion = '28.0.13004108';
 const qwdttSourceRepository = 'https://github.com/makriq-org/qwdtt.git';
@@ -33,18 +33,18 @@ const qwdttReleaseAssets = <String, QwdttReleaseAsset>{
     cliArch: 'arm',
     goArch: 'arm',
     goArm: '7',
-    sha256: '6a9709b122545a5d75ca6bba479b654e31050844a6f325a61ed9569e6aeff829',
+    sha256: '2aad8db51735f84576e53282afc2ee1eb3fe75190780962738535976f16ac086',
   ),
   'arm64-v8a': QwdttReleaseAsset(
     abi: 'arm64-v8a',
     cliArch: 'arm64',
     goArch: 'arm64',
-    sha256: '5c5864fdf7d3d29e47a8017c6cda1d1c9715ce8cf69aca59113f16cdd383b1f9',
+    sha256: '609ff14937f175cd8b3f3a2af0eed72c7194467a20f6eb1ed04c9aedb04cc8b9',
   ),
   'x86_64': QwdttReleaseAsset(
     abi: 'x86_64',
     cliArch: 'amd64',
     goArch: 'amd64',
-    sha256: '283959f2f8c07134b7b6bd9a3b724a449e73dab462f2a4bed435695912c1d36a',
+    sha256: 'e3400f9f9ed12f8ee542363a39c9cb93fad29cfdf135723d968dfe433859b63c',
   ),
 };

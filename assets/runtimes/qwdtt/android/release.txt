@@ -1,7 +1,7 @@
-flclashm-qwdtt-1
+git-4695bbebf00e9d4bc5cf16117dc4db236ae50158
 https://github.com/makriq-org/qwdtt.git
 go1.27.3
 ndk-28.0.13004108
-armeabi-v7a:arm:7
-arm64-v8a:arm64:
-x86_64:amd64:
+armeabi-v7a:arm:7:2aad8db51735f84576e53282afc2ee1eb3fe75190780962738535976f16ac086
+arm64-v8a:arm64::609ff14937f175cd8b3f3a2af0eed72c7194467a20f6eb1ed04c9aedb04cc8b9
+x86_64:amd64::e3400f9f9ed12f8ee542363a39c9cb93fad29cfdf135723d968dfe433859b63c

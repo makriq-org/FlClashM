@@ -1194,7 +1194,8 @@ String _buildQwdttStamp() {
     qwdttPinnedGoVersion,
     'ndk-$qwdttPinnedNdkVersion',
     ...qwdttReleaseAssets.values.map(
-      (asset) => '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}',
+      (asset) =>
+          '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}:${asset.sha256}',
     ),
   ];
   return lines.join('\n');
