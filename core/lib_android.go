@@ -11,7 +11,6 @@ import (
 	t "core/tun"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/constant"
@@ -112,14 +111,6 @@ func (t *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	return ResolveProcess(t.callback, protocol, source.String(), target.String(), uid)
 }
 
-// ownerAnswer is the JSON contract of the Android connection-owner callback.
-type ownerAnswer struct {
-	UID      int      `json:"uid"`
-	Packages []string `json:"packages"`
-	Unknown  bool     `json:"unknown"`
-	Error    string   `json:"error"`
-}
-
 // tunOwnerResolver attributes one flow through the same JNI callback the
 // process-aware rules use, but returns the UID and every shared package instead
 // of a display name.
@@ -157,17 +148,7 @@ func (t *TunHandler) resolveOwner(protocol string, source, destination netip.Add
 	if raw == "" {
 		return isolation.Owner{}, errors.New("connection owner lookup is unavailable")
 	}
-	var answer ownerAnswer
-	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
-		return isolation.Owner{}, fmt.Errorf("connection owner answer: %w", err)
-	}
-	if answer.Error != "" {
-		return isolation.Owner{}, errors.New(answer.Error)
-	}
-	if answer.Unknown || answer.UID < 0 {
-		return isolation.Owner{Known: false}, nil
-	}
-	return isolation.Owner{Known: true, UID: answer.UID, Packages: answer.Packages}, nil
+	return parseOwnerAnswer(raw)
 }
 
 func socketAddr(protocol string, address netip.AddrPort) net.Addr {
@@ -230,11 +211,14 @@ func handleStopTun() {
 	defer tunLock.Unlock()
 	runTime = nil
 	tunUp.Store(false)
-	clearIsolationGuard()
+	// Close the listener before dropping the guard: in-flight packets then still
+	// see the policy instead of an unguarded window, and the guard's resolver is
+	// valid until the handler has drained.
 	if tunHandler != nil {
 		tunHandler.close()
 		tunHandler = nil
 	}
+	clearIsolationGuard()
 }
 
 func handleStartTun(fd int, callback unsafe.Pointer) bool {
@@ -253,6 +237,10 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 	if previous != nil {
 		previous.close()
 	}
+	if fd == 0 {
+		// No tunnel is being created; nothing may keep enforcing a policy.
+		clearIsolationGuard()
+	}
 	runLock.Lock()
 	if currentConfig == nil {
 		runLock.Unlock()
@@ -269,6 +257,7 @@ func handleStartTun(fd int, callback unsafe.Pointer) bool {
 		} else if callback != nil {
 			releaseObject(callback)
 		}
+		clearIsolationGuard()
 		return false
 	}
 	tunCfg := currentConfig.General.Tun

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/netip"
 	"sync/atomic"
 
@@ -103,4 +106,34 @@ func isolationOptions(capability string) *state.AppIsolationOptions {
 		options.Status = "applied"
 	}
 	return options
+}
+
+// ownerAnswer is the JSON contract of the Android connection-owner callback.
+type ownerAnswer struct {
+	UID      int      `json:"uid"`
+	Packages []string `json:"packages"`
+	Unknown  bool     `json:"unknown"`
+	Error    string   `json:"error"`
+}
+
+// parseOwnerAnswer turns one callback answer into an owner. Anything that does
+// not clearly identify a UID and its package list fails closed as an error, so
+// the guard treats it as an unattributable flow instead of priming a decision.
+func parseOwnerAnswer(raw string) (isolation.Owner, error) {
+	var answer ownerAnswer
+	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
+		return isolation.Owner{}, fmt.Errorf("connection owner answer: %w", err)
+	}
+	if answer.Error != "" {
+		return isolation.Owner{}, errors.New(answer.Error)
+	}
+	if answer.Unknown || answer.UID < 0 {
+		return isolation.Owner{Known: false}, nil
+	}
+	// A resolved owner always carries its package list (possibly empty for a
+	// system UID). A partial answer would otherwise look like root and pass.
+	if answer.Packages == nil {
+		return isolation.Owner{}, errors.New("connection owner answer has no package list")
+	}
+	return isolation.Owner{Known: true, UID: answer.UID, Packages: answer.Packages}, nil
 }

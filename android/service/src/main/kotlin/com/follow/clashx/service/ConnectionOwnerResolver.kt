@@ -27,7 +27,9 @@ internal class ConnectionOwnerResolver(context: Context) {
     fun resolve(protocol: Int, source: InetSocketAddress, target: InetSocketAddress, uidHint: Int): String {
         val answer = JsonObject()
         try {
-            val uid = if (uidHint > 0) uidHint else ownerUid(protocol, source, target)
+            // Go passes -1 when /proc/net had no answer; UID 0 is a valid root
+            // owner and must reach the guard's system exemption.
+            val uid = if (uidHint >= 0) uidHint else ownerUid(protocol, source, target)
             if (uid < 0) {
                 answer.addProperty("unknown", true)
                 return answer.toString()
@@ -60,8 +62,9 @@ internal class ConnectionOwnerResolver(context: Context) {
             appContext.packageManager.getPackagesForUid(uid)?.toList().orEmpty()
         }.getOrDefault(emptyList())
         if (packageCache.size >= MAX_CACHED_UIDS) packageCache.clear()
-        // Install and uninstall change a UID's package set; the bounded TTL
-        // keeps that accurate without a package-change receiver in :remote.
+        // Install and uninstall change a UID's package set. Keep the cache no
+        // longer than the guard's own UDP decision lifetime so a changed set
+        // takes effect for new flows without a package-change receiver.
         packageCache[uid] = Packages(names, now + PACKAGE_CACHE_TTL_MS)
         return names
     }
@@ -70,6 +73,6 @@ internal class ConnectionOwnerResolver(context: Context) {
         const val PER_USER_RANGE = 100000
         const val FIRST_APPLICATION_UID = 10000
         const val MAX_CACHED_UIDS = 512
-        const val PACKAGE_CACHE_TTL_MS = 60_000L
+        const val PACKAGE_CACHE_TTL_MS = 10_000L
     }
 }

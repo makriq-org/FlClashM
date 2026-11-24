@@ -939,9 +939,12 @@ func handleSetState(params string) {
 	// The plan is the complete state: a field it omits (an older plan has no
 	// app isolation) must fall back to its default instead of keeping a value
 	// from the previous profile.
+	previousIsolation := state.CurrentState.AppIsolation
 	state.CurrentState.AppIsolation = state.AppIsolationOptions{}
 	if err := json.Unmarshal([]byte(params), state.CurrentState); err != nil {
 		log.Warnln("[State] unmarshal failed: %v", err)
+		// A malformed payload must not weaken the policy that is still active.
+		state.CurrentState.AppIsolation = previousIsolation
 	}
 	refreshIsolationPolicy()
 }

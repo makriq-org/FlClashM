@@ -183,9 +183,12 @@ func TestUDPDecisionCacheLifecycle(t *testing.T) {
 	if calls := resolver.count(key); calls != 2 {
 		t.Fatalf("resolver calls = %d, want 2", calls)
 	}
-	guard.Update(tunPolicy(Off, Access{}))
+	guard.Update(tunPolicy(Balanced, Access{Enabled: true}))
 	if !guard.Check("udp", source, remote) {
-		t.Fatal("policy update did not clear the cache")
+		t.Fatal("policy update reused the expired decision")
+	}
+	if calls := resolver.count(key); calls != 3 {
+		t.Fatalf("resolver calls = %d, want 3", calls)
 	}
 }
 
@@ -210,7 +213,7 @@ func TestPolicyUpdateInvalidatesAnInFlightUDPDecision(t *testing.T) {
 		cacheKey: {Known: true, UID: 10123, Packages: []string{"com.allowed"}},
 	}}
 	guard := NewGuard(tunPolicy(Balanced, Access{Enabled: true}), resolver)
-	oldGeneration := guard.generation.Load()
+	oldGeneration := guard.current.Load().generation
 	guard.Update(tunPolicy(Balanced, Access{Enabled: true, Reject: []string{"com.allowed"}}))
 	// A check that started before the update may insert its decision after the
 	// cache was cleared; the generation must keep that entry inert.

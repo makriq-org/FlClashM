@@ -111,3 +111,29 @@ func TestRefreshIsolationPolicyClearsTheGuardWhenStateChanges(t *testing.T) {
 		t.Fatalf("guard mode = %q", guard.Stats().Mode)
 	}
 }
+
+func TestParseOwnerAnswer(t *testing.T) {
+	owner, err := parseOwnerAnswer(`{"uid":10123,"packages":["com.example.one","com.example.two"]}`)
+	if err != nil || !owner.Known || owner.UID != 10123 || len(owner.Packages) != 2 {
+		t.Fatalf("owner = %#v, err = %v", owner, err)
+	}
+	owner, err = parseOwnerAnswer(`{"uid":1051,"packages":[]}`)
+	if err != nil || !owner.Known || owner.UID != 1051 || owner.Packages == nil {
+		t.Fatalf("system owner = %#v, err = %v", owner, err)
+	}
+	owner, err = parseOwnerAnswer(`{"unknown":true}`)
+	if err != nil || owner.Known {
+		t.Fatalf("unknown = %#v, err = %v", owner, err)
+	}
+	if _, err = parseOwnerAnswer(`{"error":"SecurityException"}`); err == nil || err.Error() != "SecurityException" {
+		t.Fatalf("error answer = %v", err)
+	}
+	if _, err = parseOwnerAnswer(`not json`); err == nil {
+		t.Fatal("malformed answer was accepted")
+	}
+	// A resolved UID without a package list is a protocol violation; treating it
+	// as known root would let the flow pass.
+	if _, err = parseOwnerAnswer(`{"uid":0}`); err == nil {
+		t.Fatal("answer without a package list was accepted")
+	}
+}

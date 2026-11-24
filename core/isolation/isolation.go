@@ -149,12 +149,19 @@ type entry struct {
 	generation uint64
 }
 
+// policySnapshot pairs a policy with the cache generation it belongs to, so a
+// check can never mix an old policy with a new generation.
+type policySnapshot struct {
+	policy     Policy
+	generation uint64
+}
+
 // Guard applies one policy to TUN flows. Safe for concurrent use.
 type Guard struct {
 	resolver Resolver
 	now      func() time.Time
 
-	policy     atomic.Pointer[Policy]
+	current    atomic.Pointer[policySnapshot]
 	generation atomic.Uint64
 
 	mu    sync.Mutex
@@ -169,7 +176,7 @@ type Guard struct {
 
 func NewGuard(policy Policy, resolver Resolver) *Guard {
 	g := &Guard{resolver: resolver, now: time.Now, cache: map[key]entry{}}
-	g.policy.Store(&policy)
+	g.current.Store(&policySnapshot{policy: policy})
 	g.SetCapability("full")
 	return g
 }
@@ -190,8 +197,11 @@ func (g *Guard) SetCapability(value string) {
 // Update replaces the policy and drops every cached decision, so a settings or
 // profile change takes effect for the next packet.
 func (g *Guard) Update(policy Policy) {
-	g.generation.Add(1)
-	g.policy.Store(&policy)
+	generation := g.generation.Add(1)
+	// Publish the policy and its generation atomically: a check must use both
+	// from one snapshot, or an old decision could be stored under a new
+	// generation and survive the cache reset below.
+	g.current.Store(&policySnapshot{policy: policy, generation: generation})
 	g.mu.Lock()
 	g.cache = map[key]entry{}
 	g.mu.Unlock()
@@ -201,18 +211,19 @@ func (g *Guard) Update(policy Policy) {
 // before DNS hijack and routing, so it must not perform work proportional to
 // packet size.
 func (g *Guard) Check(protocol string, source, destination netip.AddrPort) bool {
-	p := g.policy.Load()
-	if p == nil || p.Mode == Off {
+	snapshot := g.current.Load()
+	if snapshot == nil || snapshot.policy.Mode == Off {
 		return true
 	}
-	allow := g.decide(p, protocol, source, destination)
+	allow := g.decide(snapshot, protocol, source, destination)
 	if !allow {
 		g.denied.Add(1)
 	}
 	return allow
 }
 
-func (g *Guard) decide(p *Policy, protocol string, source, destination netip.AddrPort) bool {
+func (g *Guard) decide(snapshot *policySnapshot, protocol string, source, destination netip.AddrPort) bool {
+	p := &snapshot.policy
 	switch protocol {
 	case "tcp":
 		// A new connection is resolved once. Reusing a port must not inherit
@@ -220,7 +231,7 @@ func (g *Guard) decide(p *Policy, protocol string, source, destination netip.Add
 		return g.flowAllowed(p, protocol, source, destination)
 	case "udp":
 		now := g.now()
-		generation := g.generation.Load()
+		generation := snapshot.generation
 		k := key{protocol, source, destination}
 		g.mu.Lock()
 		cached, ok := g.cache[k]
@@ -295,8 +306,8 @@ func (g *Guard) fail(err error) {
 // Stats is a point-in-time diagnostic snapshot.
 func (g *Guard) Stats() Stats {
 	stats := Stats{Denied: g.denied.Load(), Failures: g.failures.Load()}
-	if p := g.policy.Load(); p != nil {
-		stats.Mode = p.Mode
+	if snapshot := g.current.Load(); snapshot != nil {
+		stats.Mode = snapshot.policy.Mode
 	}
 	if message := g.lastErr.Load(); message != nil {
 		stats.LastError = *message
