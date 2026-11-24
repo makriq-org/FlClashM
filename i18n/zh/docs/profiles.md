@@ -335,8 +335,8 @@ proxy-groups:
 | 参数 | 默认值 | 允许值 |
 |------|--------|--------|
 | `server`、`port` | 必填 | IP 或域名；端口 1…65535 |
-| `password` | 必填 | 非空连接密码 |
-| `vk-hashes` | 必填 | 1…6 个唯一的 VK 通话哈希 |
+| `password` | 必填 | 非空连接密码，不含 `\|` 或首尾空格 |
+| `vk-hashes` | 必填 | 1…6 个唯一的 VK 通话哈希，不含逗号、分号或空格 |
 | `tunnel` | `wireguard` | `wireguard`（DTLS）、`wireguard-direct`（无 DTLS）、`raw-ip` |
 | `workers` | `9` | 1…27 × 哈希数量；每组 9 个，最后一组可以不完整 |
 | `obfs` | `audio` | `audio`、`video` |

@@ -335,8 +335,8 @@ proxy-groups:
 | Parameter | Default | Allowed values |
 |-----------|---------|----------------|
 | `server`, `port` | required | IP or domain; port 1…65535 |
-| `password` | required | non-empty connection password |
-| `vk-hashes` | required | 1…6 unique VK call hashes |
+| `password` | required | non-empty connection password without `\|` or edge spaces |
+| `vk-hashes` | required | 1…6 unique VK call hashes without commas, semicolons or spaces |
 | `tunnel` | `wireguard` | `wireguard` (DTLS), `wireguard-direct` (no DTLS), `raw-ip` |
 | `workers` | `9` | 1…27 × hash count; groups of 9, the last group may be partial |
 | `obfs` | `audio` | `audio`, `video` |
