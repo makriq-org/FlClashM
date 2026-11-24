@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flclashx/clash/clash.dart';
@@ -199,133 +198,119 @@ String _appIsolationLabel(AppLocalizations l, AppIsolationMode mode) =>
       AppIsolationMode.strict => l.appIsolationStrict,
     };
 
+const appIsolationSettingKey = 'clash.tun.app-isolation';
+
+/// The live `appIsolation` block from Go, shared by the row and its status.
+final appliedAppIsolationProvider =
+    FutureProvider.autoDispose<AppliedAppIsolation?>((ref) async {
+      // Re-read when the VPN starts, the saved mode changes or a profile
+      // switch changes which settings the subscription owns.
+      ref.watch(isStartProvider);
+      ref.watch(managedSettingsProvider);
+      ref.watch(
+        currentProfileProvider.select((profile) => profile?.lastUpdateDate),
+      );
+      ref.watch(
+        patchClashConfigProvider.select((state) => state.tun.appIsolation),
+      );
+      final raw =
+          await (clashLib?.readAndroidVpnOptions() ?? Future.value(''));
+      return AppliedAppIsolation.parse(raw);
+    });
+
+/// The value the row shows. While the subscription owns the mode, Go's
+/// effective mode is authoritative; otherwise the local setting is.
+final appIsolationViewProvider = Provider<AppIsolationMode>((ref) {
+  return effectiveAppIsolationMode(
+    locked: ref.watch(settingLockedProvider(appIsolationSettingKey)),
+    applied: ref.watch(appliedAppIsolationProvider).value,
+    local: ref.watch(
+      patchClashConfigProvider.select((state) => state.tun.appIsolation),
+    ),
+  );
+});
+
 class AppIsolationItem extends ConsumerWidget {
   const AppIsolationItem({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
-    return ConfigOptionsItem<AppIsolationMode>(
-      managedKey: 'clash.tun.app-isolation',
-      title: (l) => l.appIsolation,
-      options: AppIsolationMode.values,
-      textBuilder: (mode) => _appIsolationLabel(appLocalizations, mode),
-      selector: patchClashConfigProvider.select((state) => state.tun.appIsolation),
-      onChanged: _tunWriter(
-        (state, value) => state.copyWith.tun(appIsolation: value),
+    return ManagedSetting(
+      settingKey: appIsolationSettingKey,
+      // Taking the setting over must keep the mode that is actually applied.
+      onTakenOver: () {
+        final mode = ref.read(appIsolationViewProvider);
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith.tun(appIsolation: mode));
+      },
+      child: ConfigOptionsItem<AppIsolationMode>(
+        title: (l) => l.appIsolation,
+        options: AppIsolationMode.values,
+        textBuilder: (mode) => _appIsolationLabel(appLocalizations, mode),
+        selector: appIsolationViewProvider,
+        onChanged: _tunWriter(
+          (state, value) => state.copyWith.tun(appIsolation: value),
+        ),
       ),
     );
   }
 }
 
 /// Shows the mode the guard actually uses and warns when it cannot be applied
-/// in full. The options come from Go, so this reflects the running guard rather
-/// than only the saved setting.
+/// in full. Both the mode and the status come from Go.
 class AppIsolationStatus extends ConsumerWidget {
   const AppIsolationStatus({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Rebuild when the saved mode changes or the VPN starts; the options are
-    // read from Go so the reported mode is the one the guard actually uses,
-    // not just the value the row displays.
-    ref.watch(isStartProvider);
-    ref.watch(
-      patchClashConfigProvider.select((state) => state.tun.appIsolation),
-    );
-    return FutureBuilder<String>(
-      future: clashLib?.readAndroidVpnOptions() ?? Future.value(''),
-      builder: (context, snapshot) {
-        final raw = snapshot.data;
-        if (raw == null || raw.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final status = _AppliedIsolation.parse(raw);
-        if (status == null) {
-          return const SizedBox.shrink();
-        }
-        final appLocalizations = context.appLocalizations;
-        final warning =
-            status.status == 'unavailable' ||
-            status.status == 'degraded' ||
-            status.status == 'limited';
-        final lines = <String>[
-          if (status.status != 'inactive')
-            '${appLocalizations.appIsolationApplied}: '
-                '${_modeLabel(appLocalizations, status.mode)} '
-                '(${_sourceLabel(appLocalizations, status.source)})',
-          if (status.status == 'limited') appLocalizations.appIsolationLimited,
-          if (status.status == 'degraded')
-            [
-              appLocalizations.appIsolationDegraded,
-              if (status.detail.isNotEmpty) status.detail,
-            ].join(' '),
-          if (status.status == 'unavailable')
-            [
-              appLocalizations.appIsolationUnavailable,
-              if (status.detail.isNotEmpty) status.detail,
-            ].join(' '),
-          if (status.status == 'inactive') appLocalizations.appIsolationInactive,
-        ];
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Text(
-            lines.join('\n'),
-            style: warning
-                ? context.listCaptionStyle.copyWith(
-                    color: context.colorScheme.error,
-                  )
-                : context.listCaptionStyle,
-          ),
-        );
-      },
+    final status = ref.watch(appliedAppIsolationProvider).value;
+    if (status == null) {
+      return const SizedBox.shrink();
+    }
+    final appLocalizations = context.appLocalizations;
+    final warning =
+        status.status == 'unavailable' ||
+        status.status == 'degraded' ||
+        status.status == 'limited';
+    final lines = <String>[
+      if (status.status != 'inactive')
+        '${appLocalizations.appIsolationApplied}: '
+            '${_appIsolationLabel(appLocalizations, status.mode ?? AppIsolationMode.balanced)} '
+            '(${_sourceLabel(appLocalizations, status.source)})',
+      if (status.status == 'limited') appLocalizations.appIsolationLimited,
+      if (status.status == 'degraded')
+        [
+          appLocalizations.appIsolationDegraded,
+          if (status.detail.isNotEmpty) status.detail,
+        ].join(' '),
+      if (status.status == 'unavailable')
+        [
+          appLocalizations.appIsolationUnavailable,
+          if (status.detail.isNotEmpty) status.detail,
+        ].join(' '),
+      if (status.status == 'inactive') appLocalizations.appIsolationInactive,
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Text(
+        lines.join('\n'),
+        style: warning
+            ? context.listCaptionStyle.copyWith(
+                color: context.colorScheme.error,
+              )
+            : context.listCaptionStyle,
+      ),
     );
   }
 }
-
-String _modeLabel(AppLocalizations l, String mode) => switch (mode) {
-  'off' => l.appIsolationOff,
-  'strict' => l.appIsolationStrict,
-  _ => l.appIsolationBalanced,
-};
 
 String _sourceLabel(AppLocalizations l, String source) => switch (source) {
   'profile' => l.appIsolationSourceProfile,
   'user' => l.appIsolationSourceUser,
   _ => l.appIsolationSourceDefault,
 };
-
-class _AppliedIsolation {
-  const _AppliedIsolation({
-    required this.mode,
-    required this.source,
-    required this.status,
-    required this.detail,
-  });
-
-  final String mode;
-  final String source;
-  final String status;
-  final String detail;
-
-  static _AppliedIsolation? parse(String raw) {
-    try {
-      final options = jsonDecode(raw) as Map<String, dynamic>;
-      final value = options['appIsolation'];
-      if (value is! Map) {
-        return null;
-      }
-      return _AppliedIsolation(
-        mode: value['mode'] is String ? value['mode'] as String : 'balanced',
-        source: value['source'] is String ? value['source'] as String : 'default',
-        status: value['status'] is String ? value['status'] as String : '',
-        detail: value['detail'] is String ? value['detail'] as String : '',
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-}
 
 class TunStackItem extends ConsumerWidget {
   const TunStackItem({super.key});

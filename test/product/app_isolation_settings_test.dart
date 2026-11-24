@@ -52,6 +52,55 @@ void main() {
     expect(released.tun.appIsolation, AppIsolationMode.off);
   });
 
+  test('applied isolation parsing keeps mode, source and failures apart', () {
+    final applied = AppliedAppIsolation.parse(
+      '{"appIsolation":{"mode":"strict","source":"profile",'
+      '"status":"applied","detail":""}}',
+    );
+    expect(applied?.mode, AppIsolationMode.strict);
+    expect(applied?.source, 'profile');
+    expect(applied?.status, 'applied');
+    expect(AppliedAppIsolation.parse('{"enable":true}'), isNull);
+    expect(AppliedAppIsolation.parse(''), isNull);
+    expect(AppliedAppIsolation.parse('not json'), isNull);
+  });
+
+  test('the locked row shows the profile mode, but takeover keeps it local', () {
+    const local = AppIsolationMode.balanced;
+    const applied = AppliedAppIsolation(
+      mode: AppIsolationMode.strict,
+      source: 'profile',
+      status: 'applied',
+      detail: '',
+    );
+    expect(
+      effectiveAppIsolationMode(locked: true, applied: applied, local: local),
+      AppIsolationMode.strict,
+    );
+    // Local settings win when the subscription does not own the mode.
+    expect(
+      effectiveAppIsolationMode(
+        locked: true,
+        applied: const AppliedAppIsolation(
+          mode: AppIsolationMode.strict,
+          source: 'user',
+          status: 'applied',
+          detail: '',
+        ),
+        local: local,
+      ),
+      local,
+    );
+    expect(
+      effectiveAppIsolationMode(locked: false, applied: applied, local: local),
+      local,
+    );
+    expect(
+      effectiveAppIsolationMode(locked: true, applied: null, local: local),
+      local,
+    );
+  });
+
   test('the setting is an owned clash key for the network page', () {
     expect(managedClashKeysOf(['tun.app-isolation']), {
       'clash.tun.app-isolation',
