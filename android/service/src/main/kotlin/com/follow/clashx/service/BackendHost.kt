@@ -104,7 +104,7 @@ object BackendHost {
         val version = application.packageManager.getPackageInfo(application.packageName, 0).versionName ?: ""
         val libraries = application.applicationInfo.nativeLibraryDir
         val executables = JSONObject()
-        for (type in listOf("naiveproxy", "olcrtc", "byedpi", "stormdns")) {
+        for (type in listOf("naiveproxy", "olcrtc", "byedpi", "stormdns", "qwdtt")) {
             executables.put(type, File(libraries, "libflclashm_$type.so").absolutePath)
         }
         val trustManagers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {

@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flclashx/product/runtime/byedpi_release.dart';
 import 'package:flclashx/product/runtime/naiveproxy_release.dart';
 import 'package:flclashx/product/runtime/olcrtc_release.dart';
+import 'package:flclashx/product/runtime/qwdtt_release.dart';
 import 'package:flclashx/product/runtime/stormdns_release.dart';
 
 const _appName = 'FlClashM';
@@ -21,6 +22,7 @@ const _naiveProxyStampFile = 'assets/runtimes/naiveproxy/android/release.txt';
 const _olcRtcStampFile = 'assets/runtimes/olcrtc/android/release.txt';
 const _byedpiStampFile = 'assets/runtimes/byedpi/android/release.txt';
 const _stormDnsStampFile = 'assets/runtimes/stormdns/android/release.txt';
+const _qwdttStampFile = 'assets/runtimes/qwdtt/android/release.txt';
 const _androidRuntimeJniRoot = 'android/app/src/main/jniLibs';
 final _projectRoot = File.fromUri(Platform.script).parent.absolute.path;
 
@@ -79,6 +81,7 @@ Future<void> main(List<String> args) async {
   await _syncByedpiAssets();
   await _syncOlcRtcAssets();
   await _syncStormDnsAssets();
+  await _syncQwdttAssets();
   await _syncAndroidRuntimeNativeLibraries();
   if (command.out == 'runtime-assets') {
     return;
@@ -672,6 +675,13 @@ Future<void> _syncAndroidRuntimeNativeLibraries() async {
       fileName: stormDnsAndroidNativeLibraryFileName,
     );
   }
+  for (final asset in qwdttReleaseAssets.values) {
+    await _copyRuntimeNativeLibrary(
+      sourcePath: asset.bundledAssetPath,
+      abi: asset.abi,
+      fileName: qwdttAndroidNativeLibraryFileName,
+    );
+  }
 }
 
 Future<void> _copyRuntimeNativeLibrary({
@@ -1050,6 +1060,145 @@ Future<Directory> _prepareStormDnsSource() async {
     name: 'checkout stormdns pinned commit',
   );
   return cacheDir;
+}
+
+Future<void> _syncQwdttAssets() async {
+  final stamp = File(_projectPath(_qwdttStampFile));
+  final expectedStamp = _buildQwdttStamp();
+  final assetFilesMatch = await _qwdttAssetsMatchDigests();
+
+  if (assetFilesMatch &&
+      stamp.existsSync() &&
+      (await stamp.readAsString()).trim() == expectedStamp) {
+    return;
+  }
+
+  final sourceDir = await _prepareQwdttSource();
+  await _requireGoVersion(qwdttPinnedGoVersion);
+  final targetRoot = Directory(_projectPath(qwdttBundledAssetRoot));
+  if (!targetRoot.existsSync()) {
+    targetRoot.createSync(recursive: true);
+  }
+
+  final ndkBin = _resolveNdkBinDir();
+  for (final asset in qwdttReleaseAssets.values) {
+    final arch = _androidArches[asset.cliArch];
+    if (arch == null) {
+      throw StateError('Unknown qwdtt Android arch ${asset.cliArch}');
+    }
+
+    final target = File(_projectPath(asset.bundledAssetPath));
+    target.parent.createSync(recursive: true);
+    if (target.existsSync()) {
+      await target.delete();
+    }
+
+    final env = <String, String>{
+      ...Platform.environment,
+      'GOOS': 'android',
+      'GOARCH': asset.goArch,
+      'CGO_ENABLED': '1',
+      'CC': _join(ndkBin.path, arch.toolchain),
+    };
+    if (asset.goArm != null) {
+      env['GOARM'] = asset.goArm!;
+    }
+
+    await _exec(
+      [
+        'go',
+        'build',
+        '-buildvcs=false',
+        '-trimpath',
+        '-ldflags=-s -w -buildid= -checklinkname=0',
+        '-o',
+        target.path,
+        '.',
+      ],
+      environment: env,
+      workingDirectory: _join(sourceDir.path, 'go_client'),
+      name: 'build qwdtt Android ${asset.abi}',
+    );
+
+    final digest = sha256.convert(await target.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      throw StateError(
+        'qwdtt ${asset.abi} digest mismatch: '
+        'expected ${asset.sha256}, got $digest',
+      );
+    }
+  }
+
+  stamp.parent.createSync(recursive: true);
+  await stamp.writeAsString('$expectedStamp\n', flush: true);
+}
+
+Future<bool> _qwdttAssetsMatchDigests() async {
+  for (final asset in qwdttReleaseAssets.values) {
+    final file = File(_projectPath(asset.bundledAssetPath));
+    if (!file.existsSync()) {
+      return false;
+    }
+    final digest = sha256.convert(await file.readAsBytes()).toString();
+    if (digest != asset.sha256) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Future<Directory> _prepareQwdttSource() async {
+  final override = Platform.environment['QWDTT_SOURCE_DIR'];
+  if (override != null && override.trim().isNotEmpty) {
+    final sourceDir = Directory(override.trim());
+    if (!sourceDir.existsSync()) {
+      throw StateError('QWDTT_SOURCE_DIR does not exist: ${sourceDir.path}');
+    }
+    await _exec(
+      ['git', 'checkout', '--detach', qwdttPinnedCommit],
+      workingDirectory: sourceDir.path,
+      name: 'checkout qwdtt pinned commit',
+    );
+    return sourceDir;
+  }
+
+  final cacheDir = Directory(_projectPath('.dart_tool', 'qwdtt-source'));
+  if (!Directory(_join(cacheDir.path, '.git')).existsSync()) {
+    if (cacheDir.existsSync()) {
+      await cacheDir.delete(recursive: true);
+    }
+    await cacheDir.parent.create(recursive: true);
+    await _exec(
+      ['git', 'clone', qwdttSourceRepository, cacheDir.path],
+      name: 'clone qwdtt source',
+    );
+  }
+
+  await _exec(
+    ['git', 'fetch', '--depth', '1', 'origin', qwdttPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'fetch qwdtt pinned commit',
+  );
+  await _exec(
+    ['git', 'checkout', '--detach', qwdttPinnedCommit],
+    workingDirectory: cacheDir.path,
+    name: 'checkout qwdtt pinned commit',
+  );
+  return cacheDir;
+}
+
+String _buildQwdttStamp() {
+  final lines = <String>[
+    qwdttPinnedReleaseTag,
+    qwdttSourceRepository,
+    qwdttPinnedGoVersion,
+    'ndk-$qwdttPinnedNdkVersion',
+    ...qwdttReleaseAssets.values.map(
+      (asset) =>
+          '${asset.abi}:${asset.goArch}:${asset.goArm ?? ''}:${asset.sha256}',
+    ),
+  ];
+  return lines.join('\n');
 }
 
 String _buildStormDnsStamp() {

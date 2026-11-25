@@ -34,7 +34,7 @@ rules:
 
 ## 🔌 内置节点
 
-仅 ByeDPI 支持 UDP，默认开启，可用 `udp: false` 关闭。NaiveProxy、OlcRTC 和 StormDNS 不支持 UDP。
+ByeDPI 和 qWDTT 支持 UDP，默认开启，可用 `udp: false` 关闭。NaiveProxy、OlcRTC 和 StormDNS 不支持 UDP。
 
 ### NaiveProxy
 
@@ -289,11 +289,76 @@ proxy-groups:
 
 </details>
 
+### qWDTT
+
+```yaml
+proxies:
+  - name: "VK TURN"
+    type: qwdtt
+    server: vpn.example.com
+    port: 56003
+    password: "password"
+    vk-hashes: ["CALL_HASH_1", "CALL_HASH_2"]
+    tunnel: raw-ip
+    workers: 9
+    obfs: audio
+    udp: true
+    turn-transport: udp
+    turn-servers: ["192.0.2.10", "192.0.2.20:443"]
+    turn-port: 3478
+    dns-server: system
+    activation:
+      mode: auto
+      wake:
+        urls: ["https://www.gstatic.com/generate_204"]
+        interval: 30s
+        failures: 2
+        retry-after: 5m
+      sleep:
+        idle: 15m
+    connectivity-check:
+      urls: ["https://www.gstatic.com/generate_204"]
+      required: false
+      timeout: 5s
+      startup-timeout: 120s
+      retry-interval: 1s
+      requests: 1
+      concurrency: 1
+      min-success-ratio: 1
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://www.gstatic.com/generate_204"
+    proxies: ["DIRECT", "VK TURN"]
+```
+
+| 参数 | 默认值 | 允许值 |
+|------|--------|--------|
+| `server`、`port` | 必填 | IP 或域名；端口 1…65535 |
+| `password` | 必填 | 非空连接密码，不含 `\|` 或首尾空格 |
+| `vk-hashes` | 必填 | 1…6 个唯一的 VK 通话哈希，不含逗号、分号或空格 |
+| `tunnel` | `wireguard` | `wireguard`（DTLS）、`wireguard-direct`（无 DTLS）、`raw-ip` |
+| `workers` | `9` | 1…27 × 哈希数量；每组 9 个，最后一组可以不完整 |
+| `obfs` | `audio` | `audio`、`video` |
+| `udp` | `true` | 所有隧道模式均支持 TCP 和 UDP |
+| `turn-transport` | `udp` | `udp`、`tcp` |
+| `turn-servers` | VK 地址 | `host` 或 `host:port` 列表 |
+| `turn-port` | VK 端口 | 1…65535 |
+| `dns-server` | `system` | `system` 或 `IP:port` — qWDTT 自身的解析器 |
+
+`port` 是服务于所选 `tunnel` 的服务器监听端口：`wdtt-server` 使用独立套接字（`wireguard` 用 `-listen`，`wireguard-direct` 用 `-listen-direct`，`raw-ip` 用 `-listen-raw`）。端口与模式不匹配时，服务器不会响应配置请求，节点将保持未连接状态。
+
+TURN 端口优先级：`turn-servers` 中的端口 → `turn-port` → VK 返回的端口。
+
+`dns-server` 设置 qWDTT 在隧道建立**之前**用于查找 VK 和服务器地址的解析器。`system` 表示物理网络 DNS：移动网络常封锁公共解析器，因此运营商 DNS 成为主用，Yandex 作为备用。显式 `IP:port` 会完全替换它。配置文件从不设置隧道内的 DNS——它始终由服务器提供。
+
+VK 授权完全自动：优先 VK Calls，失败时使用 legacy。验证码仅通过原生方式处理，不使用 WebView，也不需要用户操作；无法自动连接时，节点进入不可用状态。单个哈希不可用不会停止节点：工作组会切换到下一个哈希。密码、本地端口和 SOCKS5 服务凭据由 FlClashM 管理，而不是由配置提供。
+
 <a id="activation"></a>
 
 ## 😴 休眠备用
 
-OlcRTC 和 StormDNS 默认 `activation: auto`：手动选择或受监测分组故障时启动。节点必须直接属于分组。未被选择且无连接时，经过 `sleep.idle` 后休眠；`0s` 表示在 VPN 重启前不休眠。设为 `activation: always` 可随配置启动。
+OlcRTC、StormDNS 和 qWDTT 默认 `activation: auto`：手动选择或受监测分组故障时启动。节点必须直接属于分组。未被选择且无连接时，经过 `sleep.idle` 后休眠；`0s` 表示在 VPN 重启前不休眠。设为 `activation: always` 可随配置启动。
 
 `activation` 和 `connectivity-check` 必须放在 `proxies` 的具体节点内。`activation: auto` 需要直接包含节点的分组及唤醒 URL（显式指定或从节点检测、分组、应用设置继承），否则拒绝配置。这两个区块的时长必须是整秒（`1s`、`1m`），不允许 `500ms`。
 

@@ -36,7 +36,7 @@ RawProfile + настройки + capabilities → Go Compiler + SecurityPolicy
    SecurityPolicy, исполнение и восстановление. RuntimeCoordinator — единственный
    владелец изменяемого состояния runtime. Пакет проверяется host-тестами без Android.
 3. **Engine/Transport adapters** — mihomo и отдельные внешние процессы
-   `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`; транспорты не встраиваются в mihomo.
+   `naiveproxy`, `olcrtc`, `byedpi`, `stormdns`, `qwdtt`; транспорты не встраиваются в mihomo.
 4. **Android host** (`:remote`) — независимый от Flutter процесс backend, разрешения,
    foreground service, VPN/TUN, события ОС. `:validator` изолирует разбор mihomo.
 5. **Product UI** (`lib/product/**`) — тонкий клиент backend, представление,

@@ -49,7 +49,7 @@ type ProcessAdapter struct {
 	processes map[string]*process
 }
 
-var nodeID = regexp.MustCompile(`^(naiveproxy|olcrtc|byedpi|stormdns)-[0-9a-f]{32}(?:-probe-[0-9a-f]{32})?$`)
+var nodeID = regexp.MustCompile(`^(naiveproxy|olcrtc|byedpi|stormdns|qwdtt)-[0-9a-f]{32}(?:-probe-[0-9a-f]{32})?$`)
 
 func (a *ProcessAdapter) directory(node backend.NodePlan) (string, error) {
 	if !nodeID.MatchString(node.ID) || !strings.HasPrefix(node.ID, node.Type+"-") {
@@ -111,6 +111,30 @@ func (a *ProcessAdapter) renderDNS(ctx context.Context, node backend.NodePlan, d
 		if len(dns) >= 16 {
 			break
 		}
+	}
+	if node.Type == "qwdtt" {
+		name := filepath.Join(directory, "config.json")
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		native := map[string]any{}
+		if json.Unmarshal(raw, &native) != nil {
+			return errors.New("invalid qwdtt artifact")
+		}
+		// Явный резолвер профиля уже записан в go-dns и подстановки не требует.
+		if native["go-dns"] != "operator" {
+			return nil
+		}
+		if len(dns) == 0 {
+			return errors.New("physical DNS is unavailable")
+		}
+		native["dns-fallback"] = dns
+		rendered, err := json.Marshal(native)
+		if err != nil {
+			return err
+		}
+		return writePrivate(name, rendered)
 	}
 	if node.Type == "olcrtc" {
 		name := filepath.Join(directory, "config.yaml")
@@ -224,7 +248,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	if launch.Port != 0 {
 		port = launch.Port
 	}
-	if node.Type == "stormdns" || node.Type == "olcrtc" {
+	if node.Type == "stormdns" || node.Type == "olcrtc" || node.Type == "qwdtt" {
 		if err = a.renderDNS(ctx, node, directory); err != nil {
 			return err
 		}
@@ -238,6 +262,9 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 		arguments = []string{filepath.Join(directory, "config.yaml")}
 	case "stormdns":
 		arguments = []string{"-config", filepath.Join(directory, "client_config.toml"), "-resolvers", filepath.Join(directory, "client_resolvers.txt")}
+	case "qwdtt":
+		// Секреты остаются в файле 0600; в argv только путь.
+		arguments = []string{"-config", filepath.Join(directory, "config.json")}
 	case "byedpi":
 		strategy := launch.Strategy
 		if strategy == "" {
@@ -303,7 +330,7 @@ func (a *ProcessAdapter) Start(ctx context.Context, launch backend.NodeLaunch) e
 	output := newProcessOutput(node.Type, a.Log, user, password)
 	command.Stdout = output
 	command.Stderr = output
-	p := &process{command: command, address: address, graceful: node.Type == "olcrtc", done: make(chan struct{})}
+	p := &process{command: command, address: address, graceful: node.Type == "olcrtc" || node.Type == "qwdtt", done: make(chan struct{})}
 	started := make(chan error, 1)
 	pin := bindChildLifetime(command)
 	go func() {

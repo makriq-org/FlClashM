@@ -12,7 +12,7 @@
 
 </div>
 
-A mihomo client based on [FlClashX](https://github.com/pluralplay/FlClashX). Runs ByeDPI, OlcRTC, StormDNS and NaiveProxy from profiles, with subscriptions, split tunneling, a VPN tile and verified APK updates.
+A mihomo client based on [FlClashX](https://github.com/pluralplay/FlClashX). Runs ByeDPI, OlcRTC, StormDNS, qWDTT and NaiveProxy from profiles, with subscriptions, split tunneling, a VPN tile and verified APK updates.
 
 > [!NOTE]
 > The project is under active development; some features are still being refined.
@@ -50,6 +50,6 @@ Open an [issue](https://github.com/makriq-org/FlClashM/issues) with the app vers
 
 ## 🙏 Credits and license
 
-Thanks to the authors of [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+Thanks to the authors of [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy), [qWDTT](https://github.com/makriq-org/qwdtt).
 
 The app is [GPL-3.0](../../LICENSE). Third-party cores and binaries retain their own licenses. Release history: [CHANGELOG](../../CHANGELOG.md).

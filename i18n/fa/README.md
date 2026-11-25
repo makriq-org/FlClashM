@@ -14,7 +14,7 @@
 
 </div>
 
-کلاینت mihomo بر پایهٔ [FlClashX](https://github.com/pluralplay/FlClashX). ByeDPI، OlcRTC، StormDNS و NaiveProxy را از پروفایل اجرا می‌کند و از اشتراک، تفکیک ترافیک، کاشی VPN و به‌روزرسانی تأییدشدهٔ APK پشتیبانی می‌کند.
+کلاینت mihomo بر پایهٔ [FlClashX](https://github.com/pluralplay/FlClashX). ByeDPI، OlcRTC، StormDNS، qWDTT و NaiveProxy را از پروفایل اجرا می‌کند و از اشتراک، تفکیک ترافیک، کاشی VPN و به‌روزرسانی تأییدشدهٔ APK پشتیبانی می‌کند.
 
 > [!NOTE]
 > پروژه در حال توسعهٔ فعال است و برخی قابلیت‌ها هنوز تکمیل می‌شوند.
@@ -52,7 +52,7 @@ APK را از [GitHub Releases](https://github.com/makriq-org/FlClashM/releases)
 
 ## 🙏 سپاس و مجوز
 
-از نویسندگان این پروژه‌ها سپاسگزاریم: [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy).
+از نویسندگان این پروژه‌ها سپاسگزاریم: [FlClashX](https://github.com/pluralplay/FlClashX), [mihomo](https://github.com/MetaCubeX/mihomo), [ByeDPI](https://github.com/hufrea/byedpi), [OlcRTC](https://github.com/openlibrecommunity/olcrtc), [StormDNS](https://github.com/nullroute1970/StormDNS), [NaiveProxy](https://github.com/klzgrad/naiveproxy), [qWDTT](https://github.com/makriq-org/qwdtt).
 
 برنامه تحت [GPL-3.0](../../LICENSE) است. هسته‌ها و باینری‌های شخص ثالث مجوز خود را حفظ می‌کنند. تاریخچهٔ انتشار: [CHANGELOG](../../CHANGELOG.md).
 

@@ -34,7 +34,7 @@ Built-in nodes belong in `proxies` and work with ordinary mihomo groups and rule
 
 ## 🔌 Built-in nodes
 
-Only ByeDPI supports UDP; it is enabled by default and can be disabled with `udp: false`. NaiveProxy, OlcRTC and StormDNS do not support UDP.
+ByeDPI and qWDTT support UDP; it is enabled by default and can be disabled with `udp: false`. NaiveProxy, OlcRTC and StormDNS do not support UDP.
 
 ### NaiveProxy
 
@@ -289,11 +289,76 @@ Profile fields map to native keys through `core/backend/compile/storm_schema.jso
 
 </details>
 
+### qWDTT
+
+```yaml
+proxies:
+  - name: "VK TURN"
+    type: qwdtt
+    server: vpn.example.com
+    port: 56003
+    password: "password"
+    vk-hashes: ["CALL_HASH_1", "CALL_HASH_2"]
+    tunnel: raw-ip
+    workers: 9
+    obfs: audio
+    udp: true
+    turn-transport: udp
+    turn-servers: ["192.0.2.10", "192.0.2.20:443"]
+    turn-port: 3478
+    dns-server: system
+    activation:
+      mode: auto
+      wake:
+        urls: ["https://www.gstatic.com/generate_204"]
+        interval: 30s
+        failures: 2
+        retry-after: 5m
+      sleep:
+        idle: 15m
+    connectivity-check:
+      urls: ["https://www.gstatic.com/generate_204"]
+      required: false
+      timeout: 5s
+      startup-timeout: 120s
+      retry-interval: 1s
+      requests: 1
+      concurrency: 1
+      min-success-ratio: 1
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://www.gstatic.com/generate_204"
+    proxies: ["DIRECT", "VK TURN"]
+```
+
+| Parameter | Default | Allowed values |
+|-----------|---------|----------------|
+| `server`, `port` | required | IP or domain; port 1…65535 |
+| `password` | required | non-empty connection password without `\|` or edge spaces |
+| `vk-hashes` | required | 1…6 unique VK call hashes without commas, semicolons or spaces |
+| `tunnel` | `wireguard` | `wireguard` (DTLS), `wireguard-direct` (no DTLS), `raw-ip` |
+| `workers` | `9` | 1…27 × hash count; groups of 9, the last group may be partial |
+| `obfs` | `audio` | `audio`, `video` |
+| `udp` | `true` | TCP and UDP work in every tunnel mode |
+| `turn-transport` | `udp` | `udp`, `tcp` |
+| `turn-servers` | VK addresses | list of `host` or `host:port` |
+| `turn-port` | VK port | 1…65535 |
+| `dns-server` | `system` | `system` or `IP:port` — the qWDTT resolver itself |
+
+`port` is the port of the server listener that serves the chosen `tunnel`: `wdtt-server` opens separate sockets (`-listen` for `wireguard`, `-listen-direct` for `wireguard-direct`, `-listen-raw` for `raw-ip`). If the port does not match the mode, the server never answers the configuration request and the node stays disconnected.
+
+TURN port priority: the port in `turn-servers`, then `turn-port`, then the port returned by VK.
+
+`dns-server` sets the resolver qWDTT uses to find VK and the server address **before** the tunnel comes up. `system` means the physical network DNS: public resolvers are often blocked on mobile networks, so the carrier DNS becomes primary and Yandex stays as the fallback. An explicit `IP:port` replaces it entirely. The profile never configures the DNS inside the tunnel — the server always supplies it.
+
+VK authentication is fully automatic: VK Calls first, legacy on failure. Captcha is solved natively only, with no WebView and no user interaction; if automatic connection fails, the node becomes unavailable. A dead hash does not stop the node: the worker group rotates to the next hash. Passwords, local ports and SOCKS5 service credentials are owned by FlClashM, not by the profile.
+
 <a id="activation"></a>
 
 ## 😴 Sleeping reserve
 
-OlcRTC and StormDNS default to `activation: auto`: they start on manual selection or failure of the watched group. A node must be a direct group member. With no selection or connections it sleeps after `sleep.idle`; `0s` prevents sleep until VPN restart. Use `activation: always` to start with the profile.
+OlcRTC, StormDNS and qWDTT default to `activation: auto`: they start on manual selection or failure of the watched group. A node must be a direct group member. With no selection or connections it sleeps after `sleep.idle`; `0s` prevents sleep until VPN restart. Use `activation: always` to start with the profile.
 
 `activation` and `connectivity-check` belong inside a specific node in `proxies`. `activation: auto` requires a direct containing group and a wake URL (explicit or inherited from the node check, group or app settings); otherwise the profile is rejected. Durations in these two blocks must be whole seconds (`1s`, `1m`); `500ms` is invalid.
 

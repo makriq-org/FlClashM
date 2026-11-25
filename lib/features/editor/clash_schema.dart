@@ -347,6 +347,7 @@ const _proxyTypes = [
   'dns',
   'reject',
   'rematch',
+  'qwdtt',
 ];
 
 const _proxyCommon = {'name': _str, 'type': YamlSchema.scalar(_proxyTypes)};
@@ -1250,6 +1251,39 @@ const _proxyVariants = <String, Map<String, YamlSchema>>{
     'ip-stack': _ipStack,
     'remote-dns-resolve': _bool,
     'dns': _strList,
+  },
+  'qwdtt': {
+    ..._server,
+    'udp': _bool,
+    'password': _str,
+    'vk-hashes': _strList,
+    'tunnel': YamlSchema.scalar(['wireguard', 'wireguard-direct', 'raw-ip']),
+    'workers': _str,
+    'obfs': YamlSchema.scalar(['audio', 'video']),
+    'turn-transport': YamlSchema.scalar(['udp', 'tcp']),
+    'turn-servers': _strList,
+    'turn-port': _str,
+    'dns-server': _str,
+    'connectivity-check': YamlSchema.map({
+      'urls': _strList,
+      'required': _bool,
+      'timeout': _str,
+      'startup-timeout': _str,
+      'retry-interval': _str,
+      'requests': _str,
+      'concurrency': _str,
+      'min-success-ratio': _str,
+    }),
+    'activation': YamlSchema.map({
+      'mode': YamlSchema.scalar(['auto', 'always']),
+      'wake': YamlSchema.map({
+        'urls': _strList,
+        'interval': _str,
+        'failures': _str,
+        'retry-after': _str,
+      }),
+      'sleep': YamlSchema.map({'idle': _str}),
+    }),
   },
   'direct': {
     'tfo': _bool,

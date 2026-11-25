@@ -3279,6 +3279,21 @@
       "path": "lib/models/proxy_chain.dart",
       "bucket": "budget",
       "reason": "Модель цепочки описывает прыжки, включённость и ограничения имени."
+    },
+    {
+      "path": "core/backend/compile/qwdtt.go",
+      "bucket": "budget",
+      "reason": "Компилятор qWDTT формирует приватный конфиг внешнего транспорта и проверяет публичный контракт узла."
+    },
+    {
+      "path": "core/backend/compile/qwdtt_test.go",
+      "bucket": "budget",
+      "reason": "Тесты контракта qWDTT проверяют границы параметров и отсутствие секретов в аргументах процесса."
+    },
+    {
+      "path": "lib/features/editor/clash_schema.dart",
+      "bucket": "budget",
+      "reason": "Схема YAML-редактора знает поля встроенного узла qWDTT."
     }
   ]
 }

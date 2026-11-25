@@ -40,7 +40,7 @@ rules:
 
 ## 🔌 نودهای داخلی
 
-فقط ByeDPI از UDP پشتیبانی می‌کند؛ به‌طور پیش‌فرض فعال است و با `udp: false` خاموش می‌شود. NaiveProxy، OlcRTC و StormDNS از UDP پشتیبانی نمی‌کنند.
+ByeDPI و qWDTT از UDP پشتیبانی می‌کنند؛ به‌طور پیش‌فرض فعال است و با `udp: false` خاموش می‌شود. NaiveProxy، OlcRTC و StormDNS از UDP پشتیبانی نمی‌کنند.
 
 ### NaiveProxy
 
@@ -323,11 +323,80 @@ proxy-groups:
 
 </details>
 
+### qWDTT
+
+<div dir="ltr">
+
+```yaml
+proxies:
+  - name: "VK TURN"
+    type: qwdtt
+    server: vpn.example.com
+    port: 56003
+    password: "password"
+    vk-hashes: ["CALL_HASH_1", "CALL_HASH_2"]
+    tunnel: raw-ip
+    workers: 9
+    obfs: audio
+    udp: true
+    turn-transport: udp
+    turn-servers: ["192.0.2.10", "192.0.2.20:443"]
+    turn-port: 3478
+    dns-server: system
+    activation:
+      mode: auto
+      wake:
+        urls: ["https://www.gstatic.com/generate_204"]
+        interval: 30s
+        failures: 2
+        retry-after: 5m
+      sleep:
+        idle: 15m
+    connectivity-check:
+      urls: ["https://www.gstatic.com/generate_204"]
+      required: false
+      timeout: 5s
+      startup-timeout: 120s
+      retry-interval: 1s
+      requests: 1
+      concurrency: 1
+      min-success-ratio: 1
+proxy-groups:
+  - name: "main"
+    type: fallback
+    url: "https://www.gstatic.com/generate_204"
+    proxies: ["DIRECT", "VK TURN"]
+```
+
+</div>
+
+| پارامتر | پیش‌فرض | مقادیر مجاز |
+|---------|---------|-------------|
+| `server`، `port` | الزامی | IP یا دامنه؛ پورت 1…65535 |
+| `password` | الزامی | رمز اتصال غیرخالی، بدون `\|` یا فاصله در ابتدا و انتها |
+| `vk-hashes` | الزامی | 1…6 هش یکتای تماس VK، بدون ویرگول، نقطه‌ویرگول یا فاصله |
+| `tunnel` | `wireguard` | `wireguard` (DTLS)، `wireguard-direct` (بدون DTLS)، `raw-ip` |
+| `workers` | `9` | 1…27 × تعداد هش؛ گروه‌های 9تایی، گروه آخر می‌تواند ناقص باشد |
+| `obfs` | `audio` | `audio`، `video` |
+| `udp` | `true` | TCP و UDP در همهٔ حالت‌های تونل کار می‌کنند |
+| `turn-transport` | `udp` | `udp`، `tcp` |
+| `turn-servers` | آدرس‌های VK | فهرست `host` یا `host:port` |
+| `turn-port` | پورت VK | 1…65535 |
+| `dns-server` | `system` | `system` یا `IP:port` — خودِ resolver در qWDTT |
+
+`port` پورت همان listener سروری است که `tunnel` انتخاب‌شده را سرویس می‌دهد: `wdtt-server` سوکت‌های جداگانه باز می‌کند (`-listen` برای `wireguard`، `-listen-direct` برای `wireguard-direct`، `-listen-raw` برای `raw-ip`). اگر پورت با حالت هم‌خوانی نداشته باشد، سرور به درخواست پیکربندی پاسخ نمی‌دهد و نود متصل نمی‌شود.
+
+اولویت پورت TURN: پورت موجود در `turn-servers`، سپس `turn-port`، سپس پورتی که VK برمی‌گرداند.
+
+`dns-server` همان resolverی را تعیین می‌کند که qWDTT با آن VK و آدرس سرور را **پیش از** برپا شدن تونل پیدا می‌کند. `system` یعنی DNS شبکه فیزیکی: resolverهای عمومی روی شبکه‌های موبایل اغلب مسدودند، بنابراین DNS اپراتور اصلی می‌شود و Yandex به‌عنوان پشتیبان می‌ماند. `IP:port` صریح کاملاً جای آن را می‌گیرد. پروفایل هرگز DNS داخل تونل را تنظیم نمی‌کند — آن را همیشه سرور می‌دهد.
+
+احراز هویت VK کاملاً خودکار است: ابتدا VK Calls، در صورت خطا legacy. کپچا فقط به‌صورت بومی حل می‌شود، بدون WebView و بدون دخالت کاربر؛ اگر اتصال خودکار ممکن نباشد، نود در وضعیت در دسترس نبودن قرار می‌گیرد. از کار افتادن یک هش نود را متوقف نمی‌کند: گروه کاری به هش بعدی می‌چرخد. رمزها، پورت‌های محلی و اعتبارنامه‌های سرویس SOCKS5 توسط FlClashM تعیین می‌شوند، نه پروفایل.
+
 <a id="activation"></a>
 
 ## 😴 نود ذخیرهٔ خوابیده
 
-پیش‌فرض OlcRTC و StormDNS برابر `activation: auto` است: با انتخاب دستی یا خرابی گروه تحت نظر اجرا می‌شوند. نود باید عضو مستقیم گروه باشد. بدون انتخاب یا اتصال، پس از `sleep.idle` می‌خوابد؛ `0s` خواب را تا راه‌اندازی مجدد VPN غیرفعال می‌کند. برای اجرا همراه پروفایل از `activation: always` استفاده کنید.
+پیش‌فرض OlcRTC، StormDNS و qWDTT برابر `activation: auto` است: با انتخاب دستی یا خرابی گروه تحت نظر اجرا می‌شوند. نود باید عضو مستقیم گروه باشد. بدون انتخاب یا اتصال، پس از `sleep.idle` می‌خوابد؛ `0s` خواب را تا راه‌اندازی مجدد VPN غیرفعال می‌کند. برای اجرا همراه پروفایل از `activation: always` استفاده کنید.
 
 `activation` و `connectivity-check` داخل نود مشخص در `proxies` قرار می‌گیرند. `activation: auto` به گروهِ دربرگیرندهٔ مستقیم و URL بیداری نیاز دارد (صریح یا به‌ارث‌رسیده از بررسی نود، گروه یا تنظیم برنامه)؛ در غیر این صورت پروفایل رد می‌شود. مدت این دو بخش باید مضرب ثانیه باشد (`1s`، `1m`)؛ `500ms` نامعتبر است.
 

@@ -112,6 +112,8 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			start, size = 35900, 256
 		case "stormdns":
 			start, size = 36200, 256
+		case "qwdtt":
+			start, size = 36500, 256
 		}
 		start += e.PortOffset
 		seed := 0
@@ -130,11 +132,11 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			return nil, errors.New("external listener port range exhausted")
 		}
 		reserved[port] = true
-		udp := kind == "byedpi"
+		udp := kind == "byedpi" || kind == "qwdtt"
 		if value, explicitUDP := raw["udp"]; explicitUDP {
 			udp = value == true
 		}
-		if kind != "byedpi" && udp {
+		if kind != "byedpi" && kind != "qwdtt" && udp {
 			return nil, errors.New("external transport does not support UDP")
 		}
 		check, activation, err := nodeChecks(raw, kind, name, config, testURL)
@@ -154,6 +156,8 @@ func (e *ExternalCompiler) Compile(ctx context.Context, config, patch Object, te
 			err = e.buildByeDPI(ctx, raw, &node)
 		case "stormdns":
 			err = e.buildStormDNS(ctx, raw, &node, username, password)
+		case "qwdtt":
+			err = buildQwdtt(raw, &node, username, password)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s node %q: %w", kind, name, err)
@@ -216,7 +220,7 @@ func nodeChecks(raw Object, kind, name string, config Object, testURL string) (O
 		check["required"] = false
 	}
 	startup := 30 * time.Second
-	if kind == "stormdns" {
+	if kind == "stormdns" || kind == "qwdtt" {
 		startup = 2 * time.Minute
 	}
 	for key, spec := range map[string]struct{ fallback, max time.Duration }{"timeout": {5 * time.Second, time.Minute}, "startup-timeout": {startup, 5 * time.Minute}, "retry-interval": {time.Second, 5 * time.Minute}} {

@@ -73,10 +73,18 @@ func (b *Backend) ReconcileNodes(ctx context.Context) error {
 				node.pending = false
 			}
 		}
-		if activation := node.plan.Activation; activation != nil && activation.Mode == "auto" && !c.now().Before(node.nextCheck) {
-			node.nextCheck = c.now().Add(time.Duration(activation.Wake.Interval) * time.Second)
-			if err := c.reconcileReserve(ctx, node, generation); err != nil && ctx.Err() != nil {
-				return ctx.Err()
+		if activation := node.plan.Activation; activation != nil && activation.Mode == "auto" {
+			// Ручной выбор не должен ждать очередного Wake.Interval: проверяем
+			// его до временного гейта и сбрасываем гейт для выбранного узла.
+			selected := !node.awake && c.reserveSelected(ctx, node, activation)
+			if selected {
+				node.nextCheck = time.Time{}
+			}
+			if !c.now().Before(node.nextCheck) {
+				node.nextCheck = c.now().Add(time.Duration(activation.Wake.Interval) * time.Second)
+				if err := c.reconcileReserve(ctx, node, generation, selected); err != nil && ctx.Err() != nil {
+					return ctx.Err()
+				}
 			}
 		}
 	}
@@ -86,7 +94,23 @@ func (b *Backend) ReconcileNodes(ctx context.Context) error {
 	c.publishNodes(generation)
 	return nil
 }
-func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRuntime, generation uint64) error {
+
+// reserveSelected сообщает, выбран ли узел в одной из содержащих его групп.
+// Ошибка наблюдения не считается выбором: узел остаётся в обычном резерве.
+func (c *runtimeCoordinator) reserveSelected(ctx context.Context, node *nodeRuntime, activation *NodeActivation) bool {
+	selected, err := c.nodeOptions.Inspection.Selected(ctx, activation.ContainingGroups)
+	if err != nil {
+		return false
+	}
+	for _, group := range activation.ContainingGroups {
+		if selected[group] == node.plan.Name {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRuntime, generation uint64, selectedNow bool) error {
 	activation := node.plan.Activation
 	now := c.now()
 	if now.Before(node.retryUntil) {
@@ -98,17 +122,21 @@ func (c *runtimeCoordinator) reconcileReserve(ctx context.Context, node *nodeRun
 			node.failures = 0
 			return err
 		}
-		healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err == nil && healthy {
-			node.failures = 0
-			return nil
-		}
-		node.failures++
-		if node.failures < activation.Wake.Failures {
-			return nil
+		// Ручной выбор спящего узла должен разбудить его сразу, не дожидаясь
+		// отказа группы: иначе выбранный прокси остаётся без слушателя.
+		if !selectedNow && !c.reserveSelected(ctx, node, activation) {
+			healthy, err := c.nodeOptions.Inspection.TestGroup(ctx, activation.WatchGroup, activation.Wake.URLs)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if err == nil && healthy {
+				node.failures = 0
+				return nil
+			}
+			node.failures++
+			if node.failures < activation.Wake.Failures {
+				return nil
+			}
 		}
 		return c.nodeOperation(ctx, node.plan.ID, "node.wake", func(operation context.Context) error {
 			wakeErr := c.launchNode(operation, node)
@@ -254,6 +282,11 @@ func (c *runtimeCoordinator) nextNodeDelay() time.Duration {
 			remaining := node.nextCheck.Sub(now)
 			if remaining < 0 {
 				remaining = 0
+			}
+			// Выбор может измениться через mihomo API без команды backend.
+			// Спим не дольше секунды, чтобы заметить его до Wake.Interval.
+			if !node.awake && remaining > time.Second {
+				remaining = time.Second
 			}
 			if remaining < delay {
 				delay = remaining

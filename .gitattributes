@@ -6,4 +6,4 @@ assets/data/*.metadb binary
 tool/patches/*.patch whitespace=-space-before-tab
 # Context lines in the upstream C patch can end with spaces.
 tool/patches/byedpi-socks-auth.patch whitespace=-blank-at-eol,-space-before-tab
-tool/patches/mihomo-byedpi-udp-token.patch whitespace=-blank-at-eol,-space-before-tab
+tool/patches/mihomo-socks5-udp-token.patch whitespace=-blank-at-eol,-space-before-tab
