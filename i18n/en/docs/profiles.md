@@ -344,9 +344,13 @@ proxy-groups:
 | `turn-transport` | `udp` | `udp`, `tcp` |
 | `turn-servers` | VK addresses | list of `host` or `host:port` |
 | `turn-port` | VK port | 1…65535 |
-| `dns-server` | `system` | `system` or `IP:port` |
+| `dns-server` | `system` | `system` or `IP:port` — the qWDTT resolver itself |
 
-TURN port priority: the port in `turn-servers`, then `turn-port`, then the port returned by VK. An explicit `dns-server` (IP only) is never replaced by the carrier DNS. `system` means the DNS supplied by the qWDTT server: it is reachable inside the tunnel, unlike the phone’s physical DNS.
+`port` is the port of the server listener that serves the chosen `tunnel`: `wdtt-server` opens separate sockets (`-listen` for `wireguard`, `-listen-direct` for `wireguard-direct`, `-listen-raw` for `raw-ip`). If the port does not match the mode, the server never answers the configuration request and the node stays disconnected.
+
+TURN port priority: the port in `turn-servers`, then `turn-port`, then the port returned by VK.
+
+`dns-server` sets the resolver qWDTT uses to find VK and the server address **before** the tunnel comes up. `system` means the physical network DNS: public resolvers are often blocked on mobile networks, so the carrier DNS becomes primary and Yandex stays as the fallback. An explicit `IP:port` replaces it entirely. The profile never configures the DNS inside the tunnel — the server always supplies it.
 
 VK authentication is fully automatic: VK Calls first, legacy on failure. Captcha is solved natively only, with no WebView and no user interaction; if automatic connection fails, the node becomes unavailable. A dead hash does not stop the node: the worker group rotates to the next hash. Passwords, local ports and SOCKS5 service credentials are owned by FlClashM, not by the profile.
 

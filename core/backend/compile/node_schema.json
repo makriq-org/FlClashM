@@ -296,6 +296,8 @@
     {"path": "qwdtt.turn-servers[]", "type": "string"},
     {"path": "qwdtt.turn-port", "type": "integer", "minimum": 1, "maximum": 65535},
     {"path": "qwdtt.dns-server", "type": "string", "hasDefault": true, "default": "system"},
+    {"path": "qwdtt.go-dns", "type": "string", "additionalTypes": ["integer", "boolean", "object", "list"], "forbidden": "the VK bootstrap resolver is configured by dns-server"},
+    {"path": "qwdtt.dns-fallback", "type": "string", "additionalTypes": ["integer", "boolean", "object", "list"], "forbidden": "the bootstrap fallback resolver is taken from the physical network"},
     {"path": "qwdtt.listen", "type": "string", "additionalTypes": ["integer", "boolean", "object", "list"], "forbidden": "the local listener is owned by FlClashM"},
     {"path": "qwdtt.socks", "type": "string", "additionalTypes": ["integer", "boolean", "object", "list"], "forbidden": "the local SOCKS5 listener is owned by FlClashM"},
     {"path": "qwdtt.socks-listen", "type": "string", "additionalTypes": ["integer", "boolean", "object", "list"], "forbidden": "the local SOCKS5 listener is owned by FlClashM"},

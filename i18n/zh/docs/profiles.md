@@ -344,9 +344,13 @@ proxy-groups:
 | `turn-transport` | `udp` | `udp`、`tcp` |
 | `turn-servers` | VK 地址 | `host` 或 `host:port` 列表 |
 | `turn-port` | VK 端口 | 1…65535 |
-| `dns-server` | `system` | `system` 或 `IP:port` |
+| `dns-server` | `system` | `system` 或 `IP:port` — qWDTT 自身的解析器 |
 
-TURN 端口优先级：`turn-servers` 中的端口 → `turn-port` → VK 返回的端口。显式 `dns-server`（仅 IP）不会被运营商 DNS 替换。`system` 表示 qWDTT 服务器提供的 DNS：它可在隧道内访问，不同于手机的物理 DNS。
+`port` 是服务于所选 `tunnel` 的服务器监听端口：`wdtt-server` 使用独立套接字（`wireguard` 用 `-listen`，`wireguard-direct` 用 `-listen-direct`，`raw-ip` 用 `-listen-raw`）。端口与模式不匹配时，服务器不会响应配置请求，节点将保持未连接状态。
+
+TURN 端口优先级：`turn-servers` 中的端口 → `turn-port` → VK 返回的端口。
+
+`dns-server` 设置 qWDTT 在隧道建立**之前**用于查找 VK 和服务器地址的解析器。`system` 表示物理网络 DNS：移动网络常封锁公共解析器，因此运营商 DNS 成为主用，Yandex 作为备用。显式 `IP:port` 会完全替换它。配置文件从不设置隧道内的 DNS——它始终由服务器提供。
 
 VK 授权完全自动：优先 VK Calls，失败时使用 legacy。验证码仅通过原生方式处理，不使用 WebView，也不需要用户操作；无法自动连接时，节点进入不可用状态。单个哈希不可用不会停止节点：工作组会切换到下一个哈希。密码、本地端口和 SOCKS5 服务凭据由 FlClashM 管理，而不是由配置提供。
 

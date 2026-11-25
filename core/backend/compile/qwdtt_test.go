@@ -39,25 +39,35 @@ func TestQwdttDefaults(t *testing.T) {
 	if native["workers"] != float64(9) || native["udp"] != true || native["dns-server"] != "system" {
 		t.Fatalf("defaults: %v", native)
 	}
+	if native["go-dns"] != "operator" {
+		t.Fatalf("default bootstrap resolver: %v", native["go-dns"])
+	}
 	socks := object(native["socks"])
 	if socks["listen"] != "127.0.0.1:"+strconv.Itoa(node.Port) || socks["auth"] != true || socks["udp-token"] != true {
 		t.Fatalf("socks: %v", socks)
 	}
-	if node.Metadata["depends-on-system-dns"] != "" || node.UDP != true || node.Activation == nil {
+	if node.Metadata["depends-on-system-dns"] != "true" || node.UDP != true || node.Activation == nil {
 		t.Fatalf("node metadata: %+v", node)
 	}
 }
 
 func TestQwdttExplicitFields(t *testing.T) {
-	native, _, err := compileQwdtt(t, `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1, h2, h3], tunnel: wireguard-direct, workers: 27, obfs: video, udp: false, turn-transport: tcp, turn-servers: ['192.0.2.10', '192.0.2.20:443', '[2001:db8::1]', '[2001:db8::2]:443'], turn-port: 3478, dns-server: '1.1.1.1:5353', activation: always}`)
+	native, node, err := compileQwdtt(t, `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1, h2, h3], tunnel: wireguard-direct, workers: 27, obfs: video, udp: false, turn-transport: tcp, turn-servers: ['192.0.2.10', '192.0.2.20:443', '[2001:db8::1]', '[2001:db8::2]:443'], turn-port: 3478, dns-server: '1.1.1.1:5353', activation: always}`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if native["tunnel"] != "wireguard-direct" || native["workers"] != float64(27) || native["obfs"] != "video" || native["turn-transport"] != "tcp" {
 		t.Fatalf("native: %v", native)
 	}
-	if native["turn-port"] != float64(3478) || native["dns-server"] != "1.1.1.1:5353" {
+	if native["turn-port"] != float64(3478) {
 		t.Fatalf("native: %v", native)
+	}
+	// dns-server задаёт резолвер самого qWDTT, а DNS туннеля всегда серверный.
+	if native["go-dns"] != "custom:1.1.1.1:5353" || native["dns-server"] != "system" {
+		t.Fatalf("dns: %v / %v", native["go-dns"], native["dns-server"])
+	}
+	if node.Metadata["depends-on-system-dns"] != "" {
+		t.Fatalf("explicit resolver must not depend on the physical DNS: %+v", node.Metadata)
 	}
 	if native["udp"] != false {
 		t.Fatalf("udp must be disabled: %v", native)
@@ -94,6 +104,7 @@ func TestQwdttValidation(t *testing.T) {
 		"space password":       `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: ' abc ', vk-hashes: [h1], activation: always}`,
 		"empty password":       `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: '', vk-hashes: [h1], activation: always}`,
 		"owned listener":       `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1], socks: '127.0.0.1:1', activation: always}`,
+		"owned bootstrap dns":  `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1], go-dns: yandex, activation: always}`,
 		"unknown field":        `{name: Qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1], fld: 1, activation: always}`,
 	}
 	for name, source := range cases {

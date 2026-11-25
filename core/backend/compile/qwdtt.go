@@ -116,7 +116,8 @@ func buildQwdtt(raw Object, node *Node, serviceUser, servicePassword string) err
 		"obfs":           obfs,
 		"udp":            udp,
 		"turn-transport": transport,
-		"dns-server":     dns,
+		// DNS внутри туннеля всегда выдаёт сервер: профиль им не управляет.
+		"dns-server": "system",
 		"socks": Object{
 			"listen":    net.JoinHostPort(node.Host, strconv.Itoa(node.Port)),
 			"username":  serviceUser,
@@ -135,6 +136,16 @@ func buildQwdtt(raw Object, node *Node, serviceUser, servicePassword string) err
 	}
 	if turnPort > 0 {
 		native["turn-port"] = turnPort
+	}
+	// dns-server задаёт резолвер самого qWDTT: им он находит VK и адрес сервера
+	// до подъёма туннеля. Публичные резолверы на мобильных сетях часто
+	// заблокированы, поэтому system означает DNS физической сети; адреса
+	// подставляет host при запуске узла.
+	if dns == "system" {
+		native["go-dns"] = "operator"
+		node.Metadata["depends-on-system-dns"] = "true"
+	} else {
+		native["go-dns"] = "custom:" + dns
 	}
 	return artifact(node, "config.json", native)
 }

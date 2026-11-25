@@ -292,7 +292,7 @@ func TestQwdttArtifactsDNSAndArguments(t *testing.T) {
 	}
 	directory, _ := adapter.directory(node)
 	body, err := os.ReadFile(filepath.Join(directory, "config.json"))
-	if err != nil || !strings.Contains(string(body), `"dns-server":"system"`) {
+	if err != nil || !strings.Contains(string(body), `"dns-server":"system"`) || !strings.Contains(string(body), `"go-dns":"operator"`) {
 		t.Fatalf("prepared config %q %v", body, err)
 	}
 	if err = adapter.Start(context.Background(), backend.NodeLaunch{Node: node}); err != nil {
@@ -317,8 +317,62 @@ func TestQwdttArtifactsDNSAndArguments(t *testing.T) {
 	if err != nil || !strings.Contains(string(rendered), `"dns-server":"system"`) {
 		t.Fatalf("rendered config %q %v", rendered, err)
 	}
+	// system означает DNS физической сети: host подставляет его при запуске.
+	if !strings.Contains(string(rendered), `"dns-fallback":["9.9.9.9"]`) {
+		t.Fatalf("rendered config lost the physical DNS: %q", rendered)
+	}
 	if err = adapter.Stop(context.Background(), node.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// qwdttPlan собирает план узла qWDTT из одного прокси-описания.
+func qwdttPlan(t *testing.T, proxy string) (backend.NodePlan, *ProcessAdapter, string) {
+	t.Helper()
+	config, err := compile.ParseProfile("proxies: [" + proxy + "]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans, err := (&compile.ExternalCompiler{}).Compile(context.Background(), config, compile.Object{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(plans[0])
+	var node backend.NodePlan
+	_ = json.Unmarshal(raw, &node)
+	adapter := &ProcessAdapter{Home: t.TempDir(), ABI: "host"}
+	if err = adapter.Prepare(context.Background(), node); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := adapter.directory(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return node, adapter, directory
+}
+
+func TestQwdttExplicitResolverSkipsPhysicalDNS(t *testing.T) {
+	node, adapter, directory := qwdttPlan(t, `{name: qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1], dns-server: '1.1.1.1:5353', activation: always}`)
+	// Host без PhysicalDNS: явный резолвер профиля не должен от него зависеть.
+	if err := adapter.renderDNS(context.Background(), node, directory); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(directory, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"go-dns":"custom:1.1.1.1:5353"`) {
+		t.Fatalf("explicit resolver was not preserved: %q", body)
+	}
+	if strings.Contains(string(body), "dns-fallback") {
+		t.Fatalf("explicit resolver gained a physical fallback: %q", body)
+	}
+}
+
+func TestQwdttSystemResolverRequiresPhysicalDNS(t *testing.T) {
+	node, adapter, directory := qwdttPlan(t, `{name: qw, type: qwdtt, server: vpn.example.com, port: 56003, password: secret, vk-hashes: [h1], dns-server: system, activation: always}`)
+	if err := adapter.renderDNS(context.Background(), node, directory); err == nil {
+		t.Fatal("system resolver accepted a missing physical DNS")
 	}
 }
 
